@@ -114,13 +114,42 @@ internal static partial class Http3OriginBridge
             // default path supplies sessionArgs: null, which skips the user callback and rejects
             // any chain that is not already trusted by the OS (breaking MITM-test and custom-CA
             // deployments for every H3→H3 origin connect).
-            quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
-                connectHost, port, upStreamEndPoint, upstreamProxy,
-                (sender, certificate, chain, errors) =>
-                    server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
-                cancellationToken,
-                sniHost: sniHost,
-                failFastHandshake: !isForcedH3);
+            if (staleConnectionRetries == 0
+                && ShouldRaceTcp(sessionArgs, server, isForcedH3, connectHost, sniHost, port, upStreamEndPoint,
+                    upstreamProxy))
+            {
+                // Cold QUIC origin: a handshake that never completes (UDP/443 dropped) must not hold the
+                // request for the whole timeout while a working TCP path is available.
+                var (racedConn, tcpWon) = await AcquireQuicRacingTcpAsync(
+                    sessionArgs, server, logger, connectHost, sniHost, port, upStreamEndPoint, upstreamProxy,
+                    cancellationToken);
+                if (tcpWon)
+                {
+                    try
+                    {
+                        await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken,
+                            onInterimResponse);
+                    }
+                    catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
+                    {
+                        sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
+                    }
+
+                    return;
+                }
+
+                quicConn = racedConn!; // non-null whenever TCP did not win
+            }
+            else
+            {
+                quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
+                    connectHost, port, upStreamEndPoint, upstreamProxy,
+                    (sender, certificate, chain, errors) =>
+                        server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
+                    cancellationToken,
+                    sniHost: sniHost,
+                    failFastHandshake: !isForcedH3);
+            }
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);
@@ -181,10 +210,15 @@ internal static partial class Http3OriginBridge
             List<(string Name, string Value)> decodedResponseHeaders;
             int finalStatus;
 
+            // A silent QUIC path (handshake fine, no response) would otherwise hold the request until the
+            // idle timeout. Bound only the very first frame, and only when replaying over TCP is safe.
+            var guardFirstFrame = !isForcedH3 && IsReplayableOnStall(request, finOnHeaders);
+
             while (true)
             {
-                responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
-                    maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
+                responseHeadersFrame = await ReadResponseFrameAsync(originStream,
+                    server.MaxDecodedHeaderListBytes, guardFirstFrame, cancellationToken);
+                guardFirstFrame = false; // the peer is alive once any frame arrives
 
                 try
                 {
@@ -253,8 +287,10 @@ internal static partial class Http3OriginBridge
                         continue;
                     var ttlSeconds = Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
+                    // This response arrived on a completed QUIC connection, so it may clear a
+                    // broken mark. Alt-Svc on a TCP fallback must not (see CacheHttp3CapabilityFromAltSvc).
                     server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
-                        entry.Port == originPort ? int.MinValue : entry.Port, ttl);
+                        entry.Port == originPort ? int.MinValue : entry.Port, ttl, overrideBroken: true);
                     break;
                 }
             }
@@ -495,9 +531,11 @@ internal static partial class Http3OriginBridge
 
             if (!isForcedH3)
             {
+                var originPort = request.GetOriginHostPort(port).Port;
+                server.NoteHttp3OriginUnreachable($"{sniHost}:{originPort}");
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+                    await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -508,6 +546,15 @@ internal static partial class Http3OriginBridge
             }
 
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse("QUIC cannot be routed via the configured upstream proxy (forced Http3).");
+            return;
+        }
+        catch (Http3ResponseStalledException)
+        {
+            // Silent QUIC origin and a request that is safe to send again: replay it over TCP.
+            var stalledConn = quicConn;
+            quicConn = null; // ownership moves to the replay helper (invalidated there)
+            await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
+                sniHost, port, cancellationToken, onInterimResponse);
             return;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -558,12 +605,14 @@ internal static partial class Http3OriginBridge
                 // port, which may differ when Alt-Svc / SVCB advertised an alternative port.
                 var originPort = request.GetOriginHostPort(port).Port;
                 var hostAndPort = $"{sniHost}:{originPort}";
-                server.Http3OriginCapabilityCache.Evict(hostAndPort);
+                server.NoteHttp3OriginUnreachable(hostAndPort);
                 if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
+                    logger.LogDebug(
+                        "Marked {HostAndPort} HTTP/3 unreachable for {BrokenSeconds}s; staying on TCP.",
+                        hostAndPort, (int)Http3OriginCapabilityCache.BrokenTtl.TotalSeconds);
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+                    await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -578,7 +627,13 @@ internal static partial class Http3OriginBridge
             }
 
             // Forced H3, or Auto after the request was already on the wire: surface as a 502 —
-            // never silently replay a non-idempotent exchange on TCP.
+            // never silently replay a non-idempotent exchange on TCP. A QUIC idle timeout means the path
+            // stopped delivering though, so remember that and keep later requests off QUIC.
+            if (!isForcedH3 && requestSent && ex is QuicException { QuicError: QuicError.ConnectionTimeout })
+            {
+                server.NoteHttp3OriginUnreachable($"{sniHost}:{request.GetOriginHostPort(port).Port}");
+            }
+
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
             return;
         }

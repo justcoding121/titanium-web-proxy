@@ -55,6 +55,30 @@ internal class TcpServerConnection : IDisposable
     /// </summary>
     internal int? PoolSizeLimit { get; set; }
 
+    /// <summary>
+    ///     Set only when the pool key has a concurrent connection cap. Null on the hot path.
+    /// </summary>
+    internal ConnectionBudget? Budget { get; private set; }
+
+    private int budgetSlotHeld;
+
+    internal void AttachBudget(ConnectionBudget budget)
+    {
+        Budget = budget;
+        budgetSlotHeld = 1;
+    }
+
+    /// <summary>Releases the cap slot once. Disposal is single-shot, so the decrement is too.</summary>
+    internal void ReleaseBudgetSlotOnce()
+    {
+        if (Budget is null || Interlocked.Exchange(ref budgetSlotHeld, 0) != 1)
+        {
+            return;
+        }
+
+        Budget.ReleaseSlot();
+    }
+
     public long Id { get; } = ConnectionId.Next();
 
     /// <summary>
@@ -158,7 +182,14 @@ internal class TcpServerConnection : IDisposable
     /// </summary>
     internal bool TryScheduleDisposal()
     {
-        return Interlocked.CompareExchange(ref disposalScheduled, 1, 0) == 0;
+        if (Interlocked.CompareExchange(ref disposalScheduled, 1, 0) != 0)
+        {
+            return false;
+        }
+
+        // Free the cap before the 1 second close delay, or waiters time out while the socket lingers.
+        ReleaseBudgetSlotOnce();
+        return true;
     }
 
     /// <summary>
@@ -195,6 +226,10 @@ internal class TcpServerConnection : IDisposable
     protected virtual void Dispose(bool disposing)
     {
         if (disposed) return;
+
+        // ClearPools disposes pooled sockets directly. The slot has to drop here, before the
+        // one-second close delay, or a capped cluster keeps the slot after the socket is gone.
+        ReleaseBudgetSlotOnce();
 
         if (disposing)
         {

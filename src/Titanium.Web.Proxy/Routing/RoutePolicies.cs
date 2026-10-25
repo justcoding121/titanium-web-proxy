@@ -121,13 +121,7 @@ internal static class RoutePolicies
         var decision = Evaluate(
             server.ReverseProxy,
             route,
-            args.HttpClient.Request.Method,
-            args.HttpClient.Request.ContentLength,
-            name =>
-            {
-                var headers = args.HttpClient.Request.Headers.GetHeaders(name);
-                return headers is { Count: > 0 } ? headers[0].Value : null;
-            },
+            args.HttpClient.Request,
             args.ClientRemoteEndPoint?.Address);
         return Apply(args, decision);
     }
@@ -159,17 +153,7 @@ internal static class RoutePolicies
             return false;
         }
 
-        var decision = Evaluate(
-            options,
-            route,
-            request.Method,
-            request.ContentLength,
-            name =>
-            {
-                var found = request.Headers.GetHeaders(name);
-                return found is { Count: > 0 } ? found[0].Value : null;
-            },
-            client?.Address);
+        var decision = Evaluate(options, route, request, client?.Address);
         if (!decision.Stop)
         {
             return false;
@@ -208,12 +192,16 @@ internal static class RoutePolicies
         return true;
     }
 
+    private static string? HeaderValue(Request request, string name)
+    {
+        var headers = request.Headers.GetHeaders(name);
+        return headers is { Count: > 0 } ? headers[0].Value : null;
+    }
+
     private static PolicyDecision Evaluate(
         ReverseProxyOptions options,
         RouteConfig route,
-        string? method,
-        long contentLength,
-        Func<string, string?> header,
+        Request request,
         IPAddress? client)
     {
         var names = route.Policies;
@@ -225,6 +213,8 @@ internal static class RoutePolicies
 
         var decision = default(PolicyDecision);
         string? heldNames = null;
+        var method = request.Method;
+        var contentLength = request.ContentLength;
 
         // A later policy can deny after a connection slot was taken. Give those slots back.
         PolicyDecision Deny(PolicyDecision stop)
@@ -254,9 +244,9 @@ internal static class RoutePolicies
             {
                 case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
                     return Deny(Stop(413, "payload too large"));
-                case "requireHeader" when !HeaderSatisfies(header(policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
+                case "requireHeader" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
                     return Deny(Stop(401, string.Empty));
-                case "apiKey" when !HeaderSatisfies(header(policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
+                case "apiKey" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
                     return Deny(Stop(401, string.Empty));
                 case "timeout" when policy.TimeoutSeconds is int seconds:
                     decision = decision with { TimeoutSeconds = seconds };
@@ -268,7 +258,7 @@ internal static class RoutePolicies
                         {
                             Stop = true,
                             Status = 204,
-                            Headers = CorsHeaders(policy, header("Origin")),
+                            Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
                         });
                     }
 

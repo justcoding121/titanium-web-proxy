@@ -1366,9 +1366,37 @@ namespace Titanium.Web.Proxy.Http2
                         bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                         await GrantReceiveCreditAsync(streamId, length, forceFlush: dataEndStream);
 
-                        // External-bridge streaming: pump DATA into InboundRequestBodyChannel instead of
-                        // discarding it. Create the channel in onBeforeRequest before returning.
-                        if (connectionState.Streams.TryGetValue(streamId, out var synthState)
+                        // A synthetic extended CONNECT (CONNECT-UDP) is registered in syntheticStreams
+                        // because RespondStreaming cancels the request. Its capsules live on
+                        // InboundTunnelChannel, which the later DATA branch never reaches.
+                        if (connectionState.Streams.TryGetValue(streamId, out var tunnelState)
+                            && tunnelState.IsExtendedConnect
+                            && tunnelState.InboundTunnelChannel != null)
+                        {
+                            GetHttp2PaddedDataRange(buffer, length, (flags & Http2FrameFlag.Padded) != 0,
+                                out int tunnelOff, out int tunnelLen);
+                            if (tunnelLen > 0)
+                            {
+                                var chunk = new byte[tunnelLen];
+                                Buffer.BlockCopy(buffer, tunnelOff, chunk, 0, tunnelLen);
+                                if (!tunnelState.InboundTunnelChannel.Writer.TryWrite(chunk))
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 extended CONNECT stream exceeded its bounded relay buffer.",
+                                        null, args));
+                                    RemoveAndFinalizeStream(streamId);
+                                    QueueRstStreamFrame(connectionState, input, streamId,
+                                        Http2ErrorCode.EnhanceYourCalm);
+                                }
+                            }
+
+                            if (dataEndStream)
+                            {
+                                endStream = true;
+                                tunnelState.InboundTunnelChannel.Writer.TryComplete();
+                            }
+                        }
+                        else if (connectionState.Streams.TryGetValue(streamId, out var synthState)
                             && synthState.InboundRequestBodyChannel != null
                             && args != null
                             && !args.HttpClient.Request.Http2IgnoreBodyFrames)

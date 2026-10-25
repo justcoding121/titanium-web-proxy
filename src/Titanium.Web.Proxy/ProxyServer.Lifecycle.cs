@@ -472,6 +472,15 @@ public partial class ProxyServer : IDisposable
             // ignore
         }
 
+        try
+        {
+            Interlocked.Exchange(ref mirrorDispatcher, null)?.Dispose();
+        }
+        catch
+        {
+            // ignore
+        }
+
         CertificateManager?.Dispose();
         BufferPool?.Dispose();
         _svcbDiscoveryCoordinator?.Dispose();

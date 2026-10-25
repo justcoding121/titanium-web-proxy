@@ -81,6 +81,9 @@ public sealed class MirrorConfig
     public required string ClusterId { get; init; }
     public int SamplePercent { get; init; } = 100;
     public int MaxBodyBytes { get; init; } = 65536;
+
+    /// <summary>How many mirror sends run at once for this route. Clamped to 1-16. Default: 2.</summary>
+    public int MaxConcurrency { get; init; } = 2;
 }
 
 /// <summary>Static body for a status or class such as <c>503</c> or <c>5xx</c>.</summary>

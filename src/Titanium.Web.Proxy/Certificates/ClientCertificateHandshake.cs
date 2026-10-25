@@ -1,4 +1,6 @@
+using System;
 using System.Net.Security;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
@@ -15,7 +17,8 @@ internal static class ClientCertificateHandshake
     internal static bool RequestsCertificate(ClientCertificateMode mode) =>
         mode != ClientCertificateMode.None;
 
-    internal static void Apply(SslServerAuthenticationOptions options, ClientCertificateMode mode)
+    internal static void Apply(SslServerAuthenticationOptions options, ClientCertificateMode mode,
+        X509Certificate2Collection? trustedRoots = null)
     {
         if (mode == ClientCertificateMode.None)
         {
@@ -23,6 +26,15 @@ internal static class ClientCertificateHandshake
         }
 
         options.ClientCertificateRequired = true;
+        if (trustedRoots is { Count: > 0 } roots)
+        {
+            // The callback closes over this collection reference. A reload assigns a new collection
+            // on the endpoint; a handshake already in progress keeps the one it captured.
+            options.RemoteCertificateValidationCallback = (_, certificate, chain, _) =>
+                ValidateWithRoots(certificate, chain, mode, roots);
+            return;
+        }
+
         if (mode == ClientCertificateMode.Allow)
         {
             options.RemoteCertificateValidationCallback = static (_, certificate, _, errors) =>
@@ -56,5 +68,68 @@ internal static class ClientCertificateHandshake
         }
 
         return errors == SslPolicyErrors.None;
+    }
+
+    /// <summary>
+    ///     Custom-root check used when the endpoint has trust anchors. Revocation is not checked:
+    ///     an online lookup would add latency and a new failure mode. The client-auth EKU is required.
+    /// </summary>
+    internal static bool ValidateWithRoots(X509Certificate? certificate, X509Chain? platformChain,
+        ClientCertificateMode mode, X509Certificate2Collection roots)
+    {
+        if (certificate is null)
+        {
+            return mode == ClientCertificateMode.Allow;
+        }
+
+        X509Certificate2? copy = null;
+        X509Chain? chain = null;
+        try
+        {
+            copy = X509CertificateLoader.LoadCertificate(certificate.Export(X509ContentType.Cert));
+            chain = new X509Chain();
+            chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+            chain.ChainPolicy.CustomTrustStore.AddRange(roots);
+            chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.VerificationTime = DateTime.UtcNow;
+            chain.ChainPolicy.ApplicationPolicy.Add(new Oid("1.3.6.1.5.5.7.3.2"));
+            if (platformChain is not null)
+            {
+                foreach (var element in platformChain.ChainElements)
+                {
+                    chain.ChainPolicy.ExtraStore.Add(element.Certificate);
+                }
+            }
+
+            if (!chain.Build(copy))
+            {
+                return false;
+            }
+
+            foreach (var extension in copy.Extensions)
+            {
+                if (extension is not X509EnhancedKeyUsageExtension eku)
+                {
+                    continue;
+                }
+
+                foreach (var oid in eku.EnhancedKeyUsages)
+                {
+                    if (oid.Value == "1.3.6.1.5.5.7.3.2")
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            return false;
+        }
+        finally
+        {
+            chain?.Dispose();
+            copy?.Dispose();
+        }
     }
 }

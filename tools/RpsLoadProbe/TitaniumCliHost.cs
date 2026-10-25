@@ -90,7 +90,9 @@ internal sealed class TitaniumCliHost : IDisposable
         DialectTwp,
         Policies,
         Mirror,
-        ClusterClient
+        ClusterClient,
+        StatusRetry,
+        ConnCap
     }
 
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
@@ -104,7 +106,8 @@ internal sealed class TitaniumCliHost : IDisposable
     public static bool NeedsJsonConfig(CliArmKind kind) => kind is
         CliArmKind.SingleRoute or CliArmKind.InterceptTransform or CliArmKind.PlusResilience
         or CliArmKind.PlusDiscoveryFile or CliArmKind.LbLeastTime
-        or CliArmKind.Policies or CliArmKind.Mirror or CliArmKind.ClusterClient;
+        or CliArmKind.Policies or CliArmKind.Mirror or CliArmKind.ClusterClient
+        or CliArmKind.StatusRetry or CliArmKind.ConnCap;
 
     public static async Task<TitaniumCliHost> StartAsync(int originHttpPort, CliArmKind kind,
         CancellationToken cancellationToken = default)
@@ -420,6 +423,7 @@ internal sealed class TitaniumCliHost : IDisposable
                 "\"transforms\": [ { \"kind\": \"RequestHeaderSet\", \"parameters\": { \"name\": \"x-twp-rps-probe\", \"value\": \"1\" } } ],",
             CliArmKind.Policies => "\"policies\": [ \"limit\" ],",
             CliArmKind.Mirror => "\"mirror\": { \"clusterId\": \"mirror\", \"samplePercent\": 100 },",
+            CliArmKind.StatusRetry => "\"retry\": { \"attempts\": 1 },",
             _ => "",
         };
         var routeBody =
@@ -428,9 +432,14 @@ internal sealed class TitaniumCliHost : IDisposable
             "\"order\": 1,\n" +
             (routeExtras.Length == 0 ? "" : routeExtras + "\n") +
             "\"match\": { \"path\": \"/\", \"pathKind\": \"Prefix\" }";
-        var httpClient = kind == CliArmKind.ClusterClient
-            ? "\"httpClient\": { \"maxConnectionsPerServer\": 64, \"connectTimeout\": \"00:00:02\" },"
-            : "";
+        var httpClient = kind switch
+        {
+            CliArmKind.ClusterClient =>
+                "\"httpClient\": { \"maxConnectionsPerServer\": 64, \"connectTimeout\": \"00:00:02\" },",
+            CliArmKind.ConnCap =>
+                "\"httpClient\": { \"maxConnectionsPerServer\": 32 },",
+            _ => "",
+        };
         var mirrorCluster = kind == CliArmKind.Mirror
             ? ", { \"id\": \"mirror\", \"destinations\": [ { \"id\": \"m1\", \"address\": \"127.0.0.1\", \"port\": " + originPort + " } ] }"
             : "";

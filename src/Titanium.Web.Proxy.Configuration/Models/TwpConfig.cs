@@ -65,7 +65,7 @@ public sealed class ListenerConfig
 
     /// <summary>
     ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
-    ///     <c>socks</c>, or <c>quic</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    ///     <c>socks</c>, <c>quic</c>, or <c>masque</c>. When null, classic ForwardHost rules choose transparent vs explicit.
     /// </summary>
     public string? Type { get; set; }
 
@@ -114,6 +114,51 @@ public sealed class ListenerConfig
 
     /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
     public string? ClientCertificateMode { get; set; }
+
+    /// <summary>PEM or CRT file of trust anchors for inbound client certificates.</summary>
+    public string? ClientCertificateCaPath { get; set; }
+
+    /// <summary>
+    ///     Client-facing Alt-Svc advertisement for a dual-listen HTTP/3 listener.
+    ///     Null keeps the built-in <c>h3=":port"; ma=86400</c> header.
+    /// </summary>
+    public AltSvcConfig? AltSvc { get; set; }
+
+    /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
+    public MasqueListenerConfig? Masque { get; set; }
+}
+
+/// <summary>Alt-Svc advertisement for a listener that also accepts HTTP/3.</summary>
+public sealed class AltSvcConfig
+{
+    /// <summary>When false, the listener never injects Alt-Svc. Null inherits enabled.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>Overrides the ma parameter, in seconds.</summary>
+    public int? MaxAgeSeconds { get; set; }
+
+    /// <summary>Advertised UDP port when it differs from the bound port.</summary>
+    public int? Port { get; set; }
+}
+
+/// <summary>Overrides for a MASQUE CONNECT-UDP listener. Null fields keep the safe defaults.</summary>
+public sealed class MasqueListenerConfig
+{
+    public bool? RequireAuth { get; set; }
+
+    public int[]? AllowedPorts { get; set; }
+
+    public bool? BlockPrivateTargets { get; set; }
+
+    public int? MaxTunnels { get; set; }
+
+    public int? MaxTunnelsPerClient { get; set; }
+
+    public int? IdleTimeoutSeconds { get; set; }
+
+    public int? MaxDatagramsPerSecond { get; set; }
+
+    public int? MaxBytesPerSecond { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>

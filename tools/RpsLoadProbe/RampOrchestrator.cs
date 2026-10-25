@@ -300,7 +300,11 @@ internal enum ProbeMode
     /// <summary>CLI mirror of each request onto the same origin.</summary>
     TwpCliMirrorHttp1,
     /// <summary>CLI cluster client cap and connect timeout, so the pool key is not the process default.</summary>
-    TwpCliClusterClientHttp1
+    TwpCliClusterClientHttp1,
+    /// <summary>CLI session-path status retry configured, origin always 200.</summary>
+    TwpCliRetryHttp1,
+    /// <summary>CLI concurrent upstream connection cap (budget allocated, high enough not to 503).</summary>
+    TwpCliConnCapHttp1
 }
 
 internal sealed class RampOptions
@@ -1407,6 +1411,10 @@ internal static class RampOrchestrator
                 [new("twp-cli-mirror-http1", ProbeMode.TwpCliMirrorHttp1, null)],
             ProbeMode.TwpCliClusterClientHttp1 =>
                 [new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null)],
+            ProbeMode.TwpCliRetryHttp1 =>
+                [new("twp-cli-retry-http1", ProbeMode.TwpCliRetryHttp1, null)],
+            ProbeMode.TwpCliConnCapHttp1 =>
+                [new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
@@ -1780,7 +1788,9 @@ internal static class RampOrchestrator
         new("twp-cli-dialect-twp-http1", ProbeMode.TwpCliDialectTwpHttp1, null),
         new("twp-cli-policies-http1", ProbeMode.TwpCliPoliciesHttp1, null),
         new("twp-cli-mirror-http1", ProbeMode.TwpCliMirrorHttp1, null),
-        new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null)
+        new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null),
+        new("twp-cli-retry-http1", ProbeMode.TwpCliRetryHttp1, null),
+        new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,

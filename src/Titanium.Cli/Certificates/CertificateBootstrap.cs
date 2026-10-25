@@ -5,6 +5,7 @@ using Certes.Acme;
 using Certes.Acme.Resource;
 using Titanium.Cli;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 
@@ -324,7 +325,8 @@ internal static class CertificateBootstrap
     }
 
     /// <summary>Rebuilds leaf and SNI bindings when a configured certificate file changes.</summary>
-    public static IDisposable? WatchCertificateFiles(ProxyServer proxy, CertificatesConfig? certificates)
+    public static IDisposable? WatchCertificateFiles(ProxyServer proxy, CertificatesConfig? certificates,
+        IEnumerable<ListenerConfig>? listeners = null)
     {
         var paths = new List<string>();
         if (!string.IsNullOrEmpty(certificates?.CertificatePath))
@@ -344,6 +346,17 @@ internal static class CertificateBootstrap
                 if (!string.IsNullOrEmpty(item.Path))
                 {
                     paths.Add(item.Path);
+                }
+            }
+        }
+
+        if (listeners is not null)
+        {
+            foreach (var listener in listeners)
+            {
+                if (!string.IsNullOrEmpty(listener.ClientCertificateCaPath))
+                {
+                    paths.Add(listener.ClientCertificateCaPath);
                 }
             }
         }
@@ -387,6 +400,10 @@ internal static class CertificateBootstrap
                     lock (gate)
                     {
                         Apply(proxy, certificates);
+                        if (listeners is not null)
+                        {
+                            ReloadClientCertificateAuthorities(proxy, listeners);
+                        }
                     }
                 }
                 catch (OperationCanceledException)
@@ -421,6 +438,27 @@ internal static class CertificateBootstrap
         }
 
         return new WatchSubscription(watchers, () => debounce);
+    }
+
+    internal static void ReloadClientCertificateAuthorities(ProxyServer proxy, IEnumerable<ListenerConfig> listeners)
+    {
+        foreach (var listener in listeners)
+        {
+            if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath) || !File.Exists(listener.ClientCertificateCaPath))
+            {
+                continue;
+            }
+
+            var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+            foreach (var endPoint in proxy.ProxyEndPoints)
+            {
+                if (endPoint.Port == listener.Port)
+                {
+                    // Assign a new collection. An in-flight handshake keeps the reference it captured.
+                    endPoint.ClientCertificateTrustedRoots = roots;
+                }
+            }
+        }
     }
 
     private sealed class WatchSubscription(List<FileSystemWatcher> watchers, Func<CancellationTokenSource?> debounce) : IDisposable

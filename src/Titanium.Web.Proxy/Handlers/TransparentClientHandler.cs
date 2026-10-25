@@ -123,7 +123,7 @@ public partial class ProxyServer
                                 ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
                                 AllowRenegotiation = false
                             };
-                            Certificates.ClientCertificateHandshake.Apply(options, clientCertMode);
+                            Certificates.ClientCertificateHandshake.Apply(options, clientCertMode, endPoint.ClientCertificateTrustedRoots);
                             if (sniBindings is { Count: > 0 })
                             {
                                 options.ServerCertificateSelectionCallback = (_, name) =>
@@ -323,7 +323,7 @@ public partial class ProxyServer
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
                         var peekClientCertMode = endPoint.ClientCertificateMode;
-                        Certificates.ClientCertificateHandshake.Apply(options, peekClientCertMode);
+                        Certificates.ClientCertificateHandshake.Apply(options, peekClientCertMode, endPoint.ClientCertificateTrustedRoots);
                         if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)
                         {
                             var fallbackCert = certificate;

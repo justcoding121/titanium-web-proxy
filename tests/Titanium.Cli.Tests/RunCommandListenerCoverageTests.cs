@@ -1,3 +1,4 @@
+#pragma warning disable TWP001
 using System.Net;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -75,8 +76,25 @@ public class RunCommandListenerCoverageTests
             ForwardPort = 8080,
             DecryptSsl = false,
         });
+        Invoke("AddListener", proxy, new ListenerConfig
+        {
+            Host = "127.0.0.1",
+            Port = 0,
+            Type = "masque",
+            Masque = new MasqueListenerConfig
+            {
+                RequireAuth = false,
+                AllowedPorts = [443, 8443],
+                BlockPrivateTargets = false,
+                MaxTunnels = 8,
+                MaxTunnelsPerClient = 2,
+                IdleTimeoutSeconds = 30,
+                MaxDatagramsPerSecond = 100,
+                MaxBytesPerSecond = 10_000,
+            },
+        });
 
-        Assert.IsTrue(proxy.ProxyEndPoints.Count >= 5);
+        Assert.IsTrue(proxy.ProxyEndPoints.Count >= 6);
         Assert.AreEqual("socks", (string)Invoke("ResolveListenerKind", new ListenerConfig { Type = "SOCKS" })!);
         Assert.AreEqual("explicit", (string)Invoke("ResolveListenerKind", new ListenerConfig())!);
         Assert.AreEqual("transparent", (string)Invoke("ResolveListenerKind", new ListenerConfig { ForwardHost = "h" })!);
@@ -99,6 +117,20 @@ public class RunCommandListenerCoverageTests
             MaxInboundBidirectionalStreams = 2, MaxInboundUnidirectionalStreams = 2,
             HandshakeTimeoutSeconds = 1, IdleTimeoutSeconds = 2,
         });
+        var masque = (MasqueProxyEndPoint)Invoke("CreateMasqueEndPoint", IPAddress.Loopback, new ListenerConfig
+        {
+            Port = 0,
+            Masque = new MasqueListenerConfig
+            {
+                RequireAuth = false,
+                AllowedPorts = [443],
+                MaxTunnels = 4,
+                IdleTimeoutSeconds = 15,
+            },
+        })!;
+        Assert.IsFalse(masque.Options.RequireAuth);
+        Assert.AreEqual(4, masque.Options.MaxTunnels);
+        Assert.AreEqual(TimeSpan.FromSeconds(15), masque.Options.IdleTimeout);
 
         Assert.IsTrue((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = true }, true)!);
         Assert.IsFalse((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = false }, true)!);

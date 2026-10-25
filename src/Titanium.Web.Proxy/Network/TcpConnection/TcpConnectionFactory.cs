@@ -52,6 +52,22 @@ internal class TcpConnectionFactory : IDisposable
     // Tcp server connection pool cache
     private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache = new();
 
+    // Present only for pool keys whose cluster set MaxConnectionsPerServer.
+    private readonly ConcurrentDictionary<string, ConnectionBudget> budgets = new();
+
+    internal int BudgetCountForTests => budgets.Count;
+
+    internal int BudgetOpenForTests()
+    {
+        var total = 0;
+        foreach (var budget in budgets.Values)
+        {
+            total += budget.Open;
+        }
+
+        return total;
+    }
+
     // Tcp connections waiting to be disposed by cleanup task
     private readonly ConcurrentBag<TcpServerConnection> disposalBag = new();
 
@@ -508,6 +524,14 @@ internal class TcpConnectionFactory : IDisposable
         if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
             return pooled;
 
+        if (sessionArgs.UpstreamHttpClient?.MaxConnectionsPerServer is int maxConnections && maxConnections > 0)
+        {
+            return await CreateWithinBudget(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
+                prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6,
+                createGate, maxConnections, noCache);
+        }
+
         if (createGate != null)
         {
             await createGate.WaitAsync(cancellationToken);
@@ -530,6 +554,140 @@ internal class TcpConnectionFactory : IDisposable
         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
             prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+    }
+
+    /// <summary>
+    ///     Opens a connection only while the pool key is under its concurrent cap. Pool hits never wait.
+    ///     A timeout throws <see cref="UpstreamCapacityException" /> and is not a destination failure.
+    /// </summary>
+    private async Task<TcpServerConnection?> CreateWithinBudget(string remoteHostName, int remotePort,
+        Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols,
+        bool isConnect, ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
+        IExternalProxy? externalProxy, string cacheKey, bool prefetch, CancellationToken cancellationToken,
+        string? connectHost, int? connectPort, IPEndPoint? upStreamEndPointIPv4, IPEndPoint? upStreamEndPointIPv6,
+        SemaphoreSlim? createGate, int maxConnections, bool noCache)
+    {
+        var budget = budgets.GetOrAdd(cacheKey, static (_, max) => new ConnectionBudget(max), maxConnections);
+        var deadline = sessionArgs.ConnectTimeout
+                       ?? sessionArgs.UpstreamHttpClient?.ConnectTimeout
+                       ?? TimeSpan.FromSeconds(5);
+        var until = DateTime.UtcNow + deadline;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
+            {
+                return pooled;
+            }
+
+            if (budget.TryReserve())
+            {
+                try
+                {
+                    return await CreateReservedConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                        applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy,
+                        cacheKey, prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4,
+                        upStreamEndPointIPv6, createGate, budget, noCache);
+                }
+                catch
+                {
+                    // CreateReservedConnection releases the slot when it does not attach it.
+                    throw;
+                }
+            }
+
+            var remaining = until - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new UpstreamCapacityException(cacheKey, budget.Max);
+            }
+
+            budget.EnterWait();
+            try
+            {
+                if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out pooled))
+                {
+                    return pooled;
+                }
+
+                if (budget.TryReserve())
+                {
+                    return await CreateReservedConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                        applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy,
+                        cacheKey, prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4,
+                        upStreamEndPointIPv6, createGate, budget, noCache);
+                }
+
+                remaining = until - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    throw new UpstreamCapacityException(cacheKey, budget.Max);
+                }
+
+                var woke = await budget.WaitAsync(remaining, cancellationToken).ConfigureAwait(false);
+                if (!woke && DateTime.UtcNow >= until)
+                {
+                    throw new UpstreamCapacityException(cacheKey, budget.Max);
+                }
+            }
+            finally
+            {
+                budget.ExitWait();
+            }
+        }
+    }
+
+    private async Task<TcpServerConnection?> CreateReservedConnection(string remoteHostName, int remotePort,
+        Version httpVersion, bool isHttps, SslProtocols sslProtocol, List<SslApplicationProtocol>? applicationProtocols,
+        bool isConnect, ProxyServer proxyServer, SessionEventArgsBase sessionArgs, IPEndPoint? upStreamEndPoint,
+        IExternalProxy? externalProxy, string cacheKey, bool prefetch, CancellationToken cancellationToken,
+        string? connectHost, int? connectPort, IPEndPoint? upStreamEndPointIPv4, IPEndPoint? upStreamEndPointIPv6,
+        SemaphoreSlim? createGate, ConnectionBudget budget, bool noCache)
+    {
+        var attached = false;
+        try
+        {
+            if (createGate != null)
+            {
+                await createGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
+                {
+                    budget.ReleaseSlot();
+                    return pooled;
+                }
+
+                var created = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                    applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
+                    prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+                if (created is null)
+                {
+                    budget.ReleaseSlot();
+                    return null;
+                }
+
+                created.AttachBudget(budget);
+                attached = true;
+                return created;
+            }
+            finally
+            {
+                createGate?.Release();
+            }
+        }
+        catch
+        {
+            if (!attached)
+            {
+                budget.ReleaseSlot();
+            }
+
+            throw;
+        }
     }
 
     /// <summary>
@@ -1553,6 +1711,10 @@ internal class TcpConnectionFactory : IDisposable
 
         // Drop exclusive lease before pooling or disposing so the next Get can TryEnterLease.
         connection.ExitLease();
+
+        // One null check on the hot path. Capped clusters wake a waiter so an idle pooled
+        // connection is rented instead of timing out. Uncapped connections leave Budget null.
+        connection.Budget?.Pulse();
 
         // An ALPN=h2 or h2c-intent socket whose HTTP/2 connection preface was never written (a capability
         // probe or an unadopted prefetch) is not a usable h2 session: the origin applies a preface timeout

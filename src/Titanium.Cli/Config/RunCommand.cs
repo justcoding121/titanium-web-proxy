@@ -120,7 +120,7 @@ internal static class RunCommand
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
-        using var certificateWatch = CertificateBootstrap.WatchCertificateFiles(proxy, loaded.Config.Certificates);
+        using var certificateWatch = CertificateBootstrap.WatchCertificateFiles(proxy, loaded.Config.Certificates, loaded.Config.Listeners);
         StaticFileHost.RegisterIfNeeded(proxy, loaded.Config.StaticFiles, requiresSessionPath);
 
         var loadBalancer = new LoadBalancer();
@@ -871,6 +871,7 @@ internal static class RunCommand
             "socks" => CreateSocksEndPoint(ip, listener),
             "quic" => CreateQuicEndPoint(ip, listener),
             "transparent" => CreateTransparentEndPoint(ip, listener),
+            "masque" => CreateMasqueEndPoint(ip, listener),
             _ when !string.IsNullOrEmpty(listener.ForwardHost) => CreateTransparentEndPoint(ip, listener),
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
@@ -941,6 +942,7 @@ internal static class RunCommand
         var ep = new TransparentProxyEndPoint(ip, listener.Port, listener.DecryptSsl)
         {
             EnableHttp3 = ResolveListenerHttp3(listener, listener.DecryptSsl),
+            AltSvc = ToAltSvcOptions(listener.AltSvc),
         };
 
         if (!string.IsNullOrEmpty(listener.ForwardHost))
@@ -971,6 +973,73 @@ internal static class RunCommand
 
         ApplyQuicKnobs(ep, listener);
         return ep;
+    }
+
+    private static MasqueProxyEndPoint CreateMasqueEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new MasqueProxyEndPoint(ip, listener.Port);
+        var masque = listener.Masque;
+        if (masque is null)
+        {
+            return ep;
+        }
+
+        if (masque.RequireAuth is bool requireAuth)
+        {
+            ep.Options.RequireAuth = requireAuth;
+        }
+
+        if (masque.AllowedPorts is { Length: > 0 } ports)
+        {
+            ep.Options.AllowedPorts = ports;
+        }
+
+        if (masque.BlockPrivateTargets is bool blockPrivate)
+        {
+            ep.Options.BlockPrivateTargets = blockPrivate;
+        }
+
+        if (masque.MaxTunnels is int maxTunnels)
+        {
+            ep.Options.MaxTunnels = maxTunnels;
+        }
+
+        if (masque.MaxTunnelsPerClient is int perClient)
+        {
+            ep.Options.MaxTunnelsPerClient = perClient;
+        }
+
+        if (masque.IdleTimeoutSeconds is int idle)
+        {
+            ep.Options.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+
+        if (masque.MaxDatagramsPerSecond is int datagrams)
+        {
+            ep.Options.MaxDatagramsPerSecond = datagrams;
+        }
+
+        if (masque.MaxBytesPerSecond is int bytes)
+        {
+            ep.Options.MaxBytesPerSecond = bytes;
+        }
+
+        return ep;
+    }
+
+    private static AltSvcOptions? ToAltSvcOptions(AltSvcConfig? config)
+    {
+        if (config is null)
+        {
+            return null;
+        }
+
+        return new AltSvcOptions
+        {
+            Enabled = config.Enabled ?? true,
+            MaxAgeSeconds = config.MaxAgeSeconds,
+            Port = config.Port,
+        };
     }
 
     private static void ApplyQuicKnobs(TransparentProxyEndPoint ep, ListenerConfig listener)
@@ -1029,6 +1098,11 @@ internal static class RunCommand
         if (listener.MaxConcurrentClients is int maxClients)
         {
             endPoint.MaxConcurrentClients = maxClients;
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+        {
+            endPoint.ClientCertificateTrustedRoots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
         }
     }
 

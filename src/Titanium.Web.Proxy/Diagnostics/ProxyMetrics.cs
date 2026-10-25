@@ -248,6 +248,9 @@ internal static class ProxyMetrics
     private static readonly Counter<long> UpstreamRetries =
         Meter.CreateCounter<long>("twp.proxy.upstream.retries", "{retry}", "Upstream retry attempts.");
 
+    private static readonly Counter<long> StatusRetries =
+        Meter.CreateCounter<long>("twp.proxy.status.retries", "{retry}", "Gateway status retries after 502, 503, or 504.");
+
     private static readonly Counter<long> DestinationEjections =
         Meter.CreateCounter<long>("twp.proxy.destination.ejections", "{ejection}", "Destinations marked unhealthy.");
 
@@ -283,6 +286,14 @@ internal static class ProxyMetrics
         if (UpstreamRetries.Enabled)
         {
             UpstreamRetries.Add(1);
+        }
+    }
+
+    public static void RecordStatusRetry()
+    {
+        if (StatusRetries.Enabled)
+        {
+            StatusRetries.Add(1);
         }
     }
 

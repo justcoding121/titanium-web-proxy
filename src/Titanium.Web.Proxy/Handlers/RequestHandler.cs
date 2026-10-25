@@ -1026,11 +1026,21 @@ public partial class ProxyServer
         var connection = await TcpConnectionFactory.GetServerConnection(
             this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
         args.HttpClient.SetConnection(connection);
+        // ReceiveResponse no-ops when a status is already set, so the failed attempt must be discarded
+        // or the replay would return the first 502/503/504.
+        args.HttpClient.Response = new Response();
         try
         {
             await args.HttpClient.SendRequest(
                 false, args.IsTransparent, args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
-            await args.HttpClient.ReceiveResponse(cancellationToken);
+            if (ResponseHeaderTimeoutSeconds > 0 || args.ResponseHeaderTimeout.HasValue)
+            {
+                await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            }
+            else
+            {
+                await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
         }
         catch
         {
@@ -1079,7 +1089,16 @@ public partial class ProxyServer
             if (Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
             {
                 // Async only after a retry is staged, so an unset policy does not allocate a state machine.
-                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    ProxyMetrics.RecordStatusRetry();
+                    await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                }
+                catch (ProxyTimeoutException ex)
+                {
+                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+                    return;
+                }
             }
 
             var fastResponse = args.HttpClient.Response;

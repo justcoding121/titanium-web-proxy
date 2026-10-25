@@ -145,6 +145,43 @@ public class Http3OriginCapabilityCacheTests
     }
 
     [TestMethod]
+    public void MarkBroken_BlocksAdvertisement_UntilOverride()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("www.google.com:443");
+        Assert.IsTrue(cache.TryGet("www.google.com:443", out _));
+
+        cache.MarkBroken("www.google.com:443");
+
+        Assert.IsTrue(cache.IsBroken("www.google.com:443"));
+        Assert.IsFalse(cache.TryGet("www.google.com:443", out _),
+            "A broken origin must not be selected for HTTP/3.");
+        Assert.IsFalse(cache.Set("www.google.com:443", altPort: 443),
+            "Alt-Svc / SVCB must not re-arm HTTP/3 during the broken window.");
+        Assert.IsFalse(cache.TryGet("www.google.com:443", out _));
+
+        Assert.IsTrue(cache.Set("www.google.com:443", overrideBroken: true));
+        Assert.IsFalse(cache.IsBroken("www.google.com:443"));
+        Assert.IsTrue(cache.TryGet("www.google.com:443", out _));
+    }
+
+    [TestMethod]
+    public async Task MarkBroken_AfterExpiry_AllowsSet()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.MarkBroken("www.google.com:443", ttl: TimeSpan.FromMilliseconds(50));
+        Assert.IsTrue(cache.IsBroken("www.google.com:443"));
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (cache.IsBroken("www.google.com:443") && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+
+        Assert.IsFalse(cache.IsBroken("www.google.com:443"));
+        Assert.IsTrue(cache.Set("www.google.com:443"));
+        Assert.IsTrue(cache.TryGet("www.google.com:443", out _));
+    }
+
+    [TestMethod]
     public void TwoArgTryGet_Overload_StillWorks()
     {
         // Verify the convenience overload that discards targetName compiles and returns correct altPort.

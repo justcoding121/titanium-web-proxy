@@ -118,7 +118,7 @@ internal static class ReverseProxySessionDispatch
         ObserveRequestStart(server, session, route);
         if (route.Mirror is { } mirror)
         {
-            MirrorFanout.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
+            server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
         }
 
         ClusterConfig? cluster = null;
@@ -415,7 +415,8 @@ internal static class ReverseProxySessionDispatch
         }
 
         var request = session.HttpClient.Request;
-        if (request.HasBody && (!request.IsBodyRead || request.ContentLength > retry.MaxBufferedBodyBytes))
+        // Replay sends headers only. A body, even one already buffered, would be dropped.
+        if (request.HasBody)
         {
             return false;
         }
@@ -504,6 +505,14 @@ internal static class ReverseProxySessionDispatch
 
     public static void ReportUpstreamResult(ProxyServer server, SessionEventArgsBase session, bool success)
     {
+        // A full connection cap is not an origin failure. Counting it would eject a healthy destination.
+        if (session.Exception is Exceptions.UpstreamCapacityException)
+        {
+            session.DestinationRequestLease?.Dispose();
+            session.DestinationRequestLease = null;
+            return;
+        }
+
         var id = session.UpstreamDestinationId;
         if (id is null || server.ReverseProxy?.LoadBalancer is not LoadBalancer lb)
         {
@@ -731,6 +740,11 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ex = session.Exception;
+        if (ex is Exceptions.UpstreamCapacityException)
+        {
+            return ForwarderError.NoAvailableDestination;
+        }
+
         if (ex is OperationCanceledException)
         {
             return ForwarderError.RequestCanceled;

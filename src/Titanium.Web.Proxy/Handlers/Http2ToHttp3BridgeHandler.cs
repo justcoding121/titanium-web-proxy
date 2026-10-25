@@ -144,8 +144,9 @@ public partial class ProxyServer
 
         if (!h3Route.UseH3)
         {
-            // Cold path: CONNECT committed to H2→H3 with NullOriginStream. After QUIC failure evicts
-            // the capability cache, later multiplexed streams must still be answered (via TCP).
+            // Cold path: CONNECT committed to H2→H3 with NullOriginStream. After QUIC failure marks
+            // the origin unreachable, later multiplexed streams must still be answered (via TCP, HTTP/2
+            // when this client already negotiated it).
             h3Route = Http3OriginRoute.None;
         }
 

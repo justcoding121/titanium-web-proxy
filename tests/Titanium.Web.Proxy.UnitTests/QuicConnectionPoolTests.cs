@@ -136,6 +136,51 @@ public class QuicConnectionPoolTests
     }
 
     [TestMethod]
+    public async Task BeginWarmup_QueuedBehindHandshake_SkipsDialWhenOriginMarkedUnreachableMeanwhile()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var factory = new ThrowingQuicFactory { FailAfter = TimeSpan.FromMilliseconds(400) };
+        await using var pool = new QuicConnectionPool(proxy, factory);
+        const string key = "sni.example:443";
+        proxy.Http3OriginCapabilityCache.Set(key);
+
+        // A foreground handshake holds the creation gate and is going to time out...
+        var foreground = pool.GetOrCreateAsync("connect.example", 443, null, null, null, CancellationToken.None,
+            sniHost: "sni.example", capabilityKey: key).AsTask();
+        await Task.Delay(100);
+
+        // ...the warm-up queues behind it...
+        pool.BeginWarmup("connect.example", 443, "sni.example", null, capabilityKey: key);
+        await Task.Delay(50);
+
+        // ...the handshake fails, and the pool marks the origin unreachable before releasing the gate...
+        await Assert.ThrowsExactlyAsync<System.Net.Sockets.SocketException>(() => foreground);
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken(key));
+
+        // ...so the queued warm-up must not dial: a second dial would add another 400ms handshake.
+        await Task.Delay(900);
+        Assert.AreEqual(1, factory.CreateCount,
+            "A warm-up that queued behind a failed handshake must not dial again once the origin is marked unreachable.");
+    }
+
+    [TestMethod]
+    public async Task HasLiveConnection_IsFalseCold_TrueWhileShared_FalseAfterInvalidate()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy, new FakeQuicFactory(proxy));
+
+        Assert.IsFalse(pool.HasLiveConnection("origin.example", 443, null, null),
+            "A cold origin has no connection, which is the case worth racing TCP against.");
+
+        var conn = await pool.GetOrCreateAsync("origin.example", 443, null, null, null, CancellationToken.None);
+        Assert.IsTrue(pool.HasLiveConnection("origin.example", 443, null, null));
+        Assert.IsFalse(pool.HasLiveConnection("other.example", 443, null, null));
+
+        await pool.InvalidateAsync(conn);
+        Assert.IsFalse(pool.HasLiveConnection("origin.example", 443, null, null));
+    }
+
+    [TestMethod]
     public async Task BeginWarmup_CreatesConnectionAndMarksOriginWarm()
     {
         using var proxy = new ProxyServer(false, false, false);
@@ -161,6 +206,60 @@ public class QuicConnectionPoolTests
             await Task.Delay(20);
         }
         Assert.AreEqual(1, factory.CreateCount);
+    }
+
+    [TestMethod]
+    public async Task BeginWarmup_HandshakeFails_MarksOriginUnreachable()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy, new ThrowingQuicFactory());
+        proxy.Http3OriginCapabilityCache.Set("sni.example:443");
+
+        pool.BeginWarmup("connect.example", 443, "sni.example", null, capabilityKey: "sni.example:443");
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (!proxy.Http3OriginCapabilityCache.IsBroken("sni.example:443") && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken("sni.example:443"),
+            "A failed warm-up handshake must keep real requests off the blackholed QUIC path.");
+        Assert.IsFalse(proxy.Http3OriginCapabilityCache.TryGet("sni.example:443", out _));
+    }
+
+    [TestMethod]
+    public async Task BeginWarmup_HandshakeFails_WithoutKey_DoesNotTouchCache()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy, new ThrowingQuicFactory());
+        proxy.Http3OriginCapabilityCache.Set("sni.example:443");
+
+        pool.BeginWarmup("connect.example", 443, "sni.example", null);
+        await Task.Delay(300);
+
+        Assert.IsFalse(proxy.Http3OriginCapabilityCache.IsBroken("sni.example:443"));
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.TryGet("sni.example:443", out _));
+    }
+
+    private sealed class ThrowingQuicFactory : IQuicConnectionFactory
+    {
+        private int _createCount;
+
+        /// <summary>How long a "handshake" takes before it times out; zero fails immediately.</summary>
+        public TimeSpan FailAfter { get; init; }
+
+        public int CreateCount => Volatile.Read(ref _createCount);
+
+        public async Task<QuicServerConnection> CreateAsync(
+            string connectHost, string sniHost, int port, IPEndPoint? upStreamEndPoint,
+            IExternalProxy? upStreamProxy, string cacheKey,
+            RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
+            CancellationToken cancellationToken, bool failFastHandshake = true)
+        {
+            Interlocked.Increment(ref _createCount);
+            if (FailAfter > TimeSpan.Zero)
+                await Task.Delay(FailAfter, cancellationToken);
+            throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.TimedOut);
+        }
     }
 
     [TestMethod]
