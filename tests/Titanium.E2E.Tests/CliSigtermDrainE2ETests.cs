@@ -87,9 +87,9 @@ public class CliSigtermDrainE2ETests
             var read = await probe.GetStream().ReadAsync(buffer);
             Assert.AreEqual(0, read, "a connection accepted during drain must be closed without a response");
         }
-        catch (SocketException)
+        catch (Exception ex) when (ex is SocketException or IOException)
         {
-            // The listener has already stopped accepting.
+            // Drain either refuses the accept or resets a socket that was already in the backlog.
         }
 
         var deadline = signalled.AddSeconds(drainSeconds + 4);
