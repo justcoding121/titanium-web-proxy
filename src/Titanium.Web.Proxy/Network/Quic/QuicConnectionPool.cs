@@ -106,7 +106,8 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken,
         string? sniHost = null,
-        bool failFastHandshake = true)
+        bool failFastHandshake = true,
+        string? capabilityKey = null)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
@@ -133,10 +134,29 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                 if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
                 if (TryAcquireCurrent(entry, out shared)) return shared;
 
-                var created = await _factory.CreateAsync(
-                    connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
-                    cacheKey, remoteCertificateValidationCallback, cancellationToken,
-                    failFastHandshake);
+                // The caller may have queued behind another handshake that has since failed. Re-check
+                // before dialing: running a second doomed handshake right after the origin was marked
+                // unreachable is exactly the retry the mark exists to prevent.
+                if (capabilityKey != null && _proxyServer.Http3OriginCapabilityCache.IsBroken(capabilityKey))
+                    throw new OperationCanceledException("QUIC creation skipped: origin marked unreachable.");
+
+                QuicServerConnection created;
+                try
+                {
+                    created = await _factory.CreateAsync(
+                        connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
+                        cacheKey, remoteCertificateValidationCallback, cancellationToken,
+                        failFastHandshake);
+                }
+                catch (Exception ex) when (capabilityKey != null && !_draining
+                                           && ex is not (OperationCanceledException or ObjectDisposedException
+                                               or InvalidOperationException))
+                {
+                    // Mark while still holding CreationGate. Releasing it first would let a caller queued
+                    // behind this handshake dial again before the verdict is visible.
+                    _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+                    throw;
+                }
 
                 // Nothing else can see `created` yet, so this cannot fail.
                 created.TryAcquireStream();
@@ -225,7 +245,8 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             {
                 using var timeout = new CancellationTokenSource(WarmupTimeout);
                 var connection = await GetOrCreateAsync(
-                    connectHost, port, upStreamEndPoint, null, null, timeout.Token, sniHost);
+                    connectHost, port, upStreamEndPoint, null, null, timeout.Token, sniHost,
+                    capabilityKey: capabilityKey);
 
                 // The warm-up wanted the connection established, not used; hand the stream straight
                 // back so the connection counts as idle and stays available to real requests.

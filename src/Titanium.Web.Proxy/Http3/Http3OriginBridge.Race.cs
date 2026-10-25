@@ -73,7 +73,8 @@ internal static partial class Http3OriginBridge
                 server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
             CancellationToken.None,
             sniHost: sniHost,
-            failFastHandshake: true).AsTask();
+            failFastHandshake: true,
+            capabilityKey: hostAndPort).AsTask();
 
         using var tcpCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
@@ -112,6 +113,12 @@ internal static partial class Http3OriginBridge
             // The request went away mid-race; do not leak the handshake or its stream.
             ObserveAbandonedQuicHandshake(quicTask, server, hostAndPort);
             throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            // The pool declined to dial because the origin was marked unreachable while this call queued
+            // (not a cancelled request). Surface it as a plain failure so the caller's TCP fallback runs.
+            throw new InvalidOperationException("QUIC unavailable: origin marked unreachable.", ex);
         }
     }
 

@@ -136,6 +136,34 @@ public class QuicConnectionPoolTests
     }
 
     [TestMethod]
+    public async Task BeginWarmup_QueuedBehindHandshake_SkipsDialWhenOriginMarkedUnreachableMeanwhile()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var factory = new ThrowingQuicFactory { FailAfter = TimeSpan.FromMilliseconds(400) };
+        await using var pool = new QuicConnectionPool(proxy, factory);
+        const string key = "sni.example:443";
+        proxy.Http3OriginCapabilityCache.Set(key);
+
+        // A foreground handshake holds the creation gate and is going to time out...
+        var foreground = pool.GetOrCreateAsync("connect.example", 443, null, null, null, CancellationToken.None,
+            sniHost: "sni.example", capabilityKey: key).AsTask();
+        await Task.Delay(100);
+
+        // ...the warm-up queues behind it...
+        pool.BeginWarmup("connect.example", 443, "sni.example", null, capabilityKey: key);
+        await Task.Delay(50);
+
+        // ...the handshake fails, and the pool marks the origin unreachable before releasing the gate...
+        await Assert.ThrowsExactlyAsync<System.Net.Sockets.SocketException>(() => foreground);
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken(key));
+
+        // ...so the queued warm-up must not dial: a second dial would add another 400ms handshake.
+        await Task.Delay(900);
+        Assert.AreEqual(1, factory.CreateCount,
+            "A warm-up that queued behind a failed handshake must not dial again once the origin is marked unreachable.");
+    }
+
+    [TestMethod]
     public async Task HasLiveConnection_IsFalseCold_TrueWhileShared_FalseAfterInvalidate()
     {
         using var proxy = new ProxyServer(false, false, false);
@@ -214,12 +242,24 @@ public class QuicConnectionPoolTests
 
     private sealed class ThrowingQuicFactory : IQuicConnectionFactory
     {
-        public Task<QuicServerConnection> CreateAsync(
+        private int _createCount;
+
+        /// <summary>How long a "handshake" takes before it times out; zero fails immediately.</summary>
+        public TimeSpan FailAfter { get; init; }
+
+        public int CreateCount => Volatile.Read(ref _createCount);
+
+        public async Task<QuicServerConnection> CreateAsync(
             string connectHost, string sniHost, int port, IPEndPoint? upStreamEndPoint,
             IExternalProxy? upStreamProxy, string cacheKey,
             RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
             CancellationToken cancellationToken, bool failFastHandshake = true)
-            => throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.TimedOut);
+        {
+            Interlocked.Increment(ref _createCount);
+            if (FailAfter > TimeSpan.Zero)
+                await Task.Delay(FailAfter, cancellationToken);
+            throw new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.TimedOut);
+        }
     }
 
     [TestMethod]
