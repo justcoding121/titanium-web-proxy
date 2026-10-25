@@ -5764,6 +5764,51 @@ references:
   commentId: N:Titanium.Web.Proxy.Models
   fullName: Titanium.Web.Proxy.Models
   nameWithType: Titanium.Web.Proxy.Models
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions
+  name: AltSvcOptions
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html
+  commentId: T:Titanium.Web.Proxy.Models.AltSvcOptions
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions
+  nameWithType: AltSvcOptions
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions.Enabled
+  name: Enabled
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html#Titanium_Web_Proxy_Models_AltSvcOptions_Enabled
+  commentId: P:Titanium.Web.Proxy.Models.AltSvcOptions.Enabled
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions.Enabled
+  nameWithType: AltSvcOptions.Enabled
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions.Enabled*
+  name: Enabled
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html#Titanium_Web_Proxy_Models_AltSvcOptions_Enabled_
+  commentId: Overload:Titanium.Web.Proxy.Models.AltSvcOptions.Enabled
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions.Enabled
+  nameWithType: AltSvcOptions.Enabled
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds
+  name: MaxAgeSeconds
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html#Titanium_Web_Proxy_Models_AltSvcOptions_MaxAgeSeconds
+  commentId: P:Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds
+  nameWithType: AltSvcOptions.MaxAgeSeconds
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds*
+  name: MaxAgeSeconds
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html#Titanium_Web_Proxy_Models_AltSvcOptions_MaxAgeSeconds_
+  commentId: Overload:Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions.MaxAgeSeconds
+  nameWithType: AltSvcOptions.MaxAgeSeconds
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions.Port
+  name: Port
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html#Titanium_Web_Proxy_Models_AltSvcOptions_Port
+  commentId: P:Titanium.Web.Proxy.Models.AltSvcOptions.Port
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions.Port
+  nameWithType: AltSvcOptions.Port
+- uid: Titanium.Web.Proxy.Models.AltSvcOptions.Port*
+  name: Port
+  href: api/Titanium.Web.Proxy.Models.AltSvcOptions.html#Titanium_Web_Proxy_Models_AltSvcOptions_Port_
+  commentId: Overload:Titanium.Web.Proxy.Models.AltSvcOptions.Port
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.AltSvcOptions.Port
+  nameWithType: AltSvcOptions.Port
 - uid: Titanium.Web.Proxy.Models.ClientCertificateMode
   name: ClientCertificateMode
   href: api/Titanium.Web.Proxy.Models.ClientCertificateMode.html
@@ -6473,6 +6518,154 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.IExternalProxy.UserName
   nameWithType: IExternalProxy.UserName
+- uid: Titanium.Web.Proxy.Models.MasqueOptions
+  name: MasqueOptions
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html
+  commentId: T:Titanium.Web.Proxy.Models.MasqueOptions
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions
+  nameWithType: MasqueOptions
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
+  name: AllowedPorts
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowedPorts
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
+  nameWithType: MasqueOptions.AllowedPorts
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts*
+  name: AllowedPorts
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowedPorts_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
+  nameWithType: MasqueOptions.AllowedPorts
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets
+  name: BlockPrivateTargets
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_BlockPrivateTargets
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets
+  nameWithType: MasqueOptions.BlockPrivateTargets
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets*
+  name: BlockPrivateTargets
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_BlockPrivateTargets_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets
+  nameWithType: MasqueOptions.BlockPrivateTargets
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout
+  name: IdleTimeout
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_IdleTimeout
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout
+  nameWithType: MasqueOptions.IdleTimeout
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout*
+  name: IdleTimeout
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_IdleTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.IdleTimeout
+  nameWithType: MasqueOptions.IdleTimeout
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond
+  name: MaxBytesPerSecond
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxBytesPerSecond
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond
+  nameWithType: MasqueOptions.MaxBytesPerSecond
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond*
+  name: MaxBytesPerSecond
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxBytesPerSecond_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxBytesPerSecond
+  nameWithType: MasqueOptions.MaxBytesPerSecond
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond
+  name: MaxDatagramsPerSecond
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxDatagramsPerSecond
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond
+  nameWithType: MasqueOptions.MaxDatagramsPerSecond
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond*
+  name: MaxDatagramsPerSecond
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxDatagramsPerSecond_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxDatagramsPerSecond
+  nameWithType: MasqueOptions.MaxDatagramsPerSecond
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels
+  name: MaxTunnels
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxTunnels
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels
+  nameWithType: MasqueOptions.MaxTunnels
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels*
+  name: MaxTunnels
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxTunnels_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnels
+  nameWithType: MasqueOptions.MaxTunnels
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient
+  name: MaxTunnelsPerClient
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxTunnelsPerClient
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient
+  nameWithType: MasqueOptions.MaxTunnelsPerClient
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient*
+  name: MaxTunnelsPerClient
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_MaxTunnelsPerClient_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.MaxTunnelsPerClient
+  nameWithType: MasqueOptions.MaxTunnelsPerClient
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth
+  name: RequireAuth
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_RequireAuth
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth
+  nameWithType: MasqueOptions.RequireAuth
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth*
+  name: RequireAuth
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_RequireAuth_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.RequireAuth
+  nameWithType: MasqueOptions.RequireAuth
+- uid: Titanium.Web.Proxy.Models.MasqueProxyEndPoint
+  name: MasqueProxyEndPoint
+  href: api/Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html
+  commentId: T:Titanium.Web.Proxy.Models.MasqueProxyEndPoint
+  fullName: Titanium.Web.Proxy.Models.MasqueProxyEndPoint
+  nameWithType: MasqueProxyEndPoint
+- uid: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.#ctor(System.Net.IPAddress,System.Int32)
+  name: MasqueProxyEndPoint(IPAddress, int)
+  href: api/Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html#Titanium_Web_Proxy_Models_MasqueProxyEndPoint__ctor_System_Net_IPAddress_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Models.MasqueProxyEndPoint.#ctor(System.Net.IPAddress,System.Int32)
+  name.vb: New(IPAddress, Integer)
+  fullName: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.MasqueProxyEndPoint(System.Net.IPAddress, int)
+  fullName.vb: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.New(System.Net.IPAddress, Integer)
+  nameWithType: MasqueProxyEndPoint.MasqueProxyEndPoint(IPAddress, int)
+  nameWithType.vb: MasqueProxyEndPoint.New(IPAddress, Integer)
+- uid: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.#ctor*
+  name: MasqueProxyEndPoint
+  href: api/Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html#Titanium_Web_Proxy_Models_MasqueProxyEndPoint__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueProxyEndPoint.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.MasqueProxyEndPoint
+  fullName.vb: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.New
+  nameWithType: MasqueProxyEndPoint.MasqueProxyEndPoint
+  nameWithType.vb: MasqueProxyEndPoint.New
+- uid: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options
+  name: Options
+  href: api/Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html#Titanium_Web_Proxy_Models_MasqueProxyEndPoint_Options
+  commentId: P:Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options
+  fullName: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options
+  nameWithType: MasqueProxyEndPoint.Options
+- uid: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options*
+  name: Options
+  href: api/Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html#Titanium_Web_Proxy_Models_MasqueProxyEndPoint_Options_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options
+  nameWithType: MasqueProxyEndPoint.Options
 - uid: Titanium.Web.Proxy.Models.OriginHttpVersionPolicy
   name: OriginHttpVersionPolicy
   href: api/Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.html
@@ -6637,6 +6830,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateMode
   nameWithType: ProxyEndPoint.ClientCertificateMode
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots
+  name: ClientCertificateTrustedRoots
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateTrustedRoots
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots
+  nameWithType: ProxyEndPoint.ClientCertificateTrustedRoots
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots*
+  name: ClientCertificateTrustedRoots
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateTrustedRoots_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots
+  nameWithType: ProxyEndPoint.ClientCertificateTrustedRoots
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.DecryptSsl
   name: DecryptSsl
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_DecryptSsl
@@ -6988,6 +7194,19 @@ references:
   fullName.vb: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.New
   nameWithType: TransparentProxyEndPoint.TransparentProxyEndPoint
   nameWithType.vb: TransparentProxyEndPoint.New
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc
+  name: AltSvc
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_AltSvc
+  commentId: P:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc
+  nameWithType: TransparentProxyEndPoint.AltSvc
+- uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc*
+  name: AltSvc
+  href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_AltSvc_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc
+  nameWithType: TransparentProxyEndPoint.AltSvc
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate
   name: BeforeHttpAuthenticate
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeHttpAuthenticate

@@ -89,6 +89,7 @@
     <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
     <div class="level1"><span class="xref">ProxyEndPoint</span></div>
       <div class="level2"><a class="xref" href="Titanium.Web.Proxy.Models.ExplicitProxyEndPoint.html">ExplicitProxyEndPoint</a></div>
+      <div class="level2"><a class="xref" href="Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html">MasqueProxyEndPoint</a></div>
       <div class="level2"><a class="xref" href="Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html">TransparentBaseProxyEndPoint</a></div>
   </div>
   <div class="inheritedMembers">
@@ -173,7 +174,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptProxyProtocol.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L76">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L83">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptProxyProtocol_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptProxyProtocol" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol">AcceptProxyProtocol</h4>
@@ -204,7 +205,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L167">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L174">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount">AdmittedClientCount</h4>
@@ -264,6 +265,39 @@ admission gate, not yet finished being handled).</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateTrustedRoots.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L80">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateTrustedRoots_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateTrustedRoots" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots">ClientCertificateTrustedRoots</h4>
+  <div class="markdown level1 summary"><p>Trust anchors for an inbound client certificate. Null uses the platform trust store,
+which is the historical behavior. A reload assigns a new collection; it never mutates one
+that a handshake is already reading.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public X509Certificate2Collection? ClientCertificateTrustedRoots { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate2collection">X509Certificate2Collection</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_DecryptSsl.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.DecryptSsl%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -298,7 +332,7 @@ admission gate, not yet finished being handled).</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_EnableHttpInterception.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L161">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L168">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_EnableHttpInterception_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_EnableHttpInterception" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.EnableHttpInterception">EnableHttpInterception</h4>
@@ -392,7 +426,7 @@ admission gate, not yet finished being handled).</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_MaxCachedConnections.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L145">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L152">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxCachedConnections_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxCachedConnections" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxCachedConnections">MaxCachedConnections</h4>
@@ -426,7 +460,7 @@ raising the process-wide default for every explicit MITM host.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_MaxConcurrentClients.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L152">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L159">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxConcurrentClients_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_MaxConcurrentClients" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.MaxConcurrentClients">MaxConcurrentClients</h4>
@@ -521,7 +555,7 @@ default) disables the per-endpoint admission gate, preserving today's unbounded 
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_ProxyEndPoint_TrustedProxyProtocolSources.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L85">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/ProxyEndPoint.cs/#L92">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_ProxyEndPoint_TrustedProxyProtocolSources_" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources*"></a>
   <h4 id="Titanium_Web_Proxy_Models_ProxyEndPoint_TrustedProxyProtocolSources" data-uid="Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources">TrustedProxyProtocolSources</h4>

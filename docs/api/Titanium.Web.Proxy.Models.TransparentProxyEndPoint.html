@@ -131,6 +131,9 @@ Useful when requests are redirected to this proxy end point through port forward
       <a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateMode">ProxyEndPoint.ClientCertificateMode</a>
     </div>
     <div>
+      <a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ClientCertificateTrustedRoots">ProxyEndPoint.ClientCertificateTrustedRoots</a>
+    </div>
+    <div>
       <a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptProxyProtocol">ProxyEndPoint.AcceptProxyProtocol</a>
     </div>
     <div>
@@ -183,7 +186,7 @@ Useful when requests are redirected to this proxy end point through port forward
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint__ctor_System_Net_IPAddress_System_Int32_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.%23ctor(System.Net.IPAddress%2CSystem.Int32%2CSystem.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L37">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L40">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint__ctor_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.#ctor*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint__ctor_System_Net_IPAddress_System_Int32_System_Boolean_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.#ctor(System.Net.IPAddress,System.Int32,System.Boolean)">TransparentProxyEndPoint(IPAddress, int, bool)</h4>
@@ -228,10 +231,45 @@ Useful when requests are redirected to this proxy end point through port forward
 </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_AltSvc.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L70">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_AltSvc_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc*"></a>
+  <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_AltSvc" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.AltSvc">AltSvc</h4>
+  <div class="markdown level1 summary"><p>Overrides the client-facing <code>Alt-Svc</code> value injected when <a class="xref" href="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3">EnableHttp3</a> is on.
+Null keeps <code>h3=&quot;:port&quot;; ma=86400</code>. Explicit and SOCKS endpoints never inject this header:
+they speak TCP to the client, and HTTP/3 there would require a proxy protocol that clients
+do not use. The H2-to-H3 bridge also never injects it (a mid-connection upgrade breaks Chrome).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[Experimental(&quot;TWP001&quot;)]
+public AltSvcOptions? AltSvc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Models.AltSvcOptions.html">AltSvcOptions</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L58">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L61">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.EnableHttp3">EnableHttp3</h4>
@@ -269,7 +307,7 @@ public bool EnableHttp3 { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_GenericCertificateName.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L47">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L50">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_GenericCertificateName_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_GenericCertificateName" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.GenericCertificateName">GenericCertificateName</h4>
@@ -303,7 +341,7 @@ This is valid only when UseServerNameIndication is set to false.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_HandshakeTimeout.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L83">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L130">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_HandshakeTimeout_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_HandshakeTimeout" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.HandshakeTimeout">HandshakeTimeout</h4>
@@ -336,7 +374,7 @@ public TimeSpan HandshakeTimeout { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_IdleTimeout.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L89">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L136">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_IdleTimeout_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_IdleTimeout" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.IdleTimeout">IdleTimeout</h4>
@@ -368,7 +406,7 @@ public TimeSpan IdleTimeout { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundBidirectionalStreams.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L65">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L112">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundBidirectionalStreams_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundBidirectionalStreams" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundBidirectionalStreams">MaxInboundBidirectionalStreams</h4>
@@ -401,7 +439,7 @@ public int MaxInboundBidirectionalStreams { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundUnidirectionalStreams.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L72">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L119">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundUnidirectionalStreams_" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams*"></a>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_MaxInboundUnidirectionalStreams" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.MaxInboundUnidirectionalStreams">MaxInboundUnidirectionalStreams</h4>
@@ -436,7 +474,7 @@ public int MaxInboundUnidirectionalStreams { get; set; }</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeHttpAuthenticate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L108">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L155">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeHttpAuthenticate" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeHttpAuthenticate">BeforeHttpAuthenticate</h4>
   <div class="markdown level1 summary"><p>Before handling a cleartext (non-TLS) client session — including prior-knowledge HTTP/2 (h2c) —
@@ -467,7 +505,7 @@ this event is fired so upstream protocol policy can be set without a ClientHello
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeQuicAuthenticate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L97">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L144">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeQuicAuthenticate" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeQuicAuthenticate">BeforeQuicAuthenticate</h4>
   <div class="markdown level1 summary"><p>Fired before the QUIC TLS handshake completes for each inbound HTTP/3 connection when
@@ -499,7 +537,7 @@ public event AsyncEventHandler&lt;BeforeQuicAuthenticateEventArgs&gt;? BeforeQui
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeSslAuthenticate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L102">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L149">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_Models_TransparentProxyEndPoint_BeforeSslAuthenticate" data-uid="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.BeforeSslAuthenticate">BeforeSslAuthenticate</h4>
   <div class="markdown level1 summary"><p>Before Ssl authentication this event is fired.</p>
@@ -536,7 +574,7 @@ public event AsyncEventHandler&lt;BeforeQuicAuthenticateEventArgs&gt;? BeforeQui
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_TransparentProxyEndPoint.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.TransparentProxyEndPoint%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L26" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/TransparentProxyEndPoint.cs/#L27" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>
