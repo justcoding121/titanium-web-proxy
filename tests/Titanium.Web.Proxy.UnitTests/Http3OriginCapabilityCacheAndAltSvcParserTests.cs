@@ -203,6 +203,7 @@ public class Http3OriginCapabilityCacheBackoffTests
 {
     private const string Key = "origin.example:443";
     private static readonly TimeSpan Five = TimeSpan.FromMinutes(5);
+    private static readonly double[] ExpectedWindowMinutes = [5d, 10d, 20d, 40d, 60d, 60d];
 
     private static (Http3OriginCapabilityCache Cache, Support.ManualTimeProvider Time) Create()
     {
@@ -243,7 +244,7 @@ public class Http3OriginCapabilityCacheBackoffTests
             time.Advance(window + TimeSpan.FromSeconds(1));
         }
 
-        CollectionAssert.AreEqual(new[] { 5d, 10d, 20d, 40d, 60d, 60d }, seen);
+        CollectionAssert.AreEqual(ExpectedWindowMinutes, seen);
     }
 
     [TestMethod]

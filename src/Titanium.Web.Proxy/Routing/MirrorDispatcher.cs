@@ -154,10 +154,10 @@ internal sealed class MirrorDispatcher : IDisposable
         // A mirror copy is best effort, so there is nothing to wait for. Cancelling ends an open send
         // at once, and the workers exit on their own once their queue is empty and complete.
         shutdown.Cancel();
-        foreach (var lane in lanes.Values)
+        foreach (var queue in lanes.Values.Select(static lane => lane.Queue))
         {
-            lane.Queue.Writer.TryComplete();
-            while (lane.Queue.Reader.TryRead(out _))
+            queue.Writer.TryComplete();
+            while (queue.Reader.TryRead(out _))
             {
                 // Copies that never started are dropped with the proxy.
             }
@@ -175,7 +175,7 @@ internal sealed class MirrorDispatcher : IDisposable
             while (lane.Running < target && Volatile.Read(ref disposed) == 0)
             {
                 lane.Running++;
-                lane.Tasks.Add(Task.Run(() => WorkerAsync(lane)));
+                lane.Tasks.Add(Task.Run(() => WorkerAsync(lane), shutdownToken));
             }
         }
     }
@@ -279,30 +279,35 @@ internal sealed class MirrorDispatcher : IDisposable
 
             while (lane.Queue.Reader.TryRead(out var work))
             {
-                try
-                {
-                    if (Sender is { } sender)
-                    {
-                        await sender(work).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await SendAsync(work, shutdownToken).ConfigureAwait(false);
-                    }
-
-                    Interlocked.Increment(ref sent);
-                    ProxyMetrics.RecordMirrorSent();
-                }
-                catch (OperationCanceledException) when (Volatile.Read(ref disposed) != 0)
-                {
-                    // The proxy is stopping. A cancelled copy is not a failed one.
-                }
-                catch
-                {
-                    Interlocked.Increment(ref failed);
-                    ProxyMetrics.RecordMirrorFailed();
-                }
+                await DeliverAsync(work).ConfigureAwait(false);
             }
+        }
+    }
+
+    private async Task DeliverAsync(MirrorWork work)
+    {
+        try
+        {
+            if (Sender is { } sender)
+            {
+                await sender(work).ConfigureAwait(false);
+            }
+            else
+            {
+                await SendAsync(work, shutdownToken).ConfigureAwait(false);
+            }
+
+            Interlocked.Increment(ref sent);
+            ProxyMetrics.RecordMirrorSent();
+        }
+        catch (OperationCanceledException) when (Volatile.Read(ref disposed) != 0)
+        {
+            // The proxy is stopping. A cancelled copy is not a failed one.
+        }
+        catch
+        {
+            Interlocked.Increment(ref failed);
+            ProxyMetrics.RecordMirrorFailed();
         }
     }
 

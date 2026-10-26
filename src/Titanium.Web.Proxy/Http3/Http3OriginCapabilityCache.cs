@@ -150,15 +150,8 @@ internal sealed class Http3OriginCapabilityCache
             var now = UtcNow;
             if (_cache.TryGetValue(hostAndPort, out var existing))
             {
-                var live = existing.Broken && existing.ExpiresAtUtc > now;
-                var failures = live ? existing.Failures : existing.Failures + 1;
-                var until = now + BackoffWindow(baseWindow, failures);
-                // Keep the longer window so a second failure cannot shorten the backoff.
-                if (live && existing.ExpiresAtUtc >= until)
-                    return existing.ExpiresAtUtc - now;
-
-                if (_cache.TryUpdate(hostAndPort, new Entry(int.MinValue, null, until, Broken: true, Failures: failures), existing))
-                    return until - now;
+                if (TryRenewBroken(hostAndPort, existing, baseWindow, now, out var window))
+                    return window;
 
                 continue;
             }
@@ -167,6 +160,26 @@ internal sealed class Http3OriginCapabilityCache
             if (_cache.TryAdd(hostAndPort, new Entry(int.MinValue, null, first, Broken: true, Failures: 1)))
                 return baseWindow;
         }
+    }
+
+    /// <summary>
+    ///     Marks an entry that already exists. False means another writer changed it first and the
+    ///     caller should read it again.
+    /// </summary>
+    private bool TryRenewBroken(string hostAndPort, Entry existing, TimeSpan baseWindow, DateTime now, out TimeSpan window)
+    {
+        var live = existing.Broken && existing.ExpiresAtUtc > now;
+        var failures = live ? existing.Failures : existing.Failures + 1;
+        var until = now + BackoffWindow(baseWindow, failures);
+        // Keep the longer window so a second failure cannot shorten the backoff.
+        if (live && existing.ExpiresAtUtc >= until)
+        {
+            window = existing.ExpiresAtUtc - now;
+            return true;
+        }
+
+        window = until - now;
+        return _cache.TryUpdate(hostAndPort, new Entry(int.MinValue, null, until, Broken: true, Failures: failures), existing);
     }
 
     private static TimeSpan BackoffWindow(TimeSpan baseWindow, int failures)
