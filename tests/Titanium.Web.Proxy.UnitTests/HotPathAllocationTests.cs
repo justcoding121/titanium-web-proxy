@@ -96,9 +96,10 @@ public class HotPathAllocationTests
     }
 
     [TestMethod]
-    public void WarmQuicLookup_WithAReadyKey_DoesNotAllocate()
+    public async Task WarmQuicLookup_WithAReadyKey_DoesNotAllocate()
     {
 #if DEBUG
+        await Task.CompletedTask;
         Assert.Inconclusive("Allocation ceilings are enforced in Release.");
 #else
         using var proxy = new ProxyServer(false, false, false);
