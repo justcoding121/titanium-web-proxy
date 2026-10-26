@@ -174,7 +174,7 @@ internal sealed class MirrorDispatcher : IDisposable
             return true;
         }
 
-        var cap = mirror.MaxBodyBytes > 0 ? mirror.MaxBodyBytes : 65536;
+        var cap = mirror.MaxBodyBytes > 0 ? Math.Min(mirror.MaxBodyBytes, MirrorConfig.MaxAllowedBodyBytes) : 65536;
         if (!request.IsBodyRead || request.ContentLength > cap)
         {
             return false;

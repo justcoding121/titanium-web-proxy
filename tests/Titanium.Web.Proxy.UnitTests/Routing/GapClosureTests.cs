@@ -261,6 +261,23 @@ public class GapClosureTests
     }
 
     [TestMethod]
+    public void Mirror_ClampsAHugeConfiguredBodyLimit()
+    {
+        using var fanout = new MirrorDispatcher();
+        var size = MirrorConfig.MaxAllowedBodyBytes + 1;
+        var request = new Request { Method = "POST", Host = "app.test", ContentLength = size };
+        request.RequestUriString8 = (ByteString)"/huge";
+        request.Body = new byte[size];
+        request.IsBodyRead = true;
+        fanout.TryEnqueue(
+            new MirrorConfig { ClusterId = "m", MaxBodyBytes = int.MaxValue },
+            request,
+            new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 9 });
+        Assert.AreEqual(1, fanout.SkippedForTests);
+        Assert.AreEqual(0, fanout.QueuedForTests);
+    }
+
+    [TestMethod]
     public async Task Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
     {
         var fanout = new MirrorDispatcher();

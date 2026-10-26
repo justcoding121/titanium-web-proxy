@@ -80,6 +80,13 @@ public sealed class MirrorConfig
 {
     public required string ClusterId { get; init; }
     public int SamplePercent { get; init; } = 100;
+    /// <summary>The largest <see cref="MaxBodyBytes" /> a route may ask for (1 MiB).</summary>
+    public const int MaxAllowedBodyBytes = 1_048_576;
+
+    /// <summary>
+    ///     Largest request body that is copied. Larger bodies are skipped. 0 means the 64 KiB default.
+    ///     Values above <see cref="MaxAllowedBodyBytes" /> are rejected by validation and clamped at runtime.
+    /// </summary>
     public int MaxBodyBytes { get; init; } = 65536;
 
     /// <summary>How many mirror sends run at once for this route. Clamped to 1-16. Default: 2.</summary>

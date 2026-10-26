@@ -308,6 +308,11 @@ public static class TwpConfigValidator
         {
             errors.Add($"Route '{route.Id}' mirror maxConcurrency must be 1-16.");
         }
+
+        if (mirror.MaxBodyBytes is < 0 or > MirrorConfig.MaxAllowedBodyBytes)
+        {
+            errors.Add($"Route '{route.Id}' mirror maxBodyBytes must be 0-{MirrorConfig.MaxAllowedBodyBytes}.");
+        }
     }
 
     private static void ValidateRouteRedirect(RouteConfig route, List<string> errors)
