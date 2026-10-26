@@ -39,23 +39,6 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot)
         => Select(cluster, snapshot, default);
 
-    internal DestinationConfig? SelectFirstUntried(
-        ClusterConfig cluster,
-        ImmutableClusterSnapshot snapshot,
-        Func<string, bool> alreadyTried)
-    {
-        var eligible = Collect(cluster, snapshot, cluster.HealthCheck?.Passive);
-        for (var i = 0; i < eligible.Count; i++)
-        {
-            if (!alreadyTried(eligible[i].Id))
-            {
-                return eligible[i];
-            }
-        }
-
-        return null;
-    }
-
     public DestinationConfig? Select(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, LoadBalanceContext context)
     {
         var passive = cluster.HealthCheck?.Passive;
@@ -106,6 +89,23 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.HashInput ?? context.AffinityKey ?? cluster.Id),
             _ => SelectWeightedRoundRobin(cluster.Id, eligible, cluster.SlowStartSeconds),
         };
+    }
+
+    internal DestinationConfig? SelectFirstUntried(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        Func<string, bool> alreadyTried)
+    {
+        var eligible = Collect(cluster, snapshot, cluster.HealthCheck?.Passive);
+        for (var i = 0; i < eligible.Count; i++)
+        {
+            if (!alreadyTried(eligible[i].Id))
+            {
+                return eligible[i];
+            }
+        }
+
+        return null;
     }
 
     public void Record(string name, TimeSpan duration) => RecordDestination(name, duration);
