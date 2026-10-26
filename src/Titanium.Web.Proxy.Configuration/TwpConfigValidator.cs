@@ -69,42 +69,52 @@ public static class TwpConfigValidator
             var destinationIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var dest in cluster.Destinations)
             {
-                if (string.IsNullOrWhiteSpace(dest.Id))
-                {
-                    errors.Add($"Cluster '{cluster.Id}' has a destination with an empty id.");
-                }
-                else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
-                {
-                    errors.Add($"Duplicate destination id '{dest.Id}'.");
-                }
-
-                if (string.IsNullOrWhiteSpace(dest.Address))
-                {
-                    errors.Add($"Destination '{dest.Id}' has an empty address.");
-                }
-                else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
-                {
-                    errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
-                }
-
-                if (dest.DnsRefreshSeconds < 0)
-                {
-                    errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
-                }
-
-                if (dest.Port is < 0 or > 65535)
-                {
-                    errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
-                }
-
-                if (dest.Weight < 1)
-                {
-                    errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
-                }
+                ValidateDestination(cluster.Id, dest, destinationIds, allDestinationIds, errors);
             }
         }
 
         return clusterIds;
+    }
+
+    private static void ValidateDestination(
+        string clusterId,
+        DestinationConfig dest,
+        HashSet<string> destinationIds,
+        HashSet<string> allDestinationIds,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(dest.Id))
+        {
+            errors.Add($"Cluster '{clusterId}' has a destination with an empty id.");
+        }
+        else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
+        {
+            errors.Add($"Duplicate destination id '{dest.Id}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dest.Address))
+        {
+            errors.Add($"Destination '{dest.Id}' has an empty address.");
+        }
+        else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
+        {
+            errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
+        }
+
+        if (dest.DnsRefreshSeconds < 0)
+        {
+            errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
+        }
+
+        if (dest.Port is < 0 or > 65535)
+        {
+            errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
+        }
+
+        if (dest.Weight < 1)
+        {
+            errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
+        }
     }
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)

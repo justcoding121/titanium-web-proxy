@@ -222,45 +222,56 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         {
             foreach (var dest in cluster.Destinations)
             {
-                var state = DestinationState.Healthy;
-                if (current.DestinationStates.TryGetValue(dest.Id, out var previous) &&
-                    previous is DestinationState.Draining or DestinationState.Maintenance &&
-                    previousEndpoints.TryGetValue(dest.Id, out var old) &&
-                    string.Equals(old.Address, dest.Address, StringComparison.Ordinal) &&
-                    old.Port == dest.Port &&
-                    old.UseHttps == dest.UseHttps)
-                {
-                    state = previous;
-                }
-                else if (current.DestinationStates.TryGetValue(dest.Id, out var prior) &&
-                         prior != DestinationState.Healthy)
-                {
-                    restoredHealthy.Add(dest.Id);
-                }
-
-                states[dest.Id] = state;
+                states[dest.Id] = ResolveDestinationState(current, previousEndpoints, dest, restoredHealthy);
             }
         }
 
         var runtimes = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var pair in map)
         {
-            if (current.Runtimes.TryGetValue(pair.Key, out var existing) &&
-                existing is ClusterRuntime previous &&
-                ReferenceEquals(previous.Cluster, pair.Value))
-            {
-                runtimes[pair.Key] = previous;
-            }
-            else
-            {
-                runtimes[pair.Key] = new ClusterRuntime(pair.Value);
-            }
+            runtimes[pair.Key] = ReuseRuntime(current, pair.Key, pair.Value);
         }
 
         return new ImmutableClusterSnapshot(
             new Dictionary<string, ClusterConfig>(map, StringComparer.Ordinal),
             states,
             runtimes);
+    }
+
+    private static DestinationState ResolveDestinationState(
+        ImmutableClusterSnapshot current,
+        Dictionary<string, (string Address, int Port, bool UseHttps)> previousEndpoints,
+        DestinationConfig dest,
+        List<string> restoredHealthy)
+    {
+        if (current.DestinationStates.TryGetValue(dest.Id, out var previous) &&
+            previous is DestinationState.Draining or DestinationState.Maintenance &&
+            previousEndpoints.TryGetValue(dest.Id, out var old) &&
+            string.Equals(old.Address, dest.Address, StringComparison.Ordinal) &&
+            old.Port == dest.Port &&
+            old.UseHttps == dest.UseHttps)
+        {
+            return previous;
+        }
+
+        if (current.DestinationStates.TryGetValue(dest.Id, out var prior) && prior != DestinationState.Healthy)
+        {
+            restoredHealthy.Add(dest.Id);
+        }
+
+        return DestinationState.Healthy;
+    }
+
+    private static object ReuseRuntime(ImmutableClusterSnapshot current, string clusterId, ClusterConfig cluster)
+    {
+        if (current.Runtimes.TryGetValue(clusterId, out var existing) &&
+            existing is ClusterRuntime previous &&
+            ReferenceEquals(previous.Cluster, cluster))
+        {
+            return previous;
+        }
+
+        return new ClusterRuntime(cluster);
     }
 
     private void ReconcileProbers(IReadOnlyList<ClusterConfig> clusters)

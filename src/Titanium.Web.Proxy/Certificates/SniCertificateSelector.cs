@@ -23,32 +23,40 @@ public static class SniCertificateSelector
             for (var h = 0; h < hosts.Count; h++)
             {
                 var host = hosts[h];
-                if (string.IsNullOrEmpty(host))
+                if (IsExactHost(host, serverName))
                 {
-                    continue;
+                    return bindings[i].Certificate;
                 }
 
-                if (host[0] != '*')
-                {
-                    if (string.Equals(host, serverName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return bindings[i].Certificate;
-                    }
-
-                    continue;
-                }
-
-                var suffix = host[1..];
-                if (serverName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
-                    serverName.Length > suffix.Length &&
-                    suffix.Length > wildcardLength)
-                {
-                    wildcard = bindings[i].Certificate;
-                    wildcardLength = suffix.Length;
-                }
+                ConsiderWildcard(host, serverName, bindings[i].Certificate, ref wildcard, ref wildcardLength);
             }
         }
 
         return wildcard;
+    }
+
+    private static bool IsExactHost(string host, string serverName) =>
+        host.Length > 0 && host[0] != '*' && string.Equals(host, serverName, StringComparison.OrdinalIgnoreCase);
+
+    private static void ConsiderWildcard(
+        string host,
+        string serverName,
+        X509Certificate2 certificate,
+        ref X509Certificate2? wildcard,
+        ref int wildcardLength)
+    {
+        if (host.Length == 0 || host[0] != '*')
+        {
+            return;
+        }
+
+        var suffix = host[1..];
+        if (serverName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            && serverName.Length > suffix.Length
+            && suffix.Length > wildcardLength)
+        {
+            wildcard = certificate;
+            wildcardLength = suffix.Length;
+        }
     }
 }
