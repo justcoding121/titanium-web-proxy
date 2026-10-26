@@ -89,17 +89,31 @@ public class CliSigtermDrainE2ETests
         await origin.WaitForRequestAsync();
         var signalled = DateTime.UtcNow;
         running.SendSigterm();
+        // The origin holds the first request open, so the listener is still in the drain window.
+        await Task.Delay(200);
+
+        using (var probe = new TcpClient())
+        {
+            await probe.ConnectAsync(IPAddress.Loopback, listen);
+            var sent = Encoding.ASCII.GetBytes("GET /after HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+            await probe.GetStream().WriteAsync(sent);
+            var buffer = new byte[64];
+            int read;
+            try
+            {
+                read = await probe.GetStream().ReadAsync(buffer);
+            }
+            catch (IOException ex)
+            {
+                Assert.Fail("a connection accepted during drain was reset: " + ex.Message);
+                throw;
+            }
+
+            Assert.AreEqual(0, read, "a connection accepted during drain must be closed without a response");
+        }
 
         using var response = await inflight;
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        using var probe = new TcpClient();
-        await probe.ConnectAsync(IPAddress.Loopback, listen);
-        var sent = Encoding.ASCII.GetBytes("GET /after HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-        await probe.GetStream().WriteAsync(sent);
-        var buffer = new byte[64];
-        var read = await probe.GetStream().ReadAsync(buffer);
-        Assert.AreEqual(0, read, "a connection accepted during drain must be closed without a response");
 
         var deadline = signalled.AddSeconds(drainSeconds + 4);
         while (running.ExitCode is null && DateTime.UtcNow < deadline)
