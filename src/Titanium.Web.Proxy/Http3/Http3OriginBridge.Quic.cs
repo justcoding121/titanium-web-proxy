@@ -218,8 +218,18 @@ internal static partial class Http3OriginBridge
 
             while (true)
             {
-                responseHeadersFrame = await ReadResponseFrameAsync(originStream,
+                var responseRead = await ReadResponseFrameAsync(originStream,
                     server.MaxDecodedHeaderListBytes, guardFirstFrame, cancellationToken);
+                if (responseRead.Stalled)
+                {
+                    var stalledConn = quicConn;
+                    quicConn = null;
+                    await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
+                        sniHost, port, cancellationToken, onInterimResponse);
+                    return;
+                }
+
+                responseHeadersFrame = responseRead.Frame;
                 guardFirstFrame = false; // the peer is alive once any frame arrives
 
                 try
@@ -556,15 +566,6 @@ internal static partial class Http3OriginBridge
             }
 
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse("QUIC cannot be routed via the configured upstream proxy (forced Http3).");
-            return;
-        }
-        catch (Http3ResponseStalledException)
-        {
-            // Silent QUIC origin and a request that is safe to send again: replay it over TCP.
-            var stalledConn = quicConn;
-            quicConn = null; // ownership moves to the replay helper (invalidated there)
-            await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
-                sniHost, port, cancellationToken, onInterimResponse);
             return;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

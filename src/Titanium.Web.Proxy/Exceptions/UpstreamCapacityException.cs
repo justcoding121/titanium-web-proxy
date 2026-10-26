@@ -7,7 +7,7 @@ namespace Titanium.Web.Proxy.Exceptions;
 ///     This is not a destination failure: passive health must not eject the origin for it,
 ///     and the connect-retry policy must not loop on it.
 /// </summary>
-internal sealed class UpstreamCapacityException : Exception
+public sealed class UpstreamCapacityException : Exception
 {
     public UpstreamCapacityException(string cacheKey, int max)
         : base($"Upstream connection cap of {max} was reached for '{cacheKey}'.")

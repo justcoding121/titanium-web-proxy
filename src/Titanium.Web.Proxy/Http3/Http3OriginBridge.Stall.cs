@@ -32,15 +32,6 @@ internal static partial class Http3OriginBridge
     /// </summary>
     internal static TimeSpan Http3ResponseStallTimeout { get; set; } = TimeSpan.FromSeconds(5);
 
-    /// <summary>The origin sent nothing within <see cref="Http3ResponseStallTimeout" />.</summary>
-    private sealed class Http3ResponseStalledException : Exception
-    {
-        internal Http3ResponseStalledException()
-            : base("The HTTP/3 origin did not respond within the stall timeout.")
-        {
-        }
-    }
-
     /// <summary>
     ///     True when sending the request a second time (over TCP) after QUIC went silent cannot double-submit
     ///     anything: a safe method with no body at all.
@@ -58,25 +49,25 @@ internal static partial class Http3OriginBridge
 
     /// <summary>
     ///     Reads one response frame. With <paramref name="stallGuard" /> the read is bounded by
-    ///     <see cref="Http3ResponseStallTimeout" /> and a timeout is reported as
-    ///     <see cref="Http3ResponseStalledException" />; cancellation by the caller still propagates as is.
+    ///     <see cref="Http3ResponseStallTimeout" />. A timeout sets <c>Stalled</c>; cancellation by the
+    ///     caller still propagates as is.
     /// </summary>
-    private static async ValueTask<Http3Frame?> ReadResponseFrameAsync(
+    private static async ValueTask<(Http3Frame? Frame, bool Stalled)> ReadResponseFrameAsync(
         QuicStream stream, long maxPayloadBytes, bool stallGuard, CancellationToken cancellationToken)
     {
         if (!stallGuard)
-            return await Http3Frame.ReadAsync(stream, maxPayloadBytes, cancellationToken);
+            return (await Http3Frame.ReadAsync(stream, maxPayloadBytes, cancellationToken), false);
 
         using var guard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         guard.CancelAfter(Http3ResponseStallTimeout);
         try
         {
-            return await Http3Frame.ReadAsync(stream, maxPayloadBytes, guard.Token);
+            return (await Http3Frame.ReadAsync(stream, maxPayloadBytes, guard.Token), false);
         }
         catch (OperationCanceledException) when (guard.IsCancellationRequested
                                                  && !cancellationToken.IsCancellationRequested)
         {
-            throw new Http3ResponseStalledException();
+            return (null, true);
         }
     }
 
