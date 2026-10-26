@@ -63,6 +63,7 @@ internal sealed class MirrorDispatcher : IDisposable
         HoldForTests = null;
         while (queue.Reader.TryRead(out _))
         {
+            // Drop leftover copies. The test is resetting the dispatcher, not delivering them.
         }
 
         queued = 0;
@@ -277,6 +278,7 @@ internal sealed class MirrorDispatcher : IDisposable
         var sink = new byte[256];
         while (await stream.ReadAsync(sink, timeout.Token).ConfigureAwait(false) > 0)
         {
+            // The mirror does not use the origin's response. Drain it so the origin can finish.
         }
     }
 

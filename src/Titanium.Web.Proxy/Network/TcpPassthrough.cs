@@ -22,6 +22,7 @@ internal static class TcpPassthrough
         }
         catch (ObjectDisposedException)
         {
+            // The peer already closed its side when the first direction finished.
         }
 
         try
@@ -30,6 +31,7 @@ internal static class TcpPassthrough
         }
         catch (Exception)
         {
+            // Closing the sockets unblocks both copies. Their fault is the close, not a new failure.
         }
     }
 
