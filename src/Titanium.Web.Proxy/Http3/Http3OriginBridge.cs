@@ -150,7 +150,11 @@ internal static partial class Http3OriginBridge
             }
         }
 
-        await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+        if (await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse))
+        {
+            await sessionArgs.ClearResponse(cancellationToken);
+            await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse, allowStatusRetry: false);
+        }
     }
 
     /// <summary>

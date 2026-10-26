@@ -366,11 +366,12 @@ internal static partial class Http3OriginBridge
         _ = logger;
     }
 
-    private static async Task ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private static async Task<bool> ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        bool allowStatusRetry = true)
     {
         var request = sessionArgs.HttpClient.Request;
 
@@ -609,6 +610,13 @@ internal static partial class Http3OriginBridge
                 throw;
             }
 
+            if (allowStatusRetry && sessionArgs.Extras is not null
+                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(server, sessionArgs))
+            {
+                closeConnection = true;
+                return true;
+            }
+
             var response = sessionArgs.HttpClient.Response;
             // Stream the response unless a handler already buffered it. H3 client emit path
             // (SendResponseAsync) honours StreamBodyWriter the same way H2 EmitSynthetic does.
@@ -757,6 +765,8 @@ internal static partial class Http3OriginBridge
             // downstream response handling, callbacks, and the traffic tape.
             request.HttpVersion = clientHttpVersion;
         }
+
+        return false;
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────

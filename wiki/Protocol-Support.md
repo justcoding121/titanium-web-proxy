@@ -42,7 +42,7 @@ TCP HTTP/1 origin.
 | HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
 | HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. |
 | HTTP/3 | HTTP/2 | Bridge | `Http3OriginBridge.ForwardOverHttp2Async` via `Http2OriginConnection` (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`) when `UpstreamHttpProtocol.Http2` is set. |
-| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. |
+| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A gateway 502/503/504 on a bodiless request can replay once onto another destination when the route sets `retry.attempts`. An HTTP/3 client talking to an HTTP/2 origin is not retried. |
 
 Not supported:
 
