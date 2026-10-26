@@ -198,30 +198,13 @@ internal readonly struct RouteTarget
 
                 var segment = path[start..i];
                 var atEnd = i >= path.Length;
-                if (segment.Length == 0 || segment.SequenceEqual("."))
+                if (segment.SequenceEqual(".."))
                 {
-                    // skip
+                    w = PopDotSegment(rented, w);
                 }
-                else if (segment.SequenceEqual(".."))
+                else if (segment.Length != 0 && !segment.SequenceEqual("."))
                 {
-                    if (w > 1)
-                    {
-                        w--;
-                        while (w > 1 && rented[w - 1] != '/')
-                        {
-                            w--;
-                        }
-                    }
-                }
-                else
-                {
-                    if (w > 1)
-                    {
-                        rented[w++] = '/';
-                    }
-
-                    segment.CopyTo(rented.AsSpan(w));
-                    w += segment.Length;
+                    w = AppendSegment(rented, w, segment);
                 }
 
                 if (atEnd)
@@ -243,6 +226,33 @@ internal readonly struct RouteTarget
         {
             ArrayPool<char>.Shared.Return(rented);
         }
+    }
+
+    private static int PopDotSegment(char[] rented, int w)
+    {
+        if (w <= 1)
+        {
+            return w;
+        }
+
+        w--;
+        while (w > 1 && rented[w - 1] != '/')
+        {
+            w--;
+        }
+
+        return w;
+    }
+
+    private static int AppendSegment(char[] rented, int w, ReadOnlySpan<char> segment)
+    {
+        if (w > 1)
+        {
+            rented[w++] = '/';
+        }
+
+        segment.CopyTo(rented.AsSpan(w));
+        return w + segment.Length;
     }
 
     private static bool IsUnreserved(char c) =>

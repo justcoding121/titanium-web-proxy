@@ -64,26 +64,29 @@ internal static class ForwardedHeadersApplier
                 continue;
             }
 
-            if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
-            {
-                continue;
-            }
-
-            if (!IPAddress.TryParse(rule[..slash], out var network) || !int.TryParse(rule[(slash + 1)..], out var bits))
-            {
-                continue;
-            }
-
-            var mask = bits == 0 ? 0u : uint.MaxValue << (32 - bits);
-            var peer = ToUInt(address);
-            var net = ToUInt(network);
-            if ((peer & mask) == (net & mask))
+            if (MatchesPrefix(address, rule, slash))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static bool MatchesPrefix(IPAddress address, string rule, int slash)
+    {
+        if (address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            return false;
+        }
+
+        if (!IPAddress.TryParse(rule[..slash], out var network) || !int.TryParse(rule[(slash + 1)..], out var bits))
+        {
+            return false;
+        }
+
+        var mask = bits == 0 ? 0u : uint.MaxValue << (32 - bits);
+        return (ToUInt(address) & mask) == (ToUInt(network) & mask);
     }
 
     private static uint ToUInt(IPAddress address)

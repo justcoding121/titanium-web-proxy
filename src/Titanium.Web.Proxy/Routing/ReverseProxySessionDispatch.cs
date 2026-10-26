@@ -85,15 +85,32 @@ internal static class ReverseProxySessionDispatch
 
         if (resolution == DestinationResolution.NoRoute || destination is null || route is null)
         {
-            if (resolution == DestinationResolution.RouteWithoutDestination && route is not null)
-            {
-                session.MatchedRoute = route;
-                return RouteDispatchResult.NoDestination;
-            }
-
-            return RouteDispatchResult.NotRouted;
+            return Unrouted(session, resolution, route);
         }
 
+        return BindDestination(server, session, options, request, destination, route);
+    }
+
+    private static RouteDispatchResult Unrouted(
+        SessionEventArgsBase session, DestinationResolution resolution, RouteConfig? route)
+    {
+        if (resolution == DestinationResolution.RouteWithoutDestination && route is not null)
+        {
+            session.MatchedRoute = route;
+            return RouteDispatchResult.NoDestination;
+        }
+
+        return RouteDispatchResult.NotRouted;
+    }
+
+    private static RouteDispatchResult BindDestination(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        Request request,
+        DestinationConfig destination,
+        RouteConfig route)
+    {
         var port = destination.Port;
         if (port == 0)
         {
@@ -121,27 +138,7 @@ internal static class ReverseProxySessionDispatch
             server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
         }
 
-        ClusterConfig? cluster = null;
-        var clusterId = SelectedClusterId(options, route, destination.Id);
-        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(clusterId, out var found) == true)
-        {
-            cluster = found;
-            session.PassiveHealth = cluster.HealthCheck?.Passive;
-            session.PassiveDestinationCount = cluster.Destinations.Count;
-            var connectionKey = cluster.HttpClient?.ConnectionKey;
-            session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
-            session.UpstreamHttpClient = cluster.HttpClient;
-            if (cluster.HttpClient?.ConnectTimeout is { } connectTimeout)
-            {
-                session.ConnectTimeout = connectTimeout;
-            }
-
-            if (cluster.HttpClient?.RequestTimeout is { } requestTimeout && session is SessionEventArgs timed)
-            {
-                timed.ResponseHeaderTimeout = requestTimeout;
-            }
-            StageAffinityCookie(session, cluster, destination, request);
-        }
+        var cluster = ApplyCluster(options, session, route, destination, request);
 
         var retry = route.Retry ?? cluster?.Retry;
         if (retry is { Attempts: > 0 })
@@ -174,6 +171,39 @@ internal static class ReverseProxySessionDispatch
         }
 
         return RouteDispatchResult.Routed;
+    }
+
+    private static ClusterConfig? ApplyCluster(
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        SessionEventArgsBase session,
+        RouteConfig route,
+        DestinationConfig destination,
+        Request request)
+    {
+        var clusterId = SelectedClusterId(options, route, destination.Id);
+        var manager = options.ClusterManager;
+        if (manager is null || !manager.Snapshot.Clusters.TryGetValue(clusterId, out var cluster))
+        {
+            return null;
+        }
+
+        session.PassiveHealth = cluster.HealthCheck?.Passive;
+        session.PassiveDestinationCount = cluster.Destinations.Count;
+        var connectionKey = cluster.HttpClient?.ConnectionKey;
+        session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
+        session.UpstreamHttpClient = cluster.HttpClient;
+        if (cluster.HttpClient?.ConnectTimeout is { } connectTimeout)
+        {
+            session.ConnectTimeout = connectTimeout;
+        }
+
+        if (cluster.HttpClient?.RequestTimeout is { } requestTimeout && session is SessionEventArgs timed)
+        {
+            timed.ResponseHeaderTimeout = requestTimeout;
+        }
+
+        StageAffinityCookie(session, cluster, destination, request);
+        return cluster;
     }
 
     internal static void PrepareTerminalResponse(SessionEventArgsBase session, RouteConfig route)
@@ -470,19 +500,7 @@ internal static class ReverseProxySessionDispatch
         }
 
         var snapshot = manager.Snapshot;
-        ClusterConfig? owner = null;
-        foreach (var candidate in snapshot.Clusters.Values)
-        {
-            var destinations = candidate.Destinations;
-            for (var i = 0; i < destinations.Count; i++)
-            {
-                if (string.Equals(destinations[i].Id, failed, StringComparison.Ordinal))
-                {
-                    owner = candidate;
-                    break;
-                }
-            }
-        }
+        var owner = FindOwningCluster(snapshot, failed);
 
         if (owner is null)
         {
@@ -520,6 +538,23 @@ internal static class ReverseProxySessionDispatch
         session.DestinationRequestLease?.Dispose();
         session.DestinationRequestLease = balancer.Health.TrackRequest(alternate.Id);
         return true;
+    }
+
+    private static ClusterConfig? FindOwningCluster(ImmutableClusterSnapshot snapshot, string? failed)
+    {
+        foreach (var candidate in snapshot.Clusters.Values)
+        {
+            var destinations = candidate.Destinations;
+            for (var i = 0; i < destinations.Count; i++)
+            {
+                if (string.Equals(destinations[i].Id, failed, StringComparison.Ordinal))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
