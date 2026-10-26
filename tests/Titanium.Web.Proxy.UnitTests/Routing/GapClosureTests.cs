@@ -75,7 +75,7 @@ public class GapClosureTests
             {
                 var context = new RouteMatchContext(null, "/seg" + (path % 3) + (path % 2 == 0 ? "/item" : "/4"), "GET", null, null);
                 var indexed = matcher.Match(context, frozen);
-                var linear = matcher.MatchUnindexed(context, frozen);
+                var linear = RouteMatcher.MatchUnindexed(context, frozen);
                 Assert.AreEqual(linear?.Id, indexed?.Id, context.Path);
             }
         }

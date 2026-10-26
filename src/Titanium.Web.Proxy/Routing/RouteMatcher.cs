@@ -32,7 +32,7 @@ public sealed class RouteMatcher : IRouteMatcher
         return index.Match(context, MatchLinear);
     }
 
-    internal RouteConfig? MatchUnindexed(RouteMatchContext context, IReadOnlyList<RouteConfig> routes)
+    internal static RouteConfig? MatchUnindexed(RouteMatchContext context, IReadOnlyList<RouteConfig> routes)
     {
         if (routes.Count == 0)
         {

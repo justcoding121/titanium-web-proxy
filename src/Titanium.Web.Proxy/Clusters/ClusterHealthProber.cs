@@ -159,7 +159,7 @@ internal sealed class ClusterHealthProber : IDisposable
         return min;
     }
 
-    private async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)
+    private static async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)
     {
         var probe = ProbeOverride;
         if (probe is not null)
