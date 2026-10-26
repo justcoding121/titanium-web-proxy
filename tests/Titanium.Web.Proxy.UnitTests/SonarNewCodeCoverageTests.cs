@@ -969,7 +969,7 @@ public class SonarNewCodeCoverageTests
                 session.HttpClient.Request.Headers.AddHeader("Cookie", "a=1");
                 session.HttpClient.Request.Headers.AddHeader("Cookie", "b=2");
                 session.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
-                await (Task)fwdTcp.Invoke(null, [session, proxy, cts.Token, null])!;
+                await (Task)fwdTcp.Invoke(null, [session, proxy, cts.Token, null, true])!;
                 Assert.AreEqual(200, session.HttpClient.Response.StatusCode);
             }
 
@@ -985,7 +985,7 @@ public class SonarNewCodeCoverageTests
                 post.HttpClient.Request.Body = "x=1"u8.ToArray();
                 post.HttpClient.Request.ContentType = "application/x-www-form-urlencoded";
                 post.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
-                await (Task)fwdTcp.Invoke(null, [post, proxy, cts.Token, null])!;
+                await (Task)fwdTcp.Invoke(null, [post, proxy, cts.Token, null, true])!;
                 Assert.AreEqual(200, post.HttpClient.Response.StatusCode);
             }
 
@@ -997,7 +997,7 @@ public class SonarNewCodeCoverageTests
                 head.HttpClient.Request.Host = $"127.0.0.1:{port}";
                 head.HttpClient.Request.Authority = $"127.0.0.1:{port}".GetByteString();
                 head.HttpClient.Request.RequestUriString8 = "/".GetByteString();
-                await (Task)fwdTcp.Invoke(null, [head, proxy, cts.Token, null])!;
+                await (Task)fwdTcp.Invoke(null, [head, proxy, cts.Token, null, true])!;
                 Assert.IsTrue(head.HttpClient.Response.StatusCode is 200 or 204);
             }
         }

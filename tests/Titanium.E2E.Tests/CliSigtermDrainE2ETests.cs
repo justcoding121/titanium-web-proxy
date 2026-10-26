@@ -80,6 +80,7 @@ public class CliSigtermDrainE2ETests
         }
 
         using var running = harness ?? throw new AssertFailedException("CLI did not start.");
+        await WaitUntilAccepts(listen, running);
         using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false })
         {
             Timeout = TimeSpan.FromSeconds(20),
@@ -108,6 +109,31 @@ public class CliSigtermDrainE2ETests
 
         Assert.AreEqual(0, running.ExitCode, running.StdOut + running.StdErr);
         Assert.IsTrue(DateTime.UtcNow <= deadline, "process outlived the drain timeout plus margin");
+    }
+
+    private static async Task WaitUntilAccepts(int port, CliProcessHarness harness)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (harness.ExitCode is not null)
+            {
+                Assert.Fail("CLI exited before it listened. " + harness.StdOut + harness.StdErr);
+            }
+
+            try
+            {
+                using var probe = new TcpClient();
+                await probe.ConnectAsync(IPAddress.Loopback, port);
+                return;
+            }
+            catch (SocketException)
+            {
+                await Task.Delay(50);
+            }
+        }
+
+        Assert.Fail($"port {port} never accepted. " + harness.StdOut + harness.StdErr);
     }
 
     private static bool AddressInUse(InvalidOperationException ex)
