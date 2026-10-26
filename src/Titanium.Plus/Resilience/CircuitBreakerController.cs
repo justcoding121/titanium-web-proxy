@@ -113,12 +113,10 @@ public sealed class CircuitBreakerController : IDisposable
         if (status is >= 500 and <= 599)
         {
             var count = _consecutiveFailures.AddOrUpdate(id, 1, static (_, v) => v + 1);
-            if (count >= _threshold)
+            if (count >= _threshold
+                && _manager.TrySetDestinationState(id, DestinationState.Healthy, DestinationState.Unhealthy))
             {
-                if (_manager.TrySetDestinationState(id, DestinationState.Healthy, DestinationState.Unhealthy))
-                {
-                    _ejectedUntil[id] = _time.GetUtcNow().Add(_cooldown);
-                }
+                _ejectedUntil[id] = _time.GetUtcNow().Add(_cooldown);
             }
         }
         else if (status is >= 200 and < 500)
@@ -206,12 +204,10 @@ public sealed class CircuitBreakerController : IDisposable
         if (statusCode is >= 500 and <= 599)
         {
             var count = _consecutiveFailures.AddOrUpdate(destinationId, 1, static (_, v) => v + 1);
-            if (count >= _threshold)
+            if (count >= _threshold
+                && _manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy))
             {
-                if (_manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy))
-                {
-                    _ejectedUntil[destinationId] = _time.GetUtcNow().Add(_cooldown);
-                }
+                _ejectedUntil[destinationId] = _time.GetUtcNow().Add(_cooldown);
             }
         }
         else

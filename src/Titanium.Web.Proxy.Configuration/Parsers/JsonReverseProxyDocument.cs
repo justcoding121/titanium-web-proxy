@@ -83,6 +83,14 @@ public static class JsonReverseProxyDocument
                             MaxWebSocketFramePayloadBytes = r.Limits.MaxWebSocketFramePayloadBytes,
                         },
                     Transforms = MapTransforms(r.Transforms),
+                    Retry = r.Retry is null
+                        ? null
+                        : new RetryConfig
+                        {
+                            Attempts = r.Retry.Attempts ?? 0,
+                            RetryNonIdempotent = r.Retry.RetryNonIdempotent ?? false,
+                            MaxBufferedBodyBytes = r.Retry.MaxBufferedBodyBytes ?? 64 * 1024,
+                        },
                 });
                 order++;
             }
@@ -192,6 +200,14 @@ public static class JsonReverseProxyDocument
         public MatchDto? Match { get; set; }
         public LimitsDto? Limits { get; set; }
         public List<TransformDto>? Transforms { get; set; }
+        public RetryDto? Retry { get; set; }
+    }
+
+    private sealed class RetryDto
+    {
+        public int? Attempts { get; set; }
+        public bool? RetryNonIdempotent { get; set; }
+        public int? MaxBufferedBodyBytes { get; set; }
     }
 
     private sealed class LimitsDto

@@ -230,17 +230,19 @@ internal static class ProxyMetrics
         Http2FrameWriterHighWater.Add(1,
             new KeyValuePair<string, object?>("threshold", threshold));
 
+    private const string RequestUnit = "{request}";
+
     private static readonly Counter<long> Requests =
-        Meter.CreateCounter<long>("twp.proxy.requests", "{request}", "Completed proxy requests.");
+        Meter.CreateCounter<long>("twp.proxy.requests", RequestUnit, "Completed proxy requests.");
 
     private static readonly Histogram<double> RequestDuration =
         Meter.CreateHistogram<double>("twp.proxy.request.duration", "s", "Proxy request duration.");
 
     private static readonly UpDownCounter<long> ActiveRequests =
-        Meter.CreateUpDownCounter<long>("twp.proxy.requests.active", "{request}", "Requests in flight.");
+        Meter.CreateUpDownCounter<long>("twp.proxy.requests.active", RequestUnit, "Requests in flight.");
 
     private static readonly Counter<long> FailedRequests =
-        Meter.CreateCounter<long>("twp.proxy.requests.failed", "{request}", "Failed proxy requests.");
+        Meter.CreateCounter<long>("twp.proxy.requests.failed", RequestUnit, "Failed proxy requests.");
 
     private static readonly Counter<long> ProxyBytes =
         Meter.CreateCounter<long>("twp.proxy.bytes", "By", "Bytes observed on a proxied request.");
@@ -258,16 +260,16 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.proxy.mirror.drops", "{drop}", "Mirrored requests dropped because the queue was full.");
 
     private static readonly Counter<long> MirrorQueued =
-        Meter.CreateCounter<long>("twp.proxy.mirror.queued", "{request}", "Mirrored requests accepted onto the queue.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.queued", RequestUnit, "Mirrored requests accepted onto the queue.");
 
     private static readonly Counter<long> MirrorSent =
-        Meter.CreateCounter<long>("twp.proxy.mirror.sent", "{request}", "Mirrored requests written to the mirror destination.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.sent", RequestUnit, "Mirrored requests written to the mirror destination.");
 
     private static readonly Counter<long> MirrorFailed =
-        Meter.CreateCounter<long>("twp.proxy.mirror.failed", "{request}", "Mirrored requests that failed before a response was discarded.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.failed", RequestUnit, "Mirrored requests that failed before a response was discarded.");
 
     private static readonly Counter<long> MirrorSkipped =
-        Meter.CreateCounter<long>("twp.proxy.mirror.skipped", "{request}", "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.skipped", RequestUnit, "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
 
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>
@@ -345,62 +347,75 @@ internal static class ProxyMetrics
         }
     }
 
-    public static void RecordRequest(
-        string route,
-        string cluster,
-        int status,
-        string protocol,
-        string error,
-        double durationSeconds,
-        long bytesIn,
-        long bytesOut)
+    internal readonly struct RequestSample
+    {
+        internal required string Route { get; init; }
+        internal required string Cluster { get; init; }
+        internal required int Status { get; init; }
+        internal required string Protocol { get; init; }
+        internal required string Error { get; init; }
+        internal required double DurationSeconds { get; init; }
+        internal required long BytesIn { get; init; }
+        internal required long BytesOut { get; init; }
+    }
+
+    public static void RecordRequest(RequestSample sample)
     {
         if (!RequestInstrumentsEnabled && !FailedRequests.Enabled && !ProxyBytes.Enabled)
         {
             return;
         }
 
-        var statusClass = status switch
-        {
-            >= 100 and < 200 => "1xx",
-            >= 200 and < 300 => "2xx",
-            >= 300 and < 400 => "3xx",
-            >= 400 and < 500 => "4xx",
-            >= 500 and < 600 => "5xx",
-            _ => "none",
-        };
+        var statusClass = StatusClass(sample.Status);
         if (Requests.Enabled)
         {
             Requests.Add(1,
-                new KeyValuePair<string, object?>("route", route),
-                new KeyValuePair<string, object?>("cluster", cluster),
+                new KeyValuePair<string, object?>("route", sample.Route),
+                new KeyValuePair<string, object?>("cluster", sample.Cluster),
                 new KeyValuePair<string, object?>("status_class", statusClass),
-                new KeyValuePair<string, object?>("protocol", protocol));
+                new KeyValuePair<string, object?>("protocol", sample.Protocol));
         }
 
-        if (RequestDuration.Enabled && durationSeconds > 0)
+        if (RequestDuration.Enabled && sample.DurationSeconds > 0)
         {
-            RequestDuration.Record(durationSeconds,
-                new KeyValuePair<string, object?>("route", route),
+            RequestDuration.Record(sample.DurationSeconds,
+                new KeyValuePair<string, object?>("route", sample.Route),
                 new KeyValuePair<string, object?>("status_class", statusClass));
         }
 
-        if (FailedRequests.Enabled && !string.Equals(error, "None", StringComparison.Ordinal))
+        if (FailedRequests.Enabled && !string.Equals(sample.Error, "None", StringComparison.Ordinal))
         {
-            FailedRequests.Add(1, new KeyValuePair<string, object?>("error", error));
+            FailedRequests.Add(1, new KeyValuePair<string, object?>("error", sample.Error));
         }
 
-        if (ProxyBytes.Enabled)
-        {
-            if (bytesIn > 0)
-            {
-                ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
-            }
+        RecordBytes(sample.BytesIn, sample.BytesOut);
+    }
 
-            if (bytesOut > 0)
-            {
-                ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
-            }
+    private static string StatusClass(int status) => status switch
+    {
+        >= 100 and < 200 => "1xx",
+        >= 200 and < 300 => "2xx",
+        >= 300 and < 400 => "3xx",
+        >= 400 and < 500 => "4xx",
+        >= 500 and < 600 => "5xx",
+        _ => "none",
+    };
+
+    private static void RecordBytes(long bytesIn, long bytesOut)
+    {
+        if (!ProxyBytes.Enabled)
+        {
+            return;
+        }
+
+        if (bytesIn > 0)
+        {
+            ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+        }
+
+        if (bytesOut > 0)
+        {
+            ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
         }
     }
 }

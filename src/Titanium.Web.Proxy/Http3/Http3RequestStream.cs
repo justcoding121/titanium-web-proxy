@@ -523,6 +523,23 @@ internal static class Http3RequestStream
                 if (logger.IsEnabled(LogLevel.Debug))
                     logger.LogDebug(ex, "HTTP/3 stream {StreamId} ended with QuicException", stream.Id);
             }
+            catch (Exceptions.UpstreamCapacityException ex) when (sessionArgs is not null)
+            {
+                // Cap timeout is backpressure. A 503 (no Retry-After: this helper sends status only)
+                // keeps the client from seeing an internal error, and Exception stops health ejection.
+                sessionArgs.Exception = ex;
+                try
+                {
+                    await SendSimpleStatusResponseAsync(stream, 503, qpackContext, CancellationToken.None);
+                }
+                catch (Exception)
+                {
+                    // client already gone
+                }
+
+                if (streamState != null)
+                    streamState.ResponseClosed = true;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error on HTTP/3 stream {StreamId}", stream.Id);
@@ -766,6 +783,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http11)
@@ -790,6 +809,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http3)
@@ -814,6 +835,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http2)

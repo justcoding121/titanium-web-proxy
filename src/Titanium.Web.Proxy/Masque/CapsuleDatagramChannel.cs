@@ -79,7 +79,7 @@ internal sealed class CapsuleDatagramChannel : IHttpDatagramChannel
         }
     }
 
-    public bool TryRead(out ReadOnlyMemory<byte> payload)
+    public static bool TryRead(out ReadOnlyMemory<byte> payload)
     {
         payload = default;
         return false;

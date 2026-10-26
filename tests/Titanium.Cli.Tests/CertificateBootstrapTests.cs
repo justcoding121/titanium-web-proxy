@@ -1,3 +1,4 @@
+#pragma warning disable TWP001
 using System.Net;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -145,7 +146,7 @@ public class CertificateBootstrapTests
     }
 
     [TestMethod]
-    public void WatchCertificateFiles_RebuildsSniBindingsAfterTheFileChanges()
+    public async Task WatchCertificateFiles_RebuildsSniBindingsAfterTheFileChanges()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-watch-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -169,11 +170,48 @@ public class CertificateBootstrapTests
             var saw = false;
             for (var i = 0; i < 30 && !saw; i++)
             {
-                Thread.Sleep(100);
+                await Task.Delay(100);
                 saw = ep.SniCertificates![0].Certificate.Subject == "CN=after.example";
             }
 
             Assert.IsTrue(saw);
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void ReloadClientCertificateAuthorities_MatchesAddressAndContinuesAfterABadFile()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var matched = new TransparentProxyEndPoint(IPAddress.Parse("127.0.0.1"), 8443, true);
+        var other = new TransparentProxyEndPoint(IPAddress.Parse("127.0.0.2"), 8443, true);
+        proxy.AddEndPoint(matched);
+        proxy.AddEndPoint(other);
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-ca-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            using var key = RSA.Create(2048);
+            var request = new CertificateRequest("CN=reload-ca", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+            using var ca = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(2));
+            var pem = Path.Combine(dir, "ca.pem");
+            File.WriteAllText(pem, new string(PemEncoding.Write("CERTIFICATE", ca.RawData)));
+            var bad = Path.Combine(dir, "bad.pem");
+            File.WriteAllText(bad, "not a certificate");
+
+            CertificateBootstrap.ReloadClientCertificateAuthorities(proxy,
+            [
+                new ListenerConfig { Host = "127.0.0.2", Port = 8443, ClientCertificateCaPath = bad },
+                new ListenerConfig { Host = "127.0.0.1", Port = 8443, ClientCertificateCaPath = pem },
+            ]);
+
+            Assert.IsNull(other.ClientCertificateTrustedRoots);
+            Assert.AreEqual(1, matched.ClientCertificateTrustedRoots?.Count);
         }
         finally
         {

@@ -98,6 +98,29 @@ public class MasqueRelayTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task ListenerAuthenticateFunc_RejectsMissingCredentials_AndAcceptsTheRightPassword()
+    {
+        using var echo = new UdpEcho();
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = true;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+            options.AuthenticateFunc = (user, password) =>
+                Task.FromResult(user == "user" && password == "secret");
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        var denied = await RequestAsync(client, 1, echo.Port, null);
+        Assert.AreEqual("407", Status(denied));
+
+        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes("user:secret"));
+        var opened = await RequestAsync(client, 3, echo.Port, token);
+        Assert.AreEqual("200", Status(opened));
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task BadPath_Returns400_AndSecondTunnelOverTheCap_Returns429()
     {
         using var echo = new UdpEcho();
@@ -120,6 +143,157 @@ public class MasqueRelayTests
 
         await client.Connection.WriteFrameAsync(Http2FrameType.Data, 3, Http2FrameFlag.EndStream, []);
         await WaitUntilAsync(() => proxy.Active == 0);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task SocketFactoryThrow_ReleasesTheSlot()
+    {
+        using var echo = new UdpEcho();
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+            options.SocketFactory = _ => throw new SocketException((int)SocketError.AddressFamilyNotSupported);
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        var response = await RequestAsync(client, 1, echo.Port, null);
+        Assert.AreEqual("502", Status(response));
+        await WaitUntilAsync(() => proxy.Active == 0);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task OverThePerClientLimit_DoesNotReachDns()
+    {
+        using var echo = new UdpEcho();
+        var lookups = 0;
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+            options.MaxTunnelsPerClient = 1;
+            options.DnsResolver = (_, _) =>
+            {
+                Interlocked.Increment(ref lookups);
+                return Task.FromResult(new[] { IPAddress.Loopback });
+            };
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        var path = $"/.well-known/masque/udp/example.test/{echo.Port}/";
+        var opened = await RequestAsync(client, 1, echo.Port, null, path);
+        Assert.AreEqual("200", Status(opened));
+        var limited = await RequestAsync(client, 3, echo.Port, null, path);
+        Assert.AreEqual("429", Status(limited));
+        Assert.AreEqual(1, lookups);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task IcmpUnreachable_LeavesTheTunnelOpen()
+    {
+        var closed = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        closed.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var port = ((IPEndPoint)closed.LocalEndPoint!).Port;
+        closed.Dispose();
+
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [port];
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        await OpenTunnelAsync(client, 1, port);
+        await WriteDatagramAsync(client, 1, "ping"u8.ToArray());
+        await Task.Delay(300);
+        Assert.AreEqual(1, proxy.Active);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task HeaderRules_RejectEmptyAuthorityAndAFalseCapsuleFlag()
+    {
+        using var echo = new UdpEcho();
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        var empty = client.Connection.EncodeHeaders(
+        [
+            (":method", "CONNECT"),
+            (":protocol", "connect-udp"),
+            (":scheme", "https"),
+            (":authority", ""),
+            (":path", $"/.well-known/masque/udp/127.0.0.1/{echo.Port}/"),
+        ], [("capsule-protocol", "?1")]);
+        await client.Connection.WriteHeaderBlockAsync(1, empty, false);
+        Http2RawFrame.Frame reset = default;
+        var sawReset = false;
+        var deadline = Environment.TickCount64 + 5_000;
+        while (Environment.TickCount64 < deadline)
+        {
+            reset = await client.Connection.ReadFrameAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            if (reset.Type == Http2FrameType.RstStream)
+            {
+                sawReset = true;
+                break;
+            }
+        }
+
+        Assert.IsTrue(sawReset, "An empty :authority must reset the stream.");
+        Assert.AreEqual(1, reset.StreamId);
+
+        var omitted = await RequestAsync(client, 3, echo.Port, null, capsuleProtocol: null);
+        Assert.AreEqual("200", Status(omitted));
+
+        var rejected = await RequestAsync(client, 5, echo.Port, null, capsuleProtocol: "?0");
+        Assert.AreEqual("400", Status(rejected));
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task DataAfterTheTunnelCloses_DoesNotResetWithEnhanceYourCalm()
+    {
+        using var echo = new UdpEcho();
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+            options.IdleTimeout = TimeSpan.FromMilliseconds(200);
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        await OpenTunnelAsync(client, 1, echo.Port);
+        await WaitUntilAsync(() => proxy.Active == 0);
+        await WriteDatagramAsync(client, 1, "late"u8.ToArray());
+        var deadline = Environment.TickCount64 + 1_000;
+        while (Environment.TickCount64 < deadline)
+        {
+            var read = client.Connection.ReadFrameAsync();
+            var finished = await Task.WhenAny(read, Task.Delay(200));
+            if (finished != read)
+            {
+                break;
+            }
+
+            var frame = await read;
+            if (frame.Type == Http2FrameType.RstStream && frame.Payload.Length >= 4)
+            {
+                var code = (frame.Payload[0] << 24) | (frame.Payload[1] << 16) | (frame.Payload[2] << 8) | frame.Payload[3];
+                Assert.AreNotEqual((int)Http2ErrorCode.EnhanceYourCalm, code);
+            }
+        }
     }
 
     [TestMethod]
@@ -182,10 +356,16 @@ public class MasqueRelayTests
     }
 
     private static async Task<List<(string Name, string Value)>> RequestAsync(Http2RawClient client, int streamId,
-        int port, string? basicToken, string? path = null)
+        int port, string? basicToken, string? path = null, string? capsuleProtocol = "?1",
+        string authority = "localhost")
     {
         path ??= $"/.well-known/masque/udp/127.0.0.1/{port}/";
-        var regular = new List<(string Name, string Value)> { ("capsule-protocol", "?1") };
+        var regular = new List<(string Name, string Value)>();
+        if (capsuleProtocol is not null)
+        {
+            regular.Add(("capsule-protocol", capsuleProtocol));
+        }
+
         if (basicToken is not null)
         {
             regular.Add(("proxy-authorization", "Basic " + basicToken));
@@ -196,7 +376,7 @@ public class MasqueRelayTests
             (":method", "CONNECT"),
             (":protocol", "connect-udp"),
             (":scheme", "https"),
-            (":authority", "localhost"),
+            (":authority", authority),
             (":path", path),
         ], regular);
         await client.Connection.WriteHeaderBlockAsync(streamId, block, false);

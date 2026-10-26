@@ -13,13 +13,15 @@ public class JsonAccessLogTests
     [TestMethod]
     public void FormatRecord_ProducesNdjsonShape()
     {
-        var json = JsonAccessLogWriter.FormatRecord(
-            method: "GET",
-            url: "http://example/x",
-            host: "example",
-            status: 200,
-            durationMs: 12.5,
-            clientIp: "127.0.0.1");
+        var json = JsonAccessLogWriter.FormatRecord(new AccessLogEntry
+        {
+            Method = "GET",
+            Url = "http://example/x",
+            Host = "example",
+            Status = 200,
+            DurationMs = 12.5,
+            ClientIp = "127.0.0.1",
+        });
         using var doc = JsonDocument.Parse(json);
         Assert.AreEqual("GET", doc.RootElement.GetProperty("method").GetString());
         Assert.AreEqual(200, doc.RootElement.GetProperty("status").GetInt32());

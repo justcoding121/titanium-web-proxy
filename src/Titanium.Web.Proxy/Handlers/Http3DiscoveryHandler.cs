@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
@@ -38,10 +39,13 @@ public partial class ProxyServer
         var response = args.HttpClient.Response;
         if (response == null) return;
 
-        var altSvc = response.Headers.GetHeaderValueOrNull("Alt-Svc");
-        if (string.IsNullOrEmpty(altSvc) || altSvc == "clear")
+        var altSvcHeaders = response.Headers.GetHeaders("Alt-Svc");
+        var altSvc = altSvcHeaders is { Count: > 0 }
+            ? string.Join(", ", altSvcHeaders.Select(header => header.Value))
+            : null;
+        if (string.IsNullOrEmpty(altSvc) || altSvc.Equals("clear", StringComparison.OrdinalIgnoreCase))
         {
-            if (altSvc == "clear")
+            if (altSvc is not null && altSvc.Equals("clear", StringComparison.OrdinalIgnoreCase))
                 ClearHttp3Capability(args);
             return;
         }
@@ -83,7 +87,11 @@ public partial class ProxyServer
 
         foreach (var entry in entries)
         {
-            if (entry.MaxAgeSeconds <= 0) continue;
+            if (entry.MaxAgeSeconds <= 0)
+            {
+                Http3OriginCapabilityCache.EvictUnlessBroken(hostAndPort);
+                continue;
+            }
 
             var altPort = entry.Port == port ? int.MinValue : entry.Port;
             var ttl = TimeSpan.FromSeconds(Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2));

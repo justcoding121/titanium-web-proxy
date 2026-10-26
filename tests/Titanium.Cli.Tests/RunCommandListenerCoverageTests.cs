@@ -132,6 +132,38 @@ public class RunCommandListenerCoverageTests
         Assert.AreEqual(4, masque.Options.MaxTunnels);
         Assert.AreEqual(TimeSpan.FromSeconds(15), masque.Options.IdleTimeout);
 
+        var passwordEnv = "TWP_MASQUE_TEST_PASSWORD_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(passwordEnv, "secret");
+        try
+        {
+            var authed = (MasqueProxyEndPoint)Invoke("CreateMasqueEndPoint", IPAddress.Loopback, new ListenerConfig
+            {
+                Port = 0,
+                Masque = new MasqueListenerConfig
+                {
+                    Credentials = [new MasqueCredentialConfig { Username = "user", PasswordEnv = passwordEnv }],
+                },
+            })!;
+            Assert.IsNotNull(authed.Options.AuthenticateFunc);
+            Assert.IsTrue(authed.Options.AuthenticateFunc!("user", "secret").GetAwaiter().GetResult());
+            Assert.IsFalse(authed.Options.AuthenticateFunc("user", "nope").GetAwaiter().GetResult());
+            Assert.IsFalse(authed.Options.AuthenticateFunc("other", "secret").GetAwaiter().GetResult());
+            var missing = Assert.ThrowsExactly<TargetInvocationException>(() =>
+                Invoke("CreateMasqueEndPoint", IPAddress.Loopback, new ListenerConfig
+                {
+                    Port = 9,
+                    Masque = new MasqueListenerConfig
+                    {
+                        Credentials = [new MasqueCredentialConfig { Username = "user", PasswordEnv = passwordEnv + "_missing" }],
+                    },
+                }));
+            Assert.IsInstanceOfType<InvalidOperationException>(missing.InnerException);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(passwordEnv, null);
+        }
+
         Assert.IsTrue((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = true }, true)!);
         Assert.IsFalse((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = false }, true)!);
         Assert.IsTrue((bool)Invoke("IsTruthy",

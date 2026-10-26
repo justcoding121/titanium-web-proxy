@@ -85,15 +85,32 @@ internal static class ReverseProxySessionDispatch
 
         if (resolution == DestinationResolution.NoRoute || destination is null || route is null)
         {
-            if (resolution == DestinationResolution.RouteWithoutDestination && route is not null)
-            {
-                session.MatchedRoute = route;
-                return RouteDispatchResult.NoDestination;
-            }
-
-            return RouteDispatchResult.NotRouted;
+            return Unrouted(session, resolution, route);
         }
 
+        return BindDestination(server, session, options, request, destination, route);
+    }
+
+    private static RouteDispatchResult Unrouted(
+        SessionEventArgsBase session, DestinationResolution resolution, RouteConfig? route)
+    {
+        if (resolution == DestinationResolution.RouteWithoutDestination && route is not null)
+        {
+            session.MatchedRoute = route;
+            return RouteDispatchResult.NoDestination;
+        }
+
+        return RouteDispatchResult.NotRouted;
+    }
+
+    private static RouteDispatchResult BindDestination(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        Request request,
+        DestinationConfig destination,
+        RouteConfig route)
+    {
         var port = destination.Port;
         if (port == 0)
         {
@@ -121,27 +138,7 @@ internal static class ReverseProxySessionDispatch
             server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
         }
 
-        ClusterConfig? cluster = null;
-        var clusterId = SelectedClusterId(options, route, destination.Id);
-        if (options.ClusterManager?.Snapshot.Clusters.TryGetValue(clusterId, out var found) == true)
-        {
-            cluster = found;
-            session.PassiveHealth = cluster.HealthCheck?.Passive;
-            session.PassiveDestinationCount = cluster.Destinations.Count;
-            var connectionKey = cluster.HttpClient?.ConnectionKey;
-            session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
-            session.UpstreamHttpClient = cluster.HttpClient;
-            if (cluster.HttpClient?.ConnectTimeout is { } connectTimeout)
-            {
-                session.ConnectTimeout = connectTimeout;
-            }
-
-            if (cluster.HttpClient?.RequestTimeout is { } requestTimeout && session is SessionEventArgs timed)
-            {
-                timed.ResponseHeaderTimeout = requestTimeout;
-            }
-            StageAffinityCookie(session, cluster, destination, request);
-        }
+        var cluster = ApplyCluster(options, session, route, destination, request);
 
         var retry = route.Retry ?? cluster?.Retry;
         if (retry is { Attempts: > 0 })
@@ -176,6 +173,39 @@ internal static class ReverseProxySessionDispatch
         return RouteDispatchResult.Routed;
     }
 
+    private static ClusterConfig? ApplyCluster(
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        SessionEventArgsBase session,
+        RouteConfig route,
+        DestinationConfig destination,
+        Request request)
+    {
+        var clusterId = SelectedClusterId(options, route, destination.Id);
+        var manager = options.ClusterManager;
+        if (manager is null || !manager.Snapshot.Clusters.TryGetValue(clusterId, out var cluster))
+        {
+            return null;
+        }
+
+        session.PassiveHealth = cluster.HealthCheck?.Passive;
+        session.PassiveDestinationCount = cluster.Destinations.Count;
+        var connectionKey = cluster.HttpClient?.ConnectionKey;
+        session.ClusterConnectionKey = string.IsNullOrEmpty(connectionKey) ? null : connectionKey;
+        session.UpstreamHttpClient = cluster.HttpClient;
+        if (cluster.HttpClient?.ConnectTimeout is { } connectTimeout)
+        {
+            session.ConnectTimeout = connectTimeout;
+        }
+
+        if (cluster.HttpClient?.RequestTimeout is { } requestTimeout && session is SessionEventArgs timed)
+        {
+            timed.ResponseHeaderTimeout = requestTimeout;
+        }
+
+        StageAffinityCookie(session, cluster, destination, request);
+        return cluster;
+    }
+
     internal static void PrepareTerminalResponse(SessionEventArgsBase session, RouteConfig route)
     {
         if (session is not SessionEventArgs args)
@@ -200,7 +230,7 @@ internal static class ReverseProxySessionDispatch
         var headers = new List<HttpHeader>();
         if (!string.IsNullOrEmpty(direct.ContentType))
         {
-            headers.Add(new HttpHeader("Content-Type", direct.ContentType));
+            headers.Add(new HttpHeader(KnownHeaders.ContentType.String, direct.ContentType));
         }
 
         if (direct.Headers is not null)
@@ -231,9 +261,19 @@ internal static class ReverseProxySessionDispatch
 
         if (!string.IsNullOrEmpty(redirect.Host))
         {
-            var scheme = redirect.HttpToHttps && !request.IsHttps
-                ? "https"
-                : redirect.Scheme ?? (request.IsHttps ? "https" : "http");
+            string scheme;
+            if (redirect.HttpToHttps && !request.IsHttps)
+            {
+                scheme = "https";
+            }
+            else if (redirect.Scheme is { } configuredScheme)
+            {
+                scheme = configuredScheme;
+            }
+            else
+            {
+                scheme = request.IsHttps ? "https" : "http";
+            }
             var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
             if (path.Contains('?', StringComparison.Ordinal))
             {
@@ -319,7 +359,7 @@ internal static class ReverseProxySessionDispatch
         session.GenericResponse(page?.Body ?? string.Empty, HttpStatusCode.ServiceUnavailable,
         [
             new HttpHeader("Retry-After", "1"),
-            new HttpHeader("Content-Type", page?.ContentType ?? "text/plain"),
+            new HttpHeader(KnownHeaders.ContentType.String, page?.ContentType ?? "text/plain"),
         ]);
     }
 
@@ -334,7 +374,7 @@ internal static class ReverseProxySessionDispatch
         session.HttpClient.Response.Body = System.Text.Encoding.UTF8.GetBytes(page.Body);
         if (!string.IsNullOrEmpty(page.ContentType))
         {
-            session.HttpClient.Response.Headers.AddHeader("Content-Type", page.ContentType);
+            session.HttpClient.Response.Headers.AddHeader(KnownHeaders.ContentType.String, page.ContentType);
         }
     }
 
@@ -379,7 +419,7 @@ internal static class ReverseProxySessionDispatch
 
     private static bool IsGrpc(Request request)
     {
-        var headers = request.Headers.GetHeaders("Content-Type");
+        var headers = request.Headers.GetHeaders(KnownHeaders.ContentType.String);
         return headers is { Count: > 0 } &&
                headers[0].Value.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase);
     }
@@ -399,7 +439,7 @@ internal static class ReverseProxySessionDispatch
     /// Stages one status retry when the origin answered 502, 503, or 504 and nothing has been written
     /// to the client. Off unless a retry policy is set. Connect failover is unchanged.
     /// </summary>
-    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session)
+    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session, int? status = null)
     {
         var extras = session.Extras;
         var retry = extras?.Retry;
@@ -408,8 +448,8 @@ internal static class ReverseProxySessionDispatch
             return false;
         }
 
-        var status = session.HttpClient.Response.StatusCode;
-        if (status is not (502 or 503 or 504))
+        var code = status ?? session.HttpClient.Response.StatusCode;
+        if (code is not (502 or 503 or 504))
         {
             return false;
         }
@@ -460,18 +500,7 @@ internal static class ReverseProxySessionDispatch
         }
 
         var snapshot = manager.Snapshot;
-        ClusterConfig? owner = null;
-        foreach (var candidate in snapshot.Clusters.Values)
-        {
-            foreach (var dest in candidate.Destinations)
-            {
-                if (string.Equals(dest.Id, failed, StringComparison.Ordinal))
-                {
-                    owner = candidate;
-                    break;
-                }
-            }
-        }
+        var owner = FindOwningCluster(snapshot, failed);
 
         if (owner is null)
         {
@@ -484,7 +513,15 @@ internal static class ReverseProxySessionDispatch
             return false;
         }
 
-        var port = alternate.Port == 0 ? (alternate.UseHttps ? 443 : 80) : alternate.Port;
+        int port;
+        if (alternate.Port == 0)
+        {
+            port = alternate.UseHttps ? 443 : 80;
+        }
+        else
+        {
+            port = alternate.Port;
+        }
         session.UpstreamConnectHost = alternate.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = alternate.Id;
@@ -503,10 +540,44 @@ internal static class ReverseProxySessionDispatch
         return true;
     }
 
+    private static ClusterConfig? FindOwningCluster(ImmutableClusterSnapshot snapshot, string? failed)
+    {
+        foreach (var candidate in snapshot.Clusters.Values)
+        {
+            var destinations = candidate.Destinations;
+            for (var i = 0; i < destinations.Count; i++)
+            {
+                if (string.Equals(destinations[i].Id, failed, StringComparison.Ordinal))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     True when <paramref name="ex" /> is a connection-cap timeout, including when a bridge wrapped it.
+    ///     A full cap is backpressure, not an origin failure.
+    /// </summary>
+    internal static bool IsCapacityFailure(Exception? ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is Exceptions.UpstreamCapacityException)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static void ReportUpstreamResult(ProxyServer server, SessionEventArgsBase session, bool success)
     {
         // A full connection cap is not an origin failure. Counting it would eject a healthy destination.
-        if (session.Exception is Exceptions.UpstreamCapacityException)
+        if (IsCapacityFailure(session.Exception))
         {
             session.DestinationRequestLease?.Dispose();
             session.DestinationRequestLease = null;
@@ -709,15 +780,17 @@ internal static class ReverseProxySessionDispatch
         var seconds = started == 0
             ? 0
             : (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
-        ProxyMetrics.RecordRequest(
-            route?.Id ?? "_none",
-            route?.ClusterId ?? "_none",
-            session.HttpClient.Response.StatusCode,
-            protocol,
-            error.ToString(),
-            seconds,
-            session.HttpClient.Request.ContentLength,
-            session.HttpClient.Response.ContentLength);
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = route?.Id ?? "_none",
+            Cluster = route?.ClusterId ?? "_none",
+            Status = session.HttpClient.Response.StatusCode,
+            Protocol = protocol,
+            Error = error.ToString(),
+            DurationSeconds = seconds,
+            BytesIn = session.HttpClient.Request.ContentLength,
+            BytesOut = session.HttpClient.Response.ContentLength,
+        });
         if (session.Extras?.HeldConnectionPolicy is { } held)
         {
             RoutePolicies.Release(held);
@@ -740,7 +813,7 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ex = session.Exception;
-        if (ex is Exceptions.UpstreamCapacityException)
+        if (IsCapacityFailure(ex))
         {
             return ForwarderError.NoAvailableDestination;
         }
@@ -794,8 +867,9 @@ internal static class ReverseProxySessionDispatch
 
     private static bool IsToken(string value)
     {
-        foreach (var ch in value)
+        for (var i = 0; i < value.Length; i++)
         {
+            var ch = value[i];
             if (ch is not (>= '0' and <= '9' or >= 'a' and <= 'z' or >= 'A' and <= 'Z' or '-' or '_' or '.'))
             {
                 return false;

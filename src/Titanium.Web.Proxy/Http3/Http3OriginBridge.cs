@@ -98,6 +98,39 @@ internal static partial class Http3OriginBridge
     }
 
     /// <summary>
+    ///     Forwards the request to the origin after resolving the H3 route via
+    ///     <see cref="ProxyServer.ResolveHttp3Origin" />.  Use this overload when no pre-resolved
+    ///     route is available (e.g. from the inbound H3 request path).
+    /// </summary>
+    /// <param name="onInterimResponse">
+    ///     Optional callback invoked for each 1xx interim response.
+    /// </param>
+    /// <param name="copyRequestBody">
+    ///     Native HTTP/3 only: when the request body was not buffered during BeforeRequest, copies
+    ///     remaining client DATA frames onto the origin request stream. Owned by
+    ///     <c>Http3RequestStream</c>; not used by H1→H3 / H2→H3 bridges.
+    /// </param>
+    internal static async Task ForwardAsync(
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
+    {
+        var request = sessionArgs.HttpClient.Request;
+        var (host, port) = request.GetOriginHostPort(443);
+
+        // Delegate route resolution to the centralised authority; background SVCB warming is safe
+        // here since we are not inside an H2 frame-reading loop.
+        var route = server.ResolveHttp3Origin(
+            host, port, sessionArgs.UpstreamHttpProtocol, allowDnsProbe: true);
+
+        await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse,
+            copyRequestBody);
+    }
+
+    /// <summary>
     ///     True when the TCP leg for this request is HTTP/2 to the origin: an explicit HTTP/2 policy, or an
     ///     HTTP/2 client without an explicit HTTP/1.1 policy.
     /// </summary>
@@ -150,40 +183,11 @@ internal static partial class Http3OriginBridge
             }
         }
 
-        await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
-    }
-
-    /// <summary>
-    ///     Forwards the request to the origin after resolving the H3 route via
-    ///     <see cref="ProxyServer.ResolveHttp3Origin" />.  Use this overload when no pre-resolved
-    ///     route is available (e.g. from the inbound H3 request path).
-    /// </summary>
-    /// <param name="onInterimResponse">
-    ///     Optional callback invoked for each 1xx interim response.
-    /// </param>
-    /// <param name="copyRequestBody">
-    ///     Native HTTP/3 only: when the request body was not buffered during BeforeRequest, copies
-    ///     remaining client DATA frames onto the origin request stream. Owned by
-    ///     <c>Http3RequestStream</c>; not used by H1→H3 / H2→H3 bridges.
-    /// </param>
-    internal static async Task ForwardAsync(
-        SessionEventArgs sessionArgs,
-        ProxyServer server,
-        ILogger logger,
-        CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null,
-        Func<QuicStream, CancellationToken, Task>? copyRequestBody = null)
-    {
-        var request = sessionArgs.HttpClient.Request;
-        var (host, port) = request.GetOriginHostPort(443);
-
-        // Delegate route resolution to the centralised authority; background SVCB warming is safe
-        // here since we are not inside an H2 frame-reading loop.
-        var route = server.ResolveHttp3Origin(
-            host, port, sessionArgs.UpstreamHttpProtocol, allowDnsProbe: true);
-
-        await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse,
-            copyRequestBody);
+        if (await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse))
+        {
+            await sessionArgs.ClearResponse(cancellationToken);
+            await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse, allowStatusRetry: false);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────

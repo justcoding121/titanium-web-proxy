@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Abstractions.Clusters;
@@ -68,42 +69,52 @@ public static class TwpConfigValidator
             var destinationIds = new HashSet<string>(StringComparer.Ordinal);
             foreach (var dest in cluster.Destinations)
             {
-                if (string.IsNullOrWhiteSpace(dest.Id))
-                {
-                    errors.Add($"Cluster '{cluster.Id}' has a destination with an empty id.");
-                }
-                else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
-                {
-                    errors.Add($"Duplicate destination id '{dest.Id}'.");
-                }
-
-                if (string.IsNullOrWhiteSpace(dest.Address))
-                {
-                    errors.Add($"Destination '{dest.Id}' has an empty address.");
-                }
-                else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
-                {
-                    errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
-                }
-
-                if (dest.DnsRefreshSeconds < 0)
-                {
-                    errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
-                }
-
-                if (dest.Port is < 0 or > 65535)
-                {
-                    errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
-                }
-
-                if (dest.Weight < 1)
-                {
-                    errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
-                }
+                ValidateDestination(cluster.Id, dest, destinationIds, allDestinationIds, errors);
             }
         }
 
         return clusterIds;
+    }
+
+    private static void ValidateDestination(
+        string clusterId,
+        DestinationConfig dest,
+        HashSet<string> destinationIds,
+        HashSet<string> allDestinationIds,
+        List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(dest.Id))
+        {
+            errors.Add($"Cluster '{clusterId}' has a destination with an empty id.");
+        }
+        else if (!destinationIds.Add(dest.Id) || !allDestinationIds.Add(dest.Id))
+        {
+            errors.Add($"Duplicate destination id '{dest.Id}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dest.Address))
+        {
+            errors.Add($"Destination '{dest.Id}' has an empty address.");
+        }
+        else if (dest.Address.StartsWith("unix:", StringComparison.Ordinal) && OperatingSystem.IsWindows())
+        {
+            errors.Add($"Destination '{dest.Id}' uses a unix socket, which is not supported on Windows.");
+        }
+
+        if (dest.DnsRefreshSeconds < 0)
+        {
+            errors.Add($"Destination '{dest.Id}' dnsRefreshSeconds must be >= 0.");
+        }
+
+        if (dest.Port is < 0 or > 65535)
+        {
+            errors.Add($"Destination '{dest.Id}' port {dest.Port} is out of range.");
+        }
+
+        if (dest.Weight < 1)
+        {
+            errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
+        }
     }
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
@@ -214,100 +225,133 @@ public static class TwpConfigValidator
         var routeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in routes)
         {
-            if (string.IsNullOrWhiteSpace(route.Id))
-            {
-                errors.Add("Route is missing Id.");
-            }
-            else if (!routeIds.Add(route.Id))
-            {
-                errors.Add($"Duplicate route id '{route.Id}'.");
-            }
+            ValidateRouteIdentity(route, routeIds, clusterIds, errors);
+            ValidateRouteMatch(route, errors);
+            ValidateRoutePolicies(route, policyNames, errors);
+            ValidateRouteMirror(route, clusterIds, errors);
+            ValidateRouteRedirect(route, errors);
+            ValidateRouteTransforms(route, errors);
+            ValidateRouteLimits(route, errors);
+        }
+    }
 
-            if (route.Redirect is null && route.DirectResponse is null &&
-                (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
-            {
-                errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
-            }
+    private static void ValidateRouteIdentity(RouteConfig route, HashSet<string> routeIds, HashSet<string> clusterIds, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(route.Id))
+        {
+            errors.Add("Route is missing Id.");
+        }
+        else if (!routeIds.Add(route.Id))
+        {
+            errors.Add($"Duplicate route id '{route.Id}'.");
+        }
 
-            if (route.Match is null)
-            {
-                errors.Add($"Route '{route.Id}' is missing Match.");
-            }
-            else if (route.Match.PathKind == PathMatchKind.Template)
-            {
-                ValidateTemplate(route, errors);
-            }
-            else if (route.Match.PathKind == PathMatchKind.Regex && !string.IsNullOrEmpty(route.Match.Path) &&
-                     !CompilesAsRegex(route.Match.Path))
-            {
-                errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
-            }
+        if (route.Redirect is null && route.DirectResponse is null &&
+            (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
+        {
+            errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
+        }
+    }
 
-            if (route.Policies is not null)
+    private static void ValidateRouteMatch(RouteConfig route, List<string> errors)
+    {
+        if (route.Match is null)
+        {
+            errors.Add($"Route '{route.Id}' is missing Match.");
+            return;
+        }
+
+        if (route.Match.PathKind == PathMatchKind.Template)
+        {
+            ValidateTemplate(route, errors);
+            return;
+        }
+
+        if (route.Match.PathKind == PathMatchKind.Regex && !string.IsNullOrEmpty(route.Match.Path) &&
+            !CompilesAsRegex(route.Match.Path))
+        {
+            errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
+        }
+    }
+
+    private static void ValidateRoutePolicies(RouteConfig route, HashSet<string> policyNames, List<string> errors)
+    {
+        if (route.Policies is null)
+        {
+            return;
+        }
+
+        foreach (var policyName in route.Policies.Where(policyName => !policyNames.Contains(policyName)))
+        {
+            errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
+        }
+    }
+
+    private static void ValidateRouteMirror(RouteConfig route, HashSet<string> clusterIds, List<string> errors)
+    {
+        if (route.Mirror is not { } mirror)
+        {
+            return;
+        }
+
+        if (!clusterIds.Contains(mirror.ClusterId))
+        {
+            errors.Add($"Route '{route.Id}' mirrors to unknown cluster '{mirror.ClusterId}'.");
+        }
+
+        if (mirror.SamplePercent is < 0 or > 100)
+        {
+            errors.Add($"Route '{route.Id}' mirror samplePercent must be 0-100.");
+        }
+
+        if (mirror.MaxConcurrency is < 1 or > 16)
+        {
+            errors.Add($"Route '{route.Id}' mirror maxConcurrency must be 1-16.");
+        }
+    }
+
+    private static void ValidateRouteRedirect(RouteConfig route, List<string> errors)
+    {
+        if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
+        {
+            errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
+        }
+    }
+
+    private static void ValidateRouteTransforms(RouteConfig route, List<string> errors)
+    {
+        if (route.Transforms is null)
+        {
+            return;
+        }
+
+        foreach (var transform in route.Transforms)
+        {
+            if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
             {
-                foreach (var policyName in route.Policies)
-                {
-                    if (!policyNames.Contains(policyName))
-                    {
-                        errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
-                    }
-                }
-            }
-
-            if (route.Mirror is { } mirror)
-            {
-                if (!clusterIds.Contains(mirror.ClusterId))
-                {
-                    errors.Add($"Route '{route.Id}' mirrors to unknown cluster '{mirror.ClusterId}'.");
-                }
-
-                if (mirror.SamplePercent is < 0 or > 100)
-                {
-                    errors.Add($"Route '{route.Id}' mirror samplePercent must be 0-100.");
-                }
-
-                if (mirror.MaxConcurrency is < 1 or > 16)
-                {
-                    errors.Add($"Route '{route.Id}' mirror maxConcurrency must be 1-16.");
-                }
-            }
-
-            if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
-            {
-                errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
-            }
-
-            if (route.Transforms is not null)
-            {
-                foreach (var transform in route.Transforms)
-                {
-                    if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
-                    {
-                        errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
-                        continue;
-                    }
-
-                    foreach (var name in required)
-                    {
-                        if (transform.Parameters is null || !transform.Parameters.ContainsKey(name))
-                        {
-                            errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
-                        }
-                    }
-                }
-            }
-
-            var limits = route.Limits;
-            if (limits is null)
-            {
+                errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
                 continue;
             }
 
-            RequirePositiveIfSet(limits.RequestTimeoutSeconds, $"routes.{route.Id}.limits.requestTimeoutSeconds", errors);
-            RequirePositiveIfSet(limits.IdleTimeoutSeconds, $"routes.{route.Id}.limits.idleTimeoutSeconds", errors);
-            RequirePositiveIfSet(limits.MaxBufferedBodyBytes, $"routes.{route.Id}.limits.maxBufferedBodyBytes", errors);
-            RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
+            foreach (var name in required.Where(name => transform.Parameters is null || !transform.Parameters.ContainsKey(name)))
+            {
+                errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
+            }
         }
+    }
+
+    private static void ValidateRouteLimits(RouteConfig route, List<string> errors)
+    {
+        var limits = route.Limits;
+        if (limits is null)
+        {
+            return;
+        }
+
+        RequirePositiveIfSet(limits.RequestTimeoutSeconds, $"routes.{route.Id}.limits.requestTimeoutSeconds", errors);
+        RequirePositiveIfSet(limits.IdleTimeoutSeconds, $"routes.{route.Id}.limits.idleTimeoutSeconds", errors);
+        RequirePositiveIfSet(limits.MaxBufferedBodyBytes, $"routes.{route.Id}.limits.maxBufferedBodyBytes", errors);
+        RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
     }
 
     private static void ValidateListeners(IEnumerable<ListenerConfig> listeners, List<string> errors)
@@ -354,84 +398,148 @@ public static class TwpConfigValidator
                 errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
             }
 
-            if (listener.Masque is { } masque)
+            ValidateMasqueListener(listener, errors);
+            ValidateClientCertificate(listener, errors);
+            ValidateTrustedProxySources(listener, errors);
+        }
+    }
+
+    private static void ValidateMasqueListener(ListenerConfig listener, List<string> errors)
+    {
+        if (string.Equals(listener.Type, "masque", StringComparison.OrdinalIgnoreCase)
+            && listener.Masque?.RequireAuth != false
+            && listener.Masque?.Credentials is not { Count: > 0 })
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
+        }
+
+        if (listener.Masque is not { } masque)
+        {
+            return;
+        }
+
+        ValidateMasquePortsAndLimits(listener, masque, errors);
+        if (masque.Credentials is not { } credentials)
+        {
+            return;
+        }
+
+        var seenUsers = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var credential in credentials)
+        {
+            if (string.IsNullOrWhiteSpace(credential.Username) || string.IsNullOrWhiteSpace(credential.PasswordEnv))
             {
-                if (masque.AllowedPorts is { } ports)
-                {
-                    foreach (var allowed in ports)
-                    {
-                        if (allowed is < 1 or > 65535)
-                        {
-                            errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
-                        }
-                    }
-                }
-
-                if (masque.MaxTunnels is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxTunnels must be positive.");
-                }
-
-                if (masque.MaxTunnelsPerClient is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxTunnelsPerClient must be positive.");
-                }
-
-                if (masque.IdleTimeoutSeconds is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.idleTimeoutSeconds must be positive.");
-                }
-
-                if (masque.MaxDatagramsPerSecond is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxDatagramsPerSecond must be positive.");
-                }
-
-                if (masque.MaxBytesPerSecond is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxBytesPerSecond must be positive.");
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
-            {
-                if (listener.ClientCertificateMode is not ("allow" or "require"))
-                {
-                    errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
-                }
-
-                if (!File.Exists(listener.ClientCertificateCaPath))
-                {
-                    errors.Add($"Listener port {listener.Port}: clientCertificateCaPath '{listener.ClientCertificateCaPath}' was not found.");
-                }
-                else
-                {
-                    try
-                    {
-                        var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
-                        if (roots.Count == 0)
-                        {
-                            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath contains no certificates.");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add($"Listener port {listener.Port}: clientCertificateCaPath does not parse ({ex.Message}).");
-                    }
-                }
-            }
-
-            if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
-            {
+                errors.Add($"Listener port {listener.Port}: masque credential requires username and passwordEnv.");
                 continue;
             }
 
-            foreach (var source in sources)
+            if (!seenUsers.Add(credential.Username))
             {
-                if (!CidrPrefix.TryParse(source, out _))
-                {
-                    errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
-                }
+                errors.Add($"Listener port {listener.Port}: masque credential username '{credential.Username}' is duplicated.");
+            }
+        }
+    }
+
+    private static void ValidateMasquePortsAndLimits(ListenerConfig listener, MasqueListenerConfig masque, List<string> errors)
+    {
+        if (masque.AllowedPorts is { } ports)
+        {
+            if (ports.Length == 0)
+            {
+                errors.Add($"Listener port {listener.Port}: masque.allowedPorts must not be empty.");
+            }
+
+            foreach (var allowed in ports.Where(allowed => allowed is < 1 or > 65535))
+            {
+                errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
+            }
+        }
+
+        if (masque.MaxTunnels is int maxTunnels && masque.MaxTunnelsPerClient is int perClient && perClient > maxTunnels)
+        {
+            errors.Add($"Listener port {listener.Port}: masque.maxTunnelsPerClient must not exceed maxTunnels.");
+        }
+
+        AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be at most 1000000.", masque.MaxDatagramsPerSecond is > 1_000_000);
+        AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be at most 1073741824.", masque.MaxBytesPerSecond is > 1_073_741_824);
+        AddUnless(errors, listener.Port, "masque.maxTunnels must be positive.", masque.MaxTunnels is <= 0);
+        AddUnless(errors, listener.Port, "masque.maxTunnelsPerClient must be positive.", masque.MaxTunnelsPerClient is <= 0);
+        AddUnless(errors, listener.Port, "masque.idleTimeoutSeconds must be positive.", masque.IdleTimeoutSeconds is <= 0);
+        AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be positive.", masque.MaxDatagramsPerSecond is <= 0);
+        AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be positive.", masque.MaxBytesPerSecond is <= 0);
+    }
+
+    private static void AddUnless(List<string> errors, int port, string message, bool failed)
+    {
+        if (failed)
+        {
+            errors.Add($"Listener port {port}: {message}");
+        }
+    }
+
+    private static void ValidateClientCertificate(ListenerConfig listener, List<string> errors)
+    {
+        if (!string.IsNullOrWhiteSpace(listener.ClientCertificateMode)
+            && !listener.ClientCertificateMode.Equals("none", StringComparison.OrdinalIgnoreCase)
+            && !listener.ClientCertificateMode.Equals("allow", StringComparison.OrdinalIgnoreCase)
+            && !listener.ClientCertificateMode.Equals("require", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: clientCertificateMode '{listener.ClientCertificateMode}' is not none, allow, or require.");
+        }
+
+        if ((IsClientCertificateModeSet(listener.ClientCertificateMode)
+                || !string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+            && !IsTransparentListener(listener))
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: clientCertificateMode and clientCertificateCaPath apply only to transparent listeners.");
+        }
+
+        if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+        {
+            return;
+        }
+
+        if (!string.Equals(listener.ClientCertificateMode, "allow", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(listener.ClientCertificateMode, "require", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
+        }
+
+        if (!File.Exists(listener.ClientCertificateCaPath))
+        {
+            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath '{listener.ClientCertificateCaPath}' was not found.");
+            return;
+        }
+
+        try
+        {
+            var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+            if (roots.Count == 0)
+            {
+                errors.Add($"Listener port {listener.Port}: clientCertificateCaPath contains no certificates.");
+            }
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath does not parse ({ex.Message}).");
+        }
+    }
+
+    private static void ValidateTrustedProxySources(ListenerConfig listener, List<string> errors)
+    {
+        if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
+        {
+            return;
+        }
+
+        foreach (var source in sources)
+        {
+            if (!CidrPrefix.TryParse(source, out _))
+            {
+                errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
             }
         }
     }
@@ -890,4 +998,15 @@ public static class TwpConfigValidator
 
         return warnings;
     }
+
+    private static bool IsClientCertificateModeSet(string? mode) =>
+        !string.IsNullOrWhiteSpace(mode)
+        && !mode.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     A null type with a forward host is the classic transparent listener. An explicit type is not.
+    /// </summary>
+    private static bool IsTransparentListener(ListenerConfig listener) =>
+        string.Equals(listener.Type, "transparent", StringComparison.OrdinalIgnoreCase)
+        || (string.IsNullOrWhiteSpace(listener.Type) && !string.IsNullOrEmpty(listener.ForwardHost));
 }

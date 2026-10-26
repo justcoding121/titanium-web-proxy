@@ -154,7 +154,7 @@ internal static class RoutePolicies
         }
 
         var decision = Evaluate(options, route, request, client?.Address);
-        if (!decision.Stop)
+        if (!decision.Rejected)
         {
             return false;
         }
@@ -178,7 +178,7 @@ internal static class RoutePolicies
             args.Extras.HeldConnectionPolicy = decision.Held;
         }
 
-        if (!decision.Stop)
+        if (!decision.Rejected)
         {
             return false;
         }
@@ -213,75 +213,84 @@ internal static class RoutePolicies
 
         var decision = default(PolicyDecision);
         string? heldNames = null;
-        var method = request.Method;
-        var contentLength = request.ContentLength;
-
-        // A later policy can deny after a connection slot was taken. Give those slots back.
-        PolicyDecision Deny(PolicyDecision stop)
-        {
-            ReleaseHeld(heldNames);
-            return stop;
-        }
-
         foreach (var name in names)
         {
-            RoutePolicyConfig? policy = null;
-            for (var i = 0; i < policies.Count; i++)
-            {
-                if (string.Equals(policies[i].Name, name, StringComparison.Ordinal))
-                {
-                    policy = policies[i];
-                    break;
-                }
-            }
-
+            var policy = FindNamedPolicy(policies, name);
             if (policy is null)
             {
                 continue;
             }
 
-            switch (policy.Kind)
+            var stop = ApplyKind(policy, request, client, ref decision, ref heldNames);
+            if (stop is { } denied)
             {
-                case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
-                    return Deny(Stop(413, "payload too large"));
-                case "requireHeader" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
-                    return Deny(Stop(401, string.Empty));
-                case "apiKey" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
-                    return Deny(Stop(401, string.Empty));
-                case "timeout" when policy.TimeoutSeconds is int seconds:
-                    decision = decision with { TimeoutSeconds = seconds };
-                    break;
-                case "cors":
-                    if (string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return Deny(new PolicyDecision
-                        {
-                            Stop = true,
-                            Status = 204,
-                            Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
-                        });
-                    }
-
-                    break;
-                case "rateLimit" when !AllowRate(policy, client):
-                    return Deny(Stop(429, string.Empty));
-                case "connectionLimit" when !AllowConnection(policy):
-                    return Deny(Stop(503, string.Empty));
-                case "connectionLimit":
-                    heldNames = heldNames is null ? policy.Name : heldNames + HeldSeparator + policy.Name;
-                    decision = decision with { Held = heldNames };
-                    break;
-                case "ipAllowDeny" when !AllowAddress(policy, client):
-                    return Deny(Stop(403, string.Empty));
+                ReleaseHeld(heldNames);
+                return denied;
             }
         }
 
         return decision;
     }
 
+    private static RoutePolicyConfig? FindNamedPolicy(IReadOnlyList<RoutePolicyConfig> policies, string name)
+    {
+        for (var i = 0; i < policies.Count; i++)
+        {
+            if (string.Equals(policies[i].Name, name, StringComparison.Ordinal))
+            {
+                return policies[i];
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Null means keep evaluating. A decision means stop and give back any held connection slots.</summary>
+    private static PolicyDecision? ApplyKind(
+        RoutePolicyConfig policy,
+        Request request,
+        IPAddress? client,
+        ref PolicyDecision decision,
+        ref string? heldNames)
+    {
+        var method = request.Method;
+        var contentLength = request.ContentLength;
+        switch (policy.Kind)
+        {
+            case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
+                return Stop(413, "payload too large");
+            case "requireHeader" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
+                return Stop(401, string.Empty);
+            case "apiKey" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
+                return Stop(401, string.Empty);
+            case "timeout" when policy.TimeoutSeconds is int seconds:
+                decision = decision with { TimeoutSeconds = seconds };
+                return null;
+            case "cors" when string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase):
+                return new PolicyDecision
+                {
+                    Rejected = true,
+                    Status = 204,
+                    Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
+                };
+            case "rateLimit" when !AllowRate(policy, client):
+                return Stop(429, string.Empty);
+            case "connectionLimit" when !AllowConnection(policy):
+                return Stop(503, string.Empty);
+            case "connectionLimit":
+                heldNames = heldNames is null ? policy.Name : heldNames + HeldSeparator + policy.Name;
+                decision = decision with { Held = heldNames };
+                return null;
+            case "ipAllowDeny" when !AllowAddress(policy, client):
+                return Stop(403, string.Empty);
+            default:
+                return null;
+        }
+    }
+
     private static PolicyDecision Stop(int status, string body) => new()
     {
-        Stop = true,
+        Rejected = true,
         Status = status,
         Body = body,
     };
@@ -483,7 +492,7 @@ internal static class RoutePolicies
 
     private readonly struct PolicyDecision
     {
-        public bool Stop { get; init; }
+        public bool Rejected { get; init; }
         public int Status { get; init; }
         public string? Body { get; init; }
         public string? Held { get; init; }

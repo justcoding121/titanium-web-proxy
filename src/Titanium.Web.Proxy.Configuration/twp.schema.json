@@ -235,7 +235,8 @@
                 "type": "string"
               },
               "maxConnectionsPerServer": {
-                "type": "integer"
+                "type": "integer",
+                "description": "Hard cap on open upstream connections per destination, including idle pooled sockets. Waiters time out after the connect timeout with 503 and Retry-After."
               },
               "requestTimeout": {
                 "type": "string"
@@ -330,7 +331,12 @@
             "type": "string"
           },
           "clientCertificateMode": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "none",
+              "allow",
+              "require"
+            ]
           },
           "decryptSsl": {
             "type": "boolean"
@@ -363,6 +369,9 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
+              "allowHttp11Upgrade": {
+                "type": "boolean"
+              },
               "allowedPorts": {
                 "type": "array",
                 "items": {
@@ -372,20 +381,45 @@
               "blockPrivateTargets": {
                 "type": "boolean"
               },
+              "credentials": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "username",
+                    "passwordEnv"
+                  ],
+                  "properties": {
+                    "passwordEnv": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
               "idleTimeoutSeconds": {
                 "type": "integer"
               },
               "maxBytesPerSecond": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1073741824
               },
               "maxDatagramsPerSecond": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
               },
               "maxTunnels": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1
               },
               "maxTunnelsPerClient": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1
               },
               "requireAuth": {
                 "type": "boolean"

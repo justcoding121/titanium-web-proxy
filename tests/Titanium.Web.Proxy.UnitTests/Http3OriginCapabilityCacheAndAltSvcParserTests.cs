@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Http3.Dns;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -397,5 +398,60 @@ public class Http3OriginCapabilityCacheTrimTests
         cache.TrimExpired();
 
         Assert.IsTrue(cache.TryGet("live.example.com:443", out _), "Active entry must survive TrimExpired");
+    }
+
+    [TestMethod]
+    public void EvictUnlessBroken_DropsAUsableEntry_AndKeepsABrokenMark()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("usable.example:443", ttl: TimeSpan.FromMinutes(5));
+        cache.EvictUnlessBroken("usable.example:443");
+        Assert.IsFalse(cache.TryGet("usable.example:443", out _));
+
+        cache.MarkBroken("broken.example:443", TimeSpan.FromMinutes(5));
+        cache.EvictUnlessBroken("broken.example:443");
+        Assert.IsTrue(cache.IsBroken("broken.example:443"));
+    }
+
+    [TestMethod]
+    public async Task TrimExpired_DoesNotDeleteABrokenMarkWrittenDuringTheTrim()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        const string key = "race.example:443";
+        var lost = 0;
+        var stop = 0;
+        var trimmer = Task.Run(() =>
+        {
+            while (Volatile.Read(ref stop) == 0)
+                cache.TrimExpired();
+        });
+
+        for (var i = 0; i < 400; i++)
+        {
+            cache.Set(key, ttl: TimeSpan.FromTicks(1));
+            cache.MarkBroken(key, TimeSpan.FromMinutes(5));
+            if (!cache.IsBroken(key))
+                Interlocked.Increment(ref lost);
+        }
+
+        Volatile.Write(ref stop, 1);
+        await trimmer;
+        Assert.AreEqual(0, lost);
+    }
+
+    [TestMethod]
+    public void SvcbGenerations_TrimRemovesIdleKeys_AndKeepsAnInFlightKey()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var coordinator = new Http3SvcbDiscoveryCoordinator(proxy);
+        for (var i = 0; i < 30; i++)
+            coordinator.Invalidate("idle-" + i + ":443");
+        Assert.IsTrue(coordinator.TryPinInFlightForTests("live.example:443"));
+        coordinator.Invalidate("live.example:443");
+
+        coordinator.TrimExpired();
+
+        Assert.AreEqual(1, coordinator.GenerationCountForTests);
+        coordinator.Dispose();
     }
 }

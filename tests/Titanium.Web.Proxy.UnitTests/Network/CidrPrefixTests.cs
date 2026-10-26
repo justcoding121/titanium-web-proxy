@@ -49,6 +49,6 @@ public class CidrPrefixTests
         Assert.IsFalse(endPoint.IsTrustedProxyProtocolPeer(IPAddress.Parse("8.8.8.8")));
         Assert.IsFalse(endPoint.IsTrustedProxyProtocolPeer(null));
 
-        Assert.ThrowsException<FormatException>(() => endPoint.TrustedProxyProtocolSources = ["nope"]);
+        Assert.ThrowsExactly<FormatException>(() => endPoint.TrustedProxyProtocolSources = ["nope"]);
     }
 }

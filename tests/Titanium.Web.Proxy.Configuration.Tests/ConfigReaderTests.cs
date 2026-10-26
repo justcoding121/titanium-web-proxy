@@ -8,6 +8,10 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class ConfigReaderTests
 {
+    private static readonly int[] RouteOrder = [0, 1, 2, 3, 4];
+    private static readonly int[] ListenerPorts = [9000, 9001, 9002, 9003];
+    private static readonly int[] FailureStatuses = [502, 503];
+
     private const string UpstreamAndServers = """
         upstream backend {
             server 10.0.0.1:8080;
@@ -60,7 +64,7 @@ public class ConfigReaderTests
     {
         var config = HttpServerConfigReader.Parse(UpstreamAndServers);
         Assert.AreEqual(5, config.Routes.Count);
-        CollectionAssert.AreEqual(new[] { 0, 1, 2, 3, 4 }, config.Routes.Select(r => r.Order).ToArray());
+        CollectionAssert.AreEqual(RouteOrder, config.Routes.Select(r => r.Order).ToArray());
         Assert.AreEqual("app.test", config.Routes[0].Match.Host);
         Assert.AreEqual(PathMatchKind.Prefix, config.Routes[0].Match.PathKind);
         Assert.AreEqual("backend", config.Routes[0].ClusterId);
@@ -104,7 +108,7 @@ public class ConfigReaderTests
                 }
             }
             """);
-        CollectionAssert.AreEqual(new[] { 9000, 9001, 9002, 9003 }, config.Listeners.Select(l => l.Port).ToArray());
+        CollectionAssert.AreEqual(ListenerPorts, config.Listeners.Select(l => l.Port).ToArray());
         Assert.AreEqual("127.0.0.1", config.Listeners[0].Host);
         Assert.AreEqual("[::1]", config.Listeners[1].Host);
         Assert.IsNull(config.Listeners[2].Host);
@@ -127,7 +131,7 @@ public class ConfigReaderTests
     [DataRow("listen 0;")]
     public void HttpServer_BadListen_Throws(string directive)
     {
-        Assert.ThrowsException<FormatException>(() => HttpServerConfigReader.Parse("server {\n" + directive + "\n}"));
+        Assert.ThrowsExactly<FormatException>(() => HttpServerConfigReader.Parse("server {\n" + directive + "\n}"));
     }
 
     [TestMethod]
@@ -135,7 +139,7 @@ public class ConfigReaderTests
     {
         var config = HttpServerConfigReader.Parse("# only a comment\n\n   \n");
         Assert.AreEqual(0, config.Routes.Count);
-        Assert.ThrowsException<ArgumentNullException>(() => HttpServerConfigReader.Parse(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => HttpServerConfigReader.Parse(null!));
     }
 
     [TestMethod]
@@ -238,7 +242,7 @@ public class ConfigReaderTests
         Assert.IsFalse(pool.HealthCheck!.Passive!.Enabled);
         Assert.AreEqual(5, pool.HealthCheck.Passive.ConsecutiveFailures);
         Assert.AreEqual(50, pool.HealthCheck.Passive.MaxEjectionPercent);
-        CollectionAssert.AreEqual(new[] { 502, 503 }, pool.HealthCheck.Passive.FailureStatusCodes!.ToArray());
+        CollectionAssert.AreEqual(FailureStatuses, pool.HealthCheck.Passive.FailureStatusCodes!.ToArray());
         Assert.AreEqual("pool-d0", pool.Destinations[0].Id);
         Assert.AreEqual(3, pool.Destinations[0].Weight);
         Assert.IsTrue(pool.Destinations[0].UseDestinationHost);
@@ -270,14 +274,14 @@ public class ConfigReaderTests
     [DataRow("{\"routes\":[{\"id\":\"r\"}]}")]
     public void Json_MissingRequiredFields_Throw(string json)
     {
-        Assert.ThrowsException<FormatException>(() => JsonReverseProxyDocument.Parse(json));
+        Assert.ThrowsExactly<FormatException>(() => JsonReverseProxyDocument.Parse(json));
     }
 
     [TestMethod]
     public void Json_NullAndEmptyInput_AreHandled()
     {
-        Assert.ThrowsException<ArgumentNullException>(() => JsonReverseProxyDocument.Parse(null!));
-        Assert.ThrowsException<InvalidOperationException>(() => JsonReverseProxyDocument.Parse("null"));
+        Assert.ThrowsExactly<ArgumentNullException>(() => JsonReverseProxyDocument.Parse(null!));
+        Assert.ThrowsExactly<InvalidOperationException>(() => JsonReverseProxyDocument.Parse("null"));
         var empty = JsonReverseProxyDocument.Parse("{}");
         Assert.AreEqual(0, empty.Routes.Count + empty.Clusters.Count + empty.Listeners.Count);
     }

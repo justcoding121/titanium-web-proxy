@@ -28,6 +28,21 @@ internal static class MasqueTargetPolicy
             addresses = resolve(host);
         }
 
+        var allowed = SelectAll(port, allowedPorts, blockPrivate, addresses, out var rejection);
+        return allowed.Count == 0 ? new MasquePin(null, rejection) : new MasquePin(allowed[0], null);
+    }
+
+    /// <summary>Every resolved address the port and private-range rules allow, in order.</summary>
+    public static IReadOnlyList<IPAddress> SelectAll(int port, IReadOnlyList<int> allowedPorts, bool blockPrivate,
+        IReadOnlyList<IPAddress> addresses, out string? rejection)
+    {
+        if (!Contains(allowedPorts, port))
+        {
+            rejection = "port";
+            return [];
+        }
+
+        var allowed = new List<IPAddress>();
         foreach (var address in addresses)
         {
             if (blockPrivate && PrivateNetworkGuard.IsBlocked(address))
@@ -35,10 +50,22 @@ internal static class MasqueTargetPolicy
                 continue;
             }
 
-            return new MasquePin(address, null);
+            allowed.Add(address);
         }
 
-        return new MasquePin(null, addresses.Length == 0 ? "dns" : "blocked");
+        if (allowed.Count != 0)
+        {
+            rejection = null;
+        }
+        else if (addresses.Count == 0)
+        {
+            rejection = "dns";
+        }
+        else
+        {
+            rejection = "blocked";
+        }
+        return allowed;
     }
 
     private static bool Contains(IReadOnlyList<int> ports, int port)

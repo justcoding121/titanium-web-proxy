@@ -56,12 +56,10 @@ internal sealed class ClusterHealthProber : IDisposable
                 _failures[dest.Id] = 0;
                 var streak = _successes.TryGetValue(dest.Id, out var n) ? n + 1 : 1;
                 _successes[dest.Id] = streak;
-                if (streak >= healthyNeed && _probeEjected.Contains(dest.Id))
+                if (streak >= healthyNeed && _probeEjected.Contains(dest.Id)
+                    && _manager.TrySetDestinationState(dest.Id, DestinationState.Unhealthy, DestinationState.Healthy))
                 {
-                    if (_manager.TrySetDestinationState(dest.Id, DestinationState.Unhealthy, DestinationState.Healthy))
-                    {
-                        _probeEjected.Remove(dest.Id);
-                    }
+                    _probeEjected.Remove(dest.Id);
                 }
             }
             else
@@ -148,18 +146,20 @@ internal sealed class ClusterHealthProber : IDisposable
     private static int MinDnsRefreshSeconds(ClusterConfig cluster)
     {
         var min = 0;
-        foreach (var destination in cluster.Destinations)
+        var destinations = cluster.Destinations;
+        for (var i = 0; i < destinations.Count; i++)
         {
-            if (destination.DnsRefreshSeconds > 0 && (min == 0 || destination.DnsRefreshSeconds < min))
+            var seconds = destinations[i].DnsRefreshSeconds;
+            if (seconds > 0 && (min == 0 || seconds < min))
             {
-                min = destination.DnsRefreshSeconds;
+                min = seconds;
             }
         }
 
         return min;
     }
 
-    private async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)
+    private static async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)
     {
         var probe = ProbeOverride;
         if (probe is not null)
@@ -171,7 +171,7 @@ internal sealed class ClusterHealthProber : IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, active.TimeoutSeconds)));
         try
         {
-            var port = dest.Port == 0 ? (dest.UseHttps ? 443 : 80) : dest.Port;
+            var port = ProbePort(dest);
             if (active.Kind == ActiveHealthKind.Tcp)
             {
                 using var tcp = new TcpClient();
@@ -181,32 +181,56 @@ internal sealed class ClusterHealthProber : IDisposable
 
             var scheme = dest.UseHttps ? "https" : "http";
             var path = string.IsNullOrEmpty(active.Path) ? "/" : active.Path;
-            var query = string.IsNullOrEmpty(active.Query)
-                ? string.Empty
-                : active.Query.StartsWith('?') ? active.Query : "?" + active.Query;
-            using var response = await Http.GetAsync($"{scheme}://{dest.Address}:{port}{path}{query}", timeout.Token)
+            using var response = await Http.GetAsync(
+                    $"{scheme}://{dest.Address}:{port}{path}{ProbeQuery(active.Query)}", timeout.Token)
                 .ConfigureAwait(false);
-            var code = (int)response.StatusCode;
-            if (active.ExpectedStatus is { Count: > 0 } expected)
-            {
-                for (var i = 0; i < expected.Count; i++)
-                {
-                    if (expected[i] == code)
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            return code is >= 200 and <= 399;
+            return StatusIsHealthy(active, (int)response.StatusCode);
         }
         catch (Exception)
         {
             return false;
         }
     }
+
+    private static int ProbePort(DestinationConfig dest)
+    {
+        if (dest.Port != 0)
+        {
+            return dest.Port;
+        }
+
+        return dest.UseHttps ? 443 : 80;
+    }
+
+    private static string ProbeQuery(string? query)
+    {
+        if (string.IsNullOrEmpty(query))
+        {
+            return string.Empty;
+        }
+
+        return query.StartsWith('?') ? query : "?" + query;
+    }
+
+    private static bool StatusIsHealthy(ActiveHealthConfig active, int code)
+    {
+        if (active.ExpectedStatus is not { Count: > 0 } expected)
+        {
+            return code is >= 200 and <= 399;
+        }
+
+        for (var i = 0; i < expected.Count; i++)
+        {
+            if (expected[i] == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal bool IsStoppedForTests => Volatile.Read(ref _disposed) != 0;
 
     public void Dispose()
     {

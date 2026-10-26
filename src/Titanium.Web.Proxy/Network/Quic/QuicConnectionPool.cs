@@ -98,6 +98,20 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     warmup fail-fast before TCP fallback. Pass <see langword="false"/> for Forced H3 so the
     ///     dial uses the full <see cref="ProxyServer.ConnectTimeOutSeconds"/> budget.
     /// </param>
+    /// <summary>
+    ///     A drain can flip this field on another thread during the handshake. The read stays in its
+    ///     own method so it is not treated as dead after the earlier drain check.
+    /// </summary>
+    private void NoteUnreachableUnlessDraining(string capabilityKey)
+    {
+        if (_draining)
+        {
+            return;
+        }
+
+        _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+    }
+
     internal async ValueTask<QuicServerConnection> GetOrCreateAsync( // NOSONAR S107 -- Pool acquire keeps origin identity, proxy, and handshake flags explicit.
         string connectHost,
         int port,
@@ -107,12 +121,13 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         CancellationToken cancellationToken,
         string? sniHost = null,
         bool failFastHandshake = true,
-        string? capabilityKey = null)
+        string? capabilityKey = null,
+        string? precomputedCacheKey = null)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
         var effectiveSniHost = sniHost ?? connectHost;
-        var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
+        var cacheKey = precomputedCacheKey ?? QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
             upStreamProxy, upStreamEndPoint);
         var entry = _pool.GetOrAdd(cacheKey, static _ => new OriginEntry());
 
@@ -148,13 +163,14 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                         cacheKey, remoteCertificateValidationCallback, cancellationToken,
                         failFastHandshake);
                 }
-                catch (Exception ex) when (capabilityKey != null && !_draining
+                catch (Exception ex) when (capabilityKey != null
                                            && ex is not (OperationCanceledException or ObjectDisposedException
                                                or InvalidOperationException))
                 {
-                    // Mark while still holding CreationGate. Releasing it first would let a caller queued
-                    // behind this handshake dial again before the verdict is visible.
-                    _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+                    // Re-read after the await. A drain can start while the handshake is in flight, and the
+                    // check before the dial does not cover that. Mark while still holding CreationGate.
+                    NoteUnreachableUnlessDraining(capabilityKey);
+
                     throw;
                 }
 
@@ -185,6 +201,11 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     {
         var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost ?? connectHost,
             upStreamProxy, upStreamEndPoint);
+        return HasLiveConnection(cacheKey);
+    }
+
+    internal bool HasLiveConnection(string cacheKey)
+    {
         return _pool.TryGetValue(cacheKey, out var entry)
                && Volatile.Read(ref entry.Current) is { IsClosed: false };
     }

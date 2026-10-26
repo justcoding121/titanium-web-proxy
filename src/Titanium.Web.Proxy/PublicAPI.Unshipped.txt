@@ -323,6 +323,10 @@ Titanium.Web.Proxy.Options.ProxyResourceLimits.WithMaxInterimResponses(int maxIn
 Titanium.Web.Proxy.Options.ProxyResourceLimits.WithTrailerHeaderBounds(int maxTrailerHeaderCount, int maxTrailerHeaderBlockBytes) -> Titanium.Web.Proxy.Options.ProxyResourceLimits!
 Titanium.Web.Proxy.Options.ProxyPolicyModes.WithAllowAmbiguousFraming(bool enabled) -> Titanium.Web.Proxy.Options.ProxyPolicyModes!
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException
+Titanium.Web.Proxy.Exceptions.UpstreamCapacityException
+Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey.get -> string!
+Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max.get -> int
+Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.UpstreamCapacityException(string! cacheKey, int max) -> void
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException.HeaderLimitsExceededException(bool isCount, long observed, long limit, bool isRequest) -> void
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsCount.get -> bool
 Titanium.Web.Proxy.Http.HeaderLimitsExceededException.IsRequest.get -> bool
@@ -382,6 +386,10 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.MatchedRoute.get -> Titan
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyRequestId.get -> string?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> string?
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc.get -> System.Func<string!, string!, System.Threading.Tasks.Task<bool>!>?
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade.set -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.get -> int[]!
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.set -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets.get -> bool

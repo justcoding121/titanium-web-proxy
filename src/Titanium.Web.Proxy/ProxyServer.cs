@@ -1883,7 +1883,8 @@ public partial class ProxyServer : IDisposable
 
             if (!ProxyRunning || _stopAccepting)
             {
-                tcpClient.Dispose();
+                // Unread bytes make Linux answer close() with RST. Drain them so the client sees a FIN.
+                CloseAcceptedSocketWithoutResponse(tcpClient);
                 if (!ProxyRunning)
                 {
                     break;
@@ -1892,7 +1893,7 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost.Length: > 0 } passthrough)
+            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost: { Length: > 0 } forwardHost } passthrough)
             {
                 if (!TryAdmitClientConnection(endPoint))
                 {
@@ -1904,7 +1905,7 @@ public partial class ProxyServer : IDisposable
                 {
                     await Network.TcpPassthrough.RelayAsync(
                         tcpClient,
-                        passthrough.ForwardHost!,
+                        forwardHost,
                         passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80),
                         cancellationToken).ConfigureAwait(false);
                 }
@@ -1930,19 +1931,28 @@ public partial class ProxyServer : IDisposable
             if (endPoint.AcceptProxyProtocol &&
                 endPoint.IsTrustedProxyProtocolPeer((tcpClient.RemoteEndPoint as System.Net.IPEndPoint)?.Address))
             {
+                var acceptedProxyProtocol = false;
                 try
                 {
-                    if (!await Network.ProxyProtocolReader.TryReadAsync(tcpClient, cancellationToken).ConfigureAwait(false))
-                    {
-                        tcpClient.Dispose();
-                        ReleaseClientConnection(endPoint);
-                        continue;
-                    }
+                    acceptedProxyProtocol = await Network.ProxyProtocolReader.TryReadAsync(tcpClient, cancellationToken)
+                        .ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     OnException(null, ex);
-                    tcpClient.Dispose();
+                }
+
+                if (!acceptedProxyProtocol)
+                {
+                    try
+                    {
+                        tcpClient.Dispose();
+                    }
+                    catch (Exception)
+                    {
+                        // The accept loop owns this socket. A failed dispose is already closed.
+                    }
+
                     ReleaseClientConnection(endPoint);
                     continue;
                 }
@@ -2206,6 +2216,50 @@ public partial class ProxyServer : IDisposable
         catch
         {
             // ignore — sockets are released on process exit
+        }
+    }
+
+    /// <summary>
+    ///     Drops a socket accepted after stop without writing a response. Pending client bytes are
+    ///     discarded first so the close is a FIN rather than a reset.
+    /// </summary>
+    private static void CloseAcceptedSocketWithoutResponse(Socket socket)
+    {
+        try
+        {
+            socket.ReceiveTimeout = 200;
+            Span<byte> buffer = stackalloc byte[256];
+            while (true)
+            {
+                int read;
+                try
+                {
+                    read = socket.Receive(buffer);
+                }
+                catch (SocketException)
+                {
+                    break;
+                }
+
+                if (read <= 0 || socket.Available == 0)
+                {
+                    break;
+                }
+            }
+
+            socket.Shutdown(SocketShutdown.Send);
+        }
+        catch (SocketException)
+        {
+            // The client is already gone.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already closed.
+        }
+        finally
+        {
+            socket.Dispose();
         }
     }
 

@@ -964,7 +964,7 @@ internal static class RunCommand
         }
 
         ep.Passthrough = listener.Passthrough;
-        ep.ClientCertificateMode = listener.ClientCertificateMode switch
+        ep.ClientCertificateMode = listener.ClientCertificateMode?.ToLowerInvariant() switch
         {
             "require" => ClientCertificateMode.Require,
             "allow" => ClientCertificateMode.Allow,
@@ -989,6 +989,11 @@ internal static class RunCommand
             ep.Options.RequireAuth = requireAuth;
         }
 
+        if (masque.AllowHttp11Upgrade is bool allowHttp11)
+        {
+            ep.Options.AllowHttp11Upgrade = allowHttp11;
+        }
+
         if (masque.AllowedPorts is { Length: > 0 } ports)
         {
             ep.Options.AllowedPorts = ports;
@@ -999,6 +1004,41 @@ internal static class RunCommand
             ep.Options.BlockPrivateTargets = blockPrivate;
         }
 
+        ApplyMasqueLimits(ep, masque);
+
+        if (masque.Credentials is { Count: > 0 } credentials)
+        {
+            var hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            foreach (var credential in credentials)
+            {
+                var password = Environment.GetEnvironmentVariable(credential.PasswordEnv ?? string.Empty);
+                if (string.IsNullOrEmpty(password))
+                {
+                    throw new InvalidOperationException(
+                        $"Listener port {listener.Port}: masque credential '{credential.Username}' passwordEnv '{credential.PasswordEnv}' is missing or empty.");
+                }
+
+                hashes[credential.Username ?? string.Empty] = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(password));
+            }
+
+            var unknown = new byte[32];
+            ep.Options.AuthenticateFunc = (user, password) =>
+            {
+                var supplied = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(password));
+                var known = hashes.TryGetValue(user, out var expected);
+                var match = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    supplied, known ? expected! : unknown);
+                return Task.FromResult(known && match);
+            };
+        }
+
+        return ep;
+    }
+
+    private static void ApplyMasqueLimits(MasqueProxyEndPoint ep, MasqueListenerConfig masque)
+    {
         if (masque.MaxTunnels is int maxTunnels)
         {
             ep.Options.MaxTunnels = maxTunnels;
@@ -1023,8 +1063,6 @@ internal static class RunCommand
         {
             ep.Options.MaxBytesPerSecond = bytes;
         }
-
-        return ep;
     }
 
     private static AltSvcOptions? ToAltSvcOptions(AltSvcConfig? config)

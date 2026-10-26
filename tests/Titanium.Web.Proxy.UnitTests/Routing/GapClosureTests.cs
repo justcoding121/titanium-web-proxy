@@ -75,7 +75,7 @@ public class GapClosureTests
             {
                 var context = new RouteMatchContext(null, "/seg" + (path % 3) + (path % 2 == 0 ? "/item" : "/4"), "GET", null, null);
                 var indexed = matcher.Match(context, frozen);
-                var linear = matcher.MatchUnindexed(context, frozen);
+                var linear = RouteMatcher.MatchUnindexed(context, frozen);
                 Assert.AreEqual(linear?.Id, indexed?.Id, context.Path);
             }
         }
@@ -127,6 +127,10 @@ public class GapClosureTests
         ReverseProxySessionDispatch.Apply(proxy, post);
         post.HttpClient.Response.StatusCode = 502;
         Assert.IsFalse(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, post));
+
+        var decoded = Session(proxy, "GET");
+        ReverseProxySessionDispatch.Apply(proxy, decoded);
+        Assert.IsTrue(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, decoded, 503));
     }
 
     [TestMethod]
@@ -257,7 +261,7 @@ public class GapClosureTests
     }
 
     [TestMethod]
-    public void Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
+    public async Task Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
     {
         var fanout = new MirrorDispatcher();
         var large = new Request { Method = "POST", Host = "app.test", ContentLength = 100_000 };
@@ -281,7 +285,7 @@ public class GapClosureTests
             var until = DateTime.UtcNow.AddSeconds(2);
             while (fanout.HoldEntriesForTests == 0 && DateTime.UtcNow < until)
             {
-                Thread.Sleep(1);
+                await Task.Delay(1);
             }
 
             Assert.IsTrue(fanout.HoldEntriesForTests > 0, "mirror worker did not pause");
@@ -399,7 +403,7 @@ public class GapClosureTests
     {
         var host = new ProxyConfigHost(validators: [new RejectAll()]);
         var manager = new ClusterManager();
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => host.ApplyAsync(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.ApplyAsync(
             new ProxyConfigSnapshot(),
             manager,
             _ => { }));

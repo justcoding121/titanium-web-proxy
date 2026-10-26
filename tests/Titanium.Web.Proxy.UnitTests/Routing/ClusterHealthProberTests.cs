@@ -183,6 +183,9 @@ public class ClusterHealthProberTests
         var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
         await Task.Delay(30);
         prober.Dispose();
+        Assert.IsTrue(prober.IsStoppedForTests, "the first dispose stops the probe loop");
         prober.Dispose();
+        Assert.IsTrue(prober.IsStoppedForTests, "a second dispose leaves the prober stopped");
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
     }
 }

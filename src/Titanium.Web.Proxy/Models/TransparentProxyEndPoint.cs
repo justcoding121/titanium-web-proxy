@@ -63,7 +63,9 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
 
     /// <summary>
     ///     Overrides the client-facing <c>Alt-Svc</c> value injected when <see cref="EnableHttp3" /> is on.
-    ///     Null keeps <c>h3=":port"; ma=86400</c>. Explicit and SOCKS endpoints never inject this header:
+    ///     Null keeps <c>h3=":port"; ma=86400</c>. Assign a new instance to apply changes; editing the
+    ///     fields of the current instance is ignored because the header text is cached on assignment.
+    ///     Explicit and SOCKS endpoints never inject this header:
     ///     they speak TCP to the client, and HTTP/3 there would require a proxy protocol that clients
     ///     do not use. The H2-to-H3 bridge also never injects it (a mid-connection upgrade breaks Chrome).
     /// </summary>

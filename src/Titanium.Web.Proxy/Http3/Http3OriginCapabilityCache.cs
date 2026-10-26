@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -146,6 +147,13 @@ internal sealed class Http3OriginCapabilityCache
     /// <summary>Removes an entry so the next request re-probes. Also clears a broken mark.</summary>
     internal void Evict(string hostAndPort) => _cache.TryRemove(hostAndPort, out _);
 
+    /// <summary>Drops a usable entry. A broken mark is left in place so a forget-me advertisement cannot revive it.</summary>
+    internal void EvictUnlessBroken(string hostAndPort)
+    {
+        if (_cache.TryGetValue(hostAndPort, out var entry) && !entry.Broken)
+            ((ICollection<KeyValuePair<string, Entry>>)_cache).Remove(new KeyValuePair<string, Entry>(hostAndPort, entry));
+    }
+
     /// <summary>
     ///     Removes entries whose TTL has elapsed. Called periodically from the connection-pool cleanup
     ///     loop to prevent unbounded growth of the dictionary in long-running proxies that visit many
@@ -156,7 +164,7 @@ internal sealed class Http3OriginCapabilityCache
         var now = DateTime.UtcNow;
         foreach (var key in _cache.Keys)
             if (_cache.TryGetValue(key, out var entry) && entry.ExpiresAtUtc <= now)
-                _cache.TryRemove(key, out _);
+                ((ICollection<KeyValuePair<string, Entry>>)_cache).Remove(new KeyValuePair<string, Entry>(key, entry));
     }
 
     private readonly record struct Entry(int AltPort, string? TargetName, DateTime ExpiresAtUtc, bool Broken = false);

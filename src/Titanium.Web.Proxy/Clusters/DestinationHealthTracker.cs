@@ -54,31 +54,46 @@ public sealed class DestinationHealthTracker
             return;
         }
 
-        var codes = passive.FailureStatusCodes;
-        var failed = codes is { Count: > 0 }
-            ? Contains(codes, statusCode)
-            : statusCode is 502 or 503 or 504;
-        if (!failed)
+        if (!IsFailureStatus(passive, statusCode))
         {
-            ReportSuccess(destinationId);
-            if (RateExceeded(destinationId, passive, failed: false))
-            {
-                Eject(destinationId, manager, passive, destinationCount);
-                return;
-            }
-
-            if (_reactivateAt.ContainsKey(destinationId) && statusCode is >= 200 and <= 499)
-            {
-                var ok = passive.HalfOpenSuccesses <= 1 ? 1 : passive.HalfOpenSuccesses;
-                if (ok <= 1)
-                {
-                    Restore(destinationId, manager);
-                }
-            }
-
+            NoteSuccess(destinationId, statusCode, manager, passive, destinationCount);
             return;
         }
 
+        NoteFailure(destinationId, manager, passive, destinationCount);
+    }
+
+    private static bool IsFailureStatus(PassiveHealthConfig passive, int statusCode)
+    {
+        var codes = passive.FailureStatusCodes;
+        return codes is { Count: > 0 }
+            ? Contains(codes, statusCode)
+            : statusCode is 502 or 503 or 504;
+    }
+
+    private void NoteSuccess(string destinationId, int statusCode, IClusterManager? manager, PassiveHealthConfig passive, int destinationCount)
+    {
+        ReportSuccess(destinationId);
+        if (RateExceeded(destinationId, passive, failed: false))
+        {
+            Eject(destinationId, manager, passive, destinationCount);
+            return;
+        }
+
+        if (!_reactivateAt.ContainsKey(destinationId) || statusCode is < 200 or > 499)
+        {
+            return;
+        }
+
+        var ok = passive.HalfOpenSuccesses <= 1 ? 1 : passive.HalfOpenSuccesses;
+        if (ok <= 1)
+        {
+            Restore(destinationId, manager);
+        }
+    }
+
+    private void NoteFailure(string destinationId, IClusterManager? manager, PassiveHealthConfig passive, int destinationCount)
+    {
         var threshold = passive.ConsecutiveFailures > 0 ? passive.ConsecutiveFailures : 3;
         var count = _failures.AddOrUpdate(destinationId, 1, static (_, v) => v + 1);
         if (count >= threshold || _reactivateAt.ContainsKey(destinationId) || RateExceeded(destinationId, passive, failed: true))

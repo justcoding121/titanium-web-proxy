@@ -45,42 +45,19 @@ public static class ProxyProtocolReader
         var total = 6;
         if (buffer.AsSpan(0, 6).SequenceEqual("PROXY "u8))
         {
-            // v1 is one line of at most 107 bytes ending in CRLF. Read one byte at a time so nothing past it is consumed.
-            while (total < 107)
+            total = await ReadProxyV1LineAsync(socket, buffer, total, cancellationToken).ConfigureAwait(false);
+            if (total < 0)
             {
-                if (!await ReadExactAsync(socket, buffer, total, 1, cancellationToken).ConfigureAwait(false))
-                {
-                    return false;
-                }
-
-                total++;
-                if (buffer[total - 1] == (byte)'\n')
-                {
-                    break;
-                }
+                return false;
             }
         }
         else
         {
-            if (!await ReadExactAsync(socket, buffer, total, 10, cancellationToken).ConfigureAwait(false))
+            total = await ReadProxyV2Async(socket, buffer, total, cancellationToken).ConfigureAwait(false);
+            if (total < 0)
             {
                 return false;
             }
-
-            total = 16;
-            if (!buffer.AsSpan(0, 12).SequenceEqual(V2Signature))
-            {
-                return false;
-            }
-
-            var length = (buffer[14] << 8) | buffer[15];
-            if (length > buffer.Length - 16 ||
-                !await ReadExactAsync(socket, buffer, 16, length, cancellationToken).ConfigureAwait(false))
-            {
-                return false;
-            }
-
-            total += length;
         }
 
         if (!TryParse(buffer.AsSpan(0, total), out var parsed, out var consumed) || consumed != total)
@@ -94,6 +71,51 @@ public static class ProxyProtocolReader
         }
 
         return true;
+    }
+
+    private static async ValueTask<int> ReadProxyV1LineAsync(
+        Socket socket, byte[] buffer, int total, CancellationToken cancellationToken)
+    {
+        // v1 is one line of at most 107 bytes ending in CRLF. Read one byte at a time so nothing past it is consumed.
+        while (total < 107)
+        {
+            if (!await ReadExactAsync(socket, buffer, total, 1, cancellationToken).ConfigureAwait(false))
+            {
+                return -1;
+            }
+
+            total++;
+            if (buffer[total - 1] == (byte)'\n')
+            {
+                break;
+            }
+        }
+
+        return total;
+    }
+
+    private static async ValueTask<int> ReadProxyV2Async(
+        Socket socket, byte[] buffer, int total, CancellationToken cancellationToken)
+    {
+        if (!await ReadExactAsync(socket, buffer, total, 10, cancellationToken).ConfigureAwait(false))
+        {
+            return -1;
+        }
+
+        total = 16;
+        if (!buffer.AsSpan(0, 12).SequenceEqual(V2Signature))
+        {
+            return -1;
+        }
+
+        var length = (buffer[14] << 8) | buffer[15];
+        if (length > buffer.Length - 16 ||
+            !await ReadExactAsync(socket, buffer, 16, length, cancellationToken).ConfigureAwait(false))
+        {
+            return -1;
+        }
+
+        return total + length;
     }
 
     private static async ValueTask<bool> ReadExactAsync(Socket socket, byte[] buffer, int offset, int count, CancellationToken cancellationToken)

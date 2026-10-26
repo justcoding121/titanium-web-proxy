@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text;
 
 namespace Titanium.Web.Proxy.Masque;
 
@@ -42,6 +43,10 @@ internal static class ConnectUdpPath
         }
 
         host = new string(decoded[..written]);
+        if (host.Length >= 2 && host[0] == '[' && host[^1] == ']')
+        {
+            host = host[1..^1];
+        }
         return int.TryParse(rest[(slash + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out port)
                && port is >= 1 and <= 65535;
     }
@@ -54,29 +59,70 @@ internal static class ConnectUdpPath
             return false;
         }
 
-        for (var i = 0; i < input.Length; i++)
+        Span<byte> bytes = stackalloc byte[255];
+        var count = 0;
+        var i = 0;
+        while (i < input.Length)
         {
-            var ch = input[i];
-            if (ch == '%')
-            {
-                if (i + 2 >= input.Length || !byte.TryParse(input.Slice(i + 1, 2), NumberStyles.HexNumber,
-                        CultureInfo.InvariantCulture, out var value))
-                {
-                    return false;
-                }
-
-                ch = (char)value;
-                i += 2;
-            }
-
-            if (ch is < (char)0x20 or '%' or '/' or '\\' || written == destination.Length)
+            if (!TryConsumeByte(input, ref i, out var value) || IsReserved(value) || count == bytes.Length)
             {
                 return false;
             }
 
-            destination[written++] = ch;
+            bytes[count++] = value;
         }
 
-        return written > 0 && written <= 255;
+        if (count == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+            var charCount = utf8.GetCharCount(bytes[..count]);
+            if (charCount == 0 || charCount > destination.Length)
+            {
+                return false;
+            }
+
+            utf8.GetChars(bytes[..count], destination);
+            written = charCount;
+            return true;
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
+        }
     }
+
+    private static bool TryConsumeByte(ReadOnlySpan<char> input, ref int i, out byte value)
+    {
+        var ch = input[i];
+        if (ch == '%')
+        {
+            if (i + 2 >= input.Length || !Uri.IsHexDigit(input[i + 1]) || !Uri.IsHexDigit(input[i + 2]))
+            {
+                value = 0;
+                return false;
+            }
+
+            value = Convert.ToByte(input.Slice(i + 1, 2).ToString(), 16);
+            i += 3;
+            return true;
+        }
+
+        if (ch > 0x7F)
+        {
+            value = 0;
+            return false;
+        }
+
+        value = (byte)ch;
+        i++;
+        return true;
+    }
+
+    private static bool IsReserved(byte value) =>
+        value < 0x20 || value is (byte)'%' or (byte)'/' or (byte)'\\';
 }

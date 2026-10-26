@@ -6,6 +6,7 @@ namespace Titanium.Web.Proxy.Models;
 ///     Client-facing <c>Alt-Svc</c> advertisement for a dual-listen HTTP/3 endpoint.
 ///     <see langword="null" /> on the endpoint keeps today's header (<c>h3=":port"; ma=86400</c>)
 ///     whenever <see cref="TransparentProxyEndPoint.EnableHttp3" /> is on.
+///     Assign a new instance to apply changes; the endpoint caches the header text when this object is assigned.
 /// </summary>
 [Experimental("TWP001")]
 public sealed class AltSvcOptions

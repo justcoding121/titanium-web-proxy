@@ -400,7 +400,7 @@ public class ParityGapTests
             Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = new RouteMatch { Path = "/" } }],
             Clusters = [new ClusterConfig { Id = "c", Destinations = [new DestinationConfig { Id = "a", Address = "10.0.0.1" }] }],
         };
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
             host.ApplyAsync(snapshot, manager, _ => published = true));
         Assert.IsFalse(published);
     }

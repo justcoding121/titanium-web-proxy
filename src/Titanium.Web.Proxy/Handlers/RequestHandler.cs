@@ -720,7 +720,8 @@ public partial class ProxyServer
                     catch (Exception e) when (!(e is ProxyHttpException)
                                               && !(e is ProxyTimeoutException)
                                               && !(e is OperationCanceledException)
-                                              && !(e is RetryableServerConnectionException))
+                                              && !(e is RetryableServerConnectionException)
+                                              && !(e is UpstreamCapacityException))
                     {
                         ProxyDiagnostics.ReportCaught(logger,
                             "RequestHandler wrapping unexpected failure as ProxyHttpException", e);

@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Certes;
@@ -291,14 +292,7 @@ internal static class CertificateBootstrap
                 continue;
             }
 
-            var hosts = new List<string>();
-            foreach (var host in item.Hosts)
-            {
-                if (!string.IsNullOrWhiteSpace(host))
-                {
-                    hosts.Add(host);
-                }
-            }
+            var hosts = item.Hosts.Where(host => !string.IsNullOrWhiteSpace(host)).ToList();
 
             if (hosts.Count == 0)
             {
@@ -328,25 +322,33 @@ internal static class CertificateBootstrap
     public static IDisposable? WatchCertificateFiles(ProxyServer proxy, CertificatesConfig? certificates,
         IEnumerable<ListenerConfig>? listeners = null)
     {
+        var existing = ExistingCertificatePaths(certificates, listeners);
+        if (existing.Count == 0 || certificates is null)
+        {
+            return null;
+        }
+
+        return new CertificateFileWatch(proxy, certificates, listeners, existing);
+    }
+
+    private static List<string> ExistingCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
+    {
+        return CollectCertificatePaths(certificates, listeners)
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<string> CollectCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
+    {
         var paths = new List<string>();
-        if (!string.IsNullOrEmpty(certificates?.CertificatePath))
-        {
-            paths.Add(certificates.CertificatePath);
-        }
-
-        if (!string.IsNullOrEmpty(certificates?.PrivateKeyPath))
-        {
-            paths.Add(certificates.PrivateKeyPath);
-        }
-
+        AddPath(paths, certificates?.CertificatePath);
+        AddPath(paths, certificates?.PrivateKeyPath);
         if (certificates?.Items is not null)
         {
             foreach (var item in certificates.Items)
             {
-                if (!string.IsNullOrEmpty(item.Path))
-                {
-                    paths.Add(item.Path);
-                }
+                AddPath(paths, item.Path);
             }
         }
 
@@ -354,41 +356,112 @@ internal static class CertificateBootstrap
         {
             foreach (var listener in listeners)
             {
-                if (!string.IsNullOrEmpty(listener.ClientCertificateCaPath))
+                AddPath(paths, listener.ClientCertificateCaPath);
+            }
+        }
+
+        return paths;
+    }
+
+    private static void AddPath(List<string> paths, string? path)
+    {
+        if (!string.IsNullOrEmpty(path))
+        {
+            paths.Add(path);
+        }
+    }
+
+    internal static void ReloadClientCertificateAuthorities(ProxyServer proxy, IEnumerable<ListenerConfig> listeners)
+    {
+        foreach (var listener in listeners)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath) || !File.Exists(listener.ClientCertificateCaPath))
                 {
-                    paths.Add(listener.ClientCertificateCaPath);
+                    continue;
+                }
+
+                var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+                var address = ListenerAddress(listener.Host);
+                foreach (var endPoint in proxy.ProxyEndPoints)
+                {
+                    if (endPoint.Port == listener.Port && endPoint.IpAddress.Equals(address))
+                    {
+                        // Assign a new collection. An in-flight handshake keeps the reference it captured.
+                        endPoint.ClientCertificateTrustedRoots = roots;
+                    }
                 }
             }
-        }
-
-        var existing = new List<string>();
-        foreach (var path in paths)
-        {
-            if (File.Exists(path) && !existing.Contains(path, StringComparer.OrdinalIgnoreCase))
+            catch (Exception ex)
             {
-                existing.Add(path);
+                AsyncConsole.WriteError(
+                    $"Client certificate authorities for {listener.Host}:{listener.Port} were not reloaded ({ex.Message}).");
+            }
+        }
+    }
+
+    private static IPAddress ListenerAddress(string? host)
+    {
+        host ??= "0.0.0.0";
+        return host is "0.0.0.0" or "*" ? IPAddress.Any : IPAddress.Parse(host);
+    }
+
+    private sealed class CertificateFileWatch : IDisposable
+    {
+        private readonly List<FileSystemWatcher> _watchers = new();
+        private readonly object _gate = new();
+        private readonly ProxyServer _proxy;
+        private readonly CertificatesConfig _certificates;
+        private readonly IEnumerable<ListenerConfig>? _listeners;
+        private CancellationTokenSource? _debounce;
+
+        public CertificateFileWatch(
+            ProxyServer proxy,
+            CertificatesConfig certificates,
+            IEnumerable<ListenerConfig>? listeners,
+            List<string> paths)
+        {
+            _proxy = proxy;
+            _certificates = certificates;
+            _listeners = listeners;
+            foreach (var path in paths)
+            {
+                Watch(path);
             }
         }
 
-        if (existing.Count == 0 || certificates is null)
+        private void Watch(string path)
         {
-            return null;
+            var full = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(full);
+            if (string.IsNullOrEmpty(directory))
+            {
+                return;
+            }
+
+            var watcher = new FileSystemWatcher(directory, Path.GetFileName(full))
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                EnableRaisingEvents = true,
+            };
+            watcher.Changed += OnChange;
+            watcher.Created += OnChange;
+            watcher.Renamed += OnChange;
+            _watchers.Add(watcher);
         }
 
-        var watchers = new List<FileSystemWatcher>();
-        CancellationTokenSource? debounce = null;
-        var gate = new object();
-        void OnChange(object? sender, FileSystemEventArgs args)
+        private void OnChange(object? sender, FileSystemEventArgs args)
         {
             // Watchers raise on pool threads. One lock keeps a single pending reload and a single apply at a time.
             CancellationToken token;
-            lock (gate)
+            lock (_gate)
             {
-                var previous = debounce;
+                var previous = _debounce;
                 previous?.Cancel();
                 previous?.Dispose();
                 var next = new CancellationTokenSource();
-                debounce = next;
+                _debounce = next;
                 token = next.Token;
             }
 
@@ -397,12 +470,12 @@ internal static class CertificateBootstrap
                 try
                 {
                     await Task.Delay(250, token).ConfigureAwait(false);
-                    lock (gate)
+                    lock (_gate)
                     {
-                        Apply(proxy, certificates);
-                        if (listeners is not null)
+                        Apply(_proxy, _certificates);
+                        if (_listeners is not null)
                         {
-                            ReloadClientCertificateAuthorities(proxy, listeners);
+                            ReloadClientCertificateAuthorities(_proxy, _listeners);
                         }
                     }
                 }
@@ -417,60 +490,14 @@ internal static class CertificateBootstrap
             }, CancellationToken.None);
         }
 
-        foreach (var path in existing)
-        {
-            var full = Path.GetFullPath(path);
-            var directory = Path.GetDirectoryName(full);
-            if (string.IsNullOrEmpty(directory))
-            {
-                continue;
-            }
-
-            var watcher = new FileSystemWatcher(directory, Path.GetFileName(full))
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
-                EnableRaisingEvents = true,
-            };
-            watcher.Changed += OnChange;
-            watcher.Created += OnChange;
-            watcher.Renamed += OnChange;
-            watchers.Add(watcher);
-        }
-
-        return new WatchSubscription(watchers, () => debounce);
-    }
-
-    internal static void ReloadClientCertificateAuthorities(ProxyServer proxy, IEnumerable<ListenerConfig> listeners)
-    {
-        foreach (var listener in listeners)
-        {
-            if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath) || !File.Exists(listener.ClientCertificateCaPath))
-            {
-                continue;
-            }
-
-            var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
-            foreach (var endPoint in proxy.ProxyEndPoints)
-            {
-                if (endPoint.Port == listener.Port)
-                {
-                    // Assign a new collection. An in-flight handshake keeps the reference it captured.
-                    endPoint.ClientCertificateTrustedRoots = roots;
-                }
-            }
-        }
-    }
-
-    private sealed class WatchSubscription(List<FileSystemWatcher> watchers, Func<CancellationTokenSource?> debounce) : IDisposable
-    {
         public void Dispose()
         {
-            foreach (var watcher in watchers)
+            foreach (var watcher in _watchers)
             {
                 watcher.Dispose();
             }
 
-            var source = debounce();
+            var source = _debounce;
             if (source is null)
             {
                 return;

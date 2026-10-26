@@ -141,6 +141,12 @@ public class ProtocolMatrixTests
     public async Task Mirror_EnqueuesTheMatchedRequest(ClientKind kind)
     {
         await using var origin = new RecordingOrigin((_, _) => (200, "ok"));
+        string? mirrored = null;
+        await using var mirror = new RecordingOrigin((request, _) =>
+        {
+            Volatile.Write(ref mirrored, request);
+            return (204, string.Empty);
+        });
         var routes = new[]
         {
             new RouteConfig
@@ -148,15 +154,26 @@ public class ProtocolMatrixTests
                 Id = "r",
                 ClusterId = "c1",
                 Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
-                Mirror = new MirrorConfig { ClusterId = "c1", SamplePercent = 100 },
+                Mirror = new MirrorConfig { ClusterId = "mirror", SamplePercent = 100 },
             },
         };
-        await using var proxy = await StartAsync(origin.Port, routes, kind);
-        string? mirrored = null;
-        proxy.Server.Mirror.Observed = (_, _, path) => mirrored = path;
+        await using var proxy = await StartAsync(
+            origin.Port,
+            routes,
+            kind,
+            clusterIds: ["c1", "mirror"],
+            clusterPorts: new Dictionary<string, int> { ["mirror"] = mirror.Port });
         using var response = await SendAsync(proxy, kind, "/copied");
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        StringAssert.Contains(mirrored, "/copied");
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (Volatile.Read(ref mirrored) is null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        var copied = Volatile.Read(ref mirrored);
+        Assert.IsNotNull(copied, "the mirror destination never received the request");
+        StringAssert.Contains(copied, "/copied");
     }
 
     [TestMethod]
@@ -246,17 +263,19 @@ public class ProtocolMatrixTests
         },
     ];
 
-    private static async Task<Started> StartAsync(int originPort, IReadOnlyList<RouteConfig> routes, ClientKind kind,
-        IReadOnlyList<RoutePolicyConfig>? policies = null, int destinations = 1, string[]? clusterIds = null)
+    internal static async Task<Started> StartAsync(int originPort, IReadOnlyList<RouteConfig> routes, ClientKind kind,
+        IReadOnlyList<RoutePolicyConfig>? policies = null, int destinations = 1, string[]? clusterIds = null,
+        IReadOnlyDictionary<string, int>? clusterPorts = null)
     {
         var ids = clusterIds ?? ["c1"];
         var clusters = new List<ClusterConfig>();
         foreach (var id in ids)
         {
+            var port = clusterPorts is not null && clusterPorts.TryGetValue(id, out var mapped) ? mapped : originPort;
             var dests = new List<DestinationConfig>();
             for (var i = 0; i < destinations; i++)
             {
-                dests.Add(new DestinationConfig { Id = id + "-d" + i, Address = "127.0.0.1", Port = originPort });
+                dests.Add(new DestinationConfig { Id = id + "-d" + i, Address = "127.0.0.1", Port = port });
             }
 
             clusters.Add(new ClusterConfig { Id = id, Destinations = dests });
@@ -293,7 +312,7 @@ public class ProtocolMatrixTests
         return new Started(proxy, clear, tls);
     }
 
-    private static Task<HttpResponseMessage> SendAsync(Started proxy, ClientKind kind, string path,
+    internal static Task<HttpResponseMessage> SendAsync(Started proxy, ClientKind kind, string path,
         (string Name, string Value)[]? headers = null)
     {
         var client = CreateClient(proxy, kind);
@@ -362,7 +381,7 @@ public class ProtocolMatrixTests
         return value.Trim();
     }
 
-    private sealed class Started : IAsyncDisposable
+    internal sealed class Started : IAsyncDisposable
     {
         public Started(ProxyServer server, ExplicitProxyEndPoint clear, TransparentProxyEndPoint tls)
         {
@@ -388,7 +407,7 @@ public class ProtocolMatrixTests
         }
     }
 
-    private sealed class RecordingOrigin : IAsyncDisposable
+    internal sealed class RecordingOrigin : IAsyncDisposable
     {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0);
         private readonly CancellationTokenSource cts = new();

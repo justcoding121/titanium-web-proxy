@@ -141,10 +141,22 @@ public sealed class AltSvcConfig
     public int? Port { get; set; }
 }
 
+/// <summary>One MASQUE basic-auth user. The password is read from the named environment variable, never from the file.</summary>
+public sealed class MasqueCredentialConfig
+{
+    public string? Username { get; set; }
+
+    public string? PasswordEnv { get; set; }
+}
+
 /// <summary>Overrides for a MASQUE CONNECT-UDP listener. Null fields keep the safe defaults.</summary>
 public sealed class MasqueListenerConfig
 {
     public bool? RequireAuth { get; set; }
+
+    public bool? AllowHttp11Upgrade { get; set; }
+
+    public IList<MasqueCredentialConfig>? Credentials { get; set; }
 
     public int[]? AllowedPorts { get; set; }
 

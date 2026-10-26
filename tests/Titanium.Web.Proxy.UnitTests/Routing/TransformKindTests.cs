@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -8,6 +9,8 @@ namespace Titanium.Web.Proxy.UnitTests.Routing;
 [TestClass]
 public class TransformKindTests
 {
+    private static readonly string[] CookieOnly = ["Cookie"];
+
     private static TransformRequestContext Run(string path, string kind, params (string Key, string Value)[] parameters) =>
         Run(new TransformRequestContext { Path = path }, kind, parameters);
 
@@ -124,7 +127,7 @@ public class TransformKindTests
         allow.Headers["X-Keep"] = "1";
         allow.Headers["Cookie"] = "secret";
         Run(allow, TransformKinds.RequestHeadersAllowed, ("headers", "Accept, x-keep"));
-        CollectionAssert.AreEquivalent(new[] { "Cookie" }, new List<string>(allow.HeadersToRemove));
+        CollectionAssert.AreEquivalent(CookieOnly, new List<string>(allow.HeadersToRemove));
     }
 
     [TestMethod]
@@ -197,7 +200,7 @@ public class TransformKindTests
     public void EveryKind_ReportsItsRequiredParameters(string kind, string expectedCsv)
     {
         Assert.IsTrue(TransformKinds.TryGetRequiredParameters(kind, out var required));
-        var expected = expectedCsv.Length == 0 ? new string[0] : expectedCsv.Split(',');
+        var expected = expectedCsv.Length == 0 ? Array.Empty<string>() : expectedCsv.Split(',');
         CollectionAssert.AreEqual(expected, new List<string>(required));
     }
 

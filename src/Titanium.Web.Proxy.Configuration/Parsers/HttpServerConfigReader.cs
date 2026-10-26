@@ -1,3 +1,4 @@
+using System.Linq;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
@@ -231,16 +232,7 @@ public static class HttpServerConfigReader
 
     private static int Count(string line, char c)
     {
-        var n = 0;
-        foreach (var ch in line)
-        {
-            if (ch == c)
-            {
-                n++;
-            }
-        }
-
-        return n;
+        return line.Count(ch => ch == c);
     }
 
     private static void ParseProxyPass(string pass, out string address, out int port, out bool https)

@@ -42,6 +42,10 @@ internal sealed class Http3SvcbDiscoveryCoordinator : IDisposable
         this.server = server;
     }
 
+    internal int GenerationCountForTests => generations.Count;
+
+    internal bool TryPinInFlightForTests(string key) => inflight.TryAdd(key, 0);
+
     /// <summary>
     ///     Bumps the generation for <paramref name="hostAndPort" /> so any in-flight SVCB completion
     ///     that started before an <c>Alt-Svc: clear</c> / eviction will not repopulate the cache.
@@ -147,6 +151,9 @@ internal sealed class Http3SvcbDiscoveryCoordinator : IDisposable
         foreach (var pair in missSuppressedUntil)
             if (pair.Value <= now)
                 missSuppressedUntil.TryRemove(pair.Key, out _);
+
+        foreach (var key in generations.Keys.Where(key => !inflight.ContainsKey(key)))
+            generations.TryRemove(key, out _);
 
         var excess = missSuppressedUntil.Count - MaxSuppressedEntries;
         if (excess <= 0) return;

@@ -49,22 +49,38 @@ public class CliSigtermDrainE2ETests
 
         const int drainSeconds = 8;
         using var origin = new SlowOrigin(TimeSpan.FromSeconds(2));
-        var listen = CliProcessHarness.GetFreePort();
         var cfg = Path.Combine(_tempDir, "drain.yaml");
-        await File.WriteAllTextAsync(cfg, $"""
-            schemaVersion: "7.0"
-            listeners:
-              - host: "127.0.0.1"
-                port: {listen}
-                decryptSsl: false
-                forwardHost: "127.0.0.1"
-                forwardPort: {origin.Port}
-            server:
-              drainTimeoutSeconds: {drainSeconds}
-            """);
+        CliProcessHarness? harness = null;
+        var listen = 0;
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            listen = CliProcessHarness.GetFreePort();
+            await File.WriteAllTextAsync(cfg, $"""
+                schemaVersion: "7.0"
+                listeners:
+                  - host: "127.0.0.1"
+                    port: {listen}
+                    decryptSsl: false
+                    forwardHost: "127.0.0.1"
+                    forwardPort: {origin.Port}
+                server:
+                  drainTimeoutSeconds: {drainSeconds}
+                """);
+            harness?.Dispose();
+            harness = new CliProcessHarness();
+            try
+            {
+                await harness.StartRunAsync(cfg);
+                break;
+            }
+            catch (InvalidOperationException ex) when (attempt < 5 && AddressInUse(ex))
+            {
+                // The free port was taken between the probe and the CLI bind. Try another.
+            }
+        }
 
-        using var harness = new CliProcessHarness();
-        await harness.StartRunAsync(cfg);
+        using var running = harness ?? throw new AssertFailedException("CLI did not start.");
+        await WaitUntilAccepts(listen, running);
         using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false })
         {
             Timeout = TimeSpan.FromSeconds(20),
@@ -72,34 +88,74 @@ public class CliSigtermDrainE2ETests
         var inflight = http.GetAsync($"http://127.0.0.1:{listen}/drain");
         await origin.WaitForRequestAsync();
         var signalled = DateTime.UtcNow;
-        harness.SendSigterm();
+        running.SendSigterm();
+        // The origin holds the first request open, so the listener is still in the drain window.
+        await Task.Delay(200);
 
-        using var response = await inflight;
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        using var probe = new TcpClient();
-        try
+        using (var probe = new TcpClient())
         {
             await probe.ConnectAsync(IPAddress.Loopback, listen);
             var sent = Encoding.ASCII.GetBytes("GET /after HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
             await probe.GetStream().WriteAsync(sent);
             var buffer = new byte[64];
-            var read = await probe.GetStream().ReadAsync(buffer);
+            int read;
+            try
+            {
+                read = await probe.GetStream().ReadAsync(buffer);
+            }
+            catch (IOException ex)
+            {
+                Assert.Fail("a connection accepted during drain was reset: " + ex.Message);
+                throw;
+            }
+
             Assert.AreEqual(0, read, "a connection accepted during drain must be closed without a response");
         }
-        catch (Exception ex) when (ex is SocketException or IOException)
-        {
-            // Drain either refuses the accept or resets a socket that was already in the backlog.
-        }
+
+        using var response = await inflight;
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
 
         var deadline = signalled.AddSeconds(drainSeconds + 4);
-        while (harness.ExitCode is null && DateTime.UtcNow < deadline)
+        while (running.ExitCode is null && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
         }
 
-        Assert.IsNotNull(harness.ExitCode, harness.StdOut + harness.StdErr);
+        Assert.AreEqual(0, running.ExitCode, running.StdOut + running.StdErr);
         Assert.IsTrue(DateTime.UtcNow <= deadline, "process outlived the drain timeout plus margin");
+    }
+
+    private static async Task WaitUntilAccepts(int port, CliProcessHarness harness)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (harness.ExitCode is not null)
+            {
+                Assert.Fail("CLI exited before it listened. " + harness.StdOut + harness.StdErr);
+            }
+
+            try
+            {
+                using var probe = new TcpClient();
+                await probe.ConnectAsync(IPAddress.Loopback, port);
+                return;
+            }
+            catch (SocketException)
+            {
+                await Task.Delay(50);
+            }
+        }
+
+        Assert.Fail($"port {port} never accepted. " + harness.StdOut + harness.StdErr);
+    }
+
+    private static bool AddressInUse(InvalidOperationException ex)
+    {
+        var text = ex.Message;
+        return text.Contains("address already in use", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("EADDRINUSE", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("Only one usage of each socket address", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class SlowOrigin : IDisposable
