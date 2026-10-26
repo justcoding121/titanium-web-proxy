@@ -306,7 +306,7 @@ public class ConnectionCapTests
                 }
                 : null,
         };
-        manager.ApplyAsync([cluster]).GetAwaiter().GetResult();
+        manager.ApplyAsync([cluster]).AsTask().GetAwaiter().GetResult();
         var proxy = new ProxyServer(userTrustRootCertificate: false);
         proxy.ReverseProxy = new ReverseProxyOptions
         {
@@ -403,7 +403,7 @@ public class ConnectionCapTests
                 Passive = new PassiveHealthConfig { Enabled = true, ConsecutiveFailures = 1 },
             },
         };
-        manager.ApplyAsync([cluster]).GetAwaiter().GetResult();
+        manager.ApplyAsync([cluster]).AsTask().GetAwaiter().GetResult();
     }
 
     private static ReverseProxyOptions ReverseOptions(ClusterManager manager) => new()

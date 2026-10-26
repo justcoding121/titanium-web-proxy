@@ -13,6 +13,8 @@ namespace Titanium.Web.Proxy.UnitTests.Routing;
 [TestClass]
 public class LoadBalancerBranchTests
 {
+    private static readonly string[] RandomEligible = ["r1", "r2"];
+
     private static DestinationConfig Dest(string id, int weight = 1, int priority = 0, bool backup = false, int? cap = null, string? address = null) => new()
     {
         Id = id,
@@ -70,7 +72,7 @@ public class LoadBalancerBranchTests
         var snapshot = await SnapshotAsync(new ClusterManager(), cluster);
         var balancer = new LoadBalancer();
         var seen = Enumerable.Range(0, 200).Select(_ => balancer.Select(cluster, snapshot)!.Id).Distinct().ToList();
-        CollectionAssert.AreEquivalent(new[] { "r1", "r2" }, seen);
+        CollectionAssert.AreEquivalent(RandomEligible, seen);
     }
 
     [TestMethod]
