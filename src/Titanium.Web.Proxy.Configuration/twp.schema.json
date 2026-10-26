@@ -332,7 +332,11 @@
           },
           "clientCertificateMode": {
             "type": "string",
-            "enum": ["none", "allow", "require"]
+            "enum": [
+              "none",
+              "allow",
+              "require"
+            ]
           },
           "decryptSsl": {
             "type": "boolean"
@@ -377,6 +381,25 @@
               "blockPrivateTargets": {
                 "type": "boolean"
               },
+              "credentials": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "username",
+                    "passwordEnv"
+                  ],
+                  "properties": {
+                    "passwordEnv": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
               "idleTimeoutSeconds": {
                 "type": "integer"
               },
@@ -400,18 +423,6 @@
               },
               "requireAuth": {
                 "type": "boolean"
-              },
-              "credentials": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": ["username", "passwordEnv"],
-                  "properties": {
-                    "username": { "type": "string" },
-                    "passwordEnv": { "type": "string" }
-                  }
-                }
               }
             }
           },
