@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
@@ -265,12 +266,10 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     private void ReconcileProbers(IReadOnlyList<ClusterConfig> clusters)
     {
         StopProbers();
-        foreach (var cluster in clusters)
+        foreach (var cluster in clusters.Where(cluster =>
+                     cluster.HealthCheck?.Active is { Enabled: true } || ClusterRefreshesDns(cluster)))
         {
-            if (cluster.HealthCheck?.Active is { Enabled: true } || ClusterRefreshesDns(cluster))
-            {
-                _probers.Add(new ClusterHealthProber(this, cluster, _time));
-            }
+            _probers.Add(new ClusterHealthProber(this, cluster, _time));
         }
 
         ActiveBackgroundTaskCount = _probers.Count;

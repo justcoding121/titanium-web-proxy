@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Abstractions.Clusters;
@@ -245,12 +246,9 @@ public static class TwpConfigValidator
 
             if (route.Policies is not null)
             {
-                foreach (var policyName in route.Policies)
+                foreach (var policyName in route.Policies.Where(policyName => !policyNames.Contains(policyName)))
                 {
-                    if (!policyNames.Contains(policyName))
-                    {
-                        errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
-                    }
+                    errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
                 }
             }
 
@@ -287,12 +285,10 @@ public static class TwpConfigValidator
                         continue;
                     }
 
-                    foreach (var name in required)
+                    foreach (var name in required.Where(name =>
+                                 transform.Parameters is null || !transform.Parameters.ContainsKey(name)))
                     {
-                        if (transform.Parameters is null || !transform.Parameters.ContainsKey(name))
-                        {
-                            errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
-                        }
+                        errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
                     }
                 }
             }
@@ -371,12 +367,9 @@ public static class TwpConfigValidator
                         errors.Add($"Listener port {listener.Port}: masque.allowedPorts must not be empty.");
                     }
 
-                    foreach (var allowed in ports)
+                    foreach (var allowed in ports.Where(allowed => allowed is < 1 or > 65535))
                     {
-                        if (allowed is < 1 or > 65535)
-                        {
-                            errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
-                        }
+                        errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
                     }
                 }
 

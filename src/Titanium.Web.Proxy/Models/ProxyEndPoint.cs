@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -132,15 +133,7 @@ public abstract class ProxyEndPoint
             return false;
         }
 
-        foreach (var prefix in _trustedProxySources)
-        {
-            if (prefix.Contains(address))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return _trustedProxySources.Any(prefix => prefix.Contains(address));
     }
 
     /// <summary>

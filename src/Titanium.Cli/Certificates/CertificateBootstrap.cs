@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Certes;
@@ -291,14 +292,7 @@ internal static class CertificateBootstrap
                 continue;
             }
 
-            var hosts = new List<string>();
-            foreach (var host in item.Hosts)
-            {
-                if (!string.IsNullOrWhiteSpace(host))
-                {
-                    hosts.Add(host);
-                }
-            }
+            var hosts = item.Hosts.Where(host => !string.IsNullOrWhiteSpace(host)).ToList();
 
             if (hosts.Count == 0)
             {
@@ -341,33 +335,19 @@ internal static class CertificateBootstrap
 
         if (certificates?.Items is not null)
         {
-            foreach (var item in certificates.Items)
-            {
-                if (!string.IsNullOrEmpty(item.Path))
-                {
-                    paths.Add(item.Path);
-                }
-            }
+            paths.AddRange(certificates.Items.Where(item => !string.IsNullOrEmpty(item.Path)).Select(item => item.Path!));
         }
 
         if (listeners is not null)
         {
-            foreach (var listener in listeners)
-            {
-                if (!string.IsNullOrEmpty(listener.ClientCertificateCaPath))
-                {
-                    paths.Add(listener.ClientCertificateCaPath);
-                }
-            }
+            paths.AddRange(listeners.Where(listener => !string.IsNullOrEmpty(listener.ClientCertificateCaPath))
+                .Select(listener => listener.ClientCertificateCaPath!));
         }
 
         var existing = new List<string>();
-        foreach (var path in paths)
+        foreach (var path in paths.Where(path => File.Exists(path) && !existing.Contains(path, StringComparer.OrdinalIgnoreCase)))
         {
-            if (File.Exists(path) && !existing.Contains(path, StringComparer.OrdinalIgnoreCase))
-            {
-                existing.Add(path);
-            }
+            existing.Add(path);
         }
 
         if (existing.Count == 0 || certificates is null)
