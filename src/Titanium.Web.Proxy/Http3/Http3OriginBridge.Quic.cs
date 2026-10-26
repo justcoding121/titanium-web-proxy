@@ -121,8 +121,17 @@ internal static partial class Http3OriginBridge
                 // Cold QUIC origin: a handshake that never completes (UDP/443 dropped) must not hold the
                 // request for the whole timeout while a working TCP path is available.
                 var (racedConn, tcpWon) = await AcquireQuicRacingTcpAsync(
-                    sessionArgs, server, logger, connectHost, sniHost, port, upStreamEndPoint, upstreamProxy,
-                    poolKey, cancellationToken);
+                    sessionArgs, server, logger,
+                    new QuicRaceTarget
+                    {
+                        ConnectHost = connectHost,
+                        SniHost = sniHost,
+                        Port = port,
+                        UpStreamEndPoint = upStreamEndPoint,
+                        UpstreamProxy = upstreamProxy,
+                        PoolKey = poolKey,
+                    },
+                    cancellationToken);
                 if (tcpWon)
                 {
                     try

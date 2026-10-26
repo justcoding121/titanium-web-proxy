@@ -56,11 +56,26 @@ internal static partial class Http3OriginBridge
     ///     <c>TcpWon = true</c> when the origin's TCP connection became ready first. A QUIC failure that
     ///     happens before TCP is ready is rethrown so the caller's existing fallback handling applies.
     /// </summary>
-    private static async Task<(QuicServerConnection? Quic, bool TcpWon)> AcquireQuicRacingTcpAsync( // NOSONAR S107 -- Origin identity and proxy flags stay explicit.
-        SessionEventArgs sessionArgs, ProxyServer server, ILogger logger,
-        string connectHost, string sniHost, int port, IPEndPoint? upStreamEndPoint,
-        IExternalProxy? upstreamProxy, string poolKey, CancellationToken cancellationToken)
+    private readonly struct QuicRaceTarget
     {
+        internal required string ConnectHost { get; init; }
+        internal required string SniHost { get; init; }
+        internal required int Port { get; init; }
+        internal IPEndPoint? UpStreamEndPoint { get; init; }
+        internal IExternalProxy? UpstreamProxy { get; init; }
+        internal required string PoolKey { get; init; }
+    }
+
+    private static async Task<(QuicServerConnection? Quic, bool TcpWon)> AcquireQuicRacingTcpAsync(
+        SessionEventArgs sessionArgs, ProxyServer server, ILogger logger,
+        QuicRaceTarget target, CancellationToken cancellationToken)
+    {
+        var connectHost = target.ConnectHost;
+        var sniHost = target.SniHost;
+        var port = target.Port;
+        var upStreamEndPoint = target.UpStreamEndPoint;
+        var upstreamProxy = target.UpstreamProxy;
+        var poolKey = target.PoolKey;
         var hostAndPort = $"{sniHost}:{sessionArgs.HttpClient.Request.GetOriginHostPort(port).Port}";
 
         // Deliberately not tied to the request's token: when TCP wins this handshake keeps going so a

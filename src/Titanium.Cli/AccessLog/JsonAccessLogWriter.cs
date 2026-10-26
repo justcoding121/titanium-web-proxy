@@ -5,6 +5,23 @@ using Titanium.Web.Proxy.EventArguments;
 
 namespace Titanium.Cli.AccessLog;
 
+/// <summary>One completed request, as written to the access log.</summary>
+public readonly struct AccessLogEntry
+{
+    public string? Method { get; init; }
+    public string? Url { get; init; }
+    public string? Host { get; init; }
+    public int Status { get; init; }
+    public double? DurationMs { get; init; }
+    public string? ClientIp { get; init; }
+    public string? Route { get; init; }
+    public string? Cluster { get; init; }
+    public string? Destination { get; init; }
+    public string? Error { get; init; }
+    public string? RequestId { get; init; }
+    public string? TraceId { get; init; }
+}
+
 /// <summary>Appends one JSON object per completed session (opt-in; null writer = no-op).</summary>
 public sealed class JsonAccessLogWriter : IDisposable
 {
@@ -30,36 +47,24 @@ public sealed class JsonAccessLogWriter : IDisposable
         _sampleRate = sampleRate <= 0 ? 0 : Math.Clamp(sampleRate, 0, 1);
     }
 
-    public static string FormatRecord(
-        string? method,
-        string? url,
-        string? host,
-        int status,
-        double? durationMs,
-        string? clientIp,
-        string? route = null,
-        string? cluster = null,
-        string? destination = null,
-        string? error = null,
-        string? requestId = null,
-        string? traceId = null)
+    public static string FormatRecord(AccessLogEntry entry)
     {
         var record = new Dictionary<string, object?>
         {
             ["ts"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-            ["method"] = method,
-            ["url"] = url,
-            ["host"] = host,
-            ["status"] = status,
-            ["durationMs"] = durationMs.HasValue ? Math.Round(durationMs.Value, 3) : null,
-            ["clientIp"] = clientIp,
+            ["method"] = entry.Method,
+            ["url"] = entry.Url,
+            ["host"] = entry.Host,
+            ["status"] = entry.Status,
+            ["durationMs"] = entry.DurationMs.HasValue ? Math.Round(entry.DurationMs.Value, 3) : null,
+            ["clientIp"] = entry.ClientIp,
         };
-        AddIfPresent(record, "route", route);
-        AddIfPresent(record, "cluster", cluster);
-        AddIfPresent(record, "destination", destination);
-        AddIfPresent(record, "error", error);
-        AddIfPresent(record, "requestId", requestId);
-        AddIfPresent(record, "traceId", traceId);
+        AddIfPresent(record, "route", entry.Route);
+        AddIfPresent(record, "cluster", entry.Cluster);
+        AddIfPresent(record, "destination", entry.Destination);
+        AddIfPresent(record, "error", entry.Error);
+        AddIfPresent(record, "requestId", entry.RequestId);
+        AddIfPresent(record, "traceId", entry.TraceId);
         return JsonSerializer.Serialize(record, JsonOptions);
     }
 
@@ -76,21 +81,23 @@ public sealed class JsonAccessLogWriter : IDisposable
         var req = session.HttpClient.Request;
         var resp = session.HttpClient.Response;
         var durationMs = session.Timing?.TotalDuration.TotalMilliseconds;
-        return FormatRecord(
-            req.Method,
-            req.RequestUri?.ToString() ?? req.Url,
-            req.Host ?? req.RequestUri?.Host,
-            resp.StatusCode,
-            durationMs,
-            session.ClientRemoteEndPoint.Address.ToString(),
-            session.MatchedRoute?.Id,
-            session.MatchedRoute?.ClusterId,
-            session.UpstreamDestinationId,
-            session.ForwarderError == Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.None
+        return FormatRecord(new AccessLogEntry
+        {
+            Method = req.Method,
+            Url = req.RequestUri?.ToString() ?? req.Url,
+            Host = req.Host ?? req.RequestUri?.Host,
+            Status = resp.StatusCode,
+            DurationMs = durationMs,
+            ClientIp = session.ClientRemoteEndPoint.Address.ToString(),
+            Route = session.MatchedRoute?.Id,
+            Cluster = session.MatchedRoute?.ClusterId,
+            Destination = session.UpstreamDestinationId,
+            Error = session.ForwarderError == Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError.None
                 ? null
                 : session.ForwarderError.ToString(),
-            session.ProxyRequestId,
-            session.ProxyTraceId);
+            RequestId = session.ProxyRequestId,
+            TraceId = session.ProxyTraceId,
+        });
     }
 
     public void TryWrite(SessionEventArgs session)
@@ -116,7 +123,15 @@ public sealed class JsonAccessLogWriter : IDisposable
             return;
         }
 
-        WriteLine(FormatRecord(method, url, host, status, durationMs, clientIp));
+        WriteLine(FormatRecord(new AccessLogEntry
+        {
+            Method = method,
+            Url = url,
+            Host = host,
+            Status = status,
+            DurationMs = durationMs,
+            ClientIp = clientIp,
+        }));
     }
 
     private bool ShouldSample()

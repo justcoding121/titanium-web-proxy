@@ -347,62 +347,75 @@ internal static class ProxyMetrics
         }
     }
 
-    public static void RecordRequest(
-        string route,
-        string cluster,
-        int status,
-        string protocol,
-        string error,
-        double durationSeconds,
-        long bytesIn,
-        long bytesOut)
+    internal readonly struct RequestSample
+    {
+        internal required string Route { get; init; }
+        internal required string Cluster { get; init; }
+        internal required int Status { get; init; }
+        internal required string Protocol { get; init; }
+        internal required string Error { get; init; }
+        internal required double DurationSeconds { get; init; }
+        internal required long BytesIn { get; init; }
+        internal required long BytesOut { get; init; }
+    }
+
+    public static void RecordRequest(RequestSample sample)
     {
         if (!RequestInstrumentsEnabled && !FailedRequests.Enabled && !ProxyBytes.Enabled)
         {
             return;
         }
 
-        var statusClass = status switch
-        {
-            >= 100 and < 200 => "1xx",
-            >= 200 and < 300 => "2xx",
-            >= 300 and < 400 => "3xx",
-            >= 400 and < 500 => "4xx",
-            >= 500 and < 600 => "5xx",
-            _ => "none",
-        };
+        var statusClass = StatusClass(sample.Status);
         if (Requests.Enabled)
         {
             Requests.Add(1,
-                new KeyValuePair<string, object?>("route", route),
-                new KeyValuePair<string, object?>("cluster", cluster),
+                new KeyValuePair<string, object?>("route", sample.Route),
+                new KeyValuePair<string, object?>("cluster", sample.Cluster),
                 new KeyValuePair<string, object?>("status_class", statusClass),
-                new KeyValuePair<string, object?>("protocol", protocol));
+                new KeyValuePair<string, object?>("protocol", sample.Protocol));
         }
 
-        if (RequestDuration.Enabled && durationSeconds > 0)
+        if (RequestDuration.Enabled && sample.DurationSeconds > 0)
         {
-            RequestDuration.Record(durationSeconds,
-                new KeyValuePair<string, object?>("route", route),
+            RequestDuration.Record(sample.DurationSeconds,
+                new KeyValuePair<string, object?>("route", sample.Route),
                 new KeyValuePair<string, object?>("status_class", statusClass));
         }
 
-        if (FailedRequests.Enabled && !string.Equals(error, "None", StringComparison.Ordinal))
+        if (FailedRequests.Enabled && !string.Equals(sample.Error, "None", StringComparison.Ordinal))
         {
-            FailedRequests.Add(1, new KeyValuePair<string, object?>("error", error));
+            FailedRequests.Add(1, new KeyValuePair<string, object?>("error", sample.Error));
         }
 
-        if (ProxyBytes.Enabled)
-        {
-            if (bytesIn > 0)
-            {
-                ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
-            }
+        RecordBytes(sample.BytesIn, sample.BytesOut);
+    }
 
-            if (bytesOut > 0)
-            {
-                ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
-            }
+    private static string StatusClass(int status) => status switch
+    {
+        >= 100 and < 200 => "1xx",
+        >= 200 and < 300 => "2xx",
+        >= 300 and < 400 => "3xx",
+        >= 400 and < 500 => "4xx",
+        >= 500 and < 600 => "5xx",
+        _ => "none",
+    };
+
+    private static void RecordBytes(long bytesIn, long bytesOut)
+    {
+        if (!ProxyBytes.Enabled)
+        {
+            return;
+        }
+
+        if (bytesIn > 0)
+        {
+            ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+        }
+
+        if (bytesOut > 0)
+        {
+            ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
         }
     }
 }

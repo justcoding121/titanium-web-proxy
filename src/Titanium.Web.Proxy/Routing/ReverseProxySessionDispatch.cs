@@ -745,15 +745,17 @@ internal static class ReverseProxySessionDispatch
         var seconds = started == 0
             ? 0
             : (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
-        ProxyMetrics.RecordRequest(
-            route?.Id ?? "_none",
-            route?.ClusterId ?? "_none",
-            session.HttpClient.Response.StatusCode,
-            protocol,
-            error.ToString(),
-            seconds,
-            session.HttpClient.Request.ContentLength,
-            session.HttpClient.Response.ContentLength);
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = route?.Id ?? "_none",
+            Cluster = route?.ClusterId ?? "_none",
+            Status = session.HttpClient.Response.StatusCode,
+            Protocol = protocol,
+            Error = error.ToString(),
+            DurationSeconds = seconds,
+            BytesIn = session.HttpClient.Request.ContentLength,
+            BytesOut = session.HttpClient.Response.ContentLength,
+        });
         if (session.Extras?.HeldConnectionPolicy is { } held)
         {
             RoutePolicies.Release(held);

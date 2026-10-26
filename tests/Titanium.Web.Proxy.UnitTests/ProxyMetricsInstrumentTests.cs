@@ -66,12 +66,28 @@ public class ProxyMetricsInstrumentTests
         ProxyMetrics.RecordRetry();
         ProxyMetrics.RecordEjection();
         ProxyMetrics.RecordMirrorDrop();
-        ProxyMetrics.RecordRequest("r", "c", 204, "h1", "None", 0.5, 100, 200);
-        ProxyMetrics.RecordRequest("r", "c", 503, "h2", "Connect", 0.25, 0, 0);
-        ProxyMetrics.RecordRequest("r", "c", 0, "h3", "None", 0, 0, 0);
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = "r", Cluster = "c", Status = 204, Protocol = "h1", Error = "None",
+            DurationSeconds = 0.5, BytesIn = 100, BytesOut = 200,
+        });
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = "r", Cluster = "c", Status = 503, Protocol = "h2", Error = "Connect",
+            DurationSeconds = 0.25, BytesIn = 0, BytesOut = 0,
+        });
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = "r", Cluster = "c", Status = 0, Protocol = "h3", Error = "None",
+            DurationSeconds = 0, BytesIn = 0, BytesOut = 0,
+        });
         foreach (var status in new[] { 150, 301, 404 })
         {
-            ProxyMetrics.RecordRequest("r", "c", status, "h1", "None", 0.1, 1, 1);
+            ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+            {
+                Route = "r", Cluster = "c", Status = status, Protocol = "h1", Error = "None",
+                DurationSeconds = 0.1, BytesIn = 1, BytesOut = 1,
+            });
         }
 
         listener.RecordObservableInstruments();

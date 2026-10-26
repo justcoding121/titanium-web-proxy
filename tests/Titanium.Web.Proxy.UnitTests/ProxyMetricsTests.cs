@@ -23,10 +23,18 @@ public class ProxyMetricsTests
             }
         };
         listener.SetMeasurementEventCallback<long>((_, measurement, _, _) => seen += measurement);
-        ProxyMetrics.RecordRequest("_none", "_none", 200, "h1", ForwarderError.None.ToString(), 0.01, 0, 0);
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = "_none", Cluster = "_none", Status = 200, Protocol = "h1",
+            Error = ForwarderError.None.ToString(), DurationSeconds = 0.01, BytesIn = 0, BytesOut = 0,
+        });
         Assert.AreEqual(0, seen);
         listener.Start();
-        ProxyMetrics.RecordRequest("r", "c", 200, "h1", ForwarderError.None.ToString(), 0.01, 0, 0);
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = "r", Cluster = "c", Status = 200, Protocol = "h1",
+            Error = ForwarderError.None.ToString(), DurationSeconds = 0.01, BytesIn = 0, BytesOut = 0,
+        });
         listener.RecordObservableInstruments();
         Assert.AreEqual(1, seen);
     }
@@ -34,9 +42,14 @@ public class ProxyMetricsTests
     [TestMethod]
     public void Recording_WithoutAListener_DoesNotAllocate()
     {
-        ProxyMetrics.RecordRequest("_forward", "_none", 200, "h1", "None", 0, 0, 0);
+        var sample = new ProxyMetrics.RequestSample
+        {
+            Route = "_forward", Cluster = "_none", Status = 200, Protocol = "h1", Error = "None",
+            DurationSeconds = 0, BytesIn = 0, BytesOut = 0,
+        };
+        ProxyMetrics.RecordRequest(sample);
         var before = GC.GetAllocatedBytesForCurrentThread();
-        ProxyMetrics.RecordRequest("_forward", "_none", 200, "h1", "None", 0, 0, 0);
+        ProxyMetrics.RecordRequest(sample);
         Assert.AreEqual(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 }
