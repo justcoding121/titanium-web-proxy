@@ -146,7 +146,7 @@ public class CertificateBootstrapTests
     }
 
     [TestMethod]
-    public void WatchCertificateFiles_RebuildsSniBindingsAfterTheFileChanges()
+    public async Task WatchCertificateFiles_RebuildsSniBindingsAfterTheFileChanges()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-watch-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -170,7 +170,7 @@ public class CertificateBootstrapTests
             var saw = false;
             for (var i = 0; i < 30 && !saw; i++)
             {
-                Thread.Sleep(100);
+                await Task.Delay(100);
                 saw = ep.SniCertificates![0].Certificate.Subject == "CN=after.example";
             }
 

@@ -261,7 +261,7 @@ public class GapClosureTests
     }
 
     [TestMethod]
-    public void Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
+    public async Task Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
     {
         var fanout = new MirrorDispatcher();
         var large = new Request { Method = "POST", Host = "app.test", ContentLength = 100_000 };
@@ -285,7 +285,7 @@ public class GapClosureTests
             var until = DateTime.UtcNow.AddSeconds(2);
             while (fanout.HoldEntriesForTests == 0 && DateTime.UtcNow < until)
             {
-                Thread.Sleep(1);
+                await Task.Delay(1);
             }
 
             Assert.IsTrue(fanout.HoldEntriesForTests > 0, "mirror worker did not pause");
