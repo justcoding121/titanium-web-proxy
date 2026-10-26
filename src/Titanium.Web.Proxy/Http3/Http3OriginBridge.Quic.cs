@@ -279,20 +279,27 @@ internal static partial class Http3OriginBridge
             response.RequestMethod = request.Method;
 
             // Cache Alt-Svc from response headers immediately (no need to wait for the body).
-            var altSvc = response.Headers.GetHeaderValueOrNull("Alt-Svc");
+            var altSvcHeaders = response.Headers.GetHeaders("Alt-Svc");
+            var altSvc = altSvcHeaders is { Count: > 0 }
+                ? string.Join(", ", altSvcHeaders.Select(header => header.Value))
+                : null;
             if (!string.IsNullOrEmpty(altSvc))
             {
                 var entries = AltSvcParser.Parse(altSvc);
                 var originPort = request.GetOriginHostPort(port).Port;
+                var capabilityKey = $"{sniHost}:{originPort}";
                 foreach (var entry in entries)
                 {
                     if (entry.MaxAgeSeconds <= 0)
+                    {
+                        server.Http3OriginCapabilityCache.EvictUnlessBroken(capabilityKey);
                         continue;
+                    }
                     var ttlSeconds = Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
                     // This response arrived on a completed QUIC connection, so it may clear a
                     // broken mark. Alt-Svc on a TCP fallback must not (see CacheHttp3CapabilityFromAltSvc).
-                    server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
+                    server.Http3OriginCapabilityCache.Set(capabilityKey,
                         entry.Port == originPort ? int.MinValue : entry.Port, ttl, overrideBroken: true);
                     break;
                 }
