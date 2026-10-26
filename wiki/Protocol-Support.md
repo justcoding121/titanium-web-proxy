@@ -67,7 +67,7 @@ tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. 
 | HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (no CONTINUATION frames); multi-frame header blocks do not exist in HTTP/3. |
 | `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | N/A | HTTP/3 uses extended CONNECT (RFC 9220) for WebSocket — not yet implemented. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | No | HTTP/3 transparent endpoint only; no explicit QUIC proxy yet (see [HTTP-3](HTTP-3) §Why no explicit endpoint). |
-| CONNECT-UDP (MASQUE, RFC 9298) | No | Capsules on a `type: masque` listener | No | No | Existing listener types still return 501 for `:protocol connect-udp`. See [MASQUE](MASQUE). |
+| CONNECT-UDP (MASQUE, RFC 9298) | No | Opt-in `Upgrade: connect-udp` when `allowHttp11Upgrade` is true | Capsules on a `type: masque` listener | No | A decrypting hairpin is not implemented. Existing listener types still return 501 for `:protocol connect-udp`. See [MASQUE](MASQUE). |
 | ALPN-based protocol routing | N/A | N/A | Yes | Yes | HTTP/3 negotiates `h3` via QUIC TLS 1.3; the QUIC listener only accepts connections with `h3` ALPN. |
 | Origin HTTP/3 discovery / Alt-Svc caching | N/A | N/A | N/A | Yes | `Http3OriginCapabilityCache` stores per-origin H3 capability with TTL from `Alt-Svc: h3=...; ma=...` headers; all protocols use the cache for origin selection when `EnableHttp3 = true`. |
 | Stream multiplexing | N/A | N/A | Yes | Yes | HTTP/2: concurrent streams tracked per connection in `Http2Helper`. HTTP/3: QUIC bidirectional streams, one per request/response pair. |

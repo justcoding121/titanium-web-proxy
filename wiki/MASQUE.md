@@ -50,6 +50,8 @@ listeners:
 
 In code, add a `MasqueProxyEndPoint` and set `GenericCertificate` to a certificate clients trust. When the certificate is left unset, the listener generates a leaf for `localhost` from the proxy certificate manager.
 
+Decrypting a QUIC session inside the tunnel is not implemented. The listener relays each datagram opaquely, so the payload stays end to end encrypted. There is no `decryptTunneledHttp3` switch.
+
 ## HTTP/3 later
 
 The relay talks to an internal datagram channel. Today's channel reads and writes capsules. A later build can add a QUIC datagram channel behind the same channel once .NET exposes datagrams, without changing target policy or the UDP socket. Direct MsQuic interop stays out: it would take ownership of the native QUIC callbacks that `System.Net.Quic` already owns.
