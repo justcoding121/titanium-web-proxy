@@ -63,18 +63,21 @@ internal static class PrivateNetworkGuard
         if (b[0] == 169 && b[1] == 254) return true;
         // 172.16.0.0/12
         if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
-        // 192.0.0.0/24 IETF protocol assignments, 192.0.2.0/24 TEST-NET-1
-        if (b[0] == 192 && b[1] == 0 && (b[2] == 0 || b[2] == 2)) return true;
-        // 192.168.0.0/16
-        if (b[0] == 192 && b[1] == 168) return true;
-        // 198.18.0.0/15 network benchmark tests
-        if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true;
-        // 198.51.100.0/24 TEST-NET-2, 203.0.113.0/24 TEST-NET-3
-        if (b[0] == 198 && b[1] == 51 && b[2] == 100) return true;
-        if (b[0] == 203 && b[1] == 0 && b[2] == 113) return true;
+        if (IsDocumentationOrBenchmark(b)) return true;
         // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, 255.255.255.255 broadcast
         if (b[0] >= 224) return true;
 
+        return false;
+    }
+
+    /// <summary>TEST-NET, IETF protocol assignments, RFC 1918 192.168/16, and the benchmark range.</summary>
+    private static bool IsDocumentationOrBenchmark(byte[] b)
+    {
+        if (b[0] == 192 && b[1] == 0 && (b[2] == 0 || b[2] == 2)) return true;
+        if (b[0] == 192 && b[1] == 168) return true;
+        if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true;
+        if (b[0] == 198 && b[1] == 51 && b[2] == 100) return true;
+        if (b[0] == 203 && b[1] == 0 && b[2] == 113) return true;
         return false;
     }
 

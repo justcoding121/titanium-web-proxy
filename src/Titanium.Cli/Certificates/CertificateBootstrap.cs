@@ -333,41 +333,8 @@ internal static class CertificateBootstrap
 
     private static List<string> ExistingCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
     {
-        var paths = new List<string>();
-        if (!string.IsNullOrEmpty(certificates?.CertificatePath))
-        {
-            paths.Add(certificates.CertificatePath);
-        }
-
-        if (!string.IsNullOrEmpty(certificates?.PrivateKeyPath))
-        {
-            paths.Add(certificates.PrivateKeyPath);
-        }
-
-        if (certificates?.Items is not null)
-        {
-            foreach (var item in certificates.Items)
-            {
-                if (!string.IsNullOrEmpty(item.Path))
-                {
-                    paths.Add(item.Path);
-                }
-            }
-        }
-
-        if (listeners is not null)
-        {
-            foreach (var listener in listeners)
-            {
-                if (!string.IsNullOrEmpty(listener.ClientCertificateCaPath))
-                {
-                    paths.Add(listener.ClientCertificateCaPath);
-                }
-            }
-        }
-
         var existing = new List<string>();
-        foreach (var path in paths)
+        foreach (var path in CollectCertificatePaths(certificates, listeners))
         {
             if (File.Exists(path) && !existing.Contains(path, StringComparer.OrdinalIgnoreCase))
             {
@@ -376,6 +343,38 @@ internal static class CertificateBootstrap
         }
 
         return existing;
+    }
+
+    private static List<string> CollectCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
+    {
+        var paths = new List<string>();
+        AddPath(paths, certificates?.CertificatePath);
+        AddPath(paths, certificates?.PrivateKeyPath);
+        if (certificates?.Items is not null)
+        {
+            foreach (var item in certificates.Items)
+            {
+                AddPath(paths, item.Path);
+            }
+        }
+
+        if (listeners is not null)
+        {
+            foreach (var listener in listeners)
+            {
+                AddPath(paths, listener.ClientCertificateCaPath);
+            }
+        }
+
+        return paths;
+    }
+
+    private static void AddPath(List<string> paths, string? path)
+    {
+        if (!string.IsNullOrEmpty(path))
+        {
+            paths.Add(path);
+        }
     }
 
     internal static void ReloadClientCertificateAuthorities(ProxyServer proxy, IEnumerable<ListenerConfig> listeners)

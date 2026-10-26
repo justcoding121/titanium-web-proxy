@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -54,27 +55,7 @@ internal static class MasqueTunnel
     public static async Task<(int Status, string? Body, MasqueTunnelOpen? Open)> OpenAsync(
         MasqueProxyEndPoint endPoint, string host, int port, ILogger logger, CancellationToken cancellationToken)
     {
-        IPAddress[] resolved;
-        try
-        {
-            if (IPAddress.TryParse(host, out var literal))
-            {
-                resolved = [literal];
-            }
-            else if (endPoint.Options.DnsResolver is { } resolver)
-            {
-                resolved = await resolver(host, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                resolved = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            ProxyDiagnostics.ReportBenign(logger, "MASQUE target DNS failed", ex);
-            resolved = [];
-        }
+        var resolved = await ResolveHostAsync(endPoint, host, logger, cancellationToken).ConfigureAwait(false);
 
         var allowed = MasqueTargetPolicy.SelectAll(port, endPoint.Options.AllowedPorts,
             endPoint.Options.BlockPrivateTargets, resolved, out var rejection);
@@ -84,37 +65,8 @@ internal static class MasqueTunnel
             return (status, "connect-udp target was rejected", null);
         }
 
-        Socket? udp = null;
-        Exception? connectError = null;
-        foreach (var address in allowed)
-        {
-            Socket? candidate = null;
-            try
-            {
-                candidate = endPoint.Options.SocketFactory?.Invoke(address.AddressFamily)
-                            ?? new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                if (OperatingSystem.IsWindows())
-                {
-                    try
-                    {
-                        candidate.IOControl(-1744830452, new byte[4], null);
-                    }
-                    catch (Exception)
-                    {
-                        // The receive loop still tolerates ConnectionReset.
-                    }
-                }
-
-                await candidate.ConnectAsync(new IPEndPoint(address, port), cancellationToken).ConfigureAwait(false);
-                udp = candidate;
-                break;
-            }
-            catch (Exception ex)
-            {
-                connectError = ex;
-                candidate?.Dispose();
-            }
-        }
+        var (udp, connectError) = await ConnectFirstAsync(endPoint, allowed, port, cancellationToken)
+            .ConfigureAwait(false);
 
         if (udp is null)
         {
@@ -137,7 +89,7 @@ internal static class MasqueTunnel
         var budget = new DatagramBudget(endPoint.Options.MaxDatagramsPerSecond, endPoint.Options.MaxBytesPerSecond);
         var idle = new IdleClock();
         var idleMs = (long)endPoint.Options.IdleTimeout.TotalMilliseconds;
-        var toTarget = channel.RunClientToTargetAsync(payload =>
+        var toTarget = StartClientToTarget(channel, payload =>
         {
             if (!budget.TryTake(payload.Length))
             {
@@ -157,9 +109,9 @@ internal static class MasqueTunnel
             }
 
             endPoint.CountDatagram(fromClient: true);
-        }, relay.Token).AsTask();
+        }, relay.Token);
         var toClient = ReceiveTargetAsync(endPoint, channel, udp, budget, idle, relay.Token);
-        var writer = channel.WriteQueuedAsync(relay.Token).AsTask();
+        var writer = StartWriter(channel, relay.Token);
         var idleWatch = WatchIdleAsync(endPoint, idle, idleMs, relay);
         await Task.WhenAny(toTarget, toClient, writer, idleWatch).ConfigureAwait(false);
         await relay.CancelAsync().ConfigureAwait(false);
@@ -177,6 +129,80 @@ internal static class MasqueTunnel
             ObserveRelayAsync(toClient, logger),
             ObserveRelayAsync(writer, logger)).ConfigureAwait(false);
     }
+
+    private static async Task<IPAddress[]> ResolveHostAsync(MasqueProxyEndPoint endPoint, string host, ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (IPAddress.TryParse(host, out var literal))
+            {
+                return [literal];
+            }
+
+            if (endPoint.Options.DnsResolver is { } resolver)
+            {
+                return await resolver(host, cancellationToken).ConfigureAwait(false);
+            }
+
+            return await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportBenign(logger, "MASQUE target DNS failed", ex);
+            return [];
+        }
+    }
+
+    private static async Task<(Socket? Socket, Exception? Error)> ConnectFirstAsync(MasqueProxyEndPoint endPoint,
+        IReadOnlyList<IPAddress> allowed, int port, CancellationToken cancellationToken)
+    {
+        Socket? udp = null;
+        Exception? connectError = null;
+        foreach (var address in allowed)
+        {
+            Socket? candidate = null;
+            try
+            {
+                candidate = endPoint.Options.SocketFactory?.Invoke(address.AddressFamily)
+                            ?? new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                DisableWindowsUdpReset(candidate);
+                await candidate.ConnectAsync(new IPEndPoint(address, port), cancellationToken).ConfigureAwait(false);
+                udp = candidate;
+                break;
+            }
+            catch (Exception ex)
+            {
+                connectError = ex;
+                candidate?.Dispose();
+            }
+        }
+
+        return (udp, connectError);
+    }
+
+    private static void DisableWindowsUdpReset(Socket candidate)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            candidate.IOControl(-1744830452, new byte[4], null);
+        }
+        catch (Exception)
+        {
+            // The receive loop still tolerates ConnectionReset.
+        }
+    }
+
+    private static Task StartClientToTarget(CapsuleDatagramChannel channel, DatagramSend send, CancellationToken cancellationToken) =>
+        channel.RunClientToTargetAsync(send, cancellationToken).AsTask();
+
+    private static Task StartWriter(CapsuleDatagramChannel channel, CancellationToken cancellationToken) =>
+        channel.WriteQueuedAsync(cancellationToken).AsTask();
 
     private static async Task ObserveRelayAsync(Task task, ILogger logger)
     {

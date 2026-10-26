@@ -1004,30 +1004,7 @@ internal static class RunCommand
             ep.Options.BlockPrivateTargets = blockPrivate;
         }
 
-        if (masque.MaxTunnels is int maxTunnels)
-        {
-            ep.Options.MaxTunnels = maxTunnels;
-        }
-
-        if (masque.MaxTunnelsPerClient is int perClient)
-        {
-            ep.Options.MaxTunnelsPerClient = perClient;
-        }
-
-        if (masque.IdleTimeoutSeconds is int idle)
-        {
-            ep.Options.IdleTimeout = TimeSpan.FromSeconds(idle);
-        }
-
-        if (masque.MaxDatagramsPerSecond is int datagrams)
-        {
-            ep.Options.MaxDatagramsPerSecond = datagrams;
-        }
-
-        if (masque.MaxBytesPerSecond is int bytes)
-        {
-            ep.Options.MaxBytesPerSecond = bytes;
-        }
+        ApplyMasqueLimits(ep, masque);
 
         if (masque.Credentials is { Count: > 0 } credentials)
         {
@@ -1058,6 +1035,34 @@ internal static class RunCommand
         }
 
         return ep;
+    }
+
+    private static void ApplyMasqueLimits(MasqueProxyEndPoint ep, MasqueListenerConfig masque)
+    {
+        if (masque.MaxTunnels is int maxTunnels)
+        {
+            ep.Options.MaxTunnels = maxTunnels;
+        }
+
+        if (masque.MaxTunnelsPerClient is int perClient)
+        {
+            ep.Options.MaxTunnelsPerClient = perClient;
+        }
+
+        if (masque.IdleTimeoutSeconds is int idle)
+        {
+            ep.Options.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+
+        if (masque.MaxDatagramsPerSecond is int datagrams)
+        {
+            ep.Options.MaxDatagramsPerSecond = datagrams;
+        }
+
+        if (masque.MaxBytesPerSecond is int bytes)
+        {
+            ep.Options.MaxBytesPerSecond = bytes;
+        }
     }
 
     private static AltSvcOptions? ToAltSvcOptions(AltSvcConfig? config)

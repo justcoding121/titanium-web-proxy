@@ -171,15 +171,7 @@ internal sealed class ClusterHealthProber : IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, active.TimeoutSeconds)));
         try
         {
-            int port;
-            if (dest.Port == 0)
-            {
-                port = dest.UseHttps ? 443 : 80;
-            }
-            else
-            {
-                port = dest.Port;
-            }
+            var port = ProbePort(dest);
             if (active.Kind == ActiveHealthKind.Tcp)
             {
                 using var tcp = new TcpClient();
@@ -189,41 +181,53 @@ internal sealed class ClusterHealthProber : IDisposable
 
             var scheme = dest.UseHttps ? "https" : "http";
             var path = string.IsNullOrEmpty(active.Path) ? "/" : active.Path;
-            string query;
-            if (string.IsNullOrEmpty(active.Query))
-            {
-                query = string.Empty;
-            }
-            else if (active.Query.StartsWith('?'))
-            {
-                query = active.Query;
-            }
-            else
-            {
-                query = "?" + active.Query;
-            }
-            using var response = await Http.GetAsync($"{scheme}://{dest.Address}:{port}{path}{query}", timeout.Token)
+            using var response = await Http.GetAsync(
+                    $"{scheme}://{dest.Address}:{port}{path}{ProbeQuery(active.Query)}", timeout.Token)
                 .ConfigureAwait(false);
-            var code = (int)response.StatusCode;
-            if (active.ExpectedStatus is { Count: > 0 } expected)
-            {
-                for (var i = 0; i < expected.Count; i++)
-                {
-                    if (expected[i] == code)
-                    {
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            return code is >= 200 and <= 399;
+            return StatusIsHealthy(active, (int)response.StatusCode);
         }
         catch (Exception)
         {
             return false;
         }
+    }
+
+    private static int ProbePort(DestinationConfig dest)
+    {
+        if (dest.Port != 0)
+        {
+            return dest.Port;
+        }
+
+        return dest.UseHttps ? 443 : 80;
+    }
+
+    private static string ProbeQuery(string? query)
+    {
+        if (string.IsNullOrEmpty(query))
+        {
+            return string.Empty;
+        }
+
+        return query.StartsWith('?') ? query : "?" + query;
+    }
+
+    private static bool StatusIsHealthy(ActiveHealthConfig active, int code)
+    {
+        if (active.ExpectedStatus is not { Count: > 0 } expected)
+        {
+            return code is >= 200 and <= 399;
+        }
+
+        for (var i = 0; i < expected.Count; i++)
+        {
+            if (expected[i] == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     internal bool IsStoppedForTests => Volatile.Read(ref _disposed) != 0;

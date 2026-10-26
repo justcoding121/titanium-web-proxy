@@ -64,30 +64,7 @@ internal static class ConnectUdpPath
         var i = 0;
         while (i < input.Length)
         {
-            var ch = input[i];
-            byte value;
-            if (ch == '%')
-            {
-                if (i + 2 >= input.Length || !Uri.IsHexDigit(input[i + 1]) || !Uri.IsHexDigit(input[i + 2]))
-                {
-                    return false;
-                }
-
-                value = Convert.ToByte(input.Slice(i + 1, 2).ToString(), 16);
-                i += 3;
-            }
-            else
-            {
-                if (ch > 0x7F)
-                {
-                    return false;
-                }
-
-                value = (byte)ch;
-                i++;
-            }
-
-            if (value < 0x20 || value is (byte)'%' or (byte)'/' or (byte)'\\' || count == bytes.Length)
+            if (!TryConsumeByte(input, ref i, out var value) || IsReserved(value) || count == bytes.Length)
             {
                 return false;
             }
@@ -118,4 +95,34 @@ internal static class ConnectUdpPath
             return false;
         }
     }
+
+    private static bool TryConsumeByte(ReadOnlySpan<char> input, ref int i, out byte value)
+    {
+        var ch = input[i];
+        if (ch == '%')
+        {
+            if (i + 2 >= input.Length || !Uri.IsHexDigit(input[i + 1]) || !Uri.IsHexDigit(input[i + 2]))
+            {
+                value = 0;
+                return false;
+            }
+
+            value = Convert.ToByte(input.Slice(i + 1, 2).ToString(), 16);
+            i += 3;
+            return true;
+        }
+
+        if (ch > 0x7F)
+        {
+            value = 0;
+            return false;
+        }
+
+        value = (byte)ch;
+        i++;
+        return true;
+    }
+
+    private static bool IsReserved(byte value) =>
+        value < 0x20 || value is (byte)'%' or (byte)'/' or (byte)'\\';
 }

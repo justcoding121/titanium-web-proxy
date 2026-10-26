@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -265,6 +266,8 @@ public partial class ProxyServer
         return true;
     }
 
+    private const string BasicPrefix = "Basic ";
+
     private static bool HeaderListsToken(string? value, string token)
     {
         if (value is null)
@@ -272,20 +275,12 @@ public partial class ProxyServer
             return false;
         }
 
-        foreach (var part in value.Split(','))
-        {
-            if (part.Trim().Equals(token, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return value.Split(',').Any(part => part.Trim().Equals(token, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task<bool> AuthenticatedHeaderAsync(MasqueProxyEndPoint endPoint, string? header)
     {
-        if (header is null || !header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+        if (header is null || !header.StartsWith(BasicPrefix, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -293,7 +288,7 @@ public partial class ProxyServer
         string decoded;
         try
         {
-            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(header["Basic ".Length..].Trim()));
+            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(header[BasicPrefix.Length..].Trim()));
         }
         catch (FormatException)
         {
@@ -518,7 +513,7 @@ public partial class ProxyServer
     private async Task<bool> AuthenticatedAsync(MasqueProxyEndPoint endPoint, SessionEventArgs session)
     {
         var header = session.HttpClient.Request.Headers.GetFirstHeader("proxy-authorization")?.Value;
-        if (header is null || !header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
+        if (header is null || !header.StartsWith(BasicPrefix, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -526,7 +521,7 @@ public partial class ProxyServer
         string decoded;
         try
         {
-            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(header["Basic ".Length..].Trim()));
+            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(header[BasicPrefix.Length..].Trim()));
         }
         catch (FormatException)
         {

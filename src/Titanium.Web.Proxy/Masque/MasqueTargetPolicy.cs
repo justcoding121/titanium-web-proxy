@@ -53,7 +53,18 @@ internal static class MasqueTargetPolicy
             allowed.Add(address);
         }
 
-        rejection = allowed.Count == 0 ? (addresses.Count == 0 ? "dns" : "blocked") : null;
+        if (allowed.Count != 0)
+        {
+            rejection = null;
+        }
+        else if (addresses.Count == 0)
+        {
+            rejection = "dns";
+        }
+        else
+        {
+            rejection = "blocked";
+        }
         return allowed;
     }
 

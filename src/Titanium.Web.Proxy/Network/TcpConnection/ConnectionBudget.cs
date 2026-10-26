@@ -33,10 +33,7 @@ internal sealed class ConnectionBudget
     /// </summary>
     public void SetMax(int value)
     {
-        if (value <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(value));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
 
         var previous = Volatile.Read(ref max);
         Volatile.Write(ref max, value);

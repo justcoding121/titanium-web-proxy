@@ -35,7 +35,7 @@ public class ClientCertificateTrustAnchorTests
     }
 
     [TestMethod]
-    public void CustomRoot_DoesNotDownloadTheAuthorityInformationAccessUrl()
+    public async Task CustomRoot_DoesNotDownloadTheAuthorityInformationAccessUrl()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -73,10 +73,10 @@ public class ClientCertificateTrustAnchorTests
         using var leaf = request.Create(intermediate, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1), Guid.NewGuid().ToByteArray());
 
         ClientCertificateHandshake.ValidateWithRoots(leaf, null, ClientCertificateMode.Require, new X509Certificate2Collection { root });
-        Thread.Sleep(400);
+        await Task.Delay(400);
         stop.Cancel();
         listener.Stop();
-        accept.Wait(TimeSpan.FromSeconds(2));
+        await accept.WaitAsync(TimeSpan.FromSeconds(2));
         Assert.AreEqual(0, Volatile.Read(ref accepted));
     }
 

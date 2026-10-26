@@ -262,7 +262,7 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         return DestinationState.Healthy;
     }
 
-    private static object ReuseRuntime(ImmutableClusterSnapshot current, string clusterId, ClusterConfig cluster)
+    private static ClusterRuntime ReuseRuntime(ImmutableClusterSnapshot current, string clusterId, ClusterConfig cluster)
     {
         if (current.Runtimes.TryGetValue(clusterId, out var existing) &&
             existing is ClusterRuntime previous &&

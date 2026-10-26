@@ -627,43 +627,32 @@ internal class TcpConnectionFactory : IDisposable
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var opened = await ClaimBudgetSlotAsync(connect, createGate, budget, noCache);
-            if (opened is not null)
+            var claim = await ClaimOrEvictAsync(connect, createGate, budget, noCache, cacheKey, until);
+            if (claim.Opened is not null)
             {
-                return opened;
+                return claim.Opened;
             }
 
-            if (noCache && TryEvictOneIdle(cacheKey))
+            if (claim.Retry)
             {
                 continue;
-            }
-
-            var remaining = until - DateTime.UtcNow;
-            if (remaining <= TimeSpan.Zero)
-            {
-                throw new UpstreamCapacityException(cacheKey, budget.Max);
             }
 
             budget.EnterWait();
             try
             {
-                opened = await ClaimBudgetSlotAsync(connect, createGate, budget, noCache);
-                if (opened is not null)
+                claim = await ClaimOrEvictAsync(connect, createGate, budget, noCache, cacheKey, until);
+                if (claim.Opened is not null)
                 {
-                    return opened;
+                    return claim.Opened;
                 }
 
-                if (noCache && TryEvictOneIdle(cacheKey))
+                if (claim.Retry)
                 {
                     continue;
                 }
 
-                remaining = until - DateTime.UtcNow;
-                if (remaining <= TimeSpan.Zero)
-                {
-                    throw new UpstreamCapacityException(cacheKey, budget.Max);
-                }
-
+                var remaining = until - DateTime.UtcNow;
                 var woke = await budget.WaitAsync(remaining, cancellationToken).ConfigureAwait(false);
                 if (!woke && DateTime.UtcNow >= until)
                 {
@@ -675,6 +664,35 @@ internal class TcpConnectionFactory : IDisposable
                 budget.ExitWait();
             }
         }
+    }
+
+    private readonly struct BudgetClaim
+    {
+        public TcpServerConnection? Opened { get; init; }
+        public bool Retry { get; init; }
+    }
+
+    /// <summary>Rents or opens a slot, or asks the caller to try again after an idle eviction.</summary>
+    private async Task<BudgetClaim> ClaimOrEvictAsync(TcpConnectOptions connect, SemaphoreSlim? createGate,
+        ConnectionBudget budget, bool noCache, string cacheKey, DateTime until)
+    {
+        var opened = await ClaimBudgetSlotAsync(connect, createGate, budget, noCache);
+        if (opened is not null)
+        {
+            return new BudgetClaim { Opened = opened };
+        }
+
+        if (noCache && TryEvictOneIdle(cacheKey))
+        {
+            return new BudgetClaim { Retry = true };
+        }
+
+        if (until <= DateTime.UtcNow)
+        {
+            throw new UpstreamCapacityException(cacheKey, budget.Max);
+        }
+
+        return default;
     }
 
     private async Task<TcpServerConnection?> ClaimBudgetSlotAsync(

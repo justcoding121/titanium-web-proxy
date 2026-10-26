@@ -152,11 +152,8 @@ internal sealed class Http3SvcbDiscoveryCoordinator : IDisposable
             if (pair.Value <= now)
                 missSuppressedUntil.TryRemove(pair.Key, out _);
 
-        foreach (var key in generations.Keys)
-        {
-            if (!inflight.ContainsKey(key))
-                generations.TryRemove(key, out _);
-        }
+        foreach (var key in generations.Keys.Where(key => !inflight.ContainsKey(key)))
+            generations.TryRemove(key, out _);
 
         var excess = missSuppressedUntil.Count - MaxSuppressedEntries;
         if (excess <= 0) return;

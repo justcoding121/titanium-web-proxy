@@ -419,6 +419,30 @@ public static class TwpConfigValidator
             return;
         }
 
+        ValidateMasquePortsAndLimits(listener, masque, errors);
+        if (masque.Credentials is not { } credentials)
+        {
+            return;
+        }
+
+        var seenUsers = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var credential in credentials)
+        {
+            if (string.IsNullOrWhiteSpace(credential.Username) || string.IsNullOrWhiteSpace(credential.PasswordEnv))
+            {
+                errors.Add($"Listener port {listener.Port}: masque credential requires username and passwordEnv.");
+                continue;
+            }
+
+            if (!seenUsers.Add(credential.Username))
+            {
+                errors.Add($"Listener port {listener.Port}: masque credential username '{credential.Username}' is duplicated.");
+            }
+        }
+    }
+
+    private static void ValidateMasquePortsAndLimits(ListenerConfig listener, MasqueListenerConfig masque, List<string> errors)
+    {
         if (masque.AllowedPorts is { } ports)
         {
             if (ports.Length == 0)
@@ -444,25 +468,6 @@ public static class TwpConfigValidator
         AddUnless(errors, listener.Port, "masque.idleTimeoutSeconds must be positive.", masque.IdleTimeoutSeconds is <= 0);
         AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be positive.", masque.MaxDatagramsPerSecond is <= 0);
         AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be positive.", masque.MaxBytesPerSecond is <= 0);
-        if (masque.Credentials is not { } credentials)
-        {
-            return;
-        }
-
-        var seenUsers = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var credential in credentials)
-        {
-            if (string.IsNullOrWhiteSpace(credential.Username) || string.IsNullOrWhiteSpace(credential.PasswordEnv))
-            {
-                errors.Add($"Listener port {listener.Port}: masque credential requires username and passwordEnv.");
-                continue;
-            }
-
-            if (!seenUsers.Add(credential.Username))
-            {
-                errors.Add($"Listener port {listener.Port}: masque credential username '{credential.Username}' is duplicated.");
-            }
-        }
     }
 
     private static void AddUnless(List<string> errors, int port, string message, bool failed)

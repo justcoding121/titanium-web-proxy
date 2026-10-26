@@ -232,7 +232,7 @@ public static class HttpServerConfigReader
 
     private static int Count(string line, char c)
     {
-        return line.Where(ch => ch == c).Count();
+        return line.Count(ch => ch == c);
     }
 
     private static void ParseProxyPass(string pass, out string address, out int port, out bool https)
