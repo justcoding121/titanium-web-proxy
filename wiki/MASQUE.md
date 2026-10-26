@@ -26,7 +26,7 @@ Client support for CONNECT-UDP over HTTP/2 is not verified against a shipping MA
 
 Authentication is required. The listener uses `ProxyServer.ProxyBasicAuthenticateFunc` and answers 407 with `proxy-authenticate: Basic` when the check fails. Turning authentication off on a non-loopback address produces a configuration warning.
 
-Allowed target ports default to 443. Private, loopback, link-local, and metadata addresses are blocked on the address the tunnel pins at open time. A later DNS change cannot move the socket. Relax either control explicitly in configuration.
+Allowed target ports default to 443. The tunnel pins one address at open time, and that address is blocked when it is loopback, private, link-local, site-local, multicast, `::`, a documentation or benchmark range (`192.0.0.0/24`, `192.0.2.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`), or an IPv6 form that embeds one of those (`::ffff:0:0/96`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16`, Teredo `2001::/32`). A later DNS change cannot move the socket. Relax either control explicitly in configuration. This policy fails closed.
 
 Caps default to 16 tunnels per client address and 1024 per listener. Each tunnel also has a one-second token bucket (1000 datagrams and 1,000,000 bytes). The idle timer defaults to 120 seconds and resets on traffic in either direction. A full client-bound queue drops datagrams. UDP send failures are counted and do not close the tunnel.
 

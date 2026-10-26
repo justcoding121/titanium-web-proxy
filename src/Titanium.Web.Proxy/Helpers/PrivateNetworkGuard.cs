@@ -63,8 +63,15 @@ internal static class PrivateNetworkGuard
         if (b[0] == 169 && b[1] == 254) return true;
         // 172.16.0.0/12
         if (b[0] == 172 && b[1] >= 16 && b[1] <= 31) return true;
+        // 192.0.0.0/24 IETF protocol assignments, 192.0.2.0/24 TEST-NET-1
+        if (b[0] == 192 && b[1] == 0 && (b[2] == 0 || b[2] == 2)) return true;
         // 192.168.0.0/16
         if (b[0] == 192 && b[1] == 168) return true;
+        // 198.18.0.0/15 network benchmark tests
+        if (b[0] == 198 && (b[1] == 18 || b[1] == 19)) return true;
+        // 198.51.100.0/24 TEST-NET-2, 203.0.113.0/24 TEST-NET-3
+        if (b[0] == 198 && b[1] == 51 && b[2] == 100) return true;
+        if (b[0] == 203 && b[1] == 0 && b[2] == 113) return true;
         // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, 255.255.255.255 broadcast
         if (b[0] >= 224) return true;
 
@@ -73,13 +80,49 @@ internal static class PrivateNetworkGuard
 
     private static bool IsBlockedIPv6(IPAddress address)
     {
-        if (address.IsIPv6LinkLocal) return true;
+        // :: reaches the local host on Linux. Site-local and multicast are not global unicast.
+        if (address.Equals(IPAddress.IPv6Any)) return true;
+        if (address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.IsIPv6Multicast) return true;
 
         var b = address.GetAddressBytes();
 
         // fc00::/7 - unique local addresses (RFC 4193)
         if ((b[0] & 0xFE) == 0xFC) return true;
+        // NAT64, 6to4 and Teredo can embed a private IPv4 address.
+        if (TryEmbeddedIPv4(b, out var embedded)) return IsBlockedIPv4(embedded);
 
+        return false;
+    }
+
+    private static bool TryEmbeddedIPv4(byte[] b, out IPAddress embedded)
+    {
+        // 64:ff9b::/96 NAT64. The IPv4 address is the last 4 bytes.
+        if (b[0] == 0x00 && b[1] == 0x64 && b[2] == 0xFF && b[3] == 0x9B
+            && b[4] == 0 && b[5] == 0 && b[6] == 0 && b[7] == 0
+            && b[8] == 0 && b[9] == 0 && b[10] == 0 && b[11] == 0)
+        {
+            embedded = new IPAddress(new[] { b[12], b[13], b[14], b[15] });
+            return true;
+        }
+
+        // 2002::/16 6to4. The IPv4 address is bytes 2..5.
+        if (b[0] == 0x20 && b[1] == 0x02)
+        {
+            embedded = new IPAddress(new[] { b[2], b[3], b[4], b[5] });
+            return true;
+        }
+
+        // 2001:0000::/32 Teredo. The client IPv4 address is the last 4 bytes XOR 0xFF.
+        if (b[0] == 0x20 && b[1] == 0x01 && b[2] == 0x00 && b[3] == 0x00)
+        {
+            embedded = new IPAddress(new[]
+            {
+                (byte)(b[12] ^ 0xFF), (byte)(b[13] ^ 0xFF), (byte)(b[14] ^ 0xFF), (byte)(b[15] ^ 0xFF),
+            });
+            return true;
+        }
+
+        embedded = IPAddress.None;
         return false;
     }
 }
