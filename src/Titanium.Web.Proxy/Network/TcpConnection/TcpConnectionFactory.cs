@@ -68,6 +68,17 @@ internal class TcpConnectionFactory : IDisposable
         return total;
     }
 
+    internal int BudgetWaitersForTests()
+    {
+        var total = 0;
+        foreach (var budget in budgets.Values)
+        {
+            total += budget.Waiters;
+        }
+
+        return total;
+    }
+
     // Tcp connections waiting to be disposed by cleanup task
     private readonly ConcurrentBag<TcpServerConnection> disposalBag = new();
 

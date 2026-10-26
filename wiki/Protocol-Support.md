@@ -55,6 +55,22 @@ WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (
 tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
 [HTTP/3](HTTP-3).
 
+## Gateway status retry
+
+A route opts in with `retry.attempts` greater than 0. Before any request body byte is sent, a 502, 503,
+or 504 from the origin is replayed once onto another destination. The client sees the second answer.
+
+| Path | Retried |
+|------|---------|
+| HTTP/1.1 client to an HTTP/1.1 origin | Yes |
+| HTTP/2 client to an HTTP/1.1 origin | Yes |
+| HTTP/3 client to an HTTP/1.1 origin | Yes |
+| HTTP/3 client to an HTTP/2 origin | No |
+| QUIC origins (HTTP/3 to HTTP/3, and HTTP/2 to HTTP/3) | No |
+| HTTP/2 to HTTP/2 native relay | No |
+| HTTP/1.1 client to an HTTP/2 origin | No |
+| CONNECT, WebSocket, a request that has a body, `Expect: 100-continue`, Windows authentication | Never |
+
 ## Connections and framing
 
 | Feature | HTTP/1.0 | HTTP/1.1 | HTTP/2 | HTTP/3 | Notes |

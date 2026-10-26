@@ -52,7 +52,8 @@ public class ConnectionCapTests
         var first = GetAsync(proxy);
         await origin.WaitForAcceptedAsync(1);
         var second = GetAsync(proxy);
-        await Task.Delay(200);
+        await WaitUntilAsync(() => proxy.TcpConnectionFactory.BudgetWaitersForTests() > 0,
+            () => $"waiters {proxy.TcpConnectionFactory.BudgetWaitersForTests()}");
         Assert.AreEqual(1, origin.Accepted);
         Assert.AreEqual(1, proxy.TcpConnectionFactory.BudgetOpenForTests());
         origin.Release();
