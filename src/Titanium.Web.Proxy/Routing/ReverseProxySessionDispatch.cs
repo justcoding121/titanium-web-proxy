@@ -503,10 +503,27 @@ internal static class ReverseProxySessionDispatch
         return true;
     }
 
+    /// <summary>
+    ///     True when <paramref name="ex" /> is a connection-cap timeout, including when a bridge wrapped it.
+    ///     A full cap is backpressure, not an origin failure.
+    /// </summary>
+    internal static bool IsCapacityFailure(Exception? ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is Exceptions.UpstreamCapacityException)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static void ReportUpstreamResult(ProxyServer server, SessionEventArgsBase session, bool success)
     {
         // A full connection cap is not an origin failure. Counting it would eject a healthy destination.
-        if (session.Exception is Exceptions.UpstreamCapacityException)
+        if (IsCapacityFailure(session.Exception))
         {
             session.DestinationRequestLease?.Dispose();
             session.DestinationRequestLease = null;
@@ -740,7 +757,7 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ex = session.Exception;
-        if (ex is Exceptions.UpstreamCapacityException)
+        if (IsCapacityFailure(ex))
         {
             return ForwarderError.NoAvailableDestination;
         }

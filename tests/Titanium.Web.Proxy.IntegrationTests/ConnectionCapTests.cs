@@ -1,7 +1,11 @@
+#pragma warning disable CA1416
+#pragma warning disable TWP001
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Quic;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -11,6 +15,8 @@ using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
+using Titanium.Web.Proxy.IntegrationTests.Helpers;
+using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Routing;
 
@@ -72,6 +78,83 @@ public class ConnectionCapTests
         origin.Release();
         using var finished = await held;
         Assert.AreEqual(HttpStatusCode.OK, finished.StatusCode);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ThreeCapacityTimeouts_DoNotEjectDestination_Http1()
+    {
+        await using var origin = new HoldingOrigin(gate: true);
+        var manager = new ClusterManager();
+        using var proxy = StartProxy(origin.Port, maxConnections: 1, connectTimeout: TimeSpan.FromMilliseconds(600),
+            manager: manager, passive: true);
+        var held = GetAsync(proxy);
+        await origin.WaitForAcceptedAsync(1);
+        for (var i = 0; i < 3; i++)
+        {
+            using var timed = await GetAsync(proxy);
+            Assert.AreEqual(HttpStatusCode.ServiceUnavailable, timed.StatusCode, $"request {i}");
+            Assert.IsTrue(timed.Headers.Contains("Retry-After"), $"request {i} missing Retry-After");
+        }
+
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+        origin.Release();
+        using var finished = await held;
+        Assert.AreEqual(HttpStatusCode.OK, finished.StatusCode);
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task ThreeCapacityTimeouts_DoNotEjectDestination_Http2Client()
+    {
+        await using var origin = new HoldingOrigin(gate: true);
+        var manager = new ClusterManager();
+        using var proxy = StartTranslatedProxy(origin.Port, manager, http3: false);
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+        using var raw = await Http2RawClient.ConnectCleartextDirectAsync(endpoint.Port);
+        await WriteH2GetAsync(raw, 1);
+        await origin.WaitForAcceptedAsync(1);
+        for (var i = 0; i < 3; i++)
+        {
+            var streamId = 3 + (i * 2);
+            await WriteH2GetAsync(raw, streamId);
+            var (id, headers, _) = await raw.Connection.ReadHeaderBlockAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.AreEqual(streamId, id);
+            Assert.AreEqual("503", headers.Single(h => h.Name == ":status").Value);
+            Assert.IsTrue(headers.Any(h => h.Name.Equals("retry-after", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+        origin.Release();
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task ThreeCapacityTimeouts_DoNotEjectDestination_Http3Client()
+    {
+        if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
+        {
+            Assert.Inconclusive("MsQuic / System.Net.Quic is not supported on this platform.");
+        }
+
+        await using var origin = new HoldingOrigin(gate: true);
+        var manager = new ClusterManager();
+        using var proxy = StartTranslatedProxy(origin.Port, manager, http3: true);
+        var endpoint = proxy.ProxyEndPoints.OfType<TransparentQuicProxyEndPoint>().First();
+        await using var client = await QuicHttp3Client.ConnectAsync(
+            new IPEndPoint(IPAddress.Loopback, endpoint.Port), "localhost");
+        var held = client.SendAsync("GET", $"127.0.0.1:{origin.Port}", "/");
+        await origin.WaitForAcceptedAsync(1);
+        for (var i = 0; i < 3; i++)
+        {
+            var timed = await client.SendAsync("GET", $"127.0.0.1:{origin.Port}", "/");
+            Assert.AreEqual(503, timed.StatusCode, $"request {i}");
+        }
+
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("d1"));
+        origin.Release();
+        var finished = await held.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.AreEqual(200, finished.StatusCode);
     }
 
     [TestMethod]
@@ -197,6 +280,108 @@ public class ConnectionCapTests
         proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
         proxy.Start();
         return proxy;
+    }
+
+    private static ProxyServer StartTranslatedProxy(int originPort, ClusterManager manager, bool http3)
+    {
+        ApplyCapCluster(originPort, manager);
+        var proxy = new ProxyServer(false, false, false)
+        {
+            EnableHttp2 = !http3,
+            EnableHttp3 = http3,
+            EnableHttpsSvcbDnsDiscovery = false,
+        };
+        if (http3)
+        {
+            proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
+            proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+            proxy.CertificateManager.SaveFakeCertificates = false;
+            proxy.ServerCertificateValidationCallback += (_, args) =>
+            {
+                args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
+                return Task.CompletedTask;
+            };
+        }
+
+        proxy.ReverseProxy = ReverseOptions(manager);
+        if (http3)
+        {
+            var quic = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+            {
+                ForwardHost = "127.0.0.1",
+                ForwardPort = originPort,
+                ForwardCleartext = true,
+            };
+            quic.BeforeQuicAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+                e.AllowHttpProtocolTranslation = true;
+                return Task.CompletedTask;
+            };
+            proxy.AddEndPoint(quic);
+        }
+        else
+        {
+            var clear = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+            {
+                ForwardHost = "127.0.0.1",
+                ForwardPort = originPort,
+                ForwardCleartext = true,
+            };
+            clear.BeforeHttpAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+                e.AllowHttpProtocolTranslation = true;
+                return Task.CompletedTask;
+            };
+            proxy.AddEndPoint(clear);
+        }
+
+        proxy.Start();
+        return proxy;
+    }
+
+    private static void ApplyCapCluster(int originPort, ClusterManager manager)
+    {
+        var cluster = new ClusterConfig
+        {
+            Id = "c1",
+            Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = originPort }],
+            HttpClient = new ClusterHttpClientConfig
+            {
+                MaxConnectionsPerServer = 1,
+                ConnectTimeout = TimeSpan.FromMilliseconds(600),
+            },
+            HealthCheck = new HealthCheckConfig
+            {
+                Passive = new PassiveHealthConfig { Enabled = true, ConsecutiveFailures = 1 },
+            },
+        };
+        manager.ApplyAsync([cluster]).GetAwaiter().GetResult();
+    }
+
+    private static ReverseProxyOptions ReverseOptions(ClusterManager manager) => new()
+    {
+        Routes =
+        [
+            new RouteConfig
+            {
+                Id = "r",
+                ClusterId = "c1",
+                Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            },
+        ],
+        ClusterManager = manager,
+        RouteMatcher = new RouteMatcher(),
+        LoadBalancer = new LoadBalancer(),
+    };
+
+    private static async Task WriteH2GetAsync(Http2RawClient raw, int streamId)
+    {
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "http"), (":authority", "cap.test"), (":path", "/")],
+            []);
+        await raw.Connection.WriteHeaderBlockAsync(streamId, block, endStream: true);
     }
 
     private static async Task WaitUntilAsync(Func<bool> ready, Func<string>? describe = null)
