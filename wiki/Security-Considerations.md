@@ -103,6 +103,13 @@ are skipped on that path by design.
 Trust the upstream peer when leaving the default `Disabled`; switch to `Observe` then `Enforce`
 when clients are untrusted.
 
+## Inbound client certificates must carry the client-authentication EKU
+
+On a transparent listener, `clientCertificateMode` of `allow` or `require` checks the client
+certificate against the configured trust anchors. The certificate must include the
+client-authentication extended key usage (`1.3.6.1.5.5.7.3.2`). A certificate with no EKU extension
+is rejected. The check does not download certificates named in an authority-information-access URL.
+
 ## `IgnoreServerCertificateErrors` accepts all certificate errors
 
 Setting `ProxyServer.IgnoreServerCertificateErrors = true` accepts **every** `SslPolicyErrors`

@@ -444,9 +444,27 @@ public static class TwpConfigValidator
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(listener.ClientCertificateMode)
+                && !listener.ClientCertificateMode.Equals("none", StringComparison.OrdinalIgnoreCase)
+                && !listener.ClientCertificateMode.Equals("allow", StringComparison.OrdinalIgnoreCase)
+                && !listener.ClientCertificateMode.Equals("require", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add(
+                    $"Listener port {listener.Port}: clientCertificateMode '{listener.ClientCertificateMode}' is not none, allow, or require.");
+            }
+
+            if ((IsClientCertificateModeSet(listener.ClientCertificateMode)
+                    || !string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+                && !IsTransparentListener(listener))
+            {
+                errors.Add(
+                    $"Listener port {listener.Port}: clientCertificateMode and clientCertificateCaPath apply only to transparent listeners.");
+            }
+
             if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
             {
-                if (listener.ClientCertificateMode is not ("allow" or "require"))
+                if (!string.Equals(listener.ClientCertificateMode, "allow", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(listener.ClientCertificateMode, "require", StringComparison.OrdinalIgnoreCase))
                 {
                     errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
                 }
@@ -941,4 +959,15 @@ public static class TwpConfigValidator
 
         return warnings;
     }
+
+    private static bool IsClientCertificateModeSet(string? mode) =>
+        !string.IsNullOrWhiteSpace(mode)
+        && !mode.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     A null type with a forward host is the classic transparent listener. An explicit type is not.
+    /// </summary>
+    private static bool IsTransparentListener(ListenerConfig listener) =>
+        string.Equals(listener.Type, "transparent", StringComparison.OrdinalIgnoreCase)
+        || (string.IsNullOrWhiteSpace(listener.Type) && !string.IsNullOrEmpty(listener.ForwardHost));
 }

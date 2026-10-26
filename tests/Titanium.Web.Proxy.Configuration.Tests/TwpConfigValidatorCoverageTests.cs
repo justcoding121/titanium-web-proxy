@@ -213,6 +213,28 @@ public class TwpConfigValidatorCoverageTests
     }
 
     [TestMethod]
+    public void Validate_ClientCertificateMode_IsCaseInsensitive_AndOnlyOnTransparentListeners()
+    {
+        var unknown = string.Join('\n', TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "transparent", Port = 443, ClientCertificateMode = "sometimes" }],
+        }));
+        Assert.IsTrue(unknown.Contains("is not none, allow, or require", StringComparison.Ordinal), unknown);
+
+        var wrongType = string.Join('\n', TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "explicit", Port = 8080, ClientCertificateMode = "Require" }],
+        }));
+        Assert.IsTrue(wrongType.Contains("apply only to transparent", StringComparison.Ordinal), wrongType);
+
+        var allowed = string.Join('\n', TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "transparent", Port = 443, ClientCertificateMode = "Require" }],
+        }));
+        Assert.IsFalse(allowed.Contains("clientCertificateMode", StringComparison.OrdinalIgnoreCase), allowed);
+    }
+
+    [TestMethod]
     public void Validate_Masque_RequiresCredentialsUnlessAuthIsOff()
     {
         var missing = TwpConfigValidator.Validate(new TwpConfig

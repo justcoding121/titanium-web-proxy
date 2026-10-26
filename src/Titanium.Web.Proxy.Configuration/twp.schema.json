@@ -331,7 +331,8 @@
             "type": "string"
           },
           "clientCertificateMode": {
-            "type": "string"
+            "type": "string",
+            "enum": ["none", "allow", "require"]
           },
           "decryptSsl": {
             "type": "boolean"

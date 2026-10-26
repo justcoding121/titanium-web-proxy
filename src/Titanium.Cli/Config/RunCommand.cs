@@ -964,7 +964,7 @@ internal static class RunCommand
         }
 
         ep.Passthrough = listener.Passthrough;
-        ep.ClientCertificateMode = listener.ClientCertificateMode switch
+        ep.ClientCertificateMode = listener.ClientCertificateMode?.ToLowerInvariant() switch
         {
             "require" => ClientCertificateMode.Require,
             "allow" => ClientCertificateMode.Allow,

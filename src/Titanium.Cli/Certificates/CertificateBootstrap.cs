@@ -444,21 +444,36 @@ internal static class CertificateBootstrap
     {
         foreach (var listener in listeners)
         {
-            if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath) || !File.Exists(listener.ClientCertificateCaPath))
+            try
             {
-                continue;
-            }
-
-            var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
-            foreach (var endPoint in proxy.ProxyEndPoints)
-            {
-                if (endPoint.Port == listener.Port)
+                if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath) || !File.Exists(listener.ClientCertificateCaPath))
                 {
-                    // Assign a new collection. An in-flight handshake keeps the reference it captured.
-                    endPoint.ClientCertificateTrustedRoots = roots;
+                    continue;
+                }
+
+                var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+                var address = ListenerAddress(listener.Host);
+                foreach (var endPoint in proxy.ProxyEndPoints)
+                {
+                    if (endPoint.Port == listener.Port && endPoint.IpAddress.Equals(address))
+                    {
+                        // Assign a new collection. An in-flight handshake keeps the reference it captured.
+                        endPoint.ClientCertificateTrustedRoots = roots;
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                AsyncConsole.WriteError(
+                    $"Client certificate authorities for {listener.Host}:{listener.Port} were not reloaded ({ex.Message}).");
+            }
         }
+    }
+
+    private static IPAddress ListenerAddress(string? host)
+    {
+        host ??= "0.0.0.0";
+        return host is "0.0.0.0" or "*" ? IPAddress.Any : IPAddress.Parse(host);
     }
 
     private sealed class WatchSubscription(List<FileSystemWatcher> watchers, Func<CancellationTokenSource?> debounce) : IDisposable

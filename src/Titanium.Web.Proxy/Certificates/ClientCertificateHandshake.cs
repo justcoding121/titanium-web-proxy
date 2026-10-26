@@ -71,8 +71,9 @@ internal static class ClientCertificateHandshake
     }
 
     /// <summary>
-    ///     Custom-root check used when the endpoint has trust anchors. Revocation is not checked:
-    ///     an online lookup would add latency and a new failure mode. The client-auth EKU is required.
+    ///     Custom-root check used when the endpoint has trust anchors. Revocation is not checked and
+    ///     authority-information downloads are disabled. A client certificate must carry the
+    ///     client-authentication EKU; a certificate with no EKU extension is rejected.
     /// </summary>
     internal static bool ValidateWithRoots(X509Certificate? certificate, X509Chain? platformChain,
         ClientCertificateMode mode, X509Certificate2Collection roots)
@@ -91,6 +92,7 @@ internal static class ClientCertificateHandshake
             chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
             chain.ChainPolicy.CustomTrustStore.AddRange(roots);
             chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+            chain.ChainPolicy.DisableCertificateDownloads = true;
             chain.ChainPolicy.VerificationTime = DateTime.UtcNow;
             chain.ChainPolicy.ApplicationPolicy.Add(new Oid("1.3.6.1.5.5.7.3.2"));
             if (platformChain is not null)
