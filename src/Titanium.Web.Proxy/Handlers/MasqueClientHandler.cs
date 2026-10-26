@@ -164,83 +164,15 @@ public partial class ProxyServer
             return;
         }
 
-        IPAddress[] resolved;
-        try
+        var (status, reason, opened) = await MasqueTunnel.OpenAsync(
+            endPoint, host, port, logger, ctx.CancellationToken).ConfigureAwait(false);
+        if (opened is null)
         {
-            if (IPAddress.TryParse(host, out var literal))
-            {
-                resolved = [literal];
-            }
-            else if (endPoint.Options.DnsResolver is { } resolver)
-            {
-                resolved = await resolver(host, ctx.CancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                resolved = await Dns.GetHostAddressesAsync(host, ctx.CancellationToken).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            ProxyDiagnostics.ReportBenign(logger, "MASQUE target DNS failed", ex);
-            resolved = [];
-        }
-
-        var allowed = MasqueTargetPolicy.SelectAll(port, endPoint.Options.AllowedPorts,
-            endPoint.Options.BlockPrivateTargets, resolved, out var rejection);
-        if (allowed.Count == 0)
-        {
-            var status = rejection == "port" || rejection == "blocked" ? 403 : 502;
-            Reject(session, endPoint, status, "connect-udp target was rejected");
+            Reject(session, endPoint, status, reason ?? "connect-udp target was rejected");
             return;
         }
 
-        Socket? udp = null;
-        var connected = false;
-        Exception? connectError = null;
-        foreach (var address in allowed)
-        {
-            Socket? candidate = null;
-            try
-            {
-                candidate = endPoint.Options.SocketFactory?.Invoke(address.AddressFamily)
-                            ?? new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                if (OperatingSystem.IsWindows())
-                {
-                    try
-                    {
-                        // Disable SIO_UDP_CONNRESET so an ICMP unreachable does not kill the tunnel.
-                        candidate.IOControl(-1744830452, new byte[4], null);
-                    }
-                    catch (Exception)
-                    {
-                        // The receive loop still tolerates ConnectionReset.
-                    }
-                }
-
-                candidate.Connect(new IPEndPoint(address, port));
-                udp = candidate;
-                connected = true;
-                break;
-            }
-            catch (Exception ex)
-            {
-                connectError = ex;
-                candidate?.Dispose();
-            }
-        }
-
-        if (!connected || udp is null)
-        {
-            if (connectError is not null)
-            {
-                ProxyDiagnostics.ReportBenign(logger, "MASQUE UDP connect failed", connectError);
-            }
-
-            Reject(session, endPoint, 502, "connect-udp target was rejected");
-            return;
-        }
-
+        var udp = opened.Socket;
         var inbound = Channel.CreateBounded<ReadOnlyMemory<byte>>(new BoundedChannelOptions(256)
         {
             SingleReader = true,
@@ -258,15 +190,7 @@ public partial class ProxyServer
             }
 
             inbound.Writer.TryComplete();
-            try
-            {
-                udp.Dispose();
-            }
-            catch (Exception)
-            {
-                // The receive loop unblocks on disposal.
-            }
-
+            opened.Release();
             endPoint.ReleaseTunnel(client);
         }
 
@@ -285,7 +209,7 @@ public partial class ProxyServer
         {
             try
             {
-                await RelayAsync(endPoint, inbound.Reader, body, udp, logger, token).ConfigureAwait(false);
+                await MasqueTunnel.RelayAsync(endPoint, inbound.Reader, body, udp, logger, token).ConfigureAwait(false);
             }
             finally
             {
@@ -298,134 +222,6 @@ public partial class ProxyServer
             if (ownsSlot)
             {
                 endPoint.ReleaseTunnel(client);
-            }
-        }
-    }
-
-    private static async Task RelayAsync(MasqueProxyEndPoint endPoint, ChannelReader<ReadOnlyMemory<byte>> inbound,
-        Stream body, Socket udp, Microsoft.Extensions.Logging.ILogger logger, CancellationToken cancellationToken)
-    {
-        using var relay = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var channel = new CapsuleDatagramChannel(inbound, body);
-        var budget = new DatagramBudget(endPoint.Options.MaxDatagramsPerSecond, endPoint.Options.MaxBytesPerSecond);
-        var idle = new IdleClock();
-        var idleMs = (long)endPoint.Options.IdleTimeout.TotalMilliseconds;
-        var toTarget = channel.RunClientToTargetAsync(payload =>
-        {
-            if (!budget.TryTake(payload.Length))
-            {
-                endPoint.CountDrop();
-                return;
-            }
-
-            idle.Touch();
-
-            try
-            {
-                udp.Send(payload);
-            }
-            catch (Exception ex) when (ex is SocketException or ObjectDisposedException)
-            {
-                endPoint.CountDrop();
-                return;
-            }
-
-            endPoint.CountDatagram(fromClient: true);
-        }, relay.Token).AsTask();
-        var toClient = ReceiveTargetAsync(endPoint, channel, udp, budget, idle, relay.Token);
-        var writer = channel.WriteQueuedAsync(relay.Token).AsTask();
-        var idleWatch = WatchIdleAsync(endPoint, idle, idleMs, relay);
-        await Task.WhenAny(toTarget, toClient, writer, idleWatch).ConfigureAwait(false);
-        await relay.CancelAsync().ConfigureAwait(false);
-        try
-        {
-            udp.Close();
-        }
-        catch (Exception)
-        {
-            // Closing the socket unblocks the receive loop.
-        }
-
-        await Task.WhenAll(
-            ObserveRelayAsync(toTarget, logger),
-            ObserveRelayAsync(toClient, logger),
-            ObserveRelayAsync(writer, logger)).ConfigureAwait(false);
-    }
-
-    private static async Task ObserveRelayAsync(Task task, Microsoft.Extensions.Logging.ILogger logger)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
-        {
-            // The tunnel is closing.
-        }
-        catch (Exception ex)
-        {
-            ProxyDiagnostics.ReportBenign(logger, "MASQUE relay task faulted", ex);
-        }
-    }
-
-    private static async Task ReceiveTargetAsync(MasqueProxyEndPoint endPoint, CapsuleDatagramChannel channel,
-        Socket udp, DatagramBudget budget, IdleClock idle, CancellationToken cancellationToken)
-    {
-        var buffer = ArrayPool<byte>.Shared.Rent(CapsuleReader.DefaultMaxDatagramBytes);
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                int read;
-                try
-                {
-                    read = await udp.ReceiveAsync(buffer.AsMemory(0, CapsuleReader.DefaultMaxDatagramBytes),
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset or SocketError.MessageSize)
-                {
-                    endPoint.CountDrop();
-                    continue;
-                }
-
-                if (!budget.TryTake(read))
-                {
-                    endPoint.CountDrop();
-                    continue;
-                }
-
-                idle.Touch();
-
-                if (!channel.TryQueueToClient(buffer.AsSpan(0, read)))
-                {
-                    endPoint.CountDrop();
-                    continue;
-                }
-
-                endPoint.CountDatagram(fromClient: false);
-            }
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
-        {
-            // The tunnel is closing.
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-    }
-
-    private static async Task WatchIdleAsync(MasqueProxyEndPoint endPoint, IdleClock idle, long idleMs,
-        CancellationTokenSource relay)
-    {
-        while (!relay.IsCancellationRequested)
-        {
-            await Task.Delay(500, relay.Token).ConfigureAwait(false);
-            if (Environment.TickCount64 - idle.Last > idleMs)
-            {
-                endPoint.CountIdleClose();
-                await relay.CancelAsync().ConfigureAwait(false);
-                return;
             }
         }
     }
