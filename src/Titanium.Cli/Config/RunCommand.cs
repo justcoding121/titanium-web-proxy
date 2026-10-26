@@ -989,6 +989,11 @@ internal static class RunCommand
             ep.Options.RequireAuth = requireAuth;
         }
 
+        if (masque.AllowHttp11Upgrade is bool allowHttp11)
+        {
+            ep.Options.AllowHttp11Upgrade = allowHttp11;
+        }
+
         if (masque.AllowedPorts is { Length: > 0 } ports)
         {
             ep.Options.AllowedPorts = ports;

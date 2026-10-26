@@ -474,6 +474,8 @@ Titanium.Web.Proxy.Configuration.Models.MasqueCredentialConfig.Username.get -> s
 Titanium.Web.Proxy.Configuration.Models.MasqueCredentialConfig.Username.set -> void
 Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.Credentials.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Configuration.Models.MasqueCredentialConfig!>?
 Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.Credentials.set -> void
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.AllowHttp11Upgrade.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.AllowHttp11Upgrade.set -> void
 Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.AllowedPorts.get -> int[]?
 Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.AllowedPorts.set -> void
 Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.BlockPrivateTargets.get -> bool?

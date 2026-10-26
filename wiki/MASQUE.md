@@ -14,6 +14,8 @@ capsule-protocol: ?1
 
 Datagrams travel in RFC 9297 capsules on that stream. Context ID 0 is the UDP payload. Any other context is ignored. Unknown capsule types are skipped. A declared length above 2048 bytes is discarded as it arrives and is never buffered.
 
+HTTP/1.1 Upgrade (RFC 9298 section 3.3) stays off unless `allowHttp11Upgrade` is true. With the flag on, the handshake offers `h2` and `http/1.1`. A client sends `GET` on the same path with `Connection: Upgrade`, `Upgrade: connect-udp`, and `Capsule-Protocol: ?1`. The listener answers `101 Switching Protocols` and then reads capsules on that connection until the tunnel ends, then closes it. With the flag off, the handshake offers only `h2`, which is the same as today.
+
 ## What this listener does not do
 
 HTTP/3 between the client and the proxy is not available. `System.Net.Quic` has no datagram API (dotnet/runtime#53533), and this listener does not call MsQuic. Capsules on a reliable stream have head-of-line blocking. That is inherent to CONNECT-UDP over HTTP/2.

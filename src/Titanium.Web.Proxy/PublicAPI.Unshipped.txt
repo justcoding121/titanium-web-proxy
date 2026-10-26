@@ -384,6 +384,8 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> strin
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc.get -> System.Func<string!, string!, System.Threading.Tasks.Task<bool>!>?
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc.set -> void
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade.set -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.get -> int[]!
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.set -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets.get -> bool

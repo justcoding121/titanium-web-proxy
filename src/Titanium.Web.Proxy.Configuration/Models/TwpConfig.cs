@@ -154,6 +154,8 @@ public sealed class MasqueListenerConfig
 {
     public bool? RequireAuth { get; set; }
 
+    public bool? AllowHttp11Upgrade { get; set; }
+
     public IList<MasqueCredentialConfig>? Credentials { get; set; }
 
     public int[]? AllowedPorts { get; set; }

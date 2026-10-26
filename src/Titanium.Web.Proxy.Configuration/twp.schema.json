@@ -365,6 +365,9 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
+              "allowHttp11Upgrade": {
+                "type": "boolean"
+              },
               "allowedPorts": {
                 "type": "array",
                 "items": {

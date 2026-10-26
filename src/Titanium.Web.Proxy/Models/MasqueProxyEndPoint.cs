@@ -10,7 +10,8 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Models;
 
 /// <summary>
-///     TLS listener for CONNECT-UDP (RFC 9298) over HTTP/2 capsules. Clients speak ALPN h2.
+///     TLS listener for CONNECT-UDP (RFC 9298). Clients speak ALPN h2 unless
+///     <see cref="MasqueOptions.AllowHttp11Upgrade"/> is set.
 ///     The relay is opaque: tunneled QUIC stays encrypted. Experimental.
 /// </summary>
 [Experimental("TWP001")]
@@ -127,6 +128,12 @@ public sealed class MasqueProxyEndPoint : ProxyEndPoint
 public sealed class MasqueOptions
 {
     public bool RequireAuth { get; set; } = true;
+
+    /// <summary>
+    ///     When true, the listener also offers ALPN <c>http/1.1</c> and accepts an RFC 9298
+    ///     <c>Upgrade: connect-udp</c> request. Off by default, so the handshake offers only <c>h2</c>.
+    /// </summary>
+    public bool AllowHttp11Upgrade { get; set; }
 
     /// <summary>
     ///     Listener-local basic-auth check (username, password). When null, the proxy falls back to
