@@ -358,49 +358,53 @@ public static class TwpConfigValidator
     {
         foreach (var listener in listeners)
         {
-            if (listener.Port is < 1 or > 65535)
-            {
-                errors.Add($"Listener port {listener.Port} is out of range.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
-            {
-                errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque).");
-            }
-
-            if (listener.MaxCachedConnections is <= 0)
-            {
-                errors.Add($"Listener port {listener.Port}: maxCachedConnections must be positive.");
-            }
-
-            if (listener.MaxConcurrentClients is <= 0)
-            {
-                errors.Add($"Listener port {listener.Port}: maxConcurrentClients must be positive.");
-            }
-
-            if (listener.HandshakeTimeoutSeconds is < 0)
-            {
-                errors.Add($"Listener port {listener.Port}: handshakeTimeoutSeconds must be >= 0.");
-            }
-
-            if (listener.IdleTimeoutSeconds is < 0)
-            {
-                errors.Add($"Listener port {listener.Port}: idleTimeoutSeconds must be >= 0.");
-            }
-
-            if (listener.AltSvc?.Port is < 1 or > 65535)
-            {
-                errors.Add($"Listener port {listener.Port}: altSvc.port must be between 1 and 65535.");
-            }
-
-            if (listener.AltSvc?.MaxAgeSeconds is < 1 or > 31536000)
-            {
-                errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
-            }
-
+            ValidateListenerBounds(listener, errors);
             ValidateMasqueListener(listener, errors);
             ValidateClientCertificate(listener, errors);
             ValidateTrustedProxySources(listener, errors);
+        }
+    }
+
+    private static void ValidateListenerBounds(ListenerConfig listener, List<string> errors)
+    {
+        if (listener.Port is < 1 or > 65535)
+        {
+            errors.Add($"Listener port {listener.Port} is out of range.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
+        {
+            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque).");
+        }
+
+        if (listener.MaxCachedConnections is <= 0)
+        {
+            errors.Add($"Listener port {listener.Port}: maxCachedConnections must be positive.");
+        }
+
+        if (listener.MaxConcurrentClients is <= 0)
+        {
+            errors.Add($"Listener port {listener.Port}: maxConcurrentClients must be positive.");
+        }
+
+        if (listener.HandshakeTimeoutSeconds is < 0)
+        {
+            errors.Add($"Listener port {listener.Port}: handshakeTimeoutSeconds must be >= 0.");
+        }
+
+        if (listener.IdleTimeoutSeconds is < 0)
+        {
+            errors.Add($"Listener port {listener.Port}: idleTimeoutSeconds must be >= 0.");
+        }
+
+        if (listener.AltSvc?.Port is < 1 or > 65535)
+        {
+            errors.Add($"Listener port {listener.Port}: altSvc.port must be between 1 and 65535.");
+        }
+
+        if (listener.AltSvc?.MaxAgeSeconds is < 1 or > 31536000)
+        {
+            errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
         }
     }
 

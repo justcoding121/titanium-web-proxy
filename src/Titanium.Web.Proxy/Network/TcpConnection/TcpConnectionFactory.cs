@@ -695,6 +695,18 @@ internal class TcpConnectionFactory : IDisposable
         return default;
     }
 
+    /// <summary>
+    ///     The slot is released unless <paramref name="attached"/> was set. The check lives outside
+    ///     the caller so a successful return is not treated as the only path into the catch.
+    /// </summary>
+    private static void ReleaseReservedSlot(ConnectionBudget budget, bool attached)
+    {
+        if (!attached)
+        {
+            budget.ReleaseSlot();
+        }
+    }
+
     private async Task<TcpServerConnection?> ClaimBudgetSlotAsync(
         TcpConnectOptions connect, SemaphoreSlim? createGate, ConnectionBudget budget, bool noCache)
     {
@@ -768,11 +780,7 @@ internal class TcpConnectionFactory : IDisposable
         }
         catch
         {
-            if (!attached)
-            {
-                budget.ReleaseSlot();
-            }
-
+            ReleaseReservedSlot(budget, attached);
             throw;
         }
     }

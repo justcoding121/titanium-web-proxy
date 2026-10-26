@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -177,23 +178,33 @@ internal static class DestinationResolver
                 continue;
             }
 
-            var eq = part.IndexOf('=');
-            var nameSpan = eq < 0 ? part : part[..eq];
-            var valueSpan = eq < 0 ? ReadOnlySpan<char>.Empty : part[(eq + 1)..];
-            var name = nameSpan.ToString();
-            if (!names.Contains(name))
-            {
-                continue;
-            }
-
-            var value = valueSpan.IndexOfAny('%', '+') >= 0
-                ? Uri.UnescapeDataString(valueSpan.ToString().Replace('+', ' '))
-                : valueSpan.ToString();
-            map ??= new Dictionary<string, string>(StringComparer.Ordinal);
-            map[name] = value;
+            RememberQuery(ref map, part, names);
         }
 
         return map;
+    }
+
+    private static void RememberQuery(ref Dictionary<string, string>? map, ReadOnlySpan<char> part, HashSet<string> names)
+    {
+        if (part.IsEmpty)
+        {
+            return;
+        }
+
+        var eq = part.IndexOf('=');
+        var nameSpan = eq < 0 ? part : part[..eq];
+        var valueSpan = eq < 0 ? ReadOnlySpan<char>.Empty : part[(eq + 1)..];
+        var name = nameSpan.ToString();
+        if (!names.Contains(name))
+        {
+            return;
+        }
+
+        var value = valueSpan.IndexOfAny('%', '+') >= 0
+            ? Uri.UnescapeDataString(valueSpan.ToString().Replace('+', ' '))
+            : valueSpan.ToString();
+        map ??= new Dictionary<string, string>(StringComparer.Ordinal);
+        map[name] = value;
     }
 
     private static string? ExtractAffinityKey(Request request, ClusterConfig cluster)
@@ -310,10 +321,10 @@ internal sealed class RouteTableRequirements
         HashSet<string>? query = null;
         if (options.Routes is not null)
         {
-            foreach (var route in options.Routes)
+            foreach (var match in options.Routes.Select(static route => route.Match))
             {
-                AddKeys(route.Match.Headers, ref headers, StringComparer.OrdinalIgnoreCase);
-                AddKeys(route.Match.Query, ref query, StringComparer.Ordinal);
+                AddKeys(match.Headers, ref headers, StringComparer.OrdinalIgnoreCase);
+                AddKeys(match.Query, ref query, StringComparer.Ordinal);
             }
         }
 
