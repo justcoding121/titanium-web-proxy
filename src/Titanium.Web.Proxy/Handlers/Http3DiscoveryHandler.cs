@@ -66,13 +66,16 @@ public partial class ProxyServer
 
     /// <summary>
     ///     QUIC connect failed before any request bytes were written. Auto mode stays on TCP
-    ///     (HTTP/2 when the client already negotiated it) until <see cref="Http3OriginCapabilityCache.BrokenTtl"/>
-    ///     elapses. An in-flight SVCB lookup must not put HTTP/3 back.
+    ///     (HTTP/2 when the client already negotiated it) until the broken window elapses. The window starts at
+    ///     <see cref="Http3OriginCapabilityCache.BrokenTtl"/> and doubles for each repeat failure. An in-flight
+    ///     SVCB lookup must not put HTTP/3 back.
     /// </summary>
-    internal void NoteHttp3OriginUnreachable(string hostAndPort)
+    /// <returns>How long the origin stays on TCP from now.</returns>
+    internal TimeSpan NoteHttp3OriginUnreachable(string hostAndPort)
     {
-        Http3OriginCapabilityCache.MarkBroken(hostAndPort);
+        var window = Http3OriginCapabilityCache.MarkBroken(hostAndPort);
         _svcbDiscoveryCoordinator?.Invalidate(hostAndPort);
+        return window;
     }
 
     private void CacheHttp3CapabilityFromAltSvc(SessionEventArgs args, string altSvc)

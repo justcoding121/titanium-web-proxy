@@ -196,6 +196,102 @@ public class Http3OriginCapabilityCacheTests
 }
 
 /// <summary>
+///     A broken origin is retried after a window that doubles with each consecutive failure.
+/// </summary>
+[TestClass]
+public class Http3OriginCapabilityCacheBackoffTests
+{
+    private const string Key = "origin.example:443";
+    private static readonly TimeSpan Five = TimeSpan.FromMinutes(5);
+
+    private static (Http3OriginCapabilityCache Cache, Support.ManualTimeProvider Time) Create()
+    {
+        var time = new Support.ManualTimeProvider();
+        return (new Http3OriginCapabilityCache(time), time);
+    }
+
+    [TestMethod]
+    public void FirstFailure_UsesTheFiveMinuteWindow()
+    {
+        var (cache, _) = Create();
+        Assert.AreEqual(Five, cache.MarkBroken(Key));
+        Assert.IsTrue(cache.IsBroken(Key));
+    }
+
+    [TestMethod]
+    public void AFailureInsideTheLiveWindow_DoesNotEscalate()
+    {
+        var (cache, time) = Create();
+        cache.MarkBroken(Key);
+        time.Advance(TimeSpan.FromMinutes(1));
+        Assert.AreEqual(Five, cache.MarkBroken(Key), "a second in-flight failure restarts the same window, it does not double it");
+
+        time.Advance(Five + TimeSpan.FromSeconds(1));
+        Assert.IsFalse(cache.IsBroken(Key));
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key), "a failure after the window doubles it");
+    }
+
+    [TestMethod]
+    public void WindowsDouble_AndStopAtOneHour()
+    {
+        var (cache, time) = Create();
+        var seen = new List<double>();
+        for (var i = 0; i < 6; i++)
+        {
+            var window = cache.MarkBroken(Key);
+            seen.Add(window.TotalMinutes);
+            time.Advance(window + TimeSpan.FromSeconds(1));
+        }
+
+        CollectionAssert.AreEqual(new[] { 5d, 10d, 20d, 40d, 60d, 60d }, seen);
+    }
+
+    [TestMethod]
+    public void ACompletedQuicExchange_ResetsTheStreak()
+    {
+        var (cache, time) = Create();
+        time.Advance(cache.MarkBroken(Key) + TimeSpan.FromSeconds(1));
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key));
+        Assert.IsTrue(cache.Set(Key, overrideBroken: true));
+
+        Assert.AreEqual(Five, cache.MarkBroken(Key));
+    }
+
+    [TestMethod]
+    public void AnAdvertisementAfterTheWindow_DoesNotResetTheStreak()
+    {
+        var (cache, time) = Create();
+        time.Advance(cache.MarkBroken(Key) + TimeSpan.FromMinutes(1));
+        Assert.IsTrue(cache.Set(Key), "the window is over, so an advertisement is accepted");
+
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key));
+    }
+
+    [TestMethod]
+    public void TrimExpired_KeepsTheStreakForAnHourAfterTheWindow()
+    {
+        var (cache, time) = Create();
+        time.Advance(cache.MarkBroken(Key) + TimeSpan.FromMinutes(1));
+        cache.TrimExpired();
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key), "the streak survived the trim");
+
+        time.Advance(TimeSpan.FromMinutes(10) + Http3OriginCapabilityCache.MaxBrokenTtl + TimeSpan.FromMinutes(1));
+        cache.TrimExpired();
+        Assert.AreEqual(Five, cache.MarkBroken(Key), "a quiet hour forgets the streak");
+    }
+
+    [TestMethod]
+    public void AnExplicitWindow_IsTheBaseOfTheBackoff()
+    {
+        var (cache, time) = Create();
+        var window = cache.MarkBroken(Key, TimeSpan.FromSeconds(30));
+        Assert.AreEqual(TimeSpan.FromSeconds(30), window);
+        time.Advance(window + TimeSpan.FromSeconds(1));
+        Assert.AreEqual(TimeSpan.FromSeconds(60), cache.MarkBroken(Key, TimeSpan.FromSeconds(30)));
+    }
+}
+
+/// <summary>
 ///     Unit coverage for <see cref="AltSvcParser" />.
 /// </summary>
 [TestClass]

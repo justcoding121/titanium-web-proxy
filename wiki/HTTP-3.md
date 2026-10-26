@@ -206,6 +206,12 @@ tunnel ends. The cache entry expires after the advertised `ma` (max-age) duratio
 periodically. There is no public eviction API; to force a protocol for a given request or
 connection, set `SessionEventArgs.UpstreamHttpProtocol` or `BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol`.
 
+When a QUIC connect fails before any request bytes are sent (a UDP blackhole, a handshake timeout), Auto mode
+stays on TCP for that origin and advertisements cannot bring HTTP/3 back during that window. The first window is
+5 minutes. Each failure after a window ends doubles the next one, up to 1 hour, and a failure that arrives while a
+window is open only restarts it. A completed QUIC exchange clears the streak; a quiet hour after the last window
+forgets it.
+
 ## Browsers behind an explicit proxy
 
 An explicit HTTP proxy carries browser traffic as TCP (`CONNECT`). QUIC cannot go through that tunnel, but the origin's `Alt-Svc: h3` header is forwarded unchanged. A browser that then opened UDP directly to the origin would skip the proxy, so those requests would never appear in Inspector.
