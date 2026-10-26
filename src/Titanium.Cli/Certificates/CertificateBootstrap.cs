@@ -333,16 +333,10 @@ internal static class CertificateBootstrap
 
     private static List<string> ExistingCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
     {
-        var existing = new List<string>();
-        foreach (var path in CollectCertificatePaths(certificates, listeners))
-        {
-            if (File.Exists(path) && !existing.Contains(path, StringComparer.OrdinalIgnoreCase))
-            {
-                existing.Add(path);
-            }
-        }
-
-        return existing;
+        return CollectCertificatePaths(certificates, listeners)
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     private static List<string> CollectCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
