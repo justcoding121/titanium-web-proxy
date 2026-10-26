@@ -135,7 +135,7 @@ internal static class ReverseProxySessionDispatch
         ObserveRequestStart(server, session, route);
         if (route.Mirror is { } mirror)
         {
-            server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
+            server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId), route.Id);
         }
 
         var cluster = ApplyCluster(options, session, route, destination, request);
@@ -485,11 +485,6 @@ internal static class ReverseProxySessionDispatch
         }
 
         var failed = session.UpstreamDestinationId;
-        if (failed is not null)
-        {
-            balancer.Health.ReportFailure(failed, manager);
-        }
-
         var snapshot = manager.Snapshot;
         var owner = FindOwningCluster(snapshot, failed);
 
@@ -502,6 +497,13 @@ internal static class ReverseProxySessionDispatch
         if (alternate is null)
         {
             return false;
+        }
+
+        // Only a request that moves on is counted here. When there is nowhere to go, the final
+        // upstream report counts the same failure, and counting it here as well would double it.
+        if (failed is not null)
+        {
+            balancer.Health.ReportFailure(failed, manager);
         }
 
         int port;

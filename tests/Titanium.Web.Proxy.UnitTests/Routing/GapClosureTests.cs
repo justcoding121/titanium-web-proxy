@@ -260,6 +260,163 @@ public class GapClosureTests
         }
     }
 
+    private static Request MirrorRequest()
+    {
+        var request = new Request { Method = "GET", Host = "app.test" };
+        request.RequestUriString8 = (ByteString)"/m";
+        return request;
+    }
+
+    private static DestinationConfig MirrorDestination(string address) => new() { Id = address, Address = address, Port = 9 };
+
+    private static async Task<bool> WaitUntilAsync(Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(3);
+        while (!condition() && DateTime.UtcNow < until)
+        {
+            await Task.Delay(5);
+        }
+
+        return condition();
+    }
+
+    [TestMethod]
+    public async Task Mirror_DisposeDoesNotWaitForASendThatIsStillOpen()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var accepted = listener.AcceptTcpClientAsync();
+            var fanout = new MirrorDispatcher();
+            fanout.TryEnqueue(
+                new MirrorConfig { ClusterId = "m" },
+                MirrorRequest(),
+                new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = ((IPEndPoint)listener.LocalEndpoint).Port });
+            using var client = await accepted.WaitAsync(TimeSpan.FromSeconds(3));
+            await Task.Delay(100);
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            fanout.Dispose();
+            stopwatch.Stop();
+
+            Assert.IsTrue(stopwatch.ElapsedMilliseconds < 300, $"dispose took {stopwatch.ElapsedMilliseconds} ms");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [TestMethod]
+    public async Task Mirror_ABusyRouteDoesNotDelayAnotherRoute()
+    {
+        var slowGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fastSeen = 0;
+        using var fanout = new MirrorDispatcher
+        {
+            Sender = work =>
+            {
+                if (work.Host == "slow.test")
+                {
+                    return slowGate.Task;
+                }
+
+                Interlocked.Increment(ref fastSeen);
+                return Task.CompletedTask;
+            },
+        };
+        var slow = new MirrorConfig { ClusterId = "slow", MaxConcurrency = 1 };
+        var fast = new MirrorConfig { ClusterId = "fast", MaxConcurrency = 1 };
+        try
+        {
+            for (var i = 0; i < 60; i++)
+            {
+                fanout.TryEnqueue(slow, MirrorRequest(), MirrorDestination("slow.test"), "slow-route");
+            }
+
+            var droppedBefore = fanout.DroppedForTests;
+            Assert.IsTrue(droppedBefore > 0, "the slow route fills its own queue");
+            fanout.TryEnqueue(fast, MirrorRequest(), MirrorDestination("fast.test"), "fast-route");
+            Assert.IsTrue(await WaitUntilAsync(() => Volatile.Read(ref fastSeen) == 1), "the fast route was not served");
+            Assert.AreEqual(droppedBefore, fanout.DroppedForTests, "the fast route lost nothing");
+        }
+        finally
+        {
+            slowGate.TrySetResult();
+        }
+    }
+
+    [TestMethod]
+    public async Task Mirror_EachRouteKeepsItsOwnConcurrencyLimit()
+    {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var inFlight = new int[2];
+        using var fanout = new MirrorDispatcher
+        {
+            Sender = work =>
+            {
+                Interlocked.Increment(ref inFlight[work.Host == "wide.test" ? 0 : 1]);
+                return gate.Task;
+            },
+        };
+        try
+        {
+            for (var i = 0; i < 10; i++)
+            {
+                fanout.TryEnqueue(new MirrorConfig { ClusterId = "w", MaxConcurrency = 3 }, MirrorRequest(), MirrorDestination("wide.test"), "wide");
+                fanout.TryEnqueue(new MirrorConfig { ClusterId = "n", MaxConcurrency = 1 }, MirrorRequest(), MirrorDestination("narrow.test"), "narrow");
+            }
+
+            Assert.IsTrue(await WaitUntilAsync(() => Volatile.Read(ref inFlight[0]) == 3 && Volatile.Read(ref inFlight[1]) == 1));
+            await Task.Delay(100);
+            Assert.AreEqual(3, Volatile.Read(ref inFlight[0]));
+            Assert.AreEqual(1, Volatile.Read(ref inFlight[1]));
+        }
+        finally
+        {
+            gate.TrySetResult();
+        }
+    }
+
+    [TestMethod]
+    public async Task Mirror_AnIdleRouteGivesBackItsWorkers_AndComesBackOnDemand()
+    {
+        var seen = 0;
+        using var fanout = new MirrorDispatcher
+        {
+            IdleExit = TimeSpan.FromMilliseconds(50),
+            Sender = _ =>
+            {
+                Interlocked.Increment(ref seen);
+                return Task.CompletedTask;
+            },
+        };
+        var mirror = new MirrorConfig { ClusterId = "m", MaxConcurrency = 2 };
+        fanout.TryEnqueue(mirror, MirrorRequest(), MirrorDestination("a.test"), "r");
+        Assert.IsTrue(await WaitUntilAsync(() => Volatile.Read(ref seen) == 1));
+        Assert.IsTrue(await WaitUntilAsync(() => fanout.WorkerCountForTests == 0), "idle workers should exit");
+        fanout.TryEnqueue(mirror, MirrorRequest(), MirrorDestination("a.test"), "r");
+        Assert.IsTrue(await WaitUntilAsync(() => Volatile.Read(ref seen) == 2), "a new copy restarts the route's workers");
+    }
+
+    [TestMethod]
+    public void Mirror_ClampsAHugeConfiguredBodyLimit()
+    {
+        using var fanout = new MirrorDispatcher();
+        var size = MirrorConfig.MaxAllowedBodyBytes + 1;
+        var request = new Request { Method = "POST", Host = "app.test", ContentLength = size };
+        request.RequestUriString8 = (ByteString)"/huge";
+        request.Body = new byte[size];
+        request.IsBodyRead = true;
+        fanout.TryEnqueue(
+            new MirrorConfig { ClusterId = "m", MaxBodyBytes = int.MaxValue },
+            request,
+            new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 9 });
+        Assert.AreEqual(1, fanout.SkippedForTests);
+        Assert.AreEqual(0, fanout.QueuedForTests);
+    }
+
     [TestMethod]
     public async Task Mirror_SkipsALargeBody_AndDropsWhenTheQueueIsFull()
     {

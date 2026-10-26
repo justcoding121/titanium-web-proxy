@@ -71,6 +71,16 @@ internal static partial class Http3OriginBridge
         }
     }
 
+    /// <summary>Marks an origin unreachable and logs the window it got. Synchronous so the async callers keep no extra local.</summary>
+    private static void MarkUnreachableAndLog(ProxyServer server, ILogger logger, string hostAndPort)
+    {
+        var brokenFor = server.NoteHttp3OriginUnreachable(hostAndPort);
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug(
+                "Marked {HostAndPort} HTTP/3 unreachable for {BrokenSeconds}s; staying on TCP.",
+                hostAndPort, (int)brokenFor.TotalSeconds);
+    }
+
     /// <summary>
     ///     Gives up on a silent QUIC stream: aborts it, retires the connection (other requests must not reuse a
     ///     path that stopped delivering), marks the origin unreachable and replays the request over TCP.
@@ -91,7 +101,7 @@ internal static partial class Http3OriginBridge
 
         var originPort = sessionArgs.HttpClient.Request.GetOriginHostPort(port).Port;
         var hostAndPort = $"{sniHost}:{originPort}";
-        server.NoteHttp3OriginUnreachable(hostAndPort);
+        var brokenFor = server.NoteHttp3OriginUnreachable(hostAndPort);
 
         if (quicConn != null)
             await server.QuicConnectionPool.InvalidateAsync(quicConn);
@@ -101,7 +111,7 @@ internal static partial class Http3OriginBridge
                 "HTTP/3 origin {HostAndPort} sent nothing for {StallSeconds}s; replaying {Method} over TCP and "
                 + "staying on TCP for {BrokenSeconds}s.",
                 hostAndPort, (int)Http3ResponseStallTimeout.TotalSeconds, sessionArgs.HttpClient.Request.Method,
-                (int)Http3OriginCapabilityCache.BrokenTtl.TotalSeconds);
+                (int)brokenFor.TotalSeconds);
 
         try
         {

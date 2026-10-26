@@ -139,6 +139,69 @@ public class ResiliencePhaseTests
         Assert.IsFalse(ReverseProxySessionDispatch.TrySelectAlternate(proxy, post));
     }
 
+    [TestMethod]
+    public async Task FailedRetryWithNoAlternate_IsCountedOnce()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var manager = new ClusterManager();
+        await manager.ApplyAsync([SingleDestinationCluster()]);
+        proxy.ReverseProxy = RetryRoutes(manager);
+
+        // The ejection threshold is 3 consecutive failures. One strike per request means two
+        // failed requests leave the destination healthy. A double count would eject it on the second.
+        for (var i = 0; i < 2; i++)
+        {
+            var session = MakeSession(proxy, "GET");
+            Assert.AreEqual(ReverseProxySessionDispatch.RouteDispatchResult.Routed, ReverseProxySessionDispatch.Apply(proxy, session));
+            Assert.IsFalse(ReverseProxySessionDispatch.TrySelectAlternate(proxy, session));
+            session.Exception = new IOException("origin refused");
+            ReverseProxySessionDispatch.ReportUpstreamResult(proxy, session, success: false);
+        }
+
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("only"));
+        await manager.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task FailedRetryWithAnAlternate_CountsTheFailedDestinationOnce()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var manager = new ClusterManager();
+        await manager.ApplyAsync([Cluster()]);
+        proxy.ReverseProxy = RetryRoutes(manager);
+
+        var session = MakeSession(proxy, "GET");
+        Assert.AreEqual(ReverseProxySessionDispatch.RouteDispatchResult.Routed, ReverseProxySessionDispatch.Apply(proxy, session));
+        var first = session.UpstreamDestinationId!;
+        Assert.IsTrue(ReverseProxySessionDispatch.TrySelectAlternate(proxy, session));
+        Assert.AreNotEqual(first, session.UpstreamDestinationId);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState(first));
+        await manager.DisposeAsync();
+    }
+
+    private static ReverseProxyOptions RetryRoutes(ClusterManager manager) => new()
+    {
+        ClusterManager = manager,
+        LoadBalancer = new LoadBalancer(),
+        Routes =
+        [
+            new RouteConfig
+            {
+                Id = "r",
+                ClusterId = "c",
+                Retry = new RetryConfig { Attempts = 1 },
+                Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            },
+        ],
+    };
+
+    private static ClusterConfig SingleDestinationCluster() => new()
+    {
+        Id = "c",
+        Retry = new RetryConfig { Attempts = 1 },
+        Destinations = [new DestinationConfig { Id = "only", Address = "10.0.0.1", Port = 80 }],
+    };
+
     private static ClusterConfig Cluster() => new()
     {
         Id = "c",

@@ -625,11 +625,7 @@ internal static partial class Http3OriginBridge
                 // port, which may differ when Alt-Svc / SVCB advertised an alternative port.
                 var originPort = request.GetOriginHostPort(port).Port;
                 var hostAndPort = $"{sniHost}:{originPort}";
-                server.NoteHttp3OriginUnreachable(hostAndPort);
-                if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug(
-                        "Marked {HostAndPort} HTTP/3 unreachable for {BrokenSeconds}s; staying on TCP.",
-                        hostAndPort, (int)Http3OriginCapabilityCache.BrokenTtl.TotalSeconds);
+                MarkUnreachableAndLog(server, logger, hostAndPort);
                 try
                 {
                     await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Configuration;
 
@@ -10,6 +11,7 @@ public static class TwpConfigSchema
 {
     private const string ObjectType = "object";
     private const string StringType = "string";
+    private const string MinimumKey = "minimum";
 
     public static string Generate()
     {
@@ -107,17 +109,21 @@ public static class TwpConfigSchema
             case "ListenerConfig.ClientCertificateMode":
                 schema["enum"] = new JsonArray { "none", "allow", "require" };
                 break;
+            case "MirrorConfig.MaxBodyBytes":
+                schema[MinimumKey] = 0;
+                schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;
+                break;
             case "MasqueListenerConfig.MaxBytesPerSecond":
-                schema["minimum"] = 1;
+                schema[MinimumKey] = 1;
                 schema["maximum"] = 1_073_741_824;
                 break;
             case "MasqueListenerConfig.MaxDatagramsPerSecond":
-                schema["minimum"] = 1;
+                schema[MinimumKey] = 1;
                 schema["maximum"] = 1_000_000;
                 break;
             case "MasqueListenerConfig.MaxTunnels":
             case "MasqueListenerConfig.MaxTunnelsPerClient":
-                schema["minimum"] = 1;
+                schema[MinimumKey] = 1;
                 break;
         }
     }

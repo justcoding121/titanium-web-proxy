@@ -121,6 +121,34 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    [DataRow(-1, false)]
+    [DataRow(0, true)]
+    [DataRow(65536, true)]
+    [DataRow(1_048_576, true)]
+    [DataRow(1_048_577, false)]
+    [DataRow(int.MaxValue, false)]
+    public void MirrorMaxBodyBytes_IsBounded(int maxBodyBytes, bool valid)
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "m",
+                    ClusterId = "c",
+                    Mirror = new MirrorConfig { ClusterId = "c", MaxBodyBytes = maxBodyBytes },
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+        };
+
+        var errors = Errors(config);
+        Assert.AreEqual(valid, !errors.Contains("maxBodyBytes", StringComparison.Ordinal), errors);
+    }
+
+    [TestMethod]
     public void Mirror_AndRedirect_AreChecked()
     {
         var config = new TwpConfig

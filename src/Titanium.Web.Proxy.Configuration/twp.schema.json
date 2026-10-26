@@ -704,7 +704,9 @@
                 "type": "string"
               },
               "maxBodyBytes": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1048576
               },
               "maxConcurrency": {
                 "type": "integer"
