@@ -45,65 +45,84 @@ internal sealed class CapsuleReader
         {
             if (phase == Phase.Skip)
             {
-                var take = (int)Math.Min(skipRemaining, data.Length - index);
-                index += take;
-                skipRemaining -= take;
-                if (skipRemaining == 0)
-                {
-                    phase = Phase.Type;
-                }
-
+                Skip(data, ref index);
                 continue;
             }
 
             if (phase is Phase.Type or Phase.Length)
             {
-                if (!FillVarint(data, ref index))
+                if (!ReadHeader(data, ref index, onDatagram))
                 {
                     return;
-                }
-
-                var decoded = ReadVarint(varint, varintNeed);
-                varintFilled = 0;
-                if (phase == Phase.Type)
-                {
-                    capsuleType = decoded;
-                    phase = Phase.Length;
-                    continue;
-                }
-
-                if (decoded > maxCapsuleBytes)
-                {
-                    Dropped++;
-                    skipRemaining = decoded;
-                    phase = skipRemaining == 0 ? Phase.Type : Phase.Skip;
-                    continue;
-                }
-
-                valueNeed = (int)decoded;
-                valueFilled = 0;
-                if (valueNeed == 0)
-                {
-                    Complete(onDatagram);
-                    phase = Phase.Type;
-                }
-                else
-                {
-                    phase = Phase.Value;
                 }
 
                 continue;
             }
 
-            var copy = Math.Min(valueNeed - valueFilled, data.Length - index);
-            data.Slice(index, copy).CopyTo(value.AsSpan(valueFilled));
-            valueFilled += copy;
-            index += copy;
-            if (valueFilled == valueNeed)
-            {
-                Complete(onDatagram);
-                phase = Phase.Type;
-            }
+            CopyValue(data, ref index, onDatagram);
+        }
+    }
+
+    private void Skip(ReadOnlySpan<byte> data, ref int index)
+    {
+        var take = (int)Math.Min(skipRemaining, data.Length - index);
+        index += take;
+        skipRemaining -= take;
+        if (skipRemaining == 0)
+        {
+            phase = Phase.Type;
+        }
+    }
+
+    private bool ReadHeader(ReadOnlySpan<byte> data, ref int index, DatagramHandler onDatagram)
+    {
+        if (!FillVarint(data, ref index))
+        {
+            return false;
+        }
+
+        var decoded = ReadVarint(varint, varintNeed);
+        varintFilled = 0;
+        if (phase == Phase.Type)
+        {
+            capsuleType = decoded;
+            phase = Phase.Length;
+            return true;
+        }
+
+        if (decoded > maxCapsuleBytes)
+        {
+            Dropped++;
+            skipRemaining = decoded;
+            phase = skipRemaining == 0 ? Phase.Type : Phase.Skip;
+            return true;
+        }
+
+        valueNeed = (int)decoded;
+        valueFilled = 0;
+        if (valueNeed == 0)
+        {
+            Complete(onDatagram);
+            phase = Phase.Type;
+        }
+        else
+        {
+            phase = Phase.Value;
+        }
+
+        return true;
+    }
+
+    private void CopyValue(ReadOnlySpan<byte> data, ref int index, DatagramHandler onDatagram)
+    {
+        var copy = Math.Min(valueNeed - valueFilled, data.Length - index);
+        data.Slice(index, copy).CopyTo(value.AsSpan(valueFilled));
+        valueFilled += copy;
+        index += copy;
+        if (valueFilled == valueNeed)
+        {
+            Complete(onDatagram);
+            phase = Phase.Type;
         }
     }
 

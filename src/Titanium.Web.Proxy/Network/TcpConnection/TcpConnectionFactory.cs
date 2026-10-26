@@ -603,24 +603,9 @@ internal class TcpConnectionFactory : IDisposable
     private async Task<TcpServerConnection?> CreateWithinBudget(TcpConnectOptions connect,
         SemaphoreSlim? createGate, int maxConnections, bool noCache)
     {
-        var remoteHostName = connect.RemoteHostName;
-        var remotePort = connect.RemotePort;
-        var httpVersion = connect.HttpVersion;
-        var isHttps = connect.IsHttps;
-        var sslProtocol = connect.SslProtocol;
-        var applicationProtocols = connect.ApplicationProtocols;
-        var isConnect = connect.IsConnect;
-        var proxyServer = connect.ProxyServer;
         var sessionArgs = connect.SessionArgs;
-        var upStreamEndPoint = connect.UpStreamEndPoint;
-        var externalProxy = connect.ExternalProxy;
         var cacheKey = connect.CacheKey;
-        var prefetch = connect.Prefetch;
         var cancellationToken = connect.CancellationToken;
-        var connectHost = connect.ConnectHost;
-        var connectPort = connect.ConnectPort;
-        var upStreamEndPointIPv4 = connect.UpStreamEndPointIPv4;
-        var upStreamEndPointIPv6 = connect.UpStreamEndPointIPv6;
         var budget = budgets.GetOrAdd(cacheKey, static (_, max) => new ConnectionBudget(max), maxConnections);
         budget.SetMax(maxConnections);
         var deadline = sessionArgs.ConnectTimeout
@@ -631,14 +616,10 @@ internal class TcpConnectionFactory : IDisposable
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
+            var opened = await ClaimBudgetSlotAsync(connect, createGate, budget, noCache);
+            if (opened is not null)
             {
-                return pooled;
-            }
-
-            if (budget.TryReserve())
-            {
-                return await CreateReservedConnection(connect, createGate, budget, noCache);
+                return opened;
             }
 
             if (noCache && TryEvictOneIdle(cacheKey))
@@ -655,14 +636,10 @@ internal class TcpConnectionFactory : IDisposable
             budget.EnterWait();
             try
             {
-                if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out pooled))
+                opened = await ClaimBudgetSlotAsync(connect, createGate, budget, noCache);
+                if (opened is not null)
                 {
-                    return pooled;
-                }
-
-                if (budget.TryReserve())
-                {
-                    return await CreateReservedConnection(connect, createGate, budget, noCache);
+                    return opened;
                 }
 
                 if (noCache && TryEvictOneIdle(cacheKey))
@@ -687,6 +664,22 @@ internal class TcpConnectionFactory : IDisposable
                 budget.ExitWait();
             }
         }
+    }
+
+    private async Task<TcpServerConnection?> ClaimBudgetSlotAsync(
+        TcpConnectOptions connect, SemaphoreSlim? createGate, ConnectionBudget budget, bool noCache)
+    {
+        if (TryRentFromPool(connect.ProxyServer, connect.CacheKey, noCache, connect.ApplicationProtocols, out var pooled))
+        {
+            return pooled;
+        }
+
+        if (budget.TryReserve())
+        {
+            return await CreateReservedConnection(connect, createGate, budget, noCache);
+        }
+
+        return null;
     }
 
     private async Task<TcpServerConnection?> CreateReservedConnection(TcpConnectOptions connect,
