@@ -159,6 +159,28 @@ public class MasqueHttp11UpgradeTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task ChunkedBody_Is400()
+    {
+        using var echo = new UdpEcho();
+        using var proxy = Start(options =>
+        {
+            options.AllowHttp11Upgrade = true;
+            options.RequireAuth = false;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+        });
+
+        using var client = await ConnectAsync(proxy.Port, http11: true);
+        var head = Encoding.ASCII.GetString(RequestBytes(echo.Port, basic: null, contentLength: null));
+        var message = Encoding.ASCII.GetBytes(head.Replace("\r\n\r\n", "\r\nTransfer-Encoding: chunked\r\n\r\n", StringComparison.Ordinal));
+        await client.Stream.WriteAsync(message);
+        var (status, _, _) = await ReadHeadAsync(client.Stream);
+        Assert.AreEqual(400, status);
+        Assert.AreEqual(0, proxy.Active);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task SecondTunnelFromTheSameClient_Is429_AndIdleClosesTheFirst()
     {
         using var echo = new UdpEcho();

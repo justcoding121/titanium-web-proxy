@@ -256,6 +256,12 @@ public partial class ProxyServer
             return false;
         }
 
+        if (headers.GetFirstHeader("transfer-encoding") is not null)
+        {
+            rejection = "connect-udp upgrade cannot carry a body";
+            return false;
+        }
+
         return true;
     }
 
