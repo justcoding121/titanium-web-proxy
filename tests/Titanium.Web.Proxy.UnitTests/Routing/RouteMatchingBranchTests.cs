@@ -318,13 +318,23 @@ public class RouteMatchingBranchTests
     [TestMethod]
     public void MirrorFanout_WithoutASink_NeverBlocksAndBoundsItsQueue()
     {
-        var fanout = new MirrorDispatcher();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var fanout = new MirrorDispatcher
+        {
+            HoldForTests = release.Task,
+            Sender = _ => Task.CompletedTask,
+        };
         var request = new Request { Method = "GET", RequestUriString8 = (ByteString)"/m", Host = "app" };
         var mirror = new MirrorConfig { ClusterId = "shadow" };
+        var destination = new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 9 };
         for (var i = 0; i < 500; i++)
         {
-            fanout.TryEnqueue(mirror, request);
+            fanout.TryEnqueue(mirror, request, destination);
         }
+
+        Assert.AreEqual(32, fanout.QueuedForTests, "the mirror queue holds at most 32 copies");
+        Assert.AreEqual(468, fanout.DroppedForTests, "copies past the queue are counted and dropped");
+        release.SetResult();
     }
 
     private static async Task<ImmutableClusterSnapshot> SnapshotAsync(ClusterConfig cluster, Action<ClusterManager>? shape = null)

@@ -208,6 +208,8 @@ internal sealed class ClusterHealthProber : IDisposable
         }
     }
 
+    internal bool IsStoppedForTests => Volatile.Read(ref _disposed) != 0;
+
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
