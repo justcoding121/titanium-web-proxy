@@ -783,6 +783,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http11)
@@ -807,6 +809,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http3)
@@ -831,6 +835,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http2)

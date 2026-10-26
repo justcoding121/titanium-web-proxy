@@ -246,7 +246,7 @@ public class ProtocolMatrixTests
         },
     ];
 
-    private static async Task<Started> StartAsync(int originPort, IReadOnlyList<RouteConfig> routes, ClientKind kind,
+    internal static async Task<Started> StartAsync(int originPort, IReadOnlyList<RouteConfig> routes, ClientKind kind,
         IReadOnlyList<RoutePolicyConfig>? policies = null, int destinations = 1, string[]? clusterIds = null)
     {
         var ids = clusterIds ?? ["c1"];
@@ -293,7 +293,7 @@ public class ProtocolMatrixTests
         return new Started(proxy, clear, tls);
     }
 
-    private static Task<HttpResponseMessage> SendAsync(Started proxy, ClientKind kind, string path,
+    internal static Task<HttpResponseMessage> SendAsync(Started proxy, ClientKind kind, string path,
         (string Name, string Value)[]? headers = null)
     {
         var client = CreateClient(proxy, kind);
@@ -362,7 +362,7 @@ public class ProtocolMatrixTests
         return value.Trim();
     }
 
-    private sealed class Started : IAsyncDisposable
+    internal sealed class Started : IAsyncDisposable
     {
         public Started(ProxyServer server, ExplicitProxyEndPoint clear, TransparentProxyEndPoint tls)
         {
@@ -388,7 +388,7 @@ public class ProtocolMatrixTests
         }
     }
 
-    private sealed class RecordingOrigin : IAsyncDisposable
+    internal sealed class RecordingOrigin : IAsyncDisposable
     {
         private readonly TcpListener listener = new(IPAddress.Loopback, 0);
         private readonly CancellationTokenSource cts = new();

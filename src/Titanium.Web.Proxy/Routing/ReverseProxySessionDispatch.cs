@@ -399,7 +399,7 @@ internal static class ReverseProxySessionDispatch
     /// Stages one status retry when the origin answered 502, 503, or 504 and nothing has been written
     /// to the client. Off unless a retry policy is set. Connect failover is unchanged.
     /// </summary>
-    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session)
+    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session, int? status = null)
     {
         var extras = session.Extras;
         var retry = extras?.Retry;
@@ -408,8 +408,8 @@ internal static class ReverseProxySessionDispatch
             return false;
         }
 
-        var status = session.HttpClient.Response.StatusCode;
-        if (status is not (502 or 503 or 504))
+        var code = status ?? session.HttpClient.Response.StatusCode;
+        if (code is not (502 or 503 or 504))
         {
             return false;
         }

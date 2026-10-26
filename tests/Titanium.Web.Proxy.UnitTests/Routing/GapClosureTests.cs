@@ -127,6 +127,10 @@ public class GapClosureTests
         ReverseProxySessionDispatch.Apply(proxy, post);
         post.HttpClient.Response.StatusCode = 502;
         Assert.IsFalse(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, post));
+
+        var decoded = Session(proxy, "GET");
+        ReverseProxySessionDispatch.Apply(proxy, decoded);
+        Assert.IsTrue(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, decoded, 503));
     }
 
     [TestMethod]
