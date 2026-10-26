@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Titanium.Web.Proxy.Models;
 
@@ -96,6 +97,12 @@ public sealed class MasqueProxyEndPoint : ProxyEndPoint
 public sealed class MasqueOptions
 {
     public bool RequireAuth { get; set; } = true;
+
+    /// <summary>
+    ///     Listener-local basic-auth check (username, password). When null, the proxy falls back to
+    ///     <c>ProxyServer.ProxyBasicAuthenticateFunc</c>. When both are null, authentication fails closed.
+    /// </summary>
+    public Func<string, string, Task<bool>>? AuthenticateFunc { get; set; }
 
     public int[] AllowedPorts { get; set; } = [443];
 

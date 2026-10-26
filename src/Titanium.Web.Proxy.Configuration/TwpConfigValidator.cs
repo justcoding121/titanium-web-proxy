@@ -354,6 +354,14 @@ public static class TwpConfigValidator
                 errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
             }
 
+            if (string.Equals(listener.Type, "masque", StringComparison.OrdinalIgnoreCase)
+                && listener.Masque?.RequireAuth != false
+                && listener.Masque?.Credentials is not { Count: > 0 })
+            {
+                errors.Add(
+                    $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
+            }
+
             if (listener.Masque is { } masque)
             {
                 if (masque.AllowedPorts is { } ports)
@@ -390,6 +398,27 @@ public static class TwpConfigValidator
                 if (masque.MaxBytesPerSecond is <= 0)
                 {
                     errors.Add($"Listener port {listener.Port}: masque.maxBytesPerSecond must be positive.");
+                }
+
+                if (masque.Credentials is { } credentials)
+                {
+                    var seenUsers = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var credential in credentials)
+                    {
+                        if (string.IsNullOrWhiteSpace(credential.Username)
+                            || string.IsNullOrWhiteSpace(credential.PasswordEnv))
+                        {
+                            errors.Add(
+                                $"Listener port {listener.Port}: masque credential requires username and passwordEnv.");
+                            continue;
+                        }
+
+                        if (!seenUsers.Add(credential.Username))
+                        {
+                            errors.Add(
+                                $"Listener port {listener.Port}: masque credential username '{credential.Username}' is duplicated.");
+                        }
+                    }
                 }
             }
 

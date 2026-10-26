@@ -182,6 +182,41 @@ public class TwpConfigValidatorCoverageTests
     }
 
     [TestMethod]
+    public void Validate_Masque_RequiresCredentialsUnlessAuthIsOff()
+    {
+        var missing = TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "masque", Port = 443 }],
+        });
+        Assert.IsTrue(string.Join('\n', missing).Contains("requires credentials or requireAuth: false", StringComparison.Ordinal));
+
+        var withUsers = TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Type = "masque",
+                    Port = 443,
+                    Masque = new MasqueListenerConfig
+                    {
+                        Credentials =
+                        [
+                            new MasqueCredentialConfig { Username = "a", PasswordEnv = "TWP_A" },
+                            new MasqueCredentialConfig { Username = "a", PasswordEnv = "TWP_B" },
+                            new MasqueCredentialConfig { Username = "", PasswordEnv = "" },
+                        ],
+                    },
+                },
+            ],
+        });
+        var text = string.Join('\n', withUsers);
+        Assert.IsFalse(text.Contains("requires credentials", StringComparison.Ordinal), text);
+        Assert.IsTrue(text.Contains("duplicated", StringComparison.Ordinal), text);
+        Assert.IsTrue(text.Contains("username and passwordEnv", StringComparison.Ordinal), text);
+    }
+
+    [TestMethod]
     public void Validate_NullServer_AndEmptyCollections_AreOk()
     {
         Assert.AreEqual(0, TwpConfigValidator.Validate(new TwpConfig()).Count);

@@ -1024,6 +1024,34 @@ internal static class RunCommand
             ep.Options.MaxBytesPerSecond = bytes;
         }
 
+        if (masque.Credentials is { Count: > 0 } credentials)
+        {
+            var hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            foreach (var credential in credentials)
+            {
+                var password = Environment.GetEnvironmentVariable(credential.PasswordEnv ?? string.Empty);
+                if (string.IsNullOrEmpty(password))
+                {
+                    throw new InvalidOperationException(
+                        $"Listener port {listener.Port}: masque credential '{credential.Username}' passwordEnv '{credential.PasswordEnv}' is missing or empty.");
+                }
+
+                hashes[credential.Username ?? string.Empty] = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(password));
+            }
+
+            var unknown = new byte[32];
+            ep.Options.AuthenticateFunc = (user, password) =>
+            {
+                var supplied = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(password));
+                var known = hashes.TryGetValue(user, out var expected);
+                var match = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    supplied, known ? expected! : unknown);
+                return Task.FromResult(known && match);
+            };
+        }
+
         return ep;
     }
 

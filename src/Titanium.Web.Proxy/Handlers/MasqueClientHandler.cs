@@ -113,7 +113,7 @@ public partial class ProxyServer
         MasqueProxyEndPoint endPoint)
     {
         var request = session.HttpClient.Request;
-        if (endPoint.Options.RequireAuth && !await AuthenticatedAsync(session).ConfigureAwait(false))
+        if (endPoint.Options.RequireAuth && !await AuthenticatedAsync(endPoint, session).ConfigureAwait(false))
         {
             session.GenericResponse("proxy authentication required", HttpStatusCode.ProxyAuthenticationRequired,
                 [new HttpHeader("proxy-authenticate", "Basic realm=\"masque\"")]);
@@ -343,7 +343,7 @@ public partial class ProxyServer
         }
     }
 
-    private async Task<bool> AuthenticatedAsync(SessionEventArgs session)
+    private async Task<bool> AuthenticatedAsync(MasqueProxyEndPoint endPoint, SessionEventArgs session)
     {
         var header = session.HttpClient.Request.Headers.GetFirstHeader("proxy-authorization")?.Value;
         if (header is null || !header.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
@@ -362,12 +362,24 @@ public partial class ProxyServer
         }
 
         var split = decoded.IndexOf(':');
-        if (split <= 0 || ProxyBasicAuthenticateFunc is null)
+        if (split <= 0)
         {
             return false;
         }
 
-        return await ProxyBasicAuthenticateFunc(session, decoded[..split], decoded[(split + 1)..]).ConfigureAwait(false);
+        var user = decoded[..split];
+        var password = decoded[(split + 1)..];
+        if (endPoint.Options.AuthenticateFunc is { } listenerAuth)
+        {
+            return await listenerAuth(user, password).ConfigureAwait(false);
+        }
+
+        if (ProxyBasicAuthenticateFunc is null)
+        {
+            return false;
+        }
+
+        return await ProxyBasicAuthenticateFunc(session, user, password).ConfigureAwait(false);
     }
 
     private static void Reject(SessionEventArgs session, MasqueProxyEndPoint endPoint, int status, string body)

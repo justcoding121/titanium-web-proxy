@@ -98,6 +98,29 @@ public class MasqueRelayTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task ListenerAuthenticateFunc_RejectsMissingCredentials_AndAcceptsTheRightPassword()
+    {
+        using var echo = new UdpEcho();
+        using var proxy = StartMasque(options =>
+        {
+            options.RequireAuth = true;
+            options.BlockPrivateTargets = false;
+            options.AllowedPorts = [echo.Port];
+            options.AuthenticateFunc = (user, password) =>
+                Task.FromResult(user == "user" && password == "secret");
+        });
+
+        using var client = await ConnectAsync(proxy.Port);
+        var denied = await RequestAsync(client, 1, echo.Port, null);
+        Assert.AreEqual("407", Status(denied));
+
+        var token = Convert.ToBase64String(Encoding.ASCII.GetBytes("user:secret"));
+        var opened = await RequestAsync(client, 3, echo.Port, token);
+        Assert.AreEqual("200", Status(opened));
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task BadPath_Returns400_AndSecondTunnelOverTheCap_Returns429()
     {
         using var echo = new UdpEcho();

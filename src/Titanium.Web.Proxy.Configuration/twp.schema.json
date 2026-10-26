@@ -390,6 +390,18 @@
               },
               "requireAuth": {
                 "type": "boolean"
+              },
+              "credentials": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["username", "passwordEnv"],
+                  "properties": {
+                    "username": { "type": "string" },
+                    "passwordEnv": { "type": "string" }
+                  }
+                }
               }
             }
           },

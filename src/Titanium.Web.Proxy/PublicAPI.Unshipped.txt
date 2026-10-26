@@ -382,6 +382,8 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.MatchedRoute.get -> Titan
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyRequestId.get -> string?
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> string?
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc.get -> System.Func<string!, string!, System.Threading.Tasks.Task<bool>!>?
+[TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc.set -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.get -> int[]!
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts.set -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets.get -> bool
