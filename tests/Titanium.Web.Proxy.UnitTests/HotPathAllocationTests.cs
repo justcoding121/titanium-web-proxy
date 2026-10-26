@@ -6,6 +6,7 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Routing;
 
 namespace Titanium.Web.Proxy.UnitTests;
@@ -91,6 +92,31 @@ public class HotPathAllocationTests
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         // IReadOnlyList foreach boxes its enumerator (pre-existing). Ceiling is 32 bytes/call.
         Assert.IsTrue(allocated / 10_000 <= 32, $"match allocated {allocated / 10_000} bytes/call");
+#endif
+    }
+
+    [TestMethod]
+    public void WarmQuicLookup_WithAReadyKey_DoesNotAllocate()
+    {
+#if DEBUG
+        Assert.Inconclusive("Allocation ceilings are enforced in Release.");
+#else
+        using var proxy = new ProxyServer(false, false, false);
+        await using var pool = new QuicConnectionPool(proxy);
+        const string key = "h3:localhost:443:localhost:";
+        for (var i = 0; i < 1_000; i++)
+        {
+            pool.HasLiveConnection(key);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 10_000; i++)
+        {
+            pool.HasLiveConnection(key);
+        }
+
+        var per = (GC.GetAllocatedBytesForCurrentThread() - before) / 10_000;
+        Assert.IsTrue(per <= 0, $"warm QUIC lookup allocated {per} bytes/call");
 #endif
     }
 }

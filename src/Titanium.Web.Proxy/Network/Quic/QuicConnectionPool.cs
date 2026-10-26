@@ -107,12 +107,13 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         CancellationToken cancellationToken,
         string? sniHost = null,
         bool failFastHandshake = true,
-        string? capabilityKey = null)
+        string? capabilityKey = null,
+        string? precomputedCacheKey = null)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
         var effectiveSniHost = sniHost ?? connectHost;
-        var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
+        var cacheKey = precomputedCacheKey ?? QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
             upStreamProxy, upStreamEndPoint);
         var entry = _pool.GetOrAdd(cacheKey, static _ => new OriginEntry());
 
@@ -185,6 +186,11 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     {
         var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost ?? connectHost,
             upStreamProxy, upStreamEndPoint);
+        return HasLiveConnection(cacheKey);
+    }
+
+    internal bool HasLiveConnection(string cacheKey)
+    {
         return _pool.TryGetValue(cacheKey, out var entry)
                && Volatile.Read(ref entry.Current) is { IsClosed: false };
     }

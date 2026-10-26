@@ -83,6 +83,7 @@ internal static partial class Http3OriginBridge
         sessionArgs.CustomUpStreamProxy = upstreamProxy;
         sessionArgs.CustomUpStreamProxyUsed = upstreamProxy;
         upstreamProxy ??= server.UpStreamHttpsProxy;
+        var poolKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost, upstreamProxy, upStreamEndPoint);
 
         QuicServerConnection? quicConn = null;
         // When true, StreamBodyWriter owns originStream + quicConn release (do not dispose/release here).
@@ -115,14 +116,13 @@ internal static partial class Http3OriginBridge
             // any chain that is not already trusted by the OS (breaking MITM-test and custom-CA
             // deployments for every H3→H3 origin connect).
             if (staleConnectionRetries == 0
-                && ShouldRaceTcp(sessionArgs, server, isForcedH3, connectHost, sniHost, port, upStreamEndPoint,
-                    upstreamProxy))
+                && ShouldRaceTcp(sessionArgs, server, isForcedH3, poolKey))
             {
                 // Cold QUIC origin: a handshake that never completes (UDP/443 dropped) must not hold the
                 // request for the whole timeout while a working TCP path is available.
                 var (racedConn, tcpWon) = await AcquireQuicRacingTcpAsync(
                     sessionArgs, server, logger, connectHost, sniHost, port, upStreamEndPoint, upstreamProxy,
-                    cancellationToken);
+                    poolKey, cancellationToken);
                 if (tcpWon)
                 {
                     try
@@ -148,7 +148,8 @@ internal static partial class Http3OriginBridge
                         server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
                     cancellationToken,
                     sniHost: sniHost,
-                    failFastHandshake: !isForcedH3);
+                    failFastHandshake: !isForcedH3,
+                    precomputedCacheKey: poolKey);
             }
 
             reused = !quicConn.ClaimFirstUse();

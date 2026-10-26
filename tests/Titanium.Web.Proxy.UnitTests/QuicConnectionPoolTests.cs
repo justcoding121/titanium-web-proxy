@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Quic;
 
@@ -273,6 +274,55 @@ public class QuicConnectionPoolTests
         Assert.AreEqual(1, conn.InFlightStreams);
         conn.ReleaseStream();
         await conn.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task PrecomputedCacheKey_SharesOneSlot_AndACancelledHandshakeDoesNotExtendTheBrokenWindow()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var factory = new FakeQuicFactory(proxy);
+        await using var pool = new QuicConnectionPool(proxy, factory);
+        const string key = "precomputed";
+
+        var first = await pool.GetOrCreateAsync("a.example", 443, null, null, null, CancellationToken.None,
+            precomputedCacheKey: key);
+        var second = await pool.GetOrCreateAsync("b.example", 443, null, null, null, CancellationToken.None,
+            precomputedCacheKey: key);
+        Assert.AreSame(first, second);
+        Assert.AreEqual(1, factory.CreateCount);
+        Assert.IsTrue(pool.HasLiveConnection(key));
+
+        var cancelled = new TaskCompletionSource<QuicServerConnection>();
+        cancelled.SetCanceled();
+        Http3OriginBridge.ObserveAbandonedQuicHandshake(cancelled.Task, proxy, "a.example:443");
+        await Task.Delay(50);
+        Assert.IsFalse(proxy.Http3OriginCapabilityCache.IsBroken("a.example:443"));
+
+        var faulted = Task.FromException<QuicServerConnection>(new System.IO.IOException("origin down"));
+        Http3OriginBridge.ObserveAbandonedQuicHandshake(faulted, proxy, "a.example:443");
+        await Task.Delay(50);
+        Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken("a.example:443"));
+    }
+
+    [TestMethod]
+    public async Task GetOrCreateAsync_CancelledDuringHandshake_ReturnsPromptly()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var factory = new FakeQuicFactory(proxy) { HandshakeDelay = TimeSpan.FromSeconds(30) };
+        await using var pool = new QuicConnectionPool(proxy, factory);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var started = Environment.TickCount64;
+        try
+        {
+            await pool.GetOrCreateAsync("slow.example", 443, null, null, null, cts.Token);
+            Assert.Fail("A cancelled acquire must not wait out the handshake.");
+        }
+        catch (OperationCanceledException)
+        {
+            // Task.WaitAsync reports cancellation as TaskCanceledException.
+        }
+
+        Assert.IsTrue(Environment.TickCount64 - started < 5_000);
     }
 
     [DataTestMethod]

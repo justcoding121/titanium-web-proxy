@@ -326,15 +326,14 @@ internal sealed class Http2OriginConnection : IDisposable
 
         var preface = Http2Helper.ConnectionPreface;
         connection.Http2SessionStarted = true;
-        await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
-        // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
-        await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
-        instance.AttachExclusiveFrameWriter();
-
-        _ = instance.ReadLoopAsync(instance.connectionCts.Token);
-
         try
         {
+            await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
+            // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
+            await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
+            instance.AttachExclusiveFrameWriter();
+
+            _ = instance.ReadLoopAsync(instance.connectionCts.Token);
             await instance.initialSettingsReceived.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
         }
         catch (Exception ex)

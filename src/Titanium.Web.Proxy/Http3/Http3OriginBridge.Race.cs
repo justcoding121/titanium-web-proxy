@@ -43,13 +43,11 @@ internal static partial class Http3OriginBridge
     ///     and (c) there is no live QUIC connection yet, so this request would pay a handshake.
     /// </summary>
     private static bool ShouldRaceTcp(
-        SessionEventArgs sessionArgs, ProxyServer server, bool isForcedH3, string connectHost, string sniHost,
-        int port, IPEndPoint? upStreamEndPoint, IExternalProxy? upstreamProxy)
+        SessionEventArgs sessionArgs, ProxyServer server, bool isForcedH3, string poolKey)
     {
         if (isForcedH3 || TcpRaceDelay <= TimeSpan.Zero) return false;
         if (!PrefersHttp2Origin(sessionArgs)) return false;
-        return !server.QuicConnectionPool.HasLiveConnection(connectHost, port, upStreamEndPoint, upstreamProxy,
-            sniHost);
+        return !server.QuicConnectionPool.HasLiveConnection(poolKey);
     }
 
     /// <summary>
@@ -61,7 +59,7 @@ internal static partial class Http3OriginBridge
     private static async Task<(QuicServerConnection? Quic, bool TcpWon)> AcquireQuicRacingTcpAsync( // NOSONAR S107 -- Origin identity and proxy flags stay explicit.
         SessionEventArgs sessionArgs, ProxyServer server, ILogger logger,
         string connectHost, string sniHost, int port, IPEndPoint? upStreamEndPoint,
-        IExternalProxy? upstreamProxy, CancellationToken cancellationToken)
+        IExternalProxy? upstreamProxy, string poolKey, CancellationToken cancellationToken)
     {
         var hostAndPort = $"{sniHost}:{sessionArgs.HttpClient.Request.GetOriginHostPort(port).Port}";
 
@@ -74,7 +72,8 @@ internal static partial class Http3OriginBridge
             CancellationToken.None,
             sniHost: sniHost,
             failFastHandshake: true,
-            capabilityKey: hostAndPort).AsTask();
+            capabilityKey: hostAndPort,
+            precomputedCacheKey: poolKey).AsTask();
 
         using var tcpCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
@@ -102,7 +101,7 @@ internal static partial class Http3OriginBridge
 
             // A QUIC failure propagates from here with the TCP leg left running: the caller's TCP
             // fallback then finds the connection that leg is already establishing.
-            var quic = await quicTask;
+            var quic = await quicTask.WaitAsync(cancellationToken);
 
             // QUIC won: the speculative TCP connection is not needed for this request.
             await tcpCts.CancelAsync();
@@ -126,17 +125,20 @@ internal static partial class Http3OriginBridge
     ///     Settles a QUIC handshake nobody is waiting for any more. Success hands the stream straight back
     ///     so the connection stays pooled and warm; a genuine failure marks the origin unreachable.
     /// </summary>
-    private static void ObserveAbandonedQuicHandshake(
+    internal static void ObserveAbandonedQuicHandshake(
         Task<QuicServerConnection> quicTask, ProxyServer server, string hostAndPort)
     {
-        _ = quicTask.ContinueWith(static async (t, state) =>
+        _ = quicTask.ContinueWith(static (t, state) =>
         {
             var (srv, key) = ((ProxyServer, string))state!;
             if (t.IsCompletedSuccessfully)
             {
-                await QuicConnectionPool.ReleaseAsync(t.Result);
+                _ = ReleaseQuietlyAsync(t.Result);
                 return;
             }
+
+            if (t.IsCanceled)
+                return;
 
             // Draining / disposed is shutdown, not a verdict on the origin (same rule as warm-up).
             if (t.Exception?.GetBaseException() is OperationCanceledException or ObjectDisposedException
@@ -146,6 +148,18 @@ internal static partial class Http3OriginBridge
             srv.NoteHttp3OriginUnreachable(key);
         }, (server, hostAndPort), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
+    }
+
+    private static async Task ReleaseQuietlyAsync(QuicServerConnection connection)
+    {
+        try
+        {
+            await QuicConnectionPool.ReleaseAsync(connection);
+        }
+        catch (Exception)
+        {
+            // The handshake already finished; releasing the stream is best effort.
+        }
     }
 
     /// <summary>
