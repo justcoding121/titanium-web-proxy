@@ -403,7 +403,7 @@ public class GapClosureTests
     {
         var host = new ProxyConfigHost(validators: [new RejectAll()]);
         var manager = new ClusterManager();
-        await Assert.ThrowsExceptionAsync<InvalidOperationException>(() => host.ApplyAsync(
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => host.ApplyAsync(
             new ProxyConfigSnapshot(),
             manager,
             _ => { }));

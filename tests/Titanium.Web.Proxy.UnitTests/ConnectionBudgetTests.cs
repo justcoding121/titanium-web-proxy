@@ -53,7 +53,7 @@ public class ConnectionBudgetTests
         budget.ExitWait();
         Assert.IsTrue(budget.TryReserve());
         Assert.AreEqual(2, budget.Open);
-        Assert.ThrowsException<ArgumentOutOfRangeException>(() => budget.SetMax(0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => budget.SetMax(0));
     }
 
     [TestMethod]

@@ -127,7 +127,7 @@ public class ConfigReaderTests
     [DataRow("listen 0;")]
     public void HttpServer_BadListen_Throws(string directive)
     {
-        Assert.ThrowsException<FormatException>(() => HttpServerConfigReader.Parse("server {\n" + directive + "\n}"));
+        Assert.ThrowsExactly<FormatException>(() => HttpServerConfigReader.Parse("server {\n" + directive + "\n}"));
     }
 
     [TestMethod]
@@ -135,7 +135,7 @@ public class ConfigReaderTests
     {
         var config = HttpServerConfigReader.Parse("# only a comment\n\n   \n");
         Assert.AreEqual(0, config.Routes.Count);
-        Assert.ThrowsException<ArgumentNullException>(() => HttpServerConfigReader.Parse(null!));
+        Assert.ThrowsExactly<ArgumentNullException>(() => HttpServerConfigReader.Parse(null!));
     }
 
     [TestMethod]
@@ -270,14 +270,14 @@ public class ConfigReaderTests
     [DataRow("{\"routes\":[{\"id\":\"r\"}]}")]
     public void Json_MissingRequiredFields_Throw(string json)
     {
-        Assert.ThrowsException<FormatException>(() => JsonReverseProxyDocument.Parse(json));
+        Assert.ThrowsExactly<FormatException>(() => JsonReverseProxyDocument.Parse(json));
     }
 
     [TestMethod]
     public void Json_NullAndEmptyInput_AreHandled()
     {
-        Assert.ThrowsException<ArgumentNullException>(() => JsonReverseProxyDocument.Parse(null!));
-        Assert.ThrowsException<InvalidOperationException>(() => JsonReverseProxyDocument.Parse("null"));
+        Assert.ThrowsExactly<ArgumentNullException>(() => JsonReverseProxyDocument.Parse(null!));
+        Assert.ThrowsExactly<InvalidOperationException>(() => JsonReverseProxyDocument.Parse("null"));
         var empty = JsonReverseProxyDocument.Parse("{}");
         Assert.AreEqual(0, empty.Routes.Count + empty.Clusters.Count + empty.Listeners.Count);
     }

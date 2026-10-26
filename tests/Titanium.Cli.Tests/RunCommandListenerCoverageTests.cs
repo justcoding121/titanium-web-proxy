@@ -148,7 +148,7 @@ public class RunCommandListenerCoverageTests
             Assert.IsTrue(authed.Options.AuthenticateFunc!("user", "secret").GetAwaiter().GetResult());
             Assert.IsFalse(authed.Options.AuthenticateFunc("user", "nope").GetAwaiter().GetResult());
             Assert.IsFalse(authed.Options.AuthenticateFunc("other", "secret").GetAwaiter().GetResult());
-            var missing = Assert.ThrowsException<TargetInvocationException>(() =>
+            var missing = Assert.ThrowsExactly<TargetInvocationException>(() =>
                 Invoke("CreateMasqueEndPoint", IPAddress.Loopback, new ListenerConfig
                 {
                     Port = 9,

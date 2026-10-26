@@ -60,7 +60,7 @@ public class ClientCertificateModeTests
 
             // Allow does not mean "trust anything". A certificate that does not chain to a trusted root
             // is refused, so its subject can never reach the origin as identity.
-            await Assert.ThrowsExceptionAsync<HttpRequestException>(() => GetAsync(endPoint.Port, clientCert));
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => GetAsync(endPoint.Port, clientCert));
         }
         finally
         {
@@ -91,7 +91,7 @@ public class ClientCertificateModeTests
         proxy.Start();
         try
         {
-            await Assert.ThrowsExceptionAsync<HttpRequestException>(() => GetAsync(endPoint.Port, clientCertificate: null));
+            await Assert.ThrowsExactlyAsync<HttpRequestException>(() => GetAsync(endPoint.Port, clientCertificate: null));
         }
         finally
         {

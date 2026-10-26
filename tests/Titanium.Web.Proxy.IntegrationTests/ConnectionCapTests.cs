@@ -167,7 +167,7 @@ public class ConnectionCapTests
         var held = GetAsync(proxy);
         await origin.WaitForAcceptedAsync(1);
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
-        await Assert.ThrowsExceptionAsync<TaskCanceledException>(() => GetAsync(proxy, cts.Token));
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(() => GetAsync(proxy, cts.Token));
         Assert.AreEqual(1, proxy.TcpConnectionFactory.BudgetOpenForTests());
         origin.Release();
         using var finished = await held;
