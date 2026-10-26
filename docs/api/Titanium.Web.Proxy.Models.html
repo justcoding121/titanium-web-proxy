@@ -88,7 +88,8 @@ Classes
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.AltSvcOptions.html">AltSvcOptions</a></h4>
       <section><p>Client-facing <code>Alt-Svc</code> advertisement for a dual-listen HTTP/3 endpoint.
 <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> on the endpoint keeps today's header (<code>h3=&quot;:port&quot;; ma=86400</code>)
-whenever <a class="xref" href="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3">EnableHttp3</a> is on.</p>
+whenever <a class="xref" href="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3">EnableHttp3</a> is on.
+Assign a new instance to apply changes; the endpoint caches the header text when this object is assigned.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html">DecryptFailureBypassEntry</a></h4>
       <section><p>A host that the proxy learned to tunnel without decrypt after repeated origin TLS
@@ -108,7 +109,8 @@ So client application know that it is communicating with a proxy server.</p>
       <section><p>Safe defaults for a <a class="xref" href="Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html">MasqueProxyEndPoint</a>.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html">MasqueProxyEndPoint</a></h4>
-      <section><p>TLS listener for CONNECT-UDP (RFC 9298) over HTTP/2 capsules. Clients speak ALPN h2.
+      <section><p>TLS listener for CONNECT-UDP (RFC 9298). Clients speak ALPN h2 unless
+<a class="xref" href="Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowHttp11Upgrade">AllowHttp11Upgrade</a> is set.
 The relay is opaque: tunneled QUIC stays encrypted. Experimental.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html">ProxyAuthenticationContext</a></h4>

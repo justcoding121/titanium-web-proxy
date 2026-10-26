@@ -3598,6 +3598,57 @@ references:
   commentId: F:Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.ResponseHeader
   fullName: Titanium.Web.Proxy.Exceptions.ProxyTimeoutKind.ResponseHeader
   nameWithType: ProxyTimeoutKind.ResponseHeader
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException
+  name: UpstreamCapacityException
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html
+  commentId: T:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException
+  nameWithType: UpstreamCapacityException
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.#ctor(System.String,System.Int32)
+  name: UpstreamCapacityException(string, int)
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html#Titanium_Web_Proxy_Exceptions_UpstreamCapacityException__ctor_System_String_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.#ctor(System.String,System.Int32)
+  name.vb: New(String, Integer)
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.UpstreamCapacityException(string, int)
+  fullName.vb: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.New(String, Integer)
+  nameWithType: UpstreamCapacityException.UpstreamCapacityException(string, int)
+  nameWithType.vb: UpstreamCapacityException.New(String, Integer)
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.#ctor*
+  name: UpstreamCapacityException
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html#Titanium_Web_Proxy_Exceptions_UpstreamCapacityException__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.UpstreamCapacityException
+  fullName.vb: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.New
+  nameWithType: UpstreamCapacityException.UpstreamCapacityException
+  nameWithType.vb: UpstreamCapacityException.New
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey
+  name: CacheKey
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html#Titanium_Web_Proxy_Exceptions_UpstreamCapacityException_CacheKey
+  commentId: P:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey
+  nameWithType: UpstreamCapacityException.CacheKey
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey*
+  name: CacheKey
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html#Titanium_Web_Proxy_Exceptions_UpstreamCapacityException_CacheKey_
+  commentId: Overload:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.CacheKey
+  nameWithType: UpstreamCapacityException.CacheKey
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max
+  name: Max
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html#Titanium_Web_Proxy_Exceptions_UpstreamCapacityException_Max
+  commentId: P:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max
+  nameWithType: UpstreamCapacityException.Max
+- uid: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max*
+  name: Max
+  href: api/Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html#Titanium_Web_Proxy_Exceptions_UpstreamCapacityException_Max_
+  commentId: Overload:Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.Max
+  nameWithType: UpstreamCapacityException.Max
 - uid: Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException
   name: UpstreamProxyConnectException
   href: api/Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.html
@@ -6524,6 +6575,19 @@ references:
   commentId: T:Titanium.Web.Proxy.Models.MasqueOptions
   fullName: Titanium.Web.Proxy.Models.MasqueOptions
   nameWithType: MasqueOptions
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade
+  name: AllowHttp11Upgrade
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowHttp11Upgrade
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade
+  nameWithType: MasqueOptions.AllowHttp11Upgrade
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade*
+  name: AllowHttp11Upgrade
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowHttp11Upgrade_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.AllowHttp11Upgrade
+  nameWithType: MasqueOptions.AllowHttp11Upgrade
 - uid: Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
   name: AllowedPorts
   href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowedPorts
@@ -6537,6 +6601,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.MasqueOptions.AllowedPorts
   nameWithType: MasqueOptions.AllowedPorts
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc
+  name: AuthenticateFunc
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AuthenticateFunc
+  commentId: P:Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc
+  nameWithType: MasqueOptions.AuthenticateFunc
+- uid: Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc*
+  name: AuthenticateFunc
+  href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AuthenticateFunc_
+  commentId: Overload:Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.MasqueOptions.AuthenticateFunc
+  nameWithType: MasqueOptions.AuthenticateFunc
 - uid: Titanium.Web.Proxy.Models.MasqueOptions.BlockPrivateTargets
   name: BlockPrivateTargets
   href: api/Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_BlockPrivateTargets
