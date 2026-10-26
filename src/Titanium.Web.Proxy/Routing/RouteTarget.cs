@@ -153,7 +153,8 @@ internal readonly struct RouteTarget
     private static ReadOnlySpan<char> DecodeUnreserved(string path, char[] buffer)
     {
         var n = 0;
-        for (var i = 0; i < path.Length; i++)
+        var i = 0;
+        while (i < path.Length)
         {
             var ch = path[i];
             if (ch == '%' && i + 2 < path.Length && TryHex(path[i + 1], out var hi) && TryHex(path[i + 2], out var lo))
@@ -162,12 +163,13 @@ internal readonly struct RouteTarget
                 if (IsUnreserved(decoded))
                 {
                     buffer[n++] = decoded;
-                    i += 2;
+                    i += 3;
                     continue;
                 }
             }
 
             buffer[n++] = ch;
+            i++;
         }
 
         return buffer.AsSpan(0, n);
