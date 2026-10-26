@@ -283,6 +283,13 @@ public partial class ProxyServer : IDisposable
     ///     In-flight sessions are cancelled; pooled upstream connections are cleared. The connection
     ///     factory itself stays usable for a subsequent Start (it is only disposed with the proxy).
     /// </summary>
+    /// <summary>
+    ///     True while a TCP client handler or an HTTP/3 client connection is still running. TCP uses the
+    ///     admission count, which drops when the handler returns. <see cref="ClientConnectionCount" />
+    ///     lags by one second when <see cref="TcpTimeWaitSeconds" /> is set, which would add that second to every stop.
+    /// </summary>
+    private bool ClientHandlersRunning => AdmittedClientConnectionCount > 0 || Http3ClientConnectionCount > 0;
+
     /// <summary>Stops admitting clients, waits for in-flight work, then stops.</summary>
     public async Task DrainAsync(TimeSpan timeout)
     {
@@ -293,7 +300,7 @@ public partial class ProxyServer : IDisposable
         }
 
         var deadline = DateTime.UtcNow + timeout;
-        while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
+        while (ClientHandlersRunning && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
         }
@@ -328,7 +335,7 @@ public partial class ProxyServer : IDisposable
         // Http3ClientConnectionCount tracks inbound QUIC clients separately from
         // ClientConnectionCount (TCP-based H1/H2); draining only the former would let this
         // return, and the pools below get cleared, while HTTP/3 streams are still in flight.
-        while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
+        while (ClientHandlersRunning && DateTime.UtcNow < deadline)
             // StopCore already cancelled quicListenerCts; drain polling must not share that token.
             await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
 

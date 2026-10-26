@@ -29,6 +29,8 @@ internal sealed class MirrorDispatcher : IDisposable
     private const int MaxQueued = 32;
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(2);
     private readonly ConcurrentDictionary<string, Lane> lanes = new(StringComparer.Ordinal);
+    private readonly CancellationTokenSource shutdown = new();
+    private readonly CancellationToken shutdownToken;
     private int queued;
     private int dropped;
     private int skipped;
@@ -36,6 +38,8 @@ internal sealed class MirrorDispatcher : IDisposable
     private int failed;
     private int holdEntries;
     private int disposed;
+
+    public MirrorDispatcher() => shutdownToken = shutdown.Token;
 
     /// <summary>Test sink. When set, nothing is queued.</summary>
     internal Action<string, string, string>? Observed { get; set; }
@@ -147,22 +151,19 @@ internal sealed class MirrorDispatcher : IDisposable
             return;
         }
 
-        var running = new List<Task>();
+        // A mirror copy is best effort, so there is nothing to wait for. Cancelling ends an open send
+        // at once, and the workers exit on their own once their queue is empty and complete.
+        shutdown.Cancel();
         foreach (var lane in lanes.Values)
         {
             lane.Queue.Writer.TryComplete();
-            lock (lane.Gate)
+            while (lane.Queue.Reader.TryRead(out _))
             {
-                running.AddRange(lane.Tasks);
+                // Copies that never started are dropped with the proxy.
             }
         }
 
-        if (running.Count == 0)
-        {
-            return;
-        }
-
-        Task.WhenAll(running).Wait(TimeSpan.FromSeconds(1));
+        shutdown.Dispose();
     }
 
     private void EnsureWorkers(Lane lane, int requested)
@@ -286,11 +287,15 @@ internal sealed class MirrorDispatcher : IDisposable
                     }
                     else
                     {
-                        await SendAsync(work).ConfigureAwait(false);
+                        await SendAsync(work, shutdownToken).ConfigureAwait(false);
                     }
 
                     Interlocked.Increment(ref sent);
                     ProxyMetrics.RecordMirrorSent();
+                }
+                catch (OperationCanceledException) when (Volatile.Read(ref disposed) != 0)
+                {
+                    // The proxy is stopping. A cancelled copy is not a failed one.
                 }
                 catch
                 {
@@ -301,10 +306,11 @@ internal sealed class MirrorDispatcher : IDisposable
         }
     }
 
-    private static async Task SendAsync(MirrorWork work)
+    private static async Task SendAsync(MirrorWork work, CancellationToken stopping)
     {
         using var client = new TcpClient();
-        using var timeout = new CancellationTokenSource(SendTimeout);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stopping);
+        timeout.CancelAfter(SendTimeout);
         await client.ConnectAsync(work.Host, work.Port, timeout.Token).ConfigureAwait(false);
         Stream stream = client.GetStream();
         if (work.UseHttps)

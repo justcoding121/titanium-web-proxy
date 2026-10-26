@@ -281,6 +281,34 @@ public class GapClosureTests
     }
 
     [TestMethod]
+    public async Task Mirror_DisposeDoesNotWaitForASendThatIsStillOpen()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            var accepted = listener.AcceptTcpClientAsync();
+            var fanout = new MirrorDispatcher();
+            fanout.TryEnqueue(
+                new MirrorConfig { ClusterId = "m" },
+                MirrorRequest(),
+                new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = ((IPEndPoint)listener.LocalEndpoint).Port });
+            using var client = await accepted.WaitAsync(TimeSpan.FromSeconds(3));
+            await Task.Delay(100);
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            fanout.Dispose();
+            stopwatch.Stop();
+
+            Assert.IsTrue(stopwatch.ElapsedMilliseconds < 300, $"dispose took {stopwatch.ElapsedMilliseconds} ms");
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [TestMethod]
     public async Task Mirror_ABusyRouteDoesNotDelayAnotherRoute()
     {
         var slowGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
