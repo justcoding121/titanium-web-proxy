@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Http;
 
@@ -18,35 +19,46 @@ internal static class TrafficSplit
         }
 
         var forced = ReadOverride(request, route.SplitOverrideHeader, route.SplitOverrideCookie);
-        if (forced is not null)
+        if (forced is not null && ContainsCluster(clusters, forced))
         {
-            for (var i = 0; i < clusters.Count; i++)
+            return forced;
+        }
+
+        var total = TotalWeight(clusters);
+        var draw = Draw is { } custom ? custom(total) : Random.Shared.Next(total);
+        return Pick(clusters, draw < 0 ? 0 : draw);
+    }
+
+    private static bool ContainsCluster(IReadOnlyList<WeightedCluster> clusters, string clusterId)
+    {
+        for (var i = 0; i < clusters.Count; i++)
+        {
+            if (string.Equals(clusters[i].ClusterId, clusterId, StringComparison.Ordinal))
             {
-                if (string.Equals(clusters[i].ClusterId, forced, StringComparison.Ordinal))
-                {
-                    return forced;
-                }
+                return true;
             }
         }
 
+        return false;
+    }
+
+    private static int TotalWeight(IReadOnlyList<WeightedCluster> clusters)
+    {
         var total = 0;
         for (var i = 0; i < clusters.Count; i++)
         {
-            var weight = clusters[i].Weight;
-            total += weight < 1 ? 1 : weight;
+            total += EffectiveWeight(clusters[i].Weight);
         }
 
-        var draw = Draw is { } custom ? custom(total) : Random.Shared.Next(total);
-        if (draw < 0)
-        {
-            draw = 0;
-        }
+        return total;
+    }
 
+    private static string Pick(IReadOnlyList<WeightedCluster> clusters, int draw)
+    {
         var cursor = 0;
         for (var i = 0; i < clusters.Count; i++)
         {
-            var weight = clusters[i].Weight;
-            cursor += weight < 1 ? 1 : weight;
+            cursor += EffectiveWeight(clusters[i].Weight);
             if (draw < cursor)
             {
                 return clusters[i].ClusterId;
@@ -55,6 +67,8 @@ internal static class TrafficSplit
 
         return clusters[0].ClusterId;
     }
+
+    private static int EffectiveWeight(int weight) => weight < 1 ? 1 : weight;
 
     internal static string? ReadOverride(Request request, string? headerName, string? cookieName)
     {
