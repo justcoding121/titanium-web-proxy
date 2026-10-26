@@ -149,13 +149,17 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                         cacheKey, remoteCertificateValidationCallback, cancellationToken,
                         failFastHandshake);
                 }
-                catch (Exception ex) when (capabilityKey != null && !_draining
+                catch (Exception ex) when (capabilityKey != null
                                            && ex is not (OperationCanceledException or ObjectDisposedException
                                                or InvalidOperationException))
                 {
-                    // Mark while still holding CreationGate. Releasing it first would let a caller queued
-                    // behind this handshake dial again before the verdict is visible.
-                    _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+                    // Re-read after the await. A drain can start while the handshake is in flight, and the
+                    // check before the dial does not cover that. Mark while still holding CreationGate.
+                    if (!_draining)
+                    {
+                        _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+                    }
+
                     throw;
                 }
 

@@ -105,7 +105,7 @@ internal static class MasqueTunnel
                     }
                 }
 
-                candidate.Connect(new IPEndPoint(address, port));
+                await candidate.ConnectAsync(new IPEndPoint(address, port), cancellationToken).ConfigureAwait(false);
                 udp = candidate;
                 break;
             }

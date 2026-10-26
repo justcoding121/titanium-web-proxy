@@ -154,7 +154,7 @@ internal static class RoutePolicies
         }
 
         var decision = Evaluate(options, route, request, client?.Address);
-        if (!decision.Stop)
+        if (!decision.Rejected)
         {
             return false;
         }
@@ -178,7 +178,7 @@ internal static class RoutePolicies
             args.Extras.HeldConnectionPolicy = decision.Held;
         }
 
-        if (!decision.Stop)
+        if (!decision.Rejected)
         {
             return false;
         }
@@ -256,7 +256,7 @@ internal static class RoutePolicies
                     {
                         return Deny(new PolicyDecision
                         {
-                            Stop = true,
+                            Rejected = true,
                             Status = 204,
                             Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
                         });
@@ -281,7 +281,7 @@ internal static class RoutePolicies
 
     private static PolicyDecision Stop(int status, string body) => new()
     {
-        Stop = true,
+        Rejected = true,
         Status = status,
         Body = body,
     };
@@ -483,7 +483,7 @@ internal static class RoutePolicies
 
     private readonly struct PolicyDecision
     {
-        public bool Stop { get; init; }
+        public bool Rejected { get; init; }
         public int Status { get; init; }
         public string? Body { get; init; }
         public string? Held { get; init; }

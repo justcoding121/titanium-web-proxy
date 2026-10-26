@@ -584,18 +584,10 @@ internal class TcpConnectionFactory : IDisposable
 
             if (budget.TryReserve())
             {
-                try
-                {
-                    return await CreateReservedConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
-                        applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy,
-                        cacheKey, prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4,
-                        upStreamEndPointIPv6, createGate, budget, noCache);
-                }
-                catch
-                {
-                    // CreateReservedConnection releases the slot when it does not attach it.
-                    throw;
-                }
+                return await CreateReservedConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                    applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy,
+                    cacheKey, prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4,
+                    upStreamEndPointIPv6, createGate, budget, noCache);
             }
 
             if (noCache && TryEvictOneIdle(cacheKey))
