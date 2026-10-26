@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Network.Tcp;
 /// </summary>
 internal sealed class ConnectionBudget
 {
-    private readonly int max;
+    private int max;
     private readonly SemaphoreSlim signal = new(0);
     private int open;
     private int waiters;
@@ -26,7 +26,28 @@ internal sealed class ConnectionBudget
         this.max = max;
     }
 
-    public int Max => max;
+    public int Max => Volatile.Read(ref max);
+
+    /// <summary>How many callers are inside <see cref="WaitAsync" />. Tests use this instead of a fixed delay.</summary>
+    public int Waiters => Volatile.Read(ref waiters);
+
+    /// <summary>
+    ///     Changes the cap. A higher cap wakes one waiter. Zero and negative values are rejected.
+    /// </summary>
+    public void SetMax(int value)
+    {
+        if (value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+
+        var previous = Volatile.Read(ref max);
+        Volatile.Write(ref max, value);
+        if (value > previous)
+        {
+            Pulse();
+        }
+    }
 
     public int Open => Volatile.Read(ref open);
 
@@ -35,7 +56,7 @@ internal sealed class ConnectionBudget
         while (true)
         {
             var current = Volatile.Read(ref open);
-            if (current >= max)
+            if (current >= Volatile.Read(ref max))
             {
                 return false;
             }

@@ -235,7 +235,8 @@
                 "type": "string"
               },
               "maxConnectionsPerServer": {
-                "type": "integer"
+                "type": "integer",
+                "description": "Hard cap on open upstream connections per destination, including idle pooled sockets. Waiters time out after the connect timeout with 503 and Retry-After."
               },
               "requestTimeout": {
                 "type": "string"

@@ -40,6 +40,23 @@ public class ConnectionBudgetTests
     }
 
     [TestMethod]
+    [Timeout(3_000)]
+    public async Task CapReload_UsesNewMax()
+    {
+        var budget = new ConnectionBudget(1);
+        Assert.IsTrue(budget.TryReserve());
+        Assert.IsFalse(budget.TryReserve());
+        budget.EnterWait();
+        var waiting = budget.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None);
+        budget.SetMax(2);
+        Assert.IsTrue(await waiting);
+        budget.ExitWait();
+        Assert.IsTrue(budget.TryReserve());
+        Assert.AreEqual(2, budget.Open);
+        Assert.ThrowsException<ArgumentOutOfRangeException>(() => budget.SetMax(0));
+    }
+
+    [TestMethod]
     public void CapacityTimeout_IsNotReportedAsADestinationFailure()
     {
         using var proxy = new ProxyServer();

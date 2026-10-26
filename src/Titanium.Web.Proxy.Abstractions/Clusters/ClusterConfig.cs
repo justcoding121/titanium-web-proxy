@@ -133,11 +133,16 @@ public sealed class HashKeyConfig
     public string? Name { get; init; }
 }
 
-/// <summary>Upstream connection settings that change pool identity.</summary>
+/// <summary>Upstream connection settings. Non-default values change pool identity.</summary>
 public sealed class ClusterHttpClientConfig
 {
     public string? SslProtocols { get; init; }
     public bool AcceptAnyServerCertificate { get; init; }
+
+    /// <summary>
+    ///     Hard cap on open upstream connections per destination, including sockets sitting idle in the pool.
+    ///     Waiters time out after the connect timeout with 503 and Retry-After. Null means no cap.
+    /// </summary>
     public int? MaxConnectionsPerServer { get; init; }
 
     /// <summary>Null uses the process connect timeout.</summary>

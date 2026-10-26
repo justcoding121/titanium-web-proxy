@@ -33,6 +33,7 @@ Balanced (default) enforces header limits and allows 1000 concurrent streams, wi
 | Auth rounds / upstream attempts / token | 3 / 5 / 12288 | `server.limits.maxAuthChallengeRounds`, `server.limits.maxUpstreamProxyAuthenticationAttempts`, `server.limits.maxWinAuthTokenBytes` |
 | HTTP/2 flow-control wait | 60 s | `server.limits.http2WindowUpdateTimeoutSeconds` |
 | Client connections | unset | `server.pooling.maxConcurrentClientConnections`, `server.limits.maxConcurrentClients` |
+| Upstream connections per destination | unset | `clusters[].httpClient.maxConnectionsPerServer` is a hard cap on open upstream sockets, including idle pooled ones. Waiters time out after the connect timeout with 503 and Retry-After. |
 | Timeouts | 0 (off) unless PublicFacing | `server.timeouts.connectTimeOutSeconds`, `server.timeouts.responseHeaderTimeoutSeconds`, `server.timeouts.idleReadTimeoutSeconds`, `server.timeouts.idleWriteTimeoutSeconds`, `server.timeouts.requestTimeoutSeconds`, `server.timeouts.clientHeaderTimeoutSeconds` |
 | WebSocket frame | 16 MiB | `server.limits.maxWebSocketFramePayloadBytes` |
 

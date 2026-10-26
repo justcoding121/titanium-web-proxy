@@ -568,6 +568,7 @@ internal class TcpConnectionFactory : IDisposable
         SemaphoreSlim? createGate, int maxConnections, bool noCache)
     {
         var budget = budgets.GetOrAdd(cacheKey, static (_, max) => new ConnectionBudget(max), maxConnections);
+        budget.SetMax(maxConnections);
         var deadline = sessionArgs.ConnectTimeout
                        ?? sessionArgs.UpstreamHttpClient?.ConnectTimeout
                        ?? TimeSpan.FromSeconds(5);
@@ -597,6 +598,11 @@ internal class TcpConnectionFactory : IDisposable
                 }
             }
 
+            if (noCache && TryEvictOneIdle(cacheKey))
+            {
+                continue;
+            }
+
             var remaining = until - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero)
             {
@@ -617,6 +623,11 @@ internal class TcpConnectionFactory : IDisposable
                         applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy,
                         cacheKey, prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4,
                         upStreamEndPointIPv6, createGate, budget, noCache);
+                }
+
+                if (noCache && TryEvictOneIdle(cacheKey))
+                {
+                    continue;
                 }
 
                 remaining = until - DateTime.UtcNow;
@@ -687,6 +698,46 @@ internal class TcpConnectionFactory : IDisposable
             }
 
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Drops one idle pooled socket so a no-cache request (WebSocket, replay) can take its slot.
+    ///     The pooled socket still counts as open, so without this the request waits out the connect timeout.
+    /// </summary>
+    private bool TryEvictOneIdle(string cacheKey)
+    {
+        if (!cache.TryGetValue(cacheKey, out var queue))
+        {
+            return false;
+        }
+
+        poolLock.EnterReadLock();
+        try
+        {
+            lock (queue)
+            {
+                if (!cache.TryGetValue(cacheKey, out var current) || current != queue)
+                {
+                    return false;
+                }
+
+                if (!queue.TryDequeue(out var idle))
+                {
+                    return false;
+                }
+
+                if (idle.TryScheduleDisposal())
+                {
+                    disposalBag.Add(idle);
+                }
+
+                return true;
+            }
+        }
+        finally
+        {
+            poolLock.ExitReadLock();
         }
     }
 
@@ -1712,10 +1763,6 @@ internal class TcpConnectionFactory : IDisposable
         // Drop exclusive lease before pooling or disposing so the next Get can TryEnterLease.
         connection.ExitLease();
 
-        // One null check on the hot path. Capped clusters wake a waiter so an idle pooled
-        // connection is rented instead of timing out. Uncapped connections leave Budget null.
-        connection.Budget?.Pulse();
-
         // An ALPN=h2 or h2c-intent socket whose HTTP/2 connection preface was never written (a capability
         // probe or an unadopted prefetch) is not a usable h2 session: the origin applies a preface timeout
         // and tears it down - unobservably, since the pool's health check only tests writability and its TTL
@@ -1761,6 +1808,9 @@ internal class TcpConnectionFactory : IDisposable
                     // Lease exclusivity (TryEnterLease / ExitLease) already prevents concurrent use.
                     // Skipping ConcurrentQueue.Contains avoids an O(n) scan under high pool depth.
                     queue.Enqueue(connection);
+                    // Pulse after the socket is visible in the pool. An earlier pulse woke the
+                    // waiter while the queue was still empty, so it slept until the connect timeout.
+                    connection.Budget?.Pulse();
                     return Task.CompletedTask;
                 }
             }
