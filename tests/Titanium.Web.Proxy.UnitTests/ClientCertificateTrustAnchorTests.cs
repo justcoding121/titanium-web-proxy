@@ -98,6 +98,15 @@ public class ClientCertificateTrustAnchorTests
 
         var notBefore = DateTimeOffset.UtcNow.AddDays(-2);
         var notAfter = DateTimeOffset.UtcNow.AddDays(isCa ? 30 : 2);
+        if (issuer is not null)
+        {
+            var issuerEnd = new DateTimeOffset(issuer.NotAfter.ToUniversalTime(), TimeSpan.Zero);
+            if (notAfter > issuerEnd)
+            {
+                notAfter = issuerEnd;
+            }
+        }
+
         return issuer is null
             ? request.CreateSelfSigned(notBefore, notAfter)
             : request.Create(issuer, notBefore, notAfter, Guid.NewGuid().ToByteArray());
