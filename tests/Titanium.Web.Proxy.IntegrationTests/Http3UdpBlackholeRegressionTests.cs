@@ -269,6 +269,56 @@ public class Http3UdpBlackholeRegressionTests
         Assert.IsTrue(proxy.Http3OriginCapabilityCache.IsBroken(key));
     }
 
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task RecentQuicResponse_DoesNotReplayASlowGet()
+    {
+        RequireQuic();
+
+        var savedRace = Http3OriginBridge.TcpRaceDelay;
+        Http3OriginBridge.TcpRaceDelay = TimeSpan.FromSeconds(30);
+        try
+        {
+            using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+            AnswerWithAltSvc(origin);
+            await using var quicOrigin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate, origin.Port);
+            var seen = 0;
+            quicOrigin.HandleRequest(async _ =>
+            {
+                var n = Interlocked.Increment(ref seen);
+                if (n > 1)
+                {
+                    await Task.Delay(7_000);
+                    return new QuicHttp3Response(200, "slow");
+                }
+
+                return new QuicHttp3Response(200, "warm");
+            });
+
+            using var testSuite = new TestSuite();
+            var proxy = ConfigureProxy(testSuite);
+            proxy.ConnectTimeOutSeconds = 3;
+            var key = $"localhost:{origin.Port}";
+            proxy.Http3OriginCapabilityCache.Set(key, int.MinValue, TimeSpan.FromMinutes(5), targetName: null);
+            proxy.Http3WarmOrigins.Mark("localhost", origin.Port);
+
+            var (warmStatus, warmBody) = await GetThroughFreshConnectionAsync(proxy, origin.Port);
+            Assert.AreEqual(HttpStatusCode.OK, warmStatus, warmBody);
+            Assert.AreEqual("warm", warmBody);
+            await Task.Delay(1_000);
+
+            var (slowStatus, slowBody) = await GetThroughFreshConnectionAsync(proxy, origin.Port);
+            Assert.AreEqual(HttpStatusCode.OK, slowStatus, slowBody);
+            Assert.AreEqual("slow", slowBody);
+            Assert.AreEqual(2, Volatile.Read(ref seen), "A warm QUIC connection must not replay the slow GET.");
+            Assert.IsFalse(proxy.Http3OriginCapabilityCache.IsBroken(key));
+        }
+        finally
+        {
+            Http3OriginBridge.TcpRaceDelay = savedRace;
+        }
+    }
+
     private static void RequireQuic()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)

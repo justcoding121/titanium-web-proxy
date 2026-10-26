@@ -51,9 +51,9 @@ internal static partial class Http3OriginBridge
             return false;
 
         var method = request.Method;
-        return string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(method, "HEAD", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(method, "GET", StringComparison.Ordinal)
+               || string.Equals(method, "HEAD", StringComparison.Ordinal)
+               || string.Equals(method, "OPTIONS", StringComparison.Ordinal);
     }
 
     /// <summary>

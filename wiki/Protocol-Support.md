@@ -151,6 +151,10 @@ See also the advertised=enforced consolidation in [Migration from 4.x](Migration
 ## HTTP/3 (QUIC) — opt-in, experimental
 
 HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
+A silent QUIC origin is replayed over TCP only for a safe bodiless request, and only when that QUIC
+connection has not delivered a response in the last 30 seconds. A busy connection is left alone.
+The first request on an idle connection can still be replayed. Operators who do not want QUIC set
+an upstream policy of HTTP/2 or HTTP/1.1.
 It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime.
 CLI/Inspector Release zips bundle natives per RID (Windows uses OS MsQuic on Win11/Server 2022+).
 NuGet library hosts install system `libmsquic` on Linux/macOS (or bundle with `@loader_path` on macOS) — see [HTTP-3](HTTP-3).

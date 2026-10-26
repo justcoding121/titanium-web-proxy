@@ -212,7 +212,8 @@ internal static partial class Http3OriginBridge
 
             // A silent QUIC path (handshake fine, no response) would otherwise hold the request until the
             // idle timeout. Bound only the very first frame, and only when replaying over TCP is safe.
-            var guardFirstFrame = !isForcedH3 && IsReplayableOnStall(request, finOnHeaders);
+            var guardFirstFrame = !isForcedH3 && IsReplayableOnStall(request, finOnHeaders)
+                && !quicConn.HasDeliveredRecently(30_000);
 
             while (true)
             {
@@ -271,6 +272,7 @@ internal static partial class Http3OriginBridge
             }
 
             sessionArgs.Timing?.MarkResponseHeadersReceived();
+            quicConn.NoteResponse();
 
             var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
             response.RequestMethod = request.Method;
