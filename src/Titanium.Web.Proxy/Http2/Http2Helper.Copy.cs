@@ -1379,7 +1379,8 @@ namespace Titanium.Web.Proxy.Http2
                             {
                                 var chunk = new byte[tunnelLen];
                                 Buffer.BlockCopy(buffer, tunnelOff, chunk, 0, tunnelLen);
-                                if (!tunnelState.InboundTunnelChannel.Writer.TryWrite(chunk))
+                                if (!tunnelState.InboundTunnelChannel.Writer.TryWrite(chunk)
+                                    && !tunnelState.InboundTunnelChannel.Reader.Completion.IsCompleted)
                                 {
                                     ReportException(logger, new ProxyHttpException(
                                         "HTTP/2 extended CONNECT stream exceeded its bounded relay buffer.",
@@ -1458,7 +1459,8 @@ namespace Titanium.Web.Proxy.Http2
                             var chunk = new byte[dataLen];
                             Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
                             if (!dataStreamState.InboundTunnelChannel.Writer.TryWrite(
-                                    new ReadOnlyMemory<byte>(chunk)))
+                                    new ReadOnlyMemory<byte>(chunk))
+                                && !dataStreamState.InboundTunnelChannel.Reader.Completion.IsCompleted)
                             {
                                 ReportException(logger, new ProxyHttpException(
                                     "HTTP/2 extended CONNECT stream exceeded its bounded relay buffer.",

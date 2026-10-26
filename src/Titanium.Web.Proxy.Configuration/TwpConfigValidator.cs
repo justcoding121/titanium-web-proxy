@@ -366,6 +366,11 @@ public static class TwpConfigValidator
             {
                 if (masque.AllowedPorts is { } ports)
                 {
+                    if (ports.Length == 0)
+                    {
+                        errors.Add($"Listener port {listener.Port}: masque.allowedPorts must not be empty.");
+                    }
+
                     foreach (var allowed in ports)
                     {
                         if (allowed is < 1 or > 65535)
@@ -373,6 +378,23 @@ public static class TwpConfigValidator
                             errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
                         }
                     }
+                }
+
+                if (masque.MaxTunnels is int maxTunnels && masque.MaxTunnelsPerClient is int perClient
+                    && perClient > maxTunnels)
+                {
+                    errors.Add(
+                        $"Listener port {listener.Port}: masque.maxTunnelsPerClient must not exceed maxTunnels.");
+                }
+
+                if (masque.MaxDatagramsPerSecond is > 1_000_000)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.maxDatagramsPerSecond must be at most 1000000.");
+                }
+
+                if (masque.MaxBytesPerSecond is > 1_073_741_824)
+                {
+                    errors.Add($"Listener port {listener.Port}: masque.maxBytesPerSecond must be at most 1073741824.");
                 }
 
                 if (masque.MaxTunnels is <= 0)

@@ -74,6 +74,7 @@ internal sealed class CapsuleReader
 
                 if (decoded > maxCapsuleBytes)
                 {
+                    Dropped++;
                     skipRemaining = decoded;
                     phase = skipRemaining == 0 ? Phase.Type : Phase.Skip;
                     continue;
@@ -160,6 +161,7 @@ internal sealed class CapsuleReader
 
         if (contextId != 0)
         {
+            Dropped++;
             return;
         }
 

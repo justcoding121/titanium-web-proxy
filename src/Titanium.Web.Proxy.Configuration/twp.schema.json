@@ -377,16 +377,22 @@
                 "type": "integer"
               },
               "maxBytesPerSecond": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1073741824
               },
               "maxDatagramsPerSecond": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000000
               },
               "maxTunnels": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1
               },
               "maxTunnelsPerClient": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": 1
               },
               "requireAuth": {
                 "type": "boolean"

@@ -129,9 +129,15 @@ public partial class ProxyServer
         }
 
         var capsule = request.Headers.GetFirstHeader("capsule-protocol")?.Value;
-        if (!string.Equals(capsule, "?1", StringComparison.Ordinal))
+        if (!MasqueRequestChecks.CapsuleProtocolAccepted(capsule))
         {
-            Reject(session, endPoint, 400, "capsule-protocol: ?1 is required");
+            Reject(session, endPoint, 400, "capsule-protocol must be absent or ?1");
+            return;
+        }
+
+        if (request.Authority.Length == 0 || !request.IsHttps)
+        {
+            Reject(session, endPoint, 400, "connect-udp requires an https authority");
             return;
         }
 
@@ -141,29 +147,7 @@ public partial class ProxyServer
             return;
         }
 
-        IPAddress[] resolved;
-        try
-        {
-            resolved = IPAddress.TryParse(host, out var literal)
-                ? [literal]
-                : await Dns.GetHostAddressesAsync(host, ctx.CancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            ProxyDiagnostics.ReportBenign(logger, "MASQUE target DNS failed", ex);
-            resolved = [];
-        }
-
-        var pin = MasqueTargetPolicy.Select(host, port, endPoint.Options.AllowedPorts,
-            endPoint.Options.BlockPrivateTargets, _ => resolved);
-        if (pin.Address is null)
-        {
-            var status = pin.Rejection == "port" || pin.Rejection == "blocked" ? 403 : 502;
-            Reject(session, endPoint, status, "connect-udp target was rejected");
-            return;
-        }
-
-        var client = session.ClientRemoteEndPoint.Address;
+        var client = MasqueProxyEndPoint.ClientKey(session.ClientRemoteEndPoint.Address);
         if (!endPoint.TryAdmit(client))
         {
             session.GenericResponse("too many connect-udp tunnels", (HttpStatusCode)429,
@@ -171,22 +155,88 @@ public partial class ProxyServer
             return;
         }
 
+        var ownsSlot = true;
+        try
+        {
         if (!ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var streamState))
         {
-            endPoint.ReleaseTunnel(client);
+            Reject(session, endPoint, 500, "internal error");
             return;
         }
 
-        var udp = new Socket(pin.Address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        IPAddress[] resolved;
         try
         {
-            udp.Connect(new IPEndPoint(pin.Address, port));
+            if (IPAddress.TryParse(host, out var literal))
+            {
+                resolved = [literal];
+            }
+            else if (endPoint.Options.DnsResolver is { } resolver)
+            {
+                resolved = await resolver(host, ctx.CancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                resolved = await Dns.GetHostAddressesAsync(host, ctx.CancellationToken).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
-            udp.Dispose();
-            endPoint.ReleaseTunnel(client);
-            ProxyDiagnostics.ReportBenign(logger, "MASQUE UDP connect failed", ex);
+            ProxyDiagnostics.ReportBenign(logger, "MASQUE target DNS failed", ex);
+            resolved = [];
+        }
+
+        var allowed = MasqueTargetPolicy.SelectAll(port, endPoint.Options.AllowedPorts,
+            endPoint.Options.BlockPrivateTargets, resolved, out var rejection);
+        if (allowed.Count == 0)
+        {
+            var status = rejection == "port" || rejection == "blocked" ? 403 : 502;
+            Reject(session, endPoint, status, "connect-udp target was rejected");
+            return;
+        }
+
+        Socket? udp = null;
+        var connected = false;
+        Exception? connectError = null;
+        foreach (var address in allowed)
+        {
+            Socket? candidate = null;
+            try
+            {
+                candidate = endPoint.Options.SocketFactory?.Invoke(address.AddressFamily)
+                            ?? new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                if (OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        // Disable SIO_UDP_CONNRESET so an ICMP unreachable does not kill the tunnel.
+                        candidate.IOControl(-1744830452, new byte[4], null);
+                    }
+                    catch (Exception)
+                    {
+                        // The receive loop still tolerates ConnectionReset.
+                    }
+                }
+
+                candidate.Connect(new IPEndPoint(address, port));
+                udp = candidate;
+                connected = true;
+                break;
+            }
+            catch (Exception ex)
+            {
+                connectError = ex;
+                candidate?.Dispose();
+            }
+        }
+
+        if (!connected || udp is null)
+        {
+            if (connectError is not null)
+            {
+                ProxyDiagnostics.ReportBenign(logger, "MASQUE UDP connect failed", connectError);
+            }
+
             Reject(session, endPoint, 502, "connect-udp target was rejected");
             return;
         }
@@ -228,37 +278,47 @@ public partial class ProxyServer
             StatusDescription = "OK",
         };
         response.Headers.AddHeader("capsule-protocol", "?1");
+        ownsSlot = false;
         // RespondStreaming marks the request cancelled so the HTTP/2 dispatcher emits this
         // response once. Emitting it here as well races that dispatcher.
         session.RespondStreaming(response, async (body, token) =>
         {
             try
             {
-                await RelayAsync(endPoint, inbound.Reader, body, udp, token).ConfigureAwait(false);
+                await RelayAsync(endPoint, inbound.Reader, body, udp, logger, token).ConfigureAwait(false);
             }
             finally
             {
                 ReleaseOnce();
             }
         });
+        }
+        finally
+        {
+            if (ownsSlot)
+            {
+                endPoint.ReleaseTunnel(client);
+            }
+        }
     }
 
     private static async Task RelayAsync(MasqueProxyEndPoint endPoint, ChannelReader<ReadOnlyMemory<byte>> inbound,
-        Stream body, Socket udp, CancellationToken cancellationToken)
+        Stream body, Socket udp, Microsoft.Extensions.Logging.ILogger logger, CancellationToken cancellationToken)
     {
         using var relay = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var channel = new CapsuleDatagramChannel(inbound, body);
         var budget = new DatagramBudget(endPoint.Options.MaxDatagramsPerSecond, endPoint.Options.MaxBytesPerSecond);
-        var last = Environment.TickCount64;
+        var idle = new IdleClock();
         var idleMs = (long)endPoint.Options.IdleTimeout.TotalMilliseconds;
         var toTarget = channel.RunClientToTargetAsync(payload =>
         {
-            last = Environment.TickCount64;
             if (!budget.TryTake(payload.Length))
             {
                 endPoint.CountDrop();
                 return;
             }
+
+            idle.Touch();
 
             try
             {
@@ -272,10 +332,10 @@ public partial class ProxyServer
 
             endPoint.CountDatagram(fromClient: true);
         }, relay.Token).AsTask();
-        var toClient = ReceiveTargetAsync(endPoint, channel, udp, budget, () => last = Environment.TickCount64, relay.Token);
+        var toClient = ReceiveTargetAsync(endPoint, channel, udp, budget, idle, relay.Token);
         var writer = channel.WriteQueuedAsync(relay.Token).AsTask();
-        var idle = WatchIdleAsync(endPoint, () => last, idleMs, relay);
-        await Task.WhenAny(toTarget, toClient, writer, idle).ConfigureAwait(false);
+        var idleWatch = WatchIdleAsync(endPoint, idle, idleMs, relay);
+        await Task.WhenAny(toTarget, toClient, writer, idleWatch).ConfigureAwait(false);
         await relay.CancelAsync().ConfigureAwait(false);
         try
         {
@@ -287,27 +347,54 @@ public partial class ProxyServer
         }
 
         await Task.WhenAll(
-            toTarget.ContinueWith(static _ => { }, TaskScheduler.Default),
-            toClient.ContinueWith(static _ => { }, TaskScheduler.Default),
-            writer.ContinueWith(static _ => { }, TaskScheduler.Default)).ConfigureAwait(false);
+            ObserveRelayAsync(toTarget, logger),
+            ObserveRelayAsync(toClient, logger),
+            ObserveRelayAsync(writer, logger)).ConfigureAwait(false);
+    }
+
+    private static async Task ObserveRelayAsync(Task task, Microsoft.Extensions.Logging.ILogger logger)
+    {
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // The tunnel is closing.
+        }
+        catch (Exception ex)
+        {
+            ProxyDiagnostics.ReportBenign(logger, "MASQUE relay task faulted", ex);
+        }
     }
 
     private static async Task ReceiveTargetAsync(MasqueProxyEndPoint endPoint, CapsuleDatagramChannel channel,
-        Socket udp, DatagramBudget budget, Action touch, CancellationToken cancellationToken)
+        Socket udp, DatagramBudget budget, IdleClock idle, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(CapsuleReader.DefaultMaxDatagramBytes);
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var read = await udp.ReceiveAsync(buffer.AsMemory(0, CapsuleReader.DefaultMaxDatagramBytes),
-                    cancellationToken).ConfigureAwait(false);
-                touch();
+                int read;
+                try
+                {
+                    read = await udp.ReceiveAsync(buffer.AsMemory(0, CapsuleReader.DefaultMaxDatagramBytes),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset or SocketError.MessageSize)
+                {
+                    endPoint.CountDrop();
+                    continue;
+                }
+
                 if (!budget.TryTake(read))
                 {
                     endPoint.CountDrop();
                     continue;
                 }
+
+                idle.Touch();
 
                 if (!channel.TryQueueToClient(buffer.AsSpan(0, read)))
                 {
@@ -328,13 +415,13 @@ public partial class ProxyServer
         }
     }
 
-    private static async Task WatchIdleAsync(MasqueProxyEndPoint endPoint, Func<long> last, long idleMs,
+    private static async Task WatchIdleAsync(MasqueProxyEndPoint endPoint, IdleClock idle, long idleMs,
         CancellationTokenSource relay)
     {
         while (!relay.IsCancellationRequested)
         {
             await Task.Delay(500, relay.Token).ConfigureAwait(false);
-            if (Environment.TickCount64 - last() > idleMs)
+            if (Environment.TickCount64 - idle.Last > idleMs)
             {
                 endPoint.CountIdleClose();
                 await relay.CancelAsync().ConfigureAwait(false);
@@ -389,6 +476,16 @@ public partial class ProxyServer
     }
 }
 
+/// <summary>Last activity time shared by the relay tasks without a torn read.</summary>
+internal sealed class IdleClock
+{
+    private long ticks = Environment.TickCount64;
+
+    public void Touch() => Volatile.Write(ref ticks, Environment.TickCount64);
+
+    public long Last => Volatile.Read(ref ticks);
+}
+
 /// <summary>One-second token bucket owned by a single tunnel.</summary>
 internal sealed class DatagramBudget
 {
@@ -420,7 +517,7 @@ internal sealed class DatagramBudget
                 bytes = 0;
             }
 
-            if (datagrams >= maxDatagrams || bytes + size > maxBytes)
+            if (datagrams >= maxDatagrams || (long)bytes + size > maxBytes)
             {
                 return false;
             }

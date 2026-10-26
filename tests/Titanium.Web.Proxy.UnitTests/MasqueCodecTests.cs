@@ -49,6 +49,21 @@ public class MasqueCodecTests
     }
 
     [TestMethod]
+    public void NonZeroContextId_IsCountedAsDropped()
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        var written = CapsuleReader.WriteVarint(buffer, 0);
+        written += CapsuleReader.WriteVarint(buffer[written..], 2);
+        written += CapsuleReader.WriteVarint(buffer[written..], 1);
+        buffer[written++] = 9;
+        var reader = new CapsuleReader();
+        var calls = 0;
+        reader.Feed(buffer[..written], _ => calls++);
+        Assert.AreEqual(0, calls);
+        Assert.AreEqual(1, reader.Dropped);
+    }
+
+    [TestMethod]
     public void OversizeDeclaredLength_IsSkippedWithoutBufferingIt()
     {
         Span<byte> header = stackalloc byte[16];
@@ -60,6 +75,7 @@ public class MasqueCodecTests
         var calls = 0;
         reader.Feed(blob, _ => calls++);
         Assert.AreEqual(0, calls);
+        Assert.AreEqual(1, reader.Dropped);
         Span<byte> next = stackalloc byte[32];
         var nextLen = CapsuleReader.WriteDatagram(next, "z"u8);
         reader.Feed(next[..nextLen], span =>
@@ -128,6 +144,80 @@ public class MasqueCodecTests
 
         var port = MasqueTargetPolicy.Select("1.2.3.4", 53, [443], blockPrivate: false, _ => []);
         Assert.AreEqual("port", port.Rejection);
+    }
+
+    [TestMethod]
+    public void Path_DecodesUtf8_KeepsATrailingDot_AndUnwrapsBracketedIpv6()
+    {
+        Assert.IsTrue(ConnectUdpPath.TryParse("/.well-known/masque/udp/caf%C3%A9/443/", out var host, out var port));
+        Assert.AreEqual("café", host);
+        Assert.AreEqual(443, port);
+
+        Assert.IsTrue(ConnectUdpPath.TryParse("/.well-known/masque/udp/localhost./443/", out host, out port));
+        Assert.AreEqual("localhost.", host);
+
+        Assert.IsTrue(ConnectUdpPath.TryParse(
+            "/.well-known/masque/udp/%5B2001%3Adb8%3A%3A1%5D/443/", out host, out port));
+        Assert.AreEqual("2001:db8::1", host);
+    }
+
+    [TestMethod]
+    public void Path_RejectsATruncatedEscape_ABadEscape_AndAHostOver255Bytes()
+    {
+        Assert.IsFalse(ConnectUdpPath.TryParse("/.well-known/masque/udp/%4/443/", out _, out _));
+        Assert.IsFalse(ConnectUdpPath.TryParse("/.well-known/masque/udp/%zz/443/", out _, out _));
+        var huge = new string('a', 256);
+        Assert.IsFalse(ConnectUdpPath.TryParse($"/.well-known/masque/udp/{huge}/443/", out _, out _));
+    }
+
+    [TestMethod]
+    public void CapsuleProtocol_AllowsOmittedAndParameters_AndRejectsFalse()
+    {
+        Assert.IsTrue(MasqueRequestChecks.CapsuleProtocolAccepted(null));
+        Assert.IsTrue(MasqueRequestChecks.CapsuleProtocolAccepted(" ?1 "));
+        Assert.IsTrue(MasqueRequestChecks.CapsuleProtocolAccepted("?1;a=1"));
+        Assert.IsFalse(MasqueRequestChecks.CapsuleProtocolAccepted("?0"));
+        Assert.IsFalse(MasqueRequestChecks.CapsuleProtocolAccepted("1"));
+    }
+
+    [TestMethod]
+    public void ClientKey_SharesASlash64_AndReleaseRemovesTheSlot()
+    {
+        var first = IPAddress.Parse("2001:db8:1:2:3:4:5:6");
+        var second = IPAddress.Parse("2001:db8:1:2:9:9:9:9");
+        Assert.AreEqual(MasqueProxyEndPoint.ClientKey(first), MasqueProxyEndPoint.ClientKey(second));
+        Assert.AreEqual(IPAddress.Parse("203.0.113.5"),
+            MasqueProxyEndPoint.ClientKey(IPAddress.Parse("::ffff:203.0.113.5")));
+
+        var endpoint = new MasqueProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            Options = new MasqueOptions { MaxTunnels = 4, MaxTunnelsPerClient = 1 },
+        };
+        var key = MasqueProxyEndPoint.ClientKey(first);
+        Assert.IsTrue(endpoint.TryAdmit(key));
+        Assert.IsFalse(endpoint.TryAdmit(MasqueProxyEndPoint.ClientKey(second)));
+        endpoint.ReleaseTunnel(key);
+        Assert.AreEqual(0, endpoint.ClientSlotsForTests);
+        Assert.AreEqual(0, endpoint.Active);
+    }
+
+    [TestMethod]
+    public void Policy_SelectAll_KeepsEveryPublicAddress()
+    {
+        var all = MasqueTargetPolicy.SelectAll(443, [443], blockPrivate: true,
+            [IPAddress.Parse("10.0.0.1"), IPAddress.Parse("1.2.3.4"), IPAddress.Parse("1.2.3.5")],
+            out var rejection);
+        Assert.IsNull(rejection);
+        Assert.AreEqual(2, all.Count);
+        Assert.AreEqual(IPAddress.Parse("1.2.3.4"), all[0]);
+    }
+
+    [TestMethod]
+    public void DatagramBudget_DoesNotWrapTheByteCounter()
+    {
+        var budget = new DatagramBudget(int.MaxValue, int.MaxValue, () => 10_000L);
+        Assert.IsTrue(budget.TryTake(int.MaxValue - 5));
+        Assert.IsFalse(budget.TryTake(10));
     }
 
     [TestMethod]

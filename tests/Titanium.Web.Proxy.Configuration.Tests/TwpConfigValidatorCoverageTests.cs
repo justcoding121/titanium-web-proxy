@@ -182,6 +182,37 @@ public class TwpConfigValidatorCoverageTests
     }
 
     [TestMethod]
+    public void Validate_Masque_RejectsEmptyPorts_AClientCapAboveTheListener_AndHugeRates()
+    {
+        var config = new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Type = "masque",
+                    Port = 443,
+                    Masque = new MasqueListenerConfig
+                    {
+                        RequireAuth = false,
+                        AllowedPorts = [],
+                        MaxTunnels = 2,
+                        MaxTunnelsPerClient = 8,
+                        MaxDatagramsPerSecond = 1_000_001,
+                        MaxBytesPerSecond = 1_073_741_825,
+                    },
+                },
+            ],
+        };
+
+        var errors = string.Join('\n', TwpConfigValidator.Validate(config));
+        Assert.IsTrue(errors.Contains("must not be empty", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("must not exceed maxTunnels", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("maxDatagramsPerSecond", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("maxBytesPerSecond", StringComparison.Ordinal), errors);
+    }
+
+    [TestMethod]
     public void Validate_Masque_RequiresCredentialsUnlessAuthIsOff()
     {
         var missing = TwpConfigValidator.Validate(new TwpConfig

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,6 +41,30 @@ public sealed class MasqueProxyEndPoint : ProxyEndPoint
     internal long Rejected => Volatile.Read(ref rejected);
 
     internal long Dropped => Volatile.Read(ref dropped);
+
+    /// <summary>IPv6 clients share one per-client slot across a /64. IPv4-mapped addresses unwrap.</summary>
+    internal static IPAddress ClientKey(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+        {
+            address = address.MapToIPv4();
+        }
+
+        if (address.AddressFamily != AddressFamily.InterNetworkV6)
+        {
+            return address;
+        }
+
+        var bytes = address.GetAddressBytes();
+        for (var i = 8; i < 16; i++)
+        {
+            bytes[i] = 0;
+        }
+
+        return new IPAddress(bytes);
+    }
+
+    internal int ClientSlotsForTests => clients.Count;
 
     internal bool TryAdmit(IPAddress client)
     {
@@ -88,7 +114,11 @@ public sealed class MasqueProxyEndPoint : ProxyEndPoint
 
     private void ReleaseClient(IPAddress client)
     {
-        clients.AddOrUpdate(client, 0, static (_, current) => current > 0 ? current - 1 : 0);
+        var next = clients.AddOrUpdate(client, 0, static (_, current) => current > 0 ? current - 1 : 0);
+        if (next == 0)
+        {
+            clients.TryRemove(new KeyValuePair<IPAddress, int>(client, 0));
+        }
     }
 }
 
@@ -117,4 +147,10 @@ public sealed class MasqueOptions
     public int MaxDatagramsPerSecond { get; set; } = 1000;
 
     public int MaxBytesPerSecond { get; set; } = 1_000_000;
+
+    /// <summary>Test seam. Null uses <see cref="Socket"/>.</summary>
+    internal Func<AddressFamily, Socket>? SocketFactory { get; set; }
+
+    /// <summary>Test seam. Null uses <see cref="Dns.GetHostAddressesAsync(string, CancellationToken)"/>.</summary>
+    internal Func<string, CancellationToken, Task<IPAddress[]>>? DnsResolver { get; set; }
 }
