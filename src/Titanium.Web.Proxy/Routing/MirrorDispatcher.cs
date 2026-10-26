@@ -101,7 +101,15 @@ internal sealed class MirrorDispatcher : IDisposable
             return;
         }
 
-        var port = destination.Port == 0 ? (destination.UseHttps ? 443 : 80) : destination.Port;
+        int port;
+        if (destination.Port == 0)
+        {
+            port = destination.UseHttps ? 443 : 80;
+        }
+        else
+        {
+            port = destination.Port;
+        }
         var work = new MirrorWork(
             destination.Address,
             port,

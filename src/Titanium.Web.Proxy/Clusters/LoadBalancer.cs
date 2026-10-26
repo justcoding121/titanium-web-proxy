@@ -131,7 +131,7 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         {
             var count = _health.GetActiveRequests(eligible[i].Id);
             var weight = eligible[i].Weight < 1 ? 1 : eligible[i].Weight;
-            if ((long)count * bestWeight < (long)bestCount * weight)
+            if (count * bestWeight < bestCount * weight)
             {
                 best = eligible[i];
                 bestCount = count;

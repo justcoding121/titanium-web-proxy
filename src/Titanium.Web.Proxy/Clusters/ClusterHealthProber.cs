@@ -56,12 +56,10 @@ internal sealed class ClusterHealthProber : IDisposable
                 _failures[dest.Id] = 0;
                 var streak = _successes.TryGetValue(dest.Id, out var n) ? n + 1 : 1;
                 _successes[dest.Id] = streak;
-                if (streak >= healthyNeed && _probeEjected.Contains(dest.Id))
+                if (streak >= healthyNeed && _probeEjected.Contains(dest.Id)
+                    && _manager.TrySetDestinationState(dest.Id, DestinationState.Unhealthy, DestinationState.Healthy))
                 {
-                    if (_manager.TrySetDestinationState(dest.Id, DestinationState.Unhealthy, DestinationState.Healthy))
-                    {
-                        _probeEjected.Remove(dest.Id);
-                    }
+                    _probeEjected.Remove(dest.Id);
                 }
             }
             else
@@ -171,7 +169,15 @@ internal sealed class ClusterHealthProber : IDisposable
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, active.TimeoutSeconds)));
         try
         {
-            var port = dest.Port == 0 ? (dest.UseHttps ? 443 : 80) : dest.Port;
+            int port;
+            if (dest.Port == 0)
+            {
+                port = dest.UseHttps ? 443 : 80;
+            }
+            else
+            {
+                port = dest.Port;
+            }
             if (active.Kind == ActiveHealthKind.Tcp)
             {
                 using var tcp = new TcpClient();
@@ -181,9 +187,19 @@ internal sealed class ClusterHealthProber : IDisposable
 
             var scheme = dest.UseHttps ? "https" : "http";
             var path = string.IsNullOrEmpty(active.Path) ? "/" : active.Path;
-            var query = string.IsNullOrEmpty(active.Query)
-                ? string.Empty
-                : active.Query.StartsWith('?') ? active.Query : "?" + active.Query;
+            string query;
+            if (string.IsNullOrEmpty(active.Query))
+            {
+                query = string.Empty;
+            }
+            else if (active.Query.StartsWith('?'))
+            {
+                query = active.Query;
+            }
+            else
+            {
+                query = "?" + active.Query;
+            }
             using var response = await Http.GetAsync($"{scheme}://{dest.Address}:{port}{path}{query}", timeout.Token)
                 .ConfigureAwait(false);
             var code = (int)response.StatusCode;

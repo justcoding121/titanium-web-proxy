@@ -18,10 +18,7 @@ internal sealed class ConnectionBudget
 
     public ConnectionBudget(int max)
     {
-        if (max <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(max));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(max);
 
         this.max = max;
     }

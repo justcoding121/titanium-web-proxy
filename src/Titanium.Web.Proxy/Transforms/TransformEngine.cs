@@ -8,6 +8,8 @@ namespace Titanium.Web.Proxy.Transforms;
 /// <summary>Applies known transform kinds to request path/headers/query and staged response headers.</summary>
 public sealed class TransformEngine : ITransformEngine
 {
+    private const string ValueParameter = "value";
+    private const char Slash = '/';
     /// <summary>Extra kinds. Null (the default) does not allocate or change built-in transforms.</summary>
     public IReadOnlyList<IRouteTransformFactory>? Factories { get; init; }
 
@@ -39,17 +41,17 @@ public sealed class TransformEngine : ITransformEngine
                         break;
                     }
 
-                    if (!addPrefix.StartsWith('/'))
+                    if (!addPrefix.StartsWith(Slash))
                     {
-                        addPrefix = "/" + addPrefix;
+                        addPrefix = Slash + addPrefix;
                     }
 
-                    var rest = context.Path.StartsWith('/') ? context.Path : "/" + context.Path;
+                    var rest = context.Path.StartsWith(Slash) ? context.Path : Slash + context.Path;
                     context.Path = addPrefix.TrimEnd('/') + rest;
                     break;
                 case TransformKinds.RequestHeaderSet when t.Parameters is not null &&
                                              t.Parameters.TryGetValue("name", out var name) &&
-                                             t.Parameters.TryGetValue("value", out var value):
+                                             t.Parameters.TryGetValue(ValueParameter, out var value):
                     context.Headers[name] = value;
                     break;
                 case TransformKinds.RequestHeaderRemove when t.Parameters is not null &&
@@ -59,7 +61,7 @@ public sealed class TransformEngine : ITransformEngine
                     break;
                 case TransformKinds.QueryValueSet when t.Parameters is not null &&
                                           t.Parameters.TryGetValue("name", out var qName) &&
-                                          t.Parameters.TryGetValue("value", out var qValue):
+                                          t.Parameters.TryGetValue(ValueParameter, out var qValue):
                     context.Path = SetQueryValue(context.Path, qName, qValue);
                     break;
                 case TransformKinds.RequestHostUseDestination:
@@ -67,7 +69,7 @@ public sealed class TransformEngine : ITransformEngine
                     break;
                 case TransformKinds.ResponseHeaderSet when t.Parameters is not null &&
                                               t.Parameters.TryGetValue("name", out var rhName) &&
-                                              t.Parameters.TryGetValue("value", out var rhValue):
+                                              t.Parameters.TryGetValue(ValueParameter, out var rhValue):
                     context.ResponseHeadersToSet[rhName] = rhValue;
                     break;
                 case TransformKinds.ResponseHeaderRemove when t.Parameters is not null &&
@@ -75,7 +77,7 @@ public sealed class TransformEngine : ITransformEngine
                     context.ResponseHeadersToRemove.Add(rrName);
                     break;
                 case TransformKinds.PathSet when Param(t, "path") is { } setPath:
-                    context.Path = setPath.StartsWith('/') ? setPath : "/" + setPath;
+                    context.Path = setPath.StartsWith(Slash) ? setPath : Slash + setPath;
                     break;
                 case TransformKinds.PathPattern when Param(t, "pattern") is { } pattern:
                     context.Path = pattern.Replace("{**remainder}", context.Path, StringComparison.Ordinal);
@@ -92,7 +94,7 @@ public sealed class TransformEngine : ITransformEngine
                     }
 
                     break;
-                case TransformKinds.QueryValueAppend when Param(t, "name") is { } appendName && Param(t, "value") is { } appendValue:
+                case TransformKinds.QueryValueAppend when Param(t, "name") is { } appendName && Param(t, ValueParameter) is { } appendValue:
                     context.Path = AppendQuery(context.Path, appendName, appendValue);
                     break;
                 case TransformKinds.QueryRemove when Param(t, "name") is { } removeQuery:
@@ -102,7 +104,7 @@ public sealed class TransformEngine : ITransformEngine
                     context.RouteValues.TryGetValue(routeKey, out var routeValue):
                     context.Path = SetQueryValue(context.Path, routeQuery, routeValue);
                     break;
-                case TransformKinds.RequestHeaderAppend when Param(t, "name") is { } appendHeader && Param(t, "value") is { } appendHeaderValue:
+                case TransformKinds.RequestHeaderAppend when Param(t, "name") is { } appendHeader && Param(t, ValueParameter) is { } appendHeaderValue:
                     context.Headers[appendHeader] = context.Headers.TryGetValue(appendHeader, out var current) && current.Length > 0
                         ? current + ", " + appendHeaderValue
                         : appendHeaderValue;
@@ -131,17 +133,17 @@ public sealed class TransformEngine : ITransformEngine
                     }
 
                     break;
-                case TransformKinds.ResponseHeaderAppend when Param(t, "name") is { } responseName && Param(t, "value") is { } responseValue:
+                case TransformKinds.ResponseHeaderAppend when Param(t, "name") is { } responseName && Param(t, ValueParameter) is { } responseValue:
                     context.ResponseHeadersToSet[responseName] = responseValue;
                     break;
                 case TransformKinds.ResponseHeadersAllowed when Param(t, "headers") is { } responseAllowed:
                     context.ResponseHeadersToRemove.Add("*" + responseAllowed);
                     break;
-                case TransformKinds.RequestTrailerSet when Param(t, "name") is { } requestTrailer && Param(t, "value") is { } requestTrailerValue:
+                case TransformKinds.RequestTrailerSet when Param(t, "name") is { } requestTrailer && Param(t, ValueParameter) is { } requestTrailerValue:
                     context.RequestTrailers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     context.RequestTrailers[requestTrailer] = requestTrailerValue;
                     break;
-                case TransformKinds.ResponseTrailerSet when Param(t, "name") is { } responseTrailer && Param(t, "value") is { } responseTrailerValue:
+                case TransformKinds.ResponseTrailerSet when Param(t, "name") is { } responseTrailer && Param(t, ValueParameter) is { } responseTrailerValue:
                     context.ResponseTrailers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                     context.ResponseTrailers[responseTrailer] = responseTrailerValue;
                     break;

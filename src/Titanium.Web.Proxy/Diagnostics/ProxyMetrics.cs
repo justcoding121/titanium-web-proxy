@@ -230,17 +230,19 @@ internal static class ProxyMetrics
         Http2FrameWriterHighWater.Add(1,
             new KeyValuePair<string, object?>("threshold", threshold));
 
+    private const string RequestUnit = "{request}";
+
     private static readonly Counter<long> Requests =
-        Meter.CreateCounter<long>("twp.proxy.requests", "{request}", "Completed proxy requests.");
+        Meter.CreateCounter<long>("twp.proxy.requests", RequestUnit, "Completed proxy requests.");
 
     private static readonly Histogram<double> RequestDuration =
         Meter.CreateHistogram<double>("twp.proxy.request.duration", "s", "Proxy request duration.");
 
     private static readonly UpDownCounter<long> ActiveRequests =
-        Meter.CreateUpDownCounter<long>("twp.proxy.requests.active", "{request}", "Requests in flight.");
+        Meter.CreateUpDownCounter<long>("twp.proxy.requests.active", RequestUnit, "Requests in flight.");
 
     private static readonly Counter<long> FailedRequests =
-        Meter.CreateCounter<long>("twp.proxy.requests.failed", "{request}", "Failed proxy requests.");
+        Meter.CreateCounter<long>("twp.proxy.requests.failed", RequestUnit, "Failed proxy requests.");
 
     private static readonly Counter<long> ProxyBytes =
         Meter.CreateCounter<long>("twp.proxy.bytes", "By", "Bytes observed on a proxied request.");
@@ -258,16 +260,16 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.proxy.mirror.drops", "{drop}", "Mirrored requests dropped because the queue was full.");
 
     private static readonly Counter<long> MirrorQueued =
-        Meter.CreateCounter<long>("twp.proxy.mirror.queued", "{request}", "Mirrored requests accepted onto the queue.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.queued", RequestUnit, "Mirrored requests accepted onto the queue.");
 
     private static readonly Counter<long> MirrorSent =
-        Meter.CreateCounter<long>("twp.proxy.mirror.sent", "{request}", "Mirrored requests written to the mirror destination.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.sent", RequestUnit, "Mirrored requests written to the mirror destination.");
 
     private static readonly Counter<long> MirrorFailed =
-        Meter.CreateCounter<long>("twp.proxy.mirror.failed", "{request}", "Mirrored requests that failed before a response was discarded.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.failed", RequestUnit, "Mirrored requests that failed before a response was discarded.");
 
     private static readonly Counter<long> MirrorSkipped =
-        Meter.CreateCounter<long>("twp.proxy.mirror.skipped", "{request}", "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
+        Meter.CreateCounter<long>("twp.proxy.mirror.skipped", RequestUnit, "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
 
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>

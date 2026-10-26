@@ -200,7 +200,7 @@ internal static class ReverseProxySessionDispatch
         var headers = new List<HttpHeader>();
         if (!string.IsNullOrEmpty(direct.ContentType))
         {
-            headers.Add(new HttpHeader("Content-Type", direct.ContentType));
+            headers.Add(new HttpHeader(KnownHeaders.ContentType.String, direct.ContentType));
         }
 
         if (direct.Headers is not null)
@@ -231,9 +231,19 @@ internal static class ReverseProxySessionDispatch
 
         if (!string.IsNullOrEmpty(redirect.Host))
         {
-            var scheme = redirect.HttpToHttps && !request.IsHttps
-                ? "https"
-                : redirect.Scheme ?? (request.IsHttps ? "https" : "http");
+            string scheme;
+            if (redirect.HttpToHttps && !request.IsHttps)
+            {
+                scheme = "https";
+            }
+            else if (redirect.Scheme is { } configuredScheme)
+            {
+                scheme = configuredScheme;
+            }
+            else
+            {
+                scheme = request.IsHttps ? "https" : "http";
+            }
             var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
             if (path.Contains('?', StringComparison.Ordinal))
             {
@@ -319,7 +329,7 @@ internal static class ReverseProxySessionDispatch
         session.GenericResponse(page?.Body ?? string.Empty, HttpStatusCode.ServiceUnavailable,
         [
             new HttpHeader("Retry-After", "1"),
-            new HttpHeader("Content-Type", page?.ContentType ?? "text/plain"),
+            new HttpHeader(KnownHeaders.ContentType.String, page?.ContentType ?? "text/plain"),
         ]);
     }
 
@@ -334,7 +344,7 @@ internal static class ReverseProxySessionDispatch
         session.HttpClient.Response.Body = System.Text.Encoding.UTF8.GetBytes(page.Body);
         if (!string.IsNullOrEmpty(page.ContentType))
         {
-            session.HttpClient.Response.Headers.AddHeader("Content-Type", page.ContentType);
+            session.HttpClient.Response.Headers.AddHeader(KnownHeaders.ContentType.String, page.ContentType);
         }
     }
 
@@ -379,7 +389,7 @@ internal static class ReverseProxySessionDispatch
 
     private static bool IsGrpc(Request request)
     {
-        var headers = request.Headers.GetHeaders("Content-Type");
+        var headers = request.Headers.GetHeaders(KnownHeaders.ContentType.String);
         return headers is { Count: > 0 } &&
                headers[0].Value.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase);
     }
@@ -484,7 +494,15 @@ internal static class ReverseProxySessionDispatch
             return false;
         }
 
-        var port = alternate.Port == 0 ? (alternate.UseHttps ? 443 : 80) : alternate.Port;
+        int port;
+        if (alternate.Port == 0)
+        {
+            port = alternate.UseHttps ? 443 : 80;
+        }
+        else
+        {
+            port = alternate.Port;
+        }
         session.UpstreamConnectHost = alternate.Address;
         session.UpstreamConnectPort = port;
         session.UpstreamDestinationId = alternate.Id;
