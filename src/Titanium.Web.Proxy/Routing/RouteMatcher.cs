@@ -340,9 +340,9 @@ public sealed class RouteMatcher : IRouteMatcher
             return false;
         }
 
-        foreach (var character in value)
+        for (var i = 0; i < value.Length; i++)
         {
-            if (!char.IsAsciiLetter(character))
+            if (!char.IsAsciiLetter(value[i]))
             {
                 return false;
             }

@@ -146,11 +146,13 @@ internal sealed class ClusterHealthProber : IDisposable
     private static int MinDnsRefreshSeconds(ClusterConfig cluster)
     {
         var min = 0;
-        foreach (var destination in cluster.Destinations)
+        var destinations = cluster.Destinations;
+        for (var i = 0; i < destinations.Count; i++)
         {
-            if (destination.DnsRefreshSeconds > 0 && (min == 0 || destination.DnsRefreshSeconds < min))
+            var seconds = destinations[i].DnsRefreshSeconds;
+            if (seconds > 0 && (min == 0 || seconds < min))
             {
-                min = destination.DnsRefreshSeconds;
+                min = seconds;
             }
         }
 

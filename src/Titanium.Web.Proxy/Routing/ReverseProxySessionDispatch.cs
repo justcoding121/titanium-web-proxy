@@ -473,9 +473,10 @@ internal static class ReverseProxySessionDispatch
         ClusterConfig? owner = null;
         foreach (var candidate in snapshot.Clusters.Values)
         {
-            foreach (var dest in candidate.Destinations)
+            var destinations = candidate.Destinations;
+            for (var i = 0; i < destinations.Count; i++)
             {
-                if (string.Equals(dest.Id, failed, StringComparison.Ordinal))
+                if (string.Equals(destinations[i].Id, failed, StringComparison.Ordinal))
                 {
                     owner = candidate;
                     break;
@@ -829,8 +830,9 @@ internal static class ReverseProxySessionDispatch
 
     private static bool IsToken(string value)
     {
-        foreach (var ch in value)
+        for (var i = 0; i < value.Length; i++)
         {
+            var ch = value[i];
             if (ch is not (>= '0' and <= '9' or >= 'a' and <= 'z' or >= 'A' and <= 'Z' or '-' or '_' or '.'))
             {
                 return false;
