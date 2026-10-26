@@ -135,7 +135,7 @@ internal static class ReverseProxySessionDispatch
         ObserveRequestStart(server, session, route);
         if (route.Mirror is { } mirror)
         {
-            server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId));
+            server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId), route.Id);
         }
 
         var cluster = ApplyCluster(options, session, route, destination, request);

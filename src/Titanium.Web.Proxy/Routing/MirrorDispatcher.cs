@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
@@ -18,20 +20,15 @@ namespace Titanium.Web.Proxy.Routing;
 /// <summary>
 ///     Best-effort mirror owned by one <see cref="ProxyServer" />. A full queue increments the drop
 ///     counter. The copy is a separate connection and never writes the client's response.
-///     Buffered memory is bounded by 32 queued bodies of at most <see cref="MirrorConfig.MaxBodyBytes" />.
+///     Each route has its own queue and workers, so a slow mirror cluster cannot starve another route.
+///     Buffered memory is bounded per route by 32 queued bodies of at most
+///     <see cref="MirrorConfig.MaxAllowedBodyBytes" />.
 /// </summary>
 internal sealed class MirrorDispatcher : IDisposable
 {
     private const int MaxQueued = 32;
     private static readonly TimeSpan SendTimeout = TimeSpan.FromSeconds(2);
-    private readonly Channel<MirrorWork> queue = Channel.CreateBounded<MirrorWork>(new BoundedChannelOptions(MaxQueued)
-    {
-        FullMode = BoundedChannelFullMode.Wait,
-        SingleReader = false,
-    });
-
-    private readonly List<Task> workers = new();
-    private readonly object workerGate = new();
+    private readonly ConcurrentDictionary<string, Lane> lanes = new(StringComparer.Ordinal);
     private int queued;
     private int dropped;
     private int skipped;
@@ -53,6 +50,12 @@ internal sealed class MirrorDispatcher : IDisposable
     internal int FailedForTests => failed;
     internal int HoldEntriesForTests => holdEntries;
 
+    /// <summary>How long a route's idle worker waits for work before it exits. The next copy starts it again.</summary>
+    internal TimeSpan IdleExit { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Workers running across all routes.</summary>
+    internal int WorkerCountForTests => lanes.Values.Sum(static lane => Volatile.Read(ref lane.Running));
+
     /// <summary>When set, a worker waits before sending. Tests use it to fill the queue.</summary>
     internal Task? HoldForTests { get; set; }
 
@@ -61,9 +64,12 @@ internal sealed class MirrorDispatcher : IDisposable
         Observed = null;
         Sender = null;
         HoldForTests = null;
-        while (queue.Reader.TryRead(out _))
+        foreach (var lane in lanes.Values)
         {
-            // Drop leftover copies. The test is resetting the dispatcher, not delivering them.
+            while (lane.Queue.Reader.TryRead(out _))
+            {
+                // Drop leftover copies. The test is resetting the dispatcher, not delivering them.
+            }
         }
 
         queued = 0;
@@ -74,7 +80,8 @@ internal sealed class MirrorDispatcher : IDisposable
         holdEntries = 0;
     }
 
-    public void TryEnqueue(MirrorConfig mirror, Request request, DestinationConfig? destination = null)
+    /// <param name="routeId">Names the queue and worker limit. Defaults to the mirror cluster id.</param>
+    public void TryEnqueue(MirrorConfig mirror, Request request, DestinationConfig? destination = null, string? routeId = null)
     {
         if (Volatile.Read(ref disposed) != 0 || mirror.SamplePercent <= 0)
         {
@@ -120,7 +127,8 @@ internal sealed class MirrorDispatcher : IDisposable
             CopyHeaders(request),
             body);
 
-        if (!queue.Writer.TryWrite(work))
+        var lane = lanes.GetOrAdd(routeId ?? mirror.ClusterId, static _ => new Lane());
+        if (!lane.Queue.Writer.TryWrite(work))
         {
             Interlocked.Increment(ref dropped);
             ProxyMetrics.RecordMirrorDrop();
@@ -129,7 +137,7 @@ internal sealed class MirrorDispatcher : IDisposable
 
         Interlocked.Increment(ref queued);
         ProxyMetrics.RecordMirrorQueued();
-        EnsureWorkers(mirror.MaxConcurrency);
+        EnsureWorkers(lane, mirror.MaxConcurrency);
     }
 
     public void Dispose()
@@ -139,14 +147,17 @@ internal sealed class MirrorDispatcher : IDisposable
             return;
         }
 
-        queue.Writer.TryComplete();
-        Task[] running;
-        lock (workerGate)
+        var running = new List<Task>();
+        foreach (var lane in lanes.Values)
         {
-            running = workers.ToArray();
+            lane.Queue.Writer.TryComplete();
+            lock (lane.Gate)
+            {
+                running.AddRange(lane.Tasks);
+            }
         }
 
-        if (running.Length == 0)
+        if (running.Count == 0)
         {
             return;
         }
@@ -154,15 +165,48 @@ internal sealed class MirrorDispatcher : IDisposable
         Task.WhenAll(running).Wait(TimeSpan.FromSeconds(1));
     }
 
-    private void EnsureWorkers(int requested)
+    private void EnsureWorkers(Lane lane, int requested)
     {
         var target = Math.Clamp(requested <= 0 ? 2 : requested, 1, 16);
-        lock (workerGate)
+        lock (lane.Gate)
         {
-            while (workers.Count < target && Volatile.Read(ref disposed) == 0)
+            lane.Tasks.RemoveAll(static task => task.IsCompleted);
+            while (lane.Running < target && Volatile.Read(ref disposed) == 0)
             {
-                workers.Add(Task.Run(WorkerAsync));
+                lane.Running++;
+                lane.Tasks.Add(Task.Run(() => WorkerAsync(lane)));
             }
+        }
+    }
+
+    /// <summary>
+    ///     Ends a worker that has been idle. Under the gate so a copy written just before this call
+    ///     is seen here, and a copy written after it finds the worker gone and starts another.
+    /// </summary>
+    private bool TryRetire(Lane lane)
+    {
+        lock (lane.Gate)
+        {
+            if (Volatile.Read(ref disposed) == 0 && lane.Queue.Reader.TryPeek(out _))
+            {
+                return false;
+            }
+
+            lane.Running--;
+            return true;
+        }
+    }
+
+    private async Task<bool> WaitForWorkAsync(Lane lane)
+    {
+        using var idle = new CancellationTokenSource(IdleExit);
+        try
+        {
+            return await lane.Queue.Reader.WaitToReadAsync(idle.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 
@@ -212,17 +256,27 @@ internal sealed class MirrorDispatcher : IDisposable
         name.Equals("Expect", StringComparison.OrdinalIgnoreCase) ||
         name.StartsWith("Proxy-", StringComparison.OrdinalIgnoreCase);
 
-    private async Task WorkerAsync()
+    private async Task WorkerAsync(Lane lane)
     {
-        while (await queue.Reader.WaitToReadAsync().ConfigureAwait(false))
+        while (true)
         {
+            if (!await WaitForWorkAsync(lane).ConfigureAwait(false))
+            {
+                if (TryRetire(lane))
+                {
+                    return;
+                }
+
+                continue;
+            }
+
             if (HoldForTests is { } hold)
             {
                 Interlocked.Increment(ref holdEntries);
                 await hold.ConfigureAwait(false);
             }
 
-            while (queue.Reader.TryRead(out var work))
+            while (lane.Queue.Reader.TryRead(out var work))
             {
                 try
                 {
@@ -288,6 +342,20 @@ internal sealed class MirrorDispatcher : IDisposable
         {
             // The mirror does not use the origin's response. Drain it so the origin can finish.
         }
+    }
+
+    /// <summary>One route's queue and workers.</summary>
+    private sealed class Lane
+    {
+        internal readonly Channel<MirrorWork> Queue = Channel.CreateBounded<MirrorWork>(new BoundedChannelOptions(MaxQueued)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = false,
+        });
+
+        internal readonly object Gate = new();
+        internal readonly List<Task> Tasks = new();
+        internal int Running;
     }
 
     internal readonly record struct MirrorWork(
