@@ -350,150 +350,143 @@ public static class TwpConfigValidator
                 errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
             }
 
-            if (string.Equals(listener.Type, "masque", StringComparison.OrdinalIgnoreCase)
-                && listener.Masque?.RequireAuth != false
-                && listener.Masque?.Credentials is not { Count: > 0 })
+            ValidateMasqueListener(listener, errors);
+            ValidateClientCertificate(listener, errors);
+            ValidateTrustedProxySources(listener, errors);
+        }
+    }
+
+    private static void ValidateMasqueListener(ListenerConfig listener, List<string> errors)
+    {
+        if (string.Equals(listener.Type, "masque", StringComparison.OrdinalIgnoreCase)
+            && listener.Masque?.RequireAuth != false
+            && listener.Masque?.Credentials is not { Count: > 0 })
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
+        }
+
+        if (listener.Masque is not { } masque)
+        {
+            return;
+        }
+
+        if (masque.AllowedPorts is { } ports)
+        {
+            if (ports.Length == 0)
             {
-                errors.Add(
-                    $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
+                errors.Add($"Listener port {listener.Port}: masque.allowedPorts must not be empty.");
             }
 
-            if (listener.Masque is { } masque)
+            foreach (var allowed in ports.Where(allowed => allowed is < 1 or > 65535))
             {
-                if (masque.AllowedPorts is { } ports)
-                {
-                    if (ports.Length == 0)
-                    {
-                        errors.Add($"Listener port {listener.Port}: masque.allowedPorts must not be empty.");
-                    }
-
-                    foreach (var allowed in ports.Where(allowed => allowed is < 1 or > 65535))
-                    {
-                        errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
-                    }
-                }
-
-                if (masque.MaxTunnels is int maxTunnels && masque.MaxTunnelsPerClient is int perClient
-                    && perClient > maxTunnels)
-                {
-                    errors.Add(
-                        $"Listener port {listener.Port}: masque.maxTunnelsPerClient must not exceed maxTunnels.");
-                }
-
-                if (masque.MaxDatagramsPerSecond is > 1_000_000)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxDatagramsPerSecond must be at most 1000000.");
-                }
-
-                if (masque.MaxBytesPerSecond is > 1_073_741_824)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxBytesPerSecond must be at most 1073741824.");
-                }
-
-                if (masque.MaxTunnels is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxTunnels must be positive.");
-                }
-
-                if (masque.MaxTunnelsPerClient is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxTunnelsPerClient must be positive.");
-                }
-
-                if (masque.IdleTimeoutSeconds is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.idleTimeoutSeconds must be positive.");
-                }
-
-                if (masque.MaxDatagramsPerSecond is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxDatagramsPerSecond must be positive.");
-                }
-
-                if (masque.MaxBytesPerSecond is <= 0)
-                {
-                    errors.Add($"Listener port {listener.Port}: masque.maxBytesPerSecond must be positive.");
-                }
-
-                if (masque.Credentials is { } credentials)
-                {
-                    var seenUsers = new HashSet<string>(StringComparer.Ordinal);
-                    foreach (var credential in credentials)
-                    {
-                        if (string.IsNullOrWhiteSpace(credential.Username)
-                            || string.IsNullOrWhiteSpace(credential.PasswordEnv))
-                        {
-                            errors.Add(
-                                $"Listener port {listener.Port}: masque credential requires username and passwordEnv.");
-                            continue;
-                        }
-
-                        if (!seenUsers.Add(credential.Username))
-                        {
-                            errors.Add(
-                                $"Listener port {listener.Port}: masque credential username '{credential.Username}' is duplicated.");
-                        }
-                    }
-                }
+                errors.Add($"Listener port {listener.Port}: masque.allowedPorts contains {allowed}.");
             }
+        }
 
-            if (!string.IsNullOrWhiteSpace(listener.ClientCertificateMode)
-                && !listener.ClientCertificateMode.Equals("none", StringComparison.OrdinalIgnoreCase)
-                && !listener.ClientCertificateMode.Equals("allow", StringComparison.OrdinalIgnoreCase)
-                && !listener.ClientCertificateMode.Equals("require", StringComparison.OrdinalIgnoreCase))
+        if (masque.MaxTunnels is int maxTunnels && masque.MaxTunnelsPerClient is int perClient && perClient > maxTunnels)
+        {
+            errors.Add($"Listener port {listener.Port}: masque.maxTunnelsPerClient must not exceed maxTunnels.");
+        }
+
+        AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be at most 1000000.", masque.MaxDatagramsPerSecond is > 1_000_000);
+        AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be at most 1073741824.", masque.MaxBytesPerSecond is > 1_073_741_824);
+        AddUnless(errors, listener.Port, "masque.maxTunnels must be positive.", masque.MaxTunnels is <= 0);
+        AddUnless(errors, listener.Port, "masque.maxTunnelsPerClient must be positive.", masque.MaxTunnelsPerClient is <= 0);
+        AddUnless(errors, listener.Port, "masque.idleTimeoutSeconds must be positive.", masque.IdleTimeoutSeconds is <= 0);
+        AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be positive.", masque.MaxDatagramsPerSecond is <= 0);
+        AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be positive.", masque.MaxBytesPerSecond is <= 0);
+        if (masque.Credentials is not { } credentials)
+        {
+            return;
+        }
+
+        var seenUsers = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var credential in credentials)
+        {
+            if (string.IsNullOrWhiteSpace(credential.Username) || string.IsNullOrWhiteSpace(credential.PasswordEnv))
             {
-                errors.Add(
-                    $"Listener port {listener.Port}: clientCertificateMode '{listener.ClientCertificateMode}' is not none, allow, or require.");
-            }
-
-            if ((IsClientCertificateModeSet(listener.ClientCertificateMode)
-                    || !string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
-                && !IsTransparentListener(listener))
-            {
-                errors.Add(
-                    $"Listener port {listener.Port}: clientCertificateMode and clientCertificateCaPath apply only to transparent listeners.");
-            }
-
-            if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
-            {
-                if (!string.Equals(listener.ClientCertificateMode, "allow", StringComparison.OrdinalIgnoreCase)
-                    && !string.Equals(listener.ClientCertificateMode, "require", StringComparison.OrdinalIgnoreCase))
-                {
-                    errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
-                }
-
-                if (!File.Exists(listener.ClientCertificateCaPath))
-                {
-                    errors.Add($"Listener port {listener.Port}: clientCertificateCaPath '{listener.ClientCertificateCaPath}' was not found.");
-                }
-                else
-                {
-                    try
-                    {
-                        var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
-                        if (roots.Count == 0)
-                        {
-                            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath contains no certificates.");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        errors.Add($"Listener port {listener.Port}: clientCertificateCaPath does not parse ({ex.Message}).");
-                    }
-                }
-            }
-
-            if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
-            {
+                errors.Add($"Listener port {listener.Port}: masque credential requires username and passwordEnv.");
                 continue;
             }
 
-            foreach (var source in sources)
+            if (!seenUsers.Add(credential.Username))
             {
-                if (!CidrPrefix.TryParse(source, out _))
-                {
-                    errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
-                }
+                errors.Add($"Listener port {listener.Port}: masque credential username '{credential.Username}' is duplicated.");
+            }
+        }
+    }
+
+    private static void AddUnless(List<string> errors, int port, string message, bool failed)
+    {
+        if (failed)
+        {
+            errors.Add($"Listener port {port}: {message}");
+        }
+    }
+
+    private static void ValidateClientCertificate(ListenerConfig listener, List<string> errors)
+    {
+        if (!string.IsNullOrWhiteSpace(listener.ClientCertificateMode)
+            && !listener.ClientCertificateMode.Equals("none", StringComparison.OrdinalIgnoreCase)
+            && !listener.ClientCertificateMode.Equals("allow", StringComparison.OrdinalIgnoreCase)
+            && !listener.ClientCertificateMode.Equals("require", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: clientCertificateMode '{listener.ClientCertificateMode}' is not none, allow, or require.");
+        }
+
+        if ((IsClientCertificateModeSet(listener.ClientCertificateMode)
+                || !string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+            && !IsTransparentListener(listener))
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: clientCertificateMode and clientCertificateCaPath apply only to transparent listeners.");
+        }
+
+        if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+        {
+            return;
+        }
+
+        if (!string.Equals(listener.ClientCertificateMode, "allow", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(listener.ClientCertificateMode, "require", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
+        }
+
+        if (!File.Exists(listener.ClientCertificateCaPath))
+        {
+            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath '{listener.ClientCertificateCaPath}' was not found.");
+            return;
+        }
+
+        try
+        {
+            var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+            if (roots.Count == 0)
+            {
+                errors.Add($"Listener port {listener.Port}: clientCertificateCaPath contains no certificates.");
+            }
+        }
+        catch (Exception ex)
+        {
+            errors.Add($"Listener port {listener.Port}: clientCertificateCaPath does not parse ({ex.Message}).");
+        }
+    }
+
+    private static void ValidateTrustedProxySources(ListenerConfig listener, List<string> errors)
+    {
+        if (listener.TrustedProxyProtocolSources is not { Count: > 0 } sources)
+        {
+            return;
+        }
+
+        foreach (var source in sources)
+        {
+            if (!CidrPrefix.TryParse(source, out _))
+            {
+                errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
             }
         }
     }
