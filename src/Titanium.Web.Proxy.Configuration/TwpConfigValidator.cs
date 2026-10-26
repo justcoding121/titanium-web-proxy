@@ -215,95 +215,133 @@ public static class TwpConfigValidator
         var routeIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var route in routes)
         {
-            if (string.IsNullOrWhiteSpace(route.Id))
-            {
-                errors.Add("Route is missing Id.");
-            }
-            else if (!routeIds.Add(route.Id))
-            {
-                errors.Add($"Duplicate route id '{route.Id}'.");
-            }
+            ValidateRouteIdentity(route, routeIds, clusterIds, errors);
+            ValidateRouteMatch(route, errors);
+            ValidateRoutePolicies(route, policyNames, errors);
+            ValidateRouteMirror(route, clusterIds, errors);
+            ValidateRouteRedirect(route, errors);
+            ValidateRouteTransforms(route, errors);
+            ValidateRouteLimits(route, errors);
+        }
+    }
 
-            if (route.Redirect is null && route.DirectResponse is null &&
-                (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
-            {
-                errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
-            }
+    private static void ValidateRouteIdentity(RouteConfig route, HashSet<string> routeIds, HashSet<string> clusterIds, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(route.Id))
+        {
+            errors.Add("Route is missing Id.");
+        }
+        else if (!routeIds.Add(route.Id))
+        {
+            errors.Add($"Duplicate route id '{route.Id}'.");
+        }
 
-            if (route.Match is null)
-            {
-                errors.Add($"Route '{route.Id}' is missing Match.");
-            }
-            else if (route.Match.PathKind == PathMatchKind.Template)
-            {
-                ValidateTemplate(route, errors);
-            }
-            else if (route.Match.PathKind == PathMatchKind.Regex && !string.IsNullOrEmpty(route.Match.Path) &&
-                     !CompilesAsRegex(route.Match.Path))
-            {
-                errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
-            }
+        if (route.Redirect is null && route.DirectResponse is null &&
+            (string.IsNullOrWhiteSpace(route.ClusterId) || !clusterIds.Contains(route.ClusterId)))
+        {
+            errors.Add($"Route '{route.Id}' references unknown cluster '{route.ClusterId}'.");
+        }
+    }
 
-            if (route.Policies is not null)
+    private static void ValidateRouteMatch(RouteConfig route, List<string> errors)
+    {
+        if (route.Match is null)
+        {
+            errors.Add($"Route '{route.Id}' is missing Match.");
+            return;
+        }
+
+        if (route.Match.PathKind == PathMatchKind.Template)
+        {
+            ValidateTemplate(route, errors);
+            return;
+        }
+
+        if (route.Match.PathKind == PathMatchKind.Regex && !string.IsNullOrEmpty(route.Match.Path) &&
+            !CompilesAsRegex(route.Match.Path))
+        {
+            errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
+        }
+    }
+
+    private static void ValidateRoutePolicies(RouteConfig route, HashSet<string> policyNames, List<string> errors)
+    {
+        if (route.Policies is null)
+        {
+            return;
+        }
+
+        foreach (var policyName in route.Policies.Where(policyName => !policyNames.Contains(policyName)))
+        {
+            errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
+        }
+    }
+
+    private static void ValidateRouteMirror(RouteConfig route, HashSet<string> clusterIds, List<string> errors)
+    {
+        if (route.Mirror is not { } mirror)
+        {
+            return;
+        }
+
+        if (!clusterIds.Contains(mirror.ClusterId))
+        {
+            errors.Add($"Route '{route.Id}' mirrors to unknown cluster '{mirror.ClusterId}'.");
+        }
+
+        if (mirror.SamplePercent is < 0 or > 100)
+        {
+            errors.Add($"Route '{route.Id}' mirror samplePercent must be 0-100.");
+        }
+
+        if (mirror.MaxConcurrency is < 1 or > 16)
+        {
+            errors.Add($"Route '{route.Id}' mirror maxConcurrency must be 1-16.");
+        }
+    }
+
+    private static void ValidateRouteRedirect(RouteConfig route, List<string> errors)
+    {
+        if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
+        {
+            errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
+        }
+    }
+
+    private static void ValidateRouteTransforms(RouteConfig route, List<string> errors)
+    {
+        if (route.Transforms is null)
+        {
+            return;
+        }
+
+        foreach (var transform in route.Transforms)
+        {
+            if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
             {
-                foreach (var policyName in route.Policies.Where(policyName => !policyNames.Contains(policyName)))
-                {
-                    errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
-                }
-            }
-
-            if (route.Mirror is { } mirror)
-            {
-                if (!clusterIds.Contains(mirror.ClusterId))
-                {
-                    errors.Add($"Route '{route.Id}' mirrors to unknown cluster '{mirror.ClusterId}'.");
-                }
-
-                if (mirror.SamplePercent is < 0 or > 100)
-                {
-                    errors.Add($"Route '{route.Id}' mirror samplePercent must be 0-100.");
-                }
-
-                if (mirror.MaxConcurrency is < 1 or > 16)
-                {
-                    errors.Add($"Route '{route.Id}' mirror maxConcurrency must be 1-16.");
-                }
-            }
-
-            if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
-            {
-                errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
-            }
-
-            if (route.Transforms is not null)
-            {
-                foreach (var transform in route.Transforms)
-                {
-                    if (!TransformKinds.TryGetRequiredParameters(transform.Kind, out var required))
-                    {
-                        errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
-                        continue;
-                    }
-
-                    foreach (var name in required.Where(name =>
-                                 transform.Parameters is null || !transform.Parameters.ContainsKey(name)))
-                    {
-                        errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
-                    }
-                }
-            }
-
-            var limits = route.Limits;
-            if (limits is null)
-            {
+                errors.Add($"Route '{route.Id}' has unknown transform kind '{transform.Kind}'.");
                 continue;
             }
 
-            RequirePositiveIfSet(limits.RequestTimeoutSeconds, $"routes.{route.Id}.limits.requestTimeoutSeconds", errors);
-            RequirePositiveIfSet(limits.IdleTimeoutSeconds, $"routes.{route.Id}.limits.idleTimeoutSeconds", errors);
-            RequirePositiveIfSet(limits.MaxBufferedBodyBytes, $"routes.{route.Id}.limits.maxBufferedBodyBytes", errors);
-            RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
+            foreach (var name in required.Where(name => transform.Parameters is null || !transform.Parameters.ContainsKey(name)))
+            {
+                errors.Add($"Route '{route.Id}' transform '{transform.Kind}' requires parameter '{name}'.");
+            }
         }
+    }
+
+    private static void ValidateRouteLimits(RouteConfig route, List<string> errors)
+    {
+        var limits = route.Limits;
+        if (limits is null)
+        {
+            return;
+        }
+
+        RequirePositiveIfSet(limits.RequestTimeoutSeconds, $"routes.{route.Id}.limits.requestTimeoutSeconds", errors);
+        RequirePositiveIfSet(limits.IdleTimeoutSeconds, $"routes.{route.Id}.limits.idleTimeoutSeconds", errors);
+        RequirePositiveIfSet(limits.MaxBufferedBodyBytes, $"routes.{route.Id}.limits.maxBufferedBodyBytes", errors);
+        RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
     }
 
     private static void ValidateListeners(IEnumerable<ListenerConfig> listeners, List<string> errors)
