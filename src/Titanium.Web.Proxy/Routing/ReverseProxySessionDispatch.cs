@@ -248,32 +248,10 @@ internal static class ReverseProxySessionDispatch
     {
         var target = OriginForm(request.RequestUriString8.GetString());
         var path = string.IsNullOrEmpty(redirect.Path) ? target : redirect.Path;
-        var query = "";
-        if (redirect.PreserveQuery)
-        {
-            var raw = target;
-            var q = raw.IndexOf('?');
-            if (q >= 0)
-            {
-                query = raw[q..];
-            }
-        }
-
+        var query = PreservedQuery(target, redirect.PreserveQuery);
         if (!string.IsNullOrEmpty(redirect.Host))
         {
-            string scheme;
-            if (redirect.HttpToHttps && !request.IsHttps)
-            {
-                scheme = "https";
-            }
-            else if (redirect.Scheme is { } configuredScheme)
-            {
-                scheme = configuredScheme;
-            }
-            else
-            {
-                scheme = request.IsHttps ? "https" : "http";
-            }
+            var scheme = RedirectScheme(request, redirect);
             var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
             if (path.Contains('?', StringComparison.Ordinal))
             {
@@ -284,6 +262,32 @@ internal static class ReverseProxySessionDispatch
         }
 
         return path + query;
+    }
+
+    private static string PreservedQuery(string target, bool preserve)
+    {
+        if (!preserve)
+        {
+            return "";
+        }
+
+        var q = target.IndexOf('?');
+        return q >= 0 ? target[q..] : "";
+    }
+
+    private static string RedirectScheme(Request request, RedirectConfig redirect)
+    {
+        if (redirect.HttpToHttps && !request.IsHttps)
+        {
+            return "https";
+        }
+
+        if (redirect.Scheme is { } configured)
+        {
+            return configured;
+        }
+
+        return request.IsHttps ? "https" : "http";
     }
 
     /// <summary>
@@ -469,20 +473,7 @@ internal static class ReverseProxySessionDispatch
     internal static bool TrySelectAlternate(ProxyServer server, SessionEventArgsBase session)
     {
         var extras = session.Extras;
-        var retry = extras?.Retry;
-        if (extras is null || retry is null || extras.TriedCount > retry.Attempts)
-        {
-            return false;
-        }
-
-        var method = session.HttpClient.Request.Method;
-        var idempotent = method is "GET" or "HEAD" or "PUT" or "DELETE" or "OPTIONS" or "TRACE";
-        if (!idempotent && !retry.RetryNonIdempotent)
-        {
-            return false;
-        }
-
-        if (!idempotent && session.HttpClient.Request.ContentLength > retry.MaxBufferedBodyBytes)
+        if (extras is null || !RetryAllowsMethod(extras, session.HttpClient.Request))
         {
             return false;
         }
@@ -538,6 +529,24 @@ internal static class ReverseProxySessionDispatch
         session.DestinationRequestLease?.Dispose();
         session.DestinationRequestLease = balancer.Health.TrackRequest(alternate.Id);
         return true;
+    }
+
+    private static bool RetryAllowsMethod(RoutingFeatureState extras, Request request)
+    {
+        var retry = extras.Retry;
+        if (retry is null || extras.TriedCount > retry.Attempts)
+        {
+            return false;
+        }
+
+        var method = request.Method;
+        var idempotent = method is "GET" or "HEAD" or "PUT" or "DELETE" or "OPTIONS" or "TRACE";
+        if (!idempotent && !retry.RetryNonIdempotent)
+        {
+            return false;
+        }
+
+        return idempotent || request.ContentLength <= retry.MaxBufferedBodyBytes;
     }
 
     private static ClusterConfig? FindOwningCluster(ImmutableClusterSnapshot snapshot, string? failed)
@@ -600,25 +609,34 @@ internal static class ReverseProxySessionDispatch
         if (transportFailure)
         {
             lb.Health.ReportFailure(id, server.ReverseProxy?.ClusterManager);
+            return;
         }
-        else
+
+        lb.Health.ReportStatus(
+            id,
+            status,
+            server.ReverseProxy?.ClusterManager,
+            session.PassiveHealth,
+            session.PassiveDestinationCount > 0 ? session.PassiveDestinationCount : int.MaxValue);
+        RecordDestinationLatency(server, lb, id, status, session);
+    }
+
+    private static void RecordDestinationLatency(ProxyServer server, LoadBalancer lb, string id, int status,
+        SessionEventArgsBase session)
+    {
+        if (status is < 200 or > 499 || session.Timing is null)
         {
-            lb.Health.ReportStatus(
-                id,
-                status,
-                server.ReverseProxy?.ClusterManager,
-                session.PassiveHealth,
-                session.PassiveDestinationCount > 0 ? session.PassiveDestinationCount : int.MaxValue);
-            if (status is >= 200 and <= 499 && session.Timing is not null)
-            {
-                var total = session.Timing.TotalDuration;
-                if (total > TimeSpan.Zero)
-                {
-                    lb.RecordDestination(id, total);
-                    server.ReverseProxy?.LatencyRecorder?.RecordDestination(id, total);
-                }
-            }
+            return;
         }
+
+        var total = session.Timing.TotalDuration;
+        if (total <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        lb.RecordDestination(id, total);
+        server.ReverseProxy?.LatencyRecorder?.RecordDestination(id, total);
     }
 
     /// <summary>

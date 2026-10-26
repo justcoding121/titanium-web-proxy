@@ -177,12 +177,9 @@ public sealed class TransformEngine : ITransformEngine
     private static void KeepOnly(TransformRequestContext context, string allowedCsv)
     {
         var allowed = new HashSet<string>(allowedCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase);
-        foreach (var name in context.Headers.Keys)
+        foreach (var name in context.Headers.Keys.Where(name => !allowed.Contains(name)))
         {
-            if (!allowed.Contains(name))
-            {
-                context.HeadersToRemove.Add(name);
-            }
+            context.HeadersToRemove.Add(name);
         }
     }
 

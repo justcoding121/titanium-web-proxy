@@ -53,25 +53,35 @@ internal sealed class ClusterHealthProber : IDisposable
             var ok = await ProbeAsync(dest, active, cancellationToken).ConfigureAwait(false);
             if (ok)
             {
-                _failures[dest.Id] = 0;
-                var streak = _successes.TryGetValue(dest.Id, out var n) ? n + 1 : 1;
-                _successes[dest.Id] = streak;
-                if (streak >= healthyNeed && _probeEjected.Contains(dest.Id)
-                    && _manager.TrySetDestinationState(dest.Id, DestinationState.Unhealthy, DestinationState.Healthy))
-                {
-                    _probeEjected.Remove(dest.Id);
-                }
+                NoteProbeSuccess(dest.Id, healthyNeed);
             }
             else
             {
-                _successes[dest.Id] = 0;
-                var streak = _failures.TryGetValue(dest.Id, out var n) ? n + 1 : 1;
-                _failures[dest.Id] = streak;
-                if (streak >= unhealthyNeed && _probeEjected.Add(dest.Id))
-                {
-                    _manager.TrySetDestinationState(dest.Id, DestinationState.Healthy, DestinationState.Unhealthy);
-                }
+                NoteProbeFailure(dest.Id, unhealthyNeed);
             }
+        }
+    }
+
+    private void NoteProbeSuccess(string destinationId, int healthyNeed)
+    {
+        _failures[destinationId] = 0;
+        var streak = _successes.TryGetValue(destinationId, out var n) ? n + 1 : 1;
+        _successes[destinationId] = streak;
+        if (streak >= healthyNeed && _probeEjected.Contains(destinationId)
+            && _manager.TrySetDestinationState(destinationId, DestinationState.Unhealthy, DestinationState.Healthy))
+        {
+            _probeEjected.Remove(destinationId);
+        }
+    }
+
+    private void NoteProbeFailure(string destinationId, int unhealthyNeed)
+    {
+        _successes[destinationId] = 0;
+        var streak = _failures.TryGetValue(destinationId, out var n) ? n + 1 : 1;
+        _failures[destinationId] = streak;
+        if (streak >= unhealthyNeed && _probeEjected.Add(destinationId))
+        {
+            _manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy);
         }
     }
 
