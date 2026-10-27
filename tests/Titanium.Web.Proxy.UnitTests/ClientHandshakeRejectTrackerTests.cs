@@ -32,14 +32,54 @@ public class ClientHandshakeRejectTrackerTests
     [TestCategory("Regression-2026-10-07")]
     public void Success_ResetsTheCount()
     {
-        var t = new ClientHandshakeRejectTracker { Threshold = 3 };
+        // TrustGrace off: isolates the reset of the earlier strikes from the "trusted host" memory.
+        var t = new ClientHandshakeRejectTracker { Threshold = 3, TrustGrace = TimeSpan.Zero };
         var now = DateTime.UtcNow;
         t.RecordFailure("example.com", now);
         t.RecordFailure("example.com", now);
-        t.RecordSuccess("example.com");
+        t.RecordSuccess("example.com", now);
         Assert.IsFalse(t.RecordFailure("example.com", now));
         Assert.IsFalse(t.RecordFailure("example.com", now));
         Assert.IsTrue(t.RecordFailure("example.com", now));
+    }
+
+    /// <summary>
+    ///     Soak 2026-10-27: Chrome aborted several in-flight handshakes at once when a tab was closed, so CDNs
+    ///     such as static01.nyt.com and cs.minutemedia-prebid.com (28 earlier successful handshakes) were
+    ///     learned as certificate-pinned and turned into opaque tunnels.
+    /// </summary>
+    [TestMethod]
+    public void AbortsAfterASuccessfulHandshake_DoNotTripWithinTheTrustGrace()
+    {
+        var t = new ClientHandshakeRejectTracker { Threshold = 3 };
+        var now = DateTime.UtcNow;
+        t.RecordSuccess("static01.nyt.com", now);
+        for (var i = 1; i <= 20; i++)
+            Assert.IsFalse(t.RecordFailure("static01.nyt.com", now.AddSeconds(i)),
+                "a host the client already trusted must not be learned as pinned");
+    }
+
+    [TestMethod]
+    public void AbortsAfterTheTrustGrace_CountAgain()
+    {
+        var t = new ClientHandshakeRejectTracker { Threshold = 3, TrustGrace = TimeSpan.FromMinutes(10) };
+        var now = DateTime.UtcNow;
+        t.RecordSuccess("example.com", now);
+        var later = now.AddMinutes(11);
+        Assert.IsFalse(t.RecordFailure("example.com", later));
+        Assert.IsFalse(t.RecordFailure("example.com", later));
+        Assert.IsTrue(t.RecordFailure("example.com", later));
+    }
+
+    [TestMethod]
+    public void NeverTrustedHost_StillTripsAtTheThreshold()
+    {
+        var t = new ClientHandshakeRejectTracker { Threshold = 3 };
+        var now = DateTime.UtcNow;
+        t.RecordSuccess("other.example.com", now);
+        Assert.IsFalse(t.RecordFailure("pinned.example.com", now));
+        Assert.IsFalse(t.RecordFailure("pinned.example.com", now));
+        Assert.IsTrue(t.RecordFailure("pinned.example.com", now));
     }
 
     [TestMethod]

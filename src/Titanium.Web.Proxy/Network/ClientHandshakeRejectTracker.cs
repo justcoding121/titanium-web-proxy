@@ -18,8 +18,23 @@ internal sealed class ClientHandshakeRejectTracker
 {
     private readonly ConcurrentDictionary<string, Entry> map = new(StringComparer.OrdinalIgnoreCase);
 
+    private const int MaxTrustedHosts = 4096;
+
+    private readonly ConcurrentDictionary<string, long> recentSuccess = new(StringComparer.OrdinalIgnoreCase);
+
     private TimeSpan window = TimeSpan.FromMinutes(2);
+    private TimeSpan trustGrace = TimeSpan.FromMinutes(30);
     private int maxEntries = 256;
+
+    /// <summary>
+    ///     How long a completed handshake keeps aborted handshakes for the same host from counting toward
+    ///     the threshold.
+    /// </summary>
+    internal TimeSpan TrustGrace
+    {
+        get => trustGrace;
+        set => trustGrace = value < TimeSpan.Zero ? TimeSpan.Zero : value;
+    }
 
     /// <summary>Consecutive aborted handshakes required to trip. 0 or less disables tracking.</summary>
     internal int Threshold { get; set; } = 5;
@@ -59,6 +74,13 @@ internal sealed class ClientHandshakeRejectTracker
             return false;
 
         var key = DecryptBypassCache.Normalize(host);
+
+        // A pinning client fails from its very first attempt. A host this client already completed a
+        // handshake for is trusted: later aborts are the browser giving up (tab closed, navigation, a
+        // cancelled preconnect race), and learning them turns a healthy CDN into an opaque tunnel.
+        if (recentSuccess.TryGetValue(key, out var trustedTicks) && utcNow.Ticks - trustedTicks < trustGrace.Ticks)
+            return false;
+
         if (map.Count >= maxEntries && !map.ContainsKey(key))
             Trim(utcNow);
 
@@ -86,15 +108,41 @@ internal sealed class ClientHandshakeRejectTracker
         return tripped;
     }
 
-    /// <summary>A completed handshake proves the client trusts the proxy certificate: reset the host.</summary>
-    internal void RecordSuccess(string? host)
+    /// <summary>
+    ///     A completed handshake proves the client trusts the proxy certificate: reset the host and remember
+    ///     the proof for <see cref="TrustGrace" />.
+    /// </summary>
+    internal void RecordSuccess(string? host, DateTime? utcNow = null)
     {
-        if (map.IsEmpty || string.IsNullOrWhiteSpace(host))
+        if (string.IsNullOrWhiteSpace(host) || Threshold <= 0)
             return;
-        map.TryRemove(DecryptBypassCache.Normalize(host), out _);
+
+        var key = DecryptBypassCache.Normalize(host);
+        if (!map.IsEmpty)
+            map.TryRemove(key, out _);
+
+        if (recentSuccess.Count >= MaxTrustedHosts && !recentSuccess.ContainsKey(key))
+            TrimTrusted(utcNow ?? DateTime.UtcNow);
+
+        recentSuccess[key] = (utcNow ?? DateTime.UtcNow).Ticks;
     }
 
-    internal void Clear() => map.Clear();
+    internal void Clear()
+    {
+        map.Clear();
+        recentSuccess.Clear();
+    }
+
+    private void TrimTrusted(DateTime utcNow)
+    {
+        var cutoff = (utcNow - trustGrace).Ticks;
+        foreach (var kv in recentSuccess)
+            if (kv.Value < cutoff)
+                recentSuccess.TryRemove(kv.Key, out _);
+
+        if (recentSuccess.Count >= MaxTrustedHosts)
+            recentSuccess.Clear();
+    }
 
     private void Trim(DateTime utcNow)
     {
