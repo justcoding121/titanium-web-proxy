@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using System;
+using System.Net.Sockets;
 
 namespace Titanium.Web.Proxy.Extensions;
 
@@ -35,6 +36,25 @@ internal static class TcpExtensions
         finally
         {
             socket.Blocking = blockingState;
+        }
+
+        // Send(0) succeeds on a socket whose peer already sent FIN (half-closed), so an origin that
+        // idle-closed the keep-alive connection looked healthy and the next request, a POST that cannot
+        // be replayed, died with "closed the connection before sending a response". An idle connection
+        // that is readable with nothing to read has been closed (FIN) or reset by the peer. Pending data
+        // (for example a TLS 1.3 session ticket or close_notify) is left to the stream layer.
+        try
+        {
+            if (socket.Poll(0, SelectMode.SelectRead) && socket.Available == 0)
+                return false;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
         }
 
         return true;
