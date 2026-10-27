@@ -151,14 +151,32 @@ internal static partial class Http3OriginBridge
             }
             else
             {
-                quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
-                    connectHost, port, upStreamEndPoint, upstreamProxy,
-                    (sender, certificate, chain, errors) =>
-                        server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
-                    cancellationToken,
-                    sniHost: sniHost,
-                    failFastHandshake: !isForcedH3,
-                    precomputedCacheKey: poolKey);
+                // Cold Auto-mode dial: requests queue behind one handshake. Passing the capability key lets those
+                // waiters see the origin marked unreachable by the first failure and fall back to TCP at once,
+                // instead of each serially paying its own doomed handshake. The key is only built when cold, so
+                // a warm connection (the RPS case) allocates nothing extra.
+                var coldCapabilityKey = !isForcedH3 && !server.QuicConnectionPool.HasLiveConnection(poolKey)
+                    ? $"{sniHost}:{request.GetOriginHostPort(port).Port}"
+                    : null;
+                try
+                {
+                    quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
+                        connectHost, port, upStreamEndPoint, upstreamProxy,
+                        (sender, certificate, chain, errors) =>
+                            server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
+                        cancellationToken,
+                        sniHost: sniHost,
+                        failFastHandshake: !isForcedH3,
+                        capabilityKey: coldCapabilityKey,
+                        precomputedCacheKey: poolKey);
+                }
+                catch (OperationCanceledException ex) when (coldCapabilityKey != null
+                                                            && !cancellationToken.IsCancellationRequested)
+                {
+                    // The pool declined to dial because the origin was marked unreachable while this call
+                    // queued. A failure, not a cancelled request: the TCP fallback below handles it.
+                    throw new InvalidOperationException("QUIC unavailable: origin marked unreachable.", ex);
+                }
             }
 
             reused = !quicConn.ClaimFirstUse();
@@ -222,13 +240,14 @@ internal static partial class Http3OriginBridge
 
             // A silent QUIC path (handshake fine, no response) would otherwise hold the request until the
             // idle timeout. Bound only the very first frame, and only when replaying over TCP is safe.
-            var guardFirstFrame = !isForcedH3 && IsReplayableOnStall(request, finOnHeaders)
-                && !quicConn.HasDeliveredRecently(30_000);
+            // The cheap liveness test goes first: a warm connection (the RPS case) never looks at headers.
+            var guardFirstFrame = !isForcedH3 && !quicConn.HasDeliveredRecently(30_000)
+                && IsReplayableOnStall(request, finOnHeaders);
 
             while (true)
             {
                 var responseRead = await ReadResponseFrameAsync(originStream,
-                    server.MaxDecodedHeaderListBytes, guardFirstFrame, cancellationToken);
+                    server.MaxDecodedHeaderListBytes, guardFirstFrame, quicConn, cancellationToken);
                 if (responseRead.Stalled)
                 {
                     var stalledConn = quicConn;

@@ -44,6 +44,18 @@ public class Http3ResponseStallReplayTests
     }
 
     [TestMethod]
+    [DataRow("text/event-stream", false)]
+    [DataRow("Text/Event-Stream, */*", false)]
+    [DataRow("text/html", true)]
+    public void EventStreamRequests_AreNeverReplayed(string accept, bool replayable)
+    {
+        var request = new Request { Method = "GET" };
+        request.Headers.AddHeader("Accept", accept);
+
+        Assert.AreEqual(replayable, Http3OriginBridge.IsReplayableOnStall(request, requestHasNoBody: true));
+    }
+
+    [TestMethod]
     public void ZeroTimeout_DisablesReplay()
     {
         var saved = Http3OriginBridge.Http3ResponseStallTimeout;

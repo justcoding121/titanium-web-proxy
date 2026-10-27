@@ -42,33 +42,66 @@ internal static partial class Http3OriginBridge
             return false;
 
         var method = request.Method;
-        return string.Equals(method, "GET", StringComparison.Ordinal)
-               || string.Equals(method, "HEAD", StringComparison.Ordinal)
-               || string.Equals(method, "OPTIONS", StringComparison.Ordinal);
+        var safe = string.Equals(method, "GET", StringComparison.Ordinal)
+                   || string.Equals(method, "HEAD", StringComparison.Ordinal)
+                   || string.Equals(method, "OPTIONS", StringComparison.Ordinal);
+        return safe && !IsLongLivedStream(request);
     }
 
     /// <summary>
-    ///     Reads one response frame. With <paramref name="stallGuard" /> the read is bounded by
-    ///     <see cref="Http3ResponseStallTimeout" />. A timeout sets <c>Stalled</c>; cancellation by the
-    ///     caller still propagates as is.
+    ///     An event stream or long poll legitimately says nothing for longer than the stall timeout, and
+    ///     replaying it would open a second subscription and wrongly mark a healthy origin unreachable.
+    /// </summary>
+    private static bool IsLongLivedStream(Request request)
+    {
+        var accept = request.Headers.GetFirstHeader("Accept")?.Value;
+        return accept is not null && accept.Contains("text/event-stream", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    ///     Reads one response frame. With <paramref name="stallGuard" /> the first
+    ///     <see cref="Http3ResponseStallTimeout" /> of silence is treated as a dead path, unless
+    ///     <paramref name="connection" /> delivered a response on another stream in that time: then the path is
+    ///     alive, only this origin is slow, and the read keeps waiting. A stall sets <c>Stalled</c>;
+    ///     cancellation by the caller still propagates as is.
     /// </summary>
     private static async ValueTask<(Http3Frame? Frame, bool Stalled)> ReadResponseFrameAsync(
-        QuicStream stream, long maxPayloadBytes, bool stallGuard, CancellationToken cancellationToken)
+        QuicStream stream, long maxPayloadBytes, bool stallGuard, QuicServerConnection? connection,
+        CancellationToken cancellationToken)
     {
         if (!stallGuard)
             return (await Http3Frame.ReadAsync(stream, maxPayloadBytes, cancellationToken), false);
 
-        using var guard = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        guard.CancelAfter(Http3ResponseStallTimeout);
-        try
+        // The read itself is never cancelled by the timer: cancelling a QuicStream read aborts the stream, and
+        // a slow-but-alive origin must still be able to answer on it.
+        var read = Http3Frame.ReadAsync(stream, maxPayloadBytes, cancellationToken).AsTask();
+        var timeout = Http3ResponseStallTimeout;
+        using var timer = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var winner = await Task.WhenAny(read, Task.Delay(timeout, timer.Token));
+        if (winner == read)
         {
-            return (await Http3Frame.ReadAsync(stream, maxPayloadBytes, guard.Token), false);
+            await timer.CancelAsync();
+            return (await read, false);
         }
-        catch (OperationCanceledException) when (guard.IsCancellationRequested
-                                                 && !cancellationToken.IsCancellationRequested)
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (connection is not null && connection.HasDeliveredRecently((long)timeout.TotalMilliseconds))
+            return (await read, false);
+
+        ObserveAbandonedRead(read);
+        return (null, true);
+    }
+
+    /// <summary>Settles a read nobody waits for any more: hands a late frame's buffer back and observes the abort.</summary>
+    private static void ObserveAbandonedRead(Task<Http3Frame?> read)
+    {
+        _ = read.ContinueWith(static t =>
         {
-            return (null, true);
-        }
+            if (t.IsCompletedSuccessfully)
+                t.Result?.ReturnPayload();
+            else
+                _ = t.Exception; // the stream was aborted under it; nothing to report
+        }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
     /// <summary>Marks an origin unreachable and logs the window it got. Synchronous so the async callers keep no extra local.</summary>
