@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Net;
 using System.Security.Authentication;
 using Titanium.Web.Proxy.Abstractions.Clusters;

@@ -79,6 +79,20 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
+    ///     A drain can flip this field on another thread during the handshake. The read stays in its
+    ///     own method so it is not treated as dead after the earlier drain check.
+    /// </summary>
+    private void NoteUnreachableUnlessDraining(string capabilityKey)
+    {
+        if (_draining)
+        {
+            return;
+        }
+
+        _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+    }
+
+    /// <summary>
     ///     Returns the shared <see cref="QuicServerConnection" /> for the given origin, creating it if
     ///     there is none, with one in-flight stream already registered on the caller's behalf. The
     ///     caller must pass the result to <see cref="ReleaseAsync" /> or <see cref="InvalidateAsync" />
@@ -98,20 +112,6 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     warmup fail-fast before TCP fallback. Pass <see langword="false"/> for Forced H3 so the
     ///     dial uses the full <see cref="ProxyServer.ConnectTimeOutSeconds"/> budget.
     /// </param>
-    /// <summary>
-    ///     A drain can flip this field on another thread during the handshake. The read stays in its
-    ///     own method so it is not treated as dead after the earlier drain check.
-    /// </summary>
-    private void NoteUnreachableUnlessDraining(string capabilityKey)
-    {
-        if (_draining)
-        {
-            return;
-        }
-
-        _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
-    }
-
     internal async ValueTask<QuicServerConnection> GetOrCreateAsync( // NOSONAR S107 -- Pool acquire keeps origin identity, proxy, and handshake flags explicit.
         string connectHost,
         int port,

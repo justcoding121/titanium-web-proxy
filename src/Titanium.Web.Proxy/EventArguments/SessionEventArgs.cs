@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -130,7 +130,7 @@ public class SessionEventArgs : SessionEventArgsBase
     internal Func<CancellationToken, Task<byte[]>>? Http3BufferedBodyReader { get; set; }
 
     /// <summary>
-    ///     Native HTTP/3 only: pumps remaining client DATA payloads to <paramref name="writeData"/>
+    ///     Native HTTP/3 only: pumps remaining client DATA payloads to the origin request stream
     ///     without buffering the whole body. Set by <c>Http3RequestStream</c> when the body was not
     ///     read during BeforeRequest; used by H3→H1 / H3→H2 bridges and the H3→H3 <c>copyRequestBody</c>.
     /// </summary>

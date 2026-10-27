@@ -9,7 +9,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
@@ -17,7 +16,6 @@ using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy;
 
@@ -332,7 +330,7 @@ public partial class ProxyServer
                 {
                     LowercaseHeaderNames(interim.Headers);
                     await Http2Helper.EmitInterimResponseAsync(
-                        sessionArgs, streamId, connectionState, clientStream, interim, ct);
+                        streamId, connectionState, clientStream, interim, ct);
                 },
                 copyRequestBody: copyRequestBody);
 

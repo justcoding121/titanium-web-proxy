@@ -8,8 +8,8 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     A pass-through observer that identifies multipart/form-data boundaries in a streaming
 ///     body without buffering the full content. Bytes are forwarded verbatim (parsing is
-///     purely observational). Each part is reported via <see cref="OnPartHeaders"/> and
-///     <see cref="OnPartComplete"/> callbacks.
+///     purely observational). Each part is reported via <c>OnPartHeaders</c> and
+///     <c>OnPartComplete</c> callbacks.
 ///
 ///     Limits:
 ///     - Maximum boundary length: 70 bytes (RFC 2046 §5.1.1)

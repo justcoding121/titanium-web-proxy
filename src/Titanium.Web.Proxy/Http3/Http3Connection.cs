@@ -1,8 +1,6 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Net;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;

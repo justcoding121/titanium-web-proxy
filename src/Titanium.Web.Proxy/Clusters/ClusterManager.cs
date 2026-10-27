@@ -170,8 +170,6 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
             : DestinationState.Healthy;
     }
 
-    internal void SetActiveBackgroundTaskCount(int count) => ActiveBackgroundTaskCount = count;
-
     internal async Task ProbeActiveOnceAsync()
     {
         foreach (var prober in _probers)

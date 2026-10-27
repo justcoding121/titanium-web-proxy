@@ -132,7 +132,7 @@ public sealed class ProxyResourceLimits
 
     /// <summary>
     ///     Maximum number of generated leaf certificate files retained in the on-disk cache
-    ///     (<see cref="Certificates.CertificateManager.SaveFakeCertificates" />), pruned independently
+    ///     (<c>CertificateManager.SaveFakeCertificates</c>), pruned independently
     ///     of <see cref="MaxCertificateCacheEntries" />. Disk is far cheaper than the in-memory cache's
     ///     live <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2" /> handles,
     ///     and a warm disk cache avoids repeating expensive certificate generation across process
@@ -269,9 +269,8 @@ public sealed class ProxyResourceLimits
             MaxOpenHeaderBlockDuration = maxOpenHeaderBlockDuration,
             ConnectionPoolingEnabled = connectionPoolingEnabled,
             MaxCachedConnectionsPerHost = maxCachedConnectionsPerHost,
-            // SoftPick SoftGrow=SoftCap. Offer-once (seed only when pool empty) + MaxOrigin=1:
-            // H1 ALPN Offer flood ~0.89×; MaxOrigin=1 SoftPick long ~0.95× H1 TLS. SoftGrow=8
-            // cleartext MaxOrigin=8 Offer-once regresses local H3→h2c. SoftGrow=16 Offer-once rejected.
+            // One shared HTTP/2 connection per origin authority until its stream capacity fills; the pool
+            // seeds from a retained connection only when empty. More legs measured slower.
             MaxOriginHttp2ConnectionsPerAuthority = 1,
             MaxCertificateCacheEntries = maxCertificateCacheEntries,
             MaxHttp3FramePayloadBytes = 4 * 1024 * 1024,

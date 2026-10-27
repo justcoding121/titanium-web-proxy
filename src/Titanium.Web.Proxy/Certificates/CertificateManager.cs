@@ -252,7 +252,7 @@ public sealed class CertificateManager : IDisposable
 
     /// <summary>
     ///     Evicts the least-recently-used cached certificates until the count is at or below
-    ///     <see cref="ProxyResourceLimits.MaxCertificateCacheEntries" /> (via the provider passed to the
+    ///     <c>ProxyResourceLimits.MaxCertificateCacheEntries</c> (via the provider passed to the
     ///     constructor). Each entry holds a full <see cref="X509Certificate2" /> with a private key in
     ///     memory, so - unlike <see cref="ClearIdleCertificates" />'s time-based sweep, which only bounds
     ///     how long an entry can live - nothing previously bounded how large the cache could grow

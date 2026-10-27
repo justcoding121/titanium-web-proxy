@@ -1,30 +1,18 @@
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
-using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network.Streams;
-using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
-using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.Http2
@@ -733,8 +721,8 @@ namespace Titanium.Web.Proxy.Http2
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> and enqueues the framed HEADERS/CONTINUATION bytes.
         ///     When <paramref name="encoderAlreadyExclusive"/> is set (origin writeLock held), skips the
-        ///     nested <c>settings.Sync</c> — Mac dual-TLS H1→H2 profiles nested-lock + encode under
-        ///     writeLock as the multiplex convoy.
+        ///     nested <c>settings.Sync</c>, which would otherwise nest a second lock and the encode inside
+        ///     the writeLock and convoy multiplexed streams.
         /// </summary>
         internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
@@ -905,7 +893,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     <c>ProcessCompleteHeaderBlockAsync</c>. Flushing after the write is required so Navigation
         ///     Timing <c>responseStart</c> can move before the final response arrives.
         /// </summary>
-        internal static async Task EmitInterimResponseAsync(SessionEventArgs args, int streamId,
+        internal static async Task EmitInterimResponseAsync(int streamId,
             Http2ConnectionState connectionState, Stream clientStream, Response interim,
             CancellationToken cancellationToken)
         {
@@ -1045,8 +1033,8 @@ namespace Titanium.Web.Proxy.Http2
 
             // Keep origin Content-Length when known. Short delivery used to END_STREAM with a
             // truncated body and poison Chrome (YouTube blank tab); we now RST on length mismatch
-            // instead, so advertising CL is safe and matches Kestrel/YARP (and avoids an extra empty
-            // END_STREAM DATA when the last payload frame can carry the flag).
+            // instead, so advertising CL is safe (and avoids an extra empty END_STREAM DATA when the
+            // last payload frame can carry the flag).
             var advertisedLength = response.ContentLength;
 
             // HEADERS and every DATA frame for this stream flow through the dedicated client frame

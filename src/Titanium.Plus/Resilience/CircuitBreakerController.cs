@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using Titanium.Plus;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;

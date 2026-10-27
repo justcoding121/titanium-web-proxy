@@ -2,7 +2,6 @@ using System.Net;
 using System.Text;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Plus.Security;

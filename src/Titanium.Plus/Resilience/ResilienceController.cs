@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
-using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;

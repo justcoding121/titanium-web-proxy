@@ -44,12 +44,6 @@ public static class FirefoxCertificateTrust
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(250));
 
-    /// <summary>
-    ///     Mozilla enterprise policies.json root shape. Extra keys are preserved on merge so we
-    ///     do not wipe IT-managed policies when only ImportEnterpriseRoots is needed.
-    /// </summary>
-    internal const int FirefoxPoliciesSchemaCompat = 1;
-
     /// <summary>True when a Firefox profiles.ini (or common profile root) is present.</summary>
     public static bool IsFirefoxProfilePresent() => TryGetProfilesIniPath(out _);
 

@@ -98,7 +98,7 @@ public partial class ProxyServer
                         if (requestLine.IsEmpty()) return;
 
                         // Transparent reverse + no interception: try session-lite before SessionEventArgs
-                        // (new-connection TLS terminate: c=1 already leads YARP; c=32 paid full session GC).
+                        // (avoids building the full session graph for every new TLS-terminated connection).
                         // Never lite when the connection-level upstream is H2/H3 — ForwardH1TerminateLite
                         // always opens HTTP/1.1 TCP (H1→H3/H2 bridges were 100% err after session-lite).
                         var connectionUpstream = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
@@ -389,7 +389,7 @@ public partial class ProxyServer
                         // Route transforms (RequestHeaderSet / PathPrefix / …) must run while the
                         // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
                         // Taking the baseline before TryApply made MutationCount diverge and forced
-                        // the full session path (~0.75× CLI reverse for intercept-http1).
+                        // the full, slower session path.
                         var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
                         if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
                         {
@@ -983,12 +983,12 @@ public partial class ProxyServer
                 cancellationToken);
         };
 
-        /// Retry with new connection if the initial stream.WriteAsync call to server fails.
-        /// i.e if request line and headers failed to get send.
-        /// Do not retry after reading data from client stream, 
-        /// because subsequent try will not have data to read from client 
-        /// and will hang at clientStream.ReadAsync call.
-        /// So, throw RetryableServerConnectionException only when we are sure we can retry safely.
+        // Retry with new connection if the initial stream.WriteAsync call to server fails.
+        // i.e if request line and headers failed to get send.
+        // Do not retry after reading data from client stream,
+        // because subsequent try will not have data to read from client
+        // and will hang at clientStream.ReadAsync call.
+        // So, throw RetryableServerConnectionException only when we are sure we can retry safely.
         return await RetryPolicy<RetryableServerConnectionException>(args).ExecuteAsync(async connection =>
         {
             // set the connection and send request headers
@@ -1608,7 +1608,7 @@ public partial class ProxyServer
 
     /// <summary>
     ///     HTTP/1.0 has no <c>chunked</c> transfer-coding at all (it predates RFC 2616's introduction of
-    ///     it), so a request that is still <see cref="Request.IsChunked" /> when
+    ///     it), so a request that is still <c>Request.IsChunked</c> when
     ///     <see cref="HttpWebClient.ResolveOriginHttpVersion" /> says the origin will be declared "HTTP/1.0"
     ///     on the wire cannot be forwarded as-is: <see cref="OriginHttpVersionPolicy.PreserveClientVersion" />
     ///     (the default) mirrors whatever version the client declared, so an HTTP/1.0 client whose request

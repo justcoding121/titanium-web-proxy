@@ -2,7 +2,6 @@ using System;
 using System.Buffers;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Routing;
 

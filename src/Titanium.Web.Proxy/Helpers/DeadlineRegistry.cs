@@ -12,10 +12,10 @@ namespace Titanium.Web.Proxy.Helpers;
 ///     records, independent of whether the <see cref="Deadline" /> scope that owned it has since been
 ///     disposed by stack unwinding, which one actually elapsed first.
 ///     <para>
-///         <see cref="ProxyTimeoutScope" /> attributes a firing by comparing a scope's own linked token
-///         against its immediate parent at the moment some <em>later</em> code asks
-///         <c>IsTimedOut()</c> - which only works when that check runs before the scope is disposed.
-///         Once an inner scope's <c>using</c> block has already unwound (its <c>Dispose</c> ran during
+///         A deadline can attribute a firing by comparing its own linked token against its immediate
+///         parent at the moment some <em>later</em> code asks whether it timed out - which only works
+///         when that check runs before the deadline is disposed.
+///         Once an inner deadline's <c>using</c> block has already unwound (its <c>Dispose</c> ran during
 ///         exception propagation, before an outer, un-nested catch gets a chance to inspect anything),
 ///         there is nothing left to compare: the inner scope's tokens are gone. Composing several
 ///         deadlines - client-header, then request, then idle-write, potentially several layers of
@@ -26,7 +26,7 @@ namespace Titanium.Web.Proxy.Helpers;
 ///     <para>
 ///         Each catch site calls <see cref="Deadline.TryGetTimeoutException" /> on its own, still-live
 ///         <see cref="Deadline" />: that checks this deadline's own "mine, not my parent's" condition -
-///         the same test <see cref="ProxyTimeoutScope" /> performs - synchronously, before falling back
+///         the same test performed synchronously, before falling back
 ///         to this registry for a firing already recorded by some other (necessarily inner, thus
 ///         necessarily already-disposed) deadline that shares it. An earlier design instead registered a
 ///         <see cref="CancellationToken.Register(Action{object},object)" /> callback to record firings
@@ -140,10 +140,8 @@ internal sealed class DeadlineRegistry
     }
 
     /// <summary>
-    ///     A single active deadline, linked from some parent token. Mirrors <see cref="ProxyTimeoutScope" />'s
-    ///     public shape (<see cref="Token" />, <see cref="HasDeadline" />) so call sites read the same way;
-    ///     the difference is entirely in how a firing is attributed (see <see cref="DeadlineRegistry" />'s
-    ///     remarks).
+    ///     A single active deadline, linked from some parent token. Exposes <see cref="Token" /> and <see cref="HasDeadline" />;
+    ///     how a firing is attributed is described in the <see cref="DeadlineRegistry" /> remarks.
     /// </summary>
     public sealed class Deadline : IDisposable
     {
@@ -194,8 +192,8 @@ internal sealed class DeadlineRegistry
         public bool HasDeadline => linkedCts != null;
 
         /// <summary>
-        ///     True when this deadline's own timer - not an ancestor's - is what elapsed. Mirrors
-        ///     <see cref="ProxyTimeoutScope.IsTimedOut" />; evaluated fresh every call rather than cached,
+        ///     True when this deadline's own timer - not an ancestor's - is what elapsed.
+        ///     Evaluated fresh every call rather than cached,
         ///     since it must stay correct if some other deadline was attributed first (see
         ///     <see cref="TryGetTimeoutException" />).
         /// </summary>

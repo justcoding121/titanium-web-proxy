@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.Http2;
 ///             so nothing forwarded here is ever meant to reach a real peer.
 ///         </item>
 ///         <item>
-///             Every read after the initial SETTINGS frame blocks until <paramref name="cancellationToken"/> (from
+///             Every read after the initial SETTINGS frame blocks until the token (from
 ///             the constructor) is cancelled, which happens once the real client-facing leg ends for any reason
 ///             (see <see cref="Http2Helper.SendHttp2" />) - it must never return 0 (EOF) on its own, since that
 ///             would make the generic relay loop treat this direction as "the server closed the connection" and

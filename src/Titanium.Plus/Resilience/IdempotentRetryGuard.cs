@@ -1,4 +1,3 @@
-using Titanium.Plus;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;

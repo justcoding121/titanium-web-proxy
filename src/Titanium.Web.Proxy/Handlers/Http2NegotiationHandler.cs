@@ -465,7 +465,7 @@ public partial class ProxyServer
 
     /// <summary>
     ///     Opens an additional HTTP/2 origin TCP connection for multi-leg same-protocol relay
-    ///     (<see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority" />).
+    ///     (<c>ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority</c>).
     /// </summary>
     private async Task<TcpServerConnection> OpenAdditionalOriginHttp2ConnectionAsync(
         string remoteHostName, int remotePort, string? connectHost, int? connectPort,
@@ -543,7 +543,7 @@ public partial class ProxyServer
     ///                 Probe done before ServerHello (warm cache or probe finishes within
     ///                 <see cref="Http2ServerHelloProbeBudget" />): <paramref name="negotiation" /> is not null.
     ///                 <c>http2Supported</c> is set correctly — h2 is offered only if the origin actually
-    ///                 supports it and <see cref="TunnelConnectEventArgs.AllowHttpProtocolTranslation" /> is
+    ///                 supports it and <c>AllowHttpProtocolTranslation</c> is
     ///                 respected for the h1-only origin case (no false h2 promise to the client).
     ///             </item>
     ///             <item>

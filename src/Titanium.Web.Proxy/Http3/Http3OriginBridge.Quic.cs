@@ -4,26 +4,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Quic;
-using System.Net.Security;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -222,8 +215,7 @@ internal static partial class Http3OriginBridge
             }
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
-            // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
-            // Always Flush on all OS (Darwin skip-Flush A/B regressed Mac÷YARP). When HEADERS/DATA
+            // ms late, so always Flush on every OS (skipping it on macOS measurably lowered RPS). When HEADERS/DATA
             // already packed STREAM+FIN via completeWrites:true, CompleteWrites is a no-op / throw —
             // only finish the write side if it is still open (body copy path).
             await originStream.FlushAsync(cancellationToken);
@@ -408,8 +400,8 @@ internal static partial class Http3OriginBridge
                     }
                 }
 
-                // Drain to FIN so Dispose does not RST a live H3 request stream (pool poison →
-                // handshake-per-request under load; cool H1→H3 fell ~1.16× → ~0.7×).
+                // Drain to FIN so Dispose does not reset a live H3 request stream; a reset poisons the pooled
+                // connection and forces a new handshake per request under load.
                 while (true)
                 {
                     var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
@@ -787,10 +779,9 @@ internal static partial class Http3OriginBridge
                     await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders,
                         cancellationToken, completeWrites: true);
                     requestSent = true;
-                    // QuicStream WriteAsync may buffer; without Flush the peer can stall forever
-                    // under multiplex (GHA Linux/Windows reverse H3→H3 @ c=64: 0 RPS / ~0% CPU).
-                    // Darwin A/B skipping Flush (27d2967d) dropped Mac reverse RPS (~5k→~3–4k) and
-                    // worsened H3÷YARP — keep Flush on all OS. completeWrites:true already FINs.
+                    // QuicStream WriteAsync may buffer; without Flush the peer can stall indefinitely under
+                    // multiplex load on Linux and Windows, and skipping it on macOS lowered RPS. Keep Flush on
+                    // every OS. completeWrites:true already sends the FIN.
                     await originStream.FlushAsync(cancellationToken);
 
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.

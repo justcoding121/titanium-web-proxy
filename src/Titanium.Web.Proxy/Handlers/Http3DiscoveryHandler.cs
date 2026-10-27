@@ -1,7 +1,5 @@
 using System;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Logging;
@@ -211,17 +209,5 @@ public partial class ProxyServer
             SvcbDiscoveryCoordinator.QueueDiscovery(host, port);
 
         return Http3OriginRoute.None;
-    }
-
-    /// <summary>
-    ///     Returns <see langword="true" /> when this request should be forwarded to the origin over
-    ///     HTTP/3 rather than the normal TCP pipeline. Evaluated in <c>HandleHttpSessionRequest</c>
-    ///     before the TCP connection generator runs. Cache-only: this path does not warm SVCB.
-    /// </summary>
-    internal bool ShouldUseHttp3Origin(SessionEventArgs args)
-    {
-        var (host, port) = args.HttpClient.Request.GetOriginHostPort(443);
-
-        return ResolveHttp3Origin(host, port, args.UpstreamHttpProtocol, allowDnsProbe: false).UseH3;
     }
 }

@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Titanium.Plus.ControlPlane;
-using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;

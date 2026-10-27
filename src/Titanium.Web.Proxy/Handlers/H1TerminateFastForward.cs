@@ -15,9 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.StreamExtended.Network;
 using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy;
@@ -79,8 +77,8 @@ public partial class ProxyServer
     /// <summary>
     ///     Interception-off transparent reverse with fixed <see cref="TransparentBaseProxyEndPoint.ForwardHost" />:
     ///     bodiless GET/HEAD without allocating <see cref="SessionEventArgs" /> (H3→H1 session-lite analogue).
-    ///     New-connection TLS terminate pays Schannel per accept; skipping the session graph cuts parallel
-    ///     GC under c=32 (cool: c=1 already leads YARP, c=32 was ~0.88–0.90×).
+    ///     New-connection TLS terminate already pays a handshake per accept; skipping the session graph
+    ///     avoids the allocation and GC cost of building it for every connection under concurrency.
     ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
     ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
     ///     Pre-origin middleware (CIDR/WAF/JWT/rate-limit/cache/CORS) runs on this path via

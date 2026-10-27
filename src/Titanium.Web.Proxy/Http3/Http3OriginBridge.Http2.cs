@@ -1,28 +1,19 @@
 #pragma warning disable CA1416
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -231,9 +222,9 @@ internal static partial class Http3OriginBridge
     /// <summary>
     ///     Session-less H3→H3 forward for the interception-off bodiless path.
     ///     Request: QPACK encode from the Request bag (authority rewrite for ForwardHost).
-    ///     Response when <paramref name="clientStream"/> is non-null: <b>verbatim frame relay</b>
+    ///     Response when a client stream is supplied: <b>verbatim frame relay</b>
     ///     (H2 compressed-relay analogue) — no response QPACK decode/re-encode / <see cref="Response"/> graph.
-    ///     When <paramref name="clientStream"/> is null (MITM unchanged-lite): capture the first
+    ///     When no client stream is supplied (MITM unchanged-lite): capture the first
     ///     HEADERS QPACK block (+ tiny DATA) into <see cref="H3H2FastForward.PreencodedQpackHeaders"/>
     ///     and populate <see cref="H3H2FastForward.Response"/> so BeforeResponse can run before emit.
     ///     Returns <see langword="true"/> when the client response is already on the wire, or when

@@ -1,10 +1,7 @@
 using System;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
-using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Routing;
 

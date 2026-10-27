@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Text;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers.WinHttp;

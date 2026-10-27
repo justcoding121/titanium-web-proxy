@@ -946,7 +946,7 @@ public partial class ProxyServer
     ///     Implements the RFC 8441 h2-client → HTTP/1.1-origin WebSocket tunnel. Opens a dedicated
     ///     HTTP/1.1 TCP connection to the origin, performs the WebSocket upgrade handshake (GET +
     ///     Upgrade: websocket), and if the origin responds 101, signals the h2 client with 200 OK and
-    ///     relays DATA frames bidirectionally until either side closes. Uses <see cref="RespondStreaming"/>
+    ///     relays DATA frames bidirectionally until either side closes. Uses <c>RespondStreaming</c>
     ///     so the 200 HEADERS frame carries no END_STREAM and the h2 stream stays open for DATA relay;
     ///     END_STREAM is sent automatically when the streaming body completes.
     /// </summary>

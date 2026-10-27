@@ -1,28 +1,13 @@
 #pragma warning disable CA1416
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net.Quic;
-using System.Net.Security;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Http2;
-using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
-using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 

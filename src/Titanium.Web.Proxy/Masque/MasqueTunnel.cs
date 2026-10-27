@@ -51,7 +51,7 @@ internal sealed class MasqueTunnelOpen
 /// <summary>Opens and relays one CONNECT-UDP tunnel. The HTTP listener owns the response.</summary>
 internal static class MasqueTunnel
 {
-    /// <summary>Returns a rejection status. Zero means <paramref name="open"/> owns the socket.</summary>
+    /// <summary>Returns a rejection status. Zero means the returned <c>Open</c> owns the socket.</summary>
     public static async Task<(int Status, string? Body, MasqueTunnelOpen? Open)> OpenAsync(
         MasqueProxyEndPoint endPoint, string host, int port, ILogger logger, CancellationToken cancellationToken)
     {

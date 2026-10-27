@@ -4,7 +4,7 @@ namespace Titanium.Web.Proxy.Http3;
 
 /// <summary>
 ///     Carries the resolved H3 routing decision for one upstream origin, produced by
-///     <see cref="ProxyServer.ResolveHttp3OriginAsync" /> and consumed by
+///     <see cref="ProxyServer.ResolveHttp3Origin" /> and consumed by
 ///     <see cref="Http3OriginBridge" /> and the H2→H3 bridge handler.
 /// </summary>
 internal readonly struct Http3OriginRoute

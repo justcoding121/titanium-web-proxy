@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -13,7 +12,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Http;
@@ -21,7 +19,6 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
-using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Abstractions;
@@ -896,7 +893,7 @@ public partial class ProxyServer : IDisposable
     ///     <see cref="Models.OriginHttpVersionPolicy.NormalizeToHttp11" /> to let HTTP/1.0 clients share pooled,
     ///     persistent origin connections the same way HTTP/1.1 clients already do. This only changes the wire
     ///     version written to the origin request line - it never changes the client-facing
-    ///     <see cref="Http.Request.HttpVersion" /> that event handlers observe, nor the version/persistence used
+    ///     <c>Request.HttpVersion</c> that event handlers observe, nor the version/persistence used
     ///     to write the response back to the client.
     /// </summary>
     public OriginHttpVersionPolicy OriginHttpVersionPolicy { get; set; } = OriginHttpVersionPolicy.PreserveClientVersion;
@@ -1567,12 +1564,6 @@ public partial class ProxyServer : IDisposable
     internal bool HasOnRequestBodyWriteSubscribers => OnRequestBodyWrite != null;
     internal bool HasOnResponseBodyWriteSubscribers => OnResponseBodyWrite != null;
 
-    internal Task InvokeOnRequestBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
-        OnRequestBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
-
-    internal Task InvokeOnResponseBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
-        OnResponseBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
-
     /// <summary>
     ///     Intercept after response event from server.
     /// </summary>
@@ -2192,7 +2183,7 @@ public partial class ProxyServer : IDisposable
 
         minWorkerThreads = Math.Min(maxWorkerThreads, Math.Max(workerThreads, Environment.ProcessorCount));
         // Mirror worker floor onto IOCP: H2 FrameWriter + SocketAsyncEventArgs compete on the
-        // completion-port pool; leaving IOCP at ProcessorCount starved reverse h2c (~0.5–0.7× YARP).
+        // completion-port pool; leaving IOCP at ProcessorCount starved reverse h2c throughput.
         minCompletionPortThreads = Math.Min(maxCompletionPortThreads,
             Math.Max(minCompletionPortThreads, minWorkerThreads));
 
@@ -2206,7 +2197,7 @@ public partial class ProxyServer : IDisposable
     /// <param name="tcpClientSocket">The client socket.</param>
     /// <param name="endPoint">The proxy endpoint.</param>
     /// <param name="clientHelloWait">
-    ///     Zero-byte <see cref="Socket.ReceiveAsync(Memory{byte}, SocketFlags)" /> armed on the accept
+    ///     Zero-byte <c>Socket.ReceiveAsync</c> armed on the accept
     ///     thread; completes when the first ClientHello (or FIN) is readable without consuming it.
     /// </param>
     /// <returns>The task.</returns>

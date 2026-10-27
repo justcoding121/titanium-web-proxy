@@ -52,8 +52,8 @@ public partial class ProxyServer
 
             // Fixed leaf + HTTP/1-only reverse terminate: skip ClientHello peek and authenticate on
             // NetworkStream (same unwrap as origin HTTPS). Nesting HttpClientStream under SslStream
-            // forced an extra buffered layer on every new-connection handshake — Windows Schannel
-            // paid that more than Linux (compare-tls-cost NC tiny ~0.84× YARP).
+            // forced an extra buffered layer on every new-connection handshake, which cost Windows
+            // Schannel more than Linux.
             // Require !EnableHttp2: fixed path always offers http/1.1-only ALPN and never routes
             // negotiated "h2" into H2 bridges. WarmTls that pins http/1.1 under EnableHttp2=true
             // must not take this path (H2 reverse ALPN fail). EnableHttp3 is OK — H3 clients arrive

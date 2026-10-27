@@ -268,7 +268,7 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         }
 
         if (state == DestinationState.Unhealthy &&
-            !(passive is { Enabled: true } && _health.IsTrialDue(dest.Id, passive)))
+            !(passive is { Enabled: true } && _health.IsTrialDue(dest.Id)))
         {
             return false;
         }

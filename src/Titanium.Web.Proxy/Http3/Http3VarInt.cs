@@ -123,7 +123,7 @@ internal static class Http3VarInt
     }
 
     /// <summary>
-    ///     Reads a variable-length integer from a <see cref="Stream" /> (including <see cref="QuicStream" />).
+    ///     Reads a variable-length integer from a <see cref="Stream" /> (including a QUIC stream).
     ///     Returns <see langword="null" /> when the stream ends before a complete integer arrives.
     /// </summary>
     public static ValueTask<ulong?> ReadAsync(Stream stream, CancellationToken cancellationToken)

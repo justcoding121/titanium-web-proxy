@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.IO.Compression;
 using System.Net;
-using Titanium.Cli;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.EventArguments;

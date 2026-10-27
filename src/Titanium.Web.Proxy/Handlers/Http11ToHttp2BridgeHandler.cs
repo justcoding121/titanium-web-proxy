@@ -162,9 +162,8 @@ public partial class ProxyServer
                         // The client leg here is genuine HTTP/1.1 wire bytes (this bridge only changes
                         // what the *origin* connection speaks), so the same wire-framing rules as
                         // RequestHandler apply before anything observes pre-normalization values.
-                        // Fast path (probe / no handlers): skip validator + SetOriginalHeaders copies —
-                        // Mac dual-TLS H1→H2 residual is multiplex, but every keep-alive still paid
-                        // framing + original-header snapshot Gen0 with no user-visible benefit.
+                        // Fast path (no handlers subscribed): skip the validator and the
+                        // SetOriginalHeaders copies, which nothing could observe.
                         if (!args.IsFastPath)
                         {
                             try
@@ -373,7 +372,7 @@ public partial class ProxyServer
         string remoteHostName, int remotePort, string? connectHost, int? connectPort, // NOSONAR S1172 -- retained for call-site / overload symmetry with exchange path
         Task<TcpServerConnection?> retainedConnectionTask, CancellationToken cancellationToken)
     {
-        TcpServerConnection? seedConnection = null;
+        TcpServerConnection? seedConnection;
         try
         {
             seedConnection = await retainedConnectionTask;
@@ -396,9 +395,9 @@ public partial class ProxyServer
         if (seedConnection == null)
             return;
 
-        // SoftPick SoftGrow: only seed the first origin leg from the negotiation-retained ALPN
-        // connection. Later H1 clients must Rent/SoftGrow — Offer-flooding MaxOrigin dual-TLS
-        // legs from every client left Mac H1 TLS→H2 ~0.89× (pool dig avgMembers≈7–8).
+        // Only seed the first origin leg from the negotiation-retained connection. Later H1 clients
+        // must rent from the pool, which grows on demand: offering every client's retained connection
+        // filled the pool with idle legs and measured slower.
         if (Http2OriginConnectionPool.HasAny(poolKey)
             || Http2OriginConnectionPool.IsAtMaxOriginCapacity(poolKey))
         {
@@ -598,10 +597,10 @@ public partial class ProxyServer
             // read loop - so it is safe to write to clientStream without additional synchronization.
             //
             // Passthrough lite: when no session handlers are subscribed and RFC 8441 is off, skip the
-            // per-request InterimChannel and wait only on HeadersReceived. Probe origins do not emit 1xx.
-            // AllocTick showed Channel/segment Gen0 as a TWP-only tax vs YARP. Keep Channel+relay when
-            // interception is on so Early Hints still forward. Diag env TWP_DIAG_HEADERS_WAIT_TCS set to 1
-            // forces lite (cached at type init, not looked up per request).
+            // per-request InterimChannel and wait only on HeadersReceived, saving a channel allocation per
+            // request. Keep the channel and relay when interception is on so Early Hints still forward.
+            // Diag env TWP_DIAG_HEADERS_WAIT_TCS set to 1 forces lite (cached at type init, not looked up
+            // per request).
             var useLiteHeadersWait = DiagForceLiteHeadersWait
                 || (!NeedsHttpInterception(args.ProxyEndPoint) && !EnableRfc8441);
             Func<int, HeaderCollection, CancellationToken, Task>? relayInterim = null;

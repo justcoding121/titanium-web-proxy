@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Security;
@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Network.Tcp;
 
@@ -83,7 +82,7 @@ internal class TcpClientConnection : IDisposable
     public long Id { get; } = ConnectionId.Next();
 
     /// <summary>
-    ///     Accept-thread zero-byte <see cref="Socket.ReceiveAsync(System.Memory{byte}, SocketFlags)" /> —
+    ///     Accept-thread zero-byte <c>Socket.ReceiveAsync</c> —
     ///     must complete before any socket read (<see cref="SslStream.AuthenticateAsServerAsync" /> /
     ///     ClientHello peek). Cleared after await.
     /// </summary>

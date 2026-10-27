@@ -3,7 +3,6 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Titanium.Cli;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
 using Titanium.Cli.Service;

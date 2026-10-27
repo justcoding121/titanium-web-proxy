@@ -2,7 +2,6 @@ using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
-using Titanium.Cli;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;

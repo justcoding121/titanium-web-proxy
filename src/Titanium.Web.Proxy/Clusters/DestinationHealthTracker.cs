@@ -180,7 +180,7 @@ public sealed class DestinationHealthTracker
     }
 
     /// <summary>True when an ejected destination is due for one half-open trial.</summary>
-    internal bool IsTrialDue(string destinationId, PassiveHealthConfig passive)
+    internal bool IsTrialDue(string destinationId)
     {
         if (!_reactivateAt.TryGetValue(destinationId, out var at))
         {

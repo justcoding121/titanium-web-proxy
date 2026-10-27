@@ -14,11 +14,9 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -116,8 +114,7 @@ internal static class Http3RequestStream
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
 
                 // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
-                // Same playbook that beat YARP on H2 (lightweight session args): keep Request for
-                // HPACK/QPACK only. Covers forced H3→H2 / H3→H3 / H3→H1 reverse probes.
+                // Keep only the Request, for HPACK/QPACK encoding. Covers forced H3→H2 / H3→H3 / H3→H1 reverse.
                 if (interceptionOff
                     && !Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(server.ReverseProxy, endPoint)
                     && !server.EnableRfc8441
@@ -140,7 +137,7 @@ internal static class Http3RequestStream
                 // Always link stream CTS ↔ connection token: FinalizeAllStreamsAsync Cancel()s the
                 // stream CTS, and sessionArgs.CancellationToken must observe that (skipping the
                 // link and setting OperationCancellationToken to the connection token alone left
-                // abortable waiters stuck and cooled H3→H2 ratio ~0.67×).
+                // abortable waiters stuck).
                 cts = new CancellationTokenSource();
                 linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
 
@@ -580,7 +577,7 @@ internal static class Http3RequestStream
 
     /// <summary>
     ///     Interception-off H3→origin bodiless path: one <see cref="Request" /> + stream CTS, no
-    ///     <see cref="SessionEventArgs" /> graph (matches YARP's lack of a proxy session bag).
+    ///     <see cref="SessionEventArgs" /> graph.
     ///     Dispatches to H3→H2 / H3→H3 / H3→H1 session-lite forwards.
     /// </summary>
     private static async Task HandleH3OriginFastPathAsync( // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
