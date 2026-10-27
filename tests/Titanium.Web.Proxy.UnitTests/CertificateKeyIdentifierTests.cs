@@ -27,7 +27,7 @@ public class CertificateKeyIdentifierTests
         foreach (var engine in new[] { CertificateEngine.BouncyCastle, CertificateEngine.BouncyCastleFast })
         foreach (var algorithm in new[] { CertificateKeyAlgorithm.Rsa2048, CertificateKeyAlgorithm.EcdsaP256 })
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = engine,
                 LeafCertificateKeyAlgorithm = algorithm,
@@ -72,7 +72,7 @@ public class CertificateKeyIdentifierTests
         {
             foreach (var algorithm in new[] { CertificateKeyAlgorithm.Rsa2048, CertificateKeyAlgorithm.EcdsaP256 })
             {
-                using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 {
                     CertificateEngine = CertificateEngine.BouncyCastleFast,
                     LeafCertificateKeyAlgorithm = algorithm,
@@ -143,7 +143,7 @@ public class CertificateKeyIdentifierTests
 
         foreach (var engine in new[] { CertificateEngine.BouncyCastle, CertificateEngine.BouncyCastleFast })
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = engine,
             };

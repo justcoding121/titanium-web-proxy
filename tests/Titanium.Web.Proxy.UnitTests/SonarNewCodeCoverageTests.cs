@@ -1247,7 +1247,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void CertificateManager_CachedCountAndEngineBranch()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -1265,7 +1265,7 @@ public class SonarNewCodeCoverageTests
         // Touch Windows engine setter path on Windows only (throws elsewhere).
         if (RunTime.IsWindows)
         {
-            using var win = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var win = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.DefaultWindows
             };
@@ -1352,7 +1352,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void CertificateManager_OsTrustSuppressArms_DoNotOpenDialogs()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -1606,7 +1606,7 @@ public class SonarNewCodeCoverageTests
         var noMax = typeof(CertificateManager).GetMethod("NoMaxCacheEntries", PrivateStatic)!;
         Assert.IsNull(noMax.Invoke(null, null));
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             SaveFakeCertificates = true,
@@ -1683,7 +1683,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void CertificateManager_RemoveTrustedAndEnsureRoot_SuppressArms()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -2128,7 +2128,7 @@ public class SonarNewCodeCoverageTests
         Assert.AreEqual(4, ordered.Length);
         Assert.AreEqual(0, TcpConnectionFactory.InterleaveByAddressFamily([]).Length);
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
         };
