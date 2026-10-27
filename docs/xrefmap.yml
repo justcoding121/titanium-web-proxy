@@ -4228,6 +4228,19 @@ references:
   commentId: T:Titanium.Web.Proxy.Http.HttpWebClient
   fullName: Titanium.Web.Proxy.Http.HttpWebClient
   nameWithType: HttpWebClient
+- uid: Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion
+  name: ClientHttpVersion
+  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_ClientHttpVersion
+  commentId: P:Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion
+  fullName: Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion
+  nameWithType: HttpWebClient.ClientHttpVersion
+- uid: Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion*
+  name: ClientHttpVersion
+  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_ClientHttpVersion_
+  commentId: Overload:Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion
+  nameWithType: HttpWebClient.ClientHttpVersion
 - uid: Titanium.Web.Proxy.Http.HttpWebClient.ConnectRequest
   name: ConnectRequest
   href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_ConnectRequest
@@ -4254,6 +4267,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.HttpWebClient.IsHttps
   nameWithType: HttpWebClient.IsHttps
+- uid: Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion
+  name: OriginHttpVersion
+  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_OriginHttpVersion
+  commentId: P:Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion
+  fullName: Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion
+  nameWithType: HttpWebClient.OriginHttpVersion
+- uid: Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion*
+  name: OriginHttpVersion
+  href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_OriginHttpVersion_
+  commentId: Overload:Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion
+  nameWithType: HttpWebClient.OriginHttpVersion
 - uid: Titanium.Web.Proxy.Http.HttpWebClient.ProcessId
   name: ProcessId
   href: api/Titanium.Web.Proxy.Http.HttpWebClient.html#Titanium_Web_Proxy_Http_HttpWebClient_ProcessId
