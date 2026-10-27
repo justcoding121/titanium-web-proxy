@@ -309,6 +309,30 @@ public class GapClosureTests
     }
 
     [TestMethod]
+    public async Task Mirror_RefusesRequestLineWithControlCharacters()
+    {
+        var seen = 0;
+        using var fanout = new MirrorDispatcher
+        {
+            Sender = _ =>
+            {
+                Interlocked.Increment(ref seen);
+                return Task.CompletedTask;
+            },
+        };
+        var config = new MirrorConfig { ClusterId = "m", MaxConcurrency = 1 };
+        var request = new Request { Method = "GET", Host = "app.test" };
+        request.RequestUriString8 = (ByteString)"/x HTTP/1.1\r\nX-Injected: 1";
+
+        fanout.TryEnqueue(config, request, MirrorDestination("m.test"), "r");
+        fanout.TryEnqueue(config, MirrorRequest(), MirrorDestination("m.test"), "r");
+
+        Assert.IsTrue(await WaitUntilAsync(() => Volatile.Read(ref seen) >= 1));
+        await Task.Delay(50);
+        Assert.AreEqual(1, Volatile.Read(ref seen), "only the clean request is mirrored");
+    }
+
+    [TestMethod]
     public async Task Mirror_ABusyRouteDoesNotDelayAnotherRoute()
     {
         var slowGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

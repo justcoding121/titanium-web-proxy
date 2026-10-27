@@ -104,7 +104,10 @@ internal sealed class MirrorDispatcher : IDisposable
             return;
         }
 
+        // The copy is written as raw text. A request line or Host value with a space or line break would
+        // split into a second request on the mirror, so such a request is skipped rather than rewritten.
         if (destination is null || destination.Address.StartsWith("unix:", StringComparison.OrdinalIgnoreCase) ||
+            !IsSafeRequestLine(request.Method ?? "GET", path, request.Host) ||
             !TryCopyBody(mirror, request, out var body))
         {
             Interlocked.Increment(ref skipped);
@@ -229,12 +232,32 @@ internal sealed class MirrorDispatcher : IDisposable
         return body.Length <= cap;
     }
 
+    private static bool IsSafeRequestLine(string method, string path, string? host) =>
+        method.Length > 0 && path.Length > 0 &&
+        !HasControlOrSpace(method) && !HasControlOrSpace(path) && !HasLineBreak(host);
+
+    private static bool HasControlOrSpace(string value)
+    {
+        foreach (var ch in value)
+        {
+            if (ch <= ' ' || ch == 0x7f)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasLineBreak(string? value) =>
+        value is not null && value.AsSpan().IndexOfAny('\r', '\n') >= 0;
+
     private static string CopyHeaders(Request request)
     {
         var block = new StringBuilder();
         foreach (var header in request.Headers)
         {
-            if (IsHopByHop(header.Name))
+            if (IsHopByHop(header.Name) || HasLineBreak(header.Name) || HasLineBreak(header.Value))
             {
                 continue;
             }
