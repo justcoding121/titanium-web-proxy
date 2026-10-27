@@ -411,4 +411,6 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> strin
 [TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint.MasqueProxyEndPoint(System.Net.IPAddress! ipAddress, int port) -> void
 [TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options.get -> Titanium.Web.Proxy.Models.MasqueOptions!
 [TWP001]Titanium.Web.Proxy.Models.MasqueProxyEndPoint.Options.set -> void
+Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion.get -> System.Version!
+Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion.get -> System.Version!
 

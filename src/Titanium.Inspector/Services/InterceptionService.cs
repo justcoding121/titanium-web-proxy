@@ -2455,8 +2455,9 @@ public sealed class InterceptionService : IDisposable
         var resp = e.HttpClient.Response;
         snap.StatusCode = resp.StatusCode;
         snap.ResponseHeadersText = FormatHeaders(resp.Headers);
+        // The two legs, not the raw Request/Response versions: a bridge rewrites those for the wire.
         snap.Protocol = SessionDisplayFormat.FormatClientServer(
-            e.HttpClient.Request.HttpVersion, resp.HttpVersion);
+            e.HttpClient.ClientHttpVersion, e.HttpClient.OriginHttpVersion);
         // Body throws BodyNotFoundException when the response has no body (204, Content-Length: 0, 304),
         // even though such responses are marked IsBodyRead. That used to abort FillResponse and leave the
         // row without status / origin protocol.
@@ -2724,9 +2725,17 @@ public sealed class InterceptionService : IDisposable
     private static bool IsNativeHttp2Exchange(SessionEventArgs e) =>
         e.HttpClient.Request.HttpVersion.Major == 2 && e.HttpClient.Response.HttpVersion.Major == 2;
 
-    /// <summary>Multiplexed clients pay the exchange latency in BeforeRequest, where waits overlap across streams.</summary>
+    /// <summary>
+    ///     Multiplexed clients pay the exchange latency in BeforeRequest, where waits overlap across streams.
+    ///     Decided on the client leg (<see cref="Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion"/>), not
+    ///     <c>Request.HttpVersion</c>: an h2 client bridged onto an HTTP/1.1 origin has its request rewritten to
+    ///     1.1 by BeforeResponse, which made this answer flip and charge the latency a second time.
+    /// </summary>
     private static bool LatencyPaidOnRequestSide(SessionEventArgs e) =>
-        e.HttpClient.Request.HttpVersion.Major == 2;
+        LatencyPaidOnRequestSide(e.HttpClient.ClientHttpVersion);
+
+    internal static bool LatencyPaidOnRequestSide(Version clientHttpVersion) =>
+        clientHttpVersion.Major == 2;
 
     private static string ThrottleEventKey(NetworkThrottleProfile profile) => profile.Name switch
     {

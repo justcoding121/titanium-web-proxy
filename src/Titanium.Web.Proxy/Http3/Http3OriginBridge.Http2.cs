@@ -313,6 +313,9 @@ internal static partial class Http3OriginBridge
                 on1xx, cancellationToken, copyRequestBody);
 
             var response = exchange.Response;
+            // The origin leg is HTTP/2 whatever version the response is stamped with below (or by
+            // Http2OriginConnection, which stamps HTTP/1.1 for an H1 client). Hosts label from this.
+            sessionArgs.HttpClient.RecordOriginHttpVersion(HttpHeader.Version20);
             // H3 clients must see an HTTP/3 response. An H2 client that fell back off QUIC must
             // keep the HTTP/2 response the origin actually sent.
             if (presentResponseAsHttp3)

@@ -377,6 +377,9 @@ public partial class ProxyServer
         // afterward so AfterResponse / traffic tape report H2↔H1.1 instead of H1.1↔H1.1. Same pattern
         // as Http3OriginBridge.ForwardOverTcpAsync.
         var clientHttpVersion = request.HttpVersion;
+        // The rewrite below is wire-local, but BeforeResponse still runs while it is in effect. Record the real
+        // client leg so hosts can label and branch on it (the origin leg is the HTTP/1.1 response as parsed).
+        sessionArgs.HttpClient.RecordClientHttpVersion(clientHttpVersion);
 
         try
         {

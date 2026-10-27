@@ -151,6 +151,71 @@ public class HttpWebClient
 
     private Response? response;
 
+    // The legs are stored as one byte each (major * 10 + minor, 0 = not recorded) rather than as Version
+    // references: only 1.0 / 1.1 / 2.0 / 3.0 are ever recorded, so this adds no pointer for the GC to scan and
+    // packs into existing field padding. Native exchanges never write either field.
+
+    /// <summary>
+    ///     Client-facing leg recorded by a translation bridge that rewrites <see cref="Request" />'s version for
+    ///     the origin wire. Zero on every native exchange.
+    /// </summary>
+    private byte clientLegHttpVersion;
+
+    /// <summary>
+    ///     Origin-facing leg recorded by a translation bridge that stamps the response with the client's version
+    ///     so the client-side status line is valid. Zero on every native exchange.
+    /// </summary>
+    private byte originLegHttpVersion;
+
+    /// <summary>
+    ///     HTTP version of the client-facing leg: what the client negotiated with the proxy.
+    ///     Equals <c>Request.HttpVersion</c> except while a translation bridge has rewritten the request's
+    ///     version for the origin wire (an HTTP/2 client bridged onto an HTTP/1.1 origin reports
+    ///     <c>2.0</c> here for the whole exchange). Use this, not <c>Request.HttpVersion</c>, to label or
+    ///     branch on the client protocol. <c>0.0</c> when unknown.
+    /// </summary>
+    public Version ClientHttpVersion =>
+        clientLegHttpVersion == 0 ? Request.HttpVersion : DecodeLegVersion(clientLegHttpVersion);
+
+    /// <summary>
+    ///     HTTP version of the origin-facing leg: what the proxy actually spoke to the origin.
+    ///     Equals <c>Response.HttpVersion</c> except where a bridge stamps the response with the client's
+    ///     version for the client-side status line (an HTTP/1.1 client bridged onto an HTTP/2 or HTTP/3 origin
+    ///     reports <c>2.0</c> or <c>3.0</c> here). Reading it never materializes a response. <c>0.0</c> when
+    ///     no response has been received yet.
+    /// </summary>
+    public Version OriginHttpVersion =>
+        originLegHttpVersion != 0
+            ? DecodeLegVersion(originLegHttpVersion)
+            : response?.HttpVersion ?? HttpHeader.VersionUnknown;
+
+    /// <summary>Record the client leg before a bridge rewrites the request version for the origin wire.</summary>
+    internal void RecordClientHttpVersion(Version version) => clientLegHttpVersion = EncodeLegVersion(version);
+
+    /// <summary>Record the origin leg where a bridge stamps the response with the client's version.</summary>
+    internal void RecordOriginHttpVersion(Version version) => originLegHttpVersion = EncodeLegVersion(version);
+
+    /// <summary>True when a bridge already recorded the origin leg for this exchange.</summary>
+    internal bool HasRecordedOriginHttpVersion => originLegHttpVersion != 0;
+
+    /// <summary>
+    ///     <c>major * 10 + minor</c> for a version this proxy speaks; zero (not recorded) for anything else, so a
+    ///     version that cannot be represented falls back to the raw <c>Request</c>/<c>Response</c> value.
+    /// </summary>
+    private static byte EncodeLegVersion(Version version) =>
+        version.Major is >= 1 and <= 3 && version.Minor is 0 or 1 && version.Build < 0
+            ? (byte)(version.Major * 10 + version.Minor)
+            : (byte)0;
+
+    private static Version DecodeLegVersion(byte code) => code switch
+    {
+        10 => HttpHeader.Version10,
+        11 => HttpHeader.Version11,
+        20 => HttpHeader.Version20,
+        30 => HttpHeader.Version30,
+        _ => new Version(code / 10, code % 10)
+    };
+
     /// <summary>
     ///     PID of the local client process for this session (Windows, Linux, and macOS).
     ///     Remote clients, unsupported platforms, and unresolved sockets yield a non-positive value.
@@ -481,6 +546,8 @@ public class HttpWebClient
         upstreamConnectionId = null;
         upstreamRemoteEndPoint = null;
         upstreamConnectionTiming = null;
+        clientLegHttpVersion = 0;
+        originLegHttpVersion = 0;
         CloseServerConnection = false;
         Request.ResetForKeepAlive();
         response?.ResetForKeepAlive();
@@ -498,6 +565,8 @@ public class HttpWebClient
         upstreamConnectionId = null;
         upstreamRemoteEndPoint = null;
         upstreamConnectionTiming = null;
+        clientLegHttpVersion = 0;
+        originLegHttpVersion = 0;
         CloseServerConnection = false;
         Request = request;
         if (response is not null)

@@ -370,6 +370,85 @@ public class InspectViewersAndThrottleTests
         Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(250));
     }
 
+    [TestMethod]
+    public async Task Http2ClientBridgedToHttp1Origin_PaysLatencyOnce_NotAgainInBeforeResponse()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = new NetworkThrottleProfile("lat", latencyMs: 300, bytesPerSecond: 0),
+        };
+
+        // The bridge has already rewritten the request and stamped the response to HTTP/1.1 for the origin
+        // wire, but the client is HTTP/2 and paid the latency in BeforeRequest.
+        using var session = MakeHttp2Session(bodyLength: 1000, major: 1);
+        session.HttpClient.RecordClientHttpVersion(new Version(2, 0));
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(200),
+            "The latency was paid on the request side for an HTTP/2 client; BeforeResponse must not charge it again.");
+    }
+
+    [TestMethod]
+    public async Task Http1ClientBridgedToHttp2Origin_StillPaysLatencyInline()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+            ThrottleProfile = new NetworkThrottleProfile("lat", latencyMs: 300, bytesPerSecond: 0),
+        };
+
+        // HTTP/1.1 client, HTTP/2 origin: only the origin leg differs from the raw versions.
+        using var session = MakeHttp2Session(bodyLength: 1000, major: 1);
+        session.HttpClient.RecordOriginHttpVersion(new Version(2, 0));
+
+        var started = DateTime.UtcNow;
+        await interception.ApplyResponseThrottleAsync(session, responseEdited: false);
+
+        Assert.IsTrue(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(250));
+    }
+
+    [TestMethod]
+    [DataRow(1, 0, false)]
+    [DataRow(1, 1, false)]
+    [DataRow(2, 0, true)]
+    [DataRow(3, 0, false)]
+    public void LatencyPaidOnRequestSide_FollowsTheClientLeg(int major, int minor, bool expected) =>
+        Assert.AreEqual(expected, InterceptionService.LatencyPaidOnRequestSide(new Version(major, minor)));
+
+    [TestMethod]
+    [DataRow(1, 1, 1, 1, null, null, "h1.1 → h1.1")]         // native HTTP/1.1 on both legs
+    [DataRow(2, 0, 2, 0, null, null, "h2 → h2")]             // native HTTP/2 on both legs
+    [DataRow(1, 1, 1, 1, 2, null, "h2 → h1.1")]              // h2 client bridged onto an HTTP/1.1 origin
+    [DataRow(1, 1, 1, 1, null, 2, "h1.1 → h2")]              // h1 client bridged onto an HTTP/2 origin
+    [DataRow(1, 1, 1, 1, null, 3, "h1.1 → h3")]              // h1 client bridged onto an HTTP/3 origin
+    [DataRow(2, 0, 3, 0, null, null, "h2 → h3")]             // h2 client over HTTP/3: response keeps its own version
+    public void ProtocolColumn_ShowsTheTwoLegs_NotTheVersionsABridgeRewrote(
+        int reqMajor, int reqMinor, int respMajor, int respMinor, int? clientLeg, int? originLeg, string expected)
+    {
+        using var session = MakeHttp2Session(bodyLength: 10, major: 1);
+        session.HttpClient.Request.HttpVersion = new Version(reqMajor, reqMinor);
+        session.HttpClient.Response.HttpVersion = new Version(respMajor, respMinor);
+        if (clientLeg is { } c)
+        {
+            session.HttpClient.RecordClientHttpVersion(new Version(c, 0));
+        }
+
+        if (originLeg is { } o)
+        {
+            session.HttpClient.RecordOriginHttpVersion(new Version(o, 0));
+        }
+
+        var snap = new SessionSnapshot();
+        typeof(InterceptionService)
+            .GetMethod("FillResponse", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .Invoke(null, [snap, session]);
+
+        Assert.AreEqual(expected, snap.Protocol);
+    }
+
     private static SessionEventArgs MakeHttp2Session(int bodyLength, int major = 2)
     {
         var session = MakeSession();

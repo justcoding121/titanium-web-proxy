@@ -55,6 +55,35 @@ WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (
 tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
 [HTTP/3](HTTP-3).
 
+## Observing the two legs
+
+On a bridge, `Request.HttpVersion` and `Response.HttpVersion` are rewritten for the wire they are about to
+cross: an HTTP/2 client bridged onto an HTTP/1.1 origin has its request rewritten to `1.1` before it is sent,
+and an HTTP/1.1 client bridged onto an HTTP/2 or HTTP/3 origin has the response stamped with the client's
+version so the client-side status line is valid. Those fields drive framing, so they stay as they are.
+
+To label or branch on what each side actually negotiated, read the two read-only properties on
+`e.HttpClient` instead:
+
+| Property | Meaning |
+|----------|---------|
+| `ClientHttpVersion` | What the client negotiated with the proxy. |
+| `OriginHttpVersion` | What the proxy spoke to the origin. `0.0` until a response exists. |
+
+| Exchange | `ClientHttpVersion` | `OriginHttpVersion` |
+|----------|---------------------|---------------------|
+| HTTP/1.1 client to HTTP/1.1 origin (native) | 1.1 | 1.1 |
+| HTTP/2 client to HTTP/2 origin (native) | 2.0 | 2.0 |
+| HTTP/2 client to HTTP/1.1 origin (bridge) | 2.0 | 1.1 |
+| HTTP/1.1 client to HTTP/2 origin (bridge) | 1.1 | 2.0 |
+| HTTP/1.1 client to HTTP/3 origin (bridge) | 1.1 | 3.0 |
+| HTTP/2 client to HTTP/3 origin (bridge) | 2.0 | 3.0 |
+
+On a native exchange both properties return the raw `Request`/`Response` version, and reading
+`OriginHttpVersion` never creates a response. The values hold for the whole exchange, including
+`BeforeResponse` and `AfterResponse`, and are cleared when the connection is reused for the next request.
+Titanium Inspector's Protocol column and its throttle latency decision use them.
+
 ## Gateway status retry
 
 A route opts in with `retry.attempts` greater than 0. Before any request body byte is sent, a 502, 503,

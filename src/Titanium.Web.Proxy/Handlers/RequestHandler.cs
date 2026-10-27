@@ -823,6 +823,10 @@ public partial class ProxyServer
                 // ("HTTP/3.0 200 ..."), which curl and other strict HTTP/1.1 clients don't recognize. Mirror
                 // Http2OriginConnection's H1.1-bridge convention (always the client-facing wire version, not
                 // the origin's) so the status line matches the actual protocol on this leg.
+                // Keep the origin leg observable before it is overwritten: 3.0 for QUIC, or whatever a
+                // TCP fallback recorded / parsed. A fallback that already recorded its leg (HTTP/2) wins.
+                if (!args.HttpClient.HasRecordedOriginHttpVersion)
+                    args.HttpClient.RecordOriginHttpVersion(h3Response.HttpVersion);
                 h3Response.HttpVersion = args.HttpClient.Request.HttpVersion;
 
                 // This response was decoded from real HTTP/3 frames (Http3OriginBridge), never from

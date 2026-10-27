@@ -681,6 +681,9 @@ public partial class ProxyServer
         var clientStream = args.ClientStream;
         var response = exchange.Response;
         response.RequestMethod = args.HttpClient.Request.Method;
+        // Http2OriginConnection stamps the response HTTP/1.1 so the client-side status line is valid. The origin
+        // leg of this exchange is HTTP/2; record it before BeforeResponse / AfterResponse observe the response.
+        args.HttpClient.RecordOriginHttpVersion(HttpHeader.Version20);
 
         if (exchange.TrailingHeaders != null)
             foreach (var header in exchange.TrailingHeaders)
