@@ -134,7 +134,8 @@ public static class ReverseProxyFastPath
         !string.IsNullOrEmpty(cluster.HttpClient?.ConnectionKey);
 
     private static bool DestinationHasExtraBehavior(DestinationConfig dest) =>
-        dest.MaxConcurrentRequests is not null || dest.Priority != 0 || dest.Backup || dest.SlowStartSeconds > 0;
+        dest.MaxConcurrentRequests is not null || dest.Priority != 0 || dest.Backup || dest.SlowStartSeconds > 0 ||
+        dest.DnsRefreshSeconds > 0;
 }
 
 internal sealed class ForwardHostEquivalenceCache

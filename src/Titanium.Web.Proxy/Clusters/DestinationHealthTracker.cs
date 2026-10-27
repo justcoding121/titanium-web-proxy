@@ -17,7 +17,11 @@ public sealed class DestinationHealthTracker
     private readonly ConcurrentDictionary<string, int> _ejections = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, RateWindow> _rates = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, long> _slowStart = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _halfOpenSuccesses = new(StringComparer.Ordinal);
     private int _ejected;
+
+    /// <summary>Defaults shared by every request on a cluster with no passive policy. Never mutated.</summary>
+    private static readonly PassiveHealthConfig DefaultPassive = new();
 
     public DestinationHealthTracker()
         : this(TimeProvider.System)
@@ -28,11 +32,30 @@ public sealed class DestinationHealthTracker
 
     public void ReportSuccess(string destinationId)
     {
+        // Every healthy response lands here. A write takes the dictionary's bucket lock, so skip it
+        // when there is no streak to clear.
+        if (_failures.TryGetValue(destinationId, out var streak) && streak == 0)
+        {
+            return;
+        }
+
         _failures[destinationId] = 0;
     }
 
-    /// <summary>Clears the failure streak after an external restore to Healthy.</summary>
-    internal void ResetCounters(string destinationId) => _failures[destinationId] = 0;
+    /// <summary>
+    ///     Clears the failure streak and any ejection record after an external restore to Healthy
+    ///     (an active probe, a reload, or an operator). Without this the next single failure would
+    ///     eject the destination again, and the ejection cap would keep counting a destination that is back.
+    /// </summary>
+    internal void ResetCounters(string destinationId)
+    {
+        _failures[destinationId] = 0;
+        _halfOpenSuccesses.TryRemove(destinationId, out _);
+        if (_reactivateAt.TryRemove(destinationId, out _))
+        {
+            Interlocked.Decrement(ref _ejected);
+        }
+    }
 
     public void ReportFailure(string destinationId, IClusterManager? manager, int unhealthyThreshold = 3)
     {
@@ -48,7 +71,7 @@ public sealed class DestinationHealthTracker
     /// </summary>
     public void ReportStatus(string destinationId, int statusCode, IClusterManager? manager, PassiveHealthConfig? passive, int destinationCount)
     {
-        passive ??= new PassiveHealthConfig();
+        passive ??= DefaultPassive;
         if (!passive.Enabled)
         {
             return;
@@ -85,8 +108,11 @@ public sealed class DestinationHealthTracker
             return;
         }
 
-        var ok = passive.HalfOpenSuccesses <= 1 ? 1 : passive.HalfOpenSuccesses;
-        if (ok <= 1)
+        var required = passive.HalfOpenSuccesses <= 1 ? 1 : passive.HalfOpenSuccesses;
+        var seen = required <= 1
+            ? 1
+            : _halfOpenSuccesses.AddOrUpdate(destinationId, 1, static (_, count) => count + 1);
+        if (seen >= required)
         {
             Restore(destinationId, manager);
         }
@@ -95,6 +121,8 @@ public sealed class DestinationHealthTracker
     private void NoteFailure(string destinationId, IClusterManager? manager, PassiveHealthConfig passive, int destinationCount)
     {
         var threshold = passive.ConsecutiveFailures > 0 ? passive.ConsecutiveFailures : 3;
+        // A failed trial restarts the run of half-open successes.
+        _halfOpenSuccesses.TryRemove(destinationId, out _);
         var count = _failures.AddOrUpdate(destinationId, 1, static (_, v) => v + 1);
         if (count >= threshold || _reactivateAt.ContainsKey(destinationId) || RateExceeded(destinationId, passive, failed: true))
         {
@@ -192,6 +220,7 @@ public sealed class DestinationHealthTracker
         }
 
         _failures[destinationId] = 0;
+        _halfOpenSuccesses.TryRemove(destinationId, out _);
         manager?.SetDestinationState(destinationId, DestinationState.Healthy);
     }
 

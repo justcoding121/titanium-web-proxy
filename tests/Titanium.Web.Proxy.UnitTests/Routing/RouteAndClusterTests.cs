@@ -838,6 +838,40 @@ public class PassiveHealthTests
     }
 
     [TestMethod]
+    public async Task HalfOpenTrial_RequiresConfiguredSuccesses_AndFailureRestartsTheRun()
+    {
+        var time = new Support.ManualTimeProvider();
+        var tracker = new DestinationHealthTracker(time);
+        var manager = new ClusterManager();
+        manager.AttachHealthTracker(tracker);
+        var passive = new PassiveHealthConfig { ConsecutiveFailures = 1, ReactivateAfterSeconds = 10, HalfOpenSuccesses = 2 };
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            HealthCheck = new HealthCheckConfig { Passive = passive },
+            Destinations = [new DestinationConfig { Id = "a", Address = "10.0.0.1", Port = 80 }],
+        };
+        await manager.ApplyAsync([cluster]);
+        tracker.ReportStatus("a", 502, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"));
+
+        time.Advance(TimeSpan.FromSeconds(10));
+        Assert.AreEqual("a", new LoadBalancer(tracker).Select(cluster, manager.Snapshot)?.Id);
+
+        tracker.ReportStatus("a", 200, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"), "one success is not enough");
+
+        tracker.ReportStatus("a", 502, manager, passive, 1);
+        time.Advance(TimeSpan.FromSeconds(20)); // the second ejection backs off to twice the first delay
+        Assert.AreEqual("a", new LoadBalancer(tracker).Select(cluster, manager.Snapshot)?.Id);
+        tracker.ReportStatus("a", 200, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"), "a failed trial restarts the run");
+
+        tracker.ReportStatus("a", 200, manager, passive, 1);
+        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
+    }
+
+    [TestMethod]
     public async Task MaxEjectionPercent_KeepsOneDestination()
     {
         var manager = new ClusterManager();

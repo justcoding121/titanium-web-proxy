@@ -275,6 +275,10 @@ internal static class ProxyMetrics
     public static bool RequestInstrumentsEnabled =>
         Requests.Enabled || RequestDuration.Enabled || ActiveRequests.Enabled;
 
+    /// <summary>True when any per-request instrument has a listener. Live check, not cached.</summary>
+    public static bool RequestMetricsEnabled =>
+        RequestInstrumentsEnabled || FailedRequests.Enabled || ProxyBytes.Enabled;
+
     public static void AddActiveRequest(int delta)
     {
         if (ActiveRequests.Enabled)

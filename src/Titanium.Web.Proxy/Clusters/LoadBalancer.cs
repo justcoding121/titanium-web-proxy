@@ -112,11 +112,13 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
     public void RecordDestination(string destinationId, TimeSpan duration)
     {
-        var sample = duration.Ticks;
+        // Runs once per proxied response. The static lambdas take the sample as an argument, so the
+        // call allocates no closure.
         _latencyTicks.AddOrUpdate(
             destinationId,
-            sample,
-            (_, prev) => (long)(prev * 0.7 + sample * 0.3));
+            static (_, ticks) => ticks,
+            static (_, prev, ticks) => (long)(prev * 0.7 + ticks * 0.3),
+            duration.Ticks);
     }
 
     public TimeSpan? GetDestinationLatency(string destinationId) =>

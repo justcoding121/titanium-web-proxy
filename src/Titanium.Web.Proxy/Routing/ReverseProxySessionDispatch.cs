@@ -791,38 +791,62 @@ internal static class ReverseProxySessionDispatch
         }
     }
 
-    internal static void FinishRequest(SessionEventArgsBase session, string protocol)
+    /// <summary>Client-side protocol label for metrics. TLS says nothing about it: HTTPS can be h1, h2, or h3.</summary>
+    private static string ProtocolLabel(Request request) =>
+        request.HttpVersion.Major switch
+        {
+            >= 3 => "h3",
+            2 => "h2",
+            _ => "h1",
+        };
+
+    internal static void FinishRequest(SessionEventArgsBase session)
     {
+        // Runs once for every proxied request, routed or not. With no exporter listening the sample
+        // is never built, so a plain forward pays for the classification and nothing else.
         var error = Classify(session);
         session.ForwarderError = error;
-        var route = session.MatchedRoute;
-        var started = session.Extras?.RequestStartTimestamp ?? 0;
-        var seconds = started == 0
-            ? 0
-            : (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
-        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        var extras = session.Extras;
+        var started = extras?.RequestStartTimestamp ?? 0;
+        if (ProxyMetrics.RequestMetricsEnabled)
         {
-            Route = route?.Id ?? "_none",
-            Cluster = route?.ClusterId ?? "_none",
-            Status = session.HttpClient.Response.StatusCode,
-            Protocol = protocol,
-            Error = error.ToString(),
-            DurationSeconds = seconds,
-            BytesIn = session.HttpClient.Request.ContentLength,
-            BytesOut = session.HttpClient.Response.ContentLength,
-        });
-        if (session.Extras?.HeldConnectionPolicy is { } held)
+            var route = session.MatchedRoute;
+            var seconds = started == 0
+                ? 0
+                : (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
+            ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+            {
+                Route = route?.Id ?? "_none",
+                Cluster = route?.ClusterId ?? "_none",
+                Status = session.HttpClient.Response.StatusCode,
+                Protocol = ProtocolLabel(session.HttpClient.Request),
+                Error = error.ToString(),
+                DurationSeconds = seconds,
+                BytesIn = session.HttpClient.Request.ContentLength,
+                BytesOut = session.HttpClient.Response.ContentLength,
+            });
+        }
+
+        if (extras is null)
         {
+            return;
+        }
+
+        if (extras.HeldConnectionPolicy is { } held)
+        {
+            // Cleared so a second finish cannot hand the same slot back twice.
+            extras.HeldConnectionPolicy = null;
             RoutePolicies.Release(held);
         }
 
         if (started != 0)
         {
+            extras.RequestStartTimestamp = 0;
             ProxyMetrics.AddActiveRequest(-1);
         }
 
-        session.Extras?.Activity?.SetTag("http.response.status_code", session.HttpClient.Response.StatusCode);
-        session.Extras?.Activity?.Stop();
+        extras.Activity?.SetTag("http.response.status_code", session.HttpClient.Response.StatusCode);
+        extras.Activity?.Stop();
     }
 
     internal static ForwarderError Classify(SessionEventArgsBase session)
