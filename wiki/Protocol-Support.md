@@ -36,11 +36,11 @@ TCP HTTP/1 origin.
 |--------|--------|------|-----|
 | HTTP/1.x | HTTP/1.x | Native | Default TCP pipeline. |
 | HTTP/2 | HTTP/2 | Native | TLS ALPN MITM (`EnableHttp2`, on by default). Prior-knowledge cleartext h2c on transparent reverse (`DecryptSsl: false`) for inbound clients; with `ForwardCleartext` + `UpstreamHttpProtocol.Http2`, origin is outbound h2c. |
-| HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. QUIC origins are not retried. |
+| HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. A failed QUIC exchange is not retried on another transport, except in Auto mode where a silent origin gets one TCP replay of a safe bodiless request; forced HTTP/3 never falls back. See [HTTP/3](HTTP-3#user-content-when-an-http3-origin-is-slow-or-unreachable). |
 | HTTP/1.1 | HTTP/2 | Bridge | `Http11ToHttp2BridgeHandler` when `UpstreamHttpProtocol.Http2` and `AllowHttpProtocolTranslation` are set (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`). |
 | HTTP/2 | HTTP/1.1 | Bridge | `Http2ToHttp11BridgeHandler` when `UpstreamHttpProtocol.Http11` and `AllowHttpProtocolTranslation` are set (TLS ALPN or inbound h2c client). |
 | HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
-| HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. QUIC origins are not retried. |
+| HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. QUIC origins follow the same fallback rules as HTTP/3 → HTTP/3 above. |
 | HTTP/3 | HTTP/2 | Bridge | `Http3OriginBridge.ForwardOverHttp2Async` via `Http2OriginConnection` (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`) when `UpstreamHttpProtocol.Http2` is set. |
 | HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A gateway 502/503/504 on a bodiless request can replay once onto another destination when the route sets `retry.attempts`. An HTTP/3 client talking to an HTTP/2 origin is not retried. |
 
