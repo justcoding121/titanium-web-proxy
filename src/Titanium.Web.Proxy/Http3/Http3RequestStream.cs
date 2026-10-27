@@ -674,6 +674,8 @@ internal static class Http3RequestStream
                         ColdOpenSessionFactory);
                     break;
                 case UpstreamHttpProtocol.Http3:
+                    // Forced HTTP/3 only (Auto resolves elsewhere): no TCP fallback or stall replay by design,
+                    // see the remarks on ForwardOverQuicFastAsync.
                     var relayed = await Http3OriginBridge.ForwardOverQuicFastAsync(
                         fwd, server, logger, streamToken, ColdOpenSessionFactory, stream);
                     if (relayed)
@@ -813,6 +815,8 @@ internal static class Http3RequestStream
             return false;
         if (sessionArgs.IsFastPath)
             return false;
+        // Explicitly forced HTTP/3 only. A forced origin fails closed, so the lite forward has no TCP fallback
+        // and no stall replay (see ForwardOverQuicFastAsync remarks); Auto takes the full bridge instead.
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http3)
             return false;
         return MitmUnchangedLiteRequestMatches(

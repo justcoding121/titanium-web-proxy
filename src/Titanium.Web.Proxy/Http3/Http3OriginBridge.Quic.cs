@@ -240,6 +240,8 @@ internal static partial class Http3OriginBridge
 
             // A silent QUIC path (handshake fine, no response) would otherwise hold the request until the
             // idle timeout. Bound only the very first frame, and only when replaying over TCP is safe.
+            // Auto policy only. Forced HTTP/3, including the session-less ForwardOverQuicFastAsync path, must
+            // fail closed and never replay on TCP, so its lack of this guard is by design.
             // The cheap liveness test goes first: a warm connection (the RPS case) never looks at headers.
             var guardFirstFrame = !isForcedH3 && !quicConn.HasDeliveredRecently(30_000)
                 && IsReplayableOnStall(request, finOnHeaders);
@@ -692,14 +694,19 @@ internal static partial class Http3OriginBridge
     // ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     H3 → H2 via <see cref="Http2OriginConnection"/>. Uses TLS ALPN <c>h2</c> unless the
-    ///     transparent endpoint has <see cref="TransparentBaseProxyEndPoint.ForwardCleartext"/>,
-    ///     in which case the origin is cleartext HTTP/2 prior-knowledge (h2c).
-    /// </summary>
-    /// <summary>
-    ///     Session-less H3→H2 forward for the interception-off bodiless path.
-    ///     <paramref name="coldOpenSessionFactory"/> is invoked only when the shared H2 origin pool
-    ///     must open a new TCP+H2 session (warm-pool RPS never hits it).
+    ///     Session-less H3→H3 forward for the bodiless reverse and MITM-unchanged fast paths.
+    ///     <paramref name="coldOpenSessionFactory"/> is invoked only when the pool must dial a new QUIC
+    ///     connection and needs a session stub for certificate validation (warm-pool RPS never hits it).
+    ///     <para>
+    ///         <b>Deliberately has no TCP fallback, TCP race, or stall-guard replay.</b> The callers reach this
+    ///         method only when the operator forced <see cref="UpstreamHttpProtocol.Http3"/> (reverse listener
+    ///         or <c>BeforeQuicAuthenticate</c>), and forced HTTP/3 fails closed (see
+    ///         <c>ProxyServer.EnableHttp3</c>: "no TCP fallback"). Replaying on TCP would silently downgrade a
+    ///         pinned protocol. Auto-policy traffic never comes here: it goes through
+    ///         <see cref="ForwardOverQuicAsync"/>, which has the stall guard, the TCP race and the fallback,
+    ///         all gated on <c>!isForcedH3</c>. A silent forced-H3 origin therefore ends at the QUIC idle
+    ///         timeout with a 502. That is the intended behaviour, not a missing feature.
+    ///     </para>
     /// </summary>
     internal static async Task<bool> ForwardOverQuicFastAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         H3H2FastForward fwd,
@@ -983,6 +990,8 @@ internal static partial class Http3OriginBridge
                         continue;
                     }
 
+                    // Terminal on purpose: forced HTTP/3 has no TCP fallback (see the method remarks), and no
+                    // unreachable mark is written because the capability cache is not consulted for forced routes.
                     fwd.Response = MakeBadGatewayResponse(ex.Message);
                     return false;
                 }
