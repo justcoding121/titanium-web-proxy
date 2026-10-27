@@ -27,6 +27,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class StaleKeepAliveTests
 {
     private static readonly Encoding MsgEncoding = HttpHelper.GetEncodingFromContentType(null);
+    private static readonly string[] HelloPostBody = ["hello"];
 
     [TestMethod]
     [Timeout(60 * 1000)]
@@ -300,7 +301,7 @@ public class StaleKeepAliveTests
         Assert.AreEqual(HttpStatusCode.OK, post.StatusCode);
         Assert.AreEqual("ok", await post.Content.ReadAsStringAsync());
         Assert.AreEqual(2, acceptCount, "The POST should have been replayed on exactly one fresh connection.");
-        CollectionAssert.AreEqual(new[] { "hello" }, postBodies.ToArray(), "The replayed POST lost or changed its body.");
+        CollectionAssert.AreEqual(HelloPostBody, postBodies.ToArray(), "The replayed POST lost or changed its body.");
     }
 
     /// <summary>

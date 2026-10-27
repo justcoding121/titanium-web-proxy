@@ -28,7 +28,12 @@ public class InspectorFileLogProviderResilienceTests
                 var i = 0;
                 while (!cts.IsCancellationRequested)
                 {
-                    logger.LogInformation("line {Index}", i++);
+                    var index = i++;
+                    if (logger.IsEnabled(LogLevel.Information))
+                    {
+                        logger.LogInformation("line {Index}", index);
+                    }
+
                     if (i % 64 == 0)
                     {
                         Thread.Yield();
