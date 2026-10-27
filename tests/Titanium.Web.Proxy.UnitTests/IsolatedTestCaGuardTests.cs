@@ -8,10 +8,10 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Titanium.Web.Proxy.UnitTests;
 
 [TestClass]
-public class IsolatedTestCaGuardTests
+public partial class IsolatedTestCaGuardTests
 {
-    private static readonly Regex DefaultSubjectManager =
-        new(@"new\s+CertificateManager\(\s*null\s*,", RegexOptions.Compiled);
+    [GeneratedRegex(@"new\s+CertificateManager\(\s*null\s*,", RegexOptions.CultureInvariant)]
+    private static partial Regex DefaultSubjectManager();
 
     /// <summary>
     ///     Tests must not mint a root with the product-default subject: a same-subject root already in
@@ -34,7 +34,7 @@ public class IsolatedTestCaGuardTests
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
                         && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
                         && !f.EndsWith("IsolatedTestCaGuardTests.cs", StringComparison.Ordinal))
-            .Where(f => DefaultSubjectManager.IsMatch(File.ReadAllText(f)))
+            .Where(f => DefaultSubjectManager().IsMatch(File.ReadAllText(f)))
             .Select(Path.GetFileName)
             .ToArray();
 
