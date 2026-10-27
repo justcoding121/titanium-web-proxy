@@ -288,22 +288,22 @@ internal static class Http3RequestStream
                     Routing.ReverseProxySessionDispatch.SignalNoDestination(noDestSession);
                 }
 
-                if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
-                {
-                    return;
-                }
+                // A policy denial, redirect, or direct response is already staged as a locked synthetic
+                // response. It must reach the synthetic-response branch below. Returning here left the
+                // client stream open with no response until the connection idled out.
+                var routeAnswered = routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled;
 
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
                 var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
-                var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
+                var mitmUnchangedH3H1 = !routeAnswered && TryMitmUnchangedH3ToH1Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
-                var mitmUnchangedH3H3 = !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
+                var mitmUnchangedH3H3 = !routeAnswered && !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
-                var mitmUnchangedH3H2 = !mitmUnchangedH3H1 && !mitmUnchangedH3H3
+                var mitmUnchangedH3H2 = !routeAnswered && !mitmUnchangedH3H1 && !mitmUnchangedH3H3
                     && TryMitmUnchangedH3ToH2Lite(
                         sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                         capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
