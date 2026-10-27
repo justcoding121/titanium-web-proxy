@@ -293,11 +293,79 @@ public class StaleKeepAliveTests
         using var first = await client.GetAsync(proxyUrl);
         Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
 
+        // Replay protection applies to a connection that sat idle, like one an origin idle-closes.
+        await Task.Delay(1200);
+
         using var post = await client.PostAsync(proxyUrl, new StringContent("hello"));
         Assert.AreEqual(HttpStatusCode.OK, post.StatusCode);
         Assert.AreEqual("ok", await post.Content.ReadAsStringAsync());
         Assert.AreEqual(2, acceptCount, "The POST should have been replayed on exactly one fresh connection.");
         CollectionAssert.AreEqual(new[] { "hello" }, postBodies.ToArray(), "The replayed POST lost or changed its body.");
+    }
+
+    /// <summary>
+    ///     An EOF seconds after the write means the origin accepted the POST and then died, not that it idle-closed
+    ///     the socket before reading it; sending the POST again could repeat its side effects.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ReusedConnectionClosedLongAfterPost_IsNotReplayed()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var acceptCount = 0;
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref acceptCount);
+            await DrainRequestHeaders(context);
+
+            if (n == 1)
+            {
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+
+                // The POST arrives on the same socket: take it, work on it for longer than a stale race
+                // could take, then die without answering.
+                await DrainRequestHeaders(context);
+                await Task.Delay(TimeSpan.FromSeconds(6));
+                context.Transport.Output.Complete();
+                context.Transport.Input.Complete();
+                return;
+            }
+
+            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"));
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetReverseProxyClient();
+        client.Timeout = TimeSpan.FromSeconds(30);
+        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+
+        using var first = await client.GetAsync(proxyUrl);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+        await Task.Delay(1200);
+
+        try
+        {
+            using var post = await client.PostAsync(proxyUrl, new StringContent("hello"));
+            Assert.AreNotEqual(HttpStatusCode.OK, post.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            // Connection torn down by the proxy is also an acceptable non-replay outcome.
+        }
+
+        await Task.Delay(300);
+        Assert.AreEqual(1, acceptCount, "A POST the origin held for seconds must not be replayed.");
     }
 
     /// <summary>

@@ -1304,11 +1304,18 @@ public partial class ProxyServer
     /// <summary>Largest request body held in memory so a stale keep-alive socket can be replayed.</summary>
     private const long MaxReplayBufferedBodyBytes = 64 * 1024;
 
+    /// <summary>
+    ///     A keep-alive connection must have been quiet this long before its next body is held for replay.
+    ///     Origins idle-close after seconds; connections serving back-to-back requests skip the buffering, so
+    ///     high-rate POST traffic keeps streaming its bodies.
+    /// </summary>
+    private static readonly TimeSpan MinIdleForReplayBuffering = TimeSpan.FromSeconds(1);
+
     private static bool ShouldBufferBodyForReplay(SessionEventArgs args)
     {
         var request = args.HttpClient.Request;
         return args.HttpClient.HasConnection
-               && args.HttpClient.Connection.HasServedExchange
+               && args.HttpClient.Connection.HasBeenIdleSinceLastExchange(MinIdleForReplayBuffering)
                && request.HasBody
                && !request.IsBodyRead
                && !request.IsChunked

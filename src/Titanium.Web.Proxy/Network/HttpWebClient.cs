@@ -521,7 +521,15 @@ public class HttpWebClient
     /// </summary>
     private bool CanRetryEofBeforeResponse() =>
         (!Request.HasBody || Request.IsBodyRead)
-        && (RequestSentOnReusedConnection || Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method));
+        && (Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method)
+            || (RequestSentOnReusedConnection && Connection.SinceLastExchangeStarted <= StaleSocketReplayWindow));
+
+    /// <summary>
+    ///     A socket the origin idle-closed fails the moment the request is written: the FIN is already in flight.
+    ///     An EOF that arrives long after the write means the origin accepted the request and then died, so a
+    ///     non-idempotent request must not be sent again.
+    /// </summary>
+    private static readonly TimeSpan StaleSocketReplayWindow = TimeSpan.FromSeconds(5);
 
     /// <summary>True when the last <see cref="SendRequest" /> was written on a keep-alive connection that had served a request.</summary>
     internal bool RequestSentOnReusedConnection { get; private set; }

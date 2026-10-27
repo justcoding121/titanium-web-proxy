@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -146,7 +147,26 @@ internal class TcpServerConnection : IDisposable
     internal bool HasServedExchange => Volatile.Read(ref exchangesStarted) > 0;
 
     /// <summary>Records that a request is about to be written; returns whether the connection was already used.</summary>
-    internal bool MarkExchangeStarted() => Interlocked.Increment(ref exchangesStarted) > 1;
+    internal bool MarkExchangeStarted()
+    {
+        Volatile.Write(ref lastExchangeStartTimestamp, Stopwatch.GetTimestamp());
+        return Interlocked.Increment(ref exchangesStarted) > 1;
+    }
+
+    private long lastExchangeStartTimestamp;
+
+    /// <summary>Time since the most recent request was written on this connection.</summary>
+    internal TimeSpan SinceLastExchangeStarted =>
+        Stopwatch.GetElapsedTime(Volatile.Read(ref lastExchangeStartTimestamp));
+
+    /// <summary>
+    ///     True when the connection already served a request and has been quiet for at least
+    ///     <paramref name="minimumIdle" /> since it started. A connection the origin idle-closes was idle for
+    ///     the origin's keep-alive timeout (seconds); one that served a request milliseconds ago is not at risk,
+    ///     so hot keep-alive traffic never pays for replay protection.
+    /// </summary>
+    internal bool HasBeenIdleSinceLastExchange(TimeSpan minimumIdle) =>
+        HasServedExchange && SinceLastExchangeStarted >= minimumIdle;
 
     /// <summary>
     ///     True once the HTTP/2 connection preface has been written on this connection, i.e. it carries a
