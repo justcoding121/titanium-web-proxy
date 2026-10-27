@@ -116,13 +116,12 @@ public partial class ProxyServer
                             var fallback = certificate ?? (sniBindings is { Count: > 0 } ? sniBindings[0].Certificate : null);
                             options = new SslServerAuthenticationOptions
                             {
-                                ServerCertificateContext =
-                                    CertificateManager.CreateSslCertificateContext(fallback!),
                                 EnabledSslProtocols = SupportedSslProtocols,
                                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                                 ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
                                 AllowRenegotiation = false
                             };
+                            CertificateManager.ConfigureServerCertificate(options, fallback!);
                             Certificates.ClientCertificateHandshake.Apply(options, clientCertMode, endPoint.ClientCertificateTrustedRoots);
                             if (sniBindings is { Count: > 0 })
                             {
@@ -318,10 +317,10 @@ public partial class ProxyServer
 
                         var options = new SslServerAuthenticationOptions
                         {
-                            ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate),
                             EnabledSslProtocols = SupportedSslProtocols,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
+                        CertificateManager.ConfigureServerCertificate(options, certificate);
                         var peekClientCertMode = endPoint.ClientCertificateMode;
                         Certificates.ClientCertificateHandshake.Apply(options, peekClientCertMode, endPoint.ClientCertificateTrustedRoots);
                         if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)

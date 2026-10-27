@@ -129,6 +129,15 @@ public sealed class CertificateManager : IDisposable
         sslCertificateContexts = new();
 
     /// <summary>
+    ///     Leaf thumbprints whose <see cref="System.Net.Security.SslStreamCertificateContext" /> could not be
+    ///     built (see <see cref="ConfigureServerCertificate" />). Remembered so every handshake does not
+    ///     repeat a failing OS chain build.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> sslCertificateContextFailures = new();
+
+    private int sslCertificateContextFailureLogged;
+
+    /// <summary>
     ///     Certificates removed from <see cref="cachedCertificates" /> by <see cref="EnforceCertificateCacheBound" />
     ///     or the idle sweep in <see cref="ClearIdleCertificates" />, awaiting disposal. Not disposed at
     ///     eviction time because the certificate object may still be held by an in-flight TLS
@@ -298,7 +307,10 @@ public sealed class CertificateManager : IDisposable
     {
         var thumbprint = leaf.Thumbprint;
         if (thumbprint != null)
+        {
             sslCertificateContexts.TryRemove(thumbprint, out _);
+            sslCertificateContextFailures.TryRemove(thumbprint, out _);
+        }
     }
 
     /// <summary>
@@ -1176,6 +1188,43 @@ public sealed class CertificateManager : IDisposable
             ReferenceEquals(existing.TargetCertificate, leaf) ? existing : created);
     }
 
+    /// <summary>
+    ///     Presents <paramref name="leaf" /> to the client in <paramref name="options" />, preferring a cached
+    ///     <see cref="System.Net.Security.SslStreamCertificateContext" /> and falling back to the plain
+    ///     <see cref="System.Net.Security.SslServerAuthenticationOptions.ServerCertificate" /> when the OS
+    ///     refuses to build a chain for it.
+    ///     <para>
+    ///         Windows fails <c>X509Chain.Build</c> ("An unknown chain building error occurred") when a
+    ///         different certificate with the same subject as our signer is already in the Windows store
+    ///         (for example a regenerated product-default "Titanium Root Certificate Authority" next to the
+    ///         one the Inspector trusted earlier), even with custom trust. The context only exists to pre-build
+    ///         and cache the chain; a leaf signed by a self-signed root needs nothing more than the leaf
+    ///         itself, so a handshake must not fail because that optimisation is unavailable.
+    ///     </para>
+    /// </summary>
+    internal void ConfigureServerCertificate(System.Net.Security.SslServerAuthenticationOptions options,
+        X509Certificate2 leaf)
+    {
+        var key = leaf.Thumbprint;
+        if (key == null || !sslCertificateContextFailures.ContainsKey(key))
+            try
+            {
+                options.ServerCertificateContext = CreateSslCertificateContext(leaf);
+                return;
+            }
+            catch (CryptographicException ex)
+            {
+                if (key != null)
+                    sslCertificateContextFailures[key] = 0;
+                if (Interlocked.Exchange(ref sslCertificateContextFailureLogged, 1) == 0)
+                    ProxyDiagnostics.ReportException(Logger,
+                        "Server certificate chain pre-build failed; presenting the leaf directly", ex);
+            }
+
+        options.ServerCertificateContext = null;
+        options.ServerCertificate = leaf;
+    }
+
     private System.Net.Security.SslStreamCertificateContext BuildSslCertificateContext(X509Certificate2 leaf)
     {
         var extras = new X509Certificate2Collection();
@@ -1951,6 +2000,7 @@ public sealed class CertificateManager : IDisposable
                 }
 
         sslCertificateContexts.Clear();
+        sslCertificateContextFailures.Clear();
 
         // Also dispose anything already evicted but still waiting out its grace period: the root is
         // changing, so leaves signed by the old root are not worth holding onto even briefly.
@@ -1994,6 +2044,7 @@ public sealed class CertificateManager : IDisposable
                 }
 
             sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;

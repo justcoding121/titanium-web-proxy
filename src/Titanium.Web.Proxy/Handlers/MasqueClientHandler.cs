@@ -45,17 +45,6 @@ public partial class ProxyServer
         var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false);
         try
         {
-            SslStreamCertificateContext? context = null;
-            try
-            {
-                context = CertificateManager.CreateSslCertificateContext(certificate);
-            }
-            catch (CryptographicException)
-            {
-                // A leaf minted outside this CertificateManager can fail the offline chain
-                // build. SslStream still accepts the certificate directly.
-            }
-
             var options = new SslServerAuthenticationOptions
             {
                 EnabledSslProtocols = SupportedSslProtocols,
@@ -64,14 +53,9 @@ public partial class ProxyServer
                     ? SslExtensions.Http2AndHttp11ProtocolAsList
                     : SslExtensions.Http2ProtocolAsList,
             };
-            if (context is not null)
-            {
-                options.ServerCertificateContext = context;
-            }
-            else
-            {
-                options.ServerCertificate = certificate;
-            }
+            // A leaf minted outside this CertificateManager (or blocked by a same-subject root in the
+            // OS store) can fail the offline chain build; fall back to presenting the leaf directly.
+            CertificateManager.ConfigureServerCertificate(options, certificate);
 
             await AwaitPendingClientHelloAsync(clientConnection).ConfigureAwait(false);
             await sslStream.AuthenticateAsServerAsync(options, cancellationTokenSource.Token).ConfigureAwait(false);
