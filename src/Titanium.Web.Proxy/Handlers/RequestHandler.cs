@@ -724,7 +724,8 @@ public partial class ProxyServer
                                               && !(e is UpstreamCapacityException))
                     {
                         ProxyDiagnostics.ReportCaught(logger,
-                            "RequestHandler wrapping unexpected failure as ProxyHttpException", e);
+                            $"RequestHandler wrapping unexpected failure as ProxyHttpException " +
+                            $"({args.HttpClient.Request.Method} {args.HttpClient.Request.Host})", e);
                         throw new ProxyHttpException("Error occured whilst handling session request", e, args);
                     }
                 }
@@ -1234,6 +1235,11 @@ public partial class ProxyServer
             return;
         }
 
+        // A keep-alive socket the origin idle-closed fails only after the request was written, and a streamed
+        // body cannot be sent again. Hold a small body so that failure can be replayed on a fresh connection.
+        if (ShouldBufferBodyForReplay(args))
+            await args.BufferRequestBodyForReplayAsync(cancellationToken);
+
         var body = request.CompressBodyAndUpdateContentLength();
 
         await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
@@ -1293,6 +1299,25 @@ public partial class ProxyServer
 
         // parse and send response
         await HandleHttpSessionResponse(args);
+    }
+
+    /// <summary>Largest request body held in memory so a stale keep-alive socket can be replayed.</summary>
+    private const long MaxReplayBufferedBodyBytes = 64 * 1024;
+
+    private static bool ShouldBufferBodyForReplay(SessionEventArgs args)
+    {
+        var request = args.HttpClient.Request;
+        return args.HttpClient.HasConnection
+               && args.HttpClient.Connection.HasServedExchange
+               && request.HasBody
+               && !request.IsBodyRead
+               && !request.IsChunked
+               && request.ContentLength is > 0 and <= MaxReplayBufferedBodyBytes
+               // Buffering decodes the body and sending re-encodes it; with no Content-Encoding the bytes are unchanged.
+               && request.ContentEncoding == null
+               && !request.ExpectContinue
+               && !request.UpgradeToWebSocket
+               && request.HttpVersion.Major == 1;
     }
 
     /// <summary>

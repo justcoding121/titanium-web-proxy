@@ -354,6 +354,12 @@ public class SessionEventArgs : SessionEventArgsBase
         request.IsBodyReceived = true;
     }
 
+    /// <summary>Buffers a small HTTP/1.x request body so the request can be replayed on another upstream connection.</summary>
+    internal Task BufferRequestBodyForReplayAsync(CancellationToken cancellationToken) =>
+        HttpClient.Request.IsBodyRead
+            ? Task.CompletedTask
+            : BufferHttp11RequestBodyAsync(HttpClient.Request, cancellationToken);
+
     private async Task BufferHttp11RequestBodyAsync(Request request, CancellationToken cancellationToken)
     {
         var body = await ReadBodyAsync(true, cancellationToken);

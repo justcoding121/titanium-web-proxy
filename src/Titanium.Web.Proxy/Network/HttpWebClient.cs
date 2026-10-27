@@ -298,6 +298,8 @@ public class HttpWebClient
     internal ValueTask SendRequest(bool enable100ContinueBehaviour, bool isTransparent, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         OriginHttpVersionPolicy originHttpVersionPolicy, CancellationToken cancellationToken)
     {
+        RequestSentOnReusedConnection = Connection.MarkExchangeStarted();
+
         var upstreamProxy = Connection.UpStreamProxy;
 
         var useUpstreamProxy = upstreamProxy != null && upstreamProxy.ProxyType == ExternalProxyType.Http &&
@@ -461,7 +463,9 @@ public class HttpWebClient
                 throw new RetryableServerConnectionException(
                     "Server connection was closed before any response was received.");
 
-            throw new IOException("Server closed the connection before sending a response.");
+            throw new IOException(
+                $"Server closed the connection before sending a response ({Request.Method} {Request.Host}, " +
+                $"{(RequestSentOnReusedConnection ? "reused" : "fresh")} connection).");
         }
 
         Response.HttpVersion = httpStatus.Value.Version;
@@ -507,7 +511,20 @@ public class HttpWebClient
         (!Request.HasBody || Request.IsBodyRead)
         && Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method);
 
-    private bool CanRetryEofBeforeResponse() => CanRetryMalformedStatusLine();
+    /// <summary>
+    ///     EOF before a single response byte on a keep-alive connection that already carried a request means the
+    ///     origin idle-closed it while it sat in the pool: it never read this request. Browsers replay any method
+    ///     in that case (Chrome and Firefox resend a POST on a reused socket that closes with no response), and
+    ///     the proxy must, because the pooled socket is invisible to the browser and a 502 is not retried.
+    ///     The request must still be replayable (no body, or a buffered one); a fresh connection that closes
+    ///     without answering may have processed the request, so only idempotent methods are replayed there.
+    /// </summary>
+    private bool CanRetryEofBeforeResponse() =>
+        (!Request.HasBody || Request.IsBodyRead)
+        && (RequestSentOnReusedConnection || Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method));
+
+    /// <summary>True when the last <see cref="SendRequest" /> was written on a keep-alive connection that had served a request.</summary>
+    internal bool RequestSentOnReusedConnection { get; private set; }
 
     private static RetryableServerConnectionException MalformedStatusLine(FormatException ex) =>
         new("Server returned a response that did not start with an HTTP status line.", ex);

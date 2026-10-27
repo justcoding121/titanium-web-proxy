@@ -242,6 +242,189 @@ public class StaleKeepAliveTests
     }
 
     /// <summary>
+    ///     The origin idle-closes the pooled socket in the instant the next request arrives (it never reads it), so
+    ///     the pool's liveness check cannot see it. Browsers resend any method on such a reused socket; the proxy
+    ///     owns the pool, so a small POST must be replayed on a fresh connection instead of becoming a 502.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ReusedConnectionClosedWithoutResponse_SmallPost_IsReplayedOnFreshConnection()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var acceptCount = 0;
+        var postBodies = new ConcurrentQueue<string>();
+
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref acceptCount);
+            var requestText = await DrainRequestHeaders(context);
+
+            if (n == 1)
+            {
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+
+                // The POST arrives on the same socket: close without answering.
+                await DrainRequestHeaders(context);
+                context.Transport.Output.Complete();
+                context.Transport.Input.Complete();
+                return;
+            }
+
+            var received = requestText[(requestText.IndexOf("\r\n\r\n", StringComparison.Ordinal) + 4)..];
+            postBodies.Enqueue(await ReadBodyAsync(context, received, 5));
+            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"));
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetReverseProxyClient();
+        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+
+        using var first = await client.GetAsync(proxyUrl);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+
+        using var post = await client.PostAsync(proxyUrl, new StringContent("hello"));
+        Assert.AreEqual(HttpStatusCode.OK, post.StatusCode);
+        Assert.AreEqual("ok", await post.Content.ReadAsStringAsync());
+        Assert.AreEqual(2, acceptCount, "The POST should have been replayed on exactly one fresh connection.");
+        CollectionAssert.AreEqual(new[] { "hello" }, postBodies.ToArray(), "The replayed POST lost or changed its body.");
+    }
+
+    /// <summary>
+    ///     Only a reused socket proves the origin never read the request. A fresh connection that closes without
+    ///     answering may have processed the POST, so it must not be sent twice.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task FreshConnectionClosedWithoutResponse_Post_IsNotReplayed()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var acceptCount = 0;
+        server.HandleTcpRequest(async context =>
+        {
+            Interlocked.Increment(ref acceptCount);
+            await DrainRequestHeaders(context);
+            context.Transport.Output.Complete();
+            context.Transport.Input.Complete();
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetReverseProxyClient();
+        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+
+        try
+        {
+            using var post = await client.PostAsync(proxyUrl, new StringContent("hello"));
+            Assert.AreNotEqual(HttpStatusCode.OK, post.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            // Connection torn down by the proxy is also an acceptable non-replay outcome.
+        }
+
+        await Task.Delay(300);
+        Assert.AreEqual(1, acceptCount, "A POST on a fresh connection must not be replayed.");
+    }
+
+    /// <summary>
+    ///     A body too large to hold is streamed to the origin and cannot be sent again, reused socket or not.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ReusedConnectionClosedWithoutResponse_LargePost_IsNotReplayed()
+    {
+        using var testSuite = new TestSuite();
+        var server = testSuite.GetServer();
+
+        var acceptCount = 0;
+        server.HandleTcpRequest(async context =>
+        {
+            var n = Interlocked.Increment(ref acceptCount);
+            await DrainRequestHeaders(context);
+
+            if (n == 1)
+            {
+                await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"));
+                await DrainRequestHeaders(context);
+                context.Transport.Output.Complete();
+                context.Transport.Input.Complete();
+                return;
+            }
+
+            await ReadBodyAsync(context, string.Empty, 200 * 1024);
+            await context.Transport.Output.WriteAsync(MsgEncoding.GetBytes(
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"));
+        });
+
+        var proxy = testSuite.GetReverseProxy();
+        proxy.EnableConnectionPool = true;
+        proxy.BeforeRequest += (_, e) =>
+        {
+            e.HttpClient.Request.Url = server.ListeningTcpUrl;
+            return Task.CompletedTask;
+        };
+
+        var client = testSuite.GetReverseProxyClient();
+        var proxyUrl = new Uri($"http://localhost:{proxy.ProxyEndPoints[0].Port}/");
+
+        using var first = await client.GetAsync(proxyUrl);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+
+        try
+        {
+            using var post = await client.PostAsync(proxyUrl, new StringContent(new string('x', 200 * 1024)));
+            Assert.AreNotEqual(HttpStatusCode.OK, post.StatusCode);
+        }
+        catch (HttpRequestException)
+        {
+            // Connection torn down by the proxy is also an acceptable non-replay outcome.
+        }
+
+        await Task.Delay(300);
+        Assert.AreEqual(1, acceptCount, "A streamed body cannot be replayed.");
+    }
+
+    private static async Task<string> ReadBodyAsync(ConnectionContext context, string alreadyRead, int length)
+    {
+        var received = new StringBuilder(alreadyRead);
+        var count = alreadyRead.Length;
+        while (count < length)
+        {
+            var result = await context.Transport.Input.ReadAsync();
+            foreach (var seg in result.Buffer)
+            {
+                received.Append(MsgEncoding.GetString(seg.Span));
+                count += seg.Length;
+            }
+
+            context.Transport.Input.AdvanceTo(result.Buffer.End);
+            if (result.IsCompleted) break;
+        }
+
+        return received.ToString();
+    }
+
+    /// <summary>
     ///     A page load leaves several idle upstream sockets pooled. A dev server idle-closes all of them
     ///     together, and the pool cannot see that (its liveness poll only proves the local side is writable).
     ///     The replay after the first stale socket must dial; renting the next queued socket fails the same
@@ -448,7 +631,7 @@ public class StaleKeepAliveTests
             $"expected a fresh upstream accept for the replay; accepted={accepted}");
     }
 
-    private static async Task DrainRequestHeaders(ConnectionContext context)
+    private static async Task<string> DrainRequestHeaders(ConnectionContext context)
     {
         var requestText = string.Empty;
         while (!requestText.Contains("\r\n\r\n", StringComparison.Ordinal))
@@ -457,6 +640,8 @@ public class StaleKeepAliveTests
             foreach (var seg in result.Buffer) requestText += MsgEncoding.GetString(seg.Span);
             context.Transport.Input.AdvanceTo(result.Buffer.End);
         }
+
+        return requestText;
     }
 
     private sealed class RetryGateLoggerFactory : ILoggerFactory
