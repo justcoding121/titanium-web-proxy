@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -87,6 +88,69 @@ public class ClusterHealthProberTests
         using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
         await prober.ProbeOnceAsync();
         Assert.AreEqual(DestinationState.Maintenance, manager.GetDestinationState("a"));
+    }
+
+    [TestMethod]
+    public async Task SlowDestinationsAreProbedTogether_NotOneAfterAnother()
+    {
+        ClusterHealthProber.ProbeOverride = async (_, _) =>
+        {
+            await Task.Delay(400);
+            return false;
+        };
+        var cluster = Cluster(
+            new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, UnhealthyThreshold = 1 },
+            Dest("a"), Dest("b"), Dest("c"), Dest("d"));
+        var manager = await ManagerAsync(cluster);
+        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await prober.ProbeOnceAsync();
+        watch.Stop();
+
+        Assert.IsTrue(watch.ElapsedMilliseconds < 1300, $"round took {watch.ElapsedMilliseconds} ms");
+        foreach (var id in new[] { "a", "b", "c", "d" })
+        {
+            Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState(id));
+        }
+    }
+
+    [TestMethod]
+    public async Task UnixDestination_IsProbedBySocketConnect_NotEjectedByAnUnusableUrl()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Unix domain sockets are not a supported destination on Windows.");
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), "twp-probe-" + Guid.NewGuid().ToString("N") + ".sock");
+        using var server = new System.Net.Sockets.Socket(
+            System.Net.Sockets.AddressFamily.Unix, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Unspecified);
+        server.Bind(new System.Net.Sockets.UnixDomainSocketEndPoint(path));
+        server.Listen(4);
+        try
+        {
+            var cluster = Cluster(
+                new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, TimeoutSeconds = 2, UnhealthyThreshold = 1, HealthyThreshold = 1 },
+                new DestinationConfig { Id = "u", Address = "unix:" + path });
+            var manager = await ManagerAsync(cluster);
+            using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+
+            await prober.ProbeOnceAsync();
+            Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("u"));
+
+            server.Dispose();
+            File.Delete(path);
+            await prober.ProbeOnceAsync();
+            Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("u"));
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
     }
 
     [TestMethod]
