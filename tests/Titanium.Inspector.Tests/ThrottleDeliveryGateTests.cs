@@ -423,6 +423,97 @@ public class ThrottleDeliveryGateTests
         }
     }
 
+    // ---- HTTP/2 client to an HTTP/1.1 origin (the proxy bridges the two) ----
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public async Task Http2Client_BridgedToHttp1Origin_Throttled_BehavesLikeUnthrottled()
+    {
+        using var originNone = new Http2Origin();
+        using var originOn = new Http2Origin();
+        var fast = new NetworkThrottleProfile("fast", latencyMs: 0, bytesPerSecond: 8_000_000);
+
+        var none = await FetchH2(originNone.Port, profile: null, count: 4, winAuthHosts: "127.0.0.1");
+        var on = await FetchH2(originOn.Port, fast, count: 4, winAuthHosts: "127.0.0.1");
+
+        foreach (var run in new[] { none, on })
+        {
+            Assert.IsTrue(run.All(r => r.Version == new Version(2, 0)), "The client must really be on HTTP/2.");
+            Assert.IsTrue(run.All(r => r.Bytes.Length == BigBytes));
+        }
+
+        Assert.IsTrue(originNone.RequestProtocols.All(p => p == "HTTP/1.1"),
+            "The pin must make this an h2-client-to-h1-origin bridge: " + string.Join(",", originNone.RequestProtocols));
+        Assert.IsTrue(originOn.RequestProtocols.All(p => p == "HTTP/1.1"));
+
+        for (var i = 0; i < 4; i++)
+        {
+            Assert.IsFalse(on[i].ConnectionClose, "HTTP/2 responses must never carry Connection: close.");
+            CollectionAssert.AreEqual(none[i].Headers, on[i].Headers,
+                $"THROTTLED:\n{string.Join("\n", on[i].Headers)}\nNONE:\n{string.Join("\n", none[i].Headers)}");
+            CollectionAssert.AreEqual(none[i].Bytes, on[i].Bytes);
+        }
+
+        Assert.AreEqual(originNone.ConnectionCount, originOn.ConnectionCount,
+            $"Throttling must not change origin connection reuse (none={originNone.ConnectionCount}, throttled={originOn.ConnectionCount}).");
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public async Task Http2Client_BridgedToHttp1Origin_ParallelAndAborted_DoNotStallOrCorrupt()
+    {
+        using var origin = new Http2Origin();
+        using var interception = NewInterception(
+            new NetworkThrottleProfile("slow", latencyMs: 50, bytesPerSecond: 400_000), decrypt: true);
+        interception.WinAuthHosts = "127.0.0.1";
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            using var http = ProxyClient(interception.BoundPort, TimeSpan.FromSeconds(60), h2: true);
+            using (var warm = await http.GetAsync($"https://127.0.0.1:{origin.Port}/tiny?warm"))
+            {
+                Assert.AreEqual(new Version(2, 0), warm.Version, "The client must really be on HTTP/2.");
+                await warm.Content.ReadAsByteArrayAsync();
+            }
+
+            // Several concurrent streams, each paced, each on its own HTTP/1.1 origin connection.
+            var all = await Task.WhenAll(Enumerable.Range(0, 4)
+                .Select(i => http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/big?i={i}")));
+            Assert.IsTrue(all.All(b => b.Length == BigBytes && b.All(x => x == (byte)'Z')));
+
+            // Abort one stream while the body is still being paced.
+            using (var cts = new CancellationTokenSource())
+            {
+                using var response = await http.GetAsync(
+                    $"https://127.0.0.1:{origin.Port}/huge", HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                await using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
+                var buffer = new byte[4096];
+                var got = 0;
+                while (got < 16 * 1024)
+                {
+                    var read = await stream.ReadAsync(buffer, cts.Token);
+                    Assert.IsTrue(read > 0);
+                    got += read;
+                }
+
+                cts.Cancel();
+            }
+
+            // The multiplexed client connection and the origin pool must both still work.
+            var watch = Stopwatch.StartNew();
+            var again = await Task.WhenAll(Enumerable.Range(0, 3)
+                .Select(i => http.GetByteArrayAsync($"https://127.0.0.1:{origin.Port}/small?again={i}")));
+            watch.Stop();
+            Assert.IsTrue(again.All(b => b.Length == 30 * 1024));
+            Assert.IsTrue(watch.Elapsed < TimeSpan.FromSeconds(8), $"Follow-up requests took {watch.Elapsed}.");
+            Assert.IsTrue(origin.RequestProtocols.All(p => p == "HTTP/1.1"));
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+    }
+
     // ---- HTTP/1 client to an HTTP/2 origin (the proxy bridges the two) ----
 
     [TestMethod]
@@ -439,9 +530,10 @@ public class ThrottleDeliveryGateTests
         Assert.IsTrue(on.Elapsed >= TimeSpan.FromSeconds(1.4), $"150 KiB at 80 kB/s took {on.Elapsed}.");
     }
     private static async Task<List<(string[] Headers, byte[] Bytes, SessionSnapshot Snapshot, bool ConnectionClose, Version Version)>>
-        FetchH2(int originPort, NetworkThrottleProfile? profile, int count)
+        FetchH2(int originPort, NetworkThrottleProfile? profile, int count, string winAuthHosts = "")
     {
         using var interception = NewInterception(profile, decrypt: true);
+        interception.WinAuthHosts = winAuthHosts;
         var snapshots = new List<SessionSnapshot>();
         interception.SessionCaptured += (_, s) =>
         {
@@ -698,6 +790,12 @@ public class ThrottleDeliveryGateTests
             _app = builder.Build();
             _app.Run(async context =>
             {
+                _connectionIds.TryAdd(context.Connection.Id, 0);
+                lock (_protocols)
+                {
+                    _protocols.Add(context.Request.Protocol);
+                }
+
                 var path = context.Request.Path.Value ?? "/";
                 var size = path.StartsWith("/huge", StringComparison.Ordinal) ? 400 * 1024
                     : path.StartsWith("/small", StringComparison.Ordinal) ? 30 * 1024
@@ -719,7 +817,25 @@ public class ThrottleDeliveryGateTests
             Port = new Uri(addresses.First()).Port;
         }
 
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _connectionIds = new();
+        private readonly List<string> _protocols = [];
+
         public int Port { get; }
+
+        /// <summary>Distinct origin connections that carried a request.</summary>
+        public int ConnectionCount => _connectionIds.Count;
+
+        /// <summary>The HTTP protocol each request arrived on, in order.</summary>
+        public string[] RequestProtocols
+        {
+            get
+            {
+                lock (_protocols)
+                {
+                    return [.. _protocols];
+                }
+            }
+        }
 
         public void Dispose()
         {

@@ -2698,7 +2698,10 @@ public sealed class InterceptionService : IDisposable
             ProgressiveDelivery.AppendVia(plan.Response.Headers, plan.Response.HttpVersion, pseudonym);
         }
 
-        var http1Client = e.HttpClient.Request.HttpVersion.Major < 2;
+        // The client leg, not Request.HttpVersion: an h2 client bridged onto an HTTP/1.1 origin has its request
+        // rewritten to 1.1 by now, which made this true: the pooled origin connection was dropped after every
+        // paced response and Connection: close was added to an h2 stream's headers.
+        var http1Client = e.HttpClient.ClientHttpVersion.Major < 2;
         if (http1Client)
         {
             ProgressiveDelivery.MarkConnectionClose(plan.Response.Headers);
