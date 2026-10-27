@@ -1547,7 +1547,7 @@ public partial class ProxyServer : IDisposable
     ///     Subscribe to inspect or modify the request body chunk-by-chunk as it streams to the server,
     ///     without buffering the whole body. Do not combine with SessionEventArgs.GetRequestBody (which buffers).
     /// </summary>
-    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite; // NOSONAR S3264 -- Raised by OnBeforeRequestBodyWrite through InvokeAsync.
 
     /// <summary>
     ///     Intercept response event from server.
@@ -1559,7 +1559,7 @@ public partial class ProxyServer : IDisposable
     ///     Subscribe to inspect or modify the response body chunk-by-chunk as it streams to the client,
     ///     without buffering the whole body. Do not combine with SessionEventArgs.GetResponseBody (which buffers).
     /// </summary>
-    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite; // NOSONAR S3264 -- Raised by OnBeforeResponseBodyWrite through InvokeAsync.
 
     internal bool HasOnRequestBodyWriteSubscribers => OnRequestBodyWrite != null;
     internal bool HasOnResponseBodyWriteSubscribers => OnResponseBodyWrite != null;

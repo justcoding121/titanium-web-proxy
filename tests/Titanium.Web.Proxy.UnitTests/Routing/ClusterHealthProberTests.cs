@@ -95,7 +95,7 @@ public class ClusterHealthProberTests
     {
         ClusterHealthProber.ProbeOverride = async (_, _) =>
         {
-            await Task.Delay(400);
+            await Task.Delay(400, CancellationToken.None);
             return false;
         };
         var cluster = Cluster(

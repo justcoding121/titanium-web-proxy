@@ -236,18 +236,8 @@ internal sealed class MirrorDispatcher : IDisposable
         method.Length > 0 && path.Length > 0 &&
         !HasControlOrSpace(method) && !HasControlOrSpace(path) && !HasLineBreak(host);
 
-    private static bool HasControlOrSpace(string value)
-    {
-        foreach (var ch in value)
-        {
-            if (ch <= ' ' || ch == 0x7f)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasControlOrSpace(string value) =>
+        value.Any(static ch => ch <= ' ' || ch == 0x7f);
 
     private static bool HasLineBreak(string? value) =>
         value is not null && value.AsSpan().IndexOfAny('\r', '\n') >= 0;
