@@ -174,6 +174,13 @@ internal static class DecryptFailureLearning
         if (name.StartsWith("Access-Control-", StringComparison.OrdinalIgnoreCase))
             return true;
 
+        // Device Bound Session Credentials (DBSC): a 403 on a cookie-rotation request carries
+        // Secure-Session-Challenge, which is the normal refresh handshake and not a bot block.
+        if (name.StartsWith("Secure-Session-", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("Sec-Session-", StringComparison.OrdinalIgnoreCase)
+            || name.StartsWith("Sec-Secure-Session", StringComparison.OrdinalIgnoreCase))
+            return true;
+
         return NonChallengeHeaderNames.Any(skip => name.Equals(skip, StringComparison.OrdinalIgnoreCase));
     }
 

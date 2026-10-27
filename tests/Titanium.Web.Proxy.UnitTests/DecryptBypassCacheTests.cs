@@ -394,6 +394,22 @@ public class DecryptFailureBypassProxyApiTests
     }
 
     [TestMethod]
+    public void LooksLikeBotChallenge_IgnoresDeviceBoundSessionCredentialsRefresh()
+    {
+        // accounts.google.com/RotateBoundCookies answers 403 + Secure-Session-Challenge as part of the
+        // normal DBSC cookie refresh; it must not teach the bypass cache to stop decrypting the host.
+        Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(
+            ("Secure-Session-Challenge", "\"abc123\";id=\"session-1\""),
+            ("Content-Type", "text/plain"))));
+        Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(
+            ("Sec-Session-Challenge", "\"abc123\""))));
+        // A real bot signal next to the DBSC header still counts.
+        Assert.IsTrue(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith(
+            ("Secure-Session-Challenge", "\"abc123\""),
+            ("cf-mitigated", "challenge"))));
+    }
+
+    [TestMethod]
     public void LooksLikeBotChallenge_IgnoresOrdinaryForbiddenAndRateLimitResponses()
     {
         Assert.IsFalse(DecryptFailureLearning.LooksLikeBotChallenge(ResponseWith()));
