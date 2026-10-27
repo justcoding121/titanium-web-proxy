@@ -1901,24 +1901,14 @@ public partial class ProxyServer : IDisposable
                     continue;
                 }
 
-                try
-                {
-                    await Network.TcpPassthrough.RelayAsync(
-                        tcpClient,
-                        forwardHost,
-                        passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80),
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    OnException(null, ex);
-                }
-                finally
-                {
-                    tcpClient.Dispose();
-                    ReleaseClientConnection(endPoint);
-                }
-
+                // The relay runs for the life of the connection. Awaiting it here would hold the accept
+                // loop and serialize every passthrough client behind the one before it.
+                var passthroughPort = passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80);
+                var passthroughClient = tcpClient;
+                ThreadPool.UnsafeQueueUserWorkItem(
+                    new DeferredWorkItem(() => HandlePassthroughClientAsync(
+                        passthroughClient, endPoint, forwardHost, passthroughPort, cancellationToken)),
+                    preferLocal: false);
                 continue;
             }
 
@@ -1931,69 +1921,143 @@ public partial class ProxyServer : IDisposable
             if (endPoint.AcceptProxyProtocol &&
                 endPoint.IsTrustedProxyProtocolPeer((tcpClient.RemoteEndPoint as System.Net.IPEndPoint)?.Address))
             {
-                var acceptedProxyProtocol = false;
-                try
-                {
-                    acceptedProxyProtocol = await Network.ProxyProtocolReader.TryReadAsync(tcpClient, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    OnException(null, ex);
-                }
-
-                if (!acceptedProxyProtocol)
-                {
-                    try
-                    {
-                        tcpClient.Dispose();
-                    }
-                    catch (Exception)
-                    {
-                        // The accept loop owns this socket. A failed dispose is already closed.
-                    }
-
-                    ReleaseClientConnection(endPoint);
-                    continue;
-                }
+                // The preamble read waits on the peer. Reading it here would let one stalled sender
+                // hold the accept loop and delay every other client of this listener.
+                var preambleClient = tcpClient;
+                ThreadPool.UnsafeQueueUserWorkItem(
+                    new DeferredWorkItem(() => HandleProxyProtocolClientAsync(
+                        preambleClient, endPoint, cancellationToken)),
+                    preferLocal: false);
+                continue;
             }
 
-            try
+            if (!TryArmAcceptedClient(tcpClient, endPoint, cancellationToken, out var clientHelloWait))
             {
-                tcpClient.NoDelay = NoDelay;
-            }
-            catch (Exception ex)
-            {
-                OnException(null, ex);
-            }
-
-            // Kestrel SocketConnection.Start(): arm a zero-byte WaitForData on the accept thread
-            // before the ThreadPool hop so ClientHello can arrive during queue/setup. Await it
-            // before new SslStream (overlapping receives on the same socket are unsafe).
-            Task<int> clientHelloWait;
-            try
-            {
-                clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None, cancellationToken).AsTask();
-            }
-            catch (Exception ex)
-            {
-                OnException(null, ex);
-                try
-                {
-                    tcpClient.Dispose();
-                }
-                catch
-                {
-                    // Already disposed / reset.
-                }
-
-                ReleaseClientConnection(endPoint);
                 continue;
             }
 
             ThreadPool.UnsafeQueueUserWorkItem(
                 new AcceptedClientWorkItem(this, tcpClient, endPoint, clientHelloWait), preferLocal: false);
         }
+    }
+
+    /// <summary>How long a trusted peer may take to send its PROXY protocol preamble.</summary>
+    private static readonly TimeSpan ProxyProtocolReadTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    ///     Applies <see cref="NoDelay" /> and arms the zero-byte read. Returns false after disposing the
+    ///     socket and releasing the admission slot when the socket is already unusable.
+    /// </summary>
+    private bool TryArmAcceptedClient(Socket tcpClient, ProxyEndPoint endPoint, CancellationToken cancellationToken,
+        out Task<int> clientHelloWait)
+    {
+        try
+        {
+            tcpClient.NoDelay = NoDelay;
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+
+        // Kestrel SocketConnection.Start(): arm a zero-byte WaitForData on the accept thread
+        // before the ThreadPool hop so ClientHello can arrive during queue/setup. Await it
+        // before new SslStream (overlapping receives on the same socket are unsafe).
+        try
+        {
+            clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None, cancellationToken).AsTask();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+            try
+            {
+                tcpClient.Dispose();
+            }
+            catch
+            {
+                // Already disposed / reset.
+            }
+
+            ReleaseClientConnection(endPoint);
+            clientHelloWait = Task.FromResult(0);
+            return false;
+        }
+    }
+
+    private async Task HandlePassthroughClientAsync(Socket client, ProxyEndPoint endPoint, string host, int port,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Network.TcpPassthrough.RelayAsync(client, host, port, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The proxy is stopping. Closing the sockets below ends the relay.
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+        finally
+        {
+            client.Dispose();
+            ReleaseClientConnection(endPoint);
+        }
+    }
+
+    /// <summary>
+    ///     Reads the PROXY protocol preamble off the accept loop, then hands the socket to the normal
+    ///     client path with the zero-byte read armed only after the preamble is consumed.
+    /// </summary>
+    private async Task HandleProxyProtocolClientAsync(Socket client, ProxyEndPoint endPoint,
+        CancellationToken cancellationToken)
+    {
+        var accepted = false;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(ProxyProtocolReadTimeout);
+            accepted = await Network.ProxyProtocolReader.TryReadAsync(client, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, or the peer never sent a preamble. Either way the connection is dropped below.
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+
+        if (!accepted)
+        {
+            try
+            {
+                client.Dispose();
+            }
+            catch (Exception)
+            {
+                // A failed dispose means the socket is already closed.
+            }
+
+            ReleaseClientConnection(endPoint);
+            return;
+        }
+
+        if (!TryArmAcceptedClient(client, endPoint, cancellationToken, out var clientHelloWait))
+        {
+            return;
+        }
+
+        await HandleAcceptedClientAsync(client, endPoint, clientHelloWait).ConfigureAwait(false);
+    }
+
+    /// <summary>Runs an async body from the thread pool without a <see cref="Task.Run(Action)" /> wrapper.</summary>
+    private sealed class DeferredWorkItem(Func<Task> work) : IThreadPoolWorkItem
+    {
+        public void Execute() => _ = work();
     }
 
     /// <summary>
