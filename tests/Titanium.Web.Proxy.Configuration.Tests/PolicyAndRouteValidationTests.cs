@@ -70,6 +70,27 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void ForwardedHeadersTrustedProxies_RejectsEntriesThatWouldTrustNobody()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Server = new ServerConfig
+            {
+                ForwardedHeaders = new Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig
+                {
+                    TrustedProxies = ["10.0.0.0/8", "::1", "10.0.0.0/40", "not-an-address"],
+                },
+            },
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "trustedProxies entry '10.0.0.0/40'");
+        StringAssert.Contains(errors, "trustedProxies entry 'not-an-address'");
+        Assert.IsFalse(errors.Contains("'10.0.0.0/8'") || errors.Contains("'::1'"), errors);
+    }
+
+    [TestMethod]
     public void WellFormedPolicies_AreAccepted()
     {
         var config = new TwpConfig

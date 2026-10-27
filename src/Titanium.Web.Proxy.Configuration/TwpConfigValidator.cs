@@ -648,6 +648,7 @@ public static class TwpConfigValidator
         if (server.DecryptFailureBypassThreshold is <= 0)
             errors.Add("server.decryptFailureBypassThreshold must be positive.");
 
+        ValidateForwardedHeaders(server.ForwardedHeaders, errors);
         ValidateTls(server.Tls, errors);
         ValidateTimeouts(server.Timeouts, errors);
         ValidatePooling(server.Pooling, errors);
@@ -656,6 +657,23 @@ public static class TwpConfigValidator
         ValidateUpstream(server.Upstream, errors);
         ValidateCertificateManager(server.CertificateManager, errors);
         ValidateAccessLog(server.AccessLog, errors);
+    }
+
+    /// <summary>
+    /// An entry that does not parse trusts nobody at run time, so a typo would silently stop a real proxy
+    /// from being believed. Reject it at load instead.
+    /// </summary>
+    private static void ValidateForwardedHeaders(ForwardedHeadersConfig? forwarded, List<string> errors)
+    {
+        if (forwarded?.TrustedProxies is not { } proxies)
+        {
+            return;
+        }
+
+        foreach (var entry in proxies.Where(entry => !CidrPrefix.TryParse(entry, out _)))
+        {
+            errors.Add($"server.forwardedHeaders.trustedProxies entry '{entry}' is not an address or CIDR prefix.");
+        }
     }
 
     private static void ValidateAccessLog(AccessLogConfig? accessLog, List<string> errors)
