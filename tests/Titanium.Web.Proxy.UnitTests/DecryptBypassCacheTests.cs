@@ -33,8 +33,56 @@ public class DecryptBypassCacheTests
     public void MarkBypassed_ForcesActive()
     {
         var cache = new DecryptBypassCache { StrikeThreshold = 5 };
-        cache.MarkBypassed("cdn.example.com");
+        Assert.IsTrue(cache.MarkBypassed("cdn.example.com"), "the first call turns bypass on");
+        Assert.IsFalse(cache.MarkBypassed("cdn.example.com"), "an already-active host is not newly learned");
         Assert.IsTrue(cache.ShouldBypass("cdn.example.com"));
+    }
+
+    [TestMethod]
+    public void RecordFailure_ReportsActivationOnlyOnce()
+    {
+        var cache = new DecryptBypassCache { StrikeThreshold = 2 };
+        Assert.IsFalse(cache.RecordFailure("a.example.com", out var first));
+        Assert.IsFalse(first);
+        Assert.IsTrue(cache.RecordFailure("a.example.com", out var second));
+        Assert.IsTrue(second);
+        Assert.IsTrue(cache.RecordFailure("a.example.com", out var third));
+        Assert.IsFalse(third, "already active");
+    }
+
+    /// <summary>
+    ///     Two connections to one host usually fail in the same millisecond. Exactly one of them may report that it
+    ///     turned bypass on (it logs and raises the change event), and no strike may be lost or counted twice.
+    /// </summary>
+    [TestMethod]
+    public void ConcurrentFailures_ActivateExactlyOnce_AndCountEveryStrike()
+    {
+        for (var round = 0; round < 200; round++)
+        {
+            var cache = new DecryptBypassCache { StrikeThreshold = 1000 };
+            var forced = new DecryptBypassCache();
+            const int workers = 8;
+            var activations = 0;
+            using var start = new ManualResetEventSlim();
+            var threads = new Thread[workers];
+            for (var i = 0; i < workers; i++)
+            {
+                threads[i] = new Thread(() =>
+                {
+                    start.Wait();
+                    cache.RecordFailure("h.example.com");
+                    if (forced.MarkBypassed("h.example.com"))
+                        Interlocked.Increment(ref activations);
+                });
+                threads[i].Start();
+            }
+
+            start.Set();
+            foreach (var t in threads) t.Join();
+
+            Assert.AreEqual(1, activations, "round " + round);
+            Assert.AreEqual(workers, cache.Snapshot()[0].Strikes, "round " + round);
+        }
     }
 
     [TestMethod]

@@ -461,9 +461,7 @@ public partial class ProxyServer : IDisposable
         if (!ClientHandshakeRejects.RecordFailure(host, DateTime.UtcNow))
             return false;
 
-        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
-        DecryptFailureBypassCache.MarkBypassed(host);
-        if (!wasActive)
+        if (DecryptFailureBypassCache.MarkBypassed(host))
         {
             ProxyLog.ClientRejectedCertificateBypassLearned(logger, host, ClientHandshakeRejects.Threshold);
             RaiseDecryptFailureBypassChanged(host);
@@ -513,19 +511,19 @@ public partial class ProxyServer : IDisposable
         if (!forceBypass && !Network.Tcp.DecryptFailureLearning.IsLearnableOriginTlsFailure(error))
             return false;
 
-        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
         bool isActive;
+        bool becameActive;
         if (forceBypass)
         {
-            DecryptFailureBypassCache.MarkBypassed(host);
+            becameActive = DecryptFailureBypassCache.MarkBypassed(host);
             isActive = true;
         }
         else
         {
-            isActive = DecryptFailureBypassCache.RecordFailure(host);
+            isActive = DecryptFailureBypassCache.RecordFailure(host, out becameActive);
         }
 
-        if (isActive && !wasActive)
+        if (becameActive)
         {
             ProxyLog.DecryptFailureBypassLearned(logger, host,
                 forceBypass ? "forced after a failed MITM handshake" : "origin TLS failure");
@@ -551,19 +549,19 @@ public partial class ProxyServer : IDisposable
         if (statusCode is not (403 or 429))
             return false;
 
-        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
         bool isActive;
+        bool becameActive;
         if (forceImmediate)
         {
-            DecryptFailureBypassCache.MarkBypassed(host);
+            becameActive = DecryptFailureBypassCache.MarkBypassed(host);
             isActive = true;
         }
         else
         {
-            isActive = DecryptFailureBypassCache.RecordFailure(host);
+            isActive = DecryptFailureBypassCache.RecordFailure(host, out becameActive);
         }
 
-        if (isActive && !wasActive)
+        if (becameActive)
         {
             ProxyLog.DecryptFailureBypassLearned(logger, host, $"HTTP {statusCode} block");
             RaiseDecryptFailureBypassChanged(host);
