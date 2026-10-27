@@ -12,6 +12,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
+using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
@@ -54,7 +55,64 @@ namespace Titanium.Web.Proxy.Http2
                     pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
                     rr.Priority.HasValue, block, settings.MaxFrameSize);
                 connectionState.EnqueueWriteRented(towardServer, writeLock, output, framed.Array!, framed.Count);
-                rr.Http2HeadersQueued = true;
+
+                bool cancelBehindHeaders;
+                lock (rr)
+                {
+                    rr.Http2HeadersQueued = true;
+                    cancelBehindHeaders = towardServer && rr.Http2ClientResetBeforeHeaders;
+                }
+
+                // The client reset this stream while BeforeRequest was still running and the RST was held back
+                // (see Http2ClientResetBeforeHeaders). Cancel right behind the HEADERS so the origin does not
+                // keep serving a request nobody waits for; the RST can never overtake them on the FIFO.
+                if (cancelBehindHeaders)
+                    QueueRstStreamFrameTowardServer(connectionState, writeLock, output, frameHeader.StreamId,
+                        Http2ErrorCode.Cancel);
+            }
+        }
+
+        private static void QueueRstStreamFrameTowardServer(Http2ConnectionState connectionState,
+            SemaphoreSlim writeLock, Stream output, int streamId, Http2ErrorCode errorCode)
+        {
+            const int frameSize = 9 + 4;
+            var rented = ArrayPool<byte>.Shared.Rent(frameSize);
+            var rstFrameHeader = new Http2FrameHeader
+            {
+                StreamId = streamId,
+                Type = Http2FrameType.RstStream,
+                Length = 4,
+                Flags = 0
+            };
+            rstFrameHeader.CopyToBuffer(rented);
+            BinaryPrimitives.WriteUInt32BigEndian(rented.AsSpan(9), (uint)errorCode);
+            connectionState.EnqueueWriteRented(towardServer: true, writeLock, output, rented, frameSize);
+        }
+
+        /// <summary>
+        ///     Called when the client resets a stream. Returns true when the origin has not been sent this
+        ///     stream's HEADERS yet (BeforeRequest still running), in which case the RST must not be relayed:
+        ///     it would be an RST on an idle stream. The reset is recorded on the request so the HEADERS, if
+        ///     they are queued later, are immediately followed by a RST.
+        /// </summary>
+        internal static bool TryHoldClientResetUntilHeaders(Http2ConnectionState connectionState,
+            Http2StreamState resetStream)
+        {
+            if (connectionState.OriginRelayPool != null
+                || resetStream.IsCompressedRelay
+                || resetStream.CapturedCompressedHeaders != null
+                || resetStream.IsExternalBridge
+                || resetStream.IsExtendedConnect
+                || resetStream.SessionArgs?.HttpClient.Request is not { } request)
+                return false;
+
+            lock (request)
+            {
+                if (request.Http2HeadersQueued)
+                    return false;
+
+                request.Http2ClientResetBeforeHeaders = true;
+                return true;
             }
         }
 
@@ -657,7 +715,17 @@ namespace Titanium.Web.Proxy.Http2
         internal static async ValueTask SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {
-            if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
+            if (errorCode != Http2ErrorCode.NoError)
+            {
+                ProxyMetrics.ParserError("http2");
+
+                // The call site is the only record of why the proxy gave up on the connection; the browser only
+                // reports a bare ERR_HTTP2_PROTOCOL_ERROR. The stack names the validation branch that fired.
+                var diagnosticsLogger = ProxyDiagnostics.Logger;
+                if (diagnosticsLogger.IsEnabled(LogLevel.Debug))
+                    diagnosticsLogger.LogDebug("Sending HTTP/2 GOAWAY({ErrorCode}) lastStreamId={LastStreamId}{NewLine}{Stack}",
+                        errorCode, lastStreamId, Environment.NewLine, Environment.StackTrace);
+            }
 
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.GoAway;

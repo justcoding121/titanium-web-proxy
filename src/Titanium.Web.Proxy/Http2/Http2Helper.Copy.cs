@@ -2378,8 +2378,11 @@ namespace Titanium.Web.Proxy.Http2
                     if (connectionState.TryTakeStream(streamId, out var resetStream))
                     {
                         resetBeforeOriginHeaders = isClient
-                            && resetStream.SessionArgs?.HttpClient.Request is
-                                { Http2HeadersDeferred: true, Http2HeadersQueued: false };
+                            && (resetStream.SessionArgs?.HttpClient.Request is
+                                    { Http2HeadersDeferred: true, Http2HeadersQueued: false }
+                                // BeforeRequest still running: HEADERS not queued yet (a slow handler plus a
+                                // browser that cancels and re-issues the request is enough to hit this).
+                                || TryHoldClientResetUntilHeaders(connectionState, resetStream));
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();
