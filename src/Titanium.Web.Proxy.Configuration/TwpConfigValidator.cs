@@ -1,5 +1,7 @@
 using System.Net;
 using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -70,11 +72,125 @@ public static class TwpConfigValidator
             {
                 ValidateDestination(cluster.Id, dest, destinationIds, allDestinationIds, errors);
             }
+
+            ValidateHttpClient(cluster.Id, cluster.HttpClient, errors);
         }
 
         return clusterIds;
     }
 
+    /// <summary>
+    /// Upstream TLS files are checked at load time so a typo is a config error, not a 502 on the first request.
+    /// The proxy applies the same rules at run time and fails closed.
+    /// </summary>
+    private static void ValidateHttpClient(string clusterId, ClusterHttpClientConfig? http, List<string> errors)
+    {
+        if (http is null)
+        {
+            return;
+        }
+
+        var prefix = $"Cluster '{clusterId}' httpClient";
+        var hasCertificate = !string.IsNullOrWhiteSpace(http.ClientCertificatePath);
+        var hasKey = !string.IsNullOrWhiteSpace(http.ClientCertificateKeyPath);
+        if (http.ServerName is not null && string.IsNullOrWhiteSpace(http.ServerName))
+        {
+            errors.Add($"{prefix}: serverName must not be blank.");
+        }
+
+        if (hasKey && !hasCertificate)
+        {
+            errors.Add($"{prefix}: clientCertificateKeyPath requires clientCertificatePath.");
+        }
+
+        if (!string.IsNullOrEmpty(http.ClientCertificatePasswordEnv) && !hasCertificate)
+        {
+            errors.Add($"{prefix}: clientCertificatePasswordEnv requires clientCertificatePath.");
+        }
+
+        if (hasCertificate)
+        {
+            ValidateClientCertificateFiles(prefix, http, hasKey, errors);
+        }
+
+        if (!string.IsNullOrWhiteSpace(http.CaBundlePath))
+        {
+            ValidateCaBundle(prefix, http.CaBundlePath, errors);
+        }
+    }
+
+    private static void ValidateClientCertificateFiles(string prefix, ClusterHttpClientConfig http, bool hasKey,
+        List<string> errors)
+    {
+        var certPath = http.ClientCertificatePath!;
+        if (!File.Exists(certPath))
+        {
+            errors.Add($"{prefix}: clientCertificatePath '{certPath}' was not found.");
+            return;
+        }
+
+        if (hasKey && !File.Exists(http.ClientCertificateKeyPath!))
+        {
+            errors.Add($"{prefix}: clientCertificateKeyPath '{http.ClientCertificateKeyPath}' was not found.");
+            return;
+        }
+
+        string? password = null;
+        if (!string.IsNullOrEmpty(http.ClientCertificatePasswordEnv))
+        {
+            password = Environment.GetEnvironmentVariable(http.ClientCertificatePasswordEnv);
+            if (password is null)
+            {
+                errors.Add($"{prefix}: environment variable '{http.ClientCertificatePasswordEnv}' (clientCertificatePasswordEnv) is not set.");
+                return;
+            }
+        }
+
+        try
+        {
+            using var certificate = hasKey
+                ? LoadPemPair(certPath, http.ClientCertificateKeyPath!, password)
+                : X509CertificateLoader.LoadPkcs12FromFile(certPath, password);
+            if (!certificate.HasPrivateKey)
+            {
+                errors.Add($"{prefix}: clientCertificatePath '{certPath}' has no private key.");
+            }
+        }
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException or IOException)
+        {
+            errors.Add($"{prefix}: client certificate does not parse ({ex.Message}).");
+        }
+    }
+
+    private static X509Certificate2 LoadPemPair(string certPath, string keyPath, string? password)
+    {
+        var keyPem = File.ReadAllText(keyPath);
+        return keyPem.Contains("ENCRYPTED PRIVATE KEY", StringComparison.Ordinal)
+            ? X509Certificate2.CreateFromEncryptedPemFile(certPath, password, keyPath)
+            : X509Certificate2.CreateFromPemFile(certPath, keyPath);
+    }
+
+    private static void ValidateCaBundle(string prefix, string path, List<string> errors)
+    {
+        if (!File.Exists(path))
+        {
+            errors.Add($"{prefix}: caBundlePath '{path}' was not found.");
+            return;
+        }
+
+        try
+        {
+            var roots = ClientCertificateAuthorityFiles.Load(path);
+            if (roots.Count == 0)
+            {
+                errors.Add($"{prefix}: caBundlePath contains no certificates.");
+            }
+        }
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException or IOException)
+        {
+            errors.Add($"{prefix}: caBundlePath does not parse ({ex.Message}).");
+        }
+    }
     private static void ValidateDestination(
         string clusterId,
         DestinationConfig dest,

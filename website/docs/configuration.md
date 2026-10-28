@@ -102,6 +102,44 @@ A route `mirror` sends a copy of matching requests to another cluster and discar
 
 Optional `limits` on a route overrides that session only: `requestTimeoutSeconds`, `idleTimeoutSeconds`, `maxBufferedBodyBytes`, `maxWebSocketFramePayloadBytes`. Omit it and the server limits apply. Full key list: [Limits and escape hatches](/docs/limits).
 
+### Upstream TLS
+
+Optional `clusters[].httpClient` settings control how the proxy authenticates to a cluster's HTTPS destinations. Every field is off by default. A cluster that sets none of them keeps the machine trust store, the origin host as the TLS name, and the shared connection pool.
+
+```json
+{
+  "schemaVersion": "7.1",
+  "clusters": [
+    {
+      "id": "payments",
+      "destinations": [
+        { "id": "p1", "address": "10.0.0.5", "port": 8443, "useHttps": true }
+      ],
+      "httpClient": {
+        "clientCertificatePath": "/etc/titanium/payments-client.crt",
+        "clientCertificateKeyPath": "/etc/titanium/payments-client.key",
+        "caBundlePath": "/etc/titanium/payments-ca.pem",
+        "serverName": "payments.internal",
+        "verifyHostname": true
+      }
+    }
+  ]
+}
+```
+
+Keep `schemaVersion` (or another native section) in the JSON file. A bare listeners, routes, and clusters document is read by the reverse-proxy subset, which has no `httpClient`.
+
+| Key | Effect |
+|-----|--------|
+| `clientCertificatePath`, `clientCertificateKeyPath` | Client certificate for mutual TLS. Give a PEM certificate and its PEM key together. For a PFX or PKCS#12 file, set only `clientCertificatePath`. |
+| `clientCertificatePasswordEnv` | Name of the environment variable that holds the PFX password, or the password of an encrypted PEM key. The password never appears in the file. |
+| `caBundlePath` | PEM or CRT trust anchors for this cluster. They replace the machine store, so a public CA is not trusted unless the bundle lists it. |
+| `serverName` | Sent as TLS SNI and checked against the origin certificate. The HTTP `Host` header is not changed. |
+| `verifyHostname` | Default `true`. `false` tolerates only a certificate name mismatch. Chain, expiry, and revocation errors still fail. |
+| `acceptAnyServerCertificate` | Skips certificate validation for this cluster on HTTP/1.1, HTTP/2, and HTTP/3. |
+
+The files are read once when the configuration loads or reloads, never per request, and their content is part of the connection pool key, so two clusters with different identities never share a socket. Rotating a file takes effect on the next `titanium reload`. A missing, unreadable, or unparsable file is a validation error at load time; if it breaks later the cluster answers 502 and logs the cause once. It never falls back to the machine store or an anonymous handshake. Active health probes to an HTTPS destination use the same certificate, CA bundle, and server name. A route `mirror` ignores these settings and uses the machine trust store, so a mirror cluster that needs a private CA fails its best-effort copy.
+
 ### Route transforms
 
 Optional `transforms` on a route rewrite the upstream request (and can stage response header changes). Empty/absent transforms keep the reverse fast path. Supported kinds:

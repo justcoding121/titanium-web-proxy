@@ -457,8 +457,6 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AltSvc.get -> Titanium.We
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AltSvc.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateMode.set -> void
-static Titanium.Web.Proxy.Configuration.ClientCertificateAuthorityFiles.Load(string! path) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!
-Titanium.Web.Proxy.Configuration.ClientCertificateAuthorityFiles
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateCaPath.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClientCertificateCaPath.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TrustedProxyProtocolSources.get -> System.Collections.Generic.IList<string!>!

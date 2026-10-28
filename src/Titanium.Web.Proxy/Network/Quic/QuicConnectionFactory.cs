@@ -52,10 +52,14 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
         string cacheKey,
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken,
-        bool failFastHandshake = true)
+        bool failFastHandshake = true,
+        UpstreamTlsMaterial? tlsMaterial = null)
     {
         if (upStreamProxy != null)
             throw new QuicProxyNotSupportedException(upStreamProxy.ToString() ?? "unknown");
+
+        // Same fail-closed rule as the TCP path: unusable cluster TLS files never fall back to defaults.
+        tlsMaterial?.ThrowIfFaulted();
 
         // Auto-policy H3 (SVCB/Alt-Svc) and pool warmups must fail fast when UDP is filtered: the
         // .NET default HandshakeTimeout is 10s, which makes every first request to an H3-advertising
@@ -73,7 +77,7 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
             {
                 ApplicationProtocols = new List<SslApplicationProtocol> { SslApplicationProtocol.Http3 },
                 // SNI and certificate validation use the origin authority, not the connect host.
-                TargetHost = sniHost,
+                TargetHost = tlsMaterial?.ServerName ?? sniHost,
                 RemoteCertificateValidationCallback = remoteCertificateValidationCallback
                     ?? DefaultValidationCallback
             },
@@ -89,6 +93,12 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
             MaxInboundBidirectionalStreams = 0,
             MaxInboundUnidirectionalStreams = 3  // control, QPACK encoder, QPACK decoder
         };
+
+        if (tlsMaterial?.ClientCertificate is { } clientCertificate)
+        {
+            clientOptions.ClientAuthenticationOptions.ClientCertificates =
+                new X509CertificateCollection { clientCertificate };
+        }
 
         var connectStartedAt = DateTime.UtcNow;
         var connection = await QuicConnection.ConnectAsync(clientOptions, cancellationToken);
@@ -128,9 +138,13 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
     /// </summary>
     internal static string GetCacheKey(
         string connectHost, int port, string sniHost,
-        IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint)
+        IExternalProxy? upStreamProxy, IPEndPoint? upStreamEndPoint, string? tlsFingerprint = null)
     {
-        return $"h3:{connectHost}:{port}:{sniHost}:{upStreamProxy?.ToString() ?? string.Empty}:{upStreamEndPoint?.ToString() ?? string.Empty}";
+        var key = $"h3:{connectHost}:{port}:{sniHost}:{upStreamProxy?.ToString() ?? string.Empty}:{upStreamEndPoint?.ToString() ?? string.Empty}";
+
+        // A cluster with its own client certificate or trust anchors must never share a connection with
+        // another identity.
+        return tlsFingerprint is null ? key : key + ":tls:" + tlsFingerprint;
     }
 }
 #pragma warning restore CA1416

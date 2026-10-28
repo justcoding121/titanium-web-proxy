@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Clusters;
 
@@ -68,6 +69,19 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
         _ = reconcileBackground;
+
+        // Read and parse each cluster's upstream TLS files now, so a request never does file I/O and the
+        // pool key already holds the content fingerprint. A broken file is logged by the first request
+        // that needs it and fails closed there.
+        foreach (var cluster in clusters)
+        {
+            if (cluster.HttpClient is { } httpClient)
+            {
+                _ = UpstreamTlsMaterial.For(httpClient);
+                _ = httpClient.ConnectionKey;
+            }
+        }
+
         while (true)
         {
             var current = Volatile.Read(ref _snapshot);

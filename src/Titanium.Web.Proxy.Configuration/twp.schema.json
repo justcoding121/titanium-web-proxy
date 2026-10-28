@@ -228,6 +228,18 @@
               "acceptAnyServerCertificate": {
                 "type": "boolean"
               },
+              "caBundlePath": {
+                "type": "string"
+              },
+              "clientCertificateKeyPath": {
+                "type": "string"
+              },
+              "clientCertificatePasswordEnv": {
+                "type": "string"
+              },
+              "clientCertificatePath": {
+                "type": "string"
+              },
               "connectTimeout": {
                 "type": "string"
               },
@@ -241,8 +253,14 @@
               "requestTimeout": {
                 "type": "string"
               },
+              "serverName": {
+                "type": "string"
+              },
               "sslProtocols": {
                 "type": "string"
+              },
+              "verifyHostname": {
+                "type": "boolean"
               }
             }
           },

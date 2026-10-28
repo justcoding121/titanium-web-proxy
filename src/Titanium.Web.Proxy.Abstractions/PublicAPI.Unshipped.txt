@@ -623,3 +623,18 @@ Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(st
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestTrailerSet = "RequestTrailerSet" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseTrailerSet = "ResponseTrailerSet" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxAllowedBodyBytes = 1048576 -> int
+static Titanium.Web.Proxy.Abstractions.Network.ClientCertificateAuthorityFiles.Load(string! path) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!
+static Titanium.Web.Proxy.Abstractions.Network.ClientCertificateAuthorityFiles.Parse(byte[]! content) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!
+Titanium.Web.Proxy.Abstractions.Network.ClientCertificateAuthorityFiles
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificatePath.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificatePath.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificateKeyPath.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificateKeyPath.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificatePasswordEnv.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ClientCertificatePasswordEnv.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.CaBundlePath.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.CaBundlePath.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ServerName.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.ServerName.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.VerifyHostname.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterHttpClientConfig.VerifyHostname.init -> void

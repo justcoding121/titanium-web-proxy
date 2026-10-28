@@ -3,10 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Clusters;
 
@@ -23,10 +26,14 @@ internal sealed class ClusterHealthProber : IDisposable
     private readonly Dictionary<string, int> _successes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _failures = new(StringComparer.Ordinal);
     private readonly HashSet<string> _probeEjected = new(StringComparer.Ordinal);
-    private static readonly HttpClient Http = new(new SocketsHttpHandler { AllowAutoRedirect = false })
+    private static readonly HttpClient SharedHttp = new(new SocketsHttpHandler { AllowAutoRedirect = false })
     {
         Timeout = Timeout.InfiniteTimeSpan,
     };
+
+    // Per-cluster client, built only when the cluster sets upstream TLS options. Otherwise probes share one client.
+    private readonly HttpClient? _tlsHttp;
+    private readonly string? _tlsServerName;
 
     private readonly Dictionary<string, DateTimeOffset> _dnsRefreshed = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cancel = new();
@@ -37,6 +44,13 @@ internal sealed class ClusterHealthProber : IDisposable
     {
         _manager = manager;
         _cluster = cluster;
+        if (UpstreamTlsMaterial.For(cluster.HttpClient) is { } material)
+        {
+            _tlsHttp = CreateTlsClient(material);
+            _tlsServerName = material.ServerName;
+        }
+
+
         _loop = Task.Run(() => LoopAsync(time), _cancel.Token);
     }
 
@@ -184,7 +198,35 @@ internal sealed class ClusterHealthProber : IDisposable
         return min;
     }
 
-    private static async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)
+    /// <summary>
+    ///     HTTPS probes must trust what traffic trusts: the cluster's client certificate, CA bundle, server name,
+    ///     and hostname policy. Otherwise a destination that only accepts mTLS is ejected for no real fault.
+    /// </summary>
+    private static HttpClient CreateTlsClient(UpstreamTlsMaterial material)
+    {
+        var ssl = new SslClientAuthenticationOptions
+        {
+            TargetHost = material.ServerName,
+            RemoteCertificateValidationCallback = (_, certificate, chain, errors) =>
+            {
+                if (material.Error is not null) return false;
+                if (material.AcceptAny) return true;
+                return material.ApplyPolicy(certificate, chain, errors, X509RevocationMode.NoCheck)
+                       == SslPolicyErrors.None;
+            },
+        };
+        if (material.ClientCertificate is { } clientCertificate)
+        {
+            ssl.ClientCertificates = new X509CertificateCollection { clientCertificate };
+        }
+
+        return new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, SslOptions = ssl })
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+    }
+
+    private async Task<bool> ProbeAsync(DestinationConfig dest, ActiveHealthConfig active, CancellationToken cancellationToken)
     {
         var probe = ProbeOverride;
         if (probe is not null)
@@ -214,8 +256,16 @@ internal sealed class ClusterHealthProber : IDisposable
 
             var scheme = dest.UseHttps ? "https" : "http";
             var path = string.IsNullOrEmpty(active.Path) ? "/" : active.Path;
-            using var response = await Http.GetAsync(
-                    $"{scheme}://{UrlHost(dest.Address)}:{port}{path}{ProbeQuery(active.Query)}", timeout.Token)
+            using var request = new HttpRequestMessage(HttpMethod.Get,
+                $"{scheme}://{UrlHost(dest.Address)}:{port}{path}{ProbeQuery(active.Query)}");
+            if (dest.UseHttps && _tlsServerName is not null)
+            {
+                // SocketsHttpHandler derives SNI and the checked name from the Host header, so the cluster's
+                // serverName has to travel there for the probe to match what real traffic presents.
+                request.Headers.Host = _tlsServerName;
+            }
+
+            using var response = await (_tlsHttp ?? SharedHttp).SendAsync(request, timeout.Token)
                 .ConfigureAwait(false);
             return StatusIsHealthy(active, (int)response.StatusCode);
         }
@@ -292,6 +342,7 @@ internal sealed class ClusterHealthProber : IDisposable
         }
 
         _cancel.Cancel();
+        _tlsHttp?.Dispose();
 
         // Release the source only after the loop has stopped touching its token.
         _ = _loop.ContinueWith(

@@ -14,4 +14,7 @@
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Titanium.Web.Proxy.UnitTests\UpstreamTlsTestPki.cs" Link="Helpers\UpstreamTlsTestPki.cs" />
+  </ItemGroup>
 </Project>

@@ -22,5 +22,6 @@ internal interface IQuicConnectionFactory
         string cacheKey,
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken,
-        bool failFastHandshake = true);
+        bool failFastHandshake = true,
+        UpstreamTlsMaterial? tlsMaterial = null);
 }

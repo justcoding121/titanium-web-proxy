@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using Certes;
 using Certes.Acme.Resource;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;

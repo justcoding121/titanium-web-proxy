@@ -92,6 +92,17 @@ internal static class ProxyLog
             host, port, FormatProtocol(negotiated));
     }
 
+    /// <summary>
+    ///     A cluster's upstream client certificate or CA file could not be read or parsed. Logged once per
+    ///     config instance; every request to that cluster then fails with 502 until the file is fixed and the
+    ///     configuration is reloaded.
+    /// </summary>
+    internal static void UpstreamTlsMaterialFaulted(ILogger logger, string detail)
+    {
+        if (!logger.IsEnabled(LogLevel.Error)) return;
+        logger.LogError("[proxy<->origin] upstream TLS material unusable; failing closed with 502: {Detail}", detail);
+    }
+
     internal static void OriginConnectionFailed(ILogger logger, string host, int port, Exception ex)
     {
         // Covers the whole connection setup to the origin (DNS/TCP connect, optional upstream-proxy

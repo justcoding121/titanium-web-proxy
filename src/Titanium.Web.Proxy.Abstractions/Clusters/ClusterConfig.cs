@@ -151,20 +151,71 @@ public sealed class ClusterHttpClientConfig
     /// <summary>Null uses the process request-header timeout.</summary>
     public TimeSpan? RequestTimeout { get; init; }
 
-    /// <summary>Empty when every setting is at the process default.</summary>
-    public string ConnectionKey
-    {
-        get
-        {
-            if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null &&
-                ConnectTimeout is null && RequestTimeout is null)
-            {
-                return string.Empty;
-            }
+    /// <summary>
+    ///     Client certificate presented to the upstream. A PEM certificate when
+    ///     <see cref="ClientCertificateKeyPath"/> is set, otherwise a PFX/PKCS#12 file.
+    /// </summary>
+    public string? ClientCertificatePath { get; init; }
 
-            return (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer +
-                   "|" + ConnectTimeout?.TotalMilliseconds + "|" + RequestTimeout?.TotalMilliseconds;
+    /// <summary>PEM private key that pairs with a PEM <see cref="ClientCertificatePath"/>.</summary>
+    public string? ClientCertificateKeyPath { get; init; }
+
+    /// <summary>
+    ///     Name of the environment variable holding the PFX password, or the password of an encrypted PEM key.
+    ///     The password itself is never read from the configuration file.
+    /// </summary>
+    public string? ClientCertificatePasswordEnv { get; init; }
+
+    /// <summary>PEM or CRT file of trust anchors used instead of the machine store for this cluster.</summary>
+    public string? CaBundlePath { get; init; }
+
+    /// <summary>Overrides the TLS SNI value and the name checked against the upstream certificate.</summary>
+    public string? ServerName { get; init; }
+
+    /// <summary>
+    ///     When false, only a certificate name mismatch is tolerated. Chain, expiry, and revocation
+    ///     errors still fail the handshake.
+    /// </summary>
+    public bool VerifyHostname { get; init; } = true;
+
+    private string? connectionKey;
+    private UpstreamTlsFileSnapshot? tlsFiles;
+
+    /// <summary>True when any setting changes how the upstream TLS handshake is validated or presented.</summary>
+    internal bool HasTlsMaterial =>
+        AcceptAnyServerCertificate || !VerifyHostname || !string.IsNullOrEmpty(ServerName) ||
+        !string.IsNullOrEmpty(ClientCertificatePath) || !string.IsNullOrEmpty(CaBundlePath);
+
+    /// <summary>True when a file-backed TLS setting is present, so the pool key must follow the file contents.</summary>
+    private bool HasTlsFiles =>
+        !string.IsNullOrEmpty(ClientCertificatePath) || !string.IsNullOrEmpty(CaBundlePath);
+
+    /// <summary>
+    ///     File bytes read once per config instance. A reload builds a new instance, so a rotated file is
+    ///     picked up then; nothing re-reads a file on the request path.
+    /// </summary>
+    internal UpstreamTlsFileSnapshot TlsFiles =>
+        tlsFiles ??= UpstreamTlsFileSnapshot.Read(this);
+
+    /// <summary>Empty when every setting is at the process default. Computed once, on first use.</summary>
+    public string ConnectionKey => connectionKey ??= BuildConnectionKey();
+
+    private string BuildConnectionKey()
+    {
+        if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null &&
+            ConnectTimeout is null && RequestTimeout is null && !HasTlsMaterial)
+        {
+            return string.Empty;
         }
+
+        var key = (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer +
+                  "|" + ConnectTimeout?.TotalMilliseconds + "|" + RequestTimeout?.TotalMilliseconds;
+        if (!HasTlsFiles && VerifyHostname && string.IsNullOrEmpty(ServerName))
+        {
+            return key;
+        }
+
+        return key + "|tls:" + TlsFiles.Fingerprint;
     }
 }
 
