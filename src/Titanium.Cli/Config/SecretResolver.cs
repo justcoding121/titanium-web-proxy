@@ -37,6 +37,16 @@ internal static class SecretResolver
                 errors);
             controlPlane.SharedSecretEnv = null;
             controlPlane.SharedSecretFile = null;
+            controlPlane.DashboardViewerSecret = ResolveOne(
+                "plus.controlPlane.dashboardViewerSecret",
+                controlPlane.DashboardViewerSecret,
+                controlPlane.DashboardViewerSecretEnv,
+                controlPlane.DashboardViewerSecretFile,
+                multiline: false,
+                readEnv,
+                errors);
+            controlPlane.DashboardViewerSecretEnv = null;
+            controlPlane.DashboardViewerSecretFile = null;
         }
 
         if (config.Plus?.Options is { Count: > 0 } options)
@@ -67,6 +77,7 @@ internal static class SecretResolver
     {
         var files = new List<string>();
         Add(files, config.Plus?.ControlPlane?.SharedSecretFile);
+        Add(files, config.Plus?.ControlPlane?.DashboardViewerSecretFile);
         Add(files, config.Server?.Admin?.AuthTokenFile);
         if (config.Plus?.Options is { } options)
         {

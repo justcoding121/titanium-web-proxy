@@ -8,7 +8,7 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 
 | Outcome | Capability |
 |---------|------------|
-| Dashboard | HTML admin on an ephemeral port (or explicit `controlPlane.dashboardPort`) |
+| Dashboard | Sign-in page and six views (overview, routes and clusters, health, config, certificates, audit) on an ephemeral port (or explicit `controlPlane.dashboardPort`); see [Dashboard](#dashboard) |
 | Observability | Prometheus-style metrics for destination state / latency |
 | Security | CIDR allow-list, JWT/OIDC (JWKS), API key / Basic auth |
 | Web application firewall (WAF) | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
@@ -68,6 +68,40 @@ titanium update --remove-plus
 
 This removes Plus beside the CLI (and `.bak` / `.new`). It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
 
+## Dashboard
+
+The dashboard is server-rendered HTML plus one small script that polls `/api/*` every 2 seconds. There is no front-end build and no external asset: the page loads `/assets/dashboard.js` and `/assets/dashboard.css` from the same origin. Its address is printed at start-up; set `plus.controlPlane.dashboardPort` to pin the port.
+
+| View | Path | What it shows |
+|------|------|---------------|
+| Overview | `/` | Requests per second (last 10 s), error ratio and p50 / p95 / p99 latency (last 60 s, from the proxy's duration histogram), active connections and requests |
+| Routes and clusters | `/routes` | Read-only route and cluster config with secrets masked, per-route requests, errors and latency, and a Drain / Healthy button for each destination |
+| Health and ejections | `/health` | The last 200 passive and circuit-breaker ejections, active-probe failures and recoveries |
+| Config and reload | `/config` | Schema version, config hash, when the config loaded, and the time, result and (redacted) error of the last reload |
+| Certificates | `/certificates` | Subject, issuer, expiry and days left for the listener, SNI, client-CA and upstream certificate files |
+| Audit | `/audit` | The newest audit events |
+
+The same data is served as JSON at `/api/overview`, `/api/routes`, `/api/health`, `/api/config`, `/api/certs`, `/api/audit` and `/api/snapshot`, and as Prometheus text at `/metrics`.
+
+Per-route counters cover at most 1024 routes; further routes are counted under `(other)`. A route's match values (header and query values) are never shown, and transform parameters are shown only for a fixed list of non-sensitive keys.
+
+### Sign-in and roles
+
+Opening a page without a session redirects to `/login`. Signing in with a secret sets the `titanium_plus_session` cookie: a random 256-bit id, `HttpOnly`, `SameSite=Strict` (and `Secure` when TLS is on). A session ends after 30 minutes without use or on **Sign out**; the script's own polling does not count as use. At most 64 sessions are kept, and the least recently used one is dropped to make room.
+
+| Role | Secret | Can do |
+|------|--------|--------|
+| operator | `plus.controlPlane.sharedSecret` | Everything, including Drain and Healthy |
+| viewer | `plus.controlPlane.dashboardViewerSecret` | Read every view; the buttons are disabled and the server answers `403` to a mutation |
+
+`dashboardViewerSecret` takes the same `...Env` / `...File` forms as the shared secret (see [Secret references](/docs/configuration#secret-references)). It must differ from the shared secret and may not be a well-known default.
+
+Every change a session makes (Drain, Healthy, Sign out) needs the CSRF token the page carries in the `X-Titanium-Csrf` header; a request without it gets `403` and changes nothing. Scripts and browser-automation tests can skip the cookie and send the `X-Titanium-Control-Secret` header on each request instead: that header is the credential, so it needs no CSRF token. A wrong secret at the login page or in the header counts toward the [failed-login throttle](#failed-login-throttle); a request carrying an expired cookie does not.
+
+Every response carries `Content-Security-Policy: default-src 'self'` (no inline script or style), `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. Values from your config, such as a destination id, are HTML-encoded.
+
+Editing routes from the dashboard and single sign-on are not provided.
+
 ## Control-plane and credential hardening
 
 ### Hashed Basic users
@@ -82,7 +116,7 @@ This removes Plus beside the CLI (and `.bak` / `.new`). It does **not** stop a r
 
 PBKDF2 here is PBKDF2-HMAC-SHA256 with a 16-byte or longer salt and a 16 to 64 byte hash; new hashes use 210000 iterations. A hash that does not parse stops start-up with a message that names the user, so a typo cannot leave a user silently locked out or unprotected. Every secret comparison (Basic passwords, API keys, the control-plane shared secret) is constant-time. A verified hashed login is remembered in memory for five minutes, so a keep-alive client does not pay the hashing cost on every request.
 
-Put the list in a file with one `user:secret` per line and point `security.basicUsersFile` at it (see [Secret references](/docs/configuration#secret-references)). `security.basicUsersEnv` and `discovery.consulTokenFile`/`Env`, `state.redisFile`/`Env`, `security.apiKeysFile`/`Env`, and `plus.controlPlane.sharedSecretFile`/`Env` all work the same way. The Redis connection string is never written to logs; only its host and port are.
+Put the list in a file with one `user:secret` per line and point `security.basicUsersFile` at it (see [Secret references](/docs/configuration#secret-references)). `security.basicUsersEnv` and `discovery.consulTokenFile`/`Env`, `state.redisFile`/`Env`, `security.apiKeysFile`/`Env`, `plus.controlPlane.sharedSecretFile`/`Env`, and `plus.controlPlane.dashboardViewerSecretFile`/`Env` all work the same way. The Redis connection string is never written to logs; only its host and port are.
 
 ### Audit log
 
@@ -95,9 +129,9 @@ Set `audit.path` to keep an append-only record of what happened on the control p
 | Field | Meaning |
 |-------|---------|
 | `time` | UTC, ISO 8601 |
-| `actor` | A role label such as `control-plane:shared-secret`, `dashboard:shared-secret`, or `...:anonymous` for a failed login. It never contains a secret or a presented credential |
+| `actor` | A role label such as `control-plane:shared-secret`, `dashboard:operator`, `dashboard:viewer`, `dashboard:shared-secret` (header), or `...:anonymous` for a failed login. It never contains a secret or a presented credential |
 | `remote` | Client address |
-| `action` | `drain`, `healthy`, `snapshot-put`, `cache-purge`, `login` (the dashboard page opened with the secret), or `login-failed` |
+| `action` | `drain`, `healthy`, `snapshot-put`, `cache-purge`, `login` (a dashboard sign-in, or a first page opened with the secret header), `logout`, or `login-failed` |
 | `target` | A destination id, path, or purge prefix, at most 256 characters |
 | `result` | `ok`, `denied`, `throttled`, `rejected`, `unavailable`, or `error` |
 

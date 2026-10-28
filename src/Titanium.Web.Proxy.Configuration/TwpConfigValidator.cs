@@ -60,6 +60,12 @@ public static class TwpConfigValidator
                 controlPlane.SharedSecretEnv,
                 controlPlane.SharedSecretFile,
                 errors);
+            ValidateSecretReference(
+                "plus.controlPlane.dashboardViewerSecret",
+                controlPlane.DashboardViewerSecret,
+                controlPlane.DashboardViewerSecretEnv,
+                controlPlane.DashboardViewerSecretFile,
+                errors);
             ValidateControlPlaneTransport(plus.Enabled, controlPlane, errors);
         }
 

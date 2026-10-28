@@ -173,8 +173,10 @@ internal static class RunCommand
 
         // No meter listener is attached until server.metrics is on or /metrics is first served.
         using var metricsExposition = new MetricsExposition();
+        var hostStatus = new CliHostStatus(loaded.Config, configHash);
         var plusContext = new PlusActivationContext
         {
+            HostStatus = hostStatus,
             RegisterMetricsAppender = metricsExposition.AddAppender,
             ProxyServer = proxy,
             ClusterManager = clusterManager,
@@ -255,6 +257,8 @@ internal static class RunCommand
                                     {
                                         adminServer?.SetAuthToken(rotated);
                                     }
+
+                                    hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
                                 }).ConfigureAwait(false);
                             configHash = AdminHost.ComputeConfigHash(configPath);
                             AsyncConsole.WriteLine("Config reloaded.");
@@ -262,6 +266,7 @@ internal static class RunCommand
                         }
                         catch (Exception ex)
                         {
+                            hostStatus.MarkReloadFailed(ex.Message);
                             AsyncConsole.WriteError("Config reload failed: " + ex.Message);
                         }
                     },
@@ -1270,6 +1275,11 @@ internal static class RunCommand
             if (!string.IsNullOrEmpty(plus.ControlPlane.SharedSecret))
             {
                 options["controlPlane.sharedSecret"] = plus.ControlPlane.SharedSecret;
+            }
+
+            if (!string.IsNullOrEmpty(plus.ControlPlane.DashboardViewerSecret))
+            {
+                options["controlPlane.dashboardViewerSecret"] = plus.ControlPlane.DashboardViewerSecret;
             }
 
             if (plus.ControlPlane.AllowInsecureNonLoopback)

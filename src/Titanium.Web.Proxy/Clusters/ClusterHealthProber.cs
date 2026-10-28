@@ -97,6 +97,7 @@ internal sealed class ClusterHealthProber : IDisposable
             && _manager.TrySetDestinationState(destinationId, DestinationState.Unhealthy, DestinationState.Healthy))
         {
             _probeEjected.Remove(destinationId);
+            _manager.ReportHealthEvent(destinationId, "recovery", "active-probe", $"{streak} successful probes");
         }
     }
 
@@ -105,9 +106,11 @@ internal sealed class ClusterHealthProber : IDisposable
         _successes[destinationId] = 0;
         var streak = _failures.TryGetValue(destinationId, out var n) ? n + 1 : 1;
         _failures[destinationId] = streak;
-        if (streak >= unhealthyNeed && _probeEjected.Add(destinationId))
+        _manager.ReportHealthEvent(destinationId, "probe-failure", "active-probe", $"{streak} consecutive failures");
+        if (streak >= unhealthyNeed && _probeEjected.Add(destinationId) &&
+            _manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy))
         {
-            _manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy);
+            _manager.ReportHealthEvent(destinationId, "ejection", "active-probe", $"{streak} failed probes");
         }
     }
 

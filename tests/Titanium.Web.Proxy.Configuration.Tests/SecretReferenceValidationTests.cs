@@ -45,6 +45,56 @@ public class SecretReferenceValidationTests
     }
 
     [TestMethod]
+    public void DashboardViewerSecret_AnySingleForm_IsAccepted()
+    {
+        foreach (var controlPlane in new[]
+                 {
+                     new ControlPlaneConfig { DashboardViewerSecret = "literal" },
+                     new ControlPlaneConfig { DashboardViewerSecretEnv = "TITANIUM_VIEWER" },
+                     new ControlPlaneConfig { DashboardViewerSecretFile = "/etc/titanium/secret/viewer" },
+                     new ControlPlaneConfig { SharedSecret = "x", DashboardViewerSecret = "y" },
+                 })
+        {
+            Assert.AreEqual(string.Empty, Errors(new PlusConfig { Enabled = true, ControlPlane = controlPlane }));
+        }
+    }
+
+    [TestMethod]
+    public void DashboardViewerSecret_MoreThanOneForm_IsRejected()
+    {
+        var errors = Errors(new PlusConfig
+        {
+            ControlPlane = new ControlPlaneConfig { DashboardViewerSecret = "x", DashboardViewerSecretFile = "/f" },
+        });
+
+        StringAssert.Contains(errors, "Set exactly one of plus.controlPlane.dashboardViewerSecret");
+        StringAssert.Contains(errors, "dashboardViewerSecretFile");
+    }
+
+    [TestMethod]
+    public void DashboardViewerSecret_YamlAndSchemaKeys_AreKnown()
+    {
+        const string yaml = """
+            plus:
+              enabled: true
+              controlPlane:
+                sharedSecretFile: /etc/titanium/secret/shared
+                dashboardViewerSecretEnv: TITANIUM_VIEWER
+            """;
+        Assert.AreEqual(0, UnknownConfigKeyScanner.Scan(yaml, yaml: true).Count);
+        var config = TwpConfigLoader.LoadYaml(yaml);
+        Assert.AreEqual("TITANIUM_VIEWER", config.Plus!.ControlPlane!.DashboardViewerSecretEnv);
+        Assert.AreEqual(string.Empty, string.Join("\n", TwpConfigValidator.Validate(config)));
+
+        // The checked-in schema is compared with the model by EscapeHatchConfigTests.SchemaFile_MatchesTheModel.
+        var schema = TwpConfigSchema.Generate();
+        foreach (var key in new[] { "dashboardViewerSecret", "dashboardViewerSecretEnv", "dashboardViewerSecretFile" })
+        {
+            StringAssert.Contains(schema, $"\"{key}\"");
+        }
+    }
+
+    [TestMethod]
     public void EmptyReferenceNames_AreRejected()
     {
         StringAssert.Contains(

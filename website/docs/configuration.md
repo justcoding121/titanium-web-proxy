@@ -171,6 +171,7 @@ A sensitive setting is one of three forms: the literal, a `...Env` sibling that 
 | Setting | Env sibling | File sibling |
 | --- | --- | --- |
 | `plus.controlPlane.sharedSecret` | `sharedSecretEnv` | `sharedSecretFile` |
+| `plus.controlPlane.dashboardViewerSecret` | `dashboardViewerSecretEnv` | `dashboardViewerSecretFile` |
 | `plus.options` `security.apiKeys` | `security.apiKeysEnv` | `security.apiKeysFile` |
 | `plus.options` `security.basicUsers` | `security.basicUsersEnv` | `security.basicUsersFile` |
 | `plus.options` `state.redis` | `state.redisEnv` | `state.redisFile` |

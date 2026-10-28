@@ -706,3 +706,51 @@ Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.GrpcWeb.get -> bool
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.GrpcWeb.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.SendProxyProtocol.get -> string?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.SendProxyProtocol.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.DestinationHealthEvent() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.DestinationId.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.DestinationId.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Detail.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Detail.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Kind.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Source.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Source.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Time.get -> System.DateTimeOffset
+Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent.Time.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.IDestinationHealthEvents
+Titanium.Web.Proxy.Abstractions.Plugins.IDestinationHealthEvents.HealthEvent -> System.Action<Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent!>?
+Titanium.Web.Proxy.Abstractions.Plugins.IDestinationHealthEvents.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent! healthEvent) -> void
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusHostStatus
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusHostStatus.GetCertificates() -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo!>!
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusHostStatus.GetConfigStatus() -> Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus!
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.HostStatus.get -> Titanium.Web.Proxy.Abstractions.Plugins.IPlusHostStatus?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.HostStatus.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Error.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Error.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Issuer.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Issuer.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Name.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Name.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.NotAfterUtc.get -> System.DateTimeOffset?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.NotAfterUtc.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.PlusCertificateInfo() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Role.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Role.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Subject.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Subject.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.ConfigHash.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.ConfigHash.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LastReloadError.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LastReloadError.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LastReloadResult.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LastReloadResult.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LastReloadUtc.get -> System.DateTimeOffset?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LastReloadUtc.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LoadedUtc.get -> System.DateTimeOffset?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LoadedUtc.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.PlusConfigStatus() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.SchemaVersion.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.SchemaVersion.init -> void

@@ -215,7 +215,32 @@ public sealed partial class CliProcessHarness : IDisposable
                 continue;
             }
 
-            File.Copy(file, Path.Combine(CliDirectory, name), overwrite: true);
+            CopyWhenFree(file, Path.Combine(CliDirectory, name));
+        }
+    }
+
+    /// <summary>
+    /// A CLI started by the previous test can still be releasing its assemblies. Retry briefly, and accept a
+    /// locked destination that already holds the same bytes length (it was copied by an earlier test).
+    /// </summary>
+    private static void CopyWhenFree(string source, string destination)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Copy(source, destination, overwrite: true);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(250);
+            }
+            catch (IOException) when (File.Exists(destination) &&
+                                      new FileInfo(destination).Length == new FileInfo(source).Length)
+            {
+                return;
+            }
         }
     }
 

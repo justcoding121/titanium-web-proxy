@@ -385,6 +385,24 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void BuildPlusOptions_CarriesTheDashboardViewerSecret_OnlyWhenSet()
+    {
+        var with = RunCommand.BuildPlusOptions(new PlusConfig
+        {
+            Enabled = true,
+            ControlPlane = new ControlPlaneConfig { SharedSecret = "s3cret", DashboardViewerSecret = "viewer-secret" },
+        });
+        Assert.AreEqual("viewer-secret", with["controlPlane.dashboardViewerSecret"]);
+
+        var without = RunCommand.BuildPlusOptions(new PlusConfig
+        {
+            Enabled = true,
+            ControlPlane = new ControlPlaneConfig { SharedSecret = "s3cret" },
+        });
+        Assert.IsFalse(without.ContainsKey("controlPlane.dashboardViewerSecret"));
+    }
+
+    [TestMethod]
     public void ApplyLogging_NoConfig_NotVerbose_UsesDebugOrReleasePosture()
     {
         using var proxy = new ProxyServer(userTrustRootCertificate: false);

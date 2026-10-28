@@ -585,6 +585,15 @@
             "dashboardPort": {
               "type": "integer"
             },
+            "dashboardViewerSecret": {
+              "type": "string"
+            },
+            "dashboardViewerSecretEnv": {
+              "type": "string"
+            },
+            "dashboardViewerSecretFile": {
+              "type": "string"
+            },
             "host": {
               "type": "string"
             },

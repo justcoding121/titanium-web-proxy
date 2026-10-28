@@ -44,10 +44,10 @@ public class DashboardHostTests
 
         using var http = new HttpClient();
 
-        var unauth = await http.GetAsync(dash.Prefix);
+        var unauth = await http.GetAsync(dash.Prefix + "api/snapshot");
         Assert.AreEqual(HttpStatusCode.Unauthorized, unauth.StatusCode);
 
-        using var authReq = new HttpRequestMessage(HttpMethod.Get, dash.Prefix);
+        using var authReq = new HttpRequestMessage(HttpMethod.Get, dash.Prefix + "routes");
         authReq.Headers.Add(ControlPlaneServer.SharedSecretHeader, secret);
         var html = await http.SendAsync(authReq);
         Assert.AreEqual(HttpStatusCode.OK, html.StatusCode);

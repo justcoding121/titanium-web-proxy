@@ -70,20 +70,11 @@ public sealed class ControlPlaneSecurity
     /// </summary>
     internal ControlHttpResponse? Authenticate(ControlHttpRequest request, string surface, string sharedSecret, out string actor)
     {
-        var remote = request.RemoteAddress?.ToString() ?? "unknown";
-        if (Throttle.IsBlocked(remote, out var retryAfter, out var first))
+        var throttled = CheckThrottle(request, surface);
+        if (throttled is not null)
         {
             actor = "anonymous";
-            if (first)
-            {
-                Audit.Record($"{surface}:anonymous", remote, AuditActions.LoginFailed, request.Path, AuditResults.Throttled);
-            }
-
-            return ControlHttpResponse.Text(
-                (int)HttpStatusCode.TooManyRequests,
-                "text/plain; charset=utf-8",
-                "too many failed attempts",
-                new KeyValuePair<string, string>("Retry-After", retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            return throttled;
         }
 
         var presented = request.Header(ControlPlaneServer.SharedSecretHeader);
@@ -94,6 +85,34 @@ public sealed class ControlPlaneSecurity
         }
 
         actor = "anonymous";
+        return RejectCredentials(request, surface);
+    }
+
+    /// <summary>The 429 for a remote that has used up its failures, or null. The first refusal of a lockout is audited.</summary>
+    internal ControlHttpResponse? CheckThrottle(ControlHttpRequest request, string surface)
+    {
+        var remote = request.RemoteAddress?.ToString() ?? "unknown";
+        if (!Throttle.IsBlocked(remote, out var retryAfter, out var first))
+        {
+            return null;
+        }
+
+        if (first)
+        {
+            Audit.Record($"{surface}:anonymous", remote, AuditActions.LoginFailed, request.Path, AuditResults.Throttled);
+        }
+
+        return ControlHttpResponse.Text(
+            (int)HttpStatusCode.TooManyRequests,
+            "text/plain; charset=utf-8",
+            "too many failed attempts",
+            new KeyValuePair<string, string>("Retry-After", retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+    }
+
+    /// <summary>Counts a failed credential against the remote, audits <c>login-failed</c>, and returns the 401.</summary>
+    internal ControlHttpResponse RejectCredentials(ControlHttpRequest request, string surface)
+    {
+        var remote = request.RemoteAddress?.ToString() ?? "unknown";
         Throttle.RecordFailure(remote);
         Audit.Record($"{surface}:anonymous", remote, AuditActions.LoginFailed, request.Path, AuditResults.Denied);
         return ControlHttpResponse.Text((int)HttpStatusCode.Unauthorized, "text/plain; charset=utf-8", "unauthorized");

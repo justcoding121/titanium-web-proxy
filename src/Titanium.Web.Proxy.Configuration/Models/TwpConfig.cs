@@ -240,6 +240,18 @@ public sealed class ControlPlaneConfig
     public string? SharedSecretFile { get; set; }
 
     /// <summary>
+    /// Secret that signs a person in to the dashboard read-only (no Drain or Healthy). Must differ from
+    /// <see cref="SharedSecret"/>, which signs in an operator. Unset leaves the viewer role off.
+    /// </summary>
+    public string? DashboardViewerSecret { get; set; }
+
+    /// <summary>Name of the environment variable holding the viewer secret. Set at most one of the three forms.</summary>
+    public string? DashboardViewerSecretEnv { get; set; }
+
+    /// <summary>File holding the viewer secret (a mounted Secret). Relative paths resolve against the config directory.</summary>
+    public string? DashboardViewerSecretFile { get; set; }
+
+    /// <summary>
     /// Optional TLS for the control plane and dashboard listeners (PEM certificate chain and private key).
     /// Required when <see cref="Host"/> is not loopback, unless <see cref="AllowInsecureNonLoopback"/> is set.
     /// </summary>

@@ -164,6 +164,45 @@ public class SecretResolverTests
     }
 
     [TestMethod]
+    public void DashboardViewerSecret_FromEnvironmentAndFile_ReachesThePlusOptions()
+    {
+        var fromEnv = new TwpConfig
+        {
+            Plus = new PlusConfig { ControlPlane = new ControlPlaneConfig { DashboardViewerSecretEnv = "VIEWER" } },
+        };
+        Assert.AreEqual(0, SecretResolver.Resolve(fromEnv, Env(("VIEWER", "viewer-from-env"))).Count);
+        Assert.AreEqual("viewer-from-env", fromEnv.Plus!.ControlPlane!.DashboardViewerSecret);
+        Assert.IsNull(fromEnv.Plus.ControlPlane.DashboardViewerSecretEnv);
+        Assert.AreEqual("viewer-from-env", RunCommand.BuildPlusOptions(fromEnv.Plus)["controlPlane.dashboardViewerSecret"]);
+
+        var path = WriteSecret("viewer", "viewer-from-file\n");
+        var fromFile = new TwpConfig
+        {
+            Plus = new PlusConfig { ControlPlane = new ControlPlaneConfig { DashboardViewerSecretFile = path } },
+        };
+        Assert.AreEqual(0, SecretResolver.Resolve(fromFile).Count);
+        Assert.AreEqual("viewer-from-file", fromFile.Plus!.ControlPlane!.DashboardViewerSecret);
+        CollectionAssert.Contains(SecretResolver.SecretFiles(new TwpConfig
+        {
+            Plus = new PlusConfig { ControlPlane = new ControlPlaneConfig { DashboardViewerSecretFile = path } },
+        }).ToArray(), path);
+    }
+
+    [TestMethod]
+    public void DashboardViewerSecret_UnsetEnvironmentVariable_NamesTheSetting()
+    {
+        var config = new TwpConfig
+        {
+            Plus = new PlusConfig { ControlPlane = new ControlPlaneConfig { DashboardViewerSecretEnv = "NOPE" } },
+        };
+
+        var errors = SecretResolver.Resolve(config, Env());
+
+        Assert.AreEqual(1, errors.Count, string.Join("\n", errors));
+        StringAssert.Contains(errors[0], "plus.controlPlane.dashboardViewerSecretEnv 'NOPE' is not set");
+    }
+
+    [TestMethod]
     public void AdminToken_FromFile_IsOnlyResolvedWhenAdminIsEnabled()
     {
         var path = WriteSecret("admin", "admin-from-file\n");

@@ -22,6 +22,7 @@ public static class AuditActions
     public const string CachePurge = "cache-purge";
     public const string Login = "login";
     public const string LoginFailed = "login-failed";
+    public const string Logout = "logout";
 }
 
 /// <summary>Result values written to the audit log.</summary>

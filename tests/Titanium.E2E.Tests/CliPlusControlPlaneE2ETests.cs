@@ -223,7 +223,7 @@ public class CliPlusControlPlaneE2ETests
             // Dashboard without secret → 401
             Assert.AreEqual(
                 HttpStatusCode.Unauthorized,
-                (await http.GetAsync($"http://127.0.0.1:{dashboard}/")).StatusCode);
+                (await http.GetAsync($"http://127.0.0.1:{dashboard}/api/snapshot")).StatusCode);
         }
         finally
         {

@@ -41,6 +41,8 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
             StringComparison.Ordinal);
 
         ControlPlaneServer.ValidateSecret(host, secret, allowDev);
+        var viewerSecret = options.GetValueOrDefault("controlPlane.dashboardViewerSecret");
+        ValidateViewerSecret(viewerSecret, secret);
 
         var tls = ParseTls(options);
         var allowInsecure = IsTrue(options.GetValueOrDefault("controlPlane.allowInsecureNonLoopback"));
@@ -77,7 +79,20 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         var operations = new DrainOperations(context.ClusterManager);
         var metrics = new PrometheusMetricsExporter(context.ClusterManager, context.LatencyRecorder);
         context.RegisterMetricsAppender?.Invoke(metrics.AppendTo);
-        var dashboard = new DashboardHost(controlPlane, operations, metrics, context.ClusterManager, dashboardPort);
+        var dashboard = new DashboardHost(
+            controlPlane,
+            operations,
+            metrics,
+            context.ClusterManager,
+            dashboardPort,
+            new DashboardOptions
+            {
+                ViewerSecret = viewerSecret,
+                Routes = context.Routes,
+                HostStatus = context.HostStatus,
+                Metrics = new DashboardMetrics(),
+                HealthEvents = new HealthEventLog(context.ClusterManager),
+            });
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");
 
@@ -90,6 +105,25 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         _ = CircuitBreakerController.TryStart(context, options);
         _ = IdempotentRetryGuard.TryStart(context, options);
         _ = GrpcTranscodeGuard.TryStart(context, options);
+    }
+
+    /// <summary>
+    ///     The viewer secret opens the dashboard read-only, so it must be its own secret: the same value as the shared
+    ///     secret would sign every viewer in as an operator, and the default one is public.
+    /// </summary>
+    internal static void ValidateViewerSecret(string? viewerSecret, string sharedSecret)
+    {
+        if (string.IsNullOrEmpty(viewerSecret))
+        {
+            return;
+        }
+
+        if (viewerSecret.Equals("changeme", StringComparison.OrdinalIgnoreCase) ||
+            ConstantTime.StringEquals(viewerSecret, sharedSecret))
+        {
+            throw new InvalidOperationException(
+                "controlPlane.dashboardViewerSecret must be set to its own value: not 'changeme' and not the shared secret.");
+        }
     }
 
     private static ControlPlaneTlsOptions? ParseTls(IReadOnlyDictionary<string, string> options)

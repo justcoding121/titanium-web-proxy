@@ -210,6 +210,9 @@ public sealed class DestinationHealthTracker
         {
             Interlocked.Increment(ref _ejected);
         }
+
+        (manager as ClusterManager)?.ReportHealthEvent(
+            destinationId, "ejection", "passive", $"ejection {generation}, retry in {delay}s");
     }
 
     private void Restore(string destinationId, IClusterManager? manager)
@@ -222,6 +225,7 @@ public sealed class DestinationHealthTracker
         _failures[destinationId] = 0;
         _halfOpenSuccesses.TryRemove(destinationId, out _);
         manager?.SetDestinationState(destinationId, DestinationState.Healthy);
+        (manager as ClusterManager)?.ReportHealthEvent(destinationId, "recovery", "passive", "half-open trial succeeded");
     }
 
     private static bool Contains(IReadOnlyList<int> codes, int status)

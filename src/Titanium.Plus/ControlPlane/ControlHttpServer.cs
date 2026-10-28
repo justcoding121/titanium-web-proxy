@@ -445,9 +445,18 @@ internal sealed class ControlHttpServer : IDisposable
             .Append("HTTP/1.1 ").Append(response.Status).Append(' ').Append(Reason(response.Status)).Append("\r\n")
             .Append("Content-Type: ").Append(response.ContentType).Append("\r\n")
             .Append("Content-Length: ").Append(response.Body.Length).Append("\r\n")
-            .Append("Connection: close\r\n")
-            .Append("Cache-Control: no-store\r\n")
-            .Append("X-Content-Type-Options: nosniff\r\n");
+            .Append("Connection: close\r\n");
+        // Defaults for every response; a handler that already set one (the dashboard does) is not repeated.
+        if (!HasHeader(response, "Cache-Control"))
+        {
+            head.Append("Cache-Control: no-store\r\n");
+        }
+
+        if (!HasHeader(response, "X-Content-Type-Options"))
+        {
+            head.Append("X-Content-Type-Options: nosniff\r\n");
+        }
+
         foreach (var (name, value) in response.Headers)
         {
             // Header values come from this code, but never let a CR/LF through.
@@ -463,6 +472,19 @@ internal sealed class ControlHttpServer : IDisposable
         }
 
         await stream.FlushAsync(token).ConfigureAwait(false);
+    }
+
+    private static bool HasHeader(ControlHttpResponse response, string name)
+    {
+        foreach (var (key, _) in response.Headers)
+        {
+            if (key.Equals(name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string Reason(int status) =>

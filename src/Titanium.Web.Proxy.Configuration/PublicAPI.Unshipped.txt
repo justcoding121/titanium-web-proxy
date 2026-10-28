@@ -572,3 +572,9 @@ Titanium.Web.Proxy.Configuration.Models.TlsConfig.CipherSuites.set -> void
 Titanium.Web.Proxy.Configuration.Models.TlsConfig.OcspStapling.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.TlsConfig.OcspStapling.set -> void
 static Titanium.Web.Proxy.Configuration.TwpConfigValidator.CollectWarnings(Titanium.Web.Proxy.Configuration.Models.TwpConfig! config, bool isWindows) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecret.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecret.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretEnv.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretEnv.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretFile.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretFile.set -> void

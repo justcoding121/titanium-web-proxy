@@ -632,7 +632,7 @@ public class PlusHardeningTests
         using (var page = Request(HttpMethod.Get, dash.Prefix!, Secret))
         {
             var html = await (await http.SendAsync(page)).Content.ReadAsStringAsync();
-            StringAssert.Contains(html, "Recent audit events");
+            StringAssert.Contains(html, "Titanium Plus");
         }
 
         using (var drain = Request(HttpMethod.Post, dash.Prefix + "drain/" + Uri.EscapeDataString("d<1>"), Secret))
@@ -675,7 +675,7 @@ public class PlusHardeningTests
             Assert.IsFalse(json.Contains(Secret, StringComparison.Ordinal));
         }
 
-        using (var page = Request(HttpMethod.Get, dash.Prefix!, Secret))
+        using (var page = Request(HttpMethod.Get, dash.Prefix + "audit", Secret))
         {
             var html = await (await http.SendAsync(page)).Content.ReadAsStringAsync();
             StringAssert.Contains(html, "d&lt;1&gt;", "audit targets are HTML-encoded");
@@ -698,7 +698,7 @@ public class PlusHardeningTests
 
         for (var i = 0; i < 5; i++)
         {
-            Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.GetAsync(dash.Prefix)).StatusCode);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.GetAsync(dash.Prefix + "api/snapshot")).StatusCode);
         }
 
         Assert.AreEqual(HttpStatusCode.TooManyRequests, (await http.GetAsync(control.Prefix + "v1/snapshot")).StatusCode);

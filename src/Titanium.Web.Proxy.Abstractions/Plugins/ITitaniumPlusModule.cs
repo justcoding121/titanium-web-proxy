@@ -36,6 +36,9 @@ public sealed class PlusActivationContext
     /// Null when the host has no exposition. The appender runs only while a scrape is served.
     /// </summary>
     public Action<Action<System.Text.StringBuilder>>? RegisterMetricsAppender { get; init; }
+
+    /// <summary>Config identity, last reload outcome, and certificate inventory for the Plus dashboard. Null when the host has none.</summary>
+    public IPlusHostStatus? HostStatus { get; init; }
 }
 
 /// <summary>Opt-in GET/HEAD response cache (empty/off = zero cost when unused).</summary>

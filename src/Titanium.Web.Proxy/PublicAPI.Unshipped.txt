@@ -441,3 +441,5 @@ Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites.get -> System.Collections.Ge
 Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites.set -> void
 Titanium.Web.Proxy.ProxyServer.OcspStapling.get -> bool
 Titanium.Web.Proxy.ProxyServer.OcspStapling.set -> void
+Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent -> System.Action<Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent!>?
+Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent! healthEvent) -> void
