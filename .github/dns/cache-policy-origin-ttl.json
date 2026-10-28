@@ -1,0 +1,14 @@
+{
+  "Name": "titaniumproxy-origin-ttl-no-default",
+  "Comment": "Honor origin Cache-Control. Responses with no Cache-Control, including GitHub Pages 404s, are not stored.",
+  "DefaultTTL": 0,
+  "MaxTTL": 31536000,
+  "MinTTL": 0,
+  "ParametersInCacheKeyAndForwardedToOrigin": {
+    "EnableAcceptEncodingGzip": true,
+    "EnableAcceptEncodingBrotli": true,
+    "HeadersConfig": { "HeaderBehavior": "none" },
+    "CookiesConfig": { "CookieBehavior": "none" },
+    "QueryStringsConfig": { "QueryStringBehavior": "none" }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "CallerReference": "titaniumproxy-website-v1",
-  "Comment": "titaniumproxy.com → GitHub Pages origin (path rewrite via CloudFront Function titaniumproxy-path-rewrite)",
+    "Comment": "titaniumproxy.com to GitHub Pages. Policy 1abdb5b3-41e3-47d2-913a-2e9620bcb1b8 honors origin max-age.",
   "Enabled": true,
   "Aliases": {
     "Quantity": 2,
@@ -46,7 +46,7 @@
       }
     },
     "Compress": true,
-    "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+    "CachePolicyId": "1abdb5b3-41e3-47d2-913a-2e9620bcb1b8",
     "FunctionAssociations": {
       "Quantity": 1,
       "Items": [
