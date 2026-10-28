@@ -75,10 +75,28 @@ public static class TwpConfigValidator
 
             ValidateHttpClient(cluster.Id, cluster.HttpClient, errors);
             ValidateRetry($"clusters.{cluster.Id}.retry", cluster.Retry, errors);
+            ValidateClusterProxyProtocol(cluster, errors);
         }
 
         return clusterIds;
     }
+
+    private static void ValidateClusterProxyProtocol(ClusterConfig cluster, List<string> errors)
+    {
+        if (cluster.SendProxyProtocol is null)
+        {
+            return;
+        }
+
+        if (!IsProxyProtocolMode(cluster.SendProxyProtocol))
+        {
+            errors.Add($"Cluster '{cluster.Id}' sendProxyProtocol '{cluster.SendProxyProtocol}' is not none or v2.");
+        }
+    }
+
+    private static bool IsProxyProtocolMode(string value) =>
+        value.Equals("none", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("v2", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateRetry(string path, RetryConfig? retry, List<string> errors)
     {
@@ -1418,6 +1436,73 @@ public static class TwpConfigValidator
         if (tls is null) return;
         RejectUnknownProtocols(tls.SupportedSslProtocols, "server.tls.supportedSslProtocols", errors);
         RejectUnknownProtocols(tls.SupportedServerSslProtocols, "server.tls.supportedServerSslProtocols", errors);
+        ValidateListenerTlsPolicy(tls, errors);
+    }
+
+    private static void ValidateListenerTlsPolicy(TlsConfig tls, List<string> errors)
+    {
+        if (tls.MinVersion is not null)
+        {
+            if (!TlsPolicyParser.TryParseMinVersion(tls.MinVersion, out var minimum))
+            {
+                errors.Add($"server.tls.minVersion '{tls.MinVersion}' is not Tls12 or Tls13.");
+            }
+            else if (tls.SupportedSslProtocols is { Count: > 0 } supported
+                     && TryParseProtocolMask(supported, out var mask)
+                     && mask != SslProtocols.None
+                     && (mask & ~(LowestBit(minimum) - 1)) == SslProtocols.None)
+            {
+                errors.Add(
+                    $"server.tls.minVersion {minimum} excludes every protocol in server.tls.supportedSslProtocols.");
+            }
+        }
+
+        if (tls.CipherSuites is null)
+        {
+            return;
+        }
+
+        if (tls.CipherSuites.Count == 0)
+        {
+            errors.Add("server.tls.cipherSuites must list at least one suite (or be omitted for the OS default).");
+            return;
+        }
+
+        foreach (var name in tls.CipherSuites)
+        {
+            if (!TlsPolicyParser.TryParseCipherSuite(name, out _))
+            {
+                errors.Add($"server.tls.cipherSuites '{name}' is not a TlsCipherSuite name.");
+            }
+        }
+    }
+
+    private static bool TryParseProtocolMask(IEnumerable<string> names, out SslProtocols mask)
+    {
+        mask = SslProtocols.None;
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name) || !Enum.TryParse<SslProtocols>(name.Trim(), ignoreCase: true, out var part))
+            {
+                return false;
+            }
+
+            mask |= part;
+        }
+
+        return true;
+    }
+
+    private static SslProtocols LowestBit(SslProtocols value) => (SslProtocols)((int)value & -(int)value);
+
+    private static void CollectTlsWarnings(TlsConfig? tls, bool isWindows, List<string> warnings)
+    {
+        if (isWindows && tls?.CipherSuites is { Count: > 0 })
+        {
+            warnings.Add(
+                "server.tls.cipherSuites is ignored on Windows: .NET has no cipher suite policy there. " +
+                "The OS default applies. Use Linux or macOS to restrict listener cipher suites.");
+        }
     }
 
     private static void RejectUnknownProtocols(IList<string>? names, string path, List<string> errors)
@@ -1465,9 +1550,18 @@ public static class TwpConfigValidator
     ///     Limits that are accepted by config but not enforced on a live path. Callers print these
     ///     without failing validation.
     /// </summary>
-    public static IReadOnlyList<string> CollectWarnings(TwpConfig config)
+    public static IReadOnlyList<string> CollectWarnings(TwpConfig config) =>
+        CollectWarnings(config, OperatingSystem.IsWindows());
+
+    /// <summary>
+    ///     Same as <see cref="CollectWarnings(TwpConfig)" /> for an explicit platform, so a Windows-only warning
+    ///     can be checked from any host.
+    /// </summary>
+    public static IReadOnlyList<string> CollectWarnings(TwpConfig config, bool isWindows)
     {
         var warnings = new List<string>();
+        CollectTlsWarnings(config.Server?.Tls, isWindows, warnings);
+        CollectClusterProxyProtocolWarnings(config, warnings);
         var limits = config.Server?.Limits;
         if (limits?.MaxDecompressionRatio is not null)
             warnings.Add("server.limits.maxDecompressionRatio is reserved and not enforced. Body expansion is bounded by maxBufferedBodyBytes.");
@@ -1514,6 +1608,38 @@ public static class TwpConfigValidator
         }
 
         return warnings;
+    }
+
+    private static void CollectClusterProxyProtocolWarnings(TwpConfig config, List<string> warnings)
+    {
+        var passthroughClusters = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var listener in config.Listeners.Where(l => l.Passthrough))
+        {
+            if (!string.IsNullOrEmpty(listener.SniDefaultClusterId))
+            {
+                passthroughClusters.Add(listener.SniDefaultClusterId);
+            }
+
+            foreach (var route in listener.SniRoutes ?? [])
+            {
+                if (!string.IsNullOrEmpty(route.ClusterId))
+                {
+                    passthroughClusters.Add(route.ClusterId);
+                }
+            }
+        }
+
+        foreach (var cluster in config.Clusters)
+        {
+            if (cluster.SendProxyProtocol is { } mode
+                && mode.Equals("v2", StringComparison.OrdinalIgnoreCase)
+                && !passthroughClusters.Contains(cluster.Id))
+            {
+                warnings.Add(
+                    $"Cluster '{cluster.Id}' sets sendProxyProtocol v2, but no passthrough listener routes to it. " +
+                    "HTTP origin connections are pooled across clients and never carry a PROXY header.");
+            }
+        }
     }
 
     private static bool IsClientCertificateModeSet(string? mode) =>

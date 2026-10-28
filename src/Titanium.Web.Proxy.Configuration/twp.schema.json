@@ -324,6 +324,13 @@
               }
             }
           },
+          "sendProxyProtocol": {
+            "type": "string",
+            "enum": [
+              "none",
+              "v2"
+            ]
+          },
           "sessionAffinity": {
             "type": "object",
             "additionalProperties": false,
@@ -1382,6 +1389,18 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "cipherSuites": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minVersion": {
+              "type": "string"
+            },
+            "ocspStapling": {
+              "type": "boolean"
+            },
             "supportedServerSslProtocols": {
               "type": "array",
               "items": {

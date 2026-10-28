@@ -274,6 +274,28 @@ public sealed class TlsConfig
     public IList<string>? SupportedSslProtocols { get; set; }
 
     public IList<string>? SupportedServerSslProtocols { get; set; }
+
+    /// <summary>
+    ///     Lowest TLS version a client-facing (listener) handshake accepts: <c>Tls12</c> or <c>Tls13</c>.
+    ///     It trims <see cref="SupportedSslProtocols" /> for listeners only and never widens it. Origin-facing
+    ///     handshakes are unchanged. Null keeps the supported-protocol list as the only limit.
+    /// </summary>
+    public string? MinVersion { get; set; }
+
+    /// <summary>
+    ///     TLS cipher suites a listener handshake may negotiate, by <c>System.Net.Security.TlsCipherSuite</c>
+    ///     name (for example <c>TLS_AES_256_GCM_SHA384</c>). Honored on Linux and macOS only; .NET has no cipher
+    ///     policy on Windows, where the list is ignored with a warning. Null keeps the OS default.
+    /// </summary>
+    public IList<string>? CipherSuites { get; set; }
+
+    /// <summary>
+    ///     Lets the server certificate context fetch an OCSP response so .NET can staple it, instead of
+    ///     building the chain offline. Only a certificate with an OCSP responder in its authority information
+    ///     access extension can be stapled; certificates the proxy mints per host have none. Null or false
+    ///     keeps the offline chain build and no stapling.
+    /// </summary>
+    public bool? OcspStapling { get; set; }
 }
 
 /// <summary>Fixed upstream proxies, PAC, and local bind endpoints.</summary>

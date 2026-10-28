@@ -327,6 +327,117 @@ public class PassthroughSniRoutingTests
         Assert.AreEqual(IPAddress.Loopback, seenClient.Address);
     }
 
+    private static readonly byte[] ProxyV2Signature = [0x0d, 0x0a, 0x0d, 0x0a, 0x00, 0x0d, 0x0a, 0x51, 0x55, 0x49, 0x54, 0x0a];
+
+    private static (PlainOrigin Origin, Task<byte[]> Received) CapturingOrigin()
+    {
+        var received = new TaskCompletionSource<byte[]>();
+        var origin = PlainOrigin.Start(async socket =>
+        {
+            var buffer = new byte[64];
+            var got = 0;
+            while (got < buffer.Length)
+            {
+                var n = await socket.ReceiveAsync(buffer.AsMemory(got));
+                if (n == 0)
+                {
+                    break;
+                }
+
+                got += n;
+                if (buffer.AsSpan(0, got).EndsWith("data"u8))
+                {
+                    break;
+                }
+            }
+
+            received.TrySetResult(buffer.AsSpan(0, got).ToArray());
+        });
+        return (origin, received.Task);
+    }
+
+    private static async Task<byte[]> SendDataThroughClusterAsync(
+        string? clusterMode, PassthroughProxyProtocolMode listenerMode)
+    {
+        var (origin, received) = CapturingOrigin();
+        await using var _ = origin;
+        var cluster = new ClusterConfig
+        {
+            Id = "pp",
+            Destinations = [Destination("o1", "127.0.0.1", origin.Port)],
+            SendProxyProtocol = clusterMode,
+        };
+        await using var rig = await Rig.StartAsync(
+            endPoint =>
+            {
+                endPoint.PassthroughDefaultClusterId = "pp";
+                endPoint.PassthroughProxyProtocol = listenerMode;
+            },
+            cluster);
+
+        using var client = await rig.ConnectAsync();
+        await client.SendAsync(Encoding.ASCII.GetBytes("data"));
+        return await received.WaitAsync(Step);
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ClusterSendProxyProtocolV2_WritesTheHeaderWithoutAListenerSetting()
+    {
+        var bytes = await SendDataThroughClusterAsync("v2", PassthroughProxyProtocolMode.None);
+
+        CollectionAssert.AreEqual(ProxyV2Signature, bytes[..12]);
+        Assert.AreEqual(28 + 4, bytes.Length, "28-byte IPv4 header, then the client bytes");
+        Assert.IsTrue(ProxyProtocolReader.TryParse(bytes.AsSpan(0, 28), out var client, out _));
+        Assert.AreEqual(IPAddress.Loopback, client!.Address);
+        Assert.AreEqual("data", Encoding.ASCII.GetString(bytes, 28, 4));
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ClusterSendProxyProtocolNone_SuppressesTheListenerHeader()
+    {
+        var bytes = await SendDataThroughClusterAsync("none", PassthroughProxyProtocolMode.V2);
+
+        Assert.AreEqual("data", Encoding.ASCII.GetString(bytes));
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task ClusterSendProxyProtocolUnset_KeepsTheListenerSetting()
+    {
+        var inherited = await SendDataThroughClusterAsync(null, PassthroughProxyProtocolMode.V2);
+        var off = await SendDataThroughClusterAsync(null, PassthroughProxyProtocolMode.None);
+
+        CollectionAssert.AreEqual(ProxyV2Signature, inherited[..12]);
+        Assert.AreEqual("data", Encoding.ASCII.GetString(off));
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task TcpHealthProbe_SendsALocalProxyHeader_WhenTheClusterSendsV2()
+    {
+        var (origin, received) = CapturingOrigin();
+        await using var _ = origin;
+        var cluster = new ClusterConfig
+        {
+            Id = "probe",
+            Destinations = [Destination("o1", "127.0.0.1", origin.Port)],
+            SendProxyProtocol = "v2",
+            HealthCheck = new HealthCheckConfig
+            {
+                Active = new ActiveHealthConfig { Enabled = true, Kind = ActiveHealthKind.Tcp, IntervalSeconds = 1, TimeoutSeconds = 2 },
+            },
+        };
+        await using var rig = await Rig.StartAsync(_ => { }, cluster);
+
+        var bytes = await received.WaitAsync(Step);
+
+        // The probe closes after the header, so the origin sees exactly a 16-byte v2 LOCAL header.
+        Assert.AreEqual(16, bytes.Length);
+        CollectionAssert.AreEqual(ProxyV2Signature, bytes[..12]);
+        Assert.AreEqual(0x20, bytes[12], "version 2, LOCAL command");
+    }
     [TestMethod]
     [Timeout(60 * 1000)]
     public async Task Metrics_CountConnectionsByRouteAndResult_AndBytesByDirection()

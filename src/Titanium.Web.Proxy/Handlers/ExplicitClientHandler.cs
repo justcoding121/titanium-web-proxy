@@ -240,7 +240,7 @@ public partial class ProxyServer
                 {
                     connectRequest.IsHttps = true; // Decryption changes the tunneled request to HTTPS semantics.
 
-                    var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
+                    var sslProtocol = clientHelloInfo.SslProtocol & ListenerSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
                         throw new NotSupportedException("Unsupported client SSL version.");
@@ -367,7 +367,7 @@ public partial class ProxyServer
 
                         CertificateManager.ConfigureServerCertificate(options, certificate);
                         options.ClientCertificateRequired = false;
-                        options.EnabledSslProtocols = SupportedSslProtocols;
+                        ApplyListenerTlsPolicy(options);
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
 
                         ClientTlsTiming? clientTlsTiming = null;

@@ -509,3 +509,14 @@ Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ServerName.set -> void
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.SniRouteConfig() -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ResponseCompression.get -> Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.ResponseCompression.set -> void
+Titanium.Web.Proxy.Configuration.TlsPolicyParser
+static Titanium.Web.Proxy.Configuration.TlsPolicyParser.TryParseMinVersion(string? text, out System.Security.Authentication.SslProtocols minimum) -> bool
+static Titanium.Web.Proxy.Configuration.TlsPolicyParser.TryParseCipherSuite(string? text, out System.Net.Security.TlsCipherSuite suite) -> bool
+static Titanium.Web.Proxy.Configuration.TlsPolicyParser.TryParseCipherSuites(System.Collections.Generic.IEnumerable<string!>! names, out System.Collections.Generic.IReadOnlyList<System.Net.Security.TlsCipherSuite>! suites) -> bool
+Titanium.Web.Proxy.Configuration.Models.TlsConfig.MinVersion.get -> string?
+Titanium.Web.Proxy.Configuration.Models.TlsConfig.MinVersion.set -> void
+Titanium.Web.Proxy.Configuration.Models.TlsConfig.CipherSuites.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Configuration.Models.TlsConfig.CipherSuites.set -> void
+Titanium.Web.Proxy.Configuration.Models.TlsConfig.OcspStapling.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.TlsConfig.OcspStapling.set -> void
+static Titanium.Web.Proxy.Configuration.TwpConfigValidator.CollectWarnings(Titanium.Web.Proxy.Configuration.Models.TwpConfig! config, bool isWindows) -> System.Collections.Generic.IReadOnlyList<string!>!

@@ -107,7 +107,7 @@ The clusters are ordinary clusters, defined as in [Routes & clusters](#routes-cl
 - **No server name.** A client that connects by IP address, sends no `server_name`, speaks something other than TLS, or stays silent for `sniReadTimeoutSeconds` (a protocol where the server speaks first) is treated as having no name. Whatever it already sent is forwarded.
 - **Balancing.** The cluster's algorithm, weights, priorities, caps, and passive health apply to connections the same way they do to requests. A connect that fails is tried against another destination, up to the smaller of 3 and the number of eligible destinations, and each failure counts toward passive ejection. Open connections count as active requests for `LeastRequests`.
 - **Half-close.** When one side sends EOF, the proxy shuts down sending to the other side and lets the remaining direction finish for up to 30 seconds. A client that finishes its request and waits for the reply works.
-- **`sendProxyProtocol: v2`.** Writes a PROXY protocol v2 header with the client and listener addresses to the upstream before any client bytes. The upstream must expect it.
+- **`sendProxyProtocol: v2`.** Writes a PROXY protocol v2 header with the client and listener addresses to the upstream before any client bytes. The upstream must expect it. A cluster can set its own `sendProxyProtocol` (see below), which replaces the listener setting for connections routed to that cluster.
 - **Validation.** Every `clusterId` must exist. `serverName` is an exact name or one leading `*.` label. At least one of `sniRoutes`, `sniDefaultClusterId`, or `forwardHost` is required on a passthrough listener, and `sniRoutes` requires `passthrough: true` and `decryptSsl: false`.
 - **Metrics.** `twp.passthrough.connections{route,result}` counts finished connections. `route` is the matching `serverName` pattern, `default`, or `forward`. `result` is `ok`, `idle_timeout`, `grace_expired`, `connect_failed`, `no_destination`, `no_route`, `client_closed`, `cancelled`, or `error`. `twp.passthrough.bytes{direction}` counts bytes relayed (`in` is client to upstream, `out` is upstream to client).
 
@@ -409,6 +409,9 @@ server:
   tls:
     supportedSslProtocols: [Tls12, Tls13]
     supportedServerSslProtocols: [None]
+    minVersion: null          # Tls12 or Tls13, listeners only (see below)
+    cipherSuites: null        # TlsCipherSuite names, Linux and macOS only
+    ocspStapling: false       # let the server certificate context fetch an OCSP response
   upstream:
     forwardToUpstreamGateway: false
     upstreamProxyConfigurationScript: null
@@ -449,6 +452,41 @@ server:
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
 HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+
+### Listener TLS policy (`server.tls`)
+
+These keys shape the handshake the proxy completes with its own clients on terminating listeners (explicit, transparent, and MASQUE). They never change origin-facing handshakes, and each one is off by default.
+
+| Key | Effect |
+|-----|--------|
+| `minVersion` | `Tls12` or `Tls13` (`1.2`, `1.3`, `TLSv1.2`, and `TLSv1.3` also parse). Trims `supportedSslProtocols` for listeners and never widens it. A client that offers only older versions is refused. A `minVersion` that excludes every entry of `supportedSslProtocols` fails validation. |
+| `cipherSuites` | `TlsCipherSuite` names such as `TLS_AES_256_GCM_SHA384`. Linux and macOS only: .NET has no cipher suite policy on Windows, where the list is ignored, a validation warning is printed, and the OS default applies. Leaving out every TLS 1.3 suite turns TLS 1.3 off for listeners. |
+| `ocspStapling` | `true` builds server certificate contexts with `offline: false`, so .NET may fetch an OCSP response and staple it. The default builds them offline: no network use and no stapling. Only a certificate whose authority information access extension names an OCSP responder can be stapled, and the certificates the proxy mints per host have none, so this matters for a certificate you supply. Chain building may touch the network the first time a certificate is presented. |
+
+```yaml
+server:
+  tls:
+    minVersion: Tls13
+    cipherSuites: [TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256]
+    ocspStapling: true
+```
+
+### PROXY protocol to TCP origins (`clusters[].sendProxyProtocol`)
+
+`none` or `v2`. A cluster that sets it replaces the passthrough listener's `sendProxyProtocol` for connections routed to that cluster: `v2` writes a PROXY protocol v2 header with the client and listener addresses before any client bytes, and `none` suppresses a header the listener would send. Leave it unset to inherit the listener. The setting applies to TCP passthrough only. Pooled HTTP origin connections are shared between clients and never carry a header, so validation warns when a cluster sets `v2` but no passthrough listener routes to it. A TCP active health probe to a `v2` cluster sends a v2 LOCAL header so an origin that insists on the preamble does not reject the probe.
+
+```json
+{
+  "schemaVersion": "7.1",
+  "clusters": [
+    {
+      "id": "tcp-web",
+      "sendProxyProtocol": "v2",
+      "destinations": [{ "id": "w1", "address": "10.0.0.7", "port": 8443 }]
+    }
+  ]
+}
+```
 
 ### Access log (`server.accessLog`)
 

@@ -702,3 +702,5 @@ Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Compression.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Compression.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.GrpcWeb.get -> bool
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.GrpcWeb.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.SendProxyProtocol.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.SendProxyProtocol.init -> void

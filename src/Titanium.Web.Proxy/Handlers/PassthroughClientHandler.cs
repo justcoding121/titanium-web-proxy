@@ -125,6 +125,23 @@ public partial class ProxyServer
     }
 
     /// <summary>
+    ///     A cluster's <c>sendProxyProtocol</c> replaces the listener's setting: <c>v2</c> writes the header,
+    ///     <c>none</c> suppresses it, and null keeps whatever the listener chose.
+    /// </summary>
+    private static void ApplyClusterProxyProtocol(Socket client, ClusterConfig cluster, TcpPassthroughOptions options)
+    {
+        var mode = cluster.SendProxyProtocol;
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return;
+        }
+
+        options.Preamble = mode.Equals("v2", StringComparison.OrdinalIgnoreCase)
+            ? ProxyProtocolWriter.BuildV2(client.RemoteEndPoint as IPEndPoint, client.LocalEndPoint as IPEndPoint)
+            : ReadOnlyMemory<byte>.Empty;
+    }
+
+    /// <summary>
     ///     Reads until the first TLS record is complete, the bytes are clearly not TLS, the peer closes, or the SNI
     ///     timeout passes. Returns the byte count (possibly zero after a timeout), or -1 when the client closed
     ///     without sending anything.
@@ -182,6 +199,8 @@ public partial class ProxyServer
         {
             return (none, "no_destination");
         }
+
+        ApplyClusterProxyProtocol(client, cluster, relayOptions);
 
         var snapshot = manager.Snapshot;
         var selector = reverse!.LoadBalancer

@@ -116,11 +116,11 @@ public partial class ProxyServer
                             var fallback = certificate ?? (sniBindings is { Count: > 0 } ? sniBindings[0].Certificate : null);
                             options = new SslServerAuthenticationOptions
                             {
-                                EnabledSslProtocols = SupportedSslProtocols,
                                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                                 ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
                                 AllowRenegotiation = false
                             };
+                            ApplyListenerTlsPolicy(options);
                             CertificateManager.ConfigureServerCertificate(options, fallback!);
                             Certificates.ClientCertificateHandshake.Apply(options, clientCertMode, endPoint.ClientCertificateTrustedRoots);
                             if (sniBindings is { Count: > 0 })
@@ -202,7 +202,7 @@ public partial class ProxyServer
 
                 if (endPoint.DecryptSsl && args.DecryptSsl)
                 {
-                    var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
+                    var sslProtocol = clientHelloInfo.SslProtocol & ListenerSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
                         throw new NotSupportedException("Unsupported client SSL version.");
@@ -317,9 +317,9 @@ public partial class ProxyServer
 
                         var options = new SslServerAuthenticationOptions
                         {
-                            EnabledSslProtocols = SupportedSslProtocols,
                             CertificateRevocationCheckMode = X509RevocationMode.NoCheck
                         };
+                        ApplyListenerTlsPolicy(options);
                         CertificateManager.ConfigureServerCertificate(options, certificate);
                         var peekClientCertMode = endPoint.ClientCertificateMode;
                         Certificates.ClientCertificateHandshake.Apply(options, peekClientCertMode, endPoint.ClientCertificateTrustedRoots);

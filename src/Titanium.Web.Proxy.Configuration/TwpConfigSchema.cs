@@ -109,6 +109,7 @@ public static class TwpConfigSchema
             case "ListenerConfig.ClientCertificateMode":
                 schema["enum"] = new JsonArray { "none", "allow", "require" };
                 break;
+            case "ClusterConfig.SendProxyProtocol":
             case "ListenerConfig.SendProxyProtocol":
                 schema["enum"] = new JsonArray { "none", "v2" };
                 break;

@@ -251,6 +251,13 @@ internal sealed class ClusterHealthProber : IDisposable
             {
                 using var tcp = new TcpClient();
                 await tcp.ConnectAsync(dest.Address, port, timeout.Token).ConfigureAwait(false);
+                if (string.Equals(_cluster.SendProxyProtocol, "v2", StringComparison.OrdinalIgnoreCase))
+                {
+                    // A v2 LOCAL header tells the origin this is a health check, not a client connection.
+                    await tcp.GetStream().WriteAsync(ProxyProtocolWriter.BuildV2(null, null), timeout.Token)
+                        .ConfigureAwait(false);
+                }
+
                 return true;
             }
 

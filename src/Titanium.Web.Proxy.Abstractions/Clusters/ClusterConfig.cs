@@ -98,6 +98,14 @@ public sealed class ClusterConfig
 
     /// <summary>Name of an <c>ILoadBalancingPolicy</c>. Null uses <see cref="Algorithm"/>.</summary>
     public string? LoadBalancingPolicy { get; init; }
+
+    /// <summary>
+    ///     PROXY protocol header written to a TCP origin before any client bytes: <c>none</c> or <c>v2</c>.
+    ///     Null inherits the passthrough listener's <c>sendProxyProtocol</c>. Applies to TCP passthrough
+    ///     connections only. Pooled HTTP origin connections are shared between clients and never carry it.
+    ///     A TCP active health probe sends a v2 LOCAL header when this is <c>v2</c>.
+    /// </summary>
+    public string? SendProxyProtocol { get; init; }
 }
 
 /// <summary>How a sticky pin is read.</summary>
