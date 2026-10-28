@@ -186,17 +186,35 @@ public partial class ProxyServer
         Http2ConnectionState connectionState, Stream clientStream, H2DispatchOrigin origin,
         CancellationToken streamToken, Channel<(byte[] Buffer, int Length)>? requestBodyChannel)
     {
-        var first = await RunHttp2ToHttp2DispatchAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
+        var result = await RunHttp2ToHttp2DispatchAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
             origin, requestBodyChannel, allowGoAwayRetry: true, streamToken);
-        if (first == BridgeAttemptResult.Completed)
-            return;
-        if (first == BridgeAttemptResult.ReplayStatus)
+
+        // Each pass that asks for a replay is followed by another. The retry policy refuses once its
+        // attempts are spent, which ends the loop.
+        try
         {
-            await sessionArgs.ClearResponse(streamToken);
-            var alternate = new H2DispatchOrigin(origin.RemoteHostName, origin.RemotePort,
-                sessionArgs.UpstreamConnectHost, sessionArgs.UpstreamConnectPort);
-            await RunHttp2ToHttp2DispatchAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
-                alternate, requestBodyChannel, allowGoAwayRetry: false, streamToken);
+            while (result == BridgeAttemptResult.ReplayStatus)
+            {
+                try
+                {
+                    await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(this, sessionArgs, streamToken);
+                }
+                catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
+                {
+                    // The attempt below sees the cancelled token and tears the stream down.
+                }
+
+                await sessionArgs.ClearResponse(streamToken);
+                var alternate = new H2DispatchOrigin(origin.RemoteHostName, origin.RemotePort,
+                    sessionArgs.UpstreamConnectHost, sessionArgs.UpstreamConnectPort);
+                result = await RunHttp2ToHttp2DispatchAttemptAsync(sessionArgs, streamId, connectionState,
+                    clientStream, alternate, requestBodyChannel, allowGoAwayRetry: false, streamToken);
+            }
+        }
+        finally
+        {
+            // The retry-budget slot is held from the first staged replay until the last one has answered.
+            Routing.ReverseProxySessionDispatch.EndGatewayRetry(sessionArgs);
         }
     }
 
@@ -281,45 +299,66 @@ public partial class ProxyServer
                     !originConnection.ServerConnection.ClaimFirstUse());
 
             sessionArgs.Timing?.MarkRequestSent();
-            Http2OriginExchange exchange;
+            Http2OriginExchange exchange = null!;
+            ProxyTimeoutException? perTryTimeout = null;
+            var perTryLimit = PerTryHeaderTimeout(sessionArgs, copyRequestBody != null);
             try
             {
-                exchange = await originConnection.SendAsync(sessionArgs.HttpClient.Request, relayInterim,
-                    cancellationToken, copyRequestBody);
+                try
+                {
+                    exchange = await originConnection.SendAsync(sessionArgs.HttpClient.Request, relayInterim,
+                        cancellationToken, copyRequestBody, perTryLimit);
+                }
+                catch (Http2OriginGoAwayException) when (allowGoAwayRetry
+                                                         && (copyRequestBody == null
+                                                             || sessionArgs.HttpClient.Request.IsBodyRead
+                                                             || sessionArgs.HttpClient.Request.IsBodyReceived
+                                                             || !sessionArgs.HttpClient.Request.HasBody))
+                {
+                    Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
+                    originConnection = await Http2OriginConnectionPool.RentAsync(poolKey,
+                        async ct =>
+                        {
+                            var tcp = await EstablishHttp2OriginTcpConnectionAsync(sessionArgs, origin.RemoteHostName,
+                                origin.RemotePort, origin.ConnectHost, origin.ConnectPort, ct);
+                            return await Http2OriginConnection.CreateAsync(tcp, logger, ct, ResourceLimits,
+                                MaxDecodedHeaderListBytes);
+                        },
+                        cancellationToken);
+                    sessionArgs.HttpClient.BindUpstreamConnection(originConnection.ServerConnection);
+                    if (sessionArgs.Timing != null)
+                        sessionArgs.Timing.MarkConnectionReady(originConnection.ServerConnection.Id,
+                            !originConnection.ServerConnection.ClaimFirstUse());
+                    sessionArgs.Timing?.MarkRequestSent();
+                    exchange = await originConnection.SendAsync(sessionArgs.HttpClient.Request, relayInterim,
+                        cancellationToken, null, perTryLimit);
+                }
             }
-            catch (Http2OriginGoAwayException) when (allowGoAwayRetry
-                                                     && (copyRequestBody == null
-                                                         || sessionArgs.HttpClient.Request.IsBodyRead
-                                                         || sessionArgs.HttpClient.Request.IsBodyReceived
-                                                         || !sessionArgs.HttpClient.Request.HasBody))
+            catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                   && perTryLimit.HasValue)
             {
-                Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
-                originConnection = await Http2OriginConnectionPool.RentAsync(poolKey,
-                    async ct =>
-                    {
-                        var tcp = await EstablishHttp2OriginTcpConnectionAsync(sessionArgs, origin.RemoteHostName,
-                            origin.RemotePort, origin.ConnectHost, origin.ConnectPort, ct);
-                        return await Http2OriginConnection.CreateAsync(tcp, logger, ct, ResourceLimits,
-                            MaxDecodedHeaderListBytes);
-                    },
-                    cancellationToken);
-                sessionArgs.HttpClient.BindUpstreamConnection(originConnection.ServerConnection);
-                if (sessionArgs.Timing != null)
-                    sessionArgs.Timing.MarkConnectionReady(originConnection.ServerConnection.Id,
-                        !originConnection.ServerConnection.ClaimFirstUse());
-                sessionArgs.Timing?.MarkRequestSent();
-                exchange = await originConnection.SendAsync(sessionArgs.HttpClient.Request, relayInterim,
-                    cancellationToken);
+                // Only the per-try deadline was passed to the send. It is handled below.
+                perTryTimeout = ex;
             }
 
-            sessionArgs.Timing?.MarkResponseHeadersReceived();
+            if (perTryTimeout is null)
+                sessionArgs.Timing?.MarkResponseHeadersReceived();
             if (sessionArgs.Extras is not null
-                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs))
+                && (perTryTimeout is null
+                    ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs,
+                        exchange.Response.StatusCode, exchange.Response, bufferedBodyReplayable: true)
+                    : Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs, 504,
+                        bufferedBodyReplayable: true, timedOut: true)))
             {
-                invalidateOnClose = true;
+                // A body still streaming from the origin cannot be abandoned on a shared connection.
+                invalidateOnClose = perTryTimeout is null && exchange.Response.StreamBodyWriter != null;
                 replayRequested = true;
                 return BridgeAttemptResult.ReplayStatus;
             }
+
+            // No retry left: the deadline ends the exchange exactly as it would without a retry policy.
+            if (perTryTimeout is not null)
+                throw perTryTimeout;
 
             ApplyHttp2DispatchExchange(sessionArgs, exchange, clientHttpVersion);
 
@@ -400,6 +439,18 @@ public partial class ProxyServer
         }
 
         return result;
+    }
+
+    /// <summary>
+    ///     The retry policy's per-try deadline for one h2 origin send. Null when there is none, or when the
+    ///     request body is still streaming from the client (the deadline is for the response, not the upload).
+    /// </summary>
+    internal static TimeSpan? PerTryHeaderTimeout(SessionEventArgs sessionArgs, bool streamsRequestBody)
+    {
+        if (streamsRequestBody || sessionArgs.Extras is not { PerTryTimeoutActive: true })
+            return null;
+
+        return sessionArgs.ResponseHeaderTimeout;
     }
 
     private Func<int, HeaderCollection, CancellationToken, Task>? CreateH2DispatchInterimRelay(

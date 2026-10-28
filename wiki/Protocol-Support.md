@@ -43,7 +43,7 @@ TCP HTTP/1 origin.
 | HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
 | HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. QUIC origins follow the same fallback rules as HTTP/3 → HTTP/3 above. |
 | HTTP/3 | HTTP/2 | Bridge | `Http3OriginBridge.ForwardOverHttp2Async` via `Http2OriginConnection` (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`) when `UpstreamHttpProtocol.Http2` is set. |
-| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A gateway 502/503/504 on a bodiless request can replay once onto another destination when the route sets `retry.attempts`. An HTTP/3 client talking to an HTTP/2 origin is not retried. |
+| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A retryable gateway status on a bodiless request can replay onto another destination when the route sets `retry.attempts` (see [Gateway status retry](#user-content-gateway-status-retry)). An HTTP/3 client talking to an HTTP/2 origin is not retried. |
 
 Not supported:
 
@@ -87,8 +87,31 @@ Titanium Inspector's Protocol column and its throttle latency decision use them.
 
 ## Gateway status retry
 
-A route opts in with `retry.attempts` greater than 0. Before any request body byte is sent, a 502, 503,
-or 504 from the origin is replayed once onto another destination. The client sees the second answer.
+A route (or its cluster) opts in with `retry.attempts` greater than 0. Before the client has been sent a
+byte, a retryable answer from the origin is replayed onto another destination, up to `attempts` times. The
+client sees the last answer. Each replay picks a destination that has not been tried for this request.
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `attempts` | 0 (off) | Replays per request. A cluster needs at least that many other usable destinations. |
+| `statusCodes` | 502, 503, 504 | Statuses that trigger a replay. Accepts 429 and 500-599. |
+| `perTryTimeoutMilliseconds` | 0 (off) | Response-header deadline for every try but the last. A try that runs out counts as a 504. The last try uses the route's own deadline. Needs a cluster with more than one destination. |
+| `backoffMilliseconds` | 0 (none) | Wait before replay n of `backoff * 2^n`, capped at `maxBackoffMilliseconds`, plus jitter. |
+| `maxBackoffMilliseconds` | 1000 | Cap for backoff and for a honored `Retry-After`. |
+| `jitterPercent` | 20 | Random extra wait, 0 to this percent of the backoff. |
+| `honorRetryAfter` | false | Use a delta-seconds `Retry-After` from the origin instead of the backoff, capped at `maxBackoffMilliseconds`. An HTTP-date is ignored. |
+| `budgetPercent` | 0 (unlimited) | Replays in flight for a cluster may not exceed this percent of its in-flight requests. |
+| `budgetMinConcurrent` | 3 | Floor for the budget, so a quiet cluster can still retry. A replay over the limit is refused and counted as `twp.proxy.status.retries_refused` with `reason=budget`. |
+| `retryNonIdempotent` | false | Also replay POST and PATCH. Never retried otherwise. |
+| `maxBufferedBodyBytes` | 65,536 | Largest buffered body that may be sent again. |
+
+The wait before a replay is cancelled with the client request. `twp.proxy.status.retries` carries a `reason`
+tag: `status` for an answer, `timeout` for a per-try deadline.
+
+An HTTP/1.1 origin gets headers only, so a request with a body is never replayed to it. An HTTP/2 origin
+replays a request whose HEADERS frame ended the stream, or whose body was fully buffered within
+`maxBufferedBodyBytes` (for example read by a `BeforeRequest` handler). A body that is streaming to the
+origin cannot be sent again.
 
 | Path | Retried |
 |------|---------|
@@ -99,8 +122,8 @@ or 504 from the origin is replayed once onto another destination. The client see
 | QUIC origins (HTTP/3 to HTTP/3, and HTTP/2 to HTTP/3) | No |
 | HTTP/2 to HTTP/2 native relay | No |
 | HTTP/2 to HTTP/2 per-stream dispatch bridge | Yes |
-| HTTP/1.1 client to an HTTP/2 origin | No |
-| CONNECT, WebSocket, a request that has a body, `Expect: 100-continue`, Windows authentication | Never |
+| HTTP/1.1 client to an HTTP/2 origin | Yes |
+| CONNECT, WebSocket, a streamed request body, `Expect: 100-continue`, Windows authentication | Never |
 
 ## Connections and framing
 

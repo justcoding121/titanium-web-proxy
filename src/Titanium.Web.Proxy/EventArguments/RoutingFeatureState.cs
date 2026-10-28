@@ -1,4 +1,6 @@
+using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Clusters;
 
 namespace Titanium.Web.Proxy.EventArguments;
 
@@ -8,7 +10,22 @@ namespace Titanium.Web.Proxy.EventArguments;
 internal sealed class RoutingFeatureState
 {
     public RetryConfig? Retry { get; set; }
-    public bool StatusRetried { get; set; }
+
+    /// <summary>Replays staged because the origin answered with a retryable status or ran out of time.</summary>
+    public int StatusRetries { get; set; }
+
+    /// <summary>Wait the caller must serve before the next replay. Zero means replay at once.</summary>
+    public int PendingRetryDelayMilliseconds { get; set; }
+
+    /// <summary>True while <c>ResponseHeaderTimeout</c> holds the per-try deadline instead of the route's own.</summary>
+    public bool PerTryTimeoutActive { get; set; }
+
+    /// <summary>The deadline that was in force before the per-try one replaced it.</summary>
+    public System.TimeSpan? ResponseHeaderTimeoutBeforePerTry { get; set; }
+
+    /// <summary>Cluster whose retry budget this request is holding while a replay is in flight.</summary>
+    private ClusterRuntime? budgetHolder;
+
     public long RequestStartTimestamp { get; set; }
     public System.Diagnostics.Activity? Activity { get; set; }
     public string? RequestId { get; set; }
@@ -40,6 +57,26 @@ internal sealed class RoutingFeatureState
         return false;
     }
 
+    /// <summary>Takes a retry slot from <paramref name="runtime" />. The slot is given back by <see cref="ReleaseRetryBudget" />.</summary>
+    public bool TryHoldRetryBudget(ClusterRuntime runtime, int limit)
+    {
+        ReleaseRetryBudget();
+        if (!runtime.TryAcquireRetry(limit))
+        {
+            return false;
+        }
+
+        budgetHolder = runtime;
+        return true;
+    }
+
+    /// <summary>Gives back the retry slot, if one is held. Safe to call more than once.</summary>
+    public void ReleaseRetryBudget()
+    {
+        var holder = Interlocked.Exchange(ref budgetHolder, null);
+        holder?.ReleaseRetry();
+    }
+
     /// <summary>
     /// Clears every mutable field so a recycled extras object cannot leak state across keep-alive
     /// requests. Prefer disposing Activity and nulling the session's Extras; call this when an
@@ -47,8 +84,12 @@ internal sealed class RoutingFeatureState
     /// </summary>
     public void Reset()
     {
+        ReleaseRetryBudget();
         Retry = null;
-        StatusRetried = false;
+        StatusRetries = 0;
+        PendingRetryDelayMilliseconds = 0;
+        PerTryTimeoutActive = false;
+        ResponseHeaderTimeoutBeforePerTry = null;
         RequestStartTimestamp = 0;
         Activity?.Dispose();
         Activity = null;

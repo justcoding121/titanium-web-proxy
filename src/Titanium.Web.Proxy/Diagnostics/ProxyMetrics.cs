@@ -251,7 +251,10 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.proxy.upstream.retries", "{retry}", "Upstream retry attempts.");
 
     private static readonly Counter<long> StatusRetries =
-        Meter.CreateCounter<long>("twp.proxy.status.retries", "{retry}", "Gateway status retries after 502, 503, or 504.");
+        Meter.CreateCounter<long>("twp.proxy.status.retries", "{retry}", "Gateway retries, by reason: status or timeout.");
+
+    private static readonly Counter<long> StatusRetriesRefused =
+        Meter.CreateCounter<long>("twp.proxy.status.retries_refused", "{retry}", "Gateway retries not attempted, by reason: budget.");
 
     private static readonly Counter<long> DestinationEjections =
         Meter.CreateCounter<long>("twp.proxy.destination.ejections", "{ejection}", "Destinations marked unhealthy.");
@@ -307,11 +310,21 @@ internal static class ProxyMetrics
         }
     }
 
-    public static void RecordStatusRetry()
+    /// <param name="reason"><c>status</c> for a retryable origin status, <c>timeout</c> for a per-try deadline.</param>
+    public static void RecordStatusRetry(string reason)
     {
         if (StatusRetries.Enabled)
         {
-            StatusRetries.Add(1);
+            StatusRetries.Add(1, new KeyValuePair<string, object?>("reason", reason));
+        }
+    }
+
+    /// <param name="reason"><c>budget</c> when the cluster's retry budget had no slot left.</param>
+    public static void RecordStatusRetryRefused(string reason)
+    {
+        if (StatusRetriesRefused.Enabled)
+        {
+            StatusRetriesRefused.Add(1, new KeyValuePair<string, object?>("reason", reason));
         }
     }
 

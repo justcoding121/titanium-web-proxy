@@ -74,9 +74,51 @@ public static class TwpConfigValidator
             }
 
             ValidateHttpClient(cluster.Id, cluster.HttpClient, errors);
+            ValidateRetry($"clusters.{cluster.Id}.retry", cluster.Retry, errors);
         }
 
         return clusterIds;
+    }
+
+    private static void ValidateRetry(string path, RetryConfig? retry, List<string> errors)
+    {
+        if (retry is null)
+        {
+            return;
+        }
+
+        RequireNonNegative(retry.Attempts, $"{path}.attempts", errors);
+        RequireNonNegative(retry.MaxBufferedBodyBytes, $"{path}.maxBufferedBodyBytes", errors);
+        RequireNonNegative(retry.PerTryTimeoutMilliseconds, $"{path}.perTryTimeoutMilliseconds", errors);
+        RequireNonNegative(retry.BackoffMilliseconds, $"{path}.backoffMilliseconds", errors);
+        RequireNonNegative(retry.MaxBackoffMilliseconds, $"{path}.maxBackoffMilliseconds", errors);
+        RequireNonNegative(retry.BudgetMinConcurrent, $"{path}.budgetMinConcurrent", errors);
+
+        if (retry.JitterPercent is < 0 or > 100)
+        {
+            errors.Add($"{path}.jitterPercent must be between 0 and 100.");
+        }
+
+        if (retry.BudgetPercent is < 0 or > 1000)
+        {
+            errors.Add($"{path}.budgetPercent must be between 0 and 1000 (0 = unlimited).");
+        }
+
+        if (retry.StatusCodes is { } codes)
+        {
+            if (codes.Count == 0)
+            {
+                errors.Add($"{path}.statusCodes must list at least one status (or be omitted for 502, 503, 504).");
+            }
+
+            foreach (var code in codes)
+            {
+                if (code is not (429 or (>= 500 and <= 599)))
+                {
+                    errors.Add($"{path}.statusCodes: {code} is not retryable (use 429 or 500-599).");
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -442,6 +484,7 @@ public static class TwpConfigValidator
             ValidateRouteRedirect(route, errors);
             ValidateRouteTransforms(route, errors);
             ValidateRouteLimits(route, errors);
+            ValidateRetry($"routes.{route.Id}.retry", route.Retry, errors);
         }
     }
 

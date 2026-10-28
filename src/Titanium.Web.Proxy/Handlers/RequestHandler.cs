@@ -615,7 +615,7 @@ public partial class ProxyServer
                             var newConnection = result.LatestConnection;
 
                             // A status retry swapped the origin socket inside the request. Track the new one.
-                            if (args.Extras is { StatusRetried: true } && args.HttpClient.HasConnection)
+                            if (args.Extras is { StatusRetries: > 0 } && args.HttpClient.HasConnection)
                                 newConnection = args.HttpClient.Connection;
 
                             if (connection != newConnection && connection != null)
@@ -1022,6 +1022,47 @@ public partial class ProxyServer
         }, generator, serverConnection);
     }
 
+    /// <summary>
+    ///     Replays the request onto the destination <see cref="Routing.ReverseProxySessionDispatch.TryStageGatewayRetry" />
+    ///     already staged, and keeps going while the answer is retryable and attempts remain. Call only after
+    ///     a retry was staged. Returns false when the last try ran out of time and the 504 has been written.
+    /// </summary>
+    private async Task<bool> ReplayStagedGatewayRetriesAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        ProxyTimeoutException? timeout;
+        bool staged;
+        do
+        {
+            try
+            {
+                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                timeout = null;
+            }
+            catch (ProxyTimeoutException ex)
+            {
+                timeout = ex;
+            }
+            finally
+            {
+                Routing.ReverseProxySessionDispatch.EndGatewayRetry(args);
+            }
+
+            staged = timeout is null
+                ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args)
+                : timeout.Kind == ProxyTimeoutKind.ResponseHeader
+                  && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504, timedOut: true);
+        }
+        while (staged);
+
+        if (timeout is null)
+        {
+            return true;
+        }
+
+        await HandleProxyTimeoutAsync(args, timeout, cancellationToken);
+        return false;
+    }
+
     private async Task ReplayGatewayStatusAsync(SessionEventArgs args, CancellationToken cancellationToken)
     {
         // The first origin answered with an unread body, so that socket is finished. Close it now. The
@@ -1030,6 +1071,10 @@ public partial class ProxyServer
         {
             await TcpConnectionFactory.Release(args.HttpClient.Connection, true);
         }
+
+        // Backoff runs after the old socket is gone, so a waiting retry does not hold pool capacity.
+        await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(this, args, cancellationToken)
+            .ConfigureAwait(false);
 
         var connection = await TcpConnectionFactory.GetServerConnection(
             this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
@@ -1077,6 +1122,7 @@ public partial class ProxyServer
             // The fast path used to skip the response-header deadline entirely, so a stalled origin hung
             // the client forever even with ResponseHeaderTimeoutSeconds set. Only pay for the deadline when
             // one is configured (server-wide or per-session) so the default RPS path is unchanged.
+            ProxyTimeoutException? firstTimeout = null;
             if (ResponseHeaderTimeoutSeconds > 0 || args.ResponseHeaderTimeout.HasValue)
             {
                 try
@@ -1085,8 +1131,7 @@ public partial class ProxyServer
                 }
                 catch (ProxyTimeoutException ex)
                 {
-                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
-                    return;
+                    firstTimeout = ex;
                 }
             }
             else
@@ -1094,19 +1139,22 @@ public partial class ProxyServer
                 await args.HttpClient.ReceiveResponse(cancellationToken);
             }
 
-            if (Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            // Async only after a retry is staged, so an unset policy does not allocate a state machine.
+            var stagedRetry = firstTimeout is null
+                ? args.Extras is not null && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args)
+                : firstTimeout.Kind == ProxyTimeoutKind.ResponseHeader
+                  && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504, timedOut: true);
+            if (stagedRetry)
             {
-                // Async only after a retry is staged, so an unset policy does not allocate a state machine.
-                try
+                if (!await ReplayStagedGatewayRetriesAsync(args, cancellationToken).ConfigureAwait(false))
                 {
-                    ProxyMetrics.RecordStatusRetry();
-                    await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
-                }
-                catch (ProxyTimeoutException ex)
-                {
-                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
                     return;
                 }
+            }
+            else if (firstTimeout is not null)
+            {
+                await HandleProxyTimeoutAsync(args, firstTimeout, cancellationToken);
+                return;
             }
 
             var fastResponse = args.HttpClient.Response;

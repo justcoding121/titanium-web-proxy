@@ -13,10 +13,11 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class PolicyAndRouteValidationTests
 {
-    private static ClusterConfig Cluster(string id) => new()
+    private static ClusterConfig Cluster(string id, RetryConfig? retry = null) => new()
     {
         Id = id,
         Destinations = [new DestinationConfig { Id = id + "-d", Address = "127.0.0.1", Port = 9 }],
+        Retry = retry,
     };
 
     private static RouteConfig Route(string id, string cluster = "c", params string[] policies) => new()
@@ -27,7 +28,79 @@ public class PolicyAndRouteValidationTests
         Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
     };
 
+    private static RouteConfig RouteWithRetry(string id, RetryConfig retry) => new()
+    {
+        Id = id,
+        ClusterId = "c",
+        Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+        Retry = retry,
+    };
+
     private static string Errors(TwpConfig config) => string.Join("\n", TwpConfigValidator.Validate(config));
+
+    [TestMethod]
+    public void Retry_WithBadValues_IsRejectedOnClustersAndRoutes()
+    {
+        var bad = new RetryConfig
+        {
+            Attempts = -1,
+            PerTryTimeoutMilliseconds = -1,
+            BackoffMilliseconds = -1,
+            MaxBackoffMilliseconds = -1,
+            JitterPercent = 101,
+            BudgetPercent = -5,
+            BudgetMinConcurrent = -1,
+            StatusCodes = [404, 429, 503],
+        };
+        var cluster = Cluster("c", bad);
+        var route = RouteWithRetry("r", bad);
+        var errors = Errors(new TwpConfig { Clusters = [cluster], Routes = [route] });
+
+        foreach (var path in new[] { "clusters.c.retry", "routes.r.retry" })
+        {
+            StringAssert.Contains(errors, path + ".attempts");
+            StringAssert.Contains(errors, path + ".perTryTimeoutMilliseconds");
+            StringAssert.Contains(errors, path + ".backoffMilliseconds");
+            StringAssert.Contains(errors, path + ".maxBackoffMilliseconds");
+            StringAssert.Contains(errors, path + ".jitterPercent");
+            StringAssert.Contains(errors, path + ".budgetPercent");
+            StringAssert.Contains(errors, path + ".budgetMinConcurrent");
+            StringAssert.Contains(errors, path + ".statusCodes: 404");
+        }
+
+        Assert.IsFalse(errors.Contains("statusCodes: 429", StringComparison.Ordinal), errors);
+        Assert.IsFalse(errors.Contains("statusCodes: 503", StringComparison.Ordinal), errors);
+
+        var empty = Errors(new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Routes = [RouteWithRetry("r", new RetryConfig { Attempts = 1, StatusCodes = [] })],
+        });
+        StringAssert.Contains(empty, "statusCodes must list at least one status");
+    }
+
+    [TestMethod]
+    public void Retry_WithEveryOption_IsAccepted()
+    {
+        var retry = new RetryConfig
+        {
+            Attempts = 2,
+            StatusCodes = [429, 500, 503],
+            PerTryTimeoutMilliseconds = 800,
+            BackoffMilliseconds = 50,
+            MaxBackoffMilliseconds = 500,
+            JitterPercent = 10,
+            HonorRetryAfter = true,
+            BudgetPercent = 20,
+            BudgetMinConcurrent = 5,
+        };
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c", retry)],
+            Routes = [RouteWithRetry("r", retry)],
+        };
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+    }
 
     [TestMethod]
     public void Route_NamingAnUndefinedPolicy_IsRejected()
@@ -287,3 +360,5 @@ public class PolicyAndRouteValidationTests
         StringAssert.Contains(errors, "redirect status 200 is not a 3xx code");
     }
 }
+
+

@@ -648,33 +648,60 @@ public partial class ProxyServer
                 };
             }
 
-            Http2OriginExchange exchange;
+            Http2OriginExchange exchange = null!;
+            ProxyTimeoutException? perTryTimeout = null;
+            var perTryLimit = PerTryHeaderTimeout(args, copyRequestBody != null);
             try
             {
-                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken,
-                    copyRequestBody);
+                try
+                {
+                    exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken,
+                        copyRequestBody, perTryLimit);
+                }
+                catch (Http2OriginGoAwayException)
+                {
+                    // The origin told us (via GOAWAY) it never took any action for this stream at all (RFC 7540
+                    // §6.8) - the request, still fully buffered in `request`, is safe to replay verbatim on a
+                    // different pooled connection exactly once. Do not dispose a shared conn that may still
+                    // have sibling streams below last-stream-id — Invalidate retires only this member.
+                    if (copyRequestBody != null && !request.IsBodyRead)
+                        throw;
+
+                    Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
+                    originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                        cancellationToken);
+
+                    var retriedConnection = originConnection.ServerConnection;
+                    args.HttpClient.BindUpstreamConnection(retriedConnection);
+                    if (args.Timing != null)
+                        args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
+
+                    args.Timing?.MarkRequestSent();
+                    exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken, null,
+                        perTryLimit);
+                }
             }
-            catch (Http2OriginGoAwayException)
+            catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                   && perTryLimit.HasValue)
             {
-                // The origin told us (via GOAWAY) it never took any action for this stream at all (RFC 7540
-                // §6.8) - the request, still fully buffered in `request`, is safe to replay verbatim on a
-                // different pooled connection exactly once. Do not dispose a shared conn that may still
-                // have sibling streams below last-stream-id — Invalidate retires only this member.
-                if (copyRequestBody != null && !request.IsBodyRead)
-                    throw;
-
-                Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
-                originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
-                    cancellationToken);
-
-                var retriedConnection = originConnection.ServerConnection;
-                args.HttpClient.BindUpstreamConnection(retriedConnection);
-                if (args.Timing != null)
-                    args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
-
-                args.Timing?.MarkRequestSent();
-                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
+                // Only the per-try deadline was passed to the send. It is handled below.
+                perTryTimeout = ex;
             }
+
+            if (args.Extras is not null)
+            {
+                var replayed = await ReplayHttp11ToHttp2GatewayFailuresAsync(args, exchange, perTryTimeout,
+                    originConnection, poolKey, openFactory, remoteHostName, remotePort, relayInterim,
+                    cancellationToken);
+                exchange = replayed.Exchange;
+                perTryTimeout = replayed.Timeout;
+                originConnection = replayed.Origin;
+                poolKey = replayed.PoolKey;
+            }
+
+            // No retry left: the deadline ends the exchange exactly as it would without a retry policy.
+            if (perTryTimeout is not null)
+                throw perTryTimeout;
 
             args.Timing?.MarkResponseHeadersReceived();
 
@@ -697,6 +724,68 @@ public partial class ProxyServer
                 await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
             }
         }
+    }
+
+    private readonly record struct Http11ToHttp2Replay(
+        Http2OriginExchange Exchange, ProxyTimeoutException? Timeout, Http2OriginConnection Origin, string PoolKey);
+
+    /// <summary>
+    ///     While the origin's answer (or a per-try deadline) calls for a retry and attempts remain, sends the
+    ///     request again on a leased stream of the next destination. A body is sent again only when it was fully
+    ///     buffered. Returns the last exchange, or the deadline that ended the last try.
+    /// </summary>
+    private async Task<Http11ToHttp2Replay> ReplayHttp11ToHttp2GatewayFailuresAsync( // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
+        SessionEventArgs args, Http2OriginExchange exchange, ProxyTimeoutException? timeout,
+        Http2OriginConnection originConnection, string poolKey,
+        Func<CancellationToken, Task<Http2OriginConnection>> openFactory,
+        string remoteHostName, int remotePort,
+        Func<int, HeaderCollection, CancellationToken, Task>? relayInterim, CancellationToken cancellationToken)
+    {
+        var request = args.HttpClient.Request;
+        try
+        {
+            while (timeout is null
+                       ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args,
+                           exchange.Response.StatusCode, exchange.Response, bufferedBodyReplayable: true)
+                       : Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504,
+                           bufferedBodyReplayable: true, timedOut: true))
+            {
+                // Give back the answer being replaced. Draining a streaming body is what releases its lease.
+                if (timeout is null && exchange.Response.StreamBodyWriter is { } abandoned)
+                    await abandoned(Stream.Null, cancellationToken);
+
+                await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(this, args, cancellationToken);
+
+                poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName, remotePort,
+                    args.UpstreamConnectHost, args.UpstreamConnectPort);
+                originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                    cancellationToken);
+
+                var serverConnection = originConnection.ServerConnection;
+                args.HttpClient.BindUpstreamConnection(serverConnection);
+                if (args.Timing != null)
+                    args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
+                args.Timing?.MarkRequestSent();
+
+                timeout = null;
+                var limit = PerTryHeaderTimeout(args, false);
+                try
+                {
+                    exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken, null, limit);
+                }
+                catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                       && limit.HasValue)
+                {
+                    timeout = ex;
+                }
+            }
+        }
+        finally
+        {
+            Routing.ReverseProxySessionDispatch.EndGatewayRetry(args);
+        }
+
+        return new Http11ToHttp2Replay(exchange, timeout, originConnection, poolKey);
     }
 
     /// <summary>

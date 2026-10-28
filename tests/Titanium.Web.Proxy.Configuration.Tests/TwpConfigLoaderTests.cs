@@ -107,6 +107,39 @@ public class TwpConfigLoaderTests
     }
 
     [TestMethod]
+    public void JsonReverseProxyDocument_ParsesEveryRetryOption()
+    {
+        var json = """
+            {
+              "clusters": [{ "id": "backend", "destinations": [{ "address": "127.0.0.1" }] }],
+              "routes": [{ "clusterId": "backend", "retry": {
+                "attempts": 2, "statusCodes": [429, 503], "perTryTimeoutMilliseconds": 800,
+                "backoffMilliseconds": 50, "maxBackoffMilliseconds": 400, "jitterPercent": 10,
+                "honorRetryAfter": true, "budgetPercent": 20, "budgetMinConcurrent": 5 } }]
+            }
+            """;
+        var retry = JsonReverseProxyDocument.Parse(json).Routes[0].Retry!;
+        Assert.AreEqual(2, retry.Attempts);
+        CollectionAssert.AreEqual(new[] { 429, 503 }, retry.StatusCodes!.ToArray());
+        Assert.AreEqual(800, retry.PerTryTimeoutMilliseconds);
+        Assert.AreEqual(50, retry.BackoffMilliseconds);
+        Assert.AreEqual(400, retry.MaxBackoffMilliseconds);
+        Assert.AreEqual(10, retry.JitterPercent);
+        Assert.IsTrue(retry.HonorRetryAfter);
+        Assert.AreEqual(20, retry.BudgetPercent);
+        Assert.AreEqual(5, retry.BudgetMinConcurrent);
+
+        var defaults = JsonReverseProxyDocument.Parse(
+            """{ "clusters": [{ "id": "b", "destinations": [{ "address": "127.0.0.1" }] }], "routes": [{ "clusterId": "b", "retry": { "attempts": 1 } }] }""")
+            .Routes[0].Retry!;
+        Assert.IsNull(defaults.StatusCodes);
+        Assert.AreEqual(1000, defaults.MaxBackoffMilliseconds);
+        Assert.AreEqual(20, defaults.JitterPercent);
+        Assert.AreEqual(3, defaults.BudgetMinConcurrent);
+        Assert.AreEqual(0, defaults.BudgetPercent);
+    }
+
+    [TestMethod]
     public void JsonReverseProxyDocument_ParsesAlgorithmsTransformsAndFile()
     {
         var json = """

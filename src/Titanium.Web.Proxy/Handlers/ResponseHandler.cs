@@ -36,7 +36,17 @@ public partial class ProxyServer
         try
         {
             // read response & headers from server (response-header deadline / idle-read for exempt paths)
-            await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            // A per-try deadline from the retry policy is handled below, not as a final 504.
+            ProxyTimeoutException? perTryTimeout = null;
+            try
+            {
+                await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            }
+            catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                   && args.Extras is { PerTryTimeoutActive: true })
+            {
+                perTryTimeout = ex;
+            }
 
             // Relay/consume every interim (1xx) response that precedes the final response on this connection.
             // 100 Continue is discarded exactly as before - per spec, "the client can simply discard this
@@ -61,19 +71,30 @@ public partial class ProxyServer
                 await ReceiveOriginResponseWithTimeout(args, cancellationToken);
             }
 
-            args.Timing?.MarkResponseHeadersReceived();
+            if (perTryTimeout is null)
+            {
+                args.Timing?.MarkResponseHeadersReceived();
+            }
 
             // Status retry is opt-in. Extras is null when the route has no retry policy, so the common
-            // path is one null check. The replay itself lives in ReplayGatewayStatusAsync.
-            if (args.Extras is not null
-                && !args.EnableWinAuth
-                && !args.HttpClient.Request.ExpectContinue
-                && !args.HttpClient.Request.UpgradeToWebSocket
-                && !args.IsClientResponseCommitted
-                && ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            // path is one null check. The replay itself lives in ReplayStagedGatewayRetriesAsync.
+            var stagedRetry = args.Extras is not null
+                              && (perTryTimeout is null
+                                  ? ReverseProxySessionDispatch.TryStageGatewayRetry(this, args)
+                                  : ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504, timedOut: true));
+            if (perTryTimeout is not null && !stagedRetry)
             {
-                ProxyMetrics.RecordStatusRetry();
-                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                await HandleProxyTimeoutAsync(args, perTryTimeout, cancellationToken);
+                return;
+            }
+
+            if (stagedRetry)
+            {
+                if (!await ReplayStagedGatewayRetriesAsync(args, cancellationToken).ConfigureAwait(false))
+                {
+                    return;
+                }
+
                 while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
                        and not (int)HttpStatusCode.SwitchingProtocols)
                 {

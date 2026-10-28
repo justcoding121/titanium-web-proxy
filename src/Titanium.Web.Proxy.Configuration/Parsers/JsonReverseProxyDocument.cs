@@ -90,6 +90,14 @@ public static class JsonReverseProxyDocument
                             Attempts = r.Retry.Attempts ?? 0,
                             RetryNonIdempotent = r.Retry.RetryNonIdempotent ?? false,
                             MaxBufferedBodyBytes = r.Retry.MaxBufferedBodyBytes ?? 64 * 1024,
+                            StatusCodes = r.Retry.StatusCodes,
+                            PerTryTimeoutMilliseconds = r.Retry.PerTryTimeoutMilliseconds ?? 0,
+                            BackoffMilliseconds = r.Retry.BackoffMilliseconds ?? 0,
+                            MaxBackoffMilliseconds = r.Retry.MaxBackoffMilliseconds ?? 1000,
+                            JitterPercent = r.Retry.JitterPercent ?? 20,
+                            HonorRetryAfter = r.Retry.HonorRetryAfter ?? false,
+                            BudgetPercent = r.Retry.BudgetPercent ?? 0,
+                            BudgetMinConcurrent = r.Retry.BudgetMinConcurrent ?? 3,
                         },
                 });
                 order++;
@@ -208,6 +216,14 @@ public static class JsonReverseProxyDocument
         public int? Attempts { get; set; }
         public bool? RetryNonIdempotent { get; set; }
         public int? MaxBufferedBodyBytes { get; set; }
+        public List<int>? StatusCodes { get; set; }
+        public int? PerTryTimeoutMilliseconds { get; set; }
+        public int? BackoffMilliseconds { get; set; }
+        public int? MaxBackoffMilliseconds { get; set; }
+        public int? JitterPercent { get; set; }
+        public bool? HonorRetryAfter { get; set; }
+        public int? BudgetPercent { get; set; }
+        public int? BudgetMinConcurrent { get; set; }
     }
 
     private sealed class LimitsDto

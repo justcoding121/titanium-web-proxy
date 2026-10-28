@@ -308,25 +308,48 @@ public partial class ProxyServer
         // Replay once on a fresh connection (same single-replay rule the H1 path gets from RetryPolicy).
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down, so the connection token
         // is not linked here (a linked source was one allocation per in-flight stream).
-        var first = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
+        var result = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
             new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: true), streamToken);
-        if (first == BridgeAttemptResult.Completed)
-            return;
-        if (first == BridgeAttemptResult.ReplayStatus)
-        {
-            await sessionArgs.ClearResponse(streamToken);
-            var alternate = new Http11BridgeOrigin(origin.RemoteHostName, origin.RemotePort,
-                sessionArgs.UpstreamConnectHost, sessionArgs.UpstreamConnectPort);
-            await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
-                new Http11BridgeAttempt(alternate, requestBodyChannel, AllowReplay: false), streamToken);
-            return;
-        }
 
-        ProxyDiagnostics.ReportCaught(logger,
-            $"HTTP/2-to-HTTP/1.1 bridge replaying stream {streamId} on a fresh origin connection",
-            new RetryableServerConnectionException("Reused origin connection was closed before a response."));
-        await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
-            new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: false), streamToken);
+        // A stale-socket replay happens at most once (AllowReplay is off afterwards). Status replays are
+        // bounded by the retry policy, which refuses once its attempts are spent.
+        try
+        {
+            while (result != BridgeAttemptResult.Completed)
+            {
+                Http11BridgeOrigin next;
+                if (result == BridgeAttemptResult.ReplayStatus)
+                {
+                    try
+                    {
+                        await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(this, sessionArgs, streamToken);
+                    }
+                    catch (OperationCanceledException) when (streamToken.IsCancellationRequested)
+                    {
+                        // The attempt below sees the cancelled token and tears the stream down.
+                    }
+
+                    await sessionArgs.ClearResponse(streamToken);
+                    next = new Http11BridgeOrigin(origin.RemoteHostName, origin.RemotePort,
+                        sessionArgs.UpstreamConnectHost, sessionArgs.UpstreamConnectPort);
+                }
+                else
+                {
+                    ProxyDiagnostics.ReportCaught(logger,
+                        $"HTTP/2-to-HTTP/1.1 bridge replaying stream {streamId} on a fresh origin connection",
+                        new RetryableServerConnectionException("Reused origin connection was closed before a response."));
+                    next = origin;
+                }
+
+                result = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState,
+                    clientStream, new Http11BridgeAttempt(next, requestBodyChannel, AllowReplay: false), streamToken);
+            }
+        }
+        finally
+        {
+            // The retry-budget slot is held from the first staged replay until the last one has answered.
+            Routing.ReverseProxySessionDispatch.EndGatewayRetry(sessionArgs);
+        }
     }
 
     private enum BridgeAttemptResult
@@ -598,18 +621,37 @@ public partial class ProxyServer
 
             // Honour the response-header deadline (server-wide or per-session) so a stalled origin yields a 504
             // instead of an unbounded wait; only paid for when a deadline is configured.
+            ProxyTimeoutException? perTryTimeout = null;
             if (ResponseHeaderTimeoutSeconds > 0 || sessionArgs.ResponseHeaderTimeout.HasValue)
-                await ReceiveOriginResponseWithTimeout(sessionArgs, cancellationToken);
+            {
+                try
+                {
+                    await ReceiveOriginResponseWithTimeout(sessionArgs, cancellationToken);
+                }
+                catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                       && sessionArgs.Extras is { PerTryTimeoutActive: true })
+                {
+                    perTryTimeout = ex;
+                }
+            }
             else
                 await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
-            sessionArgs.Timing?.MarkResponseHeadersReceived();
+            if (perTryTimeout is null)
+                sessionArgs.Timing?.MarkResponseHeadersReceived();
             if (sessionArgs.Extras is not null
-                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs))
+                && (perTryTimeout is null
+                    ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs)
+                    : Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs, 504,
+                        timedOut: true)))
             {
                 closeConnection = true;
                 replayRequested = true;
                 return BridgeAttemptResult.ReplayStatus;
             }
+
+            // No retry left: the deadline ends the exchange exactly as it would without a retry policy.
+            if (perTryTimeout is not null)
+                throw perTryTimeout;
 
             // The origin here is always HTTP/1.1 (see the GetServerConnection call above), so this
             // response is genuine wire bytes even though the client leg is h2 - the same wire-framing

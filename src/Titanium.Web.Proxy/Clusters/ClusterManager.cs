@@ -30,6 +30,9 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
 
     internal ClusterManager(TimeProvider timeProvider) => _time = timeProvider;
 
+    /// <summary>Clock for waits that belong to routing, such as retry backoff.</summary>
+    internal TimeProvider Time => _time;
+
     /// <summary>Raised after a destination state value actually changes. Not raised on the request hot path.</summary>
     internal event Action<string, DestinationState, DestinationState>? StateChanged;
 

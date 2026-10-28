@@ -93,7 +93,7 @@ public class KeepAliveResetAuditTests
         var state = new RoutingFeatureState
         {
             Retry = new RetryConfig { Attempts = 3 },
-            StatusRetried = true,
+            StatusRetries = 1,
             RequestStartTimestamp = 42,
             Activity = new Activity("test"),
             RequestId = "rid",
@@ -107,7 +107,7 @@ public class KeepAliveResetAuditTests
         state.Reset();
 
         Assert.IsNull(state.Retry);
-        Assert.IsFalse(state.StatusRetried);
+        Assert.AreEqual(0, state.StatusRetries);
         Assert.AreEqual(0L, state.RequestStartTimestamp);
         Assert.IsNull(state.Activity);
         Assert.IsNull(state.RequestId);
@@ -189,7 +189,7 @@ public class KeepAliveResetAuditTests
         var extras = new RoutingFeatureState
         {
             Retry = new RetryConfig { Attempts = 2 },
-            StatusRetried = true,
+            StatusRetries = 1,
             RequestStartTimestamp = 99,
             RequestId = "id",
             PendingSetCookie = "c=1",

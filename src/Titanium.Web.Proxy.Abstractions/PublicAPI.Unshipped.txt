@@ -381,11 +381,27 @@ Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig.TimeoutMilliseconds.init ->
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.Attempts.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.Attempts.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.BackoffMilliseconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.BackoffMilliseconds.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.BudgetMinConcurrent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.BudgetMinConcurrent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.BudgetPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.BudgetPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.HonorRetryAfter.get -> bool
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.HonorRetryAfter.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.JitterPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.JitterPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.MaxBackoffMilliseconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.MaxBackoffMilliseconds.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.MaxBufferedBodyBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.MaxBufferedBodyBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.PerTryTimeoutMilliseconds.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.PerTryTimeoutMilliseconds.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryConfig() -> void
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryNonIdempotent.get -> bool
 Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.RetryNonIdempotent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.StatusCodes.get -> System.Collections.Generic.IReadOnlyList<int>?
+Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig.StatusCodes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Retry.get -> Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Retry.init -> void
 Titanium.Web.Proxy.Abstractions.Diagnostics.ForwarderError

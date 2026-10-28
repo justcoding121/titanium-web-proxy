@@ -244,9 +244,47 @@ public sealed class ActiveHealthConfig
 /// <summary>Failover onto another destination. Zero attempts means off.</summary>
 public sealed class RetryConfig
 {
+    /// <summary>Most extra destinations one request may be replayed onto. Zero turns retry off.</summary>
     public int Attempts { get; init; }
+
     public bool RetryNonIdempotent { get; init; }
     public int MaxBufferedBodyBytes { get; init; } = 64 * 1024;
+
+    /// <summary>
+    ///     Origin status codes that trigger a replay. Null means 502, 503, and 504. Each entry must be
+    ///     429 or 500 to 599.
+    /// </summary>
+    public IReadOnlyList<int>? StatusCodes { get; init; }
+
+    /// <summary>
+    ///     Response-header deadline for every attempt except the last one. Zero means none. A try that
+    ///     runs out of time counts as a 504 and moves to the next destination.
+    /// </summary>
+    public int PerTryTimeoutMilliseconds { get; init; }
+
+    /// <summary>Wait before the first replay. It doubles on each later one. Zero means replay at once.</summary>
+    public int BackoffMilliseconds { get; init; }
+
+    /// <summary>Upper bound for one wait, including a honored <c>Retry-After</c>.</summary>
+    public int MaxBackoffMilliseconds { get; init; } = 1000;
+
+    /// <summary>Random extra wait, as a percent of the computed backoff (0-100).</summary>
+    public int JitterPercent { get; init; } = 20;
+
+    /// <summary>
+    ///     Use a delta-seconds <c>Retry-After</c> from the origin instead of the computed backoff.
+    ///     The value is capped at <see cref="MaxBackoffMilliseconds" />. An HTTP-date is ignored.
+    /// </summary>
+    public bool HonorRetryAfter { get; init; }
+
+    /// <summary>
+    ///     Share of the cluster's in-flight requests that may be retries at one time (0-100).
+    ///     Zero means no limit.
+    /// </summary>
+    public int BudgetPercent { get; init; }
+
+    /// <summary>Retries always allowed at once, however low the budget works out to.</summary>
+    public int BudgetMinConcurrent { get; init; } = 3;
 }
 
 /// <summary>Optional wait when every destination is at its concurrency cap.</summary>

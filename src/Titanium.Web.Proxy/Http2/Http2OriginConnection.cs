@@ -343,7 +343,8 @@ internal sealed class Http2OriginConnection : IDisposable
         Func<int, HeaderCollection, CancellationToken, Task>? on1xx,
         CancellationToken cancellationToken,
         Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>? copyRequestBody =
-            null)
+            null,
+        TimeSpan? headerTimeout = null)
     {
         if (!IsUsable) throw new Http2OriginGoAwayException("The origin h2 connection is no longer usable.");
 
@@ -495,15 +496,41 @@ internal sealed class Http2OriginConnection : IDisposable
             // HeadersReceived TCS instead — otherwise we race ProcessHeaderBlock and synthesize 502.
             // Inline tiny-CL delays HeadersReceived until END_STREAM; always await it after interims
             // so the body buffer is complete before TakeInlineBody.
-            if (on1xx != null)
+            // headerTimeout (a retry policy's per-try deadline) bounds only this wait. The body read below
+            // keeps the caller's token, so the deadline cannot cut a response short once it has started.
+            CancellationTokenSource? headerCts = null;
+            var headerToken = cancellationToken;
+            if (headerTimeout is { } headerLimit && headerLimit > TimeSpan.Zero)
             {
-                var interimReader = pending.InterimChannel?.Reader
-                    ?? throw new InvalidOperationException("InterimChannel required when on1xx is set.");
-                await foreach (var interim in interimReader.ReadAllAsync(cancellationToken))
-                    await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
+                headerCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                headerCts.CancelAfter(headerLimit);
+                headerToken = headerCts.Token;
             }
 
-            await pending.HeadersReceived.Task.WaitAsync(cancellationToken);
+            try
+            {
+                if (on1xx != null)
+                {
+                    var interimReader = pending.InterimChannel?.Reader
+                        ?? throw new InvalidOperationException("InterimChannel required when on1xx is set.");
+                    await foreach (var interim in interimReader.ReadAllAsync(headerToken))
+                        await on1xx(interim.StatusCode, interim.Headers, cancellationToken);
+                }
+
+                await pending.HeadersReceived.Task.WaitAsync(headerToken);
+            }
+            catch (OperationCanceledException ex) when (headerCts is { IsCancellationRequested: true }
+                                                        && !cancellationToken.IsCancellationRequested)
+            {
+                throw new ProxyTimeoutException("Proxy responseheader timeout elapsed.", ProxyTimeoutKind.ResponseHeader, ex)
+                {
+                    ConfiguredTimeout = headerTimeout,
+                };
+            }
+            finally
+            {
+                headerCts?.Dispose();
+            }
 
             var response = pending.Response ??
                            new Response

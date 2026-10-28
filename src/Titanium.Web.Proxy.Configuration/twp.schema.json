@@ -289,11 +289,38 @@
               "attempts": {
                 "type": "integer"
               },
+              "backoffMilliseconds": {
+                "type": "integer"
+              },
+              "budgetMinConcurrent": {
+                "type": "integer"
+              },
+              "budgetPercent": {
+                "type": "integer"
+              },
+              "honorRetryAfter": {
+                "type": "boolean"
+              },
+              "jitterPercent": {
+                "type": "integer"
+              },
+              "maxBackoffMilliseconds": {
+                "type": "integer"
+              },
               "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "perTryTimeoutMilliseconds": {
                 "type": "integer"
               },
               "retryNonIdempotent": {
                 "type": "boolean"
+              },
+              "statusCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
               }
             }
           },
@@ -813,11 +840,38 @@
               "attempts": {
                 "type": "integer"
               },
+              "backoffMilliseconds": {
+                "type": "integer"
+              },
+              "budgetMinConcurrent": {
+                "type": "integer"
+              },
+              "budgetPercent": {
+                "type": "integer"
+              },
+              "honorRetryAfter": {
+                "type": "boolean"
+              },
+              "jitterPercent": {
+                "type": "integer"
+              },
+              "maxBackoffMilliseconds": {
+                "type": "integer"
+              },
               "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "perTryTimeoutMilliseconds": {
                 "type": "integer"
               },
               "retryNonIdempotent": {
                 "type": "boolean"
+              },
+              "statusCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
               }
             }
           },

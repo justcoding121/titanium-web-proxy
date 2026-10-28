@@ -119,6 +119,172 @@ public class Http2RouteDispatchTests
         Assert.AreEqual(0, hits());
     }
 
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H2Client_H2Origin_StatusRetry_ReachesTheThirdDestination()
+    {
+        await using var origin = CreateScriptedOrigin(hit => hit < 3 ? (503, "busy") : (200, "third"), out var hits);
+        await using var proxy = await StartRetryProxyAsync(origin.Port, new RetryConfig { Attempts = 2 }, destinations: 3);
+
+        using var client = CreateH2Client(proxy);
+        using var response = await client.GetAsync($"https://127.0.0.1:{proxy.Tls.Port}/retry");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("third", await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(3, hits());
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H2Client_H2Origin_StatusRetry_CustomStatusAndAttemptLimit()
+    {
+        await using var origin = CreateScriptedOrigin(_ => (429, "slow"), out var hits);
+        await using var proxy = await StartRetryProxyAsync(
+            origin.Port, new RetryConfig { Attempts = 1, StatusCodes = [429] }, destinations: 3);
+
+        using var client = CreateH2Client(proxy);
+        using var response = await client.GetAsync($"https://127.0.0.1:{proxy.Tls.Port}/retry");
+
+        Assert.AreEqual((HttpStatusCode)429, response.StatusCode);
+        Assert.AreEqual(2, hits());
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H2Client_H2Origin_PerTryTimeout_MovesToTheNextDestination()
+    {
+        await using var origin = CreateScriptedOrigin(hit => hit == 1 ? null : (200, "prompt"), out var hits);
+        await using var proxy = await StartRetryProxyAsync(
+            origin.Port, new RetryConfig { Attempts = 1, PerTryTimeoutMilliseconds = 400 });
+
+        using var client = CreateH2Client(proxy);
+        using var response = await client.GetAsync($"https://127.0.0.1:{proxy.Tls.Port}/retry");
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("prompt", await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(2, hits());
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1Client_H2Origin_StatusRetry_FailsOverAndKeepsTheConnection()
+    {
+        await using var origin = CreateScriptedOrigin(hit => hit % 2 == 1 ? (503, "busy") : (200, "ok" + hit), out var hits);
+        await using var proxy = await StartRetryProxyAsync(
+            origin.Port, new RetryConfig { Attempts = 1 });
+        proxy.Tls.BeforeSslAuthenticate += (_, e) =>
+        {
+            e.DecryptSsl = true;
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var handler = new SocketsHttpHandler
+        {
+            SslOptions = { RemoteCertificateValidationCallback = (_, certificate, _, _) => certificate is not null },
+        };
+        using var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+            DefaultRequestVersion = HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+
+        for (var i = 0; i < 2; i++)
+        {
+            using var response = await client.GetAsync($"https://127.0.0.1:{proxy.Tls.Port}/retry");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, "request " + i);
+        }
+
+        Assert.AreEqual(4, hits());
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1Client_H2Origin_PerTryTimeout_MovesToTheNextDestination()
+    {
+        await using var origin = CreateScriptedOrigin(hit => hit == 1 ? null : (200, "prompt"), out var hits);
+        await using var proxy = await StartRetryProxyAsync(
+            origin.Port, new RetryConfig { Attempts = 1, PerTryTimeoutMilliseconds = 400 });
+        proxy.Tls.BeforeSslAuthenticate += (_, e) =>
+        {
+            e.DecryptSsl = true;
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var handler = new SocketsHttpHandler
+        {
+            SslOptions = { RemoteCertificateValidationCallback = (_, certificate, _, _) => certificate is not null },
+        };
+        using var client = new HttpClient(handler)
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+            DefaultRequestVersion = HttpVersion.Version11,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact,
+        };
+
+        using var response = await client.GetAsync($"https://127.0.0.1:{proxy.Tls.Port}/retry");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        Assert.AreEqual("prompt", await response.Content.ReadAsStringAsync());
+        Assert.AreEqual(2, hits());
+    }
+
+    private static async Task<Started> StartRetryProxyAsync(int originPort, RetryConfig retry, int destinations = 2)
+    {
+        var manager = new ClusterManager();
+        var dests = new List<DestinationConfig>();
+        for (var i = 0; i < destinations; i++)
+        {
+            dests.Add(new DestinationConfig { Id = "c1-d" + i, Address = "127.0.0.1", Port = originPort });
+        }
+
+        await manager.ApplyAsync([new ClusterConfig { Id = "c1", Destinations = dests }]);
+        var routes = new[]
+        {
+            new RouteConfig
+            {
+                Id = "r",
+                ClusterId = "c1",
+                Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                Retry = retry,
+            },
+        };
+        return await StartH2ReverseProxyAsync(originPort, originPort, policies: null, routes, clusterManager: manager);
+    }
+
+    /// <summary>An HTTP/2 origin that answers by hit number. A null answer never responds.</summary>
+    private static MarkerOrigin CreateScriptedOrigin(
+        Func<int, (int Status, string Body)?> answer, out Func<int> hitCounter)
+    {
+        var hits = 0;
+        hitCounter = () => Volatile.Read(ref hits);
+        var server = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        server.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            while (true)
+            {
+                var (streamId, _, _) = await connection.ReadRequestAsync();
+                var hit = Interlocked.Increment(ref hits);
+                if (answer(hit) is not { } reply)
+                {
+                    continue;
+                }
+
+                var payload = Encoding.UTF8.GetBytes(reply.Body);
+                var respHeaders = connection.EncodeHeaders(
+                    [(":status", reply.Status.ToString()), ("content-length", payload.Length.ToString())],
+                    Array.Empty<(string, string)>());
+                await connection.WriteHeaderBlockAsync(streamId, respHeaders, endStream: false);
+                await connection.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream, payload);
+            }
+        });
+        return new MarkerOrigin(server);
+    }
+
     private static MarkerOrigin CreateMarkerOrigin(string marker, out Func<int> hitCounter)
     {
         var hits = 0;
@@ -292,3 +458,4 @@ public class Http2RouteDispatchTests
         }
     }
 }
+

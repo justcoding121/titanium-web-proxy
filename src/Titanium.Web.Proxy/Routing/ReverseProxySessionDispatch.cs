@@ -201,6 +201,7 @@ internal static class ReverseProxySessionDispatch
             session.Extras ??= new RoutingFeatureState();
             session.Extras.Retry = retry;
             session.Extras.Remember(destination.Id);
+            ApplyPerTryTimeout(server, session, retry, cluster);
         }
 
         StreamDestinationDispatch.ApplyRouteLimits(route, session);
@@ -495,33 +496,247 @@ internal static class ReverseProxySessionDispatch
     }
 
     /// <summary>
-    /// Stages one status retry when the origin answered 502, 503, or 504 and nothing has been written
-    /// to the client. Off unless a retry policy is set. Connect failover is unchanged.
+    /// Stages one more replay onto another destination when the origin answered with a retryable status
+    /// (or a per-try deadline ran out) and nothing has been written to the client. Off unless a retry
+    /// policy is set. Stops after <see cref="RetryConfig.Attempts" /> replays. Connect failover is unchanged.
     /// </summary>
-    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session, int? status = null)
+    /// <param name="status">Status to judge. Defaults to the session's current response.</param>
+    /// <param name="originResponse">
+    /// The origin's answer when it has not been assigned to the session yet (HTTP/2 origins). Used for
+    /// <c>Retry-After</c>.
+    /// </param>
+    /// <param name="bufferedBodyReplayable">
+    /// True for HTTP/2 origins, which can send a body again. A body is replayed only when it was fully
+    /// buffered within <see cref="RetryConfig.MaxBufferedBodyBytes" />. HTTP/1 origins replay headers only.
+    /// </param>
+    /// <param name="timedOut">True when the per-try response-header deadline fired. Counts as a 504.</param>
+    internal static bool TryStageGatewayRetry(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        int? status = null,
+        Response? originResponse = null,
+        bool bufferedBodyReplayable = false,
+        bool timedOut = false)
     {
         var extras = session.Extras;
         var retry = extras?.Retry;
-        if (retry is not { Attempts: > 0 } || extras!.StatusRetried || session.IsClientResponseCommitted)
+        if (retry is not { Attempts: > 0 } || extras!.StatusRetries >= retry.Attempts || session.IsClientResponseCommitted)
         {
             return false;
         }
 
-        var code = status ?? session.HttpClient.Response.StatusCode;
-        if (code is not (502 or 503 or 504))
+        if (timedOut)
+        {
+            if (!extras.PerTryTimeoutActive)
+            {
+                return false;
+            }
+        }
+        else if (!IsRetryableStatus(retry, status ?? session.HttpClient.Response.StatusCode))
         {
             return false;
         }
 
         var request = session.HttpClient.Request;
-        // Replay sends headers only. A body, even one already buffered, would be dropped.
-        if (request.HasBody)
+        if (request.ExpectContinue || request.UpgradeToWebSocket || session is SessionEventArgs { EnableWinAuth: true })
         {
             return false;
         }
 
-        extras.StatusRetried = true;
-        return TrySelectAlternate(server, session);
+        if (request.HasBody && !HasReplayableBufferedBody(request, retry, bufferedBodyReplayable))
+        {
+            return false;
+        }
+
+        // Method and attempt limits are checked before the budget so a request that could never be
+        // replayed does not count as a budget refusal.
+        if (!RetryAllowsMethod(extras, request))
+        {
+            return false;
+        }
+
+        if (retry.BudgetPercent > 0 && !TryHoldRetryBudget(server, session, extras, retry))
+        {
+            ProxyMetrics.RecordStatusRetryRefused("budget");
+            return false;
+        }
+
+        var index = extras.StatusRetries++;
+        if (!TrySelectAlternate(server, session))
+        {
+            extras.ReleaseRetryBudget();
+            return false;
+        }
+
+        extras.PendingRetryDelayMilliseconds = ComputeRetryDelayMilliseconds(
+            retry, index, timedOut ? null : originResponse ?? session.HttpClient.Response);
+        if (extras.StatusRetries >= retry.Attempts)
+        {
+            RestoreResponseHeaderTimeout(session, extras);
+        }
+
+        if (timedOut && session is SessionEventArgs timedArgs)
+        {
+            // The firing was handled by this retry. Left recorded, it would colour a later, unrelated cancel.
+            timedArgs.Deadlines.Reset();
+        }
+
+        ProxyMetrics.RecordStatusRetry(timedOut ? "timeout" : "status");
+        return true;
+    }
+
+    /// <summary>Waits out the backoff chosen by <see cref="TryStageGatewayRetry" />. No cost when there is none.</summary>
+    internal static ValueTask WaitBeforeRetryAsync(
+        ProxyServer server, SessionEventArgsBase session, CancellationToken cancellationToken)
+    {
+        var extras = session.Extras;
+        var milliseconds = extras?.PendingRetryDelayMilliseconds ?? 0;
+        if (milliseconds <= 0)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        extras!.PendingRetryDelayMilliseconds = 0;
+        var time = (server.ReverseProxy?.ClusterManager as ClusterManager)?.Time ?? TimeProvider.System;
+        return new ValueTask(Task.Delay(TimeSpan.FromMilliseconds(milliseconds), time, cancellationToken));
+    }
+
+    /// <summary>Gives back the retry-budget slot once the replay has an answer or has failed.</summary>
+    internal static void EndGatewayRetry(SessionEventArgsBase session) => session.Extras?.ReleaseRetryBudget();
+
+    /// <summary>
+    /// Puts the per-try deadline on the session when the cluster has somewhere to retry. The last attempt
+    /// goes back to the route's own deadline in <see cref="TryStageGatewayRetry" />.
+    /// </summary>
+    private static void ApplyPerTryTimeout(
+        ProxyServer server, SessionEventArgsBase session, RetryConfig retry, ClusterConfig? cluster)
+    {
+        if (retry.PerTryTimeoutMilliseconds <= 0 || cluster is not { Destinations.Count: > 1 } ||
+            session is not SessionEventArgs args || args.Extras is not { } extras)
+        {
+            return;
+        }
+
+        var perTry = TimeSpan.FromMilliseconds(retry.PerTryTimeoutMilliseconds);
+        var existing = args.ResponseHeaderTimeout
+                       ?? (server.ResponseHeaderTimeoutSeconds > 0
+                           ? TimeSpan.FromSeconds(server.ResponseHeaderTimeoutSeconds)
+                           : null);
+        // A stricter deadline already in force wins, and its expiry is a plain timeout, not a try.
+        if (existing is { } current && current <= perTry)
+        {
+            return;
+        }
+
+        extras.ResponseHeaderTimeoutBeforePerTry = args.ResponseHeaderTimeout;
+        extras.PerTryTimeoutActive = true;
+        args.ResponseHeaderTimeout = perTry;
+    }
+
+    private static void RestoreResponseHeaderTimeout(SessionEventArgsBase session, RoutingFeatureState extras)
+    {
+        if (!extras.PerTryTimeoutActive)
+        {
+            return;
+        }
+
+        extras.PerTryTimeoutActive = false;
+        if (session is SessionEventArgs args)
+        {
+            args.ResponseHeaderTimeout = extras.ResponseHeaderTimeoutBeforePerTry;
+        }
+    }
+
+    private static bool IsRetryableStatus(RetryConfig retry, int code)
+    {
+        var codes = retry.StatusCodes;
+        if (codes is null)
+        {
+            return code is 502 or 503 or 504;
+        }
+
+        for (var i = 0; i < codes.Count; i++)
+        {
+            if (codes[i] == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasReplayableBufferedBody(Request request, RetryConfig retry, bool bufferedBodyReplayable)
+    {
+        // A streamed body has already been consumed from the client. Only a fully buffered one can go again.
+        return bufferedBodyReplayable
+               && request.IsBodyRead
+               && request.BodyAvailable
+               && request.Body.Length <= retry.MaxBufferedBodyBytes;
+    }
+
+    private static bool TryHoldRetryBudget(
+        ProxyServer server, SessionEventArgsBase session, RoutingFeatureState extras, RetryConfig retry)
+    {
+        var options = server.ReverseProxy;
+        if (options?.LoadBalancer is not LoadBalancer balancer || options.ClusterManager is not ClusterManager manager)
+        {
+            return true;
+        }
+
+        var snapshot = manager.Snapshot;
+        var owner = FindOwningCluster(snapshot, session.UpstreamDestinationId);
+        var runtime = owner is null ? null : ClusterRuntime.Find(snapshot, owner.Id);
+        if (owner is null || runtime is null)
+        {
+            return true;
+        }
+
+        long inFlight = 0;
+        for (var i = 0; i < owner.Destinations.Count; i++)
+        {
+            inFlight += balancer.Health.GetActiveRequests(owner.Destinations[i].Id);
+        }
+
+        var share = Math.Min(inFlight * retry.BudgetPercent / 100, int.MaxValue);
+        var limit = (int)Math.Max(retry.BudgetMinConcurrent, share);
+        return extras.TryHoldRetryBudget(runtime, limit);
+    }
+
+    /// <summary>
+    /// Backoff times two for each earlier replay, capped, plus jitter. A delta-seconds <c>Retry-After</c>
+    /// replaces it when the route asks to honor it, capped the same way.
+    /// </summary>
+    internal static int ComputeRetryDelayMilliseconds(RetryConfig retry, int retryIndex, Response? origin)
+    {
+        var cap = Math.Max(0, retry.MaxBackoffMilliseconds);
+        if (retry.HonorRetryAfter && origin is not null && TryReadRetryAfterSeconds(origin, out var seconds))
+        {
+            return (int)Math.Min(seconds * 1000L, cap);
+        }
+
+        if (retry.BackoffMilliseconds <= 0)
+        {
+            return 0;
+        }
+
+        var delay = Math.Min((long)retry.BackoffMilliseconds << Math.Min(retryIndex, 20), cap);
+        if (delay > 0 && retry.JitterPercent > 0)
+        {
+            delay += Random.Shared.NextInt64(0, delay * Math.Min(retry.JitterPercent, 100) / 100 + 1);
+        }
+
+        return (int)Math.Min(delay, int.MaxValue);
+    }
+
+    private static bool TryReadRetryAfterSeconds(Response response, out int seconds)
+    {
+        seconds = 0;
+        var value = response.Headers.GetHeaderValueOrNull("Retry-After");
+        // An HTTP-date is not honored. It would need the origin's clock to mean anything.
+        return value is not null &&
+               int.TryParse(value.AsSpan().Trim(), System.Globalization.NumberStyles.None,
+                   System.Globalization.CultureInfo.InvariantCulture, out seconds);
     }
 
     /// <summary>Picks another destination after a connect failure. False means do not retry.</summary>
