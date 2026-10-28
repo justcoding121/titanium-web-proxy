@@ -573,8 +573,19 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "fixedWindow",
+              "tokenBucket"
+            ]
+          },
           "allow": {
             "type": "string"
+          },
+          "burst": {
+            "type": "integer",
+            "minimum": 1
           },
           "cacheMaxEntries": {
             "type": "integer"
@@ -597,6 +608,9 @@
               "type": "string"
             }
           },
+          "emitHeaders": {
+            "type": "boolean"
+          },
           "failOpen": {
             "type": "boolean"
           },
@@ -606,11 +620,20 @@
           "headerValue": {
             "type": "string"
           },
+          "key": {
+            "type": "string",
+            "pattern": "^(client|forwardedClient|route|header:[!#$%\u0026\u0027*\u002B.^_\u0060|~0-9A-Za-z-]\u002B|cookie:[!#$%\u0026\u0027*\u002B.^_\u0060|~0-9A-Za-z-]\u002B)$"
+          },
           "kind": {
             "type": "string"
           },
           "limit": {
             "type": "integer"
+          },
+          "maxKeys": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 10000000
           },
           "maxRequestBodyBytes": {
             "type": "integer"

@@ -182,7 +182,8 @@ public partial class ProxyServer
                 clientStream.Connection.RemoteEndPoint as IPEndPoint,
                 out var policyStatus,
                 out var policyBody,
-                out var policyHeaders))
+                out var policyHeaders,
+                ForwardedHeaders?.TrustedProxies))
         {
             var denied = new Abstractions.Middleware.ProxyMiddlewareContext
             {

@@ -672,3 +672,13 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.TimeoutMilliseconds.ge
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.TimeoutMilliseconds.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Url.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Url.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Algorithm.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Algorithm.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Burst.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Burst.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.EmitHeaders.get -> bool?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.EmitHeaders.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Key.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Key.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.init -> void

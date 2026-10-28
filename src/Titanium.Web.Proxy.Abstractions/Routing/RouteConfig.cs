@@ -146,6 +146,29 @@ public sealed class RoutePolicyConfig
 
     /// <summary><c>extAuth</c>: most cached answers kept, oldest evicted first. Default: 10000.</summary>
     public int? CacheMaxEntries { get; init; }
+
+    /// <summary>
+    /// <c>rateLimit</c>: what a counter is keyed on. <c>client</c> (default, the socket address),
+    /// <c>forwardedClient</c> (rightmost X-Forwarded-For entry that is not a trusted proxy),
+    /// <c>header:&lt;Name&gt;</c>, <c>cookie:&lt;Name&gt;</c> (a request without the value falls back to the client address),
+    /// or <c>route</c> (one counter per route).
+    /// </summary>
+    public string? Key { get; init; }
+
+    /// <summary><c>rateLimit</c>: <c>fixedWindow</c> (default) or <c>tokenBucket</c>.</summary>
+    public string? Algorithm { get; init; }
+
+    /// <summary><c>rateLimit</c> token bucket: bucket capacity, at least 1. Default: the limit.</summary>
+    public int? Burst { get; init; }
+
+    /// <summary>
+    /// <c>rateLimit</c>: most counters kept for this policy, 1000-10000000. Once full, expired counters are dropped,
+    /// and new keys share one overflow counter. Default: 100000.
+    /// </summary>
+    public int? MaxKeys { get; init; }
+
+    /// <summary><c>rateLimit</c>: add RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset to a 429. Default: false.</summary>
+    public bool? EmitHeaders { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>

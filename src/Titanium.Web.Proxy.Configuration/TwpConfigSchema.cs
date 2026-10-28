@@ -113,6 +113,19 @@ public static class TwpConfigSchema
                 schema[MinimumKey] = 0;
                 schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;
                 break;
+            case "RoutePolicyConfig.Algorithm":
+                schema["enum"] = new JsonArray { "fixedWindow", "tokenBucket" };
+                break;
+            case "RoutePolicyConfig.Burst":
+                schema[MinimumKey] = 1;
+                break;
+            case "RoutePolicyConfig.Key":
+                schema["pattern"] = "^(client|forwardedClient|route|header:[!#$%&'*+.^_`|~0-9A-Za-z-]+|cookie:[!#$%&'*+.^_`|~0-9A-Za-z-]+)$";
+                break;
+            case "RoutePolicyConfig.MaxKeys":
+                schema[MinimumKey] = 1000;
+                schema["maximum"] = 10_000_000;
+                break;
             case "MasqueListenerConfig.MaxBytesPerSecond":
                 schema[MinimumKey] = 1;
                 schema["maximum"] = 1_073_741_824;

@@ -230,6 +230,53 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void RateLimitV2_RejectsUnknownKeysAlgorithmsAndBadBounds()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "k1", Kind = "rateLimit", Key = "ip" },
+                new RoutePolicyConfig { Name = "k2", Kind = "rateLimit", Key = "header:" },
+                new RoutePolicyConfig { Name = "k3", Kind = "rateLimit", Key = "cookie:bad name" },
+                new RoutePolicyConfig { Name = "a1", Kind = "rateLimit", Algorithm = "leakyBucket" },
+                new RoutePolicyConfig { Name = "b1", Kind = "rateLimit", Algorithm = "tokenBucket", Burst = 0 },
+                new RoutePolicyConfig { Name = "m1", Kind = "rateLimit", MaxKeys = 999 },
+                new RoutePolicyConfig { Name = "m2", Kind = "rateLimit", MaxKeys = 10_000_001 },
+            ],
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "'k1' (rateLimit) key 'ip'");
+        StringAssert.Contains(errors, "'k2' (rateLimit) key 'header:'");
+        StringAssert.Contains(errors, "'k3' (rateLimit) key 'cookie:bad name'");
+        StringAssert.Contains(errors, "'a1' (rateLimit) algorithm 'leakyBucket'");
+        StringAssert.Contains(errors, "'b1' (rateLimit) burst must be >= 1");
+        StringAssert.Contains(errors, "'m1' (rateLimit) maxKeys must be 1000-10000000");
+        StringAssert.Contains(errors, "'m2' (rateLimit) maxKeys must be 1000-10000000");
+    }
+
+    [TestMethod]
+    public void RateLimitV2_AcceptsEveryKeyTypeAndAlgorithm()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "p1", Kind = "rateLimit", Key = "client", Algorithm = "fixedWindow" },
+                new RoutePolicyConfig { Name = "p2", Kind = "rateLimit", Key = "forwardedClient", Algorithm = "tokenBucket", Burst = 1 },
+                new RoutePolicyConfig { Name = "p3", Kind = "rateLimit", Key = "header:X-Api-Key", MaxKeys = 1000 },
+                new RoutePolicyConfig { Name = "p4", Kind = "rateLimit", Key = "cookie:sid", MaxKeys = 10_000_000, EmitHeaders = true },
+                new RoutePolicyConfig { Name = "p5", Kind = "rateLimit", Key = "route", Limit = 5, WindowSeconds = 10 },
+            ],
+        };
+
+        Assert.AreEqual(string.Empty, Errors(config));
+    }
+
+    [TestMethod]
     public void ForwardedHeadersTrustedProxies_RejectsEntriesThatWouldTrustNobody()
     {
         var config = new TwpConfig

@@ -21,16 +21,14 @@ namespace Titanium.Web.Proxy.Routing;
 /// <summary>Enforces route policies before a destination is selected. No work when the route lists none.</summary>
 internal static class RoutePolicies
 {
-    private static readonly ConcurrentDictionary<string, Window> Windows = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<string, int> Connections = new(StringComparer.Ordinal);
 
     internal static TimeProvider Clock { get; set; } = TimeProvider.System;
 
     internal static void ResetForTests()
     {
-        Windows.Clear();
+        RateLimiter.Reset();
         Connections.Clear();
-        _rateWrites = 0;
         Clock = TimeProvider.System;
     }
 
@@ -137,7 +135,8 @@ internal static class RoutePolicies
             server.ReverseProxy,
             route,
             args.HttpClient.Request,
-            args.ClientRemoteEndPoint?.Address);
+            args.ClientRemoteEndPoint?.Address,
+            server.ForwardedHeaders?.TrustedProxies);
         return Apply(args, decision);
     }
 
@@ -148,7 +147,8 @@ internal static class RoutePolicies
         IPEndPoint? client,
         out int status,
         out string? body,
-        out List<KeyValuePair<string, string>>? headers)
+        out List<KeyValuePair<string, string>>? headers,
+        IReadOnlyList<string>? trustedProxies = null)
     {
         status = 0;
         body = null;
@@ -168,7 +168,7 @@ internal static class RoutePolicies
             return false;
         }
 
-        var decision = Evaluate(options, route, request, client?.Address);
+        var decision = Evaluate(options, route, request, client?.Address, trustedProxies);
         if (!decision.Rejected)
         {
             return false;
@@ -217,7 +217,8 @@ internal static class RoutePolicies
         ReverseProxyOptions options,
         RouteConfig route,
         Request request,
-        IPAddress? client)
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
     {
         var names = route.Policies;
         var policies = options.Policies;
@@ -236,7 +237,7 @@ internal static class RoutePolicies
                 continue;
             }
 
-            var stop = ApplyKind(policy, request, client, ref decision, ref heldNames);
+            var stop = ApplyKind(policy, route, request, client, trustedProxies, ref decision, ref heldNames);
             if (stop is { } denied)
             {
                 ReleaseHeld(heldNames);
@@ -263,8 +264,10 @@ internal static class RoutePolicies
     /// <summary>Null means keep evaluating. A decision means stop and give back any held connection slots.</summary>
     private static PolicyDecision? ApplyKind(
         RoutePolicyConfig policy,
+        RouteConfig route,
         Request request,
         IPAddress? client,
+        IReadOnlyList<string>? trustedProxies,
         ref PolicyDecision decision,
         ref string? heldNames)
     {
@@ -288,8 +291,8 @@ internal static class RoutePolicies
                     Status = 204,
                     Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
                 };
-            case "rateLimit" when !AllowRate(policy, client):
-                return Stop(429, string.Empty);
+            case "rateLimit":
+                return CheckRate(policy, route, request, client, trustedProxies);
             case "connectionLimit" when !AllowConnection(policy):
                 return Stop(503, string.Empty);
             case "connectionLimit":
@@ -310,61 +313,40 @@ internal static class RoutePolicies
         Body = body,
     };
 
-    private static bool AllowRate(RoutePolicyConfig policy, IPAddress? client)
+    internal static int RateWindowCount => RateLimiter.Count;
+
+    /// <summary>Null means the request passes. Otherwise a 429 with Retry-After, and RateLimit-* when asked.</summary>
+    private static PolicyDecision? CheckRate(
+        RoutePolicyConfig policy,
+        RouteConfig route,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
     {
-        var limit = policy.Limit ?? 1;
-        var window = TimeSpan.FromSeconds(policy.WindowSeconds ?? 1);
-        var key = policy.Name + "|" + (client?.ToString() ?? "");
-        var now = Clock.GetUtcNow();
-        var state = Windows.GetOrAdd(key, _ => new Window());
-        bool allowed;
-        lock (state)
+        var verdict = RateLimiter.Check(policy, route.Id, request, client, trustedProxies, Clock.GetUtcNow());
+        if (verdict.Allowed)
         {
-            if (state.Start == default || now - state.Start >= window)
-            {
-                state.Start = now;
-                state.Count = 0;
-                state.Span = window;
-            }
-
-            state.Count++;
-            state.Seen = now;
-            allowed = state.Count <= limit;
+            return null;
         }
 
-        // The sweep takes other windows' locks. Run it after this one is released so two writers
-        // that sweep at the same time cannot wait on each other.
-        SweepIdleWindows(now);
-        return allowed;
-    }
-
-    private static int _rateWrites;
-
-    internal static int RateWindowCount => Windows.Count;
-
-    private static void SweepIdleWindows(DateTimeOffset now)
-    {
-        if ((Interlocked.Increment(ref _rateWrites) & 31) != 0)
+        var headers = new List<KeyValuePair<string, string>>(4)
         {
-            return;
+            new("Retry-After", verdict.RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        };
+        if (policy.EmitHeaders == true)
+        {
+            headers.Add(new("RateLimit-Limit", verdict.Limit.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            headers.Add(new("RateLimit-Remaining", verdict.Remaining.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            headers.Add(new("RateLimit-Reset", verdict.ResetSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
-        foreach (var pair in Windows)
+        return new PolicyDecision
         {
-            var state = pair.Value;
-            if (state.Span <= TimeSpan.Zero)
-            {
-                continue;
-            }
-
-            lock (state)
-            {
-                if (now - state.Seen > state.Span + state.Span)
-                {
-                    Windows.TryRemove(pair);
-                }
-            }
-        }
+            Rejected = true,
+            Status = 429,
+            Body = string.Empty,
+            Headers = headers,
+        };
     }
 
     private static bool AllowConnection(RoutePolicyConfig policy)
@@ -495,14 +477,6 @@ internal static class RoutePolicies
         var a = SHA256.HashData(Encoding.UTF8.GetBytes(left ?? string.Empty));
         var b = SHA256.HashData(Encoding.UTF8.GetBytes(right ?? string.Empty));
         return CryptographicOperations.FixedTimeEquals(a, b);
-    }
-
-    private sealed class Window
-    {
-        public DateTimeOffset Start;
-        public DateTimeOffset Seen;
-        public TimeSpan Span;
-        public int Count;
     }
 
     private readonly struct PolicyDecision

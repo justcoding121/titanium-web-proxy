@@ -362,6 +362,11 @@ public static class TwpConfigValidator
                     errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
                 }
 
+                if (policy.Kind == "rateLimit")
+                {
+                    ValidateRateLimit(policy, errors);
+                }
+
                 break;
             case "ipAllowDeny":
                 if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
@@ -376,6 +381,45 @@ public static class TwpConfigValidator
                 ValidateExtAuth(policy, errors);
                 break;
         }
+    }
+
+    private static void ValidateRateLimit(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.Key is not null && !IsRateLimitKey(policy.Key))
+        {
+            errors.Add(
+                $"Policy '{name}' (rateLimit) key '{policy.Key}' must be client, forwardedClient, route, header:<Name>, or cookie:<Name>.");
+        }
+
+        if (policy.Algorithm is not null && policy.Algorithm is not ("fixedWindow" or "tokenBucket"))
+        {
+            errors.Add($"Policy '{name}' (rateLimit) algorithm '{policy.Algorithm}' must be fixedWindow or tokenBucket.");
+        }
+
+        if (policy.Burst is < 1)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) burst must be >= 1.");
+        }
+
+        if (policy.MaxKeys is < 1000 or > 10_000_000)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) maxKeys must be 1000-10000000.");
+        }
+    }
+
+    private static bool IsRateLimitKey(string key)
+    {
+        if (key is "client" or "forwardedClient" or "route")
+        {
+            return true;
+        }
+
+        const int prefixLength = 7;
+        return key.Length > prefixLength &&
+               (key.StartsWith("header:", StringComparison.Ordinal) ||
+                key.StartsWith("cookie:", StringComparison.Ordinal)) &&
+               IsHeaderToken(key[prefixLength..]);
     }
 
     private static void ValidateExtAuth(RoutePolicyConfig policy, List<string> errors)
