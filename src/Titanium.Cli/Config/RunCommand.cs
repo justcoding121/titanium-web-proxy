@@ -88,6 +88,7 @@ internal static class RunCommand
         }
 
         // Relative *File paths resolve against the config directory (the working directory set above).
+        var secretFiles = SecretResolver.SecretFiles(loaded.Config);
         var secretErrors = SecretResolver.Resolve(loaded.Config);
         if (secretErrors.Count > 0)
         {
@@ -261,7 +262,8 @@ internal static class RunCommand
                             AsyncConsole.WriteError("Config reload failed: " + ex.Message);
                         }
                     },
-                    onStopRequested: () => readiness.BeginDrain()).ConfigureAwait(false);
+                    onStopRequested: () => readiness.BeginDrain(),
+                    extraWatchPaths: secretFiles).ConfigureAwait(false);
             }
             finally
             {
@@ -583,7 +585,8 @@ internal static class RunCommand
         string configPath,
         bool watch,
         Func<Task>? onReload,
-        Action? onStopRequested = null)
+        Action? onStopRequested = null,
+        IReadOnlyList<string>? extraWatchPaths = null)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -610,8 +613,7 @@ internal static class RunCommand
         PosixSignalRegistration? sigHup = null;
         EventWaitHandle? winReload = null;
         RegisteredWaitHandle? winReloadWait = null;
-        FileSystemWatcher? watcher = null;
-        CancellationTokenSource? watchDebounce = null;
+        ContentWatcher? contentWatcher = null;
         try
         {
             if (!OperatingSystem.IsWindows())
@@ -676,50 +678,18 @@ internal static class RunCommand
 
             if (watch && onReload is not null)
             {
-                var full = Path.GetFullPath(configPath);
-                var dir = Path.GetDirectoryName(full) ?? ".";
-                var file = Path.GetFileName(full);
-                watcher = new FileSystemWatcher(dir, file)
+                // Watches the config and any secret files by content, so a ConfigMap or Secret symlink swap
+                // (..data) reloads once. A failed reload keeps the running config; the next change retries.
+                var watched = new List<string> { configPath };
+                if (extraWatchPaths is not null)
                 {
-                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
-                    EnableRaisingEvents = true,
-                };
-                // Assigned on the main flow so finally can dispose; replaced on each FS event.
-                watchDebounce = new CancellationTokenSource();
-                void OnWatch(object sender, FileSystemEventArgs e)
-                {
-                    var prev = watchDebounce;
-                    if (prev is null)
-                    {
-                        return;
-                    }
-
-                    prev.Cancel();
-                    prev.Dispose();
-                    var next = new CancellationTokenSource();
-                    watchDebounce = next;
-                    var token = next.Token;
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await Task.Delay(250, token).ConfigureAwait(false);
-                            await onReload().ConfigureAwait(false);
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            // Debounced.
-                        }
-                        catch
-                        {
-                            // Reload errors are logged by caller.
-                        }
-                    }, CancellationToken.None);
+                    watched.AddRange(extraWatchPaths);
                 }
 
-                watcher.Changed += OnWatch;
-                watcher.Created += OnWatch;
-                watcher.Renamed += OnWatch;
+                contentWatcher = new ContentWatcher(
+                    watched,
+                    onReload,
+                    onError: ex => AsyncConsole.WriteError("Config reload failed: " + ex.Message));
                 Console.WriteLine("config-watch-enabled");
                 await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
             }
@@ -734,12 +704,7 @@ internal static class RunCommand
             sigHup?.Dispose();
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
-            watcher?.Dispose();
-            if (watchDebounce is not null)
-            {
-                await watchDebounce.CancelAsync().ConfigureAwait(false);
-                watchDebounce.Dispose();
-            }
+            contentWatcher?.Dispose();
         }
     }
 #pragma warning restore CA1068

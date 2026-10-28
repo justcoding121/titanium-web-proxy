@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Certes;
 using Certes.Acme.Resource;
+using Titanium.Cli.Config;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Configuration;
@@ -326,7 +327,25 @@ internal static class CertificateBootstrap
             return null;
         }
 
-        return new CertificateFileWatch(proxy, certificates, listeners, existing);
+        // Content-hash watch: a cert-manager or Kubernetes Secret mount swaps ..data, which a watcher on the
+        // file name alone would never see. Apply and the CA reload run one at a time.
+        var gate = new object();
+        return new ContentWatcher(
+            existing,
+            () =>
+            {
+                lock (gate)
+                {
+                    Apply(proxy, certificates);
+                    if (listeners is not null)
+                    {
+                        ReloadClientCertificateAuthorities(proxy, listeners);
+                    }
+                }
+
+                return Task.CompletedTask;
+            },
+            onError: ex => AsyncConsole.WriteError("Certificate reload failed: " + ex.Message));
     }
 
     private static List<string> ExistingCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
@@ -403,107 +422,6 @@ internal static class CertificateBootstrap
     {
         host ??= "0.0.0.0";
         return host is "0.0.0.0" or "*" ? IPAddress.Any : IPAddress.Parse(host);
-    }
-
-    private sealed class CertificateFileWatch : IDisposable
-    {
-        private readonly List<FileSystemWatcher> _watchers = new();
-        private readonly object _gate = new();
-        private readonly ProxyServer _proxy;
-        private readonly CertificatesConfig _certificates;
-        private readonly IEnumerable<ListenerConfig>? _listeners;
-        private CancellationTokenSource? _debounce;
-
-        public CertificateFileWatch(
-            ProxyServer proxy,
-            CertificatesConfig certificates,
-            IEnumerable<ListenerConfig>? listeners,
-            List<string> paths)
-        {
-            _proxy = proxy;
-            _certificates = certificates;
-            _listeners = listeners;
-            foreach (var path in paths)
-            {
-                Watch(path);
-            }
-        }
-
-        private void Watch(string path)
-        {
-            var full = Path.GetFullPath(path);
-            var directory = Path.GetDirectoryName(full);
-            if (string.IsNullOrEmpty(directory))
-            {
-                return;
-            }
-
-            var watcher = new FileSystemWatcher(directory, Path.GetFileName(full))
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
-                EnableRaisingEvents = true,
-            };
-            watcher.Changed += OnChange;
-            watcher.Created += OnChange;
-            watcher.Renamed += OnChange;
-            _watchers.Add(watcher);
-        }
-
-        private void OnChange(object? sender, FileSystemEventArgs args)
-        {
-            // Watchers raise on pool threads. One lock keeps a single pending reload and a single apply at a time.
-            CancellationToken token;
-            lock (_gate)
-            {
-                var previous = _debounce;
-                previous?.Cancel();
-                previous?.Dispose();
-                var next = new CancellationTokenSource();
-                _debounce = next;
-                token = next.Token;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(250, token).ConfigureAwait(false);
-                    lock (_gate)
-                    {
-                        Apply(_proxy, _certificates);
-                        if (_listeners is not null)
-                        {
-                            ReloadClientCertificateAuthorities(_proxy, _listeners);
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Debounced.
-                }
-                catch (Exception ex)
-                {
-                    AsyncConsole.WriteError("Certificate reload failed: " + ex.Message);
-                }
-            }, CancellationToken.None);
-        }
-
-        public void Dispose()
-        {
-            foreach (var watcher in _watchers)
-            {
-                watcher.Dispose();
-            }
-
-            var source = _debounce;
-            if (source is null)
-            {
-                return;
-            }
-
-            source.Cancel();
-            source.Dispose();
-        }
     }
 
     private static void AssignGenericCertificate(ProxyServer proxy, X509Certificate2 leaf)

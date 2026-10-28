@@ -302,7 +302,7 @@ public class ConfigReloadTests
             Interlocked.Increment(ref reloads);
             return Task.CompletedTask;
         };
-        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null])!;
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null])!;
         await Task.Delay(300);
         cts.Cancel();
         await waitTask;

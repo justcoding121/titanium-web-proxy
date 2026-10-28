@@ -341,7 +341,8 @@ public sealed partial class CliProcessHarness : IDisposable
         IDictionary<string, string?>? env = null,
         bool verbose = false,
         bool serviceMode = false,
-        string? serviceName = null)
+        string? serviceName = null,
+        bool watch = false)
     {
         if (_process is not null)
         {
@@ -352,6 +353,11 @@ public sealed partial class CliProcessHarness : IDisposable
         if (verbose)
         {
             args.Add("-v");
+        }
+
+        if (watch)
+        {
+            args.Add("--watch");
         }
 
         if (serviceMode)

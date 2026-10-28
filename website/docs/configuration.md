@@ -630,6 +630,8 @@ titanium reload -c twp.yaml
 | `titanium run --watch` | Debounced file watch (optional) |
 | Plus `PUT /v1/snapshot` | Programmatic route/cluster swap without editing the file |
 
+With `--watch`, Titanium watches the directory that contains the config file, so Kubernetes ConfigMap and Secret updates work: kubelet publishes a new revision by atomically repointing the `..data` symlink, and `--watch` notices that swap. Files referenced through `*File` secret settings are watched the same way. Events are debounced (250 ms) and compared by content hash, so one swap causes exactly one reload; a 30 s content-hash poll covers mounts that do not deliver file events. The same applies to the certificate files used by `server.tls` and client-certificate authorities.
+
 Invalid reloads keep the previous routes and clusters; the process stays up. Unlike a typical YARP process recycle, Titanium keeps listeners bound and in-flight sessions on the old cluster snapshot until they finish.
 
 ### Code-only callbacks
