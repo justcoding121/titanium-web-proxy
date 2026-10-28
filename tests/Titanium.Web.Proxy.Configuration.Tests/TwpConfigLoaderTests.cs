@@ -29,6 +29,53 @@ public class TwpConfigLoaderTests
     }
 
     [TestMethod]
+    public void LoadYaml_ParsesClustersRoutesAndReadOnlyCollections()
+    {
+        var config = TwpConfigLoader.LoadYaml("""
+            schemaVersion: "7.1"
+            listeners:
+              - host: 0.0.0.0
+                port: 8080
+            clusters:
+              - id: web
+                destinations:
+                  - id: a
+                    address: backend.internal
+                    port: 80
+                  - id: b
+                    address: 10.0.0.2
+                    port: 8080
+                healthCheck:
+                  passive:
+                    failureStatusCodes: [502, 503]
+            routes:
+              - id: api
+                clusterId: web
+                match:
+                  path: /api
+                  hosts: [a.test, b.test]
+                  methods: [GET, POST]
+                  headers:
+                    X-A: "1"
+                transforms:
+                  - kind: PathSet
+                    parameters:
+                      path: /x
+            """);
+
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+        var cluster = config.Clusters.Single();
+        Assert.AreEqual(2, cluster.Destinations.Count);
+        Assert.AreEqual("backend.internal", cluster.Destinations[0].Address);
+        CollectionAssert.AreEqual(new[] { 502, 503 }, cluster.HealthCheck!.Passive!.FailureStatusCodes!.ToArray());
+        var route = config.Routes.Single();
+        CollectionAssert.AreEqual(new[] { "a.test", "b.test" }, route.Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(new[] { "GET", "POST" }, route.Match.Methods!.ToArray());
+        Assert.AreEqual("1", route.Match.Headers!["X-A"]);
+        Assert.AreEqual("/x", route.Transforms!.Single().Parameters!["path"]);
+    }
+
+    [TestMethod]
     public void SiteFileReader_ParsesUpstream()
     {
         var config = SiteFileReader.Parse("api.example.com /api => http://127.0.0.1:5000\n");
