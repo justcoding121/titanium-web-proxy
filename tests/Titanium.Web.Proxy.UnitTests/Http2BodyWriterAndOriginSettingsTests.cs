@@ -459,6 +459,45 @@ public class Http2BodyWriterAndOriginSettingsTests
             => Headers.Add(Tuple.Create(name.ToString(), value.ToString()));
     }
 
+    [TestMethod]
+    public async Task CreateAsync_CancelledBeforeThePreface_ReleasesTheConnectionCount()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var before = proxy.ServerConnectionCount;
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var accept = listener.AcceptSocketAsync();
+        var client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        await client.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        var accepted = await accept;
+        accepted.Dispose();
+
+        var stream = new HttpServerStream(proxy, new NetworkStream(client, ownsSocket: true),
+            new DefaultBufferPool(), CancellationToken.None);
+        var serverConn = new TcpServerConnection(proxy, client, stream, "origin.test", 443, true,
+            default, HttpHeader.Version20, null, null, "h2-origin");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        try
+        {
+            await Http2OriginConnection.CreateAsync(serverConn, NullLogger.Instance, cancelled.Token);
+            Assert.Fail("A cancelled preface must not return a live origin connection.");
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException)
+        {
+            // The preface write observes the cancelled token, or the peer reset before it.
+        }
+
+        serverConn.Dispose();
+        var deadline = Environment.TickCount64 + 3_000;
+        while (proxy.ServerConnectionCount != before && Environment.TickCount64 < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.AreEqual(before, proxy.ServerConnectionCount);
+    }
+
     private static async Task<Http2OriginConnection> CreateOriginConnectionShellAsync()
     {
         // ProxyServer must outlive the connection (Dispose updates server connection counts).

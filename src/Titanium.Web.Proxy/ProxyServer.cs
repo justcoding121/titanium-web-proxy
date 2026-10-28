@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -13,7 +12,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
 using Titanium.Web.Proxy.Http;
@@ -21,10 +19,10 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
-using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
@@ -200,6 +198,34 @@ public partial class ProxyServer : IDisposable
     ///     An factory that creates tcp connection to server.
     /// </summary>
     internal TcpConnectionFactory TcpConnectionFactory { get; }
+
+    private Routing.MirrorDispatcher? mirrorDispatcher;
+
+    /// <summary>
+    ///     Mirror queue for this proxy. Created on first use so a process with no mirror route
+    ///     does not start workers. Two proxies do not share a queue.
+    /// </summary>
+    internal Routing.MirrorDispatcher Mirror
+    {
+        get
+        {
+            var existing = Volatile.Read(ref mirrorDispatcher);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            var created = new Routing.MirrorDispatcher();
+            var raced = Interlocked.CompareExchange(ref mirrorDispatcher, created, null);
+            if (raced is not null)
+            {
+                created.Dispose();
+                return raced;
+            }
+
+            return created;
+        }
+    }
 
     /// <summary>
     ///     Pool of outbound QUIC connections to HTTP/3 origin servers.
@@ -435,9 +461,7 @@ public partial class ProxyServer : IDisposable
         if (!ClientHandshakeRejects.RecordFailure(host, DateTime.UtcNow))
             return false;
 
-        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
-        DecryptFailureBypassCache.MarkBypassed(host);
-        if (!wasActive)
+        if (DecryptFailureBypassCache.MarkBypassed(host))
         {
             ProxyLog.ClientRejectedCertificateBypassLearned(logger, host, ClientHandshakeRejects.Threshold);
             RaiseDecryptFailureBypassChanged(host);
@@ -487,19 +511,19 @@ public partial class ProxyServer : IDisposable
         if (!forceBypass && !Network.Tcp.DecryptFailureLearning.IsLearnableOriginTlsFailure(error))
             return false;
 
-        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
         bool isActive;
+        bool becameActive;
         if (forceBypass)
         {
-            DecryptFailureBypassCache.MarkBypassed(host);
+            becameActive = DecryptFailureBypassCache.MarkBypassed(host);
             isActive = true;
         }
         else
         {
-            isActive = DecryptFailureBypassCache.RecordFailure(host);
+            isActive = DecryptFailureBypassCache.RecordFailure(host, out becameActive);
         }
 
-        if (isActive && !wasActive)
+        if (becameActive)
         {
             ProxyLog.DecryptFailureBypassLearned(logger, host,
                 forceBypass ? "forced after a failed MITM handshake" : "origin TLS failure");
@@ -525,19 +549,19 @@ public partial class ProxyServer : IDisposable
         if (statusCode is not (403 or 429))
             return false;
 
-        var wasActive = DecryptFailureBypassCache.IsBypassActive(host);
         bool isActive;
+        bool becameActive;
         if (forceImmediate)
         {
-            DecryptFailureBypassCache.MarkBypassed(host);
+            becameActive = DecryptFailureBypassCache.MarkBypassed(host);
             isActive = true;
         }
         else
         {
-            isActive = DecryptFailureBypassCache.RecordFailure(host);
+            isActive = DecryptFailureBypassCache.RecordFailure(host, out becameActive);
         }
 
-        if (isActive && !wasActive)
+        if (becameActive)
         {
             ProxyLog.DecryptFailureBypassLearned(logger, host, $"HTTP {statusCode} block");
             RaiseDecryptFailureBypassChanged(host);
@@ -867,7 +891,7 @@ public partial class ProxyServer : IDisposable
     ///     <see cref="Models.OriginHttpVersionPolicy.NormalizeToHttp11" /> to let HTTP/1.0 clients share pooled,
     ///     persistent origin connections the same way HTTP/1.1 clients already do. This only changes the wire
     ///     version written to the origin request line - it never changes the client-facing
-    ///     <see cref="Http.Request.HttpVersion" /> that event handlers observe, nor the version/persistence used
+    ///     <c>Request.HttpVersion</c> that event handlers observe, nor the version/persistence used
     ///     to write the response back to the client.
     /// </summary>
     public OriginHttpVersionPolicy OriginHttpVersionPolicy { get; set; } = OriginHttpVersionPolicy.PreserveClientVersion;
@@ -1521,7 +1545,7 @@ public partial class ProxyServer : IDisposable
     ///     Subscribe to inspect or modify the request body chunk-by-chunk as it streams to the server,
     ///     without buffering the whole body. Do not combine with SessionEventArgs.GetRequestBody (which buffers).
     /// </summary>
-    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite;
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnRequestBodyWrite; // NOSONAR S3264 -- Raised by OnBeforeRequestBodyWrite through InvokeAsync.
 
     /// <summary>
     ///     Intercept response event from server.
@@ -1533,16 +1557,10 @@ public partial class ProxyServer : IDisposable
     ///     Subscribe to inspect or modify the response body chunk-by-chunk as it streams to the client,
     ///     without buffering the whole body. Do not combine with SessionEventArgs.GetResponseBody (which buffers).
     /// </summary>
-    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite;
+    public event AsyncEventHandler<BeforeBodyWriteEventArgs>? OnResponseBodyWrite; // NOSONAR S3264 -- Raised by OnBeforeResponseBodyWrite through InvokeAsync.
 
     internal bool HasOnRequestBodyWriteSubscribers => OnRequestBodyWrite != null;
     internal bool HasOnResponseBodyWriteSubscribers => OnResponseBodyWrite != null;
-
-    internal Task InvokeOnRequestBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
-        OnRequestBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
-
-    internal Task InvokeOnResponseBodyWriteAsync(object sender, BeforeBodyWriteEventArgs args) =>
-        OnResponseBodyWrite?.Invoke(sender, args) ?? Task.CompletedTask;
 
     /// <summary>
     ///     Intercept after response event from server.
@@ -1598,6 +1616,18 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     public Action<Response>? ResponseHeaderContributor { get; set; }
 
+    /// <summary>When set, generate or reuse this request id header. Null leaves the header untouched.</summary>
+    public string? RequestIdHeader { get; set; }
+
+    /// <summary>When true, start a server span for each intercepted request.</summary>
+    public bool TracingEnabled { get; set; }
+
+    /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
+    public bool PropagateTraceContext { get; set; }
+
+    /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
+    public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
@@ -1612,7 +1642,10 @@ public partial class ProxyServer : IDisposable
         || AfterResponse != null
         || OnRequestBodyWrite != null
         || OnResponseBodyWrite != null
-        || EnableDecryptFailureBypass;
+        || EnableDecryptFailureBypass
+        || TracingEnabled
+        || RequestIdHeader is not null
+        || ForwardedHeaders is not null;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the
@@ -1837,10 +1870,35 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (!ProxyRunning)
+            if (!ProxyRunning || _stopAccepting)
             {
-                tcpClient.Dispose();
-                break;
+                // Unread bytes make Linux answer close() with RST. Drain them so the client sees a FIN.
+                CloseAcceptedSocketWithoutResponse(tcpClient);
+                if (!ProxyRunning)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost: { Length: > 0 } forwardHost } passthrough)
+            {
+                if (!TryAdmitClientConnection(endPoint))
+                {
+                    tcpClient.Dispose();
+                    continue;
+                }
+
+                // The relay runs for the life of the connection. Awaiting it here would hold the accept
+                // loop and serialize every passthrough client behind the one before it.
+                var passthroughPort = passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80);
+                var passthroughClient = tcpClient;
+                ThreadPool.UnsafeQueueUserWorkItem(
+                    new DeferredWorkItem(() => HandlePassthroughClientAsync(
+                        passthroughClient, endPoint, forwardHost, passthroughPort, cancellationToken)),
+                    preferLocal: false);
+                continue;
             }
 
             if (!TryAdmitClientConnection(endPoint))
@@ -1849,42 +1907,146 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            try
+            if (endPoint.AcceptProxyProtocol &&
+                endPoint.IsTrustedProxyProtocolPeer((tcpClient.RemoteEndPoint as System.Net.IPEndPoint)?.Address))
             {
-                tcpClient.NoDelay = NoDelay;
-            }
-            catch (Exception ex)
-            {
-                OnException(null, ex);
+                // The preamble read waits on the peer. Reading it here would let one stalled sender
+                // hold the accept loop and delay every other client of this listener.
+                var preambleClient = tcpClient;
+                ThreadPool.UnsafeQueueUserWorkItem(
+                    new DeferredWorkItem(() => HandleProxyProtocolClientAsync(
+                        preambleClient, endPoint, cancellationToken)),
+                    preferLocal: false);
+                continue;
             }
 
-            // Kestrel SocketConnection.Start(): arm a zero-byte WaitForData on the accept thread
-            // before the ThreadPool hop so ClientHello can arrive during queue/setup. Await it
-            // before new SslStream (overlapping receives on the same socket are unsafe).
-            Task<int> clientHelloWait;
-            try
+            if (!TryArmAcceptedClient(tcpClient, endPoint, cancellationToken, out var clientHelloWait))
             {
-                clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None, cancellationToken).AsTask();
-            }
-            catch (Exception ex)
-            {
-                OnException(null, ex);
-                try
-                {
-                    tcpClient.Dispose();
-                }
-                catch
-                {
-                    // Already disposed / reset.
-                }
-
-                ReleaseClientConnection(endPoint);
                 continue;
             }
 
             ThreadPool.UnsafeQueueUserWorkItem(
                 new AcceptedClientWorkItem(this, tcpClient, endPoint, clientHelloWait), preferLocal: false);
         }
+    }
+
+    /// <summary>How long a trusted peer may take to send its PROXY protocol preamble.</summary>
+    private static readonly TimeSpan ProxyProtocolReadTimeout = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    ///     Applies <see cref="NoDelay" /> and arms the zero-byte read. Returns false after disposing the
+    ///     socket and releasing the admission slot when the socket is already unusable.
+    /// </summary>
+    private bool TryArmAcceptedClient(Socket tcpClient, ProxyEndPoint endPoint, CancellationToken cancellationToken,
+        out Task<int> clientHelloWait)
+    {
+        try
+        {
+            tcpClient.NoDelay = NoDelay;
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+
+        // Kestrel SocketConnection.Start(): arm a zero-byte WaitForData on the accept thread
+        // before the ThreadPool hop so ClientHello can arrive during queue/setup. Await it
+        // before new SslStream (overlapping receives on the same socket are unsafe).
+        try
+        {
+            clientHelloWait = tcpClient.ReceiveAsync(Memory<byte>.Empty, SocketFlags.None, cancellationToken).AsTask();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+            try
+            {
+                tcpClient.Dispose();
+            }
+            catch
+            {
+                // Already disposed / reset.
+            }
+
+            ReleaseClientConnection(endPoint);
+            clientHelloWait = Task.FromResult(0);
+            return false;
+        }
+    }
+
+    private async Task HandlePassthroughClientAsync(Socket client, ProxyEndPoint endPoint, string host, int port,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Network.TcpPassthrough.RelayAsync(client, host, port, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // The proxy is stopping. Closing the sockets below ends the relay.
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+        finally
+        {
+            client.Dispose();
+            ReleaseClientConnection(endPoint);
+        }
+    }
+
+    /// <summary>
+    ///     Reads the PROXY protocol preamble off the accept loop, then hands the socket to the normal
+    ///     client path with the zero-byte read armed only after the preamble is consumed.
+    /// </summary>
+    private async Task HandleProxyProtocolClientAsync(Socket client, ProxyEndPoint endPoint,
+        CancellationToken cancellationToken)
+    {
+        var accepted = false;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(ProxyProtocolReadTimeout);
+            accepted = await Network.ProxyProtocolReader.TryReadAsync(client, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopping, or the peer never sent a preamble. Either way the connection is dropped below.
+        }
+        catch (Exception ex)
+        {
+            OnException(null, ex);
+        }
+
+        if (!accepted)
+        {
+            try
+            {
+                client.Dispose();
+            }
+            catch (Exception)
+            {
+                // A failed dispose means the socket is already closed.
+            }
+
+            ReleaseClientConnection(endPoint);
+            return;
+        }
+
+        if (!TryArmAcceptedClient(client, endPoint, cancellationToken, out var clientHelloWait))
+        {
+            return;
+        }
+
+        await HandleAcceptedClientAsync(client, endPoint, clientHelloWait).ConfigureAwait(false);
+    }
+
+    /// <summary>Runs an async body from the thread pool without a <see cref="Task.Run(Action)" /> wrapper.</summary>
+    private sealed class DeferredWorkItem(Func<Task> work) : IThreadPoolWorkItem
+    {
+        public void Execute() => _ = work();
     }
 
     /// <summary>
@@ -2019,7 +2181,7 @@ public partial class ProxyServer : IDisposable
 
         minWorkerThreads = Math.Min(maxWorkerThreads, Math.Max(workerThreads, Environment.ProcessorCount));
         // Mirror worker floor onto IOCP: H2 FrameWriter + SocketAsyncEventArgs compete on the
-        // completion-port pool; leaving IOCP at ProcessorCount starved reverse h2c (~0.5–0.7× YARP).
+        // completion-port pool; leaving IOCP at ProcessorCount starved reverse h2c throughput.
         minCompletionPortThreads = Math.Min(maxCompletionPortThreads,
             Math.Max(minCompletionPortThreads, minWorkerThreads));
 
@@ -2033,7 +2195,7 @@ public partial class ProxyServer : IDisposable
     /// <param name="tcpClientSocket">The client socket.</param>
     /// <param name="endPoint">The proxy endpoint.</param>
     /// <param name="clientHelloWait">
-    ///     Zero-byte <see cref="Socket.ReceiveAsync(Memory{byte}, SocketFlags)" /> armed on the accept
+    ///     Zero-byte <c>Socket.ReceiveAsync</c> armed on the accept
     ///     thread; completes when the first ClientHello (or FIN) is readable without consuming it.
     /// </param>
     /// <returns>The task.</returns>
@@ -2059,6 +2221,7 @@ public partial class ProxyServer : IDisposable
             else if (endPoint is TransparentProxyEndPoint tep)
                 await HandleClient(tep, clientConnection);
             else if (endPoint is SocksProxyEndPoint sep) await HandleClient(sep, clientConnection);
+            else if (endPoint is MasqueProxyEndPoint masque) await HandleMasqueClient(masque, clientConnection);
         }
     }
 
@@ -2106,6 +2269,50 @@ public partial class ProxyServer : IDisposable
         catch
         {
             // ignore — sockets are released on process exit
+        }
+    }
+
+    /// <summary>
+    ///     Drops a socket accepted after stop without writing a response. Pending client bytes are
+    ///     discarded first so the close is a FIN rather than a reset.
+    /// </summary>
+    private static void CloseAcceptedSocketWithoutResponse(Socket socket)
+    {
+        try
+        {
+            socket.ReceiveTimeout = 200;
+            Span<byte> buffer = stackalloc byte[256];
+            while (true)
+            {
+                int read;
+                try
+                {
+                    read = socket.Receive(buffer);
+                }
+                catch (SocketException)
+                {
+                    break;
+                }
+
+                if (read <= 0 || socket.Available == 0)
+                {
+                    break;
+                }
+            }
+
+            socket.Shutdown(SocketShutdown.Send);
+        }
+        catch (SocketException)
+        {
+            // The client is already gone.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already closed.
+        }
+        finally
+        {
+            socket.Dispose();
         }
     }
 
@@ -2171,7 +2378,19 @@ public partial class ProxyServer : IDisposable
     private RetryPolicy<T> RetryPolicy<T>(SessionEventArgs? sessionOverride) where T : Exception
     {
         var attempts = sessionOverride?.NetworkFailureRetryAttempts ?? NetworkFailureRetryAttempts;
-        return new RetryPolicy<T>(attempts, TcpConnectionFactory);
+        if (sessionOverride?.Extras?.Retry is { Attempts: > 0 } retry)
+        {
+            attempts = Math.Max(attempts, retry.Attempts);
+        }
+
+        var policy = new RetryPolicy<T>(attempts, TcpConnectionFactory);
+        if (sessionOverride?.Extras?.Retry is { Attempts: > 0 })
+        {
+            var session = sessionOverride;
+            policy.BeforeRetry = () => ReverseProxySessionDispatch.TrySelectAlternate(this, session);
+        }
+
+        return policy;
     }
 
 }

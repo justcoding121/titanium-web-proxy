@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net.Quic;
 using System.Runtime.InteropServices;
-using Titanium.Cli;
 
 namespace Titanium.Cli.Http3;
 

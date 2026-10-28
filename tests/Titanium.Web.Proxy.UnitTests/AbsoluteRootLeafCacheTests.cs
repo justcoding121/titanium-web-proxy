@@ -22,7 +22,7 @@ public class AbsoluteRootLeafCacheTests
         var rootPfx = Path.Combine(rootDir, "rootCert.pfx");
         try
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -69,7 +69,7 @@ public class AbsoluteRootLeafCacheTests
         File.WriteAllBytes(marker, [1, 2, 3]);
         try
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -104,7 +104,7 @@ public class AbsoluteRootLeafCacheTests
         Directory.CreateDirectory(dirB);
         try
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -173,7 +173,7 @@ public class SameCommonNameStoreCandidateTests
     [TestMethod]
     public void EvictCertificate_InvalidatesSslContextEntry()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -216,7 +216,7 @@ public class SameCommonNameStoreCandidateTests
     [TestMethod]
     public void InvalidateSslCertificateContext_Twice_AndDisposePendingEvictions()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -242,7 +242,7 @@ public class SameCommonNameStoreCandidateTests
     [TestMethod]
     public void RemoveMatchingCertificates_CurrentUserMy_OpensAndCompletes()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };

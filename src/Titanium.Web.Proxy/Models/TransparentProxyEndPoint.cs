@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
 using System.Net.Quic;
 using System.Runtime.CompilerServices;
@@ -27,6 +28,8 @@ namespace Titanium.Web.Proxy.Models;
 public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInboundEndPoint
 {
     private int maxInboundUnidirectionalStreams = 3;
+    private AltSvcOptions? altSvc;
+    private string? cachedAltSvcValue;
 
     /// <summary>
     ///     Initialize a new instance.
@@ -57,6 +60,52 @@ public class TransparentProxyEndPoint : TransparentBaseProxyEndPoint, IQuicInbou
     /// </summary>
     [Experimental("TWP001")]
     public bool EnableHttp3 { get; set; }
+
+    /// <summary>
+    ///     Overrides the client-facing <c>Alt-Svc</c> value injected when <see cref="EnableHttp3" /> is on.
+    ///     Null keeps <c>h3=":port"; ma=86400</c>. Assign a new instance to apply changes; editing the
+    ///     fields of the current instance is ignored because the header text is cached on assignment.
+    ///     Explicit and SOCKS endpoints never inject this header:
+    ///     they speak TCP to the client, and HTTP/3 there would require a proxy protocol that clients
+    ///     do not use. The H2-to-H3 bridge also never injects it (a mid-connection upgrade breaks Chrome).
+    /// </summary>
+    [Experimental("TWP001")]
+    public AltSvcOptions? AltSvc
+    {
+        get => altSvc;
+        set
+        {
+            altSvc = value;
+            cachedAltSvcValue = null;
+        }
+    }
+
+    /// <summary>
+    ///     Cached <c>Alt-Svc</c> header value. Built once per assignment so response injection does not
+    ///     allocate. Cleared by <see cref="AltSvc" />.
+    /// </summary>
+    internal string ClientAltSvcValue
+    {
+        get
+        {
+            var cached = cachedAltSvcValue;
+            if (cached is not null)
+            {
+                return cached;
+            }
+
+            var options = altSvc;
+            var port = options?.Port ?? Port;
+            var maxAge = options?.MaxAgeSeconds ?? 86400;
+            cached = string.Concat(
+                "h3=\":",
+                port.ToString(CultureInfo.InvariantCulture),
+                "\"; ma=",
+                maxAge.ToString(CultureInfo.InvariantCulture));
+            cachedAltSvcValue = cached;
+            return cached;
+        }
+    }
 
     /// <summary>
     ///     Maximum concurrent inbound client-initiated bidirectional streams per QUIC connection when

@@ -399,12 +399,11 @@ internal static class HarBodyCopy
             out string? nestedEncoding)
         {
             nestedEncoding = null;
-            var truncated = false;
             var next = Peek();
             if (next == '{')
             {
                 _parents.Push(name);
-                truncated = ReadObject(body, maxBytes, wantedParent, wantedProperty, out nestedEncoding);
+                var truncated = ReadObject(body, maxBytes, wantedParent, wantedProperty, out nestedEncoding);
                 if (_parents.Count > 0)
                 {
                     _parents.Pop();
@@ -416,7 +415,7 @@ internal static class HarBodyCopy
             if (next == '[')
             {
                 _parents.Push(name);
-                truncated = ReadArray(body, maxBytes, wantedParent, wantedProperty, out nestedEncoding);
+                var truncated = ReadArray(body, maxBytes, wantedParent, wantedProperty, out nestedEncoding);
                 if (_parents.Count > 0)
                 {
                     _parents.Pop();

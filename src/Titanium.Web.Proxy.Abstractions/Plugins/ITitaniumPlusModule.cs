@@ -1,4 +1,3 @@
-using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Microsoft.Extensions.Logging;

@@ -14,11 +14,9 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -116,9 +114,9 @@ internal static class Http3RequestStream
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
 
                 // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
-                // Same playbook that beat YARP on H2 (lightweight session args): keep Request for
-                // HPACK/QPACK only. Covers forced H3→H2 / H3→H3 / H3→H1 reverse probes.
+                // Keep only the Request, for HPACK/QPACK encoding. Covers forced H3→H2 / H3→H3 / H3→H1 reverse.
                 if (interceptionOff
+                    && !Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(server.ReverseProxy, endPoint)
                     && !server.EnableRfc8441
                     && method is "GET" or "HEAD" or "DELETE" or "OPTIONS"
                     && authArgs.UpstreamHttpProtocol is UpstreamHttpProtocol.Http2
@@ -139,7 +137,7 @@ internal static class Http3RequestStream
                 // Always link stream CTS ↔ connection token: FinalizeAllStreamsAsync Cancel()s the
                 // stream CTS, and sessionArgs.CancellationToken must observe that (skipping the
                 // link and setting OperationCancellationToken to the connection token alone left
-                // abortable waiters stuck and cooled H3→H2 ratio ~0.67×).
+                // abortable waiters stuck).
                 cts = new CancellationTokenSource();
                 linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, cancellationToken);
 
@@ -280,19 +278,29 @@ internal static class Http3RequestStream
                 }
 
                 // Per-stream route → destination (no-op when ReverseProxy routes unset).
-                Routing.ReverseProxySessionDispatch.TryApply(server, sessionArgs);
+                var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(server, sessionArgs);
+                if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+                    && sessionArgs is SessionEventArgs noDestSession)
+                {
+                    Routing.ReverseProxySessionDispatch.SignalNoDestination(noDestSession);
+                }
+
+                // A policy denial, redirect, or direct response is already staged as a locked synthetic
+                // response. It must reach the synthetic-response branch below. Returning here left the
+                // client stream open with no response until the connection idled out.
+                var routeAnswered = routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled;
 
                 // Inject Via only when we stay on the full session forward path (not MITM
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
                 var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
-                var mitmUnchangedH3H1 = TryMitmUnchangedH3ToH1Lite(
+                var mitmUnchangedH3H1 = !routeAnswered && TryMitmUnchangedH3ToH1Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
-                var mitmUnchangedH3H3 = !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
+                var mitmUnchangedH3H3 = !routeAnswered && !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
-                var mitmUnchangedH3H2 = !mitmUnchangedH3H1 && !mitmUnchangedH3H3
+                var mitmUnchangedH3H2 = !routeAnswered && !mitmUnchangedH3H1 && !mitmUnchangedH3H3
                     && TryMitmUnchangedH3ToH2Lite(
                         sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                         capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
@@ -512,6 +520,23 @@ internal static class Http3RequestStream
                 if (logger.IsEnabled(LogLevel.Debug))
                     logger.LogDebug(ex, "HTTP/3 stream {StreamId} ended with QuicException", stream.Id);
             }
+            catch (Exceptions.UpstreamCapacityException ex) when (sessionArgs is not null)
+            {
+                // Cap timeout is backpressure. A 503 (no Retry-After: this helper sends status only)
+                // keeps the client from seeing an internal error, and Exception stops health ejection.
+                sessionArgs.Exception = ex;
+                try
+                {
+                    await SendSimpleStatusResponseAsync(stream, 503, qpackContext, CancellationToken.None);
+                }
+                catch (Exception)
+                {
+                    // client already gone
+                }
+
+                if (streamState != null)
+                    streamState.ResponseClosed = true;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled error on HTTP/3 stream {StreamId}", stream.Id);
@@ -552,7 +577,7 @@ internal static class Http3RequestStream
 
     /// <summary>
     ///     Interception-off H3→origin bodiless path: one <see cref="Request" /> + stream CTS, no
-    ///     <see cref="SessionEventArgs" /> graph (matches YARP's lack of a proxy session bag).
+    ///     <see cref="SessionEventArgs" /> graph.
     ///     Dispatches to H3→H2 / H3→H3 / H3→H1 session-lite forwards.
     /// </summary>
     private static async Task HandleH3OriginFastPathAsync( // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
@@ -646,6 +671,8 @@ internal static class Http3RequestStream
                         ColdOpenSessionFactory);
                     break;
                 case UpstreamHttpProtocol.Http3:
+                    // Forced HTTP/3 only (Auto resolves elsewhere): no TCP fallback or stall replay by design,
+                    // see the remarks on ForwardOverQuicFastAsync.
                     var relayed = await Http3OriginBridge.ForwardOverQuicFastAsync(
                         fwd, server, logger, streamToken, ColdOpenSessionFactory, stream);
                     if (relayed)
@@ -755,6 +782,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http11)
@@ -779,8 +808,12 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
+        // Explicitly forced HTTP/3 only. A forced origin fails closed, so the lite forward has no TCP fallback
+        // and no stall replay (see ForwardOverQuicFastAsync remarks); Auto takes the full bridge instead.
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http3)
             return false;
         return MitmUnchangedLiteRequestMatches(
@@ -803,6 +836,8 @@ internal static class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+            return false;
         if (sessionArgs.IsFastPath)
             return false;
         if (authArgs.UpstreamHttpProtocol != UpstreamHttpProtocol.Http2)

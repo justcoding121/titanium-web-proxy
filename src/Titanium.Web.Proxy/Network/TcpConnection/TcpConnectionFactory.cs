@@ -10,7 +10,6 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,6 +50,33 @@ internal class TcpConnectionFactory : IDisposable
 
     // Tcp server connection pool cache
     private readonly ConcurrentDictionary<string, ConcurrentQueue<TcpServerConnection>> cache = new();
+
+    // Present only for pool keys whose cluster set MaxConnectionsPerServer.
+    private readonly ConcurrentDictionary<string, ConnectionBudget> budgets = new();
+
+    internal int BudgetCountForTests => budgets.Count;
+
+    internal int BudgetOpenForTests()
+    {
+        var total = 0;
+        foreach (var budget in budgets.Values)
+        {
+            total += budget.Open;
+        }
+
+        return total;
+    }
+
+    internal int BudgetWaitersForTests()
+    {
+        var total = 0;
+        foreach (var budget in budgets.Values)
+        {
+            total += budget.Waiters;
+        }
+
+        return total;
+    }
 
     // Tcp connections waiting to be disposed by cleanup task
     private readonly ConcurrentBag<TcpServerConnection> disposalBag = new();
@@ -138,7 +164,8 @@ internal class TcpConnectionFactory : IDisposable
         bool isHttps, List<SslApplicationProtocol>? applicationProtocols,
         IPEndPoint? upStreamEndPoint, IExternalProxy? externalProxy,
         string? connectHost = null, int? connectPort = null,
-        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null)
+        IPEndPoint? upStreamEndPointIPv4 = null, IPEndPoint? upStreamEndPointIPv6 = null,
+        string? clusterKey = null)
     {
         // http version is ignored since its an application level decision b/w HTTP 1.0/1.1
         // also when doing connect request MS Edge browser sends http 1.0 but uses 1.1 after server sends 1.1 its response.
@@ -179,6 +206,12 @@ internal class TcpConnectionFactory : IDisposable
                 cacheKeyBuilder.Append("-next-");
                 AppendExternalProxyToCacheKey(cacheKeyBuilder, externalProxy.NextHop);
             }
+        }
+
+        if (!string.IsNullOrEmpty(clusterKey))
+        {
+            cacheKeyBuilder.Append("-cluster-");
+            cacheKeyBuilder.Append(clusterKey);
         }
 
         return cacheKeyBuilder.ToString();
@@ -327,7 +360,8 @@ internal class TcpConnectionFactory : IDisposable
         var (connectHost, connectPort) = ResolveConnectTarget(session);
 
         return GetConnectionCacheKey(originHost, originPort, isHttps, applicationProtocols, upStreamEndPoint,
-            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+            upStreamProxy, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6,
+            session.ClusterConnectionKey);
     }
 
     private static (IPEndPoint? Generic, IPEndPoint? IPv4, IPEndPoint? IPv6) ResolveConfiguredUpStreamEndPoints(
@@ -491,7 +525,7 @@ internal class TcpConnectionFactory : IDisposable
 
             cacheKey = GetConnectionCacheKey(remoteHostName, remotePort,
                 isHttps, applicationProtocols, upStreamEndPoint, externalProxy, connectHost, connectPort,
-                resolvedV4, resolvedV6);
+                resolvedV4, resolvedV6, sessionArgs.ClusterConnectionKey);
         }
 
         upStreamEndPointIPv4 = resolvedV4;
@@ -499,6 +533,32 @@ internal class TcpConnectionFactory : IDisposable
 
         if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
             return pooled;
+
+        if (sessionArgs.UpstreamHttpClient?.MaxConnectionsPerServer is int maxConnections && maxConnections > 0)
+        {
+            var connect = new TcpConnectOptions
+            {
+                RemoteHostName = remoteHostName,
+                RemotePort = remotePort,
+                HttpVersion = httpVersion,
+                IsHttps = isHttps,
+                SslProtocol = sslProtocol,
+                ApplicationProtocols = applicationProtocols,
+                IsConnect = isConnect,
+                ProxyServer = proxyServer,
+                SessionArgs = sessionArgs,
+                UpStreamEndPoint = upStreamEndPoint,
+                ExternalProxy = externalProxy,
+                CacheKey = cacheKey,
+                Prefetch = prefetch,
+                CancellationToken = cancellationToken,
+                ConnectHost = connectHost,
+                ConnectPort = connectPort,
+                UpStreamEndPointIPv4 = upStreamEndPointIPv4,
+                UpStreamEndPointIPv6 = upStreamEndPointIPv6,
+            };
+            return await CreateWithinBudget(connect, createGate, maxConnections, noCache);
+        }
 
         if (createGate != null)
         {
@@ -522,6 +582,246 @@ internal class TcpConnectionFactory : IDisposable
         return await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
             applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
             prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+    }
+
+    /// <summary>
+    ///     Opens a connection only while the pool key is under its concurrent cap. Pool hits never wait.
+    ///     A timeout throws <see cref="UpstreamCapacityException" /> and is not a destination failure.
+    /// </summary>
+    private readonly struct TcpConnectOptions
+    {
+        internal required string RemoteHostName { get; init; }
+        internal required int RemotePort { get; init; }
+        internal required Version HttpVersion { get; init; }
+        internal required bool IsHttps { get; init; }
+        internal required SslProtocols SslProtocol { get; init; }
+        internal List<SslApplicationProtocol>? ApplicationProtocols { get; init; }
+        internal required bool IsConnect { get; init; }
+        internal required ProxyServer ProxyServer { get; init; }
+        internal required SessionEventArgsBase SessionArgs { get; init; }
+        internal IPEndPoint? UpStreamEndPoint { get; init; }
+        internal IExternalProxy? ExternalProxy { get; init; }
+        internal required string CacheKey { get; init; }
+        internal required bool Prefetch { get; init; }
+        internal required CancellationToken CancellationToken { get; init; }
+        internal string? ConnectHost { get; init; }
+        internal int? ConnectPort { get; init; }
+        internal IPEndPoint? UpStreamEndPointIPv4 { get; init; }
+        internal IPEndPoint? UpStreamEndPointIPv6 { get; init; }
+    }
+
+    private async Task<TcpServerConnection?> CreateWithinBudget(TcpConnectOptions connect,
+        SemaphoreSlim? createGate, int maxConnections, bool noCache)
+    {
+        var sessionArgs = connect.SessionArgs;
+        var cacheKey = connect.CacheKey;
+        var cancellationToken = connect.CancellationToken;
+        var budget = budgets.GetOrAdd(cacheKey, static (_, max) => new ConnectionBudget(max), maxConnections);
+        budget.SetMax(maxConnections);
+        var deadline = sessionArgs.ConnectTimeout
+                       ?? sessionArgs.UpstreamHttpClient?.ConnectTimeout
+                       ?? TimeSpan.FromSeconds(5);
+        var until = DateTime.UtcNow + deadline;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var claim = await ClaimOrEvictAsync(connect, createGate, budget, noCache, cacheKey, until);
+            if (claim.Opened is not null)
+            {
+                return claim.Opened;
+            }
+
+            if (claim.Retry)
+            {
+                continue;
+            }
+
+            budget.EnterWait();
+            try
+            {
+                claim = await ClaimOrEvictAsync(connect, createGate, budget, noCache, cacheKey, until);
+                if (claim.Opened is not null)
+                {
+                    return claim.Opened;
+                }
+
+                if (claim.Retry)
+                {
+                    continue;
+                }
+
+                var remaining = until - DateTime.UtcNow;
+                var woke = await budget.WaitAsync(remaining, cancellationToken).ConfigureAwait(false);
+                if (!woke && DateTime.UtcNow >= until)
+                {
+                    throw new UpstreamCapacityException(cacheKey, budget.Max);
+                }
+            }
+            finally
+            {
+                budget.ExitWait();
+            }
+        }
+    }
+
+    private readonly struct BudgetClaim
+    {
+        public TcpServerConnection? Opened { get; init; }
+        public bool Retry { get; init; }
+    }
+
+    /// <summary>Rents or opens a slot, or asks the caller to try again after an idle eviction.</summary>
+    private async Task<BudgetClaim> ClaimOrEvictAsync(TcpConnectOptions connect, SemaphoreSlim? createGate,
+        ConnectionBudget budget, bool noCache, string cacheKey, DateTime until)
+    {
+        var opened = await ClaimBudgetSlotAsync(connect, createGate, budget, noCache);
+        if (opened is not null)
+        {
+            return new BudgetClaim { Opened = opened };
+        }
+
+        if (noCache && TryEvictOneIdle(cacheKey))
+        {
+            return new BudgetClaim { Retry = true };
+        }
+
+        if (until <= DateTime.UtcNow)
+        {
+            throw new UpstreamCapacityException(cacheKey, budget.Max);
+        }
+
+        return default;
+    }
+
+    /// <summary>
+    ///     The slot is released unless <paramref name="attached"/> was set. The check lives outside
+    ///     the caller so a successful return is not treated as the only path into the catch.
+    /// </summary>
+    private static void ReleaseReservedSlot(ConnectionBudget budget, bool attached)
+    {
+        if (!attached)
+        {
+            budget.ReleaseSlot();
+        }
+    }
+
+    private async Task<TcpServerConnection?> ClaimBudgetSlotAsync(
+        TcpConnectOptions connect, SemaphoreSlim? createGate, ConnectionBudget budget, bool noCache)
+    {
+        if (TryRentFromPool(connect.ProxyServer, connect.CacheKey, noCache, connect.ApplicationProtocols, out var pooled))
+        {
+            return pooled;
+        }
+
+        if (budget.TryReserve())
+        {
+            return await CreateReservedConnection(connect, createGate, budget, noCache);
+        }
+
+        return null;
+    }
+
+    private async Task<TcpServerConnection?> CreateReservedConnection(TcpConnectOptions connect,
+        SemaphoreSlim? createGate, ConnectionBudget budget, bool noCache)
+    {
+        var remoteHostName = connect.RemoteHostName;
+        var remotePort = connect.RemotePort;
+        var httpVersion = connect.HttpVersion;
+        var isHttps = connect.IsHttps;
+        var sslProtocol = connect.SslProtocol;
+        var applicationProtocols = connect.ApplicationProtocols;
+        var isConnect = connect.IsConnect;
+        var proxyServer = connect.ProxyServer;
+        var sessionArgs = connect.SessionArgs;
+        var upStreamEndPoint = connect.UpStreamEndPoint;
+        var externalProxy = connect.ExternalProxy;
+        var cacheKey = connect.CacheKey;
+        var prefetch = connect.Prefetch;
+        var cancellationToken = connect.CancellationToken;
+        var connectHost = connect.ConnectHost;
+        var connectPort = connect.ConnectPort;
+        var upStreamEndPointIPv4 = connect.UpStreamEndPointIPv4;
+        var upStreamEndPointIPv6 = connect.UpStreamEndPointIPv6;
+        var attached = false;
+        try
+        {
+            if (createGate != null)
+            {
+                await createGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                if (TryRentFromPool(proxyServer, cacheKey, noCache, applicationProtocols, out var pooled))
+                {
+                    budget.ReleaseSlot();
+                    return pooled;
+                }
+
+                var created = await CreateServerConnection(remoteHostName, remotePort, httpVersion, isHttps, sslProtocol,
+                    applicationProtocols, isConnect, proxyServer, sessionArgs, upStreamEndPoint, externalProxy, cacheKey,
+                    prefetch, cancellationToken, connectHost, connectPort, upStreamEndPointIPv4, upStreamEndPointIPv6);
+                if (created is null)
+                {
+                    budget.ReleaseSlot();
+                    return null;
+                }
+
+                created.AttachBudget(budget);
+                attached = true;
+                return created;
+            }
+            finally
+            {
+                createGate?.Release();
+            }
+        }
+        catch
+        {
+            ReleaseReservedSlot(budget, attached);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Drops one idle pooled socket so a no-cache request (WebSocket, replay) can take its slot.
+    ///     The pooled socket still counts as open, so without this the request waits out the connect timeout.
+    /// </summary>
+    private bool TryEvictOneIdle(string cacheKey)
+    {
+        if (!cache.TryGetValue(cacheKey, out var queue))
+        {
+            return false;
+        }
+
+        poolLock.EnterReadLock();
+        try
+        {
+            lock (queue)
+            {
+                if (!cache.TryGetValue(cacheKey, out var current) || current != queue)
+                {
+                    return false;
+                }
+
+                if (!queue.TryDequeue(out var idle))
+                {
+                    return false;
+                }
+
+                if (idle.TryScheduleDisposal())
+                {
+                    disposalBag.Add(idle);
+                }
+
+                return true;
+            }
+        }
+        finally
+        {
+            poolLock.ExitReadLock();
+        }
     }
 
     /// <summary>
@@ -677,7 +977,35 @@ internal class TcpConnectionFactory : IDisposable
                 port = externalProxy.Port;
             }
 
-            var ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
+            // Only a configured destination may name a socket path. A host taken from the client's own
+            // request target must never reach a local unix socket.
+            if (!string.IsNullOrEmpty(connectHost) &&
+                hostname.StartsWith("unix:", StringComparison.Ordinal) && externalProxy == null)
+            {
+                return await ConnectUnixDestinationAsync(new UnixDestinationConnect
+                {
+                    ProxyServer = proxyServer,
+                    Hostname = hostname,
+                    RemoteHostName = remoteHostName,
+                    RemotePort = remotePort,
+                    HttpVersion = httpVersion,
+                    CacheKey = cacheKey,
+                    SessionArgs = sessionArgs,
+                    CancellationToken = cancellationToken,
+                }).ConfigureAwait(false);
+            }
+
+            IPAddress[] ipAddresses;
+            if (sessionArgs?.UpstreamPinnedAddress is { } pinned && externalProxy == null)
+            {
+                ipAddresses = [pinned];
+                timing?.MarkDnsResolved();
+            }
+            else
+            {
+                ipAddresses = await Dns.GetHostAddressesAsync(hostname, cancellationToken);
+            }
+
             if (ipAddresses == null || ipAddresses.Length == 0)
             {
                 if (prefetch) return null;
@@ -1054,7 +1382,8 @@ internal class TcpConnectionFactory : IDisposable
                     // HttpServerStream tears down the chain.
                     var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
                         (sender, certificate, chain, sslPolicyErrors) =>
-                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                            sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
+                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                                 sslPolicyErrors),
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                         {
@@ -1070,7 +1399,7 @@ internal class TcpConnectionFactory : IDisposable
                         ApplicationProtocols = applicationProtocols,
                         TargetHost = remoteHostName,
                         ClientCertificates = null,
-                        EnabledSslProtocols = enabledSslProtocols,
+                        EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                     };
 
@@ -1087,6 +1416,7 @@ internal class TcpConnectionFactory : IDisposable
             {
                 var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
                     (sender, certificate, chain, sslPolicyErrors) =>
+                        sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
                         proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                             sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
@@ -1103,7 +1433,7 @@ internal class TcpConnectionFactory : IDisposable
                     ApplicationProtocols = applicationProtocols,
                     TargetHost = remoteHostName,
                     ClientCertificates = null,
-                    EnabledSslProtocols = enabledSslProtocols,
+                    EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
                 };
 
@@ -1198,7 +1528,8 @@ internal class TcpConnectionFactory : IDisposable
             IsWinAuthenticated = upstreamProxyWinAuthenticated,
             UsedClientCertificate = usedClientCertificate,
             Timing = timing,
-            PoolSizeLimit = sessionArgs?.ProxyEndPoint?.MaxCachedConnections
+            PoolSizeLimit = sessionArgs?.UpstreamHttpClient?.MaxConnectionsPerServer
+                            ?? sessionArgs?.ProxyEndPoint?.MaxCachedConnections
         };
     }
 
@@ -1568,6 +1899,9 @@ internal class TcpConnectionFactory : IDisposable
                     // Lease exclusivity (TryEnterLease / ExitLease) already prevents concurrent use.
                     // Skipping ConcurrentQueue.Contains avoids an O(n) scan under high pool depth.
                     queue.Enqueue(connection);
+                    // Pulse after the socket is visible in the pool. An earlier pulse woke the
+                    // waiter while the queue was still empty, so it slept until the connect timeout.
+                    connection.Budget?.Pulse();
                     return Task.CompletedTask;
                 }
             }
@@ -1711,6 +2045,65 @@ internal class TcpConnectionFactory : IDisposable
         }
 
         disposed = true;
+    }
+
+    private static SslProtocols ClusterSslProtocols(SessionEventArgsBase? session, SslProtocols fallback)
+    {
+        var text = session?.UpstreamHttpClient?.SslProtocols;
+        if (string.IsNullOrEmpty(text) || !Enum.TryParse(text, out SslProtocols parsed) || parsed == SslProtocols.None)
+        {
+            return fallback;
+        }
+
+        return parsed;
+    }
+
+    private readonly struct UnixDestinationConnect
+    {
+        internal required ProxyServer ProxyServer { get; init; }
+        internal required string Hostname { get; init; }
+        internal required string RemoteHostName { get; init; }
+        internal required int RemotePort { get; init; }
+        internal required Version HttpVersion { get; init; }
+        internal required string CacheKey { get; init; }
+        internal SessionEventArgsBase? SessionArgs { get; init; }
+        internal required CancellationToken CancellationToken { get; init; }
+    }
+
+    private static async Task<TcpServerConnection?> ConnectUnixDestinationAsync(UnixDestinationConnect connect)
+    {
+        var proxyServer = connect.ProxyServer;
+        var hostname = connect.Hostname;
+        var remoteHostName = connect.RemoteHostName;
+        var remotePort = connect.RemotePort;
+        var httpVersion = connect.HttpVersion;
+        var cacheKey = connect.CacheKey;
+        var sessionArgs = connect.SessionArgs;
+        var cancellationToken = connect.CancellationToken;
+        if (OperatingSystem.IsWindows())
+        {
+            throw new PlatformNotSupportedException("Unix domain destinations are not supported on Windows.");
+        }
+
+        var path = hostname[5..];
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(path), cancellationToken).ConfigureAwait(false);
+            var stream = new HttpServerStream(
+                proxyServer, new NetworkStream(socket, ownsSocket: true), proxyServer.BufferPool, cancellationToken);
+            return new TcpServerConnection(
+                proxyServer, socket, stream, remoteHostName, remotePort, false, default, httpVersion, null, null, cacheKey)
+            {
+                PoolSizeLimit = sessionArgs?.UpstreamHttpClient?.MaxConnectionsPerServer
+                                ?? sessionArgs?.ProxyEndPoint?.MaxCachedConnections,
+            };
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
     }
 
     private static class ProxySocketConnectionTaskFactory

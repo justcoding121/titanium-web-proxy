@@ -465,7 +465,7 @@ public partial class ProxyServer
 
     /// <summary>
     ///     Opens an additional HTTP/2 origin TCP connection for multi-leg same-protocol relay
-    ///     (<see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority" />).
+    ///     (<c>ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority</c>).
     /// </summary>
     private async Task<TcpServerConnection> OpenAdditionalOriginHttp2ConnectionAsync(
         string remoteHostName, int remotePort, string? connectHost, int? connectPort,
@@ -517,19 +517,25 @@ public partial class ProxyServer
     ///     offer <c>h2</c> speculatively without stalling ServerHello further.
     /// </summary>
     internal static async Task<Http2NegotiationResult?> TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
-        Task<Http2NegotiationResult> negotiationTask, CancellationToken cancellationToken)
+        Task<Http2NegotiationResult> negotiationTask, CancellationToken cancellationToken,
+        TimeSpan? budget = null)
     {
         if (negotiationTask.IsCompleted)
             return await negotiationTask.ConfigureAwait(false);
 
         try
         {
-            return await negotiationTask.WaitAsync(Http2ServerHelloProbeBudget, cancellationToken)
+            return await negotiationTask.WaitAsync(budget ?? Http2ServerHelloProbeBudget, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (TimeoutException) when (!negotiationTask.IsCompleted)
+        catch (TimeoutException)
         {
-            return null;
+            // The budget expired. The probe can finish in the instant between the timer firing and this check
+            // (seen on r.stripe.com: the probe completed 1 ms after the budget). A filter on IsCompleted let
+            // that TimeoutException escape to HandleClient, which dropped the browser's CONNECT. A probe that
+            // finished is used; one that faulted rethrows its own error from the await; one still running
+            // yields null so the caller offers h2 speculatively.
+            return negotiationTask.IsCompleted ? await negotiationTask.ConfigureAwait(false) : null;
         }
     }
 
@@ -543,7 +549,7 @@ public partial class ProxyServer
     ///                 Probe done before ServerHello (warm cache or probe finishes within
     ///                 <see cref="Http2ServerHelloProbeBudget" />): <paramref name="negotiation" /> is not null.
     ///                 <c>http2Supported</c> is set correctly — h2 is offered only if the origin actually
-    ///                 supports it and <see cref="TunnelConnectEventArgs.AllowHttpProtocolTranslation" /> is
+    ///                 supports it and <c>AllowHttpProtocolTranslation</c> is
     ///                 respected for the h1-only origin case (no false h2 promise to the client).
     ///             </item>
     ///             <item>

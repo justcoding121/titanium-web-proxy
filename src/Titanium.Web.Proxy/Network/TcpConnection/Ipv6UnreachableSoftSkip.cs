@@ -27,7 +27,7 @@ internal static class Ipv6UnreachableSoftSkip
         Volatile.Write(ref skipUntilUnixMs, 0);
     }
 
-    internal static bool IsSkipping(TimeSpan? ttl = null)
+    internal static bool IsSkipping()
     {
         var until = Volatile.Read(ref skipUntilUnixMs);
         if (until == 0) return false;

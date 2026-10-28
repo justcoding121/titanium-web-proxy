@@ -40,6 +40,8 @@ public static class SiteFileReader
                     ForwardHost = pendingForwardHost,
                     ForwardPort = pendingForwardPort,
                 });
+                pendingForwardHost = null;
+                pendingForwardPort = null;
                 continue;
             }
 
@@ -199,6 +201,12 @@ public static class SiteFileReader
         else if (value.StartsWith(HttpSchemePrefix, StringComparison.OrdinalIgnoreCase))
         {
             value = value[HttpSchemePrefix.Length..];
+        }
+
+        var slash = value.IndexOf('/');
+        if (slash >= 0)
+        {
+            value = value[..slash];
         }
 
         var colon = value.LastIndexOf(':');

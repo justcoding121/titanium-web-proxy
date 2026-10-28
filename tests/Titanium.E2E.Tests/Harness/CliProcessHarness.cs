@@ -365,7 +365,7 @@ public sealed partial class CliProcessHarness : IDisposable
         }
 
         _process = StartProcess(ResolveFileName(), BuildArgList(args.ToArray()), env);
-        await WaitForOutputAsync("running", TimeSpan.FromSeconds(45));
+        await WaitForOutputAsync("Titanium proxy running", TimeSpan.FromSeconds(45));
     }
 
     public async Task WaitForOutputAsync(string substring, TimeSpan timeout)

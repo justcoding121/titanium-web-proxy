@@ -10,7 +10,7 @@ namespace Titanium.Web.Proxy.Network.Streams;
 /// <summary>
 ///     Write-only wrapper enforcing a cumulative byte cap on an inner stream, throwing
 ///     <see cref="BodySizeLimitExceededException" /> the instant a write would push the running total
-///     past the configured limit - unless <paramref name="mode" /> (see the constructor) says
+///     past the configured limit - unless the configured <see cref="PolicyMode" /> says
 ///     otherwise, per the plan's rollout section: <see cref="PolicyFamily.BodyBudget" /> is one of the
 ///     families that supports <see cref="PolicyMode.Observe" />.
 ///     <para>

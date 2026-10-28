@@ -1,10 +1,7 @@
 using System;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
-using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Routing;
 
@@ -15,10 +12,8 @@ namespace Titanium.Web.Proxy.Routing;
 /// <remarks>
 /// Live session routing for HTTP/1.1 (and shared route match) uses
 /// <see cref="ReverseProxySessionDispatch"/> → <see cref="DestinationResolver"/>.
-/// This type remains the H2/H3 pool-key helper and
-/// <see cref="TrySelectNextAfterFailure"/> entry for idempotent connect retry;
-/// calling it from <see cref="ReverseProxySessionDispatch.ReportUpstreamResult"/> is redundant
-/// with <see cref="DestinationHealthTracker.ReportFailure"/> for passive health marking.
+/// This type remains the H2/H3 pool-key helper.
+/// Passive health is reported from <see cref="ReverseProxySessionDispatch.ReportUpstreamResult"/>.
 /// </remarks>
 internal static class StreamDestinationDispatch
 {
@@ -81,22 +76,6 @@ internal static class StreamDestinationDispatch
             args.MaxBufferedBodyBytes = body;
         if (limits.MaxWebSocketFramePayloadBytes is int frame)
             args.MaxWebSocketFramePayloadBytes = frame;
-    }
-
-    /// <summary>
-    /// Idempotent GET/HEAD connect retry to the next eligible destination after a failure.
-    /// </summary>
-    public static bool TrySelectNextAfterFailure(
-        Abstractions.ReverseProxyOptions? options,
-        string failedDestinationId,
-        string? authorityHost,
-        string path,
-        string method,
-        out DestinationConfig? destination)
-    {
-        destination = null;
-        options?.ClusterManager?.SetDestinationState(failedDestinationId, DestinationState.Unhealthy);
-        return TrySelect(options, authorityHost, path, method, out destination, out _);
     }
 
     public static bool IsIdempotentMethod(string? method) =>

@@ -2,7 +2,6 @@ using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
-using Titanium.Cli;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
@@ -24,6 +23,8 @@ namespace Titanium.Cli.Config;
 
 internal static class RunCommand
 {
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ClusterManager, ProxyConfigHost> ConfigHosts = new();
+
     private static readonly string[] PlusRelativePathKeys =
     [
         "grpc.transcode.descriptorSet",
@@ -118,12 +119,14 @@ internal static class RunCommand
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
+        using var certificateWatch = CertificateBootstrap.WatchCertificateFiles(proxy, loaded.Config.Certificates, loaded.Config.Listeners);
         StaticFileHost.RegisterIfNeeded(proxy, loaded.Config.StaticFiles, requiresSessionPath);
 
         var loadBalancer = new LoadBalancer();
         var responseCache = new MemoryHttpResponseCache();
         var middleware = new List<IProxyMiddleware>();
         var routes = loaded.Config.Routes.ToList();
+        var policies = loaded.Config.Policies?.ToList() ?? new List<RoutePolicyConfig>();
         var plusOptions = loaded.Config.Plus is not null
             ? BuildPlusOptions(loaded.Config.Plus)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -133,23 +136,12 @@ internal static class RunCommand
 
         IGrpcJsonTranscoder? grpcJsonTranscoder = null;
 
+        clusterManager.AttachHealthTracker(loadBalancer.Health);
+
         void RefreshReverseProxy()
         {
-            // Prefer ClusterManager snapshot so SIGHUP reload picks up new destinations
-            // (do not close over the initial ConfigLoader result).
-            var snapClusters = clusterManager.Snapshot.Clusters;
-            proxy.ReverseProxy = new ReverseProxyOptions
-            {
-                Routes = routes.Count > 0 ? routes : null,
-                Clusters = snapClusters.Count > 0 ? snapClusters.Values.ToList() : null,
-                ClusterManager = clusterManager,
-                RouteMatcher = new RouteMatcher(),
-                LoadBalancer = loadBalancer,
-                TransformEngine = new TransformEngine(),
-                Middleware = middleware.Count > 0 ? middleware : null,
-                LatencyRecorder = loadBalancer,
-                GrpcJsonTranscoder = grpcJsonTranscoder,
-            };
+            proxy.ReverseProxy = BuildReverseProxyOptions(
+                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies);
         }
 
         var plusContext = new PlusActivationContext
@@ -211,6 +203,7 @@ internal static class RunCommand
                                 () => grpcJsonTranscoder,
                                 t => grpcJsonTranscoder = t,
                                 RefreshReverseProxy,
+                                policies,
                                 stoppingToken).ConfigureAwait(false);
                             AsyncConsole.WriteLine("Config reloaded.");
                             await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -226,7 +219,8 @@ internal static class RunCommand
                 ConfigReloadGate.TryDeletePidFile(configPath);
             }
 
-            await proxy.StopAsync().ConfigureAwait(false);
+            await proxy.DrainAsync(TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server))).ConfigureAwait(false);
+            await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         finally
@@ -285,6 +279,7 @@ internal static class RunCommand
         Func<IGrpcJsonTranscoder?> getGrpc,
         Action<IGrpcJsonTranscoder?> setGrpc,
         Action refreshReverseProxy,
+        List<RoutePolicyConfig>? policies = null,
         CancellationToken stoppingToken = default)
     {
         var loaded = ConfigLoader.Load(configPath);
@@ -297,25 +292,70 @@ internal static class RunCommand
         WriteConfigWarnings(loaded);
 
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
-        if (loaded.Config.Clusters.Count > 0)
-        {
-            await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
-        }
-        else
-        {
-            await clusterManager.ApplyAsync([], stoppingToken).ConfigureAwait(false);
-        }
+        var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
+        host.RememberAppliedClusters(clusterManager.Snapshot.Clusters.Values.ToList());
 
-        ReplaceRoutes(routes, loaded.Config.Routes);
+        var snapshot = new Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot
+        {
+            Routes = loaded.Config.Routes.ToList(),
+            Clusters = loaded.Config.Clusters.ToList(),
+        };
+        await host.ApplyAsync(snapshot, clusterManager, options =>
+        {
+            // Swap policies together with routes. A failed apply leaves both as they were, and no request
+            // sees a route naming a policy that has already been replaced.
+            if (policies is not null)
+            {
+                policies.Clear();
+                if (loaded.Config.Policies is not null)
+                {
+                    foreach (var policy in loaded.Config.Policies)
+                    {
+                        policies.Add(policy);
+                    }
+                }
+            }
 
-        // Keep existing middleware; Plus control plane remains. Refresh reverse options only.
-        _ = getGrpc();
-        refreshReverseProxy();
+            ReplaceRoutes(routes, options.Routes ?? []);
+            refreshReverseProxy();
+        }, stoppingToken).ConfigureAwait(false);
+        CertificateBootstrap.ApplySniItems(proxy, loaded.Config.Certificates);
         _ = middleware;
         _ = loadBalancer;
         _ = responseCache;
         _ = plusOptions;
+        _ = getGrpc;
         _ = setGrpc;
+    }
+
+    internal static int ResolveDrainTimeoutSeconds(ServerConfig? server)
+    {
+        var drainSeconds = server?.DrainTimeoutSeconds ?? 10;
+        return drainSeconds < 0 ? 0 : drainSeconds;
+    }
+
+    internal static ReverseProxyOptions BuildReverseProxyOptions(
+        IReadOnlyCollection<RouteConfig> routes,
+        IClusterManager clusterManager,
+        LoadBalancer loadBalancer,
+        IReadOnlyCollection<IProxyMiddleware> middleware,
+        IGrpcJsonTranscoder? grpcJsonTranscoder,
+        IReadOnlyCollection<RoutePolicyConfig>? policies = null)
+    {
+        var snapClusters = clusterManager.Snapshot.Clusters;
+        return new ReverseProxyOptions
+        {
+            Routes = routes.Count > 0 ? routes.ToArray() : null,
+            Policies = policies is { Count: > 0 } ? policies.ToArray() : null,
+            Clusters = snapClusters.Count > 0 ? snapClusters.Values.ToList() : null,
+            ClusterManager = clusterManager,
+            RouteMatcher = new RouteMatcher(),
+            LoadBalancer = loadBalancer,
+            TransformEngine = new TransformEngine(),
+            Middleware = middleware.Count > 0 ? middleware.ToArray() : null,
+            LatencyRecorder = loadBalancer,
+            GrpcJsonTranscoder = grpcJsonTranscoder,
+        };
     }
 
     /// <summary>In-place route list swap used by SIGHUP reload (and unit tests).</summary>
@@ -830,6 +870,7 @@ internal static class RunCommand
             "socks" => CreateSocksEndPoint(ip, listener),
             "quic" => CreateQuicEndPoint(ip, listener),
             "transparent" => CreateTransparentEndPoint(ip, listener),
+            "masque" => CreateMasqueEndPoint(ip, listener),
             _ when !string.IsNullOrEmpty(listener.ForwardHost) => CreateTransparentEndPoint(ip, listener),
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
@@ -900,6 +941,7 @@ internal static class RunCommand
         var ep = new TransparentProxyEndPoint(ip, listener.Port, listener.DecryptSsl)
         {
             EnableHttp3 = ResolveListenerHttp3(listener, listener.DecryptSsl),
+            AltSvc = ToAltSvcOptions(listener.AltSvc),
         };
 
         if (!string.IsNullOrEmpty(listener.ForwardHost))
@@ -914,8 +956,127 @@ internal static class RunCommand
             ep.GenericCertificateName = listener.GenericCertificateName;
         }
 
+        ep.AcceptProxyProtocol = listener.AcceptProxyProtocol;
+        if (listener.TrustedProxyProtocolSources is { Count: > 0 })
+        {
+            ep.TrustedProxyProtocolSources = listener.TrustedProxyProtocolSources.ToArray();
+        }
+
+        ep.Passthrough = listener.Passthrough;
+        ep.ClientCertificateMode = listener.ClientCertificateMode?.ToLowerInvariant() switch
+        {
+            "require" => ClientCertificateMode.Require,
+            "allow" => ClientCertificateMode.Allow,
+            _ => ClientCertificateMode.None,
+        };
+
         ApplyQuicKnobs(ep, listener);
         return ep;
+    }
+
+    private static MasqueProxyEndPoint CreateMasqueEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new MasqueProxyEndPoint(ip, listener.Port);
+        var masque = listener.Masque;
+        if (masque is null)
+        {
+            return ep;
+        }
+
+        if (masque.RequireAuth is bool requireAuth)
+        {
+            ep.Options.RequireAuth = requireAuth;
+        }
+
+        if (masque.AllowHttp11Upgrade is bool allowHttp11)
+        {
+            ep.Options.AllowHttp11Upgrade = allowHttp11;
+        }
+
+        if (masque.AllowedPorts is { Length: > 0 } ports)
+        {
+            ep.Options.AllowedPorts = ports;
+        }
+
+        if (masque.BlockPrivateTargets is bool blockPrivate)
+        {
+            ep.Options.BlockPrivateTargets = blockPrivate;
+        }
+
+        ApplyMasqueLimits(ep, masque);
+
+        if (masque.Credentials is { Count: > 0 } credentials)
+        {
+            var hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            foreach (var credential in credentials)
+            {
+                var password = Environment.GetEnvironmentVariable(credential.PasswordEnv ?? string.Empty);
+                if (string.IsNullOrEmpty(password))
+                {
+                    throw new InvalidOperationException(
+                        $"Listener port {listener.Port}: masque credential '{credential.Username}' passwordEnv '{credential.PasswordEnv}' is missing or empty.");
+                }
+
+                hashes[credential.Username ?? string.Empty] = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(password));
+            }
+
+            var unknown = new byte[32];
+            ep.Options.AuthenticateFunc = (user, password) =>
+            {
+                var supplied = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(password));
+                var known = hashes.TryGetValue(user, out var expected);
+                var match = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    supplied, known ? expected! : unknown);
+                return Task.FromResult(known && match);
+            };
+        }
+
+        return ep;
+    }
+
+    private static void ApplyMasqueLimits(MasqueProxyEndPoint ep, MasqueListenerConfig masque)
+    {
+        if (masque.MaxTunnels is int maxTunnels)
+        {
+            ep.Options.MaxTunnels = maxTunnels;
+        }
+
+        if (masque.MaxTunnelsPerClient is int perClient)
+        {
+            ep.Options.MaxTunnelsPerClient = perClient;
+        }
+
+        if (masque.IdleTimeoutSeconds is int idle)
+        {
+            ep.Options.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+
+        if (masque.MaxDatagramsPerSecond is int datagrams)
+        {
+            ep.Options.MaxDatagramsPerSecond = datagrams;
+        }
+
+        if (masque.MaxBytesPerSecond is int bytes)
+        {
+            ep.Options.MaxBytesPerSecond = bytes;
+        }
+    }
+
+    private static AltSvcOptions? ToAltSvcOptions(AltSvcConfig? config)
+    {
+        if (config is null)
+        {
+            return null;
+        }
+
+        return new AltSvcOptions
+        {
+            Enabled = config.Enabled ?? true,
+            MaxAgeSeconds = config.MaxAgeSeconds,
+            Port = config.Port,
+        };
     }
 
     private static void ApplyQuicKnobs(TransparentProxyEndPoint ep, ListenerConfig listener)
@@ -974,6 +1135,11 @@ internal static class RunCommand
         if (listener.MaxConcurrentClients is int maxClients)
         {
             endPoint.MaxConcurrentClients = maxClients;
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
+        {
+            endPoint.ClientCertificateTrustedRoots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
         }
     }
 
@@ -1043,7 +1209,7 @@ internal static class RunCommand
             return true;
         }
 
-        return config.Routes.Any(r => r.Transforms is { Count: > 0 });
+        return config.Routes.Any(r => r.Transforms is { Count: > 0 } || r.Limits is not null);
     }
 
     private static void WriteConfigWarnings(LoadedConfig loaded)

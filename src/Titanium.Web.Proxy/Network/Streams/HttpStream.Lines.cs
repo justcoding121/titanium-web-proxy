@@ -1,23 +1,12 @@
 using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Net.Security;
-using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Compression;
-using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.Shared;
 using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
@@ -415,12 +404,4 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
 
         Array.Resize(ref buffer, newSize);
     }
-
-    /// <summary>
-    ///     Base Stream.BeginRead will call this.Read and block thread (we don't want this, Network stream handles async)
-    ///     In order to really async Reading Launch this.ReadAsync as Task will fire NetworkStream.ReadAsync
-    ///     See Threads here :
-    ///     https://github.com/justcoding121/Stream-Extended/pull/43
-    ///     https://github.com/justcoding121/Titanium-Web-Proxy/issues/575
-    /// </summary>
 }

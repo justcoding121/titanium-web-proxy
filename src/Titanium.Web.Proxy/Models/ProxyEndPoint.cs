@@ -1,7 +1,11 @@
-﻿using System.Net;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Options;
 
@@ -63,6 +67,75 @@ public abstract class ProxyEndPoint
     /// </summary>
     public X509Certificate2? GenericCertificate { get; set; }
 
+    /// <summary>SNI certificate list. Null keeps <see cref="GenericCertificate"/>.</summary>
+    public IReadOnlyList<SniCertificateBinding>? SniCertificates { get; set; }
+
+    /// <summary>Inbound client-certificate mode. <see cref="ClientCertificateMode.None"/> changes nothing.</summary>
+    public ClientCertificateMode ClientCertificateMode { get; set; }
+
+    /// <summary>
+    ///     Trust anchors for an inbound client certificate. Null uses the platform trust store,
+    ///     which is the historical behavior. A reload assigns a new collection; it never mutates one
+    ///     that a handshake is already reading.
+    /// </summary>
+    public X509Certificate2Collection? ClientCertificateTrustedRoots { get; set; }
+
+    /// <summary>When true, the accept loop requires a PROXY protocol preamble.</summary>
+    public bool AcceptProxyProtocol { get; set; }
+
+    private CidrPrefix[]? _trustedProxySources;
+    private IReadOnlyList<string>? _trustedProxySourceText;
+
+    /// <summary>
+    /// CIDR prefixes allowed to send a PROXY protocol preamble. Null or empty keeps today's behavior:
+    /// any peer may send the preamble. A non-empty list skips the preamble for everyone else.
+    /// </summary>
+    public IReadOnlyList<string>? TrustedProxyProtocolSources
+    {
+        get => _trustedProxySourceText;
+        set
+        {
+            if (value is null || value.Count == 0)
+            {
+                _trustedProxySourceText = value;
+                _trustedProxySources = null;
+                return;
+            }
+
+            var parsed = new CidrPrefix[value.Count];
+            var text = new string[value.Count];
+            for (var i = 0; i < value.Count; i++)
+            {
+                if (!CidrPrefix.TryParse(value[i], out var prefix) || prefix is null)
+                {
+                    throw new FormatException($"Invalid PROXY protocol CIDR '{value[i]}'.");
+                }
+
+                parsed[i] = prefix;
+                text[i] = value[i];
+            }
+
+            _trustedProxySources = parsed;
+            _trustedProxySourceText = text;
+        }
+    }
+
+    /// <summary>True when the peer may send a PROXY protocol preamble.</summary>
+    internal bool IsTrustedProxyProtocolPeer(IPAddress? address)
+    {
+        if (_trustedProxySources is null)
+        {
+            return true;
+        }
+
+        if (address is null)
+        {
+            return false;
+        }
+
+        return _trustedProxySources.Any(prefix => prefix.Contains(address));
+    }
+
     /// <summary>
     /// Optional override of <see cref="ProxyServer.MaxCachedConnections"/> for upstream TCP pooling
     /// when this endpoint handles the session. <see langword="null"/> uses the server default.
@@ -77,6 +150,9 @@ public abstract class ProxyEndPoint
     ///     default) disables the per-endpoint admission gate, preserving today's unbounded behavior.
     /// </summary>
     public int? MaxConcurrentClients { get; set; }
+
+    /// <summary>Single-slot forward-host equivalence cache for this listener.</summary>
+    internal Routing.ForwardHostEquivalenceCache? ForwardHostEquivalence;
 
     /// <summary>
     /// Endpoint-level override for <see cref="ProxyServer.EnableHttpInterception"/>.

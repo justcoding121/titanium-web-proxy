@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Logging;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Models;
@@ -127,29 +126,17 @@ internal sealed class Http2OriginConnection : IDisposable
     internal int LeaseCount => Volatile.Read(ref leaseCount);
 
     /// <summary>
-    ///     Historical SoftGrow=16 TLS constant. Live TLS grow uses <see cref="SoftStreamCapacity"/> —
-    ///     long 20s Mac pairs: SoftGrow=16 ~0.90× H1 / ~0.89× H3; SoftGrow=SoftPick ~0.92× H1 /
-    ///     ~0.96× H3. SoftGrow=8 peaked short-arm H1 ~0.83× but hurt H3. Cap remains
+    ///     Fallback early-grow threshold, used by <see cref="Http2OriginConnectionPool" /> only when the pool has no
+    ///     connection to ask. A live connection reports <see cref="PoolGrowThreshold" />, which follows
+    ///     <see cref="SoftStreamCapacity" />. The number of connections stays capped by
     ///     <see cref="ProxyResourceLimits.MaxOriginHttp2ConnectionsPerAuthority"/>.
     /// </summary>
-    internal const int PoolGrowActiveStreamThresholdTls = 16;
-
-    /// <summary>
-    ///     Early-grow threshold for cleartext h2c. SoftGrow=4 was the Soft=16-as-pick-cap era;
-    ///     with SoftPick=SETTINGS, SoftGrow=8 lifts Mac H3→h2c (~0.88→~0.94×). SoftGrow=12
-    ///     regresses (~0.88×). SoftGrow=16 on cleartext starved ReadLoops under Soft=16-as-pick.
-    /// </summary>
-    internal const int PoolGrowActiveStreamThresholdCleartext = 8;
-
-    /// <summary>Alias — TLS SoftGrow (tests / wiki that reference the historical name).</summary>
-    internal const int PoolGrowActiveStreamThreshold = PoolGrowActiveStreamThresholdTls;
+    internal const int PoolGrowActiveStreamThreshold = 16;
 
     /// <summary>
     ///     Soft multiplex pick capacity used by <see cref="Http2OriginConnectionPool" /> —
     ///     <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> / concurrency gate (not the early-grow dial).
-    ///     Prefer filling under this cap; grow is driven separately by
-    ///     <see cref="PoolGrowActiveStreamThreshold"/> /
-    ///     <see cref="PoolGrowActiveStreamThresholdCleartext"/>.
+    ///     Prefer filling under this cap; grow is driven separately by <see cref="PoolGrowThreshold"/>.
     /// </summary>
     internal int SoftStreamCapacity
     {
@@ -163,10 +150,9 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 
     /// <summary>
-    ///     Early-grow dial for TLS and cleartext: SoftGrow = SoftStreamCapacity (SETTINGS/gate).
-    ///     Offer-once + MaxOrigin=1 SoftPick SoftGrow SoftCap: Mac H1 TLS→H2 ~0.91–0.95×; GHA
-    ///     H3→H2 led ~1.15× (33990406830). SoftGrow=8 cleartext Offer-once MaxOrigin=8 regresses
-    ///     local H3→h2c / H1plain (~0.84–0.89×). SoftGrow=16 Offer-once TLS rejected (~0.89×).
+    ///     Active-stream count at which the pool opens another connection, for TLS and cleartext alike:
+    ///     the connection's soft capacity (the origin's <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> or the
+    ///     concurrency gate). Growing earlier than that opened extra connections that benchmarked slower.
     /// </summary>
     internal int PoolGrowThreshold => SoftStreamCapacity;
 
@@ -326,15 +312,14 @@ internal sealed class Http2OriginConnection : IDisposable
 
         var preface = Http2Helper.ConnectionPreface;
         connection.Http2SessionStarted = true;
-        await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
-        // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
-        await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
-        instance.AttachExclusiveFrameWriter();
-
-        _ = instance.ReadLoopAsync(instance.connectionCts.Token);
-
         try
         {
+            await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
+            // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
+            await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
+            instance.AttachExclusiveFrameWriter();
+
+            _ = instance.ReadLoopAsync(instance.connectionCts.Token);
             await instance.initialSettingsReceived.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
         }
         catch (Exception ex)
@@ -1235,8 +1220,8 @@ internal sealed class Http2OriginConnection : IDisposable
                                     }
                                     else if (pendingData.InlineBody != null)
                                     {
-                                        // Known tiny CL: copy straight into the pre-sized buffer — no Pipe /
-                                        // ArrayPool Gen0 on the probe GET path (H1→H2 / H3→H2 Mac residual).
+                                        // Known tiny Content-Length: copy straight into the pre-sized buffer,
+                                        // avoiding a Pipe and an ArrayPool rental per small response.
                                         var bodyData = StripDataFramingSpan(payloadSpan, flags);
                                         intake.Advance(length);
                                         if (!bodyData.IsEmpty)
@@ -1760,7 +1745,7 @@ internal sealed class Http2OriginConnection : IDisposable
     ///     read loop). Pass <c>false</c> for an expected, caller-initiated teardown (see <see cref="Dispose" />) -
     ///     that is not itself a failure worth reporting; any request that was genuinely in flight when it happened
     ///     still surfaces its own failure through the normal per-request exception handling in
-    ///     <c>Http11ToHttp2BridgeHandler</c> when its <see cref="PendingStream.Completion" /> task faults.
+    ///     <c>Http11ToHttp2BridgeHandler</c> when its <c>PendingStream.Completion</c> task faults.
     /// </param>
     private void Fail(Exception ex, bool report = true)
     {
@@ -1834,9 +1819,9 @@ internal sealed class Http2OriginConnection : IDisposable
         if (writeLock.Wait(0, CancellationToken.None)) // NOSONAR S6966 -- intentional sync try-take before WaitAsync
             return default;
 
-        // Brief spin before WaitAsync: under SoftGrow=SoftPick a single TLS origin conn sees
-        // heavy writeLock convoy at c=64; WaitAsync alone allocates Task nodes per miss.
-        // spin64 (past yield) long A/B: H1 ~0.88× regress vs brief spin ~0.95× — keep brief.
+        // Brief spin before WaitAsync: one busy origin connection convoys on writeLock, and WaitAsync
+        // allocates a waiter per miss. Stop at the first point the spinner would yield; spinning
+        // longer measured slower.
         var spinner = new SpinWait();
         while (!spinner.NextSpinWillYield)
         {

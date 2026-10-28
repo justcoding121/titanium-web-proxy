@@ -23,6 +23,8 @@ internal sealed class QuicServerConnection : IAsyncDisposable
     private int _disposalScheduled;
     private int _firstUseClaimed;
     private int _inFlightStreams;
+    private long lastResponseTicks;
+    private Func<long>? clock;
     private Http3OriginClientSession? _http3ClientSession;
 
     internal QuicServerConnection(
@@ -46,6 +48,20 @@ internal sealed class QuicServerConnection : IAsyncDisposable
         CacheKey = cacheKey;
         NegotiatedApplicationProtocol = SslApplicationProtocol.Http3;
     }
+
+    /// <summary>A response just reached the proxy on this connection.</summary>
+    internal void NoteResponse() => Volatile.Write(ref lastResponseTicks, Now());
+
+    /// <summary>True when a response arrived within <paramref name="windowMs"/>.</summary>
+    internal bool HasDeliveredRecently(long windowMs)
+    {
+        var last = Volatile.Read(ref lastResponseTicks);
+        return last != 0 && Now() - last <= windowMs;
+    }
+
+    internal void UseClockForTests(Func<long> clock) => this.clock = clock;
+
+    private long Now() => clock?.Invoke() ?? Environment.TickCount64;
 
     /// <summary>
     ///     Detached instance for pool unit tests — no live <see cref="QuicConnection" />.

@@ -89,7 +89,7 @@
     original-destination data, and this adapter exposes it to the proxy.
 </p>
 <p>
-    SNI from the QUIC ClientHello (BeforeQuicAuthenticateEventArgs.SniHostName) and
+    SNI from the QUIC ClientHello (<code>BeforeQuicAuthenticateEventArgs.SniHostName</code>) and
     the <code>:authority</code> pseudo-header are validation inputs and context hints, but are not a
     reliable replacement for the actual original destination obtained from the OS routing table or
     packet-filter metadata, especially for pinned certificates, IP-literal URLs, or non-standard ports.
@@ -171,7 +171,7 @@ May be used as a hint but should not be trusted as the authoritative destination
         <td><p>The resolved (<code>hostName</code>, <code>port</code>) tuple, where <code>hostName</code> is the original
 destination host name or IP address string and <code>port</code> is the original destination port.
 Returns <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> if resolution fails and the caller should fall back to
-TransparentQuicProxyEndPoint.ForwardHost / TransparentQuicProxyEndPoint.ForwardPort.</p>
+<code>TransparentQuicProxyEndPoint.ForwardHost</code> / <code>TransparentQuicProxyEndPoint.ForwardPort</code>.</p>
 </td>
       </tr>
     </tbody>

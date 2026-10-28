@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy;
 
@@ -31,6 +32,21 @@ internal static class OriginFailureResponses
     /// <summary>Populate <paramref name="args" /> with the 502/504 response for <paramref name="ex" />.</summary>
     internal static void Apply(SessionEventArgs args, Exception ex)
     {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is UpstreamCapacityException capacity)
+            {
+                // A full cap is backpressure, not a dead origin. Setting Exception lets
+                // ReportUpstreamResult skip passive-health failure counting.
+                args.Exception = capacity;
+                args.GenericResponse(
+                    "Service Unavailable. The upstream connection limit was reached.",
+                    HttpStatusCode.ServiceUnavailable,
+                    [new HttpHeader("Retry-After", "1")]);
+                return;
+            }
+        }
+
         var status = StatusFor(ex);
         var label = status == HttpStatusCode.GatewayTimeout ? "Gateway Timeout" : "Bad Gateway";
         args.GenericResponse($"{label}. {ex.Message}", status);

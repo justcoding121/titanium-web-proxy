@@ -94,7 +94,7 @@ Interfaces
     original-destination data, and this adapter exposes it to the proxy.
 </p>
 <p>
-    SNI from the QUIC ClientHello (BeforeQuicAuthenticateEventArgs.SniHostName) and
+    SNI from the QUIC ClientHello (<code>BeforeQuicAuthenticateEventArgs.SniHostName</code>) and
     the <code>:authority</code> pseudo-header are validation inputs and context hints, but are not a
     reliable replacement for the actual original destination obtained from the OS routing table or
     packet-filter metadata, especially for pinned certificates, IP-literal URLs, or non-standard ports.

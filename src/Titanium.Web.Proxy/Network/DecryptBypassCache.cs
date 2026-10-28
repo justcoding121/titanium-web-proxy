@@ -15,6 +15,8 @@ internal sealed class DecryptBypassCache
     private readonly ConcurrentDictionary<string, Entry> cache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly object writeGate = new();
+
     private TimeSpan ttl = TimeSpan.FromMinutes(30);
     private int maxEntries = 256;
     private int strikeThreshold = 2;
@@ -72,77 +74,87 @@ internal sealed class DecryptBypassCache
     ///     Records an origin TLS handshake failure. When strikes reach the threshold, bypass becomes active.
     ///     Returns true when bypass is (now) active.
     /// </summary>
-    internal bool RecordFailure(string? host)
+    internal bool RecordFailure(string? host) => RecordFailure(host, out _);
+
+    /// <summary>
+    ///     Same as <see cref="RecordFailure(string?)" />, and reports whether this call is the one that turned
+    ///     bypass on. Two connections to one host often fail in the same millisecond; callers that log or raise an
+    ///     event on activation must act on this result, not on a separate <see cref="IsBypassActive" /> read.
+    /// </summary>
+    internal bool RecordFailure(string? host, out bool becameActive)
+    {
+        becameActive = false;
+        if (string.IsNullOrWhiteSpace(host))
+            return false;
+
+        var key = Normalize(host);
+        var now = DateTime.UtcNow;
+        bool active;
+        // Mutated in place under one lock: ConcurrentDictionary.AddOrUpdate may run its update delegate more
+        // than once under contention, which double-counted strikes on a shared mutable entry.
+        lock (writeGate)
+        {
+            if (!cache.TryGetValue(key, out var entry))
+            {
+                entry = new Entry { LearnedAtUtc = now };
+                cache[key] = entry;
+            }
+
+            var wasActive = entry.ExpiresAtUtc > now && entry.BypassActive;
+            if (entry.ExpiresAtUtc <= now)
+            {
+                entry.Strikes = 1;
+                entry.LearnedAtUtc = now;
+                entry.BypassActive = 1 >= StrikeThreshold;
+            }
+            else
+            {
+                entry.Strikes++;
+                if (entry.Strikes >= StrikeThreshold)
+                    entry.BypassActive = true;
+            }
+
+            entry.ExpiresAtUtc = now.Add(Ttl);
+            entry.LastAccessUtc = now;
+            active = entry.BypassActive;
+            becameActive = active && !wasActive;
+        }
+
+        EvictIfOverCapacity();
+        return active;
+    }
+
+    /// <summary>
+    ///     Forces bypass for a host (same-CONNECT opaque fallback after an awaited probe failure).
+    ///     Returns true when this call turned bypass on, false when it was already active.
+    /// </summary>
+    internal bool MarkBypassed(string? host)
     {
         if (string.IsNullOrWhiteSpace(host))
             return false;
 
         var key = Normalize(host);
         var now = DateTime.UtcNow;
-        var entry = cache.AddOrUpdate(key,
-            _ => new Entry
+        bool becameActive;
+        lock (writeGate)
+        {
+            if (!cache.TryGetValue(key, out var entry))
             {
-                Strikes = 1,
-                LearnedAtUtc = now,
-                ExpiresAtUtc = now.Add(Ttl),
-                LastAccessUtc = now,
-                BypassActive = 1 >= StrikeThreshold
-            },
-            (_, existing) =>
-            {
-                if (existing.ExpiresAtUtc <= now)
-                {
-                    existing.Strikes = 1;
-                    existing.LearnedAtUtc = now;
-                    existing.BypassActive = 1 >= StrikeThreshold;
-                }
-                else
-                {
-                    existing.Strikes++;
-                    if (existing.Strikes >= StrikeThreshold)
-                        existing.BypassActive = true;
-                }
+                entry = new Entry { LearnedAtUtc = now };
+                cache[key] = entry;
+            }
 
-                existing.ExpiresAtUtc = now.Add(Ttl);
-                existing.LastAccessUtc = now;
-                return existing;
-            });
+            becameActive = !(entry.ExpiresAtUtc > now && entry.BypassActive);
+            entry.Strikes = Math.Max(entry.Strikes, Math.Max(StrikeThreshold, 1));
+            entry.BypassActive = true;
+            entry.ExpiresAtUtc = now.Add(Ttl);
+            entry.LastAccessUtc = now;
+            if (entry.LearnedAtUtc == default || becameActive)
+                entry.LearnedAtUtc = now;
+        }
 
         EvictIfOverCapacity();
-        return entry.BypassActive;
-    }
-
-    /// <summary>
-    ///     Forces bypass for a host (same-CONNECT opaque fallback after an awaited probe failure).
-    /// </summary>
-    internal void MarkBypassed(string? host)
-    {
-        if (string.IsNullOrWhiteSpace(host))
-            return;
-
-        var key = Normalize(host);
-        var now = DateTime.UtcNow;
-        cache.AddOrUpdate(key,
-            _ => new Entry
-            {
-                Strikes = Math.Max(StrikeThreshold, 1),
-                LearnedAtUtc = now,
-                ExpiresAtUtc = now.Add(Ttl),
-                LastAccessUtc = now,
-                BypassActive = true
-            },
-            (_, existing) =>
-            {
-                existing.Strikes = Math.Max(existing.Strikes, StrikeThreshold);
-                existing.BypassActive = true;
-                existing.ExpiresAtUtc = now.Add(Ttl);
-                existing.LastAccessUtc = now;
-                if (existing.LearnedAtUtc == default)
-                    existing.LearnedAtUtc = now;
-                return existing;
-            });
-
-        EvictIfOverCapacity();
+        return becameActive;
     }
 
     internal bool Remove(string? host)

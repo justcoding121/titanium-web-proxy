@@ -1,4 +1,4 @@
-﻿/*
+/*
     Copyright © 2002, The KPD-Team
     All rights reserved.
     http://www.mentalis.org/
@@ -276,7 +276,6 @@ internal class ProxySocket : Socket
     /// </summary>
     /// <param name="host">The host to resolve.</param>
     /// <param name="callback">The method to call when the hostname has been resolved.</param>
-    /// <param name="state">The state.</param>
     /// <returns>An IAsyncResult instance that references the asynchronous request.</returns>
     /// <exception cref="SocketException">There was an error while trying to resolve the host.</exception>
     private void BeginDns(string host, int port, HandShakeComplete callback, AsyncProxyResult result)

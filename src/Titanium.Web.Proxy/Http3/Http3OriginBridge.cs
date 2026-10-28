@@ -1,28 +1,13 @@
 #pragma warning disable CA1416
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net.Quic;
-using System.Net.Security;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Http2;
-using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
-using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -91,14 +76,10 @@ internal static partial class Http3OriginBridge
             return;
         }
 
-        // Route resolved to non-H3 (forced Http2/Http11 override, or no H3 capability known).
-        if (sessionArgs.UpstreamHttpProtocol == UpstreamHttpProtocol.Http2)
-        {
-            await ForwardOverHttp2Async(sessionArgs, server, logger, cancellationToken, onInterimResponse);
-            return;
-        }
-
-        await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+        // Route resolved to non-H3 (forced Http2/Http11, broken QUIC, or no capability known).
+        // An HTTP/2 client stays on HTTP/2. Dropping it to HTTP/1.1 is what left Google on a
+        // one-request-per-connection fallback after the airplane blackholed UDP.
+        await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
     }
 
     /// <summary>
@@ -132,6 +113,66 @@ internal static partial class Http3OriginBridge
 
         await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse,
             copyRequestBody);
+    }
+
+    /// <summary>
+    ///     True when the TCP leg for this request is HTTP/2 to the origin: an explicit HTTP/2 policy, or an
+    ///     HTTP/2 client without an explicit HTTP/1.1 policy.
+    /// </summary>
+    private static bool PrefersHttp2Origin(SessionEventArgs sessionArgs)
+    {
+        var protocol = sessionArgs.UpstreamHttpProtocol;
+        return protocol == UpstreamHttpProtocol.Http2
+               || (protocol != UpstreamHttpProtocol.Http11
+                   && sessionArgs.HttpClient.Request.HttpVersion == HttpHeader.Version20);
+    }
+
+    /// <summary>
+    ///     Origin TCP after HTTP/3 was not selected or QUIC failed before the request was sent.
+    ///     HTTP/2 clients (and an explicit HTTP/2 policy) use the HTTP/2 origin pool. When the origin
+    ///     simply does not negotiate h2 (nothing sent yet), an H2 client's request is retried as
+    ///     HTTP/1.1. Any other HTTP/2 failure propagates: the request may already be on the wire and
+    ///     a silent replay could double-submit. Explicit HTTP/2 policy never downgrades, and
+    ///     explicit HTTP/1.1 policy never attempts HTTP/2.
+    /// </summary>
+    private static async Task FallbackToTcpOriginAsync(
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse)
+    {
+        var protocol = sessionArgs.UpstreamHttpProtocol;
+        var clientVersion = sessionArgs.HttpClient.Request.HttpVersion;
+
+        if (PrefersHttp2Origin(sessionArgs))
+        {
+            if (protocol == UpstreamHttpProtocol.Http2)
+            {
+                // Explicit policy: no silent downgrade.
+                await ForwardOverHttp2Async(sessionArgs, server, logger, cancellationToken, onInterimResponse,
+                    presentResponseAsHttp3: clientVersion.Major >= 3);
+                return;
+            }
+
+            try
+            {
+                await ForwardOverHttp2Async(sessionArgs, server, logger, cancellationToken, onInterimResponse,
+                    presentResponseAsHttp3: clientVersion.Major >= 3);
+                return;
+            }
+            catch (Http2OriginNotNegotiatedException ex)
+            {
+                if (logger.IsEnabled(LogLevel.Debug))
+                    logger.LogDebug(ex, "Origin does not negotiate HTTP/2; trying HTTP/1.1.");
+            }
+        }
+
+        if (await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse))
+        {
+            await sessionArgs.ClearResponse(cancellationToken);
+            await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse, allowStatusRetry: false);
+        }
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────

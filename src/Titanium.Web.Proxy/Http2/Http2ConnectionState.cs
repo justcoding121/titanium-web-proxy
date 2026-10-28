@@ -448,8 +448,7 @@ internal sealed class Http2ConnectionState
     /// <summary>
     ///     Removes stream registry entries (Streams, MultipartObservers, ClientSyntheticStreams).
     ///     Callers that also own flow-control windows should follow with
-    ///     <see cref="Http2SendFlowController.RemoveStream" /> on both directions, or use
-    ///     <see cref="RemoveStream" />.
+    ///     <see cref="Http2SendFlowController.RemoveStream" /> on both directions.
     /// </summary>
     public bool TryTakeStream(int streamId, out Http2StreamState state)
     {

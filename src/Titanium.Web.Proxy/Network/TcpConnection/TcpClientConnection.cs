@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;
@@ -31,6 +32,11 @@ internal class TcpClientConnection : IDisposable
     internal TcpClientConnection(ProxyServer proxyServer, Socket tcpClientSocket)
     {
         this.tcpClientSocket = tcpClientSocket;
+        if (ProxyProtocolForwarded.TryTake(tcpClientSocket, out var forwarded))
+        {
+            ForwardedRemoteEndPoint = forwarded;
+        }
+
         ProxyServer = proxyServer;
         trackClientConnectionCount = true;
         ProxyServer.UpdateClientConnectionCount(true);
@@ -64,6 +70,11 @@ internal class TcpClientConnection : IDisposable
     /// <summary>Stored remote endpoint for socket-less subclasses (e.g., QUIC).</summary>
     private IPEndPoint? RemoteEndPointOverride { get; }
 
+    private IPEndPoint? ForwardedRemoteEndPoint { get; }
+
+    /// <summary>Inbound client certificate when the listener asked for one.</summary>
+    internal X509Certificate2? ClientCertificate { get; set; }
+
     public object? ClientUserData { get; set; }
 
     private ProxyServer ProxyServer { get; }
@@ -71,7 +82,7 @@ internal class TcpClientConnection : IDisposable
     public long Id { get; } = ConnectionId.Next();
 
     /// <summary>
-    ///     Accept-thread zero-byte <see cref="Socket.ReceiveAsync(System.Memory{byte}, SocketFlags)" /> —
+    ///     Accept-thread zero-byte <c>Socket.ReceiveAsync</c> —
     ///     must complete before any socket read (<see cref="SslStream.AuthenticateAsServerAsync" /> /
     ///     ClientHello peek). Cleared after await.
     /// </summary>
@@ -81,7 +92,8 @@ internal class TcpClientConnection : IDisposable
                                      ?? tcpClientSocket?.LocalEndPoint
                                      ?? throw new InvalidOperationException("Client connection has no local endpoint.");
 
-    public EndPoint RemoteEndPoint => RemoteEndPointOverride
+    public EndPoint RemoteEndPoint => ForwardedRemoteEndPoint
+                                      ?? RemoteEndPointOverride
                                       ?? tcpClientSocket?.RemoteEndPoint
                                       ?? throw new InvalidOperationException("Client connection has no remote endpoint.");
 
@@ -106,6 +118,8 @@ internal class TcpClientConnection : IDisposable
 
         if (disposing)
         {
+            ClientCertificate?.Dispose();
+            ClientCertificate = null;
             // Prefer peer-first close (push TIME_WAIT to the client) only when explicitly requested.
             // Default TcpTimeWaitSeconds==0: close immediately — matches Kestrel SocketConnection
             // and avoids scheduling ~1 Task.Delay per new-connection handshake onto the worker pool.
@@ -164,6 +178,9 @@ internal class TcpClientConnection : IDisposable
     internal virtual void CloseGracefully()
     {
         if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+
+        ClientCertificate?.Dispose();
+        ClientCertificate = null;
 
         if (trackClientConnectionCount)
             ProxyServer.UpdateClientConnectionCount(false);

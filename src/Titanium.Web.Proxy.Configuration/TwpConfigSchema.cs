@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Configuration;
 
@@ -10,6 +11,7 @@ public static class TwpConfigSchema
 {
     private const string ObjectType = "object";
     private const string StringType = "string";
+    private const string MinimumKey = "minimum";
 
     public static string Generate()
     {
@@ -32,7 +34,9 @@ public static class TwpConfigSchema
         {
             if (property.GetMethod is null || property.GetIndexParameters().Length > 0)
                 continue;
-            props[JsonNamingPolicy.CamelCase.ConvertName(property.Name)] = SchemaFor(property.PropertyType, stack);
+            var schema = SchemaFor(property.PropertyType, stack);
+            ApplyKnownConstraints(schema, property);
+            props[JsonNamingPolicy.CamelCase.ConvertName(property.Name)] = schema;
         }
 
         return props;
@@ -71,16 +75,56 @@ public static class TwpConfigSchema
 
         try
         {
-            return new JsonObject
+            var obj = new JsonObject
             {
                 ["type"] = ObjectType,
                 ["additionalProperties"] = false,
-                ["properties"] = PropertiesOf(type, stack),
             };
+            if (type == typeof(Models.MasqueCredentialConfig))
+            {
+                obj["required"] = new JsonArray { "username", "passwordEnv" };
+            }
+
+            obj["properties"] = PropertiesOf(type, stack);
+            return obj;
         }
         finally
         {
             stack.Remove(type);
+        }
+    }
+
+    /// <summary>
+    ///     Bounds and enums the validator enforces. Reflection only sees the CLR type, so these
+    ///     are applied by declaring type and property name before the schema file is compared.
+    /// </summary>
+    private static void ApplyKnownConstraints(JsonObject schema, System.Reflection.PropertyInfo property)
+    {
+        switch (property.DeclaringType?.Name + "." + property.Name)
+        {
+            case "ClusterHttpClientConfig.MaxConnectionsPerServer":
+                schema["description"] =
+                    "Hard cap on open upstream connections per destination, including idle pooled sockets. Waiters time out after the connect timeout with 503 and Retry-After.";
+                break;
+            case "ListenerConfig.ClientCertificateMode":
+                schema["enum"] = new JsonArray { "none", "allow", "require" };
+                break;
+            case "MirrorConfig.MaxBodyBytes":
+                schema[MinimumKey] = 0;
+                schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;
+                break;
+            case "MasqueListenerConfig.MaxBytesPerSecond":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 1_073_741_824;
+                break;
+            case "MasqueListenerConfig.MaxDatagramsPerSecond":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 1_000_000;
+                break;
+            case "MasqueListenerConfig.MaxTunnels":
+            case "MasqueListenerConfig.MaxTunnelsPerClient":
+                schema[MinimumKey] = 1;
+                break;
         }
     }
 

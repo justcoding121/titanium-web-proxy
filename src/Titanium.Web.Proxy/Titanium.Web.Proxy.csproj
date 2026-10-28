@@ -13,7 +13,10 @@
     <!-- Keep in sync with the AssemblyVersion/AssemblyFileVersion attributes in
          Properties/AssemblyInfo.cs on every bump - GenerateAssemblyInfo is false below, so the SDK
          does not derive those attributes from this property automatically. -->
-    <VersionPrefix>7.0.26</VersionPrefix>
+    <VersionPrefix>7.0.27</VersionPrefix>
+    <Authors>Jehonathan Thomas</Authors>
+    <Description>A lightweight, high-performance HTTP(S) proxy server library (MITM and reverse proxy) for .NET.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- The library itself is the canonical implementation of the TWP001 experimental HTTP/3 APIs.
          Suppress the diagnostic internally; consumers will still see it. -->
     <!--
@@ -45,6 +48,7 @@
   <ItemGroup>
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
+    <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>

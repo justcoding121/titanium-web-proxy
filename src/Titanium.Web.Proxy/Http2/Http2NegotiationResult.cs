@@ -45,7 +45,7 @@ internal sealed class Http2NegotiationResult
     internal Task<TcpServerConnection?>? RetainedConnectionTask { get; }
 
     /// <summary>
-    ///     True when <see cref="UpstreamHttpProtocol.Http11" /> was requested together with
+    ///     True when <c>UpstreamHttpProtocol.Http11</c> was requested together with
     ///     <c>AllowHttpProtocolTranslation</c> and the client offered "h2": the origin-facing connection must
     ///     stay HTTP/1.1 (never probed for h2, never touching the shared capability cache), but the client may
     ///     still be offered "h2" because the caller will route the session through the h2-client-to-HTTP/1.1
@@ -57,7 +57,7 @@ internal sealed class Http2NegotiationResult
     internal bool RequiresHttp11Bridge { get; }
 
     /// <summary>
-    ///     True when <see cref="UpstreamHttpProtocol.Http2" /> was required together with
+    ///     True when <c>UpstreamHttpProtocol.Http2</c> was required together with
     ///     <c>AllowHttpProtocolTranslation</c> and the client does not offer "h2": the client-facing
     ///     connection stays HTTP/1.1 (the client never offered "h2", so nothing changes about what is
     ///     negotiated with it), but every request on it must be translated onto the already-established h2

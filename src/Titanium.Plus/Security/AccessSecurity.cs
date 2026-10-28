@@ -5,11 +5,9 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Plus.Security;
 

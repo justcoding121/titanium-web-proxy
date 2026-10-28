@@ -362,17 +362,23 @@ public partial class ProxyServer
 
     /// <summary>
     ///     Injects client-facing <c>Alt-Svc</c> for dual-listen reverse HTTP/3 endpoints when the
-    ///     origin response did not already advertise one.
+    ///     origin response did not already advertise one. Explicit endpoints are skipped: a browser
+    ///     behind an HTTP proxy must not be told to open UDP around the proxy. The H2-to-H3 bridge
+    ///     does not call this (mid-connection upgrades break Chrome).
     /// </summary>
-    private static void MaybeInjectClientAltSvc(SessionEventArgs args)
+    internal static void MaybeInjectClientAltSvc(SessionEventArgs args)
     {
+        // Endpoint type and EnableHttp3 first, then an origin-supplied header, then the cached value.
         if (args.ProxyEndPoint is not TransparentProxyEndPoint { EnableHttp3: true } ep)
+            return;
+
+        if (ep.AltSvc is { Enabled: false })
             return;
 
         var response = args.HttpClient.Response;
         if (response.Headers.HeaderExists(KnownHeaders.AltSvc.String))
             return;
 
-        response.Headers.AddHeader(KnownHeaders.AltSvc, $"h3=\":{ep.Port}\"; ma=86400");
+        response.Headers.AddHeader(KnownHeaders.AltSvc, ep.ClientAltSvcValue);
     }
 }

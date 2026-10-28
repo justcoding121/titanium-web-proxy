@@ -16,20 +16,18 @@ internal static class AltSvcParser
     /// <summary>
     ///     Represents an HTTP/3 alternative service endpoint parsed from an <c>Alt-Svc</c> header.
     /// </summary>
-    internal readonly record struct Http3AltSvc(
-        /// <summary>
-        ///     The port advertised by the origin. <see cref="int.MinValue" /> when the token had an
-        ///     empty host in the alt-authority (e.g. <c>h3=":443"</c> with the same host implied), in
-        ///     which case the consumer should substitute the current connection's port.
-        ///     Note: the RFC allows a different host in the authority; we intentionally ignore different
-        ///     hosts for security (same-origin constraint on proxy-level protocol upgrade).
-        /// </summary>
-        int Port,
-        /// <summary>
-        ///     Max-age in seconds as advertised. Zero or negative values should be treated as
-        ///     "do not cache". Defaults to 86400 (24 h) when the <c>ma</c> parameter is absent.
-        /// </summary>
-        int MaxAgeSeconds);
+    /// <param name="Port">
+    ///     The port advertised by the origin. <see cref="int.MinValue" /> when the token had an
+    ///     empty host in the alt-authority (e.g. <c>h3=":443"</c> with the same host implied), in
+    ///     which case the consumer should substitute the current connection's port.
+    ///     Note: the RFC allows a different host in the authority; we intentionally ignore different
+    ///     hosts for security (same-origin constraint on proxy-level protocol upgrade).
+    /// </param>
+    /// <param name="MaxAgeSeconds">
+    ///     Max-age in seconds as advertised. Zero or negative values should be treated as
+    ///     "do not cache". Defaults to 86400 (24 h) when the <c>ma</c> parameter is absent.
+    /// </param>
+    internal readonly record struct Http3AltSvc(int Port, int MaxAgeSeconds);
 
     private const int DefaultMaxAge = 86400;
 

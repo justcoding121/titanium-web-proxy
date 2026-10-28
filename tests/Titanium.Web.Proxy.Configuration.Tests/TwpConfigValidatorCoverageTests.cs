@@ -128,6 +128,148 @@ public class TwpConfigValidatorCoverageTests
     }
 
     [TestMethod]
+    public void Validate_RejectsAltSvcPortAndMaxAge_AndWarnsWhenHttp3IsOff()
+    {
+        var config = new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Port = 443,
+                    EnableHttp3 = false,
+                    AltSvc = new AltSvcConfig { Port = 0, MaxAgeSeconds = 0 },
+                },
+            ],
+        };
+
+        var errors = string.Join('\n', TwpConfigValidator.Validate(config));
+        Assert.IsTrue(errors.Contains("altSvc.port", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("altSvc.maxAgeSeconds", StringComparison.Ordinal), errors);
+        var warnings = string.Join('\n', TwpConfigValidator.CollectWarnings(config));
+        Assert.IsTrue(warnings.Contains("HTTP/3 is off", StringComparison.Ordinal), warnings);
+    }
+
+    [TestMethod]
+    public void Validate_MasqueLimits_AndWarnsWhenAuthIsOff()
+    {
+        var config = new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Type = "masque",
+                    Host = "0.0.0.0",
+                    Port = 443,
+                    Masque = new MasqueListenerConfig
+                    {
+                        RequireAuth = false,
+                        AllowedPorts = [0],
+                        MaxTunnels = 0,
+                        MaxDatagramsPerSecond = 0,
+                    },
+                },
+            ],
+        };
+
+        var errors = string.Join('\n', TwpConfigValidator.Validate(config));
+        Assert.IsTrue(errors.Contains("allowedPorts", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("maxTunnels", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("maxDatagramsPerSecond", StringComparison.Ordinal), errors);
+        var warnings = string.Join('\n', TwpConfigValidator.CollectWarnings(config));
+        Assert.IsTrue(warnings.Contains("authentication is off", StringComparison.Ordinal), warnings);
+    }
+
+    [TestMethod]
+    public void Validate_Masque_RejectsEmptyPorts_AClientCapAboveTheListener_AndHugeRates()
+    {
+        var config = new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Type = "masque",
+                    Port = 443,
+                    Masque = new MasqueListenerConfig
+                    {
+                        RequireAuth = false,
+                        AllowedPorts = [],
+                        MaxTunnels = 2,
+                        MaxTunnelsPerClient = 8,
+                        MaxDatagramsPerSecond = 1_000_001,
+                        MaxBytesPerSecond = 1_073_741_825,
+                    },
+                },
+            ],
+        };
+
+        var errors = string.Join('\n', TwpConfigValidator.Validate(config));
+        Assert.IsTrue(errors.Contains("must not be empty", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("must not exceed maxTunnels", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("maxDatagramsPerSecond", StringComparison.Ordinal), errors);
+        Assert.IsTrue(errors.Contains("maxBytesPerSecond", StringComparison.Ordinal), errors);
+    }
+
+    [TestMethod]
+    public void Validate_ClientCertificateMode_IsCaseInsensitive_AndOnlyOnTransparentListeners()
+    {
+        var unknown = string.Join('\n', TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "transparent", Port = 443, ClientCertificateMode = "sometimes" }],
+        }));
+        Assert.IsTrue(unknown.Contains("is not none, allow, or require", StringComparison.Ordinal), unknown);
+
+        var wrongType = string.Join('\n', TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "explicit", Port = 8080, ClientCertificateMode = "Require" }],
+        }));
+        Assert.IsTrue(wrongType.Contains("apply only to transparent", StringComparison.Ordinal), wrongType);
+
+        var allowed = string.Join('\n', TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "transparent", Port = 443, ClientCertificateMode = "Require" }],
+        }));
+        Assert.IsFalse(allowed.Contains("clientCertificateMode", StringComparison.OrdinalIgnoreCase), allowed);
+    }
+
+    [TestMethod]
+    public void Validate_Masque_RequiresCredentialsUnlessAuthIsOff()
+    {
+        var missing = TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Type = "masque", Port = 443 }],
+        });
+        Assert.IsTrue(string.Join('\n', missing).Contains("requires credentials or requireAuth: false", StringComparison.Ordinal));
+
+        var withUsers = TwpConfigValidator.Validate(new TwpConfig
+        {
+            Listeners =
+            [
+                new ListenerConfig
+                {
+                    Type = "masque",
+                    Port = 443,
+                    Masque = new MasqueListenerConfig
+                    {
+                        Credentials =
+                        [
+                            new MasqueCredentialConfig { Username = "a", PasswordEnv = "TWP_A" },
+                            new MasqueCredentialConfig { Username = "a", PasswordEnv = "TWP_B" },
+                            new MasqueCredentialConfig { Username = "", PasswordEnv = "" },
+                        ],
+                    },
+                },
+            ],
+        });
+        var text = string.Join('\n', withUsers);
+        Assert.IsFalse(text.Contains("requires credentials", StringComparison.Ordinal), text);
+        Assert.IsTrue(text.Contains("duplicated", StringComparison.Ordinal), text);
+        Assert.IsTrue(text.Contains("username and passwordEnv", StringComparison.Ordinal), text);
+    }
+
+    [TestMethod]
     public void Validate_NullServer_AndEmptyCollections_AreOk()
     {
         Assert.AreEqual(0, TwpConfigValidator.Validate(new TwpConfig()).Count);

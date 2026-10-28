@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Web.Proxy.Exceptions;
 

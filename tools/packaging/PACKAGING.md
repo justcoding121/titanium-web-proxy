@@ -104,7 +104,7 @@ Limitations under winget: update with `winget upgrade`, not `titanium update` (t
 
 ### Chocolatey (Windows)
 
-Package ids: `titanium-cli` (zip), `titanium-inspector` (MSI). Stubs in [`chocolatey/`](chocolatey/). **Automatic:** merge to `beta` / `stable` → `cut-product-tag` → [`release.yml`](../../.github/workflows/release.yml) `publish-chocolatey` (bump SHA256s + `choco push` for stable and `-beta`). Re-push an existing tag with [`chocolatey-publish.yml`](../../.github/workflows/chocolatey-publish.yml). Secret name only: `CHOCOLATEY_API_KEY` (set via `gh secret set`; never commit the key).
+Package ids: `titanium-cli` (zip), `titanium-inspector` (MSI). Stubs in [`chocolatey/`](chocolatey/). **Automatic:** merge to `beta` / `stable` → `cut-product-tag` → [`release.yml`](../../.github/workflows/release.yml) `publish-chocolatey` (bump SHA256s + `choco push` for stable and `-beta`). Re-push an existing tag with [`chocolatey-publish.yml`](../../.github/workflows/chocolatey-publish.yml). Secret name only: `CHOCOLATEY_API_KEY` (set via `gh secret set`; never commit the key). `iconUrl` must be a CDN URL pinned to the release tag (jsDelivr `cdn.jsdelivr.net/gh/...@vX.Y.Z/...`); GitHub raw links are rejected in moderation.
 
 ```shell
 choco install titanium-cli

@@ -1,13 +1,9 @@
 using System;
 using System.Buffers;
-using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -15,17 +11,13 @@ using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Streams;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
-using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
-using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.Http2
 {
@@ -1366,9 +1358,38 @@ namespace Titanium.Web.Proxy.Http2
                         bool dataEndStream = (flags & Http2FrameFlag.EndStream) != 0;
                         await GrantReceiveCreditAsync(streamId, length, forceFlush: dataEndStream);
 
-                        // External-bridge streaming: pump DATA into InboundRequestBodyChannel instead of
-                        // discarding it. Create the channel in onBeforeRequest before returning.
-                        if (connectionState.Streams.TryGetValue(streamId, out var synthState)
+                        // A synthetic extended CONNECT (CONNECT-UDP) is registered in syntheticStreams
+                        // because RespondStreaming cancels the request. Its capsules live on
+                        // InboundTunnelChannel, which the later DATA branch never reaches.
+                        if (connectionState.Streams.TryGetValue(streamId, out var tunnelState)
+                            && tunnelState.IsExtendedConnect
+                            && tunnelState.InboundTunnelChannel != null)
+                        {
+                            GetHttp2PaddedDataRange(buffer, length, (flags & Http2FrameFlag.Padded) != 0,
+                                out int tunnelOff, out int tunnelLen);
+                            if (tunnelLen > 0)
+                            {
+                                var chunk = new byte[tunnelLen];
+                                Buffer.BlockCopy(buffer, tunnelOff, chunk, 0, tunnelLen);
+                                if (!tunnelState.InboundTunnelChannel.Writer.TryWrite(chunk)
+                                    && !tunnelState.InboundTunnelChannel.Reader.Completion.IsCompleted)
+                                {
+                                    ReportException(logger, new ProxyHttpException(
+                                        "HTTP/2 extended CONNECT stream exceeded its bounded relay buffer.",
+                                        null, args));
+                                    RemoveAndFinalizeStream(streamId);
+                                    QueueRstStreamFrame(connectionState, input, streamId,
+                                        Http2ErrorCode.EnhanceYourCalm);
+                                }
+                            }
+
+                            if (dataEndStream)
+                            {
+                                endStream = true;
+                                tunnelState.InboundTunnelChannel.Writer.TryComplete();
+                            }
+                        }
+                        else if (connectionState.Streams.TryGetValue(streamId, out var synthState)
                             && synthState.InboundRequestBodyChannel != null
                             && args != null
                             && !args.HttpClient.Request.Http2IgnoreBodyFrames)
@@ -1430,7 +1451,8 @@ namespace Titanium.Web.Proxy.Http2
                             var chunk = new byte[dataLen];
                             Buffer.BlockCopy(buffer, dataOff, chunk, 0, dataLen);
                             if (!dataStreamState.InboundTunnelChannel.Writer.TryWrite(
-                                    new ReadOnlyMemory<byte>(chunk)))
+                                    new ReadOnlyMemory<byte>(chunk))
+                                && !dataStreamState.InboundTunnelChannel.Reader.Completion.IsCompleted)
                             {
                                 ReportException(logger, new ProxyHttpException(
                                     "HTTP/2 extended CONNECT stream exceeded its bounded relay buffer.",
@@ -2356,8 +2378,11 @@ namespace Titanium.Web.Proxy.Http2
                     if (connectionState.TryTakeStream(streamId, out var resetStream))
                     {
                         resetBeforeOriginHeaders = isClient
-                            && resetStream.SessionArgs?.HttpClient.Request is
-                                { Http2HeadersDeferred: true, Http2HeadersQueued: false };
+                            && (resetStream.SessionArgs?.HttpClient.Request is
+                                    { Http2HeadersDeferred: true, Http2HeadersQueued: false }
+                                // BeforeRequest still running: HEADERS not queued yet (a slow handler plus a
+                                // browser that cancels and re-issues the request is enough to hit this).
+                                || TryHoldClientResetUntilHeaders(connectionState, resetStream));
                         // RFC 8441: if the reset stream is an extended CONNECT tunnel, unblock the relay
                         // that is reading from the inbound channel so it can shut down promptly.
                         resetStream.InboundTunnelChannel?.Writer.TryComplete();

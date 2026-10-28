@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -54,6 +55,30 @@ internal class TcpServerConnection : IDisposable
     /// <see cref="Models.ProxyEndPoint.MaxCachedConnections"/>. Null = use server default.
     /// </summary>
     internal int? PoolSizeLimit { get; set; }
+
+    /// <summary>
+    ///     Set only when the pool key has a concurrent connection cap. Null on the hot path.
+    /// </summary>
+    internal ConnectionBudget? Budget { get; private set; }
+
+    private int budgetSlotHeld;
+
+    internal void AttachBudget(ConnectionBudget budget)
+    {
+        Budget = budget;
+        budgetSlotHeld = 1;
+    }
+
+    /// <summary>Releases the cap slot once. Disposal is single-shot, so the decrement is too.</summary>
+    internal void ReleaseBudgetSlotOnce()
+    {
+        if (Budget is null || Interlocked.Exchange(ref budgetSlotHeld, 0) != 1)
+        {
+            return;
+        }
+
+        Budget.ReleaseSlot();
+    }
 
     public long Id { get; } = ConnectionId.Next();
 
@@ -112,6 +137,37 @@ internal class TcpServerConnection : IDisposable
     /// </summary>
     internal DateTime LastAccess { get; set; }
 
+    private int exchangesStarted;
+
+    /// <summary>
+    ///     True once at least one HTTP/1.x request has been written on this connection: a request sent now is
+    ///     a keep-alive reuse. An origin that idle-closed the socket in the meantime ends such a request with
+    ///     EOF before any response byte, which is the one failure where replaying even a POST is safe.
+    /// </summary>
+    internal bool HasServedExchange => Volatile.Read(ref exchangesStarted) > 0;
+
+    /// <summary>Records that a request is about to be written; returns whether the connection was already used.</summary>
+    internal bool MarkExchangeStarted()
+    {
+        Volatile.Write(ref lastExchangeStartTimestamp, Stopwatch.GetTimestamp());
+        return Interlocked.Increment(ref exchangesStarted) > 1;
+    }
+
+    private long lastExchangeStartTimestamp;
+
+    /// <summary>Time since the most recent request was written on this connection.</summary>
+    internal TimeSpan SinceLastExchangeStarted =>
+        Stopwatch.GetElapsedTime(Volatile.Read(ref lastExchangeStartTimestamp));
+
+    /// <summary>
+    ///     True when the connection already served a request and has been quiet for at least
+    ///     <paramref name="minimumIdle" /> since it started. A connection the origin idle-closes was idle for
+    ///     the origin's keep-alive timeout (seconds); one that served a request milliseconds ago is not at risk,
+    ///     so hot keep-alive traffic never pays for replay protection.
+    /// </summary>
+    internal bool HasBeenIdleSinceLastExchange(TimeSpan minimumIdle) =>
+        HasServedExchange && SinceLastExchangeStarted >= minimumIdle;
+
     /// <summary>
     ///     True once the HTTP/2 connection preface has been written on this connection, i.e. it carries a
     ///     real h2 session rather than being an ALPN-negotiated-but-never-started socket. An h2 connection
@@ -158,7 +214,14 @@ internal class TcpServerConnection : IDisposable
     /// </summary>
     internal bool TryScheduleDisposal()
     {
-        return Interlocked.CompareExchange(ref disposalScheduled, 1, 0) == 0;
+        if (Interlocked.CompareExchange(ref disposalScheduled, 1, 0) != 0)
+        {
+            return false;
+        }
+
+        // Free the cap before the 1 second close delay, or waiters time out while the socket lingers.
+        ReleaseBudgetSlotOnce();
+        return true;
     }
 
     /// <summary>
@@ -195,6 +258,10 @@ internal class TcpServerConnection : IDisposable
     protected virtual void Dispose(bool disposing)
     {
         if (disposed) return;
+
+        // ClearPools disposes pooled sockets directly. The slot has to drop here, before the
+        // one-second close delay, or a capped cluster keeps the slot after the socket is gone.
+        ReleaseBudgetSlotOnce();
 
         if (disposing)
         {

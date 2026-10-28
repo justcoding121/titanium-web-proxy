@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Net;
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
-using Titanium.Plus;
 using Titanium.Plus.Security;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;

@@ -36,13 +36,13 @@ TCP HTTP/1 origin.
 |--------|--------|------|-----|
 | HTTP/1.x | HTTP/1.x | Native | Default TCP pipeline. |
 | HTTP/2 | HTTP/2 | Native | TLS ALPN MITM (`EnableHttp2`, on by default). Prior-knowledge cleartext h2c on transparent reverse (`DecryptSsl: false`) for inbound clients; with `ForwardCleartext` + `UpstreamHttpProtocol.Http2`, origin is outbound h2c. |
-| HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. |
+| HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. A failed QUIC exchange is not retried on another transport, except in Auto mode where a silent origin gets one TCP replay of a safe bodiless request; forced HTTP/3 never falls back. See [HTTP/3](HTTP-3#user-content-when-an-http3-origin-is-slow-or-unreachable). |
 | HTTP/1.1 | HTTP/2 | Bridge | `Http11ToHttp2BridgeHandler` when `UpstreamHttpProtocol.Http2` and `AllowHttpProtocolTranslation` are set (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`). |
 | HTTP/2 | HTTP/1.1 | Bridge | `Http2ToHttp11BridgeHandler` when `UpstreamHttpProtocol.Http11` and `AllowHttpProtocolTranslation` are set (TLS ALPN or inbound h2c client). |
 | HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
-| HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. |
+| HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. QUIC origins follow the same fallback rules as HTTP/3 → HTTP/3 above. |
 | HTTP/3 | HTTP/2 | Bridge | `Http3OriginBridge.ForwardOverHttp2Async` via `Http2OriginConnection` (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`) when `UpstreamHttpProtocol.Http2` is set. |
-| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. |
+| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A gateway 502/503/504 on a bodiless request can replay once onto another destination when the route sets `retry.attempts`. An HTTP/3 client talking to an HTTP/2 origin is not retried. |
 
 Not supported:
 
@@ -54,6 +54,51 @@ Not supported:
 WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (plus a native h2↔h2 DATA
 tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
 [HTTP/3](HTTP-3).
+
+## Observing the two legs
+
+On a bridge, `Request.HttpVersion` and `Response.HttpVersion` are rewritten for the wire they are about to
+cross: an HTTP/2 client bridged onto an HTTP/1.1 origin has its request rewritten to `1.1` before it is sent,
+and an HTTP/1.1 client bridged onto an HTTP/2 or HTTP/3 origin has the response stamped with the client's
+version so the client-side status line is valid. Those fields drive framing, so they stay as they are.
+
+To label or branch on what each side actually negotiated, read the two read-only properties on
+`e.HttpClient` instead:
+
+| Property | Meaning |
+|----------|---------|
+| `ClientHttpVersion` | What the client negotiated with the proxy. |
+| `OriginHttpVersion` | What the proxy spoke to the origin. `0.0` until a response exists. |
+
+| Exchange | `ClientHttpVersion` | `OriginHttpVersion` |
+|----------|---------------------|---------------------|
+| HTTP/1.1 client to HTTP/1.1 origin (native) | 1.1 | 1.1 |
+| HTTP/2 client to HTTP/2 origin (native) | 2.0 | 2.0 |
+| HTTP/2 client to HTTP/1.1 origin (bridge) | 2.0 | 1.1 |
+| HTTP/1.1 client to HTTP/2 origin (bridge) | 1.1 | 2.0 |
+| HTTP/1.1 client to HTTP/3 origin (bridge) | 1.1 | 3.0 |
+| HTTP/2 client to HTTP/3 origin (bridge) | 2.0 | 3.0 |
+
+On a native exchange both properties return the raw `Request`/`Response` version, and reading
+`OriginHttpVersion` never creates a response. The values hold for the whole exchange, including
+`BeforeResponse` and `AfterResponse`, and are cleared when the connection is reused for the next request.
+Titanium Inspector's Protocol column and its throttle latency decision use them.
+
+## Gateway status retry
+
+A route opts in with `retry.attempts` greater than 0. Before any request body byte is sent, a 502, 503,
+or 504 from the origin is replayed once onto another destination. The client sees the second answer.
+
+| Path | Retried |
+|------|---------|
+| HTTP/1.1 client to an HTTP/1.1 origin | Yes |
+| HTTP/2 client to an HTTP/1.1 origin | Yes |
+| HTTP/3 client to an HTTP/1.1 origin | Yes |
+| HTTP/3 client to an HTTP/2 origin | No |
+| QUIC origins (HTTP/3 to HTTP/3, and HTTP/2 to HTTP/3) | No |
+| HTTP/2 to HTTP/2 native relay | No |
+| HTTP/1.1 client to an HTTP/2 origin | No |
+| CONNECT, WebSocket, a request that has a body, `Expect: 100-continue`, Windows authentication | Never |
 
 ## Connections and framing
 
@@ -67,6 +112,7 @@ tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. 
 | HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (no CONTINUATION frames); multi-frame header blocks do not exist in HTTP/3. |
 | `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | N/A | HTTP/3 uses extended CONNECT (RFC 9220) for WebSocket — not yet implemented. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | No | HTTP/3 transparent endpoint only; no explicit QUIC proxy yet (see [HTTP-3](HTTP-3) §Why no explicit endpoint). |
+| CONNECT-UDP (MASQUE, RFC 9298) | No | Opt-in `Upgrade: connect-udp` when `allowHttp11Upgrade` is true | Capsules on a `type: masque` listener | No | A decrypting hairpin is not implemented. Existing listener types still return 501 for `:protocol connect-udp`. See [MASQUE](MASQUE). |
 | ALPN-based protocol routing | N/A | N/A | Yes | Yes | HTTP/3 negotiates `h3` via QUIC TLS 1.3; the QUIC listener only accepts connections with `h3` ALPN. |
 | Origin HTTP/3 discovery / Alt-Svc caching | N/A | N/A | N/A | Yes | `Http3OriginCapabilityCache` stores per-origin H3 capability with TTL from `Alt-Svc: h3=...; ma=...` headers; all protocols use the cache for origin selection when `EnableHttp3 = true`. |
 | Stream multiplexing | N/A | N/A | Yes | Yes | HTTP/2: concurrent streams tracked per connection in `Http2Helper`. HTTP/3: QUIC bidirectional streams, one per request/response pair. |
@@ -150,6 +196,10 @@ See also the advertised=enforced consolidation in [Migration from 4.x](Migration
 ## HTTP/3 (QUIC) — opt-in, experimental
 
 HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
+A silent QUIC origin is replayed over TCP only for a safe bodiless request, and only when that QUIC
+connection has not delivered a response in the last 30 seconds. A busy connection is left alone.
+The first request on an idle connection can still be replayed. Operators who do not want QUIC set
+an upstream policy of HTTP/2 or HTTP/1.1.
 It requires the MsQuic native library and `System.Net.Quic.QuicListener.IsSupported == true` at runtime.
 CLI/Inspector Release zips bundle natives per RID (Windows uses OS MsQuic on Win11/Server 2022+).
 NuGet library hosts install system `libmsquic` on Linux/macOS (or bundle with `@loader_path` on macOS) — see [HTTP-3](HTTP-3).
@@ -191,6 +241,7 @@ The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-co
 
 ## Where to look for more detail
 
+- [MASQUE](MASQUE) - CONNECT-UDP over HTTP/2 capsules on a `type: masque` listener.
 - [Streaming Bodies](Streaming-Bodies) - the `OnRequestBodyWrite`/`OnResponseBodyWrite`/`RespondStreaming` APIs in depth.
 - [HTTP/3](HTTP-3) - HTTP/3 and QUIC setup, `TransparentQuicProxyEndPoint`, and `EnableHttp3`.
 - [Home](Home) - general usage and the rest of the public API surface.

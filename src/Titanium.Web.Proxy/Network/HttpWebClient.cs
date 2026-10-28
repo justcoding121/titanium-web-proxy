@@ -151,6 +151,71 @@ public class HttpWebClient
 
     private Response? response;
 
+    // The legs are stored as one byte each (major * 10 + minor, 0 = not recorded) rather than as Version
+    // references: only 1.0 / 1.1 / 2.0 / 3.0 are ever recorded, so this adds no pointer for the GC to scan and
+    // packs into existing field padding. Native exchanges never write either field.
+
+    /// <summary>
+    ///     Client-facing leg recorded by a translation bridge that rewrites <see cref="Request" />'s version for
+    ///     the origin wire. Zero on every native exchange.
+    /// </summary>
+    private byte clientLegHttpVersion;
+
+    /// <summary>
+    ///     Origin-facing leg recorded by a translation bridge that stamps the response with the client's version
+    ///     so the client-side status line is valid. Zero on every native exchange.
+    /// </summary>
+    private byte originLegHttpVersion;
+
+    /// <summary>
+    ///     HTTP version of the client-facing leg: what the client negotiated with the proxy.
+    ///     Equals <c>Request.HttpVersion</c> except while a translation bridge has rewritten the request's
+    ///     version for the origin wire (an HTTP/2 client bridged onto an HTTP/1.1 origin reports
+    ///     <c>2.0</c> here for the whole exchange). Use this, not <c>Request.HttpVersion</c>, to label or
+    ///     branch on the client protocol. <c>0.0</c> when unknown.
+    /// </summary>
+    public Version ClientHttpVersion =>
+        clientLegHttpVersion == 0 ? Request.HttpVersion : DecodeLegVersion(clientLegHttpVersion);
+
+    /// <summary>
+    ///     HTTP version of the origin-facing leg: what the proxy actually spoke to the origin.
+    ///     Equals <c>Response.HttpVersion</c> except where a bridge stamps the response with the client's
+    ///     version for the client-side status line (an HTTP/1.1 client bridged onto an HTTP/2 or HTTP/3 origin
+    ///     reports <c>2.0</c> or <c>3.0</c> here). Reading it never materializes a response. <c>0.0</c> when
+    ///     no response has been received yet.
+    /// </summary>
+    public Version OriginHttpVersion =>
+        originLegHttpVersion != 0
+            ? DecodeLegVersion(originLegHttpVersion)
+            : response?.HttpVersion ?? HttpHeader.VersionUnknown;
+
+    /// <summary>Record the client leg before a bridge rewrites the request version for the origin wire.</summary>
+    internal void RecordClientHttpVersion(Version version) => clientLegHttpVersion = EncodeLegVersion(version);
+
+    /// <summary>Record the origin leg where a bridge stamps the response with the client's version.</summary>
+    internal void RecordOriginHttpVersion(Version version) => originLegHttpVersion = EncodeLegVersion(version);
+
+    /// <summary>True when a bridge already recorded the origin leg for this exchange.</summary>
+    internal bool HasRecordedOriginHttpVersion => originLegHttpVersion != 0;
+
+    /// <summary>
+    ///     <c>major * 10 + minor</c> for a version this proxy speaks; zero (not recorded) for anything else, so a
+    ///     version that cannot be represented falls back to the raw <c>Request</c>/<c>Response</c> value.
+    /// </summary>
+    private static byte EncodeLegVersion(Version version) =>
+        version.Major is >= 1 and <= 3 && version.Minor is 0 or 1 && version.Build < 0
+            ? (byte)(version.Major * 10 + version.Minor)
+            : (byte)0;
+
+    private static Version DecodeLegVersion(byte code) => code switch
+    {
+        10 => HttpHeader.Version10,
+        11 => HttpHeader.Version11,
+        20 => HttpHeader.Version20,
+        30 => HttpHeader.Version30,
+        _ => new Version(code / 10, code % 10)
+    };
+
     /// <summary>
     ///     PID of the local client process for this session (Windows, Linux, and macOS).
     ///     Remote clients, unsupported platforms, and unresolved sockets yield a non-positive value.
@@ -233,6 +298,8 @@ public class HttpWebClient
     internal ValueTask SendRequest(bool enable100ContinueBehaviour, bool isTransparent, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         OriginHttpVersionPolicy originHttpVersionPolicy, CancellationToken cancellationToken)
     {
+        RequestSentOnReusedConnection = Connection.MarkExchangeStarted();
+
         var upstreamProxy = Connection.UpStreamProxy;
 
         var useUpstreamProxy = upstreamProxy != null && upstreamProxy.ProxyType == ExternalProxyType.Http &&
@@ -396,7 +463,9 @@ public class HttpWebClient
                 throw new RetryableServerConnectionException(
                     "Server connection was closed before any response was received.");
 
-            throw new IOException("Server closed the connection before sending a response.");
+            throw new IOException(
+                $"Server closed the connection before sending a response ({Request.Method} {Request.Host}, " +
+                $"{(RequestSentOnReusedConnection ? "reused" : "fresh")} connection).");
         }
 
         Response.HttpVersion = httpStatus.Value.Version;
@@ -442,7 +511,28 @@ public class HttpWebClient
         (!Request.HasBody || Request.IsBodyRead)
         && Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method);
 
-    private bool CanRetryEofBeforeResponse() => CanRetryMalformedStatusLine();
+    /// <summary>
+    ///     EOF before a single response byte on a keep-alive connection that already carried a request means the
+    ///     origin idle-closed it while it sat in the pool: it never read this request. Browsers replay any method
+    ///     in that case (Chrome and Firefox resend a POST on a reused socket that closes with no response), and
+    ///     the proxy must, because the pooled socket is invisible to the browser and a 502 is not retried.
+    ///     The request must still be replayable (no body, or a buffered one); a fresh connection that closes
+    ///     without answering may have processed the request, so only idempotent methods are replayed there.
+    /// </summary>
+    private bool CanRetryEofBeforeResponse() =>
+        (!Request.HasBody || Request.IsBodyRead)
+        && (Routing.StreamDestinationDispatch.IsIdempotentMethod(Request.Method)
+            || (RequestSentOnReusedConnection && Connection.SinceLastExchangeStarted <= StaleSocketReplayWindow));
+
+    /// <summary>
+    ///     A socket the origin idle-closed fails the moment the request is written: the FIN is already in flight.
+    ///     An EOF that arrives long after the write means the origin accepted the request and then died, so a
+    ///     non-idempotent request must not be sent again.
+    /// </summary>
+    private static readonly TimeSpan StaleSocketReplayWindow = TimeSpan.FromSeconds(5);
+
+    /// <summary>True when the last <see cref="SendRequest" /> was written on a keep-alive connection that had served a request.</summary>
+    internal bool RequestSentOnReusedConnection { get; private set; }
 
     private static RetryableServerConnectionException MalformedStatusLine(FormatException ex) =>
         new("Server returned a response that did not start with an HTTP status line.", ex);
@@ -481,6 +571,8 @@ public class HttpWebClient
         upstreamConnectionId = null;
         upstreamRemoteEndPoint = null;
         upstreamConnectionTiming = null;
+        clientLegHttpVersion = 0;
+        originLegHttpVersion = 0;
         CloseServerConnection = false;
         Request.ResetForKeepAlive();
         response?.ResetForKeepAlive();
@@ -498,6 +590,8 @@ public class HttpWebClient
         upstreamConnectionId = null;
         upstreamRemoteEndPoint = null;
         upstreamConnectionTiming = null;
+        clientLegHttpVersion = 0;
+        originLegHttpVersion = 0;
         CloseServerConnection = false;
         Request = request;
         if (response is not null)

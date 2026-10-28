@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Http3.Dns;
 
 namespace Titanium.Web.Proxy.UnitTests;
 
@@ -145,6 +146,43 @@ public class Http3OriginCapabilityCacheTests
     }
 
     [TestMethod]
+    public void MarkBroken_BlocksAdvertisement_UntilOverride()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("www.google.com:443");
+        Assert.IsTrue(cache.TryGet("www.google.com:443", out _));
+
+        cache.MarkBroken("www.google.com:443");
+
+        Assert.IsTrue(cache.IsBroken("www.google.com:443"));
+        Assert.IsFalse(cache.TryGet("www.google.com:443", out _),
+            "A broken origin must not be selected for HTTP/3.");
+        Assert.IsFalse(cache.Set("www.google.com:443", altPort: 443),
+            "Alt-Svc / SVCB must not re-arm HTTP/3 during the broken window.");
+        Assert.IsFalse(cache.TryGet("www.google.com:443", out _));
+
+        Assert.IsTrue(cache.Set("www.google.com:443", overrideBroken: true));
+        Assert.IsFalse(cache.IsBroken("www.google.com:443"));
+        Assert.IsTrue(cache.TryGet("www.google.com:443", out _));
+    }
+
+    [TestMethod]
+    public async Task MarkBroken_AfterExpiry_AllowsSet()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.MarkBroken("www.google.com:443", ttl: TimeSpan.FromMilliseconds(50));
+        Assert.IsTrue(cache.IsBroken("www.google.com:443"));
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (cache.IsBroken("www.google.com:443") && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+
+        Assert.IsFalse(cache.IsBroken("www.google.com:443"));
+        Assert.IsTrue(cache.Set("www.google.com:443"));
+        Assert.IsTrue(cache.TryGet("www.google.com:443", out _));
+    }
+
+    [TestMethod]
     public void TwoArgTryGet_Overload_StillWorks()
     {
         // Verify the convenience overload that discards targetName compiles and returns correct altPort.
@@ -154,6 +192,103 @@ public class Http3OriginCapabilityCacheTests
         var found = cache.TryGet("example.com:443", out var altPort);
         Assert.IsTrue(found);
         Assert.AreEqual(8443, altPort);
+    }
+}
+
+/// <summary>
+///     A broken origin is retried after a window that doubles with each consecutive failure.
+/// </summary>
+[TestClass]
+public class Http3OriginCapabilityCacheBackoffTests
+{
+    private const string Key = "origin.example:443";
+    private static readonly TimeSpan Five = TimeSpan.FromMinutes(5);
+    private static readonly double[] ExpectedWindowMinutes = [5d, 10d, 20d, 40d, 60d, 60d];
+
+    private static (Http3OriginCapabilityCache Cache, Support.ManualTimeProvider Time) Create()
+    {
+        var time = new Support.ManualTimeProvider();
+        return (new Http3OriginCapabilityCache(time), time);
+    }
+
+    [TestMethod]
+    public void FirstFailure_UsesTheFiveMinuteWindow()
+    {
+        var (cache, _) = Create();
+        Assert.AreEqual(Five, cache.MarkBroken(Key));
+        Assert.IsTrue(cache.IsBroken(Key));
+    }
+
+    [TestMethod]
+    public void AFailureInsideTheLiveWindow_DoesNotEscalate()
+    {
+        var (cache, time) = Create();
+        cache.MarkBroken(Key);
+        time.Advance(TimeSpan.FromMinutes(1));
+        Assert.AreEqual(Five, cache.MarkBroken(Key), "a second in-flight failure restarts the same window, it does not double it");
+
+        time.Advance(Five + TimeSpan.FromSeconds(1));
+        Assert.IsFalse(cache.IsBroken(Key));
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key), "a failure after the window doubles it");
+    }
+
+    [TestMethod]
+    public void WindowsDouble_AndStopAtOneHour()
+    {
+        var (cache, time) = Create();
+        var seen = new List<double>();
+        for (var i = 0; i < 6; i++)
+        {
+            var window = cache.MarkBroken(Key);
+            seen.Add(window.TotalMinutes);
+            time.Advance(window + TimeSpan.FromSeconds(1));
+        }
+
+        CollectionAssert.AreEqual(ExpectedWindowMinutes, seen);
+    }
+
+    [TestMethod]
+    public void ACompletedQuicExchange_ResetsTheStreak()
+    {
+        var (cache, time) = Create();
+        time.Advance(cache.MarkBroken(Key) + TimeSpan.FromSeconds(1));
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key));
+        Assert.IsTrue(cache.Set(Key, overrideBroken: true));
+
+        Assert.AreEqual(Five, cache.MarkBroken(Key));
+    }
+
+    [TestMethod]
+    public void AnAdvertisementAfterTheWindow_DoesNotResetTheStreak()
+    {
+        var (cache, time) = Create();
+        time.Advance(cache.MarkBroken(Key) + TimeSpan.FromMinutes(1));
+        Assert.IsTrue(cache.Set(Key), "the window is over, so an advertisement is accepted");
+
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key));
+    }
+
+    [TestMethod]
+    public void TrimExpired_KeepsTheStreakForAnHourAfterTheWindow()
+    {
+        var (cache, time) = Create();
+        time.Advance(cache.MarkBroken(Key) + TimeSpan.FromMinutes(1));
+        cache.TrimExpired();
+        Assert.AreEqual(TimeSpan.FromMinutes(10), cache.MarkBroken(Key), "the streak survived the trim");
+
+        time.Advance(TimeSpan.FromMinutes(10) + Http3OriginCapabilityCache.MaxBrokenTtl + TimeSpan.FromMinutes(1));
+        cache.TrimExpired();
+        Assert.AreEqual(Five, cache.MarkBroken(Key), "a quiet hour forgets the streak");
+    }
+
+    [TestMethod]
+    public void AnExplicitWindow_IsTheBaseOfTheBackoff()
+    {
+        var (cache, time) = Create();
+        var window = cache.MarkBroken(Key, TimeSpan.FromSeconds(30));
+        Assert.AreEqual(TimeSpan.FromSeconds(30), window);
+        time.Advance(window + TimeSpan.FromSeconds(1));
+        Assert.AreEqual(TimeSpan.FromSeconds(60), cache.MarkBroken(Key, TimeSpan.FromSeconds(30)));
     }
 }
 
@@ -360,5 +495,60 @@ public class Http3OriginCapabilityCacheTrimTests
         cache.TrimExpired();
 
         Assert.IsTrue(cache.TryGet("live.example.com:443", out _), "Active entry must survive TrimExpired");
+    }
+
+    [TestMethod]
+    public void EvictUnlessBroken_DropsAUsableEntry_AndKeepsABrokenMark()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        cache.Set("usable.example:443", ttl: TimeSpan.FromMinutes(5));
+        cache.EvictUnlessBroken("usable.example:443");
+        Assert.IsFalse(cache.TryGet("usable.example:443", out _));
+
+        cache.MarkBroken("broken.example:443", TimeSpan.FromMinutes(5));
+        cache.EvictUnlessBroken("broken.example:443");
+        Assert.IsTrue(cache.IsBroken("broken.example:443"));
+    }
+
+    [TestMethod]
+    public async Task TrimExpired_DoesNotDeleteABrokenMarkWrittenDuringTheTrim()
+    {
+        var cache = new Http3OriginCapabilityCache();
+        const string key = "race.example:443";
+        var lost = 0;
+        var stop = 0;
+        var trimmer = Task.Run(() =>
+        {
+            while (Volatile.Read(ref stop) == 0)
+                cache.TrimExpired();
+        });
+
+        for (var i = 0; i < 400; i++)
+        {
+            cache.Set(key, ttl: TimeSpan.FromTicks(1));
+            cache.MarkBroken(key, TimeSpan.FromMinutes(5));
+            if (!cache.IsBroken(key))
+                Interlocked.Increment(ref lost);
+        }
+
+        Volatile.Write(ref stop, 1);
+        await trimmer;
+        Assert.AreEqual(0, lost);
+    }
+
+    [TestMethod]
+    public void SvcbGenerations_TrimRemovesIdleKeys_AndKeepsAnInFlightKey()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var coordinator = new Http3SvcbDiscoveryCoordinator(proxy);
+        for (var i = 0; i < 30; i++)
+            coordinator.Invalidate("idle-" + i + ":443");
+        Assert.IsTrue(coordinator.TryPinInFlightForTests("live.example:443"));
+        coordinator.Invalidate("live.example:443");
+
+        coordinator.TrimExpired();
+
+        Assert.AreEqual(1, coordinator.GenerationCountForTests);
+        coordinator.Dispose();
     }
 }

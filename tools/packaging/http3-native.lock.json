@@ -19,8 +19,8 @@
         },
         {
           "name": "libssl3",
-          "url": "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.29_amd64.deb",
-          "sha256": "c12bbf0074c44019bdf4b035b058c24eb904fc772c94707b1df801a4d130e146"
+          "url": "http://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.30_amd64.deb",
+          "sha256": "d1b4636e32ac6d3b95d583ac05ac548b1aa248414bae1c51b14f54be0f8fd7bc"
         }
       ],
       "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
@@ -36,8 +36,8 @@
         },
         {
           "name": "libssl3",
-          "url": "http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.29_arm64.deb",
-          "sha256": "3b25897180b0a84a7c7ad19ba310d6bdb45d5ce89742b478e12f606bed38fafa"
+          "url": "http://ports.ubuntu.com/ubuntu-ports/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.30_arm64.deb",
+          "sha256": "1c4b8cc736eed8a0caafc385f854fa6852382221d84be4795f1d19a52b9fec53"
         }
       ],
       "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
@@ -53,13 +53,13 @@
         },
         {
           "name": "libssl3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.8-r0.apk",
-          "sha256": "aca521e5ae4a321322a9d47ed64a1775f5ab1ffd215d1e9fc0433c58f7bfd037"
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libssl3-3.5.9-r0.apk",
+          "sha256": "05e3393fb95aa5751ca2f9d242f659f6cff82c1cc7767cc2df4a086f7ad01877"
         },
         {
           "name": "libcrypto3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.8-r0.apk",
-          "sha256": "161223a16f042b8e469e9441291e071464fd91d4f4bbe6f496ee8d0abd4e0701"
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/libcrypto3-3.5.9-r0.apk",
+          "sha256": "6632d758d8f5e9ea3b650fe966f23bbf9a202f8b8dceecac93da135dec5e3689"
         }
       ],
       "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],
@@ -75,13 +75,13 @@
         },
         {
           "name": "libssl3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.8-r0.apk",
-          "sha256": "d6ec970cc10e01539e41626f720c4e0ac69016eaa2079a10ef776ffd3243db5b"
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libssl3-3.5.9-r0.apk",
+          "sha256": "20ac252b276d73f2c69c1d25f84537c7fba81caefc026c6be1094b394af2082e"
         },
         {
           "name": "libcrypto3",
-          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.8-r0.apk",
-          "sha256": "35b892813c23664a3592e4fc8c12a03538a22c579057655361c7043305272a9a"
+          "url": "http://dl-cdn.alpinelinux.org/alpine/v3.24/main/aarch64/libcrypto3-3.5.9-r0.apk",
+          "sha256": "2676a2b0b6e23ea2edccf3ee982b9842a665d52603d047de3d0a185dc316d983"
         }
       ],
       "requiredFiles": ["libmsquic.so*", "libssl.so.3", "libcrypto.so.3"],

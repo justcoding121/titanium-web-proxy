@@ -356,7 +356,10 @@ All existing `BeforeRequest`/`BeforeResponse`/`AfterResponse` event handlers wor
 streams. The proxy auto-discovers HTTP/3 capability via `Alt-Svc` (and optional background HTTPS/SVCB
 DNS) and uses HTTP/3 on **new** Auto-mode connections once that origin is in the capability cache.
 Background QUIC warm-up starts when the cache is filled. An already-open H2↔H2 MITM session keeps
-using H2 for its streams rather than upgrading them mid-connection.
+using H2 for its streams rather than upgrading them mid-connection. A slow or silent QUIC origin falls
+back to TCP in Auto mode and never in forced HTTP/3 — see
+[When an HTTP/3 origin is slow or unreachable](HTTP-3#user-content-when-an-http3-origin-is-slow-or-unreachable).
+For an opaque CONNECT-UDP relay see [MASQUE](MASQUE).
 
 ## Tunnel (CONNECT) interception
 

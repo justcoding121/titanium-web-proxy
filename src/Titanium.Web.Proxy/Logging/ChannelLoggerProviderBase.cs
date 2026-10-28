@@ -175,7 +175,7 @@ internal abstract class ChannelLoggerProviderBase : ILoggerProvider
             channel.Writer.TryComplete();
             priorityChannel.Writer.TryComplete();
 
-            var writerCompletedInTime = false;
+            bool writerCompletedInTime;
             try
             {
                 // Bounded drain: give the writer a short window to flush what is already queued, but

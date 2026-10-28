@@ -1,6 +1,5 @@
 using System;
 using System.Buffers.Text;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Helpers;

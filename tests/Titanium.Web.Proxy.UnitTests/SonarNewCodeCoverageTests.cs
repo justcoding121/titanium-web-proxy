@@ -969,7 +969,7 @@ public class SonarNewCodeCoverageTests
                 session.HttpClient.Request.Headers.AddHeader("Cookie", "a=1");
                 session.HttpClient.Request.Headers.AddHeader("Cookie", "b=2");
                 session.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
-                await (Task)fwdTcp.Invoke(null, [session, proxy, cts.Token, null])!;
+                await (Task)fwdTcp.Invoke(null, [session, proxy, cts.Token, null, true])!;
                 Assert.AreEqual(200, session.HttpClient.Response.StatusCode);
             }
 
@@ -985,7 +985,7 @@ public class SonarNewCodeCoverageTests
                 post.HttpClient.Request.Body = "x=1"u8.ToArray();
                 post.HttpClient.Request.ContentType = "application/x-www-form-urlencoded";
                 post.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
-                await (Task)fwdTcp.Invoke(null, [post, proxy, cts.Token, null])!;
+                await (Task)fwdTcp.Invoke(null, [post, proxy, cts.Token, null, true])!;
                 Assert.AreEqual(200, post.HttpClient.Response.StatusCode);
             }
 
@@ -997,7 +997,7 @@ public class SonarNewCodeCoverageTests
                 head.HttpClient.Request.Host = $"127.0.0.1:{port}";
                 head.HttpClient.Request.Authority = $"127.0.0.1:{port}".GetByteString();
                 head.HttpClient.Request.RequestUriString8 = "/".GetByteString();
-                await (Task)fwdTcp.Invoke(null, [head, proxy, cts.Token, null])!;
+                await (Task)fwdTcp.Invoke(null, [head, proxy, cts.Token, null, true])!;
                 Assert.IsTrue(head.HttpClient.Response.StatusCode is 200 or 204);
             }
         }
@@ -1247,7 +1247,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void CertificateManager_CachedCountAndEngineBranch()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -1265,7 +1265,7 @@ public class SonarNewCodeCoverageTests
         // Touch Windows engine setter path on Windows only (throws elsewhere).
         if (RunTime.IsWindows)
         {
-            using var win = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var win = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.DefaultWindows
             };
@@ -1352,7 +1352,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void CertificateManager_OsTrustSuppressArms_DoNotOpenDialogs()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -1606,7 +1606,7 @@ public class SonarNewCodeCoverageTests
         var noMax = typeof(CertificateManager).GetMethod("NoMaxCacheEntries", PrivateStatic)!;
         Assert.IsNull(noMax.Invoke(null, null));
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             SaveFakeCertificates = true,
@@ -1683,7 +1683,7 @@ public class SonarNewCodeCoverageTests
     [TestMethod]
     public void CertificateManager_RemoveTrustedAndEnsureRoot_SuppressArms()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -2128,7 +2128,7 @@ public class SonarNewCodeCoverageTests
         Assert.AreEqual(4, ordered.Length);
         Assert.AreEqual(0, TcpConnectionFactory.InterleaveByAddressFamily([]).Length);
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
         };

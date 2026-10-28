@@ -33,7 +33,7 @@ public class DefaultCertificateDiskCacheTests
 
         try
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -82,7 +82,7 @@ public class DefaultCertificateDiskCacheTests
 
         try
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
             };
@@ -124,7 +124,7 @@ public class DefaultCertificateDiskCacheTests
     [TestMethod]
     public void CertificateLoader_LoadCertificate_AndLoadPkcs12_RoundTrip()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastleFast
         };
@@ -174,7 +174,7 @@ public class DefaultCertificateDiskCacheTests
         if (!RunTime.IsWindows)
             Assert.Inconclusive("Exclusive file-lock characterization is Windows-focused.");
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastleFast
         };
@@ -201,7 +201,7 @@ public class DefaultCertificateDiskCacheTests
         if (!RunTime.IsWindows)
             Assert.Inconclusive("File.Replace lock characterization is Windows-focused.");
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastleFast
         };
@@ -281,7 +281,7 @@ public class DefaultCertificateDiskCacheTests
         Assert.IsNotNull(certPathMethod);
         var certDir = (string)certPathMethod.Invoke(cache, new object[] { true })!;
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastleFast
         };
@@ -344,7 +344,7 @@ public class DefaultCertificateDiskCacheTests
         Directory.CreateDirectory(legacyDir);
         Directory.CreateDirectory(newDir);
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastleFast
         };

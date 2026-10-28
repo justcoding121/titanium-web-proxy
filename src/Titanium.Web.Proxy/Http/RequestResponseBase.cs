@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -60,6 +59,16 @@ public abstract class RequestResponseBase
 
     /// <summary>True when the HEADERS were deferred until the buffered body was complete.</summary>
     internal bool Http2HeadersDeferred;
+
+    /// <summary>
+    ///     The client reset this request's stream (RST_STREAM) while its BeforeRequest dispatch was still
+    ///     running, i.e. before any HEADERS reached the origin. Relaying that RST would be an RST on an idle
+    ///     stream (a connection PROTOCOL_ERROR the origin answers with GOAWAY, tearing down every other stream
+    ///     the browser multiplexed on the connection). The RST is held back; whichever side wins the
+    ///     <c>lock (request)</c> race - the reset or the HEADERS being queued - emits it right behind the HEADERS.
+    ///     Guarded by <c>lock (request)</c> together with <see cref="Http2HeadersQueued" />.
+    /// </summary>
+    internal bool Http2ClientResetBeforeHeaders;
 
     /// <summary>
     ///     Native HTTP/2 response whose handler asked for the body (GetResponseBody) so the response is

@@ -13,7 +13,7 @@ namespace Titanium.Web.Proxy.Network.Quic;
 ///         original-destination data, and this adapter exposes it to the proxy.
 ///     </para>
 ///     <para>
-///         SNI from the QUIC ClientHello (<see cref="BeforeQuicAuthenticateEventArgs.SniHostName" />) and
+///         SNI from the QUIC ClientHello (<c>BeforeQuicAuthenticateEventArgs.SniHostName</c>) and
 ///         the <c>:authority</c> pseudo-header are validation inputs and context hints, but are not a
 ///         reliable replacement for the actual original destination obtained from the OS routing table or
 ///         packet-filter metadata, especially for pinned certificates, IP-literal URLs, or non-standard ports.
@@ -35,7 +35,7 @@ public interface IOriginalDestinationResolver
     ///     The resolved (<c>hostName</c>, <c>port</c>) tuple, where <c>hostName</c> is the original
     ///     destination host name or IP address string and <c>port</c> is the original destination port.
     ///     Returns <see langword="null" /> if resolution fails and the caller should fall back to
-    ///     <see cref="TransparentQuicProxyEndPoint.ForwardHost" /> / <see cref="TransparentQuicProxyEndPoint.ForwardPort" />.
+    ///     <c>TransparentQuicProxyEndPoint.ForwardHost</c> / <c>TransparentQuicProxyEndPoint.ForwardPort</c>.
     /// </returns>
     ValueTask<(string hostName, int port)?> ResolveAsync(
         IPEndPoint localEndPoint,

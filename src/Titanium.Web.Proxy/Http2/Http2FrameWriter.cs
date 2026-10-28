@@ -21,8 +21,7 @@ namespace Titanium.Web.Proxy.Http2;
 internal sealed class Http2FrameWriter : IAsyncDisposable
 {
     // Enough for HEADERS + a full 256 KiB known-CL body (sixteen 16 KiB DATA frames) in one
-    // SslStream write after flatten. Smaller budgets force several coalesce passes mid-body and
-    // left cool 256 KiB H2→H1 at ~0.84× while 64 KiB was already at parity with an 80 KiB budget.
+    // SslStream write after flatten. Smaller budgets force several coalesce passes mid-body.
     private const int CoalesceByteBudget = 288 * 1024;
     private const int CoalesceMaxFrames = 64;
 
@@ -51,8 +50,8 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             SingleReader = true,
             SingleWriter = false,
-            // Keep ASC=false: EnqueueRented runs under origin writeLock; ASC=true MaxOrigin=1
-            // SoftPick long A/B ~0.78× H1 / ~0.88× H3 — sync drain under writeLock regresses.
+            // Keep synchronous continuations off: EnqueueRented runs under the origin writeLock, and
+            // draining synchronously under that lock measured slower.
             AllowSynchronousContinuations = false
         });
         drainTask = Task.Run(() => DrainAsync(cts.Token), cts.Token);
@@ -122,9 +121,9 @@ internal sealed class Http2FrameWriter : IAsyncDisposable
         {
             while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
             {
-                // MaxOrigin=1 SoftPick: writeLock serializes EnqueueRented then Release; the drain
-                // often wakes after a single HEADERS. Brief spin lets the next producer enqueue so
-                // coalesce can batch SecureTransport writes (YARP/SHH contiguous outgoing buffer).
+                // With one shared origin connection the writeLock serializes EnqueueRented then Release,
+                // so the drain often wakes after a single HEADERS. A brief spin lets the next producer
+                // enqueue so coalescing can batch the TLS write.
                 var spinner = new SpinWait();
                 while (!spinner.NextSpinWillYield)
                 {
