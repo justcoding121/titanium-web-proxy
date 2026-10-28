@@ -119,6 +119,11 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            {{- if and .Values.plus.enabled .Values.plus.controlPlane.tls.existingSecret }}
+            - name: plus-tls
+              mountPath: /etc/titanium-plus-tls
+              readOnly: true
+            {{- end }}
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -129,6 +134,11 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: {{ .Values.tmpDir.sizeLimit }}
+        {{- if and .Values.plus.enabled .Values.plus.controlPlane.tls.existingSecret }}
+        - name: plus-tls
+          secret:
+            secretName: {{ .Values.plus.controlPlane.tls.existingSecret }}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

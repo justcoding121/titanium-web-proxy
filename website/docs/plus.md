@@ -12,7 +12,7 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | Observability | Prometheus-style metrics for destination state / latency |
 | Security | CIDR allow-list, JWT/OIDC (JWKS), API key / Basic auth |
 | Web application firewall (WAF) | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
-| Control plane | Loopback HTTP API with shared-secret header; snapshot get/put; cache purge |
+| Control plane | Loopback-default HTTP(S) API with shared-secret header; snapshot get/put; cache purge; optional TLS; audit trail; failed-login throttle |
 | Operations | Drain / healthy / maintenance destination states |
 | Discovery | File watch, DNS poll; Consul blocking queries; Kubernetes EndpointSlice list-then-watch with backoff |
 | State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
@@ -68,6 +68,65 @@ titanium update --remove-plus
 
 This removes Plus beside the CLI (and `.bak` / `.new`). It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
 
+## Control-plane and credential hardening
+
+### Hashed Basic users
+
+`security.basicUsers` takes `user:secret` pairs separated by commas. The secret may be:
+
+| Form | Example |
+|------|---------|
+| bcrypt | `alice:{bcrypt}$2b$12$...` (`$2a$`, `$2b$`, and `$2y$` are accepted) |
+| PBKDF2 | `bob:{pbkdf2}210000$<salt-base64>$<hash-base64>` |
+| plaintext | `carol:s3cret`: still works, but Titanium logs a start-up warning that names the user (never the password) |
+
+PBKDF2 here is PBKDF2-HMAC-SHA256 with a 16-byte or longer salt and a 16 to 64 byte hash; new hashes use 210000 iterations. A hash that does not parse stops start-up with a message that names the user, so a typo cannot leave a user silently locked out or unprotected. Every secret comparison (Basic passwords, API keys, the control-plane shared secret) is constant-time. A verified hashed login is remembered in memory for five minutes, so a keep-alive client does not pay the hashing cost on every request.
+
+Put the list in a file with one `user:secret` per line and point `security.basicUsersFile` at it (see [Secret references](/docs/configuration#secret-references)). `security.basicUsersEnv` and `discovery.consulTokenFile`/`Env`, `state.redisFile`/`Env`, `security.apiKeysFile`/`Env`, and `plus.controlPlane.sharedSecretFile`/`Env` all work the same way. The Redis connection string is never written to logs; only its host and port are.
+
+### Audit log
+
+Set `audit.path` to keep an append-only record of what happened on the control plane and the dashboard. Each line is one JSON object:
+
+```json
+{"time":"2026-01-02T03:04:05.0000000Z","actor":"dashboard:shared-secret","remote":"10.1.2.3","action":"drain","target":"d1","result":"ok"}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `time` | UTC, ISO 8601 |
+| `actor` | A role label such as `control-plane:shared-secret`, `dashboard:shared-secret`, or `...:anonymous` for a failed login. It never contains a secret or a presented credential |
+| `remote` | Client address |
+| `action` | `drain`, `healthy`, `snapshot-put`, `cache-purge`, `login` (the dashboard page opened with the secret), or `login-failed` |
+| `target` | A destination id, path, or purge prefix, at most 256 characters |
+| `result` | `ok`, `denied`, `throttled`, `rejected`, `unavailable`, or `error` |
+
+The file rolls by size: when it would pass `audit.maxBytes` it becomes `audit.path.1`, older files shift up, and files past `audit.maxFiles` are deleted. A write failure never fails the request; it is counted and reported once in the log. The dashboard shows the newest 50 events and serves up to 500 (a bounded in-memory ring) as JSON at `/api/audit`, newest first. Without `audit.path` only that ring is kept.
+
+### Failed-login throttle
+
+A remote that fails authentication five times in one minute gets `429 Too Many Requests` with `Retry-After` until its oldest failure ages out, even if it then sends the right secret. The control plane and the dashboard share one count. API-key and Basic auth on the proxy path apply the same limit with a count of their own (a refused request there gets `429` and `Retry-After` too). At most 10000 remotes are tracked; when the table is full, expired entries go first, then the least recently failing one. A lockout is written to the audit log once, not once per refused request.
+
+### TLS and non-loopback listeners
+
+The control plane and dashboard listen on `plus.controlPlane.host` (default `127.0.0.1`). On any other address they must be encrypted:
+
+```yaml
+plus:
+  enabled: true
+  controlPlane:
+    host: "0.0.0.0"
+    port: 9080
+    sharedSecretFile: /run/secrets/control-secret
+    tls:
+      certificatePath: /etc/titanium/tls/tls.crt   # PEM certificate (chain)
+      keyPath: /etc/titanium/tls/tls.key           # PEM private key
+```
+
+Both listeners then serve HTTPS from that certificate. `titanium test` and `titanium run` refuse a non-loopback host without `tls`, unless you set `allowInsecureNonLoopback: true` for a network that already encrypts and isolates the port (a service mesh, a locked-down pod network). That opt-out is allowed but prints a warning, because the shared secret then crosses the network in clear text. Relative certificate paths resolve against the config directory; a certificate change needs a restart.
+
+On Kubernetes the Helm chart listens on `0.0.0.0` in the pod, so set `plus.controlPlane.tls.existingSecret` to a `kubernetes.io/tls` Secret (mounted at `/etc/titanium-plus-tls`) or `plus.controlPlane.allowInsecureNonLoopback=true`; the chart refuses to render with neither. See [Kubernetes](/docs/kubernetes).
+
 ## `plus.options` keys (reference)
 
 String values under `plus.options` (examples):
@@ -88,7 +147,9 @@ String values under `plus.options` (examples):
 | `security.jwtAuthority` / `security.jwtAudience` / `security.jwksUrl` | JWT/OIDC validation |
 | `security.apiKeys` | Comma-separated API keys (`X-Api-Key` by default) |
 | `security.apiKeyHeader` | Alternate API key header name |
-| `security.basicUsers` | Comma-separated `user:password` pairs for HTTP Basic |
+| `security.basicUsers` | Comma-separated `user:secret` pairs for HTTP Basic. `secret` is `{bcrypt}$2b$...`, `{pbkdf2}iterations$salt$hash`, or a plaintext password (works, warns at start-up). See [Control-plane and credential hardening](#control-plane-and-credential-hardening) |
+| `audit.path` | Append-only NDJSON audit log for control-plane and dashboard events. Relative paths resolve against the config directory |
+| `audit.maxBytes` / `audit.maxFiles` | Size at which the audit file rolls (default `10485760`) and how many rolled files to keep (default `5`) |
 | `cors.enabled` | Enable CORS helper (`true`) |
 | `cors.allowOrigin` / `cors.allowMethods` / `cors.allowHeaders` / `cors.allowCredentials` / `cors.maxAgeSeconds` | CORS knobs |
 | `waf.enabled` | Enable thin deny-list WAF |

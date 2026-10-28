@@ -174,6 +174,7 @@ A sensitive setting is one of three forms: the literal, a `...Env` sibling that 
 | `plus.options` `security.apiKeys` | `security.apiKeysEnv` | `security.apiKeysFile` |
 | `plus.options` `security.basicUsers` | `security.basicUsersEnv` | `security.basicUsersFile` |
 | `plus.options` `state.redis` | `state.redisEnv` | `state.redisFile` |
+| `plus.options` `discovery.consulToken` | `discovery.consulTokenEnv` | `discovery.consulTokenFile` |
 | `server.admin.authToken` | `authTokenEnv` | `authTokenFile` |
 
 ```yaml

@@ -262,6 +262,16 @@ Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretEnv.get -
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretEnv.set -> void
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretFile.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretFile.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.Tls.get -> Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.Tls.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.AllowInsecureNonLoopback.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.AllowInsecureNonLoopback.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig.ControlPlaneTlsConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig.CertificatePath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig.CertificatePath.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig.KeyPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneTlsConfig.KeyPath.set -> void
 Titanium.Web.Proxy.Configuration.SecretReferenceKeys
 const Titanium.Web.Proxy.Configuration.SecretReferenceKeys.EnvSuffix = "Env" -> string!
 const Titanium.Web.Proxy.Configuration.SecretReferenceKeys.FileSuffix = "File" -> string!

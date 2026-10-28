@@ -175,5 +175,11 @@ plus:
     sharedSecret:
       existingSecret: ""
       key: shared-secret
+    # The control plane and dashboard listen on the pod network, so they need TLS: an existing kubernetes.io/tls
+    # Secret (tls.crt and tls.key), mounted at /etc/titanium-plus-tls. Or set allowInsecureNonLoopback: true when a
+    # mesh or network policy already encrypts and isolates the port. One of the two is required when plus.enabled.
+    tls:
+      existingSecret: ""
+    allowInsecureNonLoopback: false
   # Passed to plus.options verbatim (string values). Secret-bearing options should use their *File siblings.
   options: {}

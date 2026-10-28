@@ -72,9 +72,16 @@ public sealed class AccessSecurity
         }
 
         var header = options.GetValueOrDefault("security.apiKeyHeader") ?? "X-Api-Key";
-        context.Middleware!.Add(new ApiKeyBasicAuthMiddleware(keys, users, header));
+        var middleware = new ApiKeyBasicAuthMiddleware(keys, users, header, new AuthThrottle());
+        context.Middleware!.Add(middleware);
         PlusLog.Info(context,
             $"Plus Security: API key/basic auth registered (keys={keys.Count} users={users.Count}).");
+        if (middleware.PlaintextUsers.Count > 0)
+        {
+            PlusLog.Warn(context,
+                "Plus Security: security.basicUsers has plaintext passwords for " +
+                $"{string.Join(", ", middleware.PlaintextUsers)}. Use user:{{bcrypt}}$2b$... or user:{{pbkdf2}}... hashes instead.");
+        }
     }
 
     private static void RegisterCors(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -220,7 +227,11 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
     {
         if (context.Session is SessionEventArgs session)
         {
-            session.GenericResponse(body, status);
+            // HandledHeaders lets a caller add headers such as Retry-After to the denial.
+            session.GenericResponse(
+                body,
+                status,
+                context.HandledHeaders?.Select(h => new Titanium.Web.Proxy.Models.HttpHeader(h.Key, h.Value)));
         }
 
         context.HandledStatusCode = (int)status;

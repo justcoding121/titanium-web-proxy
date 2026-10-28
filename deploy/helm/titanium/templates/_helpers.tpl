@@ -69,7 +69,15 @@ reference, and the pre-stop delay always agree with the Deployment.
 {{- $_ := set $cfg "server" $server -}}
 {{- if .Values.plus.enabled -}}
 {{- $_ := required "plus.controlPlane.sharedSecret.existingSecret is required when plus.enabled is true" .Values.plus.controlPlane.sharedSecret.existingSecret -}}
-{{- $plus := dict "enabled" true "controlPlane" (dict "host" "0.0.0.0" "port" (int .Values.plus.controlPlane.port) "sharedSecretEnv" "TITANIUM_CONTROL_SECRET") -}}
+{{- $controlPlane := dict "host" "0.0.0.0" "port" (int .Values.plus.controlPlane.port) "sharedSecretEnv" "TITANIUM_CONTROL_SECRET" -}}
+{{- if .Values.plus.controlPlane.tls.existingSecret -}}
+{{- $_ := set $controlPlane "tls" (dict "certificatePath" "/etc/titanium-plus-tls/tls.crt" "keyPath" "/etc/titanium-plus-tls/tls.key") -}}
+{{- else if .Values.plus.controlPlane.allowInsecureNonLoopback -}}
+{{- $_ := set $controlPlane "allowInsecureNonLoopback" true -}}
+{{- else -}}
+{{- fail "plus.controlPlane listens on the pod network, so set plus.controlPlane.tls.existingSecret (a kubernetes.io/tls Secret) or plus.controlPlane.allowInsecureNonLoopback=true" -}}
+{{- end -}}
+{{- $plus := dict "enabled" true "controlPlane" $controlPlane -}}
 {{- if .Values.plus.options -}}
 {{- $_ := set $plus "options" .Values.plus.options -}}
 {{- end -}}

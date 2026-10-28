@@ -238,6 +238,28 @@ public sealed class ControlPlaneConfig
 
     /// <summary>File holding the shared secret (a mounted Secret). Relative paths resolve against the config directory.</summary>
     public string? SharedSecretFile { get; set; }
+
+    /// <summary>
+    /// Optional TLS for the control plane and dashboard listeners (PEM certificate chain and private key).
+    /// Required when <see cref="Host"/> is not loopback, unless <see cref="AllowInsecureNonLoopback"/> is set.
+    /// </summary>
+    public ControlPlaneTlsConfig? Tls { get; set; }
+
+    /// <summary>
+    /// Allows a non-loopback <see cref="Host"/> without <see cref="Tls"/>. Only for networks that already
+    /// encrypt and isolate the traffic (for example a service mesh or a restricted pod network).
+    /// </summary>
+    public bool AllowInsecureNonLoopback { get; set; }
+}
+
+/// <summary>PEM certificate and key served by the control plane and dashboard.</summary>
+public sealed class ControlPlaneTlsConfig
+{
+    /// <summary>PEM certificate (chain). Relative paths resolve against the config directory.</summary>
+    public string? CertificatePath { get; set; }
+
+    /// <summary>PEM private key for <see cref="CertificatePath"/>. Relative paths resolve against the config directory.</summary>
+    public string? KeyPath { get; set; }
 }
 
 /// <summary>Certificate / ACME related paths.</summary>

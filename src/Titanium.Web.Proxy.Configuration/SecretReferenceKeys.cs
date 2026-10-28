@@ -19,5 +19,6 @@ public static class SecretReferenceKeys
         "security.apiKeys",
         "security.basicUsers",
         "state.redis",
+        "discovery.consulToken",
     ];
 }

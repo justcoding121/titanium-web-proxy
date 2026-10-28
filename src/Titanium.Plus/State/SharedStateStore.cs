@@ -26,6 +26,8 @@ public sealed class SharedStateStore
             ? n
             : 120;
 
+        // The connection string carries the password; logs name the endpoints only.
+        var where = "(unparsed)";
         IDistributedCounter counter;
         if (useMemory && !hasRedis)
         {
@@ -37,6 +39,7 @@ public sealed class SharedStateStore
             try
             {
                 var config = ConfigurationOptions.Parse(redis!);
+                where = string.Join(",", config.EndPoints.Select(e => e.ToString()));
                 config.AbortOnConnectFail = false;
                 config.ConnectTimeout = 500;
                 config.SyncTimeout = 500;
@@ -44,17 +47,17 @@ public sealed class SharedStateStore
                 if (!mux.IsConnected)
                 {
                     PlusLog.Warn(context,
-                        $"Plus State: redis={redis} not connected — rate limit fail-open (allow).");
+                        $"Plus State: redis={where} not connected — rate limit fail-open (allow).");
                     return new SharedStateStore();
                 }
 
                 counter = new RedisDistributedCounter(mux);
-                PlusLog.Info(context, $"Plus State: redis={redis} rateLimitPerMinute={limit}");
+                PlusLog.Info(context, $"Plus State: redis={where} rateLimitPerMinute={limit}");
             }
             catch (Exception ex)
             {
                 PlusLog.Warn(context,
-                    $"Plus State: redis={redis} unreachable ({ex.Message}) — rate limit fail-open (allow).");
+                    $"Plus State: redis={where} unreachable ({ex.GetType().Name}) — rate limit fail-open (allow).");
                 return new SharedStateStore();
             }
         }

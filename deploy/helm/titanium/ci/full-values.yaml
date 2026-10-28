@@ -35,6 +35,8 @@ plus:
   controlPlane:
     sharedSecret:
       existingSecret: titanium-control-plane
+    tls:
+      existingSecret: titanium-control-plane-tls
   options:
     security.apiKeysFile: /etc/titanium-secret/api-keys
 extraVolumes:

@@ -92,7 +92,7 @@ config:
 | HorizontalPodAutoscaler | `autoscaling.enabled`, CPU and optional memory |
 | ServiceMonitor | `serviceMonitor.enabled`: scrapes `/metrics` on the admin port with the admin token (needs the Prometheus Operator CRDs) |
 | NetworkPolicy | `networkPolicy.enabled`: a sample that limits the admin port to the sources you list |
-| Plus | `plus.enabled` with `plus.controlPlane.sharedSecret.existingSecret`; the control-plane secret is passed by environment variable |
+| Plus | `plus.enabled` with `plus.controlPlane.sharedSecret.existingSecret` (passed by environment variable) and either `plus.controlPlane.tls.existingSecret` (a `kubernetes.io/tls` Secret, mounted at `/etc/titanium-plus-tls`) or `plus.controlPlane.allowInsecureNonLoopback=true` |
 
 ### Graceful rollout
 

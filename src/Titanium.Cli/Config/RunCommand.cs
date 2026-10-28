@@ -32,6 +32,9 @@ internal static class RunCommand
         "grpc.transcode.descriptorSet",
         "waf.rulesFile",
         "discovery.file",
+        "audit.path",
+        "controlPlane.tls.certificatePath",
+        "controlPlane.tls.keyPath",
     ];
 
     public static async Task<int> ExecuteAsync(string[] args)
@@ -1267,6 +1270,24 @@ internal static class RunCommand
             if (!string.IsNullOrEmpty(plus.ControlPlane.SharedSecret))
             {
                 options["controlPlane.sharedSecret"] = plus.ControlPlane.SharedSecret;
+            }
+
+            if (plus.ControlPlane.AllowInsecureNonLoopback)
+            {
+                options["controlPlane.allowInsecureNonLoopback"] = "true";
+            }
+
+            if (plus.ControlPlane.Tls is { } tls)
+            {
+                if (!string.IsNullOrWhiteSpace(tls.CertificatePath))
+                {
+                    options["controlPlane.tls.certificatePath"] = tls.CertificatePath;
+                }
+
+                if (!string.IsNullOrWhiteSpace(tls.KeyPath))
+                {
+                    options["controlPlane.tls.keyPath"] = tls.KeyPath;
+                }
             }
         }
 

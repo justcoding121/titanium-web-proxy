@@ -60,6 +60,7 @@ public static class TwpConfigValidator
                 controlPlane.SharedSecretEnv,
                 controlPlane.SharedSecretFile,
                 errors);
+            ValidateControlPlaneTransport(plus.Enabled, controlPlane, errors);
         }
 
         if (plus.Options is not { Count: > 0 } options)
@@ -76,6 +77,46 @@ public static class TwpConfigValidator
                 FindOption(options, key + SecretReferenceKeys.FileSuffix),
                 errors);
         }
+    }
+
+    /// <summary>
+    ///     The control plane carries a shared secret and can rewrite routing, so a listener that is reachable from the
+    ///     network needs TLS. Loopback is exempt; <c>allowInsecureNonLoopback</c> is the explicit opt-out.
+    /// </summary>
+    private static void ValidateControlPlaneTransport(bool plusEnabled, ControlPlaneConfig controlPlane, List<string> errors)
+    {
+        var tls = controlPlane.Tls;
+        if (tls is not null)
+        {
+            if (string.IsNullOrWhiteSpace(tls.CertificatePath) || string.IsNullOrWhiteSpace(tls.KeyPath))
+            {
+                errors.Add("plus.controlPlane.tls needs both certificatePath and keyPath.");
+            }
+        }
+
+        if (!plusEnabled || tls is not null || controlPlane.AllowInsecureNonLoopback)
+        {
+            return;
+        }
+
+        if (!IsLoopbackControlPlaneHost(controlPlane.Host))
+        {
+            errors.Add(
+                $"plus.controlPlane.host '{controlPlane.Host}' is not loopback: set plus.controlPlane.tls " +
+                "(certificatePath and keyPath), or allowInsecureNonLoopback: true when the network already protects the port.");
+        }
+    }
+
+    private static bool IsLoopbackControlPlaneHost(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return true;
+        }
+
+        var trimmed = host.Trim().Trim('[', ']');
+        return trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+               (IPAddress.TryParse(trimmed, out var address) && IPAddress.IsLoopback(address));
     }
 
     private static string? FindOption(IDictionary<string, string> options, string key)
@@ -1710,6 +1751,14 @@ public static class TwpConfigValidator
         var warnings = new List<string>();
         CollectTlsWarnings(config.Server?.Tls, isWindows, warnings);
         CollectClusterProxyProtocolWarnings(config, warnings);
+        if (config.Plus is { Enabled: true, ControlPlane: { AllowInsecureNonLoopback: true, Tls: null } insecure } &&
+            !IsLoopbackControlPlaneHost(insecure.Host))
+        {
+            warnings.Add(
+                $"plus.controlPlane.host '{insecure.Host}' serves the control plane and dashboard over plain HTTP " +
+                "(allowInsecureNonLoopback). The shared secret crosses the network unencrypted unless something else protects it.");
+        }
+
         var limits = config.Server?.Limits;
         if (limits?.MaxDecompressionRatio is not null)
             warnings.Add("server.limits.maxDecompressionRatio is reserved and not enforced. Body expansion is bounded by maxBufferedBodyBytes.");

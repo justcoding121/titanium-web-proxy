@@ -1,3 +1,4 @@
+using Titanium.Plus.Audit;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
 using Titanium.Plus.Discovery;
@@ -41,6 +42,20 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
 
         ControlPlaneServer.ValidateSecret(host, secret, allowDev);
 
+        var tls = ParseTls(options);
+        var allowInsecure = IsTrue(options.GetValueOrDefault("controlPlane.allowInsecureNonLoopback"));
+        ControlPlaneServer.ValidateTransport(host, tls, allowInsecure);
+
+        var audit = new AuditLog(
+            options.GetValueOrDefault("audit.path"),
+            long.TryParse(options.GetValueOrDefault("audit.maxBytes"), out var maxBytes) ? maxBytes : AuditLog.DefaultMaxFileBytes,
+            int.TryParse(options.GetValueOrDefault("audit.maxFiles"), out var maxFiles) ? maxFiles : AuditLog.DefaultMaxFiles,
+            onError: message => PlusLog.Warn(context, message));
+        if (audit.FilePath is not null)
+        {
+            PlusLog.Info(context, $"Plus audit log: {audit.FilePath}");
+        }
+
         var controlPlane = new ControlPlaneServer(
             context.ClusterManager,
             host,
@@ -48,8 +63,16 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
             secret,
             context.Routes,
             context.RefreshReverseProxy,
-            context.ResponseCache);
+            context.ResponseCache,
+            new ControlPlaneSecurity(audit),
+            tls,
+            allowInsecure);
         controlPlane.Start();
+        if (!controlPlane.IsTls && !ControlPlaneServer.IsLoopbackHost(host))
+        {
+            PlusLog.Warn(context,
+                $"Plus control plane listens on {host}:{port} without TLS (allowInsecureNonLoopback). The shared secret crosses the network unencrypted.");
+        }
 
         var operations = new DrainOperations(context.ClusterManager);
         var metrics = new PrometheusMetricsExporter(context.ClusterManager, context.LatencyRecorder);
@@ -68,4 +91,26 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         _ = IdempotentRetryGuard.TryStart(context, options);
         _ = GrpcTranscodeGuard.TryStart(context, options);
     }
+
+    private static ControlPlaneTlsOptions? ParseTls(IReadOnlyDictionary<string, string> options)
+    {
+        var cert = options.GetValueOrDefault("controlPlane.tls.certificatePath");
+        var key = options.GetValueOrDefault("controlPlane.tls.keyPath");
+        if (string.IsNullOrWhiteSpace(cert) && string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(cert) || string.IsNullOrWhiteSpace(key))
+        {
+            throw new InvalidOperationException("controlPlane.tls needs both certificatePath and keyPath.");
+        }
+
+        return new ControlPlaneTlsOptions(cert, key);
+    }
+
+    private static bool IsTrue(string? value) =>
+        value is not null &&
+        (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1" ||
+         value.Equals("yes", StringComparison.OrdinalIgnoreCase));
 }

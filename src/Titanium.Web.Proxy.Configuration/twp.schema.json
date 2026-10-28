@@ -579,6 +579,9 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "allowInsecureNonLoopback": {
+              "type": "boolean"
+            },
             "dashboardPort": {
               "type": "integer"
             },
@@ -596,6 +599,18 @@
             },
             "sharedSecretFile": {
               "type": "string"
+            },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "certificatePath": {
+                  "type": "string"
+                },
+                "keyPath": {
+                  "type": "string"
+                }
+              }
             }
           }
         },

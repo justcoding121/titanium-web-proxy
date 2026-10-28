@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using Titanium.Plus.Audit;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
@@ -10,18 +11,23 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Plus.Dashboard;
 
-/// <summary>Authenticated HTML admin for destination states / drain / metrics.</summary>
+/// <summary>
+/// Authenticated HTML admin for destination states / drain / metrics / recent audit events. It listens on the
+/// control plane's host (and TLS certificate, when set) and shares its audit trail and failed-login throttle.
+/// </summary>
 public sealed class DashboardHost : IDisposable
 {
     private const int MaxBindAttempts = 8;
+    private const int AuditRowsOnPage = 50;
+
+    private static readonly JsonSerializerOptions AuditJson = new() { WriteIndented = false };
 
     private readonly ControlPlaneServer _controlPlane;
     private readonly DrainOperations _operations;
     private readonly PrometheusMetricsExporter _metrics;
     private readonly IClusterManager? _clusters;
     private readonly int? _requestedPort;
-    private HttpListener? _listener;
-    private CancellationTokenSource? _cts;
+    private ControlHttpServer? _server;
 
     public DashboardHost(
         ControlPlaneServer controlPlane,
@@ -41,46 +47,37 @@ public sealed class DashboardHost : IDisposable
 
     public int? BoundPort { get; private set; }
 
+    /// <summary>The audit trail this dashboard shows (shared with the control plane).</summary>
+    public AuditLog Audit => _controlPlane.Security.Audit;
+
     public void Start()
     {
-        var uri = new Uri(_controlPlane.Prefix);
         Exception? last = null;
         var attempts = _requestedPort.HasValue ? 1 : MaxBindAttempts;
+        var address = ControlHttpServer.ResolveBindAddress(_controlPlane.Host);
 
         for (var i = 0; i < attempts; i++)
         {
-            var dashPort = _requestedPort ?? AllocateEphemeralPort();
-            // Loopback-oriented dashboard over HttpListener; shared-secret auth, not public TLS.
-#pragma warning disable S5332
-            var prefix = $"http://{uri.Host}:{dashPort}/";
-#pragma warning restore S5332
-            var cts = new CancellationTokenSource();
-            var listener = new HttpListener();
-            listener.Prefixes.Add(prefix);
+            var server = new ControlHttpServer(address, _requestedPort ?? 0, _controlPlane.Certificate, HandleAsync);
             try
             {
-                listener.Start();
-                _cts = cts;
-                _listener = listener;
-                Prefix = prefix;
-                BoundPort = dashPort;
-                _ = Task.Run(() => LoopAsync(cts.Token), cts.Token);
-                return;
+                server.Start();
             }
-            catch (Exception ex) when (ex is HttpListenerException or SocketException)
+            catch (SocketException ex)
             {
                 last = ex;
-                try
-                {
-                    listener.Close();
-                }
-                catch
-                {
-                    // ignore close failures while retrying
-                }
-
-                cts.Dispose();
+                server.Dispose();
+                continue;
             }
+
+            _server = server;
+            BoundPort = server.Port;
+            var uri = new Uri(_controlPlane.Prefix);
+            // Loopback by default; plain HTTP off loopback only with controlPlane.allowInsecureNonLoopback.
+#pragma warning disable S5332
+            Prefix = $"{uri.Scheme}://{uri.Host}:{BoundPort}/";
+#pragma warning restore S5332
+            return;
         }
 
         throw new InvalidOperationException(
@@ -92,108 +89,83 @@ public sealed class DashboardHost : IDisposable
 
     public void Dispose()
     {
-        try
-        {
-            _cts?.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // already disposed
-        }
-
-        _listener?.Stop();
-        _listener?.Close();
-        _cts?.Dispose();
-        _cts = null;
+        _server?.Dispose();
+        _server = null;
         BoundPort = null;
     }
 
-    private static int AllocateEphemeralPort()
+    private async Task<ControlHttpResponse> HandleAsync(ControlHttpRequest request, CancellationToken cancellationToken)
     {
-        var probe = new TcpListener(IPAddress.Loopback, 0);
-        probe.Start();
-        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-        probe.Stop();
-        return port;
-    }
-
-    private async Task LoopAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested && _listener is { IsListening: true })
+        var denied = _controlPlane.Security.Authenticate(
+            request, ControlPlaneSecurity.DashboardSurface, _controlPlane.SharedSecret, out var actor);
+        if (denied is not null)
         {
-            HttpListenerContext ctx;
-            try
-            {
-                ctx = await _listener.GetContextAsync().WaitAsync(cancellationToken);
-            }
-            catch
-            {
-                return;
-            }
-
-            try
-            {
-                await HandleRequestAsync(ctx, cancellationToken);
-            }
-            catch
-            {
-                try
-                {
-                    ctx.Response.StatusCode = 500;
-                    ctx.Response.Close();
-                }
-                catch
-                {
-                    // ignore
-                }
-            }
-        }
-    }
-
-    private async Task HandleRequestAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
-    {
-        if (!Authorize(ctx.Request))
-        {
-            ctx.Response.StatusCode = 401;
-            await WriteAsync(ctx.Response, "text/plain", "unauthorized", cancellationToken);
-            return;
+            return denied;
         }
 
-        var path = ctx.Request.Url?.AbsolutePath ?? "/";
+        await Task.CompletedTask.ConfigureAwait(false);
+        var path = request.Path;
+        var remote = request.RemoteAddress?.ToString();
+        var isPost = request.Method.Equals("POST", StringComparison.OrdinalIgnoreCase);
+
         if (path.StartsWith("/metrics", StringComparison.OrdinalIgnoreCase))
         {
-            await WriteAsync(ctx.Response, "text/plain; version=0.0.4", _metrics.Render(), cancellationToken);
-            return;
+            return ControlHttpResponse.Text(200, "text/plain; version=0.0.4", _metrics.Render());
         }
 
         if (path.StartsWith("/api/snapshot", StringComparison.OrdinalIgnoreCase))
         {
-            await WriteSnapshotAsync(ctx, cancellationToken);
-            return;
+            return SnapshotResponse();
         }
 
-        if (path.StartsWith("/drain/", StringComparison.OrdinalIgnoreCase) &&
-            ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+        if (path.StartsWith("/api/audit", StringComparison.OrdinalIgnoreCase))
         {
-            var id = Uri.UnescapeDataString(path["/drain/".Length..]);
-            _operations.Drain(id);
-            await WriteAsync(ctx.Response, "text/plain", "ok", cancellationToken);
-            return;
+            return ControlHttpResponse.Text(200, "application/json", JsonSerializer.Serialize(
+                Audit.Recent().Select(e => new
+                {
+                    time = e.Time.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                    e.Actor,
+                    e.Remote,
+                    e.Action,
+                    e.Target,
+                    e.Result,
+                }).ToList(),
+                new JsonSerializerOptions(AuditJson) { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
         }
 
-        if (path.StartsWith("/healthy/", StringComparison.OrdinalIgnoreCase) &&
-            ctx.Request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase))
+        if (isPost && path.StartsWith("/drain/", StringComparison.OrdinalIgnoreCase))
         {
-            var id = Uri.UnescapeDataString(path["/healthy/".Length..]);
-            _operations.MarkHealthy(id);
-            await WriteAsync(ctx.Response, "text/plain", "ok", cancellationToken);
-            return;
+            return Mutate(actor, remote, AuditActions.Drain, path["/drain/".Length..], _operations.Drain);
         }
 
-        await WriteAsync(ctx.Response, "text/html; charset=utf-8", BuildHtml(), cancellationToken);
+        if (isPost && path.StartsWith("/healthy/", StringComparison.OrdinalIgnoreCase))
+        {
+            return Mutate(actor, remote, AuditActions.Healthy, path["/healthy/".Length..], _operations.MarkHealthy);
+        }
+
+        // The page itself is the dashboard "login": a person opened it with the shared secret.
+        Audit.Record(actor, remote, AuditActions.Login, path, AuditResults.Ok);
+        return ControlHttpResponse.Text(200, "text/html; charset=utf-8", BuildHtml());
     }
 
-    private async Task WriteSnapshotAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
+    private ControlHttpResponse Mutate(string actor, string? remote, string action, string escapedId, Action<string> operation)
+    {
+        var id = Uri.UnescapeDataString(escapedId);
+        try
+        {
+            operation(id);
+        }
+        catch (ArgumentException)
+        {
+            Audit.Record(actor, remote, action, id, AuditResults.Rejected);
+            return ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request");
+        }
+
+        Audit.Record(actor, remote, action, id, AuditResults.Ok);
+        return ControlHttpResponse.Text(200, "text/plain; charset=utf-8", "ok");
+    }
+
+    private ControlHttpResponse SnapshotResponse()
     {
         var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
         var json = JsonSerializer.Serialize(new
@@ -201,14 +173,7 @@ public sealed class DashboardHost : IDisposable
             destinationStates = snap.DestinationStates,
             clusters = snap.Clusters.Keys,
         });
-        await WriteAsync(ctx.Response, "application/json", json, cancellationToken);
-    }
-
-    private bool Authorize(HttpListenerRequest request)
-    {
-        var header = request.Headers[ControlPlaneServer.SharedSecretHeader];
-        return !string.IsNullOrEmpty(header) &&
-               string.Equals(header, _controlPlane.SharedSecret, StringComparison.Ordinal);
+        return ControlHttpResponse.Text(200, "application/json", json);
     }
 
     private string BuildHtml()
@@ -234,6 +199,24 @@ public sealed class DashboardHost : IDisposable
             rows.Append("<tr><td colspan=\"3\">No destinations in snapshot.</td></tr>");
         }
 
+        var auditRows = new StringBuilder();
+        foreach (var e in Audit.Recent(AuditRowsOnPage))
+        {
+            auditRows.Append("<tr><td>")
+                .Append(WebUtility.HtmlEncode(e.Time.UtcDateTime.ToString("u", System.Globalization.CultureInfo.InvariantCulture)))
+                .Append("</td><td>").Append(WebUtility.HtmlEncode(e.Actor))
+                .Append("</td><td>").Append(WebUtility.HtmlEncode(e.Remote))
+                .Append("</td><td>").Append(WebUtility.HtmlEncode(e.Action))
+                .Append("</td><td>").Append(WebUtility.HtmlEncode(e.Target))
+                .Append("</td><td>").Append(WebUtility.HtmlEncode(e.Result))
+                .Append("</td></tr>");
+        }
+
+        if (auditRows.Length == 0)
+        {
+            auditRows.Append("<tr><td colspan=\"6\">No audit events yet.</td></tr>");
+        }
+
         return new StringBuilder()
             .Append("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/>")
             .Append("<title>Titanium Plus Dashboard</title>")
@@ -246,27 +229,18 @@ public sealed class DashboardHost : IDisposable
             .Append("</code>. Control plane: <code>")
             .Append(WebUtility.HtmlEncode(_controlPlane.Prefix))
             .Append("</code></p><p><a data-testid=\"link-metrics\" href=\"/metrics\">Prometheus metrics</a> · ")
-            .Append("<a data-testid=\"link-snapshot\" href=\"/api/snapshot\">JSON snapshot</a></p><table>")
+            .Append("<a data-testid=\"link-snapshot\" href=\"/api/snapshot\">JSON snapshot</a> · ")
+            .Append("<a data-testid=\"link-audit\" href=\"/api/audit\">JSON audit</a></p><table>")
             .Append("<thead><tr><th>Destination</th><th>State</th><th>Actions</th></tr></thead><tbody>")
             .Append(rows)
+            .Append("</tbody></table><h2>Recent audit events</h2><table data-testid=\"audit-table\">")
+            .Append("<thead><tr><th>Time (UTC)</th><th>Actor</th><th>Remote</th><th>Action</th><th>Target</th><th>Result</th></tr></thead><tbody>")
+            .Append(auditRows)
             .Append("</tbody></table><script>")
             .Append("async function post(path){const secret=prompt('Control secret');")
             .Append("if(!secret)return;await fetch(path,{method:'POST',headers:{'")
             .Append(ControlPlaneServer.SharedSecretHeader)
             .Append("':secret}});location.reload();}</script></body></html>")
             .ToString();
-    }
-
-    private static async Task WriteAsync(
-        HttpListenerResponse response,
-        string contentType,
-        string body,
-        CancellationToken cancellationToken)
-    {
-        var bytes = Encoding.UTF8.GetBytes(body);
-        response.ContentType = contentType;
-        response.ContentLength64 = bytes.Length;
-        await response.OutputStream.WriteAsync(bytes, cancellationToken);
-        response.Close();
     }
 }
