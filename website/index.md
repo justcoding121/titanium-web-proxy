@@ -28,11 +28,11 @@ features:
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 is on by default. HTTP/3 is on when QUIC is available. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
   - title: Reverse proxy from the CLI
-    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, TLS, and optional automatic certificates (ACME). Change routes and backends with `titanium reload` without dropping connections.
+    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, TLS, and optional automatic certificates (ACME).
+  - title: Reload without dropping connections
+    details: Change routes and backends with `titanium reload` while current connections stay up. SIGHUP does the same on Linux and macOS.
   - title: Balance across backends
     details: Round-robin, random, least requests, and least time. Stick a client to one backend with a cookie or a header.
-  - title: Stream large bodies
-    details: Uploads and downloads stream through on HTTP/1, HTTP/2, and HTTP/3, including payloads too large to buffer.
   - title: Chain and authenticate
     details: Forward through an upstream HTTP, HTTPS, or SOCKS proxy. Proxy auth, mTLS, Kerberos, and NTLM are included.
 ---
@@ -42,22 +42,22 @@ features:
 <div class="edition-grid">
   <div class="edition-card">
     <h3>Inspect traffic</h3>
-    <p class="license">Inspector · Windows / macOS / Linux</p>
+    <p class="license"><a href="/download#stable-inspector">Inspector</a> · Windows / macOS / Linux</p>
     <p>Desktop debugger for HTTP and HTTPS. Free for personal and education use (<a href="/docs/editions">PolyForm Noncommercial</a>); commercial use needs a separate license. <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Run a reverse proxy</h3>
-    <p class="license">CLI · MIT</p>
+    <p class="license"><a href="/download#stable-cli">CLI</a> · MIT</p>
     <p>Standalone proxy for any backend stack. <a href="/download#stable-cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Ops add-on</h3>
-    <p class="license">Plus · optional</p>
+    <p class="license"><a href="/docs/plus">Plus</a> · optional</p>
     <p>Dashboard, metrics, auth helpers, and a thin WAF. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Embed in .NET</h3>
-    <p class="license">Library · NuGet · MIT</p>
+    <p class="license"><a href="https://www.nuget.org/packages/Titanium.Web.Proxy">Library</a> · NuGet · MIT</p>
     <p>Same engine inside your app. <a href="/docs/library">Library guide</a> · <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">NuGet</a>.</p>
   </div>
 </div>

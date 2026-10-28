@@ -47,6 +47,12 @@
   color: var(--vp-c-brand-1);
 }
 
+.edition-card .license a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .rps-preview {
   margin: 0.75rem 0 1.5rem;
 }
