@@ -202,6 +202,32 @@ public partial class ProxyServer
 
                         await OnBeforeRequest(args);
 
+                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+                        {
+                            closeConnection = true;
+                            await Routing.ReverseProxySessionDispatch.WriteNoDestinationAsync(args, clientStream,
+                                cancellationToken);
+                            return;
+                        }
+
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+                        {
+                            closeConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
+
+                        var streamConnectHost = connectHost;
+                        var streamConnectPort = connectPort;
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Routed &&
+                            args.UpstreamConnectHost is { Length: > 0 } routedHost)
+                        {
+                            streamConnectHost = routedHost;
+                            streamConnectPort = args.UpstreamConnectPort;
+                        }
+
                         var keepGoing = true;
 
                         if (!args.IsTransparent && !args.IsSocks)
@@ -267,11 +293,11 @@ public partial class ProxyServer
                             else
                             {
                                 var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
-                                    remotePort, connectHost, connectPort);
+                                    remotePort, streamConnectHost, streamConnectPort);
                                 if (!seedOffered && retainedConnectionTask != null)
                                 {
                                     await OfferRetainedHttp2OriginSeedAsync(poolKey, remoteHostName, remotePort,
-                                        connectHost, connectPort, retainedConnectionTask, cancellationToken);
+                                        streamConnectHost, streamConnectPort, retainedConnectionTask, cancellationToken);
                                     retainedConnectionTask = null;
                                     seedOffered = true;
                                 }
@@ -291,7 +317,7 @@ public partial class ProxyServer
                                 {
                                     // h2 origin without ENABLE_CONNECT_PROTOCOL: dedicated HTTP/1.1 fallback.
                                     await RunHttp11WebSocketHttp11FallbackAsync(args, remoteHostName, remotePort,
-                                        connectHost, connectPort, cancellationTokenSource, cancellationToken);
+                                        streamConnectHost, streamConnectPort, cancellationTokenSource, cancellationToken);
                                 }
                             }
 
@@ -302,18 +328,18 @@ public partial class ProxyServer
                         if (keepGoing)
                         {
                             var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
-                                remotePort, connectHost, connectPort);
+                                remotePort, streamConnectHost, streamConnectPort);
                             if (!seedOffered && retainedConnectionTask != null)
                             {
                                 await OfferRetainedHttp2OriginSeedAsync(poolKey, remoteHostName, remotePort,
-                                    connectHost, connectPort, retainedConnectionTask, cancellationToken);
+                                    streamConnectHost, streamConnectPort, retainedConnectionTask, cancellationToken);
                                 retainedConnectionTask = null;
                                 seedOffered = true;
                             }
 
                             openSession = args;
                             await RunHttp11ToHttp2ExchangeAsync(args, poolKey, openFactory, remoteHostName,
-                                remotePort, connectHost, connectPort, cancellationToken);
+                                remotePort, streamConnectHost, streamConnectPort, cancellationToken);
 
                             if (!args.HttpClient.Response.KeepAlive || clientRequestedClose) closeConnection = true;
                         }

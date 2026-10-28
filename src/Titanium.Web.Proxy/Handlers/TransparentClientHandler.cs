@@ -466,6 +466,16 @@ public partial class ProxyServer
                                     return;
                                 }
 
+                                if (Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(ReverseProxy, endPoint))
+                                {
+                                    await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                                    prefetchConnectionTask = null;
+                                    await SendHttp2ToHttp2DispatchBridge(clientStream, endPoint, null, null,
+                                        httpsHostName, args.ForwardHttpsPort, http2ConnectHost, http2ConnectPort,
+                                        cancellationTokenSource);
+                                    return;
+                                }
+
                                 // Adopt the connection retained by NegotiateHttp2Async for this session
                                 // instead of opening a brand new one, when it is still valid/healthy/
                                 // correctly keyed - identical adoption logic to the explicit handler.
@@ -808,6 +818,14 @@ public partial class ProxyServer
         if (negotiation.RequiresHttp11Bridge)
         {
             await SendHttp2ToHttp11Bridge(clientStream, endPoint, null, null, remoteHostName,
+                remotePort, http2ConnectHost, http2ConnectPort, cancellationTokenSource);
+            return;
+        }
+
+        if (Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(ReverseProxy, endPoint))
+        {
+            await TcpConnectionFactory.Release(negotiation.RetainedConnectionTask, true);
+            await SendHttp2ToHttp2DispatchBridge(clientStream, endPoint, null, null, remoteHostName,
                 remotePort, http2ConnectHost, http2ConnectPort, cancellationTokenSource);
             return;
         }

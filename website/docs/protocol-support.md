@@ -11,7 +11,7 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 | Client | Origin | Kind |
 |--------|--------|------|
 | HTTP/1.x | HTTP/1.x | Native |
-| HTTP/2 | HTTP/2 | Native (ALPN MITM; prior-knowledge h2c on transparent reverse) |
+| HTTP/2 | HTTP/2 | Native frame relay when the route table is forward-host equivalent (one shared origin connection per client connection). Per-stream dispatch via `Http2OriginConnectionPool` when `RequiresPerRequestDispatch` applies (explicit listeners, non-equivalent routes, or policies). |
 | HTTP/3 | HTTP/3 | Native when `EnableHttp3` |
 | HTTP/1.1 ↔ HTTP/2 | Bridge | When `UpstreamHttpProtocol` + `AllowHttpProtocolTranslation` |
 | HTTP/1.1 / HTTP/2 ↔ HTTP/3 | Bridge | When H3 selected |
@@ -34,7 +34,7 @@ For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, aut
 
 ## Routing and clusters
 
-Per-request route dispatch runs on the HTTP/1 session path, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 frame relay still follows the connection's forward target (one origin connection per client connection).
+Per-request route dispatch runs on the HTTP/1 session path, the HTTP/1-to-HTTP/2 bridge, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/2 dispatch bridge (`SendHttp2ToHttp2DispatchBridge`), the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 native frame relay is unchanged when the listener is forward-host equivalent (no per-request dispatch).
 
 ## Related
 

@@ -629,6 +629,18 @@ public partial class ProxyServer
                         return;
                     }
 
+                    if (Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(ReverseProxy, endPoint))
+                    {
+                        await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                        prefetchConnectionTask = null;
+                        var (dispatchHost, dispatchPort) =
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
+                        await SendHttp2ToHttp2DispatchBridge(clientStream, endPoint,
+                            connectArgs.HttpClient.ConnectRequest, connectArgs.UserData, dispatchHost, dispatchPort,
+                            null, null, connectArgs.CancellationTokenSource);
+                        return;
+                    }
+
                     // Adopt the connection retained by NegotiateHttp2Async (the cold-cache discovery probe,
                     // or a cache-hit prefetch) for this session instead of opening a brand new one, when it
                     // is still a valid, healthy, correctly keyed h2 connection. This is what collapses the

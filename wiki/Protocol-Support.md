@@ -36,7 +36,7 @@ TCP HTTP/1 origin.
 | Client | Origin | Kind | How |
 |--------|--------|------|-----|
 | HTTP/1.x | HTTP/1.x | Native | Default TCP pipeline. |
-| HTTP/2 | HTTP/2 | Native | TLS ALPN MITM (`EnableHttp2`, on by default). Prior-knowledge cleartext h2c on transparent reverse (`DecryptSsl: false`) for inbound clients; with `ForwardCleartext` + `UpstreamHttpProtocol.Http2`, origin is outbound h2c. |
+| HTTP/2 | HTTP/2 | Native or per-stream dispatch | TLS ALPN MITM (`EnableHttp2`, on by default). Prior-knowledge cleartext h2c on transparent reverse (`DecryptSsl: false`) for inbound clients; with `ForwardCleartext` + `UpstreamHttpProtocol.Http2`, origin is outbound h2c. When `ReverseProxyFastPath.RequiresPerRequestDispatch` is true, `SendHttp2ToHttp2DispatchBridge` leases one pooled `Http2OriginConnection` per client stream instead of a single native H2↔H2 relay. Forward-host-equivalent route tables keep the native relay. |
 | HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. A failed QUIC exchange is not retried on another transport, except in Auto mode where a silent origin gets one TCP replay of a safe bodiless request; forced HTTP/3 never falls back. See [HTTP/3](HTTP-3#user-content-when-an-http3-origin-is-slow-or-unreachable). |
 | HTTP/1.1 | HTTP/2 | Bridge | `Http11ToHttp2BridgeHandler` when `UpstreamHttpProtocol.Http2` and `AllowHttpProtocolTranslation` are set (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`). |
 | HTTP/2 | HTTP/1.1 | Bridge | `Http2ToHttp11BridgeHandler` when `UpstreamHttpProtocol.Http11` and `AllowHttpProtocolTranslation` are set (TLS ALPN or inbound h2c client). |
@@ -98,6 +98,7 @@ or 504 from the origin is replayed once onto another destination. The client see
 | HTTP/3 client to an HTTP/2 origin | No |
 | QUIC origins (HTTP/3 to HTTP/3, and HTTP/2 to HTTP/3) | No |
 | HTTP/2 to HTTP/2 native relay | No |
+| HTTP/2 to HTTP/2 per-stream dispatch bridge | Yes |
 | HTTP/1.1 client to an HTTP/2 origin | No |
 | CONNECT, WebSocket, a request that has a body, `Expect: 100-continue`, Windows authentication | Never |
 
