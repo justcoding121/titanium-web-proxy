@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Security;
@@ -63,8 +63,9 @@ public class ClientRejectedCertificateBreakerTests
         await AbortDuringHandshakeAsync(proxy, port, host);
         await AbortDuringHandshakeAsync(proxy, port, host);
         await AcceptingHandshakeAsync(proxy, port, host);
-        await AbortDuringHandshakeAsync(proxy, port, host);
-        await AbortDuringHandshakeAsync(proxy, port, host);
+        // The host is trusted now: aborts that follow (tab closed, cancelled preconnect) are not counted.
+        await AbortDuringHandshakeAsync(proxy, port, host, expectObserved: false);
+        await AbortDuringHandshakeAsync(proxy, port, host, expectObserved: false);
 
         Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost(host),
             "a completed handshake proves the client trusts the proxy root; the count must reset");
@@ -146,7 +147,8 @@ public class ClientRejectedCertificateBreakerTests
     ///     CONNECT, then drop the socket before any TLS record. This is the failure captured for pinned
     ///     clients: AuthenticateAsServerAsync throws "unexpected EOF", not a clean close.
     /// </summary>
-    private static async Task AbortDuringHandshakeAsync(ProxyServer proxy, int proxyPort, string host)
+    private static async Task AbortDuringHandshakeAsync(ProxyServer proxy, int proxyPort, string host,
+        bool expectObserved = true)
     {
         var strikesBefore = proxy.ClientHandshakeRejects.Strikes(host);
         var bypassBefore = proxy.ShouldBypassDecryptForLearnedHost(host);
@@ -172,6 +174,12 @@ public class ClientRejectedCertificateBreakerTests
                                        or System.OperationCanceledException
                                        or TimeoutException)
         {
+        }
+
+        if (!expectObserved)
+        {
+            await Task.Delay(400);
+            return;
         }
 
         var deadline = DateTime.UtcNow.AddSeconds(5);

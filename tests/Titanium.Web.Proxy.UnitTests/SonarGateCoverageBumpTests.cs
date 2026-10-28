@@ -410,7 +410,7 @@ public class SonarGateCoverageBumpTests
     [TestMethod]
     public void CertificateManager_IsSelfSignedAndInvalidateContext()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
         };
@@ -430,7 +430,7 @@ public class SonarGateCoverageBumpTests
     [TestMethod]
     public void CertificateManager_SuppressArms_RootThumbprintAndUnixUntrust()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
         };

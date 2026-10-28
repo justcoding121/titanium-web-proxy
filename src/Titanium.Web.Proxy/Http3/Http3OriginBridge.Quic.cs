@@ -4,26 +4,19 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Quic;
-using System.Net.Security;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -83,6 +76,7 @@ internal static partial class Http3OriginBridge
         sessionArgs.CustomUpStreamProxy = upstreamProxy;
         sessionArgs.CustomUpStreamProxyUsed = upstreamProxy;
         upstreamProxy ??= server.UpStreamHttpsProxy;
+        var poolKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost, upstreamProxy, upStreamEndPoint);
 
         QuicServerConnection? quicConn = null;
         // When true, StreamBodyWriter owns originStream + quicConn release (do not dispose/release here).
@@ -114,13 +108,69 @@ internal static partial class Http3OriginBridge
             // default path supplies sessionArgs: null, which skips the user callback and rejects
             // any chain that is not already trusted by the OS (breaking MITM-test and custom-CA
             // deployments for every H3→H3 origin connect).
-            quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
-                connectHost, port, upStreamEndPoint, upstreamProxy,
-                (sender, certificate, chain, errors) =>
-                    server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
-                cancellationToken,
-                sniHost: sniHost,
-                failFastHandshake: !isForcedH3);
+            if (staleConnectionRetries == 0
+                && ShouldRaceTcp(sessionArgs, server, isForcedH3, poolKey))
+            {
+                // Cold QUIC origin: a handshake that never completes (UDP/443 dropped) must not hold the
+                // request for the whole timeout while a working TCP path is available.
+                var (racedConn, tcpWon) = await AcquireQuicRacingTcpAsync(
+                    sessionArgs, server, logger,
+                    new QuicRaceTarget
+                    {
+                        ConnectHost = connectHost,
+                        SniHost = sniHost,
+                        Port = port,
+                        UpStreamEndPoint = upStreamEndPoint,
+                        UpstreamProxy = upstreamProxy,
+                        PoolKey = poolKey,
+                    },
+                    cancellationToken);
+                if (tcpWon)
+                {
+                    try
+                    {
+                        await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken,
+                            onInterimResponse);
+                    }
+                    catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
+                    {
+                        sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
+                    }
+
+                    return;
+                }
+
+                quicConn = racedConn!; // non-null whenever TCP did not win
+            }
+            else
+            {
+                // Cold Auto-mode dial: requests queue behind one handshake. Passing the capability key lets those
+                // waiters see the origin marked unreachable by the first failure and fall back to TCP at once,
+                // instead of each serially paying its own doomed handshake. The key is only built when cold, so
+                // a warm connection (the RPS case) allocates nothing extra.
+                var coldCapabilityKey = !isForcedH3 && !server.QuicConnectionPool.HasLiveConnection(poolKey)
+                    ? $"{sniHost}:{request.GetOriginHostPort(port).Port}"
+                    : null;
+                try
+                {
+                    quicConn = await server.QuicConnectionPool.GetOrCreateAsync(
+                        connectHost, port, upStreamEndPoint, upstreamProxy,
+                        (sender, certificate, chain, errors) =>
+                            server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
+                        cancellationToken,
+                        sniHost: sniHost,
+                        failFastHandshake: !isForcedH3,
+                        capabilityKey: coldCapabilityKey,
+                        precomputedCacheKey: poolKey);
+                }
+                catch (OperationCanceledException ex) when (coldCapabilityKey != null
+                                                            && !cancellationToken.IsCancellationRequested)
+                {
+                    // The pool declined to dial because the origin was marked unreachable while this call
+                    // queued. A failure, not a cancelled request: the TCP fallback below handles it.
+                    throw new InvalidOperationException("QUIC unavailable: origin marked unreachable.", ex);
+                }
+            }
 
             reused = !quicConn.ClaimFirstUse();
             sessionArgs.Timing?.MarkConnectionReady(quicConn.Id, reused);
@@ -165,8 +215,7 @@ internal static partial class Http3OriginBridge
             }
 
             // QuicStream WriteAsync may buffer; without Flush the peer can see the request hundreds of
-            // ms late (observed ~450ms Cloudflare HTML TTFB with inFlight=1 after request "sent").
-            // Always Flush on all OS (Darwin skip-Flush A/B regressed Mac÷YARP). When HEADERS/DATA
+            // ms late, so always Flush on every OS (skipping it on macOS measurably lowered RPS). When HEADERS/DATA
             // already packed STREAM+FIN via completeWrites:true, CompleteWrites is a no-op / throw —
             // only finish the write side if it is still open (body copy path).
             await originStream.FlushAsync(cancellationToken);
@@ -181,10 +230,29 @@ internal static partial class Http3OriginBridge
             List<(string Name, string Value)> decodedResponseHeaders;
             int finalStatus;
 
+            // A silent QUIC path (handshake fine, no response) would otherwise hold the request until the
+            // idle timeout. Bound only the very first frame, and only when replaying over TCP is safe.
+            // Auto policy only. Forced HTTP/3, including the session-less ForwardOverQuicFastAsync path, must
+            // fail closed and never replay on TCP, so its lack of this guard is by design.
+            // The cheap liveness test goes first: a warm connection (the RPS case) never looks at headers.
+            var guardFirstFrame = !isForcedH3 && !quicConn.HasDeliveredRecently(30_000)
+                && IsReplayableOnStall(request, finOnHeaders);
+
             while (true)
             {
-                responseHeadersFrame = await Http3Frame.ReadAsync(originStream,
-                    maxPayloadBytes: server.MaxDecodedHeaderListBytes, cancellationToken);
+                var responseRead = await ReadResponseFrameAsync(originStream,
+                    server.MaxDecodedHeaderListBytes, guardFirstFrame, quicConn, cancellationToken);
+                if (responseRead.Stalled)
+                {
+                    var stalledConn = quicConn;
+                    quicConn = null;
+                    await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
+                        sniHost, port, cancellationToken, onInterimResponse);
+                    return;
+                }
+
+                responseHeadersFrame = responseRead.Frame;
+                guardFirstFrame = false; // the peer is alive once any frame arrives
 
                 try
                 {
@@ -237,24 +305,34 @@ internal static partial class Http3OriginBridge
             }
 
             sessionArgs.Timing?.MarkResponseHeadersReceived();
+            quicConn.NoteResponse();
 
             var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
             response.RequestMethod = request.Method;
 
             // Cache Alt-Svc from response headers immediately (no need to wait for the body).
-            var altSvc = response.Headers.GetHeaderValueOrNull("Alt-Svc");
+            var altSvcHeaders = response.Headers.GetHeaders("Alt-Svc");
+            var altSvc = altSvcHeaders is { Count: > 0 }
+                ? string.Join(", ", altSvcHeaders.Select(header => header.Value))
+                : null;
             if (!string.IsNullOrEmpty(altSvc))
             {
                 var entries = AltSvcParser.Parse(altSvc);
                 var originPort = request.GetOriginHostPort(port).Port;
+                var capabilityKey = $"{sniHost}:{originPort}";
                 foreach (var entry in entries)
                 {
                     if (entry.MaxAgeSeconds <= 0)
+                    {
+                        server.Http3OriginCapabilityCache.EvictUnlessBroken(capabilityKey);
                         continue;
+                    }
                     var ttlSeconds = Math.Min(entry.MaxAgeSeconds, Http3OriginCapabilityCache.DefaultTtl.TotalSeconds * 2);
                     var ttl = TimeSpan.FromSeconds(ttlSeconds);
-                    server.Http3OriginCapabilityCache.Set($"{sniHost}:{originPort}",
-                        entry.Port == originPort ? int.MinValue : entry.Port, ttl);
+                    // This response arrived on a completed QUIC connection, so it may clear a
+                    // broken mark. Alt-Svc on a TCP fallback must not (see CacheHttp3CapabilityFromAltSvc).
+                    server.Http3OriginCapabilityCache.Set(capabilityKey,
+                        entry.Port == originPort ? int.MinValue : entry.Port, ttl, overrideBroken: true);
                     break;
                 }
             }
@@ -322,8 +400,8 @@ internal static partial class Http3OriginBridge
                     }
                 }
 
-                // Drain to FIN so Dispose does not RST a live H3 request stream (pool poison →
-                // handshake-per-request under load; cool H1→H3 fell ~1.16× → ~0.7×).
+                // Drain to FIN so Dispose does not reset a live H3 request stream; a reset poisons the pooled
+                // connection and forces a new handshake per request under load.
                 while (true)
                 {
                     var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
@@ -495,9 +573,11 @@ internal static partial class Http3OriginBridge
 
             if (!isForcedH3)
             {
+                var originPort = request.GetOriginHostPort(port).Port;
+                server.NoteHttp3OriginUnreachable($"{sniHost}:{originPort}");
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+                    await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -558,12 +638,10 @@ internal static partial class Http3OriginBridge
                 // port, which may differ when Alt-Svc / SVCB advertised an alternative port.
                 var originPort = request.GetOriginHostPort(port).Port;
                 var hostAndPort = $"{sniHost}:{originPort}";
-                server.Http3OriginCapabilityCache.Evict(hostAndPort);
-                if (logger.IsEnabled(LogLevel.Debug))
-                    logger.LogDebug("Evicted stale H3 capability for {HostAndPort}; falling back to TCP.", hostAndPort);
+                MarkUnreachableAndLog(server, logger, hostAndPort);
                 try
                 {
-                    await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse);
+                    await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
                 }
                 catch (Exception tcpEx) when (tcpEx is not OperationCanceledException)
                 {
@@ -578,7 +656,13 @@ internal static partial class Http3OriginBridge
             }
 
             // Forced H3, or Auto after the request was already on the wire: surface as a 502 —
-            // never silently replay a non-idempotent exchange on TCP.
+            // never silently replay a non-idempotent exchange on TCP. A QUIC idle timeout means the path
+            // stopped delivering though, so remember that and keep later requests off QUIC.
+            if (!isForcedH3 && requestSent && ex is QuicException { QuicError: QuicError.ConnectionTimeout })
+            {
+                server.NoteHttp3OriginUnreachable($"{sniHost}:{request.GetOriginHostPort(port).Port}");
+            }
+
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
             return;
         }
@@ -602,14 +686,19 @@ internal static partial class Http3OriginBridge
     // ────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    ///     H3 → H2 via <see cref="Http2OriginConnection"/>. Uses TLS ALPN <c>h2</c> unless the
-    ///     transparent endpoint has <see cref="TransparentBaseProxyEndPoint.ForwardCleartext"/>,
-    ///     in which case the origin is cleartext HTTP/2 prior-knowledge (h2c).
-    /// </summary>
-    /// <summary>
-    ///     Session-less H3→H2 forward for the interception-off bodiless path.
-    ///     <paramref name="coldOpenSessionFactory"/> is invoked only when the shared H2 origin pool
-    ///     must open a new TCP+H2 session (warm-pool RPS never hits it).
+    ///     Session-less H3→H3 forward for the bodiless reverse and MITM-unchanged fast paths.
+    ///     <paramref name="coldOpenSessionFactory"/> is invoked only when the pool must dial a new QUIC
+    ///     connection and needs a session stub for certificate validation (warm-pool RPS never hits it).
+    ///     <para>
+    ///         <b>Deliberately has no TCP fallback, TCP race, or stall-guard replay.</b> The callers reach this
+    ///         method only when the operator forced <see cref="UpstreamHttpProtocol.Http3"/> (reverse listener
+    ///         or <c>BeforeQuicAuthenticate</c>), and forced HTTP/3 fails closed (see
+    ///         <c>ProxyServer.EnableHttp3</c>: "no TCP fallback"). Replaying on TCP would silently downgrade a
+    ///         pinned protocol. Auto-policy traffic never comes here: it goes through
+    ///         <see cref="ForwardOverQuicAsync"/>, which has the stall guard, the TCP race and the fallback,
+    ///         all gated on <c>!isForcedH3</c>. A silent forced-H3 origin therefore ends at the QUIC idle
+    ///         timeout with a 502. That is the intended behaviour, not a missing feature.
+    ///     </para>
     /// </summary>
     internal static async Task<bool> ForwardOverQuicFastAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         H3H2FastForward fwd,
@@ -690,10 +779,9 @@ internal static partial class Http3OriginBridge
                     await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders,
                         cancellationToken, completeWrites: true);
                     requestSent = true;
-                    // QuicStream WriteAsync may buffer; without Flush the peer can stall forever
-                    // under multiplex (GHA Linux/Windows reverse H3→H3 @ c=64: 0 RPS / ~0% CPU).
-                    // Darwin A/B skipping Flush (27d2967d) dropped Mac reverse RPS (~5k→~3–4k) and
-                    // worsened H3÷YARP — keep Flush on all OS. completeWrites:true already FINs.
+                    // QuicStream WriteAsync may buffer; without Flush the peer can stall indefinitely under
+                    // multiplex load on Linux and Windows, and skipping it on macOS lowered RPS. Keep Flush on
+                    // every OS. completeWrites:true already sends the FIN.
                     await originStream.FlushAsync(cancellationToken);
 
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
@@ -893,6 +981,8 @@ internal static partial class Http3OriginBridge
                         continue;
                     }
 
+                    // Terminal on purpose: forced HTTP/3 has no TCP fallback (see the method remarks), and no
+                    // unreachable mark is written because the capability cache is not consulted for forced routes.
                     fwd.Response = MakeBadGatewayResponse(ex.Message);
                     return false;
                 }

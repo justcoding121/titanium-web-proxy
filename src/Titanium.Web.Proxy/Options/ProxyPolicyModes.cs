@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 
 namespace Titanium.Web.Proxy.Options;
@@ -124,6 +123,4 @@ public sealed class ProxyPolicyModes
     /// </summary>
     public ProxyPolicyModes WithAllowAmbiguousFraming(bool enabled) =>
         new(new Dictionary<PolicyFamily, PolicyMode>(modes), enabled);
-
-    internal IReadOnlyDictionary<PolicyFamily, PolicyMode> AsReadOnlyDictionary() => modes;
 }

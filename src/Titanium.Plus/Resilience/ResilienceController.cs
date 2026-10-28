@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
-using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -104,22 +103,19 @@ public sealed class ResilienceController : IDisposable
         string protocol,
         CancellationToken cancellationToken)
     {
+        _ = snap;
         var ok = await ProbeDestinationAsync(dest, path, protocol, cancellationToken);
         if (ok)
         {
             _failures[dest.Id] = 0;
-            if (snap.DestinationStates.TryGetValue(dest.Id, out var state) &&
-                state == DestinationState.Unhealthy)
-            {
-                manager.SetDestinationState(dest.Id, DestinationState.Healthy);
-            }
+            manager.TrySetDestinationState(dest.Id, DestinationState.Unhealthy, DestinationState.Healthy);
         }
         else
         {
             var count = _failures.AddOrUpdate(dest.Id, 1, (_, prev) => prev + 1);
             if (count >= unhealthyThreshold)
             {
-                manager.SetDestinationState(dest.Id, DestinationState.Unhealthy);
+                manager.TrySetDestinationState(dest.Id, DestinationState.Healthy, DestinationState.Unhealthy);
             }
         }
     }

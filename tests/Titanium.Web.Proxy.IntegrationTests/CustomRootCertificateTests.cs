@@ -31,7 +31,11 @@ public class CustomRootCertificateTests
         try
         {
             // Lifetime 1: create and persist a custom root CA.
-            using (var creator = new CertificateManager(null, null, false, false, false, NullLogger.Instance))
+            // Unique subject: the product-default CN is usually already in CurrentUser\Root on dev
+            // machines, and Windows then fails chain building for a different same-subject root.
+            using (var creator = new CertificateManager(
+                       "Titanium Integration Custom Root CA " + Guid.NewGuid().ToString("N"),
+                       "TitaniumIntegrationTest", false, false, false, NullLogger.Instance))
             {
                 creator.CertificateEngine = CertificateEngine.BouncyCastle;
                 Assert.IsTrue(creator.CreateRootCertificate(false));

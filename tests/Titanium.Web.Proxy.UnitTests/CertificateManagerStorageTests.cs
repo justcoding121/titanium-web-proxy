@@ -20,7 +20,7 @@ public class CertificateManagerStorageTests
     public void CreateRootCertificate_PersistToFile_ClearsAndSavesViaCertificateStorage()
     {
         var cache = new FakeCertificateCache();
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache
@@ -35,7 +35,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void CreateRootCertificate_OverwritePfxFalse_LoadsRootFromCertificateStorage()
     {
-        using var seed = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var seed = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -44,7 +44,7 @@ public class CertificateManagerStorageTests
             X509KeyStorageFlags.Exportable);
 
         var cache = new FakeCertificateCache { RootToLoad = root };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -59,7 +59,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public async Task CreateServerCertificate_SaveFakeCertificates_DiskHit_SkipsMakeCertificate()
     {
-        using var seed = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var seed = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -72,7 +72,7 @@ public class CertificateManagerStorageTests
         var cache = new FakeCertificateCache();
         cache.Leaves["disk-hit.example"] = exported;
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -89,7 +89,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void EnsureRootCertificate_WithoutTrustFlags_CreatesRootOnly()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -101,7 +101,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void EnsureRootCertificate_Overload_SetsTrustFlagsWithoutInstalling()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -117,7 +117,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public async Task ClearRootCertificate_ClearsRootAndCachedLeaves()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -133,7 +133,7 @@ public class CertificateManagerStorageTests
     public async Task CreateCertificate_SaveFakeCertificates_PersistsLeafViaStorage()
     {
         var cache = new FakeCertificateCache();
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -156,7 +156,7 @@ public class CertificateManagerStorageTests
     public void LoadRootCertificate_Expired_ReturnsNull()
     {
         var cache = new FakeCertificateCache { RootToLoad = CreateExpiredCertificate("expired-root") };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache
@@ -168,7 +168,7 @@ public class CertificateManagerStorageTests
     public void CreateRootCertificate_OverwriteFalse_ExpiredRootOnDisk_ReturnsFalse()
     {
         var cache = new FakeCertificateCache { RootToLoad = CreateExpiredCertificate("expired-on-disk") };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -182,7 +182,7 @@ public class CertificateManagerStorageTests
     public void CreateRootCertificate_LoadFailure_FallsBackToGeneratingRoot()
     {
         var cache = new FakeCertificateCache { LoadRootThrows = true };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -197,7 +197,7 @@ public class CertificateManagerStorageTests
     public void CreateRootCertificate_ClearThrows_StillPersistsRoot()
     {
         var cache = new FakeCertificateCache { ClearThrows = true };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache
@@ -214,7 +214,7 @@ public class CertificateManagerStorageTests
         var cache = new FakeCertificateCache();
         cache.Leaves["expired-leaf.example"] = expired;
 
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -233,7 +233,7 @@ public class CertificateManagerStorageTests
     public async Task CreateServerCertificate_DiskLoadFailure_FallsBackToGeneration()
     {
         var cache = new FakeCertificateCache { LoadLeafThrows = true };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -251,7 +251,7 @@ public class CertificateManagerStorageTests
     {
         var cache = new FakeCertificateCache();
         cache.Leaves["sync-expired.example"] = CreateExpiredCertificate("sync-expired.example");
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache,
@@ -268,7 +268,7 @@ public class CertificateManagerStorageTests
     public void ClearRootCertificate_WhenStorageClearThrows_PropagatesException()
     {
         var cache = new FakeCertificateCache { ClearThrows = true };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache
@@ -281,7 +281,7 @@ public class CertificateManagerStorageTests
     public void LoadRootCertificate_IOException_ReturnsNull()
     {
         var cache = new FakeCertificateCache { LoadRootThrows = true };
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = cache
@@ -292,7 +292,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void CertificateStorage_Null_ResetsToDefaultDiskCache()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
             CertificateStorage = new FakeCertificateCache()
@@ -304,7 +304,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public async Task CreateServerCertificate_ConcurrentSameHost_CoalescesPendingCreationTask()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -323,7 +323,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void IsSelfSigned_RootTrue_LeafFalse()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -339,7 +339,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void CreateSslCertificateContext_SelfSignedRoot_CreatesWithoutStoreTrust()
     {
-        using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
         };
@@ -354,7 +354,7 @@ public class CertificateManagerStorageTests
     [TestMethod]
     public void EnforceCertificateCacheBound_NullProviderAndZeroCap_DoNotThrow()
     {
-        using var unbounded = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+        using var unbounded = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
             maxCacheEntriesProvider: () => null)
         {
             CertificateEngine = CertificateEngine.BouncyCastle
@@ -366,7 +366,7 @@ public class CertificateManagerStorageTests
             BindingFlags.Instance | BindingFlags.NonPublic)!;
         enforce.Invoke(unbounded, null);
 
-        using var zeroCap = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+        using var zeroCap = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
             maxCacheEntriesProvider: () => 0)
         {
             CertificateEngine = CertificateEngine.BouncyCastle

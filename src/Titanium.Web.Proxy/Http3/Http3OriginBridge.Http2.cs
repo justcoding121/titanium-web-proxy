@@ -1,28 +1,19 @@
 #pragma warning disable CA1416
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net.Quic;
 using System.Net.Security;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -231,9 +222,9 @@ internal static partial class Http3OriginBridge
     /// <summary>
     ///     Session-less H3→H3 forward for the interception-off bodiless path.
     ///     Request: QPACK encode from the Request bag (authority rewrite for ForwardHost).
-    ///     Response when <paramref name="clientStream"/> is non-null: <b>verbatim frame relay</b>
+    ///     Response when a client stream is supplied: <b>verbatim frame relay</b>
     ///     (H2 compressed-relay analogue) — no response QPACK decode/re-encode / <see cref="Response"/> graph.
-    ///     When <paramref name="clientStream"/> is null (MITM unchanged-lite): capture the first
+    ///     When no client stream is supplied (MITM unchanged-lite): capture the first
     ///     HEADERS QPACK block (+ tiny DATA) into <see cref="H3H2FastForward.PreencodedQpackHeaders"/>
     ///     and populate <see cref="H3H2FastForward.Response"/> so BeforeResponse can run before emit.
     ///     Returns <see langword="true"/> when the client response is already on the wire, or when
@@ -244,7 +235,8 @@ internal static partial class Http3OriginBridge
         ProxyServer server,
         ILogger logger,
         CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        bool presentResponseAsHttp3 = true)
     {
         var request = sessionArgs.HttpClient.Request;
 
@@ -321,7 +313,13 @@ internal static partial class Http3OriginBridge
                 on1xx, cancellationToken, copyRequestBody);
 
             var response = exchange.Response;
-            response.HttpVersion = HttpHeader.Version30;
+            // The origin leg is HTTP/2 whatever version the response is stamped with below (or by
+            // Http2OriginConnection, which stamps HTTP/1.1 for an H1 client). Hosts label from this.
+            sessionArgs.HttpClient.RecordOriginHttpVersion(HttpHeader.Version20);
+            // H3 clients must see an HTTP/3 response. An H2 client that fell back off QUIC must
+            // keep the HTTP/2 response the origin actually sent.
+            if (presentResponseAsHttp3)
+                response.HttpVersion = HttpHeader.Version30;
             response.RequestMethod = request.Method;
             if (response.StreamBodyWriter == null)
             {
@@ -462,12 +460,25 @@ internal static partial class Http3OriginBridge
             var upStreamProxy = sessionArgs.CustomUpStreamProxyUsed
                                 ?? (originIsHttps ? server.UpStreamHttpsProxy : server.UpStreamHttpProxy);
 
-            var tcp = await server.TcpConnectionFactory.GetServerConnection(
-                server, target.Host, target.Port, HttpHeader.Version20, originIsHttps,
-                originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
-                false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
-                upStreamProxy,
-                true, false, ct, target.ConnectHost, target.ConnectPort);
+            TcpServerConnection? tcp;
+            try
+            {
+                tcp = await server.TcpConnectionFactory.GetServerConnection(
+                    server, target.Host, target.Port, HttpHeader.Version20, originIsHttps,
+                    originIsHttps ? SslExtensions.Http2ProtocolAsList : null,
+                    false, sessionArgs, sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint,
+                    upStreamProxy,
+                    true, false, ct, target.ConnectHost, target.ConnectPort);
+            }
+            catch (System.Security.Authentication.AuthenticationException ex)
+            {
+                // A strict origin can reject the h2-only ALPN offer outright (no_application_protocol)
+                // instead of answering without ALPN. The TLS handshake failed before any request byte
+                // was written, so the caller may retry the same request as HTTP/1.1.
+                throw new Http2OriginNotNegotiatedException(
+                    $"The TLS handshake for HTTP/2 with origin '{target.Host}:{target.Port}' failed.",
+                    ex, sessionArgs);
+            }
 
             if (tcp != null && !originIsHttps)
                 tcp.Http2Cleartext = true;
@@ -480,13 +491,27 @@ internal static partial class Http3OriginBridge
                 if (tcp != null)
                     await server.TcpConnectionFactory.Release(tcp, true);
                 var how = originIsHttps ? "did not negotiate HTTP/2 via ALPN" : "did not accept cleartext HTTP/2 (h2c)";
-                throw new ProxyHttpException(
+                throw new Http2OriginNotNegotiatedException(
                     $"The origin '{target.Host}:{target.Port}' {how} for the H3→H2 bridge.",
                     null, sessionArgs);
             }
 
             return await Http2OriginConnection.CreateAsync(tcp, logger, ct, server.ResourceLimits, server.MaxDecodedHeaderListBytes);
         }, cancellationToken);
+    }
+
+    /// <summary>
+    ///     The origin did not agree to HTTP/2: it answered the handshake without <c>h2</c>, or a strict origin
+    ///     rejected the h2-only ALPN offer with a TLS alert. Thrown before any request byte is written, so
+    ///     retrying the same request on HTTP/1.1 cannot double-submit.
+    /// </summary>
+    internal sealed class Http2OriginNotNegotiatedException : ProxyHttpException
+    {
+        internal Http2OriginNotNegotiatedException(string message, Exception? innerException,
+            SessionEventArgs? session)
+            : base(message, innerException, session)
+        {
+        }
     }
 
 }

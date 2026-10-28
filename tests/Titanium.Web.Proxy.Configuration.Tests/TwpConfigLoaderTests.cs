@@ -93,6 +93,20 @@ public class TwpConfigLoaderTests
     }
 
     [TestMethod]
+    public void JsonReverseProxyDocument_ParsesRouteRetry()
+    {
+        var json = """
+            {
+              "clusters": [{ "id": "backend", "destinations": [{ "address": "127.0.0.1" }] }],
+              "routes": [{ "clusterId": "backend", "retry": { "attempts": 1 } }]
+            }
+            """;
+        var route = JsonReverseProxyDocument.Parse(json).Routes[0];
+        Assert.IsNotNull(route.Retry);
+        Assert.AreEqual(1, route.Retry.Attempts);
+    }
+
+    [TestMethod]
     public void JsonReverseProxyDocument_ParsesAlgorithmsTransformsAndFile()
     {
         var json = """

@@ -114,6 +114,40 @@ public class ProxyServerLifecycleCoverageTests
     }
 
     [TestMethod]
+    [Timeout(30_000)]
+    public async Task StopAsync_DoesNotWaitForTheTimeWaitDelayAfterTheLastHandlerExits()
+    {
+        using var proxy = new ProxyServer(false, false, false) { TcpTimeWaitSeconds = 2 };
+        var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        proxy.AddEndPoint(ep);
+        proxy.Start(changeSystemProxySettings: false);
+
+        using (var client = new System.Net.Sockets.TcpClient())
+        {
+            await client.ConnectAsync(IPAddress.Loopback, ep.Port);
+            await WaitUntilAsync(() => proxy.AdmittedClientConnectionCount == 1);
+        }
+
+        await WaitUntilAsync(() => proxy.AdmittedClientConnectionCount == 0);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await proxy.StopAsync();
+        stopwatch.Stop();
+
+        Assert.IsTrue(stopwatch.ElapsedMilliseconds < 500, $"stop took {stopwatch.ElapsedMilliseconds} ms");
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var until = DateTime.UtcNow.AddSeconds(5);
+        while (!condition() && DateTime.UtcNow < until)
+        {
+            await Task.Delay(5);
+        }
+
+        Assert.IsTrue(condition(), "condition was not reached");
+    }
+
+    [TestMethod]
     public void RemoveEndPoint_Unknown_Throws_AndRemoveWhileStopped_Works()
     {
         using var proxy = new ProxyServer(false, false, false);

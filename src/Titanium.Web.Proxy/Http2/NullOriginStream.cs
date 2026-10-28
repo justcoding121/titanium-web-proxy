@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.Http2;
 ///             so nothing forwarded here is ever meant to reach a real peer.
 ///         </item>
 ///         <item>
-///             Every read after the initial SETTINGS frame blocks until <paramref name="cancellationToken"/> (from
+///             Every read after the initial SETTINGS frame blocks until the token (from
 ///             the constructor) is cancelled, which happens once the real client-facing leg ends for any reason
 ///             (see <see cref="Http2Helper.SendHttp2" />) - it must never return 0 (EOF) on its own, since that
 ///             would make the generic relay loop treat this direction as "the server closed the connection" and
@@ -45,36 +45,41 @@ internal sealed class NullOriginStream : Stream
     ///     SETTINGS frame: ENABLE_PUSH=0 (6 bytes) + INITIAL_WINDOW_SIZE=768 KiB (6 bytes).
     ///     Length = 12, type = SETTINGS, flags = 0, stream id = 0.
     /// </summary>
-    private static readonly byte[] ClientFacingSettingsFrame = BuildClientFacingSettingsFrame();
+    private static readonly byte[] ClientFacingSettingsFrame = BuildClientFacingSettingsFrame(advertiseConnectProtocol: false);
+    private static readonly byte[] ConnectProtocolSettingsFrame = BuildClientFacingSettingsFrame(advertiseConnectProtocol: true);
 
     private readonly CancellationToken cancellationToken;
+    private readonly byte[] settingsFrame;
     private int settingsBytesServed;
 
-    private static byte[] BuildClientFacingSettingsFrame()
+    private static byte[] BuildClientFacingSettingsFrame(bool advertiseConnectProtocol)
     {
-        // 9-byte header + 12-byte payload (two SETTINGS entries).
-        var frame = new byte[9 + 12];
-        // Length = 12
-        frame[0] = 0;
-        frame[1] = 0;
-        frame[2] = 12;
+        // 9-byte header + 6 bytes per SETTINGS entry.
+        var entries = advertiseConnectProtocol ? 3 : 2;
+        var payloadLength = entries * 6;
+        var frame = new byte[9 + payloadLength];
+        frame[2] = (byte)payloadLength;
         frame[3] = (byte)Http2FrameType.Settings;
-        frame[4] = 0; // flags
-        // stream id = 0 (bytes 5-8 already zero)
 
         var payload = frame.AsSpan(9);
-        // SETTINGS_ENABLE_PUSH = 0
         BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)Http2SettingsId.EnablePush);
         BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(2), 0);
-        // SETTINGS_INITIAL_WINDOW_SIZE = 768 KiB
         BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(6), (ushort)Http2SettingsId.InitialWindowSize);
         BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(8), (uint)Http2Helper.ClientInitialStreamWindowSize);
+        if (advertiseConnectProtocol)
+        {
+            // RFC 8441. The relay keeps this value only when enableRfc8441 is set on the session.
+            BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(12), (ushort)Http2SettingsId.EnableConnectProtocol);
+            BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(14), 1);
+        }
+
         return frame;
     }
 
-    internal NullOriginStream(CancellationToken cancellationToken)
+    internal NullOriginStream(CancellationToken cancellationToken, bool advertiseConnectProtocol = false)
     {
         this.cancellationToken = cancellationToken;
+        settingsFrame = advertiseConnectProtocol ? ConnectProtocolSettingsFrame : ClientFacingSettingsFrame;
     }
 
     public override bool CanRead => true;
@@ -122,11 +127,11 @@ internal sealed class NullOriginStream : Stream
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
         CancellationToken cancellationToken = default)
     {
-        if (settingsBytesServed < ClientFacingSettingsFrame.Length)
+        if (settingsBytesServed < settingsFrame.Length)
         {
-            var remaining = ClientFacingSettingsFrame.Length - settingsBytesServed;
+            var remaining = settingsFrame.Length - settingsBytesServed;
             var toCopy = Math.Min(buffer.Length, remaining);
-            ClientFacingSettingsFrame.AsMemory(settingsBytesServed, toCopy).CopyTo(buffer);
+            settingsFrame.AsMemory(settingsBytesServed, toCopy).CopyTo(buffer);
             settingsBytesServed += toCopy;
             return toCopy;
         }

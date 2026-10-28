@@ -83,6 +83,10 @@ if (QuicListener.IsSupported)
 #pragma warning restore TWP001
 ```
 
+## When an origin's QUIC path fails
+
+In Auto mode a cold QUIC handshake that is slow races a TCP/HTTP/2 connection, and a safe bodiless request (`GET`, `HEAD`, `OPTIONS`) whose QUIC origin stays silent for 5 s is replayed once over TCP. The origin then stays on TCP for 5 minutes, doubling after each repeat failure up to 1 hour. Forced HTTP/3 (`UpstreamHttpProtocol.Http3` in the library) never falls back: a dead QUIC origin returns an error.
+
 ## Full guide
 
 Packaging, Alt-Svc, bridges, and gap list: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).

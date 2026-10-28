@@ -15,9 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.StreamExtended.Network;
 using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy;
@@ -79,8 +77,8 @@ public partial class ProxyServer
     /// <summary>
     ///     Interception-off transparent reverse with fixed <see cref="TransparentBaseProxyEndPoint.ForwardHost" />:
     ///     bodiless GET/HEAD without allocating <see cref="SessionEventArgs" /> (H3→H1 session-lite analogue).
-    ///     New-connection TLS terminate pays Schannel per accept; skipping the session graph cuts parallel
-    ///     GC under c=32 (cool: c=1 already leads YARP, c=32 was ~0.88–0.90×).
+    ///     New-connection TLS terminate already pays a handshake per accept; skipping the session graph
+    ///     avoids the allocation and GC cost of building it for every connection under concurrency.
     ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
     ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
     ///     Pre-origin middleware (CIDR/WAF/JWT/rate-limit/cache/CORS) runs on this path via
@@ -108,6 +106,10 @@ public partial class ProxyServer
             var snapshot = reverse.ClusterManager?.Snapshot;
             if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalent(
                     reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
+                return false;
+
+            // A connection-limit slot is released when the session ends, which lite does not have.
+            if (reverse.Policies is { Count: > 0 } && Routing.RoutePolicies.HoldsConnectionSlot(reverse))
                 return false;
         }
 
@@ -168,6 +170,28 @@ public partial class ProxyServer
         Request request,
         CancellationToken cancellationToken)
     {
+        if (ReverseProxy is { Policies: { Count: > 0 } } policyOptions &&
+            Routing.RoutePolicies.TryHandleLite(
+                policyOptions,
+                endPoint,
+                request,
+                clientStream.Connection.RemoteEndPoint as IPEndPoint,
+                out var policyStatus,
+                out var policyBody,
+                out var policyHeaders))
+        {
+            var denied = new Abstractions.Middleware.ProxyMiddlewareContext
+            {
+                Session = H1TerminateLiteMiddlewareSession,
+                HandledStatusCode = policyStatus,
+                HandledBody = policyBody,
+                HandledHeaders = policyHeaders,
+            };
+            await WriteTerminateLiteMiddlewareResponseAsync(clientStream, request, denied, cancellationToken)
+                .ConfigureAwait(false);
+            return !H1TerminateClientRequestedClose(request);
+        }
+
         if (ReverseProxy?.Middleware is { Count: > 0 } middleware)
         {
             var handled = await TryRunTerminateLiteMiddlewareAsync(

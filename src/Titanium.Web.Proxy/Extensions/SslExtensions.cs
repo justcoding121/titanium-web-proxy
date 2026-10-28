@@ -1,13 +1,6 @@
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Net.Security;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using Titanium.Web.Proxy.StreamExtended;
-using Titanium.Web.Proxy.StreamExtended.Models;
 
 namespace Titanium.Web.Proxy.Extensions
 {

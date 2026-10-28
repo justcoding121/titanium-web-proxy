@@ -111,6 +111,11 @@ loopback, and other non-globally-routable ranges) or
 <span class="xref">Titanium.Web.Proxy.Logging.ProxyDiagnostics</span> so callers can distinguish connect,
 response-header, idle, and total request deadlines.</p>
 </section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Exceptions.UpstreamCapacityException.html">UpstreamCapacityException</a></h4>
+      <section><p>The cluster's concurrent upstream connection cap was reached and a waiter timed out.
+This is not a destination failure: passive health must not eject the origin for it,
+and the connect-retry policy must not loop on it.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Exceptions.UpstreamProxyConnectException.html">UpstreamProxyConnectException</a></h4>
       <section><p>Thrown when an HTTP upstream proxy rejects a CONNECT tunnel (or otherwise fails to
 establish one) with a non-success response. Carries the upstream status, headers, and a

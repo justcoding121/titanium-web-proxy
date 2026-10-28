@@ -1,32 +1,20 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
-using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Network.WinAuth;
-using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.StreamExtended.BufferPool;
 
 namespace Titanium.Web.Proxy;
 
@@ -37,6 +25,7 @@ namespace Titanium.Web.Proxy;
 /// </summary>
 public partial class ProxyServer : IDisposable
 {
+    private volatile bool _stopAccepting;
     /// <summary>
     ///     Start this proxy server instance.
     ///     <para>
@@ -99,6 +88,7 @@ public partial class ProxyServer : IDisposable
             assignedSystemUpStreamResolver = true;
         }
 
+        _stopAccepting = false;
         ProxyRunning = true;
 
         // Name only, per the plan's rollout section - never hosts, URLs or secrets.
@@ -281,6 +271,34 @@ public partial class ProxyServer : IDisposable
     ///     In-flight sessions are cancelled; pooled upstream connections are cleared. The connection
     ///     factory itself stays usable for a subsequent Start (it is only disposed with the proxy).
     /// </summary>
+    /// <summary>
+    ///     True while a TCP client handler or an HTTP/3 client connection is still running. TCP uses the
+    ///     admission count, which drops when the handler returns. <see cref="ClientConnectionCount" />
+    ///     lags by one second when <see cref="TcpTimeWaitSeconds" /> is set, which would add that second to every stop.
+    /// </summary>
+    private bool ClientHandlersRunning => AdmittedClientConnectionCount > 0 || Http3ClientConnectionCount > 0;
+
+    /// <summary>Stops admitting clients, waits for in-flight work, then stops.</summary>
+    public async Task DrainAsync(TimeSpan timeout)
+    {
+        _stopAccepting = true;
+        if (!ProxyRunning)
+        {
+            return;
+        }
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (ClientHandlersRunning && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        if (ProxyRunning)
+        {
+            await StopAsync(TimeSpan.Zero).ConfigureAwait(false);
+        }
+    }
+
     public void Stop()
     {
         StopCore(cancelSessions: true, clearPools: true);
@@ -305,7 +323,7 @@ public partial class ProxyServer : IDisposable
         // Http3ClientConnectionCount tracks inbound QUIC clients separately from
         // ClientConnectionCount (TCP-based H1/H2); draining only the former would let this
         // return, and the pools below get cleared, while HTTP/3 streams are still in flight.
-        while ((ClientConnectionCount > 0 || Http3ClientConnectionCount > 0) && DateTime.UtcNow < deadline)
+        while (ClientHandlersRunning && DateTime.UtcNow < deadline)
             // StopCore already cancelled quicListenerCts; drain polling must not share that token.
             await Task.Delay(50, CancellationToken.None).ConfigureAwait(false);
 
@@ -443,6 +461,15 @@ public partial class ProxyServer : IDisposable
         try
         {
             DrainPoolBlocking(Http2OriginConnectionPool.DrainAsync());
+        }
+        catch
+        {
+            // ignore
+        }
+
+        try
+        {
+            Interlocked.Exchange(ref mirrorDispatcher, null)?.Dispose();
         }
         catch
         {

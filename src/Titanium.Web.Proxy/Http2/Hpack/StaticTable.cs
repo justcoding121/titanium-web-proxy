@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright 2014 Twitter, Inc
  * This file is a derivative work modified by Ringo Leese
  *
@@ -25,7 +25,7 @@ internal static class StaticTable
     /// <summary>
     ///     Appendix A: Static Table Definition
     /// </summary>
-    /// <see cref="http://tools.ietf.org/html/rfc7541#appendix-A" />
+    /// <!-- RFC 7541 Appendix A: http://tools.ietf.org/html/rfc7541#appendix-A -->
     internal static readonly ByteString KnownHeaderAuhtority = (ByteString)":authority";
 
     internal static readonly ByteString KnownHeaderMethod = (ByteString)":method";

@@ -420,6 +420,35 @@ public class Http3RouteResolutionTests
     // ─────────────────────────────────────────────────────────────────────────
 
     [TestMethod]
+    public void ResolveH3_BrokenOrigin_IgnoresAltSvcAndSvcb()
+    {
+        using var server = MakeServer(enableH3: true, enableSvcb: true,
+            svcbResult: new SvcbResult(443, TimeSpan.FromMinutes(5)));
+        server.Http3OriginCapabilityCache.Set("www.google.com:443");
+        server.Http3OriginCapabilityCache.MarkBroken("www.google.com:443");
+        Assert.IsFalse(server.Http3OriginCapabilityCache.Set("www.google.com:443"),
+            "The TCP fallback's Alt-Svc must not undo the broken mark.");
+
+        var route = server.ResolveHttp3Origin(
+            "www.google.com", 443, UpstreamHttpProtocol.Auto, allowDnsProbe: true);
+
+        Assert.IsFalse(route.UseH3, "Auto mode stays on TCP while HTTP/3 is marked unreachable.");
+    }
+
+    [TestMethod]
+    public void ResolveH3_BrokenOrigin_ForcedHttp3StillUsesH3()
+    {
+        using var server = MakeServer();
+        server.Http3OriginCapabilityCache.MarkBroken("www.google.com:443");
+
+        var route = server.ResolveHttp3Origin(
+            "www.google.com", 443, UpstreamHttpProtocol.Http3, allowDnsProbe: false);
+
+        Assert.IsTrue(route.UseH3, "Forced HTTP/3 is an explicit instruction and ignores the broken mark.");
+        Assert.IsTrue(route.ForcedH3);
+    }
+
+    [TestMethod]
     public void ResolveH3_NullProtocol_TreatedAsAuto()
     {
         using var server = MakeServer();

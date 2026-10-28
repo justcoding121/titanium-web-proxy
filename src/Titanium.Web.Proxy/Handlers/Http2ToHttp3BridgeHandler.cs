@@ -9,7 +9,6 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
@@ -17,7 +16,6 @@ using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy;
 
@@ -106,19 +104,9 @@ public partial class ProxyServer
             await OnBeforeRequest(sessionArgs);
 
         // Per-stream destination when ReverseProxy routes are set.
-        Routing.ReverseProxySessionDispatch.TryApply(this, sessionArgs);
-
-        // BeforeRequest already synthesized a response (Ok/GenericResponse/Redirect/etc.); Http2Helper
-        // handles this via the CancelRequest path — nothing to bridge.
-        if (sessionArgs.HttpClient.Request.CancelRequest)
+        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
+        if (LeaveH2ToH3Early(sessionArgs, ctx, routeDispatch))
             return;
-
-        // RFC 8441 extended CONNECT / WebSocket streams remain on their own specialized tunnel path.
-        if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var ecState) &&
-            ecState.IsExtendedConnect)
-        {
-            return;
-        }
 
         // Warm path (attached H2 origin): never upgrade individual streams to H3 mid-connection.
         // Mixing native H2↔H2 relay with EmitSyntheticResponseAsync on the same client H2 session
@@ -134,8 +122,9 @@ public partial class ProxyServer
 
         if (!h3Route.UseH3)
         {
-            // Cold path: CONNECT committed to H2→H3 with NullOriginStream. After QUIC failure evicts
-            // the capability cache, later multiplexed streams must still be answered (via TCP).
+            // Cold path: CONNECT committed to H2→H3 with NullOriginStream. After QUIC failure marks
+            // the origin unreachable, later multiplexed streams must still be answered (via TCP, HTTP/2
+            // when this client already negotiated it).
             h3Route = Http3OriginRoute.None;
         }
 
@@ -204,6 +193,32 @@ public partial class ProxyServer
         streamState.SyntheticTask = bridgeTask;
         streamState.IsExternalBridge = true;
         ctx.ConnectionState.PendingSynthetics.Track(bridgeTask);
+    }
+
+    private static bool LeaveH2ToH3Early(
+        SessionEventArgs sessionArgs,
+        Http2StreamContext ctx,
+        Routing.ReverseProxySessionDispatch.RouteDispatchResult routeDispatch)
+    {
+        if (routeDispatch is Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+            or Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+        {
+            if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+            {
+                Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            }
+
+            return true;
+        }
+
+        // BeforeRequest already synthesized a response. Http2Helper answers it on the cancel path.
+        if (sessionArgs.HttpClient.Request.CancelRequest)
+        {
+            return true;
+        }
+
+        // RFC 8441 extended CONNECT / WebSocket streams stay on their own tunnel path.
+        return ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var ecState) && ecState.IsExtendedConnect;
     }
 
     private static (string Host, int Port) ResolveH3BridgeOriginIdentity(
@@ -315,7 +330,7 @@ public partial class ProxyServer
                 {
                     LowercaseHeaderNames(interim.Headers);
                     await Http2Helper.EmitInterimResponseAsync(
-                        sessionArgs, streamId, connectionState, clientStream, interim, ct);
+                        streamId, connectionState, clientStream, interim, ct);
                 },
                 copyRequestBody: copyRequestBody);
 

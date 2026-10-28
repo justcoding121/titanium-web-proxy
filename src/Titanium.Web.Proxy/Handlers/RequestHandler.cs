@@ -98,7 +98,7 @@ public partial class ProxyServer
                         if (requestLine.IsEmpty()) return;
 
                         // Transparent reverse + no interception: try session-lite before SessionEventArgs
-                        // (new-connection TLS terminate: c=1 already leads YARP; c=32 paid full session GC).
+                        // (avoids building the full session graph for every new TLS-terminated connection).
                         // Never lite when the connection-level upstream is H2/H3 — ForwardH1TerminateLite
                         // always opens HTTP/1.1 TCP (H1→H3/H2 bridges were 100% err after session-lite).
                         var connectionUpstream = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
@@ -389,8 +389,22 @@ public partial class ProxyServer
                         // Route transforms (RequestHeaderSet / PathPrefix / …) must run while the
                         // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
                         // Taking the baseline before TryApply made MutationCount diverge and forced
-                        // the full session path (~0.75× CLI reverse for intercept-http1).
-                        Routing.ReverseProxySessionDispatch.TryApply(this, args);
+                        // the full, slower session path.
+                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+                        {
+                            closeServerConnection = true;
+                            await Routing.ReverseProxySessionDispatch.WriteNoDestinationAsync(args, clientStream, cancellationToken);
+                            return;
+                        }
+
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+                        {
+                            closeServerConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
 
                         var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
 
@@ -597,11 +611,16 @@ public partial class ProxyServer
                                 requestToken, cancellationTokenSource);
 
                             var newConnection = result.LatestConnection;
+
+                            // A status retry swapped the origin socket inside the request. Track the new one.
+                            if (args.Extras is { StatusRetried: true } && args.HttpClient.HasConnection)
+                                newConnection = args.HttpClient.Connection;
+
                             if (connection != newConnection && connection != null)
                                 await TcpConnectionFactory.Release(connection);
 
                             // update connection to latest used
-                            connection = result.LatestConnection;
+                            connection = newConnection;
 
                             closeServerConnection = !result.Continue;
 
@@ -701,10 +720,12 @@ public partial class ProxyServer
                     catch (Exception e) when (!(e is ProxyHttpException)
                                               && !(e is ProxyTimeoutException)
                                               && !(e is OperationCanceledException)
-                                              && !(e is RetryableServerConnectionException))
+                                              && !(e is RetryableServerConnectionException)
+                                              && !(e is UpstreamCapacityException))
                     {
                         ProxyDiagnostics.ReportCaught(logger,
-                            "RequestHandler wrapping unexpected failure as ProxyHttpException", e);
+                            $"RequestHandler wrapping unexpected failure as ProxyHttpException " +
+                            $"({args.HttpClient.Request.Method} {args.HttpClient.Request.Host})", e);
                         throw new ProxyHttpException("Error occured whilst handling session request", e, args);
                     }
                 }
@@ -803,6 +824,10 @@ public partial class ProxyServer
                 // ("HTTP/3.0 200 ..."), which curl and other strict HTTP/1.1 clients don't recognize. Mirror
                 // Http2OriginConnection's H1.1-bridge convention (always the client-facing wire version, not
                 // the origin's) so the status line matches the actual protocol on this leg.
+                // Keep the origin leg observable before it is overwritten: 3.0 for QUIC, or whatever a
+                // TCP fallback recorded / parsed. A fallback that already recorded its leg (HTTP/2) wins.
+                if (!args.HttpClient.HasRecordedOriginHttpVersion)
+                    args.HttpClient.RecordOriginHttpVersion(h3Response.HttpVersion);
                 h3Response.HttpVersion = args.HttpClient.Request.HttpVersion;
 
                 // This response was decoded from real HTTP/3 frames (Http3OriginBridge), never from
@@ -963,12 +988,12 @@ public partial class ProxyServer
                 cancellationToken);
         };
 
-        /// Retry with new connection if the initial stream.WriteAsync call to server fails.
-        /// i.e if request line and headers failed to get send.
-        /// Do not retry after reading data from client stream, 
-        /// because subsequent try will not have data to read from client 
-        /// and will hang at clientStream.ReadAsync call.
-        /// So, throw RetryableServerConnectionException only when we are sure we can retry safely.
+        // Retry with new connection if the initial stream.WriteAsync call to server fails.
+        // i.e if request line and headers failed to get send.
+        // Do not retry after reading data from client stream,
+        // because subsequent try will not have data to read from client
+        // and will hang at clientStream.ReadAsync call.
+        // So, throw RetryableServerConnectionException only when we are sure we can retry safely.
         return await RetryPolicy<RetryableServerConnectionException>(args).ExecuteAsync(async connection =>
         {
             // set the connection and send request headers
@@ -993,6 +1018,41 @@ public partial class ProxyServer
             await HandleHttpSessionRequest(args);
             return true;
         }, generator, serverConnection);
+    }
+
+    private async Task ReplayGatewayStatusAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        // The first origin answered with an unread body, so that socket is finished. Close it now. The
+        // replacement is returned through HttpClient and released by the session loop like any other.
+        if (args.HttpClient.HasConnection)
+        {
+            await TcpConnectionFactory.Release(args.HttpClient.Connection, true);
+        }
+
+        var connection = await TcpConnectionFactory.GetServerConnection(
+            this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
+        args.HttpClient.SetConnection(connection);
+        // ReceiveResponse no-ops when a status is already set, so the failed attempt must be discarded
+        // or the replay would return the first 502/503/504.
+        args.HttpClient.Response = new Response();
+        try
+        {
+            await args.HttpClient.SendRequest(
+                false, args.IsTransparent, args.OriginHttpVersionPolicy ?? OriginHttpVersionPolicy, cancellationToken);
+            if (ResponseHeaderTimeoutSeconds > 0 || args.ResponseHeaderTimeout.HasValue)
+            {
+                await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            }
+            else
+            {
+                await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
+        }
+        catch
+        {
+            await TcpConnectionFactory.Release(connection, true);
+            throw;
+        }
     }
 
     private async Task HandleHttpSessionRequest(SessionEventArgs args) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -1030,6 +1090,21 @@ public partial class ProxyServer
             else
             {
                 await args.HttpClient.ReceiveResponse(cancellationToken);
+            }
+
+            if (Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            {
+                // Async only after a retry is staged, so an unset policy does not allocate a state machine.
+                try
+                {
+                    ProxyMetrics.RecordStatusRetry();
+                    await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                }
+                catch (ProxyTimeoutException ex)
+                {
+                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
+                    return;
+                }
             }
 
             var fastResponse = args.HttpClient.Response;
@@ -1160,6 +1235,11 @@ public partial class ProxyServer
             return;
         }
 
+        // A keep-alive socket the origin idle-closed fails only after the request was written, and a streamed
+        // body cannot be sent again. Hold a small body so that failure can be replayed on a fresh connection.
+        if (ShouldBufferBodyForReplay(args))
+            await args.BufferRequestBodyForReplayAsync(cancellationToken);
+
         var body = request.CompressBodyAndUpdateContentLength();
 
         await args.HttpClient.SendRequest(Enable100ContinueBehaviour, args.IsTransparent,
@@ -1219,6 +1299,32 @@ public partial class ProxyServer
 
         // parse and send response
         await HandleHttpSessionResponse(args);
+    }
+
+    /// <summary>Largest request body held in memory so a stale keep-alive socket can be replayed.</summary>
+    private const long MaxReplayBufferedBodyBytes = 64 * 1024;
+
+    /// <summary>
+    ///     A keep-alive connection must have been quiet this long before its next body is held for replay.
+    ///     Origins idle-close after seconds; connections serving back-to-back requests skip the buffering, so
+    ///     high-rate POST traffic keeps streaming its bodies.
+    /// </summary>
+    private static readonly TimeSpan MinIdleForReplayBuffering = TimeSpan.FromSeconds(1);
+
+    private static bool ShouldBufferBodyForReplay(SessionEventArgs args)
+    {
+        var request = args.HttpClient.Request;
+        return args.HttpClient.HasConnection
+               && args.HttpClient.Connection.HasBeenIdleSinceLastExchange(MinIdleForReplayBuffering)
+               && request.HasBody
+               && !request.IsBodyRead
+               && !request.IsChunked
+               && request.ContentLength is > 0 and <= MaxReplayBufferedBodyBytes
+               // Buffering decodes the body and sending re-encodes it; with no Content-Encoding the bytes are unchanged.
+               && request.ContentEncoding == null
+               && !request.ExpectContinue
+               && !request.UpgradeToWebSocket
+               && request.HttpVersion.Major == 1;
     }
 
     /// <summary>
@@ -1538,7 +1644,7 @@ public partial class ProxyServer
 
     /// <summary>
     ///     HTTP/1.0 has no <c>chunked</c> transfer-coding at all (it predates RFC 2616's introduction of
-    ///     it), so a request that is still <see cref="Request.IsChunked" /> when
+    ///     it), so a request that is still <c>Request.IsChunked</c> when
     ///     <see cref="HttpWebClient.ResolveOriginHttpVersion" /> says the origin will be declared "HTTP/1.0"
     ///     on the wire cannot be forwarded as-is: <see cref="OriginHttpVersionPolicy.PreserveClientVersion" />
     ///     (the default) mirrors whatever version the client declared, so an HTTP/1.0 client whose request

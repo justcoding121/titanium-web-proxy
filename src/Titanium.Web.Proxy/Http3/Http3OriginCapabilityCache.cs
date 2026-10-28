@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -27,7 +28,33 @@ internal sealed class Http3OriginCapabilityCache
 {
     internal static readonly TimeSpan DefaultTtl = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    ///     How long Auto mode refuses HTTP/3 after a QUIC connect fails before any request bytes
+    ///     were sent (UDP blackhole, handshake timeout). Advertisements (<c>Alt-Svc</c>, HTTPS/SVCB)
+    ///     cannot revive the origin during this window; a later successful QUIC exchange can.
+    ///     Matches the initial broken-alternative-service window browsers use when they stay on HTTP/2.
+    ///     This is the first window. Each further failure after a window ends doubles it, up to
+    ///     <see cref="MaxBrokenTtl" />.
+    /// </summary>
+    internal static readonly TimeSpan BrokenTtl = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    ///     Longest broken window. A streak of failures is also remembered for this long after the
+    ///     last window ends, so a path that stays dead keeps its long window.
+    /// </summary>
+    internal static readonly TimeSpan MaxBrokenTtl = TimeSpan.FromHours(1);
+
     private readonly ConcurrentDictionary<string, Entry> _cache = new();
+    private readonly TimeProvider _time;
+
+    public Http3OriginCapabilityCache()
+        : this(TimeProvider.System)
+    {
+    }
+
+    internal Http3OriginCapabilityCache(TimeProvider time) => _time = time;
+
+    private DateTime UtcNow => _time.GetUtcNow().UtcDateTime;
 
     /// <summary>
     ///     Returns <see langword="true" /> and fills <paramref name="altPort" /> and
@@ -41,7 +68,9 @@ internal sealed class Http3OriginCapabilityCache
     /// </summary>
     internal bool TryGet(string hostAndPort, out int altPort, out string? targetName)
     {
-        if (_cache.TryGetValue(hostAndPort, out var entry) && entry.ExpiresAtUtc > DateTime.UtcNow)
+        if (_cache.TryGetValue(hostAndPort, out var entry)
+            && !entry.Broken
+            && entry.ExpiresAtUtc > UtcNow)
         {
             altPort = entry.AltPort;
             targetName = entry.TargetName;
@@ -71,26 +100,125 @@ internal sealed class Http3OriginCapabilityCache
     ///     Optional SVCB TargetName for the QUIC connect host. <see langword="null" /> means use the
     ///     origin host for the QUIC connection (Alt-Svc path; no separate target).
     /// </param>
-    internal void Set(string hostAndPort, int altPort = int.MinValue, TimeSpan? ttl = null, string? targetName = null)
+    /// <param name="overrideBroken">
+    ///     When <see langword="true"/>, a live broken entry is replaced. Only a QUIC exchange that
+    ///     actually completed may pass this. <c>Alt-Svc</c> and SVCB advertisements must leave it
+    ///     <see langword="false"/> so a UDP blackhole cannot be re-armed by the TCP fallback response.
+    /// </param>
+    /// <returns>
+    ///     <see langword="false"/> when a live broken entry rejected the write.
+    /// </returns>
+    internal bool Set(string hostAndPort, int altPort = int.MinValue, TimeSpan? ttl = null, string? targetName = null,
+        bool overrideBroken = false)
     {
-        _cache[hostAndPort] = new Entry(altPort, targetName, DateTime.UtcNow.Add(ttl ?? DefaultTtl));
+        var expires = UtcNow.Add(ttl ?? DefaultTtl);
+        while (true)
+        {
+            if (_cache.TryGetValue(hostAndPort, out var existing))
+            {
+                if (existing.Broken && existing.ExpiresAtUtc > UtcNow && !overrideBroken)
+                    return false;
+
+                // An advertisement does not prove QUIC works, so it keeps the failure streak.
+                // Only a completed QUIC exchange (overrideBroken) clears it.
+                var carried = overrideBroken ? 0 : existing.Failures;
+                if (_cache.TryUpdate(hostAndPort, new Entry(altPort, targetName, expires, Failures: carried), existing))
+                    return true;
+
+                continue;
+            }
+
+            if (_cache.TryAdd(hostAndPort, new Entry(altPort, targetName, expires)))
+                return true;
+        }
     }
 
-    /// <summary>Removes a stale or negative entry so the next request re-probes.</summary>
+    /// <summary>
+    ///     Records that QUIC to <paramref name="hostAndPort"/> failed before the request was sent.
+    ///     <see cref="TryGet"/> misses until the window elapses, and <see cref="Set"/> from an
+    ///     advertisement does not clear it. The window is <paramref name="ttl"/> (default
+    ///     <see cref="BrokenTtl"/>) for the first failure and doubles for each failure after a window
+    ///     ends, up to <see cref="MaxBrokenTtl"/>. A failure inside a live window does not escalate:
+    ///     several requests fail together when a path dies.
+    /// </summary>
+    /// <returns>How long the origin stays broken from now.</returns>
+    internal TimeSpan MarkBroken(string hostAndPort, TimeSpan? ttl = null)
+    {
+        var baseWindow = ttl ?? BrokenTtl;
+        while (true)
+        {
+            var now = UtcNow;
+            if (_cache.TryGetValue(hostAndPort, out var existing))
+            {
+                if (TryRenewBroken(hostAndPort, existing, baseWindow, now, out var window))
+                    return window;
+
+                continue;
+            }
+
+            var first = now + baseWindow;
+            if (_cache.TryAdd(hostAndPort, new Entry(int.MinValue, null, first, Broken: true, Failures: 1)))
+                return baseWindow;
+        }
+    }
+
+    /// <summary>
+    ///     Marks an entry that already exists. False means another writer changed it first and the
+    ///     caller should read it again.
+    /// </summary>
+    private bool TryRenewBroken(string hostAndPort, Entry existing, TimeSpan baseWindow, DateTime now, out TimeSpan window)
+    {
+        var live = existing.Broken && existing.ExpiresAtUtc > now;
+        var failures = live ? existing.Failures : existing.Failures + 1;
+        var until = now + BackoffWindow(baseWindow, failures);
+        // Keep the longer window so a second failure cannot shorten the backoff.
+        if (live && existing.ExpiresAtUtc >= until)
+        {
+            window = existing.ExpiresAtUtc - now;
+            return true;
+        }
+
+        window = until - now;
+        return _cache.TryUpdate(hostAndPort, new Entry(int.MinValue, null, until, Broken: true, Failures: failures), existing);
+    }
+
+    private static TimeSpan BackoffWindow(TimeSpan baseWindow, int failures)
+    {
+        var cap = baseWindow > MaxBrokenTtl ? baseWindow : MaxBrokenTtl;
+        var scaled = baseWindow.Ticks << Math.Min(Math.Max(failures - 1, 0), 16);
+        return scaled <= 0 || scaled > cap.Ticks ? cap : TimeSpan.FromTicks(scaled);
+    }
+
+    /// <summary>True when Auto mode must not attempt HTTP/3 to this origin yet.</summary>
+    internal bool IsBroken(string hostAndPort) =>
+        _cache.TryGetValue(hostAndPort, out var entry) && entry.Broken && entry.ExpiresAtUtc > UtcNow;
+
+    /// <summary>Removes an entry so the next request re-probes. Also clears a broken mark.</summary>
     internal void Evict(string hostAndPort) => _cache.TryRemove(hostAndPort, out _);
+
+    /// <summary>Drops a usable entry. A broken mark is left in place so a forget-me advertisement cannot revive it.</summary>
+    internal void EvictUnlessBroken(string hostAndPort)
+    {
+        if (_cache.TryGetValue(hostAndPort, out var entry) && !entry.Broken)
+            ((ICollection<KeyValuePair<string, Entry>>)_cache).Remove(new KeyValuePair<string, Entry>(hostAndPort, entry));
+    }
 
     /// <summary>
     ///     Removes entries whose TTL has elapsed. Called periodically from the connection-pool cleanup
     ///     loop to prevent unbounded growth of the dictionary in long-running proxies that visit many
-    ///     unique origins.
+    ///     unique origins. An entry that carries a failure streak stays for <see cref="MaxBrokenTtl" />
+    ///     after it expires, so the next failure still escalates.
     /// </summary>
     internal void TrimExpired()
     {
-        var now = DateTime.UtcNow;
+        var now = UtcNow;
         foreach (var key in _cache.Keys)
-            if (_cache.TryGetValue(key, out var entry) && entry.ExpiresAtUtc <= now)
-                _cache.TryRemove(key, out _);
+            if (_cache.TryGetValue(key, out var entry) && IsRemovable(entry, now))
+                ((ICollection<KeyValuePair<string, Entry>>)_cache).Remove(new KeyValuePair<string, Entry>(key, entry));
     }
 
-    private readonly record struct Entry(int AltPort, string? TargetName, DateTime ExpiresAtUtc);
+    private static bool IsRemovable(Entry entry, DateTime now) =>
+        entry.ExpiresAtUtc <= now && (entry.Failures == 0 || entry.ExpiresAtUtc + MaxBrokenTtl <= now);
+
+    private readonly record struct Entry(int AltPort, string? TargetName, DateTime ExpiresAtUtc, bool Broken = false, int Failures = 0);
 }

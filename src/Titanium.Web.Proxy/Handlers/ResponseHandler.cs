@@ -62,6 +62,31 @@ public partial class ProxyServer
             }
 
             args.Timing?.MarkResponseHeadersReceived();
+
+            // Status retry is opt-in. Extras is null when the route has no retry policy, so the common
+            // path is one null check. The replay itself lives in ReplayGatewayStatusAsync.
+            if (args.Extras is not null
+                && !args.EnableWinAuth
+                && !args.HttpClient.Request.ExpectContinue
+                && !args.HttpClient.Request.UpgradeToWebSocket
+                && !args.IsClientResponseCommitted
+                && ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            {
+                ProxyMetrics.RecordStatusRetry();
+                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
+                       and not (int)HttpStatusCode.SwitchingProtocols)
+                {
+                    if (args.HttpClient.Response.StatusCode != (int)HttpStatusCode.Continue)
+                    {
+                        await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                        args.IsClientResponseCommitted = true;
+                    }
+
+                    await args.ClearResponse(cancellationToken);
+                    await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+                }
+            }
         }
         catch (ProxyTimeoutException ex)
         {
@@ -320,6 +345,7 @@ public partial class ProxyServer
         if (cancellationTokenSource.IsCancellationRequested) return false;
         return ex is SocketException
             or RetryableServerConnectionException
+            or UpstreamCapacityException
             or System.Security.Authentication.AuthenticationException
             or IOException;
     }
@@ -333,6 +359,19 @@ public partial class ProxyServer
     {
         try
         {
+            if (ex is UpstreamCapacityException)
+            {
+                args.Exception = ex;
+                args.GenericResponse(
+                    "503 Service Unavailable: the upstream connection limit was reached.",
+                    HttpStatusCode.ServiceUnavailable, closeServerConnection: true);
+                args.HttpClient.Response.Headers.AddHeader("Retry-After", "1");
+                args.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+                await args.ClientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                args.IsClientResponseCommitted = true;
+                return;
+            }
+
             var host = args.HttpClient.Request.Host ?? string.Empty;
             var socketError = ex as SocketException;
             var status = socketError?.SocketErrorCode == SocketError.TimedOut
@@ -604,6 +643,7 @@ public partial class ProxyServer
         var success = args.Exception is null &&
                       args.HttpClient.Response.StatusCode is >= 200 and < 500;
         ReverseProxySessionDispatch.ReportUpstreamResult(this, args, success);
+        ReverseProxySessionDispatch.FinishRequest(args);
 
         if (!args.IsFastPath && AfterResponse != null)
             return OnAfterResponseWithHandlerAndClientCloseAsync(args);

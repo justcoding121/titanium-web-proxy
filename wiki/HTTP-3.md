@@ -187,6 +187,31 @@ H2↔H2 MITM session):
 To force a specific protocol for a single request, set `SessionEventArgs.UpstreamHttpProtocol` inside
 `BeforeRequest`.  To force it for every request on a QUIC connection, set it on the `BeforeQuicAuthenticateEventArgs`.
 
+## When an HTTP/3 origin is slow or unreachable
+
+How the proxy reacts depends on whether HTTP/3 was **chosen** (Auto) or **forced**
+(`UpstreamHttpProtocol.Http3`).
+
+**Auto — the proxy may fall back to TCP:**
+
+- **Cold handshake race.** With no live QUIC connection to the origin and an HTTP/2 TCP leg, QUIC gets a
+  250 ms head start. If the handshake has not finished by then, the proxy opens the TCP/HTTP/2 connection in
+  parallel and uses whichever is ready first. Concurrent requests for the same cold origin share that
+  outcome instead of each paying its own failed handshake.
+- **Silent origin.** After a safe request with no body (`GET`, `HEAD`, `OPTIONS`) is written, the first
+  response frame has a 5 s deadline. If QUIC stays completely silent, the stream is abandoned, the connection
+  is retired, and the same request is replayed once over TCP. The wait continues instead when the connection
+  has delivered a response on another stream in that window (the path is alive, only this origin is slow) and
+  for `Accept: text/event-stream` requests (they legitimately stay quiet). Requests that carry a body or use
+  another method are never replayed, because the origin may already have processed them.
+- **Broken-origin backoff.** An origin that fails this way, or whose QUIC connection idles out after a request
+  was sent, is marked broken and stays on TCP for 5 minutes. Each further failure after the window ends
+  doubles it, up to 1 hour. Only a completed QUIC exchange clears the mark.
+
+**Forced HTTP/3 — fails closed.** There is no TCP race, no stall replay, and no TCP fallback, in both the
+session path and the lightweight forced-H3 fast path used by reverse routes. A dead QUIC origin returns an
+error to the client rather than silently changing transport.
+
 ## Alt-Svc automatic discovery
 
 When a response is received from an origin that advertises HTTP/3 via the `Alt-Svc` header, the proxy
@@ -205,6 +230,12 @@ trigger client `ERR_HTTP2_PROTOCOL_ERROR`); those streams stay on the attached H
 tunnel ends. The cache entry expires after the advertised `ma` (max-age) duration and is trimmed
 periodically. There is no public eviction API; to force a protocol for a given request or
 connection, set `SessionEventArgs.UpstreamHttpProtocol` or `BeforeQuicAuthenticateEventArgs.UpstreamHttpProtocol`.
+
+When a QUIC connect fails before any request bytes are sent (a UDP blackhole, a handshake timeout), Auto mode
+stays on TCP for that origin and advertisements cannot bring HTTP/3 back during that window. The first window is
+5 minutes. Each failure after a window ends doubles the next one, up to 1 hour, and a failure that arrives while a
+window is open only restarts it. A completed QUIC exchange clears the streak; a quiet hour after the last window
+forgets it.
 
 ## Browsers behind an explicit proxy
 

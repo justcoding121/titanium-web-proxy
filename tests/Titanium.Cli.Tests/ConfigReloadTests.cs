@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Caching;
@@ -227,6 +228,63 @@ public class ConfigReloadTests
 
         Assert.AreEqual(0, routes.Count);
         Assert.AreEqual(0, clusterManager.Snapshot.Clusters.Count);
+    }
+
+    [TestMethod]
+    public void DrainTimeout_DefaultsToTenSeconds_AndHonorsTheServerSetting()
+    {
+        Assert.AreEqual(10, RunCommand.ResolveDrainTimeoutSeconds(null));
+        Assert.AreEqual(3, RunCommand.ResolveDrainTimeoutSeconds(new ServerConfig { DrainTimeoutSeconds = 3 }));
+        Assert.AreEqual(0, RunCommand.ResolveDrainTimeoutSeconds(new ServerConfig { DrainTimeoutSeconds = -1 }));
+    }
+
+    [TestMethod]
+    public async Task ReloadConfigAsync_ReplacesPolicies()
+    {
+        var path = Path.Combine(_tempDir, "policies.json");
+        File.WriteAllText(path, """
+            {
+              "schemaVersion": "7.1",
+              "listeners": [ { "host": "127.0.0.1", "port": 1, "decryptSsl": false } ],
+              "policies": [ { "name": "limit", "kind": "rateLimit", "limit": 1000, "windowSeconds": 1 } ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "policies": [ "limit" ],
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                { "id": "c1", "destinations": [ { "id": "d1", "address": "127.0.0.1", "port": 9 } ] }
+              ]
+            }
+            """);
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var clusterManager = new ClusterManager();
+        var routes = new List<RouteConfig>();
+        var policies = new List<RoutePolicyConfig>();
+        ReverseProxyOptions? built = null;
+        await RunCommand.ReloadConfigAsync(
+            path,
+            proxy,
+            clusterManager,
+            routes,
+            middleware: [],
+            loadBalancer: new LoadBalancer(),
+            responseCache: new MemoryHttpResponseCache(),
+            plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            getGrpc: static () => null,
+            setGrpc: static _ => { },
+            refreshReverseProxy: () =>
+            {
+                built = RunCommand.BuildReverseProxyOptions(
+                    routes, clusterManager, new LoadBalancer(), [], null, policies);
+            },
+            policies: policies);
+        Assert.AreEqual("limit", policies[0].Name);
+        Assert.AreEqual("limit", routes[0].Policies![0]);
+        Assert.AreEqual("limit", built!.Policies![0].Name);
     }
 
     [TestMethod]

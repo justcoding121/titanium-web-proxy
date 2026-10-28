@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using Titanium.Plus;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
@@ -175,12 +174,32 @@ public sealed class WafDenyMiddleware : IProxyMiddleware
         await next(context, cancellationToken);
     }
 
+    private static string SafePath(Request request)
+    {
+        var raw = request.RequestUriString ?? string.Empty;
+        var scheme = raw.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0)
+        {
+            var start = scheme + 3;
+            var slash = raw.IndexOf('/', start);
+            raw = slash < 0 ? "/" : raw[slash..];
+        }
+
+        var cut = raw.IndexOfAny(['?', '#']);
+        if (cut >= 0)
+        {
+            raw = raw[..cut];
+        }
+
+        return raw.Length == 0 ? "/" : raw;
+    }
+
     private bool IsDenied(Request request)
     {
         if (_rules.MethodDeny.Contains(request.Method))
             return true;
 
-        var path = request.RequestUri?.AbsolutePath ?? request.RequestUriString ?? "";
+        var path = SafePath(request);
         if (_rules.PathDeny.Any(regex => regex.IsMatch(path)))
             return true;
 

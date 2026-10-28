@@ -1,17 +1,11 @@
 using System;
-using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Titanium.Web.Proxy.Compression;
-using Titanium.Web.Proxy.EventArguments;
-using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Logging;
@@ -79,9 +73,14 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     private static readonly byte[] newLine = ProxyConstants.NewLineBytes;
     private readonly ProxyServer server;
 
+    internal HeaderBlockBudget HeaderBudget(bool isRequest) =>
+        new(server.ResourceLimits.MaxHeaderCount, server.ResourceLimits.MaxHeaderAggregateBytes,
+            server.PolicyModes[PolicyFamily.HeaderLimits], isRequest);
+
     /// <summary>
     ///     Initializes a new instance of the <see cref="HttpStream" /> class.
     /// </summary>
+    /// <param name="server">The owning proxy server.</param>
     /// <param name="baseStream">The base stream.</param>
     /// <param name="bufferPool">Bufferpool.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -93,10 +92,6 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     ///     When <see langword="false" />, skips the 8 KiB <see cref="IBufferPool" /> rent. Use for
     ///     HTTP/3 session placeholders backed by <see cref="Stream.Null" /> that never read the client stream.
     /// </param>
-    internal HeaderBlockBudget HeaderBudget(bool isRequest) =>
-        new(server.ResourceLimits.MaxHeaderCount, server.ResourceLimits.MaxHeaderAggregateBytes,
-            server.PolicyModes[PolicyFamily.HeaderLimits], isRequest);
-
     internal HttpStream(ProxyServer server, Stream baseStream, IBufferPool bufferPool,
         CancellationToken cancellationToken, bool leaveOpen = false, bool rentReadBuffer = true)
     {

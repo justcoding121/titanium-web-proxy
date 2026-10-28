@@ -1,30 +1,19 @@
 using System;
 using System.Buffers;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2.Hpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network.Streams;
-using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
-using Decoder = Titanium.Web.Proxy.Http2.Hpack.Decoder;
 using Encoder = Titanium.Web.Proxy.Http2.Hpack.Encoder;
 
 namespace Titanium.Web.Proxy.Http2
@@ -66,7 +55,64 @@ namespace Titanium.Web.Proxy.Http2
                     pushPromise ? Http2FrameType.PushPromise : Http2FrameType.Headers, endStream,
                     rr.Priority.HasValue, block, settings.MaxFrameSize);
                 connectionState.EnqueueWriteRented(towardServer, writeLock, output, framed.Array!, framed.Count);
-                rr.Http2HeadersQueued = true;
+
+                bool cancelBehindHeaders;
+                lock (rr)
+                {
+                    rr.Http2HeadersQueued = true;
+                    cancelBehindHeaders = towardServer && rr.Http2ClientResetBeforeHeaders;
+                }
+
+                // The client reset this stream while BeforeRequest was still running and the RST was held back
+                // (see Http2ClientResetBeforeHeaders). Cancel right behind the HEADERS so the origin does not
+                // keep serving a request nobody waits for; the RST can never overtake them on the FIFO.
+                if (cancelBehindHeaders)
+                    QueueRstStreamFrameTowardServer(connectionState, writeLock, output, frameHeader.StreamId,
+                        Http2ErrorCode.Cancel);
+            }
+        }
+
+        private static void QueueRstStreamFrameTowardServer(Http2ConnectionState connectionState,
+            SemaphoreSlim writeLock, Stream output, int streamId, Http2ErrorCode errorCode)
+        {
+            const int frameSize = 9 + 4;
+            var rented = ArrayPool<byte>.Shared.Rent(frameSize);
+            var rstFrameHeader = new Http2FrameHeader
+            {
+                StreamId = streamId,
+                Type = Http2FrameType.RstStream,
+                Length = 4,
+                Flags = 0
+            };
+            rstFrameHeader.CopyToBuffer(rented);
+            BinaryPrimitives.WriteUInt32BigEndian(rented.AsSpan(9), (uint)errorCode);
+            connectionState.EnqueueWriteRented(towardServer: true, writeLock, output, rented, frameSize);
+        }
+
+        /// <summary>
+        ///     Called when the client resets a stream. Returns true when the origin has not been sent this
+        ///     stream's HEADERS yet (BeforeRequest still running), in which case the RST must not be relayed:
+        ///     it would be an RST on an idle stream. The reset is recorded on the request so the HEADERS, if
+        ///     they are queued later, are immediately followed by a RST.
+        /// </summary>
+        internal static bool TryHoldClientResetUntilHeaders(Http2ConnectionState connectionState,
+            Http2StreamState resetStream)
+        {
+            if (connectionState.OriginRelayPool != null
+                || resetStream.IsCompressedRelay
+                || resetStream.CapturedCompressedHeaders != null
+                || resetStream.IsExternalBridge
+                || resetStream.IsExtendedConnect
+                || resetStream.SessionArgs?.HttpClient.Request is not { } request)
+                return false;
+
+            lock (request)
+            {
+                if (request.Http2HeadersQueued)
+                    return false;
+
+                request.Http2ClientResetBeforeHeaders = true;
+                return true;
             }
         }
 
@@ -669,7 +715,17 @@ namespace Titanium.Web.Proxy.Http2
         internal static async ValueTask SendGoAwayAsync(Http2FrameHeader frameHeader, byte[] frameHeaderBuffer,
             int lastStreamId, Http2ErrorCode errorCode, Stream output)
         {
-            if (errorCode != Http2ErrorCode.NoError) ProxyMetrics.ParserError("http2");
+            if (errorCode != Http2ErrorCode.NoError)
+            {
+                ProxyMetrics.ParserError("http2");
+
+                // The call site is the only record of why the proxy gave up on the connection; the browser only
+                // reports a bare ERR_HTTP2_PROTOCOL_ERROR. The stack names the validation branch that fired.
+                var diagnosticsLogger = ProxyDiagnostics.Logger;
+                if (diagnosticsLogger.IsEnabled(LogLevel.Debug))
+                    diagnosticsLogger.LogDebug("Sending HTTP/2 GOAWAY({ErrorCode}) lastStreamId={LastStreamId}{NewLine}{Stack}",
+                        errorCode, lastStreamId, Environment.NewLine, Environment.StackTrace);
+            }
 
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.GoAway;
@@ -733,8 +789,8 @@ namespace Titanium.Web.Proxy.Http2
         /// <summary>
         ///     HPACK-encodes <paramref name="rr"/> and enqueues the framed HEADERS/CONTINUATION bytes.
         ///     When <paramref name="encoderAlreadyExclusive"/> is set (origin writeLock held), skips the
-        ///     nested <c>settings.Sync</c> — Mac dual-TLS H1→H2 profiles nested-lock + encode under
-        ///     writeLock as the multiplex convoy.
+        ///     nested <c>settings.Sync</c>, which would otherwise nest a second lock and the encode inside
+        ///     the writeLock and convoy multiplexed streams.
         /// </summary>
         internal static void EnqueueHeader(Http2Settings settings, Http2FrameHeader frameHeader, // NOSONAR S107 -- Frame-writing state is kept explicit for this low-level helper.
             byte[] frameHeaderBuffer, RequestResponseBase rr, bool endStream, Http2FrameWriter writer,
@@ -905,7 +961,7 @@ namespace Titanium.Web.Proxy.Http2
         ///     <c>ProcessCompleteHeaderBlockAsync</c>. Flushing after the write is required so Navigation
         ///     Timing <c>responseStart</c> can move before the final response arrives.
         /// </summary>
-        internal static async Task EmitInterimResponseAsync(SessionEventArgs args, int streamId,
+        internal static async Task EmitInterimResponseAsync(int streamId,
             Http2ConnectionState connectionState, Stream clientStream, Response interim,
             CancellationToken cancellationToken)
         {
@@ -1045,8 +1101,8 @@ namespace Titanium.Web.Proxy.Http2
 
             // Keep origin Content-Length when known. Short delivery used to END_STREAM with a
             // truncated body and poison Chrome (YouTube blank tab); we now RST on length mismatch
-            // instead, so advertising CL is safe and matches Kestrel/YARP (and avoids an extra empty
-            // END_STREAM DATA when the last payload frame can carry the flag).
+            // instead, so advertising CL is safe (and avoids an extra empty END_STREAM DATA when the
+            // last payload frame can carry the flag).
             var advertisedLength = response.ContentLength;
 
             // HEADERS and every DATA frame for this stream flow through the dedicated client frame

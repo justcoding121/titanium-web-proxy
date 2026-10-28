@@ -7,7 +7,6 @@ using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Caching;

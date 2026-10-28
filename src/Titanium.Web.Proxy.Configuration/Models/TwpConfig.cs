@@ -14,6 +14,9 @@ public sealed class TwpConfig
 
     public IList<ClusterConfig> Clusters { get; set; } = new List<ClusterConfig>();
 
+    /// <summary>Named policies referenced by <see cref="RouteConfig.Policies"/>. Empty leaves evaluation off.</summary>
+    public IList<RoutePolicyConfig> Policies { get; set; } = new List<RoutePolicyConfig>();
+
     public StaticFilesConfig? StaticFiles { get; set; }
 
     public PlusConfig? Plus { get; set; }
@@ -62,7 +65,7 @@ public sealed class ListenerConfig
 
     /// <summary>
     ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
-    ///     <c>socks</c>, or <c>quic</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    ///     <c>socks</c>, <c>quic</c>, or <c>masque</c>. When null, classic ForwardHost rules choose transparent vs explicit.
     /// </summary>
     public string? Type { get; set; }
 
@@ -96,6 +99,78 @@ public sealed class ListenerConfig
 
     /// <summary>QUIC idle timeout in seconds.</summary>
     public int? IdleTimeoutSeconds { get; set; }
+
+    /// <summary>Require a PROXY protocol preamble before HTTP bytes.</summary>
+    public bool AcceptProxyProtocol { get; set; }
+
+    /// <summary>
+    /// CIDR prefixes allowed to send a PROXY protocol preamble. Empty keeps the preamble required
+    /// from any peer and produces a validation warning.
+    /// </summary>
+    public IList<string> TrustedProxyProtocolSources { get; set; } = new List<string>();
+
+    /// <summary>Copy accepted bytes to <see cref="ForwardHost"/> without parsing HTTP.</summary>
+    public bool Passthrough { get; set; }
+
+    /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
+    public string? ClientCertificateMode { get; set; }
+
+    /// <summary>PEM or CRT file of trust anchors for inbound client certificates.</summary>
+    public string? ClientCertificateCaPath { get; set; }
+
+    /// <summary>
+    ///     Client-facing Alt-Svc advertisement for a dual-listen HTTP/3 listener.
+    ///     Null keeps the built-in <c>h3=":port"; ma=86400</c> header.
+    /// </summary>
+    public AltSvcConfig? AltSvc { get; set; }
+
+    /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
+    public MasqueListenerConfig? Masque { get; set; }
+}
+
+/// <summary>Alt-Svc advertisement for a listener that also accepts HTTP/3.</summary>
+public sealed class AltSvcConfig
+{
+    /// <summary>When false, the listener never injects Alt-Svc. Null inherits enabled.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>Overrides the ma parameter, in seconds.</summary>
+    public int? MaxAgeSeconds { get; set; }
+
+    /// <summary>Advertised UDP port when it differs from the bound port.</summary>
+    public int? Port { get; set; }
+}
+
+/// <summary>One MASQUE basic-auth user. The password is read from the named environment variable, never from the file.</summary>
+public sealed class MasqueCredentialConfig
+{
+    public string? Username { get; set; }
+
+    public string? PasswordEnv { get; set; }
+}
+
+/// <summary>Overrides for a MASQUE CONNECT-UDP listener. Null fields keep the safe defaults.</summary>
+public sealed class MasqueListenerConfig
+{
+    public bool? RequireAuth { get; set; }
+
+    public bool? AllowHttp11Upgrade { get; set; }
+
+    public IList<MasqueCredentialConfig>? Credentials { get; set; }
+
+    public int[]? AllowedPorts { get; set; }
+
+    public bool? BlockPrivateTargets { get; set; }
+
+    public int? MaxTunnels { get; set; }
+
+    public int? MaxTunnelsPerClient { get; set; }
+
+    public int? IdleTimeoutSeconds { get; set; }
+
+    public int? MaxDatagramsPerSecond { get; set; }
+
+    public int? MaxBytesPerSecond { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>
@@ -147,4 +222,16 @@ public sealed class CertificatesConfig
 
     /// <summary>ACME directory URL (e.g. Pebble or Let's Encrypt). Required for automated issue.</summary>
     public string? AcmeDirectory { get; set; }
+
+    public IList<CertificateFileConfig> Items { get; set; } = new List<CertificateFileConfig>();
+}
+
+/// <summary>One certificate file and the hosts it should answer for.</summary>
+public sealed class CertificateFileConfig
+{
+    public string? Path { get; set; }
+
+    public string? Password { get; set; }
+
+    public IList<string> Hosts { get; set; } = new List<string>();
 }

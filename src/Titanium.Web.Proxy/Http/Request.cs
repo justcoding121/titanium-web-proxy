@@ -1,7 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
 using System.Text;
-using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Helpers;

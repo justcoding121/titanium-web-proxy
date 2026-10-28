@@ -122,11 +122,7 @@ public sealed class InspectorFileLogProvider : ILoggerProvider
                         _streamWriter?.Flush();
                     }
                 }
-                catch (IOException)
-                {
-                    // flush best effort
-                }
-                catch (ObjectDisposedException)
+                catch (Exception)
                 {
                     // flush best effort
                 }
@@ -167,33 +163,42 @@ public sealed class InspectorFileLogProvider : ILoggerProvider
 
         try
         {
-            WriteDroppedMarkerIfNeeded();
-            EnsureWriter();
-            var line = RunLogFormat.FormatLine(entry);
-            _streamWriter!.WriteLine(line);
-            _currentSize += Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
-            _retryAfterUtcTicks = 0;
-
-            long max;
+            // Whole write under the config lock: Reconfigure() may close the writer from another
+            // thread (proxy restart / settings change); an unlocked write could hit a disposed
+            // StreamWriter.
             lock (_configLock)
             {
-                max = _maxBytes;
-            }
+                WriteDroppedMarkerIfNeeded();
+                EnsureWriter();
+                var line = RunLogFormat.FormatLine(entry);
+                _streamWriter!.WriteLine(line);
+                _currentSize += Encoding.UTF8.GetByteCount(line) + Environment.NewLine.Length;
+                _retryAfterUtcTicks = 0;
 
-            if (_currentSize >= max)
-            {
-                RollToNewFile();
+                if (_currentSize >= _maxBytes)
+                {
+                    RollToNewFile();
+                }
             }
-        }
-        catch (IOException)
-        {
-            CloseWriterSilent();
-            _retryAfterUtcTicks = DateTime.UtcNow.AddSeconds(1).Ticks;
         }
         catch (UnauthorizedAccessException)
         {
             _permanentlyUnavailable = true;
-            CloseWriterSilent();
+            lock (_configLock)
+            {
+                CloseWriterSilent();
+            }
+        }
+        catch (Exception)
+        {
+            // IOException, ObjectDisposedException, formatter faults, ...: one bad line must never
+            // kill the writer loop (that silently stops all logging for the rest of the run).
+            lock (_configLock)
+            {
+                CloseWriterSilent();
+            }
+
+            _retryAfterUtcTicks = DateTime.UtcNow.AddSeconds(1).Ticks;
         }
 
         return Task.CompletedTask;

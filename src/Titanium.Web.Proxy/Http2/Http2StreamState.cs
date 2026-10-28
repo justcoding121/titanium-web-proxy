@@ -153,7 +153,7 @@ internal sealed class Http2StreamState
     /// <summary>
     ///     Bounded channel of inbound request DATA payloads for <see cref="IsExternalBridge"/> streams
     ///     when the body was not buffered via <c>GetRequestBody</c>. Each item is an ArrayPool-rented
-    ///     buffer; the bridge reader must <see cref="ArrayPool{T}.Return"/> after writing to the origin.
+    ///     buffer; the bridge reader must <c>ArrayPool&lt;byte&gt;.Return</c> after writing to the origin.
     /// </summary>
     internal Channel<(byte[] Buffer, int Length)>? InboundRequestBodyChannel { get; set; }
 

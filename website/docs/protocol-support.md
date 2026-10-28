@@ -32,6 +32,10 @@ HTTP/2 is **on by default**. HTTP/3 is experimental and opt-in. CLI/Inspector re
 
 For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, auth), see the [Protocol-Support wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support).
 
+## Routing and clusters
+
+Per-request route dispatch runs on the HTTP/1 session path, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 frame relay still follows the connection's forward target (one origin connection per client connection).
+
 ## Related
 
 - [HTTP/3](/docs/http3)

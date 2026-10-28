@@ -188,7 +188,7 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     /// <summary>
-    ///     Builds Chromium managed-policy JSON. Prefer modern <see cref="ProxyMode"/> string keys;
+    ///     Builds Chromium managed-policy JSON. Prefer modern <c>ProxyMode</c> string keys;
     ///     also emit deprecated <c>ProxyServerMode</c>=2 for older Chromium that still reads it.
     /// </summary>
     internal static string BuildPolicyJson(string hostname, int port)

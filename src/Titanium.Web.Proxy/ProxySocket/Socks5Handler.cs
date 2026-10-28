@@ -1,4 +1,4 @@
-﻿/*
+/*
     Copyright © 2002, The KPD-Team
     All rights reserved.
     http://www.mentalis.org/
@@ -177,7 +177,6 @@ internal sealed class Socks5Handler : SocksHandler
     /// <param name="port">The port to connect to.</param>
     /// <param name="callback">The method to call when the negotiation is complete.</param>
     /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
-    /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(string host, int port, HandShakeComplete callback,
         IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)
@@ -199,7 +198,6 @@ internal sealed class Socks5Handler : SocksHandler
     /// <param name="remoteEp">An IPEndPoint that represents the remote device.</param>
     /// <param name="callback">The method to call when the negotiation is complete.</param>
     /// <param name="proxyEndPoint">The IPEndPoint of the SOCKS proxy server.</param>
-    /// <param name="state">The state.</param>
     /// <returns>An IAsyncProxyResult that references the asynchronous connection.</returns>
     public override AsyncProxyResult BeginNegotiate(IPEndPoint remoteEp, HandShakeComplete callback,
         IPEndPoint proxyEndPoint, AsyncProxyResult asyncResult)

@@ -79,6 +79,20 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
+    ///     A drain can flip this field on another thread during the handshake. The read stays in its
+    ///     own method so it is not treated as dead after the earlier drain check.
+    /// </summary>
+    private void NoteUnreachableUnlessDraining(string capabilityKey)
+    {
+        if (_draining)
+        {
+            return;
+        }
+
+        _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
+    }
+
+    /// <summary>
     ///     Returns the shared <see cref="QuicServerConnection" /> for the given origin, creating it if
     ///     there is none, with one in-flight stream already registered on the caller's behalf. The
     ///     caller must pass the result to <see cref="ReleaseAsync" /> or <see cref="InvalidateAsync" />
@@ -106,12 +120,14 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
         CancellationToken cancellationToken,
         string? sniHost = null,
-        bool failFastHandshake = true)
+        bool failFastHandshake = true,
+        string? capabilityKey = null,
+        string? precomputedCacheKey = null)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
         var effectiveSniHost = sniHost ?? connectHost;
-        var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
+        var cacheKey = precomputedCacheKey ?? QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
             upStreamProxy, upStreamEndPoint);
         var entry = _pool.GetOrAdd(cacheKey, static _ => new OriginEntry());
 
@@ -133,10 +149,30 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                 if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
                 if (TryAcquireCurrent(entry, out shared)) return shared;
 
-                var created = await _factory.CreateAsync(
-                    connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
-                    cacheKey, remoteCertificateValidationCallback, cancellationToken,
-                    failFastHandshake);
+                // The caller may have queued behind another handshake that has since failed. Re-check
+                // before dialing: running a second doomed handshake right after the origin was marked
+                // unreachable is exactly the retry the mark exists to prevent.
+                if (capabilityKey != null && _proxyServer.Http3OriginCapabilityCache.IsBroken(capabilityKey))
+                    throw new OperationCanceledException("QUIC creation skipped: origin marked unreachable.");
+
+                QuicServerConnection created;
+                try
+                {
+                    created = await _factory.CreateAsync(
+                        connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
+                        cacheKey, remoteCertificateValidationCallback, cancellationToken,
+                        failFastHandshake);
+                }
+                catch (Exception ex) when (capabilityKey != null
+                                           && ex is not (OperationCanceledException or ObjectDisposedException
+                                               or InvalidOperationException))
+                {
+                    // Re-read after the await. A drain can start while the handshake is in flight, and the
+                    // check before the dial does not cover that. Mark while still holding CreationGate.
+                    NoteUnreachableUnlessDraining(capabilityKey);
+
+                    throw;
+                }
 
                 // Nothing else can see `created` yet, so this cannot fail.
                 created.TryAcquireStream();
@@ -153,6 +189,25 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         {
             Interlocked.Decrement(ref entry.Interest);
         }
+    }
+
+    /// <summary>
+    ///     True when a usable shared connection already exists for the origin, i.e. the next
+    ///     <see cref="GetOrCreateAsync" /> will not pay a handshake. A cold origin is where racing the
+    ///     TCP path against QUIC is worth doing.
+    /// </summary>
+    internal bool HasLiveConnection(string connectHost, int port, IPEndPoint? upStreamEndPoint,
+        IExternalProxy? upStreamProxy, string? sniHost = null)
+    {
+        var cacheKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost ?? connectHost,
+            upStreamProxy, upStreamEndPoint);
+        return HasLiveConnection(cacheKey);
+    }
+
+    internal bool HasLiveConnection(string cacheKey)
+    {
+        return _pool.TryGetValue(cacheKey, out var entry)
+               && Volatile.Read(ref entry.Current) is { IsClosed: false };
     }
 
     /// <summary>
@@ -190,7 +245,13 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
     ///     origin runs at a time. Failures are silent — the next CONNECT still takes HTTP/3 and
     ///     handshakes on demand (or stays on TCP if QUIC cannot be established).
     /// </summary>
-    internal void BeginWarmup(string connectHost, int port, string sniHost, IPEndPoint? upStreamEndPoint)
+    /// <param name="capabilityKey">
+    ///     Capability-cache key (<c>host:originPort</c>) to mark unreachable when the handshake fails.
+    ///     Without it a blackholed UDP path is only discovered by the first real request, which then
+    ///     pays the whole handshake timeout on the critical path.
+    /// </param>
+    internal void BeginWarmup(string connectHost, int port, string sniHost, IPEndPoint? upStreamEndPoint,
+        string? capabilityKey = null)
     {
         if (_draining) return;
 
@@ -205,16 +266,24 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
             {
                 using var timeout = new CancellationTokenSource(WarmupTimeout);
                 var connection = await GetOrCreateAsync(
-                    connectHost, port, upStreamEndPoint, null, null, timeout.Token, sniHost);
+                    connectHost, port, upStreamEndPoint, null, null, timeout.Token, sniHost,
+                    capabilityKey: capabilityKey);
 
                 // The warm-up wanted the connection established, not used; hand the stream straight
                 // back so the connection counts as idle and stays available to real requests.
                 await ReleaseAsync(connection);
             }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException
+                                           or InvalidOperationException)
+            {
+                // Shutdown / drain, not a verdict on the origin.
+            }
             catch
             {
-                // Unreachable over QUIC (UDP blocked, handshake timeout, ...). Staying on TCP is the
-                // correct outcome, and is exactly what not marking the origin warm produces.
+                // Unreachable over QUIC (UDP blocked, handshake timeout, ...). Remember it so the next
+                // CONNECT / request stays on TCP instead of re-running this handshake in the foreground.
+                if (capabilityKey != null && !_draining)
+                    _proxyServer.NoteHttp3OriginUnreachable(capabilityKey);
             }
             finally
             {

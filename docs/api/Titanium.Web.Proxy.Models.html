@@ -85,6 +85,12 @@
     <h3 id="classes">
 Classes
 </h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.AltSvcOptions.html">AltSvcOptions</a></h4>
+      <section><p>Client-facing <code>Alt-Svc</code> advertisement for a dual-listen HTTP/3 endpoint.
+<a href="https://learn.microsoft.com/dotnet/csharp/language-reference/keywords/null">null</a> on the endpoint keeps today's header (<code>h3=&quot;:port&quot;; ma=86400</code>)
+whenever <a class="xref" href="Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentProxyEndPoint_EnableHttp3">EnableHttp3</a> is on.
+Assign a new instance to apply changes; the endpoint caches the header text when this object is assigned.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.html">DecryptFailureBypassEntry</a></h4>
       <section><p>A host that the proxy learned to tunnel without decrypt after repeated origin TLS
 handshake failures under MITM (e.g. bot / TLS-fingerprint rejection).</p>
@@ -99,11 +105,22 @@ So client application know that it is communicating with a proxy server.</p>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.HttpHeader.html">HttpHeader</a></h4>
       <section><p>Http Header object used by proxy</p>
 </section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.MasqueOptions.html">MasqueOptions</a></h4>
+      <section><p>Safe defaults for a <a class="xref" href="Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html">MasqueProxyEndPoint</a>.</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.MasqueProxyEndPoint.html">MasqueProxyEndPoint</a></h4>
+      <section><p>TLS listener for CONNECT-UDP (RFC 9298). Clients speak ALPN h2 unless
+<a class="xref" href="Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowHttp11Upgrade">AllowHttp11Upgrade</a> is set.
+The relay is opaque: tunneled QUIC stays encrypted. Experimental.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html">ProxyAuthenticationContext</a></h4>
       <section><p>A context container for authentication flows</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyEndPoint.html">ProxyEndPoint</a></h4>
       <section><p>An abstract endpoint where the proxy listens</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.SniCertificateBinding.html">SniCertificateBinding</a></h4>
+      <section><p>Certificate offered when the client SNI matches one of <a class="xref" href="Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_Hosts">Hosts</a>.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.SocksProxyEndPoint.html">SocksProxyEndPoint</a></h4>
       <section><p>A proxy end point client is not aware of.
@@ -168,6 +185,9 @@ Interfaces
     <h3 id="enums">
 Enums
 </h3>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.ClientCertificateMode.html">ClientCertificateMode</a></h4>
+      <section><p>How an inbound TLS handshake treats a client certificate.</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ExternalProxyType.html">ExternalProxyType</a></h4>
       <section></section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.html">OriginHttpVersionPolicy</a></h4>

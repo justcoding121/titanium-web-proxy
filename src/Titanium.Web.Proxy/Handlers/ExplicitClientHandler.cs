@@ -365,7 +365,7 @@ public partial class ProxyServer
                             ? SslExtensions.Http2AndHttp11ProtocolAsList
                             : SslExtensions.Http11ProtocolAsList;
 
-                        options.ServerCertificateContext = CertificateManager.CreateSslCertificateContext(certificate);
+                        CertificateManager.ConfigureServerCertificate(options, certificate);
                         options.ClientCertificateRequired = false;
                         options.EnabledSslProtocols = SupportedSslProtocols;
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;

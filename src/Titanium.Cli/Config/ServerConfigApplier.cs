@@ -41,6 +41,18 @@ internal static class ServerConfigApplier
         ApplyDecryptFailureBypass(proxy, server);
         if (!string.IsNullOrWhiteSpace(server.ProxyAuthenticationRealm))
             proxy.ProxyAuthenticationRealm = server.ProxyAuthenticationRealm;
+        if (server.RequestId is { Enabled: true } requestId)
+            proxy.RequestIdHeader = string.IsNullOrWhiteSpace(requestId.Header) ? "X-Request-Id" : requestId.Header;
+        if (server.Tracing is { Enabled: true } tracing)
+        {
+            proxy.TracingEnabled = true;
+            proxy.PropagateTraceContext = tracing.Propagate;
+        }
+
+        if (server.ForwardedHeaders is not null)
+        {
+            proxy.ForwardedHeaders = server.ForwardedHeaders;
+        }
     }
 
     private static void ApplyDecryptFailureBypass(ProxyServer proxy, ServerConfig server)

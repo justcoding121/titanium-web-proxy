@@ -1,4 +1,3 @@
-using Titanium.Cli.Config;
 using Titanium.Cli.Parsers;
 using Titanium.Web.Proxy.Configuration;
 

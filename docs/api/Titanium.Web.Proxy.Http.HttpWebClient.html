@@ -123,6 +123,41 @@
 </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HttpWebClient_ClientHttpVersion.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/HttpWebClient.cs/#L177">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Http_HttpWebClient_ClientHttpVersion_" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion*"></a>
+  <h4 id="Titanium_Web_Proxy_Http_HttpWebClient_ClientHttpVersion" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion">ClientHttpVersion</h4>
+  <div class="markdown level1 summary"><p>HTTP version of the client-facing leg: what the client negotiated with the proxy.
+Equals <code>Request.HttpVersion</code> except while a translation bridge has rewritten the request's
+version for the origin wire (an HTTP/2 client bridged onto an HTTP/1.1 origin reports
+<code>2.0</code> here for the whole exchange). Use this, not <code>Request.HttpVersion</code>, to label or
+branch on the client protocol. <code>0.0</code> when unknown.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Version ClientHttpVersion { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.version">Version</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HttpWebClient_ConnectRequest.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HttpWebClient.ConnectRequest%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -157,7 +192,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HttpWebClient_IsHttps.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HttpWebClient.IsHttps%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/HttpWebClient.cs/#L164">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/HttpWebClient.cs/#L229">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HttpWebClient_IsHttps_" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.IsHttps*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HttpWebClient_IsHttps" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.IsHttps">IsHttps</h4>
@@ -185,10 +220,45 @@
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HttpWebClient_OriginHttpVersion.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/HttpWebClient.cs/#L187">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Http_HttpWebClient_OriginHttpVersion_" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion*"></a>
+  <h4 id="Titanium_Web_Proxy_Http_HttpWebClient_OriginHttpVersion" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion">OriginHttpVersion</h4>
+  <div class="markdown level1 summary"><p>HTTP version of the origin-facing leg: what the proxy actually spoke to the origin.
+Equals <code>Response.HttpVersion</code> except where a bridge stamps the response with the client's
+version for the client-side status line (an HTTP/1.1 client bridged onto an HTTP/2 or HTTP/3 origin
+reports <code>2.0</code> or <code>3.0</code> here). Reading it never materializes a response. <code>0.0</code> when
+no response has been received yet.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Version OriginHttpVersion { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.version">Version</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Http_HttpWebClient_ProcessId.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Http.HttpWebClient.ProcessId%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/HttpWebClient.cs/#L159">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Network/HttpWebClient.cs/#L224">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Http_HttpWebClient_ProcessId_" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.ProcessId*"></a>
   <h4 id="Titanium_Web_Proxy_Http_HttpWebClient_ProcessId" data-uid="Titanium.Web.Proxy.Http.HttpWebClient.ProcessId">ProcessId</h4>

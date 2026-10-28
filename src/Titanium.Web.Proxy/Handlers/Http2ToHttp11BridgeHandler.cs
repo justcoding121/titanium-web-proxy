@@ -125,7 +125,18 @@ public partial class ProxyServer
             await OnBeforeRequest(sessionArgs);
 
         // Per-stream destination when ReverseProxy routes are set (overrides connection ForwardHost).
-        if (Routing.ReverseProxySessionDispatch.TryApply(this, sessionArgs) &&
+        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
+        if (routeDispatch is Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
+            or Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+        {
+            if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+            {
+                Routing.ReverseProxySessionDispatch.SignalNoDestination(sessionArgs);
+            }
+            return;
+        }
+
+        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Routed &&
             sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
         {
             connectHost = routedHost;
@@ -295,16 +306,32 @@ public partial class ProxyServer
         // Replay once on a fresh connection (same single-replay rule the H1 path gets from RetryPolicy).
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down, so the connection token
         // is not linked here (a linked source was one allocation per in-flight stream).
-        var replay = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
+        var first = await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
             new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: true), streamToken);
-        if (!replay)
+        if (first == BridgeAttemptResult.Completed)
             return;
+        if (first == BridgeAttemptResult.ReplayStatus)
+        {
+            await sessionArgs.ClearResponse(streamToken);
+            var alternate = new Http11BridgeOrigin(origin.RemoteHostName, origin.RemotePort,
+                sessionArgs.UpstreamConnectHost, sessionArgs.UpstreamConnectPort);
+            await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
+                new Http11BridgeAttempt(alternate, requestBodyChannel, AllowReplay: false), streamToken);
+            return;
+        }
 
         ProxyDiagnostics.ReportCaught(logger,
             $"HTTP/2-to-HTTP/1.1 bridge replaying stream {streamId} on a fresh origin connection",
             new RetryableServerConnectionException("Reused origin connection was closed before a response."));
         await RunHttp2ToHttp11BridgeAttemptAsync(sessionArgs, streamId, connectionState, clientStream,
             new Http11BridgeAttempt(origin, requestBodyChannel, AllowReplay: false), streamToken);
+    }
+
+    private enum BridgeAttemptResult
+    {
+        Completed,
+        ReplayStale,
+        ReplayStatus,
     }
 
     /// <summary>
@@ -323,8 +350,8 @@ public partial class ProxyServer
                && sessionArgs.HttpClient.Response.StatusCode == 0;
     }
 
-    /// <returns>True when the attempt failed on a reused connection and must be replayed once.</returns>
-    private async Task<bool> RunHttp2ToHttp11BridgeAttemptAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    /// <returns>Why the attempt stopped. <see cref="BridgeAttemptResult.Completed"/> means the client was answered.</returns>
+    private async Task<BridgeAttemptResult> RunHttp2ToHttp11BridgeAttemptAsync(SessionEventArgs sessionArgs, int streamId, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         Http2ConnectionState connectionState, System.IO.Stream clientStream, Http11BridgeAttempt attempt,
         CancellationToken streamToken)
     {
@@ -335,6 +362,7 @@ public partial class ProxyServer
         var requestBodyChannel = attempt.RequestBodyChannel;
         var allowReplay = attempt.AllowReplay;
         var replayRequested = false;
+        var result = BridgeAttemptResult.Completed;
         var reusedConnection = false;
         // Stream CTS is cancelled on RST_STREAM and when the connection tears down (all streams
         // cancelled in CopyHttp2FrameAsync). Skip CreateLinkedTokenSource — dumpheap on H2→H1 MITM
@@ -349,6 +377,9 @@ public partial class ProxyServer
         // afterward so AfterResponse / traffic tape report H2↔H1.1 instead of H1.1↔H1.1. Same pattern
         // as Http3OriginBridge.ForwardOverTcpAsync.
         var clientHttpVersion = request.HttpVersion;
+        // The rewrite below is wire-local, but BeforeResponse still runs while it is in effect. Record the real
+        // client leg so hosts can label and branch on it (the origin leg is the HTTP/1.1 response as parsed).
+        sessionArgs.HttpClient.RecordClientHttpVersion(clientHttpVersion);
 
         try
         {
@@ -443,6 +474,7 @@ public partial class ProxyServer
                 connection = newConnection;
 
                 if (poolKey == null
+                    && allowReplay
                     && sessionArgs.IsFastPath
                     && sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint storePoolEp
                     && customUpStreamProxy == null
@@ -569,6 +601,13 @@ public partial class ProxyServer
             else
                 await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
             sessionArgs.Timing?.MarkResponseHeadersReceived();
+            if (sessionArgs.Extras is not null
+                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, sessionArgs))
+            {
+                closeConnection = true;
+                replayRequested = true;
+                return BridgeAttemptResult.ReplayStatus;
+            }
 
             // The origin here is always HTTP/1.1 (see the GetServerConnection call above), so this
             // response is genuine wire bytes even though the client leg is h2 - the same wire-framing
@@ -829,6 +868,7 @@ public partial class ProxyServer
             // Stale pooled keep-alive socket: nothing reached the client, replay once on a fresh connection.
             closeConnection = true;
             replayRequested = true;
+            result = BridgeAttemptResult.ReplayStale;
         }
         catch (Exception ex)
         {
@@ -902,14 +942,14 @@ public partial class ProxyServer
             }
         }
 
-        return replayRequested;
+        return result;
     }
 
     /// <summary>
     ///     Implements the RFC 8441 h2-client → HTTP/1.1-origin WebSocket tunnel. Opens a dedicated
     ///     HTTP/1.1 TCP connection to the origin, performs the WebSocket upgrade handshake (GET +
     ///     Upgrade: websocket), and if the origin responds 101, signals the h2 client with 200 OK and
-    ///     relays DATA frames bidirectionally until either side closes. Uses <see cref="RespondStreaming"/>
+    ///     relays DATA frames bidirectionally until either side closes. Uses <c>RespondStreaming</c>
     ///     so the 200 HEADERS frame carries no END_STREAM and the h2 stream stays open for DATA relay;
     ///     END_STREAM is sent automatically when the streaming body completes.
     /// </summary>

@@ -258,6 +258,45 @@ public class Rfc8441TunnelTests
             "Unknown :protocol in extended CONNECT must be rejected with 501 Not Implemented.");
     }
 
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ExtendedConnect_ConnectUdp_OnExplicitListener_Returns501()
+    {
+        using var testSuite = new TestSuite(sharedServer);
+        var server = testSuite.GetServer();
+        server.HandleRequest(context => context.Response.WriteAsync("ok"));
+
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableRfc8441 = true;
+
+        var endpoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var rawClient = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port,
+            "localhost", server.TcpListeningPort);
+
+        var headers = rawClient.Connection.EncodeHeaders(
+            new[]
+            {
+                (":method", "CONNECT"), (":protocol", "connect-udp"), (":scheme", "https"),
+                (":authority", $"localhost:{server.TcpListeningPort}"),
+                (":path", "/.well-known/masque/udp/127.0.0.1/443/"),
+                ("capsule-protocol", "?1"),
+            },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, headers, false);
+
+        var (_, responseHeaders, _) = await rawClient.Connection.ReadHeaderBlockAsync();
+        Assert.AreEqual("501", responseHeaders.Single(h => h.Name == ":status").Value,
+            "connect-udp on an existing listener stays 501. MASQUE has its own listener.");
+    }
+
     // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------

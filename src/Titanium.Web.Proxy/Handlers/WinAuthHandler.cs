@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,7 +9,6 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network.WinAuth;
 using Titanium.Web.Proxy.Network.WinAuth.Security;
 using WinAuthHandler = Titanium.Web.Proxy.Network.WinAuth.WinAuthHandler;
 
@@ -17,7 +16,7 @@ namespace Titanium.Web.Proxy;
 
 public partial class ProxyServer
 {
-    /// <summary>Key used to store the per-request auth challenge round counter in <see cref="HttpClient.Data" />.</summary>
+    /// <summary>Key used to store the per-request auth challenge round counter in <c>HttpClient.Data</c>.</summary>
     private const string WinAuthRoundCountKey = "WinAuthRoundCount";
 
     /// <summary>

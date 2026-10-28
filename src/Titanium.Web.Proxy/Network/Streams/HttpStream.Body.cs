@@ -1,24 +1,13 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
-using System.Net.Security;
-using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
-using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Http;
-using Titanium.Web.Proxy.Logging;
-using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Options;
-using Titanium.Web.Proxy.Shared;
-using Titanium.Web.Proxy.StreamExtended.BufferPool;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -104,7 +93,6 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// <param name="writer"></param>
     /// <param name="isChunked"></param>
     /// <param name="contentLength"></param>
-    /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     public ValueTask CopyBodyAsync(IHttpStreamWriter writer, bool isChunked, long contentLength,
@@ -364,7 +352,6 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     ///     Copies the streams chunked
     /// </summary>
     /// <param name="writer"></param>
-    /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     private async ValueTask CopyBodyChunkedAsync(IHttpStreamWriter writer, bool isRequest, SessionEventArgs args,
@@ -413,7 +400,6 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     /// </summary>
     /// <param name="writer"></param>
     /// <param name="count"></param>
-    /// <param name="onCopy"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     private async ValueTask CopyBytesToStream(IHttpStreamWriter writer, long count, bool isRequest, SessionEventArgs args, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
@@ -421,10 +407,9 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     {
         var remainingBytes = count;
         var httpWriter = writer as HttpStream;
-        // YARP StreamCopier uses 64 KiB; H2→H1 large-read bypass never ran on this FillBuffer loop.
         // Empty parser window + remaining ≥ streamBuffer → rent a large window and ReadAsync so
-        // BaseStream fills directly (classic BufferedStream rule). Cuts origin read / SslStream
-        // WriteAsync count on known-CL reverse bodies (e.g. 256 KiB: ~32×8 KiB → ~4×64 KiB).
+        // BaseStream fills directly (classic BufferedStream rule). Cuts the number of origin reads and
+        // SslStream writes on known-length bodies (e.g. 256 KiB: ~32×8 KiB → ~4×64 KiB).
         const int largeCopyGrain = 64 * 1024;
         byte[]? largeBuf = null;
 
@@ -535,8 +520,8 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
         headerBuilder.WriteHeaders(requestResponse.Headers);
 
         // Fixed-length body up to one large-copy grain: one SslStream/NetworkStream write
-        // (headers+body) instead of a header-only TLS record + body records. Matches YARP's
-        // larger first forward write under delay-sensitive workloads (compare-lossy).
+        // (headers+body) instead of a header-only TLS record + body records, which helps on
+        // delay-sensitive links.
         if (body != null
             && body.Length <= 64 * 1024
             && !requestResponse.IsChunked

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -82,11 +82,24 @@ public class SessionEventArgs : SessionEventArgsBase
         UpstreamHttpProtocol = upstreamHttpProtocol ?? connectArgs?.UpstreamHttpProtocol;
         reRequest = false;
         ConnectTimeout = null;
+        UpstreamPinnedAddress = null;
+        UpstreamHttpClient = null;
+        ResponseTrailerPlan = null;
         CustomUpStreamProxy = null;
         CustomUpStreamProxyUsed = null;
         UpstreamConnectHost = null;
         UpstreamConnectPort = null;
         UpstreamDestinationId = null;
+        ResponseHeaderTransformPlan = null;
+        DestinationRequestLease?.Dispose();
+        DestinationRequestLease = null;
+        PassiveHealth = null;
+        PassiveDestinationCount = 0;
+        MatchedRoute = null;
+        ClusterConnectionKey = null;
+        ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
+        Extras?.Activity?.Dispose();
+        Extras = null;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;
         HttpClient.ResetForKeepAlive();
@@ -117,7 +130,7 @@ public class SessionEventArgs : SessionEventArgsBase
     internal Func<CancellationToken, Task<byte[]>>? Http3BufferedBodyReader { get; set; }
 
     /// <summary>
-    ///     Native HTTP/3 only: pumps remaining client DATA payloads to <paramref name="writeData"/>
+    ///     Native HTTP/3 only: pumps remaining client DATA payloads to the origin request stream
     ///     without buffering the whole body. Set by <c>Http3RequestStream</c> when the body was not
     ///     read during BeforeRequest; used by H3→H1 / H3→H2 bridges and the H3→H3 <c>copyRequestBody</c>.
     /// </summary>
@@ -340,6 +353,12 @@ public class SessionEventArgs : SessionEventArgsBase
         request.IsBodyRead = true;
         request.IsBodyReceived = true;
     }
+
+    /// <summary>Buffers a small HTTP/1.x request body so the request can be replayed on another upstream connection.</summary>
+    internal Task BufferRequestBodyForReplayAsync(CancellationToken cancellationToken) =>
+        HttpClient.Request.IsBodyRead
+            ? Task.CompletedTask
+            : BufferHttp11RequestBodyAsync(HttpClient.Request, cancellationToken);
 
     private async Task BufferHttp11RequestBodyAsync(Request request, CancellationToken cancellationToken)
     {

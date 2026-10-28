@@ -34,6 +34,9 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// </summary>
     public int? ForwardPort { get; set; }
 
+    /// <summary>When true, accepted sockets are copied to <see cref="ForwardHost"/> without HTTP parsing.</summary>
+    public bool Passthrough { get; set; }
+
     /// <summary>
     ///     When <see langword="true" /> together with <see cref="ProxyEndPoint.DecryptSsl" />, the proxy
     ///     terminates client TLS and opens a <b>cleartext</b> upstream TCP connection to

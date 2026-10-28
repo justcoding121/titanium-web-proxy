@@ -64,23 +64,6 @@ internal class Common
         Negotiate56 = unchecked((int)0x80000000)
     }
 
-    internal enum NtlmAuthLevel
-    {
-        /* Use LM and NTLM, never use NTLMv2 session security. */
-        LmAndNtlm,
-
-        /* Use NTLMv2 session security if the server supports it,
-         * otherwise fall back to LM and NTLM. */
-        LmAndNtlmAndTryNtlMv2Session,
-
-        /* Use NTLMv2 session security if the server supports it,
-         * otherwise fall back to NTLM.  Never use LM. */
-        NtlmOnly,
-
-        /* Use NTLMv2 only. */
-        NtlMv2Only
-    }
-
     #endregion
 
     #region internal structures

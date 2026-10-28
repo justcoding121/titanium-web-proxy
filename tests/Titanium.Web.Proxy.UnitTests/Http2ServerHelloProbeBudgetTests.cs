@@ -83,6 +83,60 @@ public class Http2ServerHelloProbeBudgetTests
         Assert.AreEqual("origin TLS timed out", thrown.Message);
     }
 
+    /// <summary>
+    ///     A probe that finishes in the instant its budget expires must be used, not turned into a TimeoutException
+    ///     that drops the browser's CONNECT (r.stripe.com did this in the soak: the probe completed 1 ms late).
+    ///     The race window is a few microseconds, so complete the probe around the timer's firing time many times.
+    /// </summary>
+    [TestMethod]
+    [Timeout(120_000)]
+    public async Task TryComplete_ProbeFinishingAtBudgetBoundary_NeverThrowsTimeout()
+    {
+        var budget = TimeSpan.FromMilliseconds(20);
+        var rng = new Random(12345);
+        var usedProbe = 0;
+        var missedBudget = 0;
+
+        for (var i = 0; i < 400; i++)
+        {
+            var expected = new Http2NegotiationResult(true, null);
+            var tcs = new TaskCompletionSource<Http2NegotiationResult>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var completeAfter = TimeSpan.FromMilliseconds(14 + rng.NextDouble() * 12);
+            var started = Stopwatch.StartNew();
+            var completer = Task.Run(() =>
+            {
+                var spin = new SpinWait();
+                while (started.Elapsed < completeAfter) spin.SpinOnce(-1);
+                tcs.TrySetResult(expected);
+            });
+
+            Http2NegotiationResult? result;
+            try
+            {
+                result = await ProxyServer.TryCompleteHttp2NegotiationBeforeClientAlpnAsync(
+                    tcs.Task, CancellationToken.None, budget);
+            }
+            catch (TimeoutException)
+            {
+                Assert.Fail($"iteration {i}: a probe that completed at {started.Elapsed} turned the budget " +
+                            "expiry into a TimeoutException.");
+                return;
+            }
+
+            await completer;
+            if (result is null) missedBudget++;
+            else
+            {
+                Assert.AreSame(expected, result);
+                usedProbe++;
+            }
+        }
+
+        Assert.IsTrue(usedProbe > 0 && missedBudget > 0,
+            $"The test did not straddle the budget (used={usedProbe}, missed={missedBudget}).");
+    }
+
     [TestMethod]
     public async Task TryComplete_CanceledToken_ThrowsWithoutWaitingBudget()
     {

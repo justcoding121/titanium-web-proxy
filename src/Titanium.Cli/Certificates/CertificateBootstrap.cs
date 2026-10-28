@@ -1,10 +1,9 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Certes;
-using Certes.Acme;
 using Certes.Acme.Resource;
-using Titanium.Cli;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 
@@ -26,6 +25,7 @@ internal static class CertificateBootstrap
         }
 
         TryApplyLeafCertificate(proxy, certificates);
+        ApplySniItems(proxy, certificates);
         if (string.IsNullOrEmpty(certificates.AcmeDomain))
         {
             return;
@@ -268,6 +268,243 @@ internal static class CertificateBootstrap
     public static void SetChallengeToken(string token, string keyAuthorization) =>
         AcmeTokens[token] = keyAuthorization;
 
+    /// <summary>Binds <see cref="CertificatesConfig.Items"/> onto decrypting listeners. Does not drop connections.</summary>
+    public static void ApplySniItems(ProxyServer proxy, CertificatesConfig? certificates)
+    {
+        if (certificates?.Items is not { Count: > 0 } items)
+        {
+            return;
+        }
+
+        var bindings = new List<SniCertificateBinding>();
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.Path) || item.Hosts is not { Count: > 0 })
+            {
+                continue;
+            }
+
+            if (!TryLoadLeaf(item.Path, keyPath: null, out var certificate, item.Password) || certificate is null)
+            {
+                continue;
+            }
+
+            var hosts = item.Hosts.Where(host => !string.IsNullOrWhiteSpace(host)).ToList();
+
+            if (hosts.Count == 0)
+            {
+                certificate.Dispose();
+                continue;
+            }
+
+            bindings.Add(new SniCertificateBinding { Hosts = hosts, Certificate = certificate });
+        }
+
+        if (bindings.Count == 0)
+        {
+            return;
+        }
+
+        IReadOnlyList<SniCertificateBinding> frozen = bindings;
+        foreach (var endPoint in proxy.ProxyEndPoints)
+        {
+            if (endPoint.DecryptSsl)
+            {
+                endPoint.SniCertificates = frozen;
+            }
+        }
+    }
+
+    /// <summary>Rebuilds leaf and SNI bindings when a configured certificate file changes.</summary>
+    public static IDisposable? WatchCertificateFiles(ProxyServer proxy, CertificatesConfig? certificates,
+        IEnumerable<ListenerConfig>? listeners = null)
+    {
+        var existing = ExistingCertificatePaths(certificates, listeners);
+        if (existing.Count == 0 || certificates is null)
+        {
+            return null;
+        }
+
+        return new CertificateFileWatch(proxy, certificates, listeners, existing);
+    }
+
+    private static List<string> ExistingCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
+    {
+        return CollectCertificatePaths(certificates, listeners)
+            .Where(File.Exists)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<string> CollectCertificatePaths(CertificatesConfig? certificates, IEnumerable<ListenerConfig>? listeners)
+    {
+        var paths = new List<string>();
+        AddPath(paths, certificates?.CertificatePath);
+        AddPath(paths, certificates?.PrivateKeyPath);
+        if (certificates?.Items is not null)
+        {
+            foreach (var item in certificates.Items)
+            {
+                AddPath(paths, item.Path);
+            }
+        }
+
+        if (listeners is not null)
+        {
+            foreach (var listener in listeners)
+            {
+                AddPath(paths, listener.ClientCertificateCaPath);
+            }
+        }
+
+        return paths;
+    }
+
+    private static void AddPath(List<string> paths, string? path)
+    {
+        if (!string.IsNullOrEmpty(path))
+        {
+            paths.Add(path);
+        }
+    }
+
+    internal static void ReloadClientCertificateAuthorities(ProxyServer proxy, IEnumerable<ListenerConfig> listeners)
+    {
+        foreach (var listener in listeners)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath) || !File.Exists(listener.ClientCertificateCaPath))
+                {
+                    continue;
+                }
+
+                var roots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);
+                var address = ListenerAddress(listener.Host);
+                foreach (var endPoint in proxy.ProxyEndPoints)
+                {
+                    if (endPoint.Port == listener.Port && endPoint.IpAddress.Equals(address))
+                    {
+                        // Assign a new collection. An in-flight handshake keeps the reference it captured.
+                        endPoint.ClientCertificateTrustedRoots = roots;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AsyncConsole.WriteError(
+                    $"Client certificate authorities for {listener.Host}:{listener.Port} were not reloaded ({ex.Message}).");
+            }
+        }
+    }
+
+    private static IPAddress ListenerAddress(string? host)
+    {
+        host ??= "0.0.0.0";
+        return host is "0.0.0.0" or "*" ? IPAddress.Any : IPAddress.Parse(host);
+    }
+
+    private sealed class CertificateFileWatch : IDisposable
+    {
+        private readonly List<FileSystemWatcher> _watchers = new();
+        private readonly object _gate = new();
+        private readonly ProxyServer _proxy;
+        private readonly CertificatesConfig _certificates;
+        private readonly IEnumerable<ListenerConfig>? _listeners;
+        private CancellationTokenSource? _debounce;
+
+        public CertificateFileWatch(
+            ProxyServer proxy,
+            CertificatesConfig certificates,
+            IEnumerable<ListenerConfig>? listeners,
+            List<string> paths)
+        {
+            _proxy = proxy;
+            _certificates = certificates;
+            _listeners = listeners;
+            foreach (var path in paths)
+            {
+                Watch(path);
+            }
+        }
+
+        private void Watch(string path)
+        {
+            var full = Path.GetFullPath(path);
+            var directory = Path.GetDirectoryName(full);
+            if (string.IsNullOrEmpty(directory))
+            {
+                return;
+            }
+
+            var watcher = new FileSystemWatcher(directory, Path.GetFileName(full))
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                EnableRaisingEvents = true,
+            };
+            watcher.Changed += OnChange;
+            watcher.Created += OnChange;
+            watcher.Renamed += OnChange;
+            _watchers.Add(watcher);
+        }
+
+        private void OnChange(object? sender, FileSystemEventArgs args)
+        {
+            // Watchers raise on pool threads. One lock keeps a single pending reload and a single apply at a time.
+            CancellationToken token;
+            lock (_gate)
+            {
+                var previous = _debounce;
+                previous?.Cancel();
+                previous?.Dispose();
+                var next = new CancellationTokenSource();
+                _debounce = next;
+                token = next.Token;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(250, token).ConfigureAwait(false);
+                    lock (_gate)
+                    {
+                        Apply(_proxy, _certificates);
+                        if (_listeners is not null)
+                        {
+                            ReloadClientCertificateAuthorities(_proxy, _listeners);
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Debounced.
+                }
+                catch (Exception ex)
+                {
+                    AsyncConsole.WriteError("Certificate reload failed: " + ex.Message);
+                }
+            }, CancellationToken.None);
+        }
+
+        public void Dispose()
+        {
+            foreach (var watcher in _watchers)
+            {
+                watcher.Dispose();
+            }
+
+            var source = _debounce;
+            if (source is null)
+            {
+                return;
+            }
+
+            source.Cancel();
+            source.Dispose();
+        }
+    }
+
     private static void AssignGenericCertificate(ProxyServer proxy, X509Certificate2 leaf)
     {
         foreach (var endPoint in proxy.ProxyEndPoints)
@@ -279,7 +516,7 @@ internal static class CertificateBootstrap
         }
     }
 
-    private static bool TryLoadLeaf(string certPath, string? keyPath, out X509Certificate2? leaf)
+    private static bool TryLoadLeaf(string certPath, string? keyPath, out X509Certificate2? leaf, string? pfxPassword = null)
     {
         leaf = null;
         if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
@@ -293,7 +530,7 @@ internal static class CertificateBootstrap
             if (ext.Equals(".pfx", StringComparison.OrdinalIgnoreCase) ||
                 ext.Equals(".p12", StringComparison.OrdinalIgnoreCase))
             {
-                var password = Environment.GetEnvironmentVariable("TITANIUM_CERT_PASSWORD");
+                var password = pfxPassword ?? Environment.GetEnvironmentVariable("TITANIUM_CERT_PASSWORD");
                 // Exportable (not EphemeralKeySet): Windows Schannel needs a usable private key
                 // for SslStream.AuthenticateAsServer on TLS-terminate listeners.
                 leaf = X509CertificateLoader.LoadPkcs12(

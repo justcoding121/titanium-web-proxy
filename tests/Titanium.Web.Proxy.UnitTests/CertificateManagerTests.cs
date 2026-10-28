@@ -37,7 +37,7 @@ namespace Titanium.Web.Proxy.UnitTests
             const int validDays = 395;
             const int graceDays = 2;
 
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = engineType,
                 CertificateValidDays = validDays,
@@ -68,7 +68,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void BC_Default_Engine_Issues_A_Distinct_Key_Per_Certificate()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -93,7 +93,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void LeafRsaKeyPairBufferSize_Is_Configurable()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -137,7 +137,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             foreach (var engine in new[] { CertificateEngine.BouncyCastle, CertificateEngine.BouncyCastleFast })
             {
-                using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 {
                     CertificateEngine = engine,
                     LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256
@@ -169,7 +169,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void ApplyFastColdStartLeafSettings_Sets_Ecdsa_FastEngine_And_DiskCache()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance);
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance);
             Assert.AreEqual(CertificateKeyAlgorithm.Rsa2048, mgr.LeafCertificateKeyAlgorithm);
             Assert.IsFalse(mgr.SaveFakeCertificates);
 
@@ -188,7 +188,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task RootCertificate_Reload_With_Same_Thumbprint_Preserves_Cache()
         {
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -219,7 +219,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task RootCertificate_Changed_Clears_Cache()
         {
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -230,7 +230,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var originalThumbprint = leaf.Thumbprint;
 
             // Create a second manager with a different root
-            var mgr2 = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr2 = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -258,7 +258,7 @@ namespace Titanium.Web.Proxy.UnitTests
         public void CertificateManager_EnsureRoot_OnlyCreatedWhenNeeded()
         {
             // Manager with no explicit root; root should NOT be auto-created when not needed
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -278,7 +278,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -302,7 +302,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.DefaultWindows };
 
             mgr.CreateRootCertificate();
@@ -327,7 +327,7 @@ namespace Titanium.Web.Proxy.UnitTests
         {
             var tasks = new List<Task>();
 
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.BouncyCastleFast };
 
             mgr.SaveFakeCertificates = true;
@@ -412,7 +412,7 @@ namespace Titanium.Web.Proxy.UnitTests
             }
 
             // Configure the proxy manager to use the intermediate CA as the signing certificate
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastle
             };
@@ -454,7 +454,7 @@ namespace Titanium.Web.Proxy.UnitTests
             try
             {
                 string rootThumbprint;
-                using (var first = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                using (var first = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                        {
                            CertificateEngine = CertificateEngine.BouncyCastle
                        })
@@ -466,7 +466,7 @@ namespace Titanium.Web.Proxy.UnitTests
                         first.RootCertificate.Export(X509ContentType.Pkcs12, password));
                 }
 
-                using var second = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+                using var second = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 {
                     CertificateEngine = CertificateEngine.BouncyCastle
                 };
@@ -504,7 +504,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [DataRow(CertificateEngine.BouncyCastleFast)]
         public void BC_Leaf_HasPrivateKey_And_IsSslUsable_OnCurrentPlatform(CertificateEngine engineType)
         {
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = engineType
             };
@@ -534,7 +534,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task CreateServerCertificate_ExpiredCachedCertificate_IsRegenerated()
         {
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.BouncyCastleFast };
 
             const string host = "expired.test";
@@ -575,7 +575,7 @@ namespace Titanium.Web.Proxy.UnitTests
         public async Task CertificateCache_EnforcesMaxEntries_EvictsLeastRecentlyUsed()
         {
             const int maxEntries = 2;
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
                 () => maxEntries)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
@@ -605,7 +605,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task CreateSslCertificateContext_AfterEvictAndReload_DoesNotReuseDisposedLeafContext()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
                 () => 1)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
@@ -710,7 +710,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task Dispose_ReleasesAllCachedCertificates()
         {
-            var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
                 { CertificateEngine = CertificateEngine.BouncyCastleFast };
 
             // Populate the in-memory cache with at least one leaf cert.
@@ -736,7 +736,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task ClearIdleCertificates_FirstSweep_EvictsStaleEntries()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast,
                 CertificateCacheTimeOutMinutes = 60
@@ -767,7 +767,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task ClearIdleCertificates_FirstSweep_DisposesPendingEvictionsAfterGrace()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
                 () => 1)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
@@ -827,7 +827,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public async Task ClearRootCertificate_DisposesPendingEvictionsImmediately()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance,
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance,
                 () => 1)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast
@@ -966,7 +966,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void CertificateEngine_Setter_PreservesBouncyCastleFast()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance);
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance);
             mgr.CertificateEngine = CertificateEngine.BouncyCastleFast;
             Assert.AreEqual(CertificateEngine.BouncyCastleFast, mgr.CertificateEngine);
         }
@@ -981,7 +981,7 @@ namespace Titanium.Web.Proxy.UnitTests
             var expiredRoot = CreateExpiredSelfSigned("expired-root-for-leaf");
             var cache = new RootOnlyExpiredCache(expiredRoot);
 
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast,
                 LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256,
@@ -1002,7 +1002,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [DataRow(CertificateEngine.BouncyCastleFast)]
         public void BC_Certificates_Include_RfcAligned_KeyUsage(CertificateEngine engineType)
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = engineType
             };
@@ -1069,7 +1069,7 @@ namespace Titanium.Web.Proxy.UnitTests
         [TestMethod]
         public void BC_Fast_Ecdsa_Leaves_Share_Key_Distinct_From_Rsa_Root()
         {
-            using var mgr = new CertificateManager(null, null, false, false, false, NullLogger.Instance)
+            using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
             {
                 CertificateEngine = CertificateEngine.BouncyCastleFast,
                 LeafCertificateKeyAlgorithm = CertificateKeyAlgorithm.EcdsaP256

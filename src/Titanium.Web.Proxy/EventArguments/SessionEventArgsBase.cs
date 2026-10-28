@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -142,6 +144,15 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// </summary>
     public TimeSpan? ConnectTimeout { get; set; }
 
+    /// <summary>Per-cluster upstream client settings. Null when the cluster uses process defaults.</summary>
+    internal ClusterHttpClientConfig? UpstreamHttpClient { get; set; }
+
+    /// <summary>Address published by DNS refresh. Null leaves name resolution unchanged.</summary>
+    internal IPAddress? UpstreamPinnedAddress { get; set; }
+
+    /// <summary>Response trailers staged by a transform. Null unless one ran.</summary>
+    internal Dictionary<string, string>? ResponseTrailerPlan { get; set; }
+
     /// <summary>
     ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.
     /// </summary>
@@ -231,6 +242,30 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
 
     /// <summary>Active-request lease for <see cref="Clusters.DestinationHealthTracker"/>.</summary>
     internal IDisposable? DestinationRequestLease { get; set; }
+
+    /// <summary>Passive policy copied at dispatch. Null uses the default 502/503/504 failures.</summary>
+    internal Abstractions.Clusters.PassiveHealthConfig? PassiveHealth { get; set; }
+
+    /// <summary>Destination count of the matched cluster, for the ejection cap.</summary>
+    internal int PassiveDestinationCount { get; set; }
+
+    /// <summary>Allocated only when retry or a later feature needs per-request state.</summary>
+    internal RoutingFeatureState? Extras { get; set; }
+
+    /// <summary>Route chosen for this request. Null when the request was not routed.</summary>
+    public Abstractions.Routing.RouteConfig? MatchedRoute { get; internal set; }
+
+    /// <summary>Request id assigned when <see cref="ProxyServer.RequestIdHeader"/> is set.</summary>
+    public string? ProxyRequestId => Extras?.RequestId;
+
+    /// <summary>W3C trace id when tracing is enabled for this request.</summary>
+    public string? ProxyTraceId => Extras?.Activity?.TraceId.ToString();
+
+    /// <summary>Appended to the upstream pool key only when a cluster sets HttpClient.</summary>
+    internal string? ClusterConnectionKey { get; set; }
+
+    /// <summary>Classification of how the request ended.</summary>
+    public Abstractions.Diagnostics.ForwarderError ForwarderError { get; internal set; }
 
     /// <summary>
     ///     Local endpoint via which we make the request.

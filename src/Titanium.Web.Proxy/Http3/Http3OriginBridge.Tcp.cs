@@ -1,10 +1,7 @@
 #pragma warning disable CA1416
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Net.Quic;
-using System.Net.Security;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -12,16 +9,12 @@ using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Extensions;
-using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
-using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Models;
-using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
-using Titanium.Web.Proxy.Options;
 using Titanium.Web.Proxy.StreamExtended.Network;
 
 namespace Titanium.Web.Proxy.Http3;
@@ -342,7 +335,7 @@ internal static partial class Http3OriginBridge
                             // Incomplete copy may leave unread CL bytes on the socket while
                             // HttpStream.Available is 0 (bytes already in the pump buffer). Pooling
                             // that connection poisons the next H3→H1 request into H3_INTERNAL_ERROR
-                            // (GHA compare-arch slow-consumer after warmup cancel).
+                            // (seen with a slow consumer after the request was cancelled).
                             if (!copyCompleted
                                 || (owned.Stream is Helpers.HttpStream residual && residual.DataAvailable))
                                 shouldClose = true;
@@ -366,11 +359,12 @@ internal static partial class Http3OriginBridge
         _ = logger;
     }
 
-    private static async Task ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    private static async Task<bool> ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         CancellationToken cancellationToken,
-        Func<Response, CancellationToken, Task>? onInterimResponse = null)
+        Func<Response, CancellationToken, Task>? onInterimResponse = null,
+        bool allowStatusRetry = true)
     {
         var request = sessionArgs.HttpClient.Request;
 
@@ -528,8 +522,8 @@ internal static partial class Http3OriginBridge
                 sessionArgs.OriginHttpVersionPolicy ?? server.OriginHttpVersionPolicy, cancellationToken);
 
             // Streamed uploads: start the origin body write in parallel with ReceiveResponse so an
-            // early-responding origin (compare-arch) can push response headers/body while the
-            // remaining request bytes are still in flight — same duplex shape as YARP StreamCopier.
+            // early-responding origin can push response headers/body while the remaining request
+            // bytes are still in flight (full duplex).
             // Buffered bodies stay half-duplex (write then read).
             Task? uploadTask = null;
             if (needsHttp11Wire && request.HasBody && !request.ExpectationFailed)
@@ -607,6 +601,13 @@ internal static partial class Http3OriginBridge
                 }
 
                 throw;
+            }
+
+            if (allowStatusRetry && sessionArgs.Extras is not null
+                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(server, sessionArgs))
+            {
+                closeConnection = true;
+                return true;
             }
 
             var response = sessionArgs.HttpClient.Response;
@@ -757,6 +758,8 @@ internal static partial class Http3OriginBridge
             // downstream response handling, callbacks, and the traffic tape.
             request.HttpVersion = clientHttpVersion;
         }
+
+        return false;
     }
 
     // ────────────────────────────────────────────────────────────────────────────────────────
