@@ -238,6 +238,16 @@ Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.Path.get -> string?
 Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.Path.set -> void
 Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.get -> double?
 Titanium.Web.Proxy.Configuration.Models.AccessLogConfig.SampleRate.set -> void
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Host.get -> string?
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Host.set -> void
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.MetricsConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Port.get -> int?
+Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Port.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Metrics.get -> Titanium.Web.Proxy.Configuration.Models.MetricsConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Metrics.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.get -> Titanium.Web.Proxy.Configuration.Models.AccessLogConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.set -> void

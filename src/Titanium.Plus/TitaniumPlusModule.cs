@@ -53,6 +53,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
 
         var operations = new DrainOperations(context.ClusterManager);
         var metrics = new PrometheusMetricsExporter(context.ClusterManager, context.LatencyRecorder);
+        context.RegisterMetricsAppender?.Invoke(metrics.AppendTo);
         var dashboard = new DashboardHost(controlPlane, operations, metrics, context.ClusterManager, dashboardPort);
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");

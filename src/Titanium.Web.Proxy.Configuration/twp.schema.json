@@ -1212,6 +1212,21 @@
             }
           }
         },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            }
+          }
+        },
         "originHttpVersionPolicy": {
           "type": "string"
         },

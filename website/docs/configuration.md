@@ -125,6 +125,20 @@ Request instruments on the `Titanium.Web.Proxy` meter stay quiet until a listene
 
 `server.requestId.enabled` and `server.tracing.enabled` are off by default. Turning either on leaves the terminate-lite path.
 
+### Prometheus metrics (`server.metrics`)
+
+Opt-in text exposition of the core meter. Off by default: with no `server.metrics` (or `enabled: false`) no meter listener exists and the request path costs what it did before.
+
+```yaml
+server:
+  metrics:
+    enabled: true
+    host: 127.0.0.1   # default
+    port: 9464        # default
+```
+
+`GET /metrics` serves counters as `_total`, up-down counters as gauges, and the request duration as a histogram with 14 fixed buckets from 1 ms to 30 s. Labels are limited to `route`, `cluster`, `status_class`, `protocol`, `error`, `direction`, `reason`, and `outcome`; at most 200 distinct `route` and 200 distinct `cluster` values are kept before the rest count as `other`. The endpoint is unauthenticated, so keep it on loopback or a private interface. Changing it needs a restart. The full instrument list is in the [Metrics wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics). A .NET host that already uses OpenTelemetry can instead call `AddMeter("Titanium.Web.Proxy")`.
+
 ## Routes & clusters
 
 ```json

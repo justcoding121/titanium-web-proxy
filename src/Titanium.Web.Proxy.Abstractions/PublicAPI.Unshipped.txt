@@ -210,6 +210,8 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ProxyServer.get ->
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ProxyServer.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RefreshReverseProxy.get -> System.Action?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RefreshReverseProxy.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RegisterMetricsAppender.get -> System.Action<System.Action<System.Text.StringBuilder!>!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RegisterMetricsAppender.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ResponseCache.get -> Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ResponseCache.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Routes.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>?

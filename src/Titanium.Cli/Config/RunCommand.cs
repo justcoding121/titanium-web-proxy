@@ -2,6 +2,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
+using Titanium.Cli.Admin;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
@@ -145,8 +146,11 @@ internal static class RunCommand
                 routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies);
         }
 
+        // No meter listener is attached until server.metrics is on or /metrics is first served.
+        using var metricsExposition = new MetricsExposition();
         var plusContext = new PlusActivationContext
         {
+            RegisterMetricsAppender = metricsExposition.AddAppender,
             ProxyServer = proxy,
             ClusterManager = clusterManager,
             Options = plusOptions,
@@ -165,9 +169,11 @@ internal static class RunCommand
         StartAcmeIfConfigured(proxy, loaded.Config);
 
         JsonAccessLogWriter? accessLog = null;
+        MetricsHttpEndpoint? metricsEndpoint = null;
         try
         {
             accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
+            metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
 
             if (serviceMode)
             {
@@ -226,8 +232,22 @@ internal static class RunCommand
         }
         finally
         {
+            metricsEndpoint?.Dispose();
             accessLog?.Dispose();
         }
+    }
+
+    private static MetricsHttpEndpoint? TryStartMetrics(MetricsExposition exposition, ServerConfig? server)
+    {
+        if (server?.Metrics is not { Enabled: true } cfg)
+        {
+            return null;
+        }
+
+        var endpoint = MetricsHttpEndpoint.Create(exposition, cfg.Host, cfg.Port);
+        endpoint.Start();
+        AsyncConsole.WriteLine($"Metrics: http://{cfg.Host ?? MetricsHttpEndpoint.DefaultHost}:{endpoint.Port}/metrics");
+        return endpoint;
     }
 
     private static JsonAccessLogWriter? TryStartAccessLog(ProxyServer proxy, ServerConfig? server)

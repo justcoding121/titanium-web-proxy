@@ -79,7 +79,7 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 | System proxy + CA | Win / macOS / Linux helpers matching Inspector trust |
 | Synthetic responses | Html / Json / File / Stream / Redirect without an origin |
 | Fast path | Skip interception work when your handlers do not need the body |
-| Metrics and tracing | Core `Meter` and `ActivitySource` named `Titanium.Web.Proxy` (`AddMeter("Titanium.Web.Proxy")` / `AddSource("Titanium.Web.Proxy")`). Request counters stay quiet until a listener is attached |
+| Metrics and tracing | Core `Meter` and `ActivitySource` named `Titanium.Web.Proxy` (`AddMeter("Titanium.Web.Proxy")` / `AddSource("Titanium.Web.Proxy")`). Request counters stay quiet until a listener is attached. Opt-in Prometheus text via `server.metrics` |
 | Clusters | Passive health, optional active probes, retry, concurrency, priority, backup, hash, and opaque session affinity |
 | Routing | Order plus specificity, segment prefix, regex, redirects, direct responses, error pages, traffic split, and mirroring |
 | Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |

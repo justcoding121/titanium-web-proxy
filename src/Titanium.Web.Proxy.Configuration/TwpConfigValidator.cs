@@ -1078,7 +1078,27 @@ public static class TwpConfigValidator
         ValidateUpstream(server.Upstream, errors);
         ValidateCertificateManager(server.CertificateManager, errors);
         ValidateAccessLog(server.AccessLog, errors);
+        ValidateMetrics(server.Metrics, errors);
         ValidateResponseCompression(server.ResponseCompression, errors);
+    }
+
+    private static void ValidateMetrics(MetricsConfig? metrics, List<string> errors)
+    {
+        if (metrics is not { Enabled: true })
+        {
+            return;
+        }
+
+        if (metrics.Port is < 1 or > 65535)
+        {
+            errors.Add("server.metrics.port must be between 1 and 65535.");
+        }
+
+        if (metrics.Host is { } host &&
+            (string.IsNullOrWhiteSpace(host) || !System.Net.IPAddress.TryParse(host.Trim(), out _)))
+        {
+            errors.Add($"server.metrics.host '{host}' is not an IP address.");
+        }
     }
 
     private static readonly string[] CompressionAlgorithmNames = ["br", "gzip"];

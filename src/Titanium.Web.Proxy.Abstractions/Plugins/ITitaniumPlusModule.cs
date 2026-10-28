@@ -30,6 +30,12 @@ public sealed class PlusActivationContext
     /// <c>ReverseProxyOptions.GrpcJsonTranscoder</c> during refresh.
     /// </summary>
     public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; set; }
+
+    /// <summary>
+    /// Registers a section that is appended to the host's Prometheus text exposition on every scrape.
+    /// Null when the host has no exposition. The appender runs only while a scrape is served.
+    /// </summary>
+    public Action<Action<System.Text.StringBuilder>>? RegisterMetricsAppender { get; init; }
 }
 
 /// <summary>Opt-in GET/HEAD response cache (empty/off = zero cost when unused).</summary>

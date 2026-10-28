@@ -118,6 +118,21 @@ public sealed class ServerConfig
 
     /// <summary>Opt-in JSON access log (path + optional sample rate). Null = off (zero cost).</summary>
     public AccessLogConfig? AccessLog { get; set; }
+
+    /// <summary>Opt-in Prometheus text endpoint for the core meter. Null or <c>enabled: false</c> = off (zero cost).</summary>
+    public MetricsConfig? Metrics { get; set; }
+}
+
+/// <summary>Prometheus exposition under <c>server.metrics</c>. Off unless <see cref="Enabled"/> is true.</summary>
+public sealed class MetricsConfig
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Bind address for <c>GET /metrics</c>. Default <c>127.0.0.1</c>.</summary>
+    public string? Host { get; set; }
+
+    /// <summary>TCP port for <c>GET /metrics</c>. Default 9464.</summary>
+    public int? Port { get; set; }
 }
 
 /// <summary>JSON access log under <c>server.accessLog</c>.</summary>
