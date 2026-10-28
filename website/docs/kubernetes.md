@@ -2,7 +2,7 @@
 
 Run the `titanium` CLI as a Deployment: a hardened container image, probes on a separate admin port, a graceful drain on rollout, and ConfigMap and Secret updates that reload without a restart.
 
-**Next:** install the [Helm chart](#helm-chart) → edit `config` in your values → `helm upgrade`.
+**Next:** install the [Helm chart](#helm-chart) → edit `config` in your values → `helm upgrade`. To drive the proxy from `Gateway` and `HTTPRoute` resources instead, see [Gateway API](/docs/gateway-api).
 
 ## Container image
 

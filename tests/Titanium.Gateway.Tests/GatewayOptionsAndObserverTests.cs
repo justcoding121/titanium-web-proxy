@@ -56,6 +56,15 @@ public sealed class GatewayOptionsAndObserverTests
     }
 
     [TestMethod]
+    public void Options_RejectUnknownFlagsAndEnvironmentNames()
+    {
+        var flag = Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse(["--bogus", "x"], NoEnvironment));
+        StringAssert.Contains(flag.Message, "bogus");
+        var env = new Dictionary<string, string?> { ["TITANIUM_GATEWAY_DATA_PLANE_SERVCE"] = "typo" };
+        Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse([], env));
+    }
+
+    [TestMethod]
     public void Options_RequireTheDataPlaneService()
     {
         Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse(["--data-plane-namespace", "x", "--no-leader-election"], NoEnvironment));

@@ -1,0 +1,181 @@
+{{- $data := include "titanium-gateway.dataName" . }}
+{{- $adminPort := int .Values.dataPlane.admin.port }}
+{{- if le (int .Values.dataPlane.terminationGracePeriodSeconds) 5 }}
+{{- fail "dataPlane.terminationGracePeriodSeconds must be greater than the 5 second pre-stop delay in the bootstrap config" }}
+{{- end }}
+# The data plane: the Titanium proxy image running `titanium run --config /etc/titanium/twp.yaml --watch`. The controller
+# owns the ConfigMap and the Secret mounted here; the pods reload routes, clusters and certificates when they change.
+# Listeners are bound at start, so the controller rolls this Deployment when the set of listeners changes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $data }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.dataSelectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dataPlane.replicaCount }}
+  {{- with .Values.dataPlane.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "titanium-gateway.dataSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.dataPlane.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "titanium-gateway.commonLabels" . | nindent 8 }}
+        {{- include "titanium-gateway.dataSelectorLabels" . | nindent 8 }}
+        {{- with .Values.dataPlane.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ $data }}
+      automountServiceAccountToken: false
+      {{- with .Values.dataPlane.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.dataPlane.terminationGracePeriodSeconds }}
+      {{- with .Values.dataPlane.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: titanium
+          image: {{ include "titanium-gateway.image" (dict "image" .Values.dataPlane.image "root" .) | quote }}
+          imagePullPolicy: {{ .Values.dataPlane.image.pullPolicy }}
+          {{- with .Values.dataPlane.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          # The image ENTRYPOINT is `titanium run --config /etc/titanium/twp.yaml`; this adds --watch.
+          args:
+            - --watch
+          ports:
+            {{- range .Values.dataPlane.ports }}
+            - name: {{ .name }}
+              containerPort: {{ .containerPort }}
+              protocol: {{ default "TCP" .protocol }}
+            {{- end }}
+            - name: admin
+              containerPort: {{ $adminPort }}
+              protocol: TCP
+          env:
+            - name: TITANIUM_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "titanium-gateway.adminSecretName" . }}
+                  key: {{ .Values.dataPlane.admin.token.key }}
+            {{- with .Values.dataPlane.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: admin
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          {{- with .Values.dataPlane.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # One directory holds twp.yaml and the generated certificates, so a change to either swaps the ..data
+            # symlink that --watch follows. Mount the directory, never single files: that would hide the swap.
+            - name: config
+              mountPath: /etc/titanium
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          projected:
+            sources:
+              - configMap:
+                  name: {{ $data }}
+              - secret:
+                  name: {{ include "titanium-gateway.tlsSecretName" . }}
+                  optional: true
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.dataPlane.tmpDir.sizeLimit }}
+      {{- with .Values.dataPlane.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dataPlane.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dataPlane.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dataPlane.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# The Service the Gateway status address comes from, and the one whose ready EndpointSlice endpoints the controller polls.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $data }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.dataSelectorLabels" . | nindent 4 }}
+  {{- with .Values.dataPlane.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.dataPlane.service.type }}
+  {{- with .Values.dataPlane.service.extra }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  ports:
+    {{- range .Values.dataPlane.ports }}
+    - name: {{ .name }}
+      port: {{ .servicePort }}
+      targetPort: {{ .name }}
+      protocol: {{ default "TCP" .protocol }}
+    {{- end }}
+  selector:
+    {{- include "titanium-gateway.dataSelectorLabels" . | nindent 4 }}
+{{- if .Values.dataPlane.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $data }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+spec:
+  maxUnavailable: {{ .Values.dataPlane.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "titanium-gateway.dataSelectorLabels" . | nindent 6 }}
+{{- end }}

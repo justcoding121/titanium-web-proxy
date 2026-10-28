@@ -1,0 +1,141 @@
+{{- $fullname := include "titanium-gateway.fullname" . }}
+{{- $controller := include "titanium-gateway.controllerName" . }}
+# The controller's service account. It reads the cluster, writes status on Gateway API resources, and writes only the
+# objects the data plane reads (named below) in this release's namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.controllerSelectorLabels" . | nindent 4 }}
+  {{- with .Values.controller.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+# The data plane never talks to the Kubernetes API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "titanium-gateway.dataName" . }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.dataSelectorLabels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses", "gateways", "httproutes", "referencegrants"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses/status", "gateways/status", "httproutes/status"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  {{- if not .Values.controller.secretNamespaces }}
+  # TLS Secrets referenced by Gateway listeners, in every namespace. Set controller.secretNamespaces to narrow this.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $controller }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $controller }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+rules:
+  # Leader election.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: [{{ $controller | quote }}]
+    verbs: ["get", "update", "patch"]
+  # What the data plane reads. Both objects are created by this chart, so the controller only updates them.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ include "titanium-gateway.dataName" . | quote }}]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ include "titanium-gateway.tlsSecretName" . | quote }}]
+    verbs: ["get", "update", "patch"]
+  # Listeners bind at start, so a change of listener set rolls the data plane.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ include "titanium-gateway.dataName" . | quote }}]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $controller }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $controller }}
+    namespace: {{ .Release.Namespace }}
+{{- range .Values.controller.secretNamespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $controller }}-secrets
+  namespace: {{ . }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $controller }}-secrets
+  namespace: {{ . }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $controller }}-secrets
+subjects:
+  - kind: ServiceAccount
+    name: {{ $controller }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}

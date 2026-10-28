@@ -1,0 +1,168 @@
+# Gateway API
+
+Run Titanium as a [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) implementation. A leader-elected controller, `titanium-gateway`, watches `GatewayClass`, `Gateway`, `HTTPRoute`, and `ReferenceGrant` resources, renders them into the data plane's `twp.yaml`, and reports status back on the resources.
+
+**Next:** [install the chart](#install) → apply a [Gateway and an HTTPRoute](#quick-start) → read [what is not supported](#what-is-not-supported) before you migrate real routes.
+
+> Gateway API support covers the HTTP core of the **standard channel** (v1.2.1). `Ingress` resources are not handled by this controller; an Ingress controller is the next planned step (tracked as WI-21).
+
+## Install
+
+```shell
+helm install titanium-gateway ./deploy/helm/titanium-gateway \
+  --namespace gateway-system --create-namespace
+```
+
+The chart installs, in one release:
+
+| Piece | What it is |
+|-------|------------|
+| Gateway API CRDs | The standard channel, bundle `v1.2.1`, unmodified, from the chart's `crds/` directory |
+| `GatewayClass` `titanium` | Owned by the controller (`titaniumproxy.com/gateway-controller`) |
+| Controller Deployment | `ghcr.io/justcoding121/titanium-gateway`, 2 replicas, one leader at a time |
+| Data-plane Deployment and Service | The `titanium` proxy image running `titanium run --config /etc/titanium/twp.yaml --watch`, 2 replicas |
+| RBAC | A least-privilege `ClusterRole` for reads and status writes, and a namespaced `Role` for the objects the controller writes |
+
+Helm installs the CRDs on `helm install` and never upgrades them. To move to another Gateway API release, apply that release's standard-channel CRDs with `kubectl apply --server-side`, then upgrade the chart.
+
+The data-plane Service is a `LoadBalancer` by default. Its load balancer address becomes `Gateway.status.addresses`. Set `dataPlane.service.type=ClusterIP` on clusters without a load balancer.
+
+## Quick start
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: web
+  namespace: apps
+spec:
+  gatewayClassName: titanium
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: shop
+  namespace: apps
+spec:
+  parentRefs:
+    - name: web
+  hostnames:
+    - shop.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: api
+          port: 8080
+          weight: 9
+        - name: api-canary
+          port: 8080
+          weight: 1
+    - backendRefs:
+        - name: frontend
+          port: 8080
+```
+
+```shell
+kubectl -n apps get gateway web -o jsonpath='{range .status.conditions[*]}{.type}={.status} ({.reason}){"\n"}{end}'
+kubectl -n apps get httproute shop -o jsonpath='{.status.parents[0].conditions[*].type}'
+```
+
+`Accepted` means the Gateway is valid. `Programmed` turns `True` only after every ready data-plane pod reports the config the controller rendered (see [How it works](#how-it-works)).
+
+## How it works
+
+1. **Informers** keep an in-memory view of `GatewayClass`, `Gateway`, `HTTPRoute`, `ReferenceGrant`, `Namespace`, `Service`, `EndpointSlice`, and the `kubernetes.io/tls` Secrets. Nothing is written to disk.
+2. **A coalesced reconcile** runs at most once every 500 ms, however many changes arrive. It renders the whole cluster state through a pure function: the same state always gives the same config.
+3. **Only the leader writes.** Replicas elect a leader with a `Lease`. The leader writes the data-plane ConfigMap (`twp.yaml`), the Secret with converted certificates, and resource status. A follower keeps its caches warm and takes over within the lease duration (15 s) if the leader stops.
+4. **The data plane reloads in place.** The pods mount the ConfigMap and the Secret in one directory and run with `--watch`, so routes, clusters, and certificates reload without a restart.
+5. **Listeners roll the pods.** Listeners are bound at start. When the set of listeners changes (a new port, or a port that starts to decrypt TLS), the controller stamps the data-plane pod template and Kubernetes rolls the Deployment with no unavailable pod.
+6. **Programmed is confirmed, not assumed.** The controller reads `/readyz` and `/version` from every ready data-plane pod and compares the `config_hash` with the SHA-256 of the config it wrote. Until they match, `Programmed` is `False` with reason `Pending`, and the controller polls again every 5 s.
+
+### Certificates
+
+Listener `certificateRefs` name `kubernetes.io/tls` Secrets. The controller converts each pair of `tls.crt` and `tls.key` into a password-less PFX and publishes it in the generated Secret as `<namespace>.<name>.pfx`, which the config names as an SNI certificate (`certificates.items`). A Secret that does not hold a matching certificate and key is reported as `InvalidCertificateRef`; the data plane never sees it. The controller keeps private keys in memory only.
+
+A `certificateRef` in another namespace needs a `ReferenceGrant`.
+
+## Supported resources and fields
+
+| Resource | Supported |
+|----------|-----------|
+| `GatewayClass` | `controllerName`. Status `Accepted`. |
+| `Gateway` | Listeners with protocol `HTTP` or `HTTPS` (TLS mode `Terminate`), `hostname`, `allowedRoutes` (`namespaces.from` Same, All, or Selector, and `kinds`), `certificateRefs`. Status `Accepted`, `Programmed`, per-listener `attachedRoutes`, `ResolvedRefs`, `Conflicted`, and addresses from the data-plane Service. |
+| `HTTPRoute` | `parentRefs` (with `sectionName` and `port`), `hostnames`, and `rules` with the matches, filters, and backends below. Status per parent: `Accepted`, `ResolvedRefs`. |
+| `ReferenceGrant` | Cross-namespace `backendRefs`, `RequestMirror` backends, and `certificateRefs` (`v1beta1`). |
+
+**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
+
+**Backends:** `backendRefs` to `Service` with `weight`. Destinations are the **ready** endpoints of the Service's `EndpointSlice`s, so a pod that is not ready receives no traffic. A weight of `0` takes no traffic.
+
+**Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier` (set, add, remove), `URLRewrite` (`hostname`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestRedirect` (301 and 302, `scheme`, `hostname`, `port`, `ReplaceFullPath`), `RequestMirror` (`percent` or `fraction`).
+
+**Timeouts:** `timeouts.request` and `timeouts.backendRequest`.
+
+## What is not supported
+
+The controller never guesses. A rule it cannot honor is answered with `500` and the reason is in the route status (`Accepted` `False` with reason `UnsupportedValue`, or `ResolvedRefs` `False`). A rule is never silently dropped.
+
+| Gateway API feature | Behavior |
+|---------------------|----------|
+| `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy` | Not watched. The standard CRDs for `GRPCRoute` are installed, but no controller acts on them. |
+| TLS `Passthrough`, protocols other than `HTTP` and `HTTPS` | Listener `Accepted` `False`, reason `UnsupportedProtocol`. |
+| `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
+| Header matches of type `RegularExpression` | The rule answers `500` (`UnsupportedValue`). |
+| `RequestRedirect` with `ReplacePrefixMatch`, or a status other than 301 and 302 | The rule answers `500`. |
+| `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
+| More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
+| A listener on a port not in `dataPlane.ports` | Listener not programmed, reason `PortUnavailable`. |
+
+### Behavior that differs from the specification
+
+These follow from how the data plane works. They are deliberate and listed so nothing surprises you.
+
+- **Routes are global across listeners.** The data plane matches routes by host, path, header, query, and method, not by listener port. Two Gateway listeners that would serve different routes on different ports serve the same routes.
+- **A mix of valid and invalid backends answers `503` for the invalid share**, where the specification says `500`. When no backend of a rule is usable, the rule answers `500`.
+- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive.
+- **`ResponseHeaderModifier` add acts as set.** The data plane keeps one value per response header.
+- **Privileged ports are mapped.** The data plane runs as non-root, so Gateway port `80` is bound as `8080` and `443` as `8443` (`dataPlane.ports`). The Service maps them back.
+
+## Configuration
+
+The controller reads flags or the matching `TITANIUM_GATEWAY_*` environment variables (the chart sets them). An unknown option stops the controller at start.
+
+| Option | Default | Meaning |
+|--------|---------|---------|
+| `--controller-name` | `titaniumproxy.com/gateway-controller` | `GatewayClass.spec.controllerName` to own |
+| `--data-plane-service` | required | The data-plane Service. Its ready endpoints are polled. |
+| `--data-plane-namespace` | `POD_NAMESPACE` | Namespace of the data plane and its ConfigMap and Secret |
+| `--data-plane-deployment` | none | Deployment rolled when the listener set changes |
+| `--config-map` / `--tls-secret` | the Service name, and the Service name plus `-tls` | Objects the controller writes |
+| `--port-map` | `80=8080,443=8443` | Gateway port to data-plane port |
+| `--secret-namespaces` | all | Namespaces whose TLS Secrets are read |
+| `--admin-port` | `9901` | Data-plane admin port. `TITANIUM_ADMIN_TOKEN` is the bearer token. |
+| `--lease-name`, `--lease-namespace`, `--identity`, `--no-leader-election` | | Leader election |
+| `--min-reconcile-ms` | `500` | Smallest gap between reconciles |
+| `--health-port` | `8081` | The controller's `/healthz` and `/readyz` |
+| `--verbose` | off | Debug logging |
+
+## Security
+
+- **RBAC is least privilege.** Reads cover the watched kinds. Writes are status on `gatewayclasses`, `gateways`, and `httproutes`, plus `update` and `patch` on exactly the data-plane ConfigMap, the certificate Secret, the data-plane Deployment, and the Lease, all by name, in the release namespace.
+- **Secret read access is the broad part.** By default the controller can read TLS Secrets in every namespace, because a Gateway may reference any of them. Set `controller.secretNamespaces` to limit both the watch and the RBAC to listed namespaces; the chart then creates a `Role` in each instead of a cluster-wide rule.
+- **The admin token** protects `/metrics` and `/version` on the data plane. The chart creates one and shares it with the controller, which needs `/version` to confirm `Programmed`.
+- **Both images run as non-root** (UID `1654`) with a read-only root file system and no capabilities.
+
+## See also
+
+- [Kubernetes](/docs/kubernetes): the container image and the plain Helm chart for the `titanium` CLI.
+- [Configuration](/docs/configuration): the `twp.yaml` the controller renders.

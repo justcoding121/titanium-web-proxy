@@ -1,0 +1,26 @@
+Titanium Gateway is installed in namespace {{ .Release.Namespace }}.
+
+GatewayClass: {{ if .Values.gatewayClass.create }}{{ .Values.gatewayClass.name }}{{ else }}(not created; create one with controllerName {{ .Values.controller.controllerName }}){{ end }}
+
+Create a Gateway and an HTTPRoute:
+
+  apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: web
+  spec:
+    gatewayClassName: {{ .Values.gatewayClass.name }}
+    listeners:
+      - name: http
+        port: 80
+        protocol: HTTP
+
+Then check that it is accepted and programmed:
+
+  kubectl get gateway web -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+
+The Gateway address is the external address of Service {{ include "titanium-gateway.dataName" . }}.
+Programmed turns True once every data-plane pod reports the rendered config on /version.
+Listener ports the data plane can bind: {{ include "titanium-gateway.portMap" . }} (Gateway port=container port).
+
+The Gateway API CRDs in this chart are the standard channel, bundle {{ index .Chart.Annotations "gateway.networking.k8s.io/bundle-version" }}. Helm installs them once and does not upgrade them.

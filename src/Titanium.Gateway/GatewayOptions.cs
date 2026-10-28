@@ -51,6 +51,15 @@ public sealed class GatewayOptions
 
     public bool Verbose { get; private set; }
 
+    private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
+    {
+        "controller-name", "data-plane-namespace", "data-plane-service", "data-plane-deployment", "config-map", "tls-secret",
+        "config-key", "lease-name", "lease-namespace", "identity", "no-leader-election", "admin-port", "admin-token-env",
+        "health-port", "tls-mount-path", "port-map", "secret-namespaces", "min-reconcile-ms", "verbose", "pod-namespace", "pod-name",
+    };
+
+    private static string KnownList => string.Join(", ", Known.Order(StringComparer.Ordinal));
+
     public static GatewayOptions Parse(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> environment)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -88,6 +97,14 @@ public sealed class GatewayOptions
             else
             {
                 throw new ArgumentException($"Option '{arg}' needs a value.");
+            }
+        }
+
+        foreach (var name in values.Keys)
+        {
+            if (!Known.Contains(name))
+            {
+                throw new ArgumentException($"Unknown option '{name}'. Known options: {KnownList}.");
             }
         }
 

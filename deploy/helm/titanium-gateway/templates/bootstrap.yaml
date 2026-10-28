@@ -1,0 +1,53 @@
+{{- $data := include "titanium-gateway.dataName" . }}
+{{- $tls := include "titanium-gateway.tlsSecretName" . }}
+{{- $adminName := include "titanium-gateway.adminSecretName" . }}
+{{- /*
+  The controller owns the data of the ConfigMap and the Secret below (server-side apply, field manager
+  titanium-gateway). The chart creates them only when they do not exist, and marks them `keep`, so a later
+  `helm upgrade` neither resets what the controller wrote nor deletes it.
+*/}}
+{{- if not (lookup "v1" "ConfigMap" .Release.Namespace $data) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $data }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.dataSelectorLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+data:
+  twp.yaml: |
+    {{- .Values.dataPlane.bootstrapConfig | nindent 4 }}
+---
+{{- end }}
+{{- if not (lookup "v1" "Secret" .Release.Namespace $tls) }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $tls }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.dataSelectorLabels" . | nindent 4 }}
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+{{- end }}
+{{- if not .Values.dataPlane.admin.token.existingSecret }}
+{{- /* Keep the token across `helm upgrade`; generate it only the first time. */}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $adminName }}
+{{- $token := randAlphaNum 40 }}
+{{- if and $existing $existing.data }}
+{{- $token = (get $existing.data .Values.dataPlane.admin.token.key) | b64dec }}
+{{- end }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $adminName }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+type: Opaque
+data:
+  {{ .Values.dataPlane.admin.token.key }}: {{ $token | b64enc | quote }}
+{{- end }}

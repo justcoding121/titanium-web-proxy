@@ -1,0 +1,18 @@
+apiVersion: v2
+name: titanium-gateway
+description: Titanium Web Proxy as a Kubernetes Gateway API implementation (GatewayClass, Gateway, HTTPRoute, ReferenceGrant), with a leader-elected controller and a data plane it configures.
+type: application
+version: 0.1.0
+appVersion: "7.0.27"
+kubeVersion: ">=1.27.0-0"
+home: https://titaniumproxy.com/docs/gateway-api
+sources:
+  - https://github.com/justcoding121/titanium-web-proxy
+keywords:
+  - gateway-api
+  - proxy
+  - titanium
+annotations:
+  # The Gateway API standard-channel CRDs in crds/ are this release, unmodified.
+  gateway.networking.k8s.io/bundle-version: v1.2.1
+  gateway.networking.k8s.io/channel: standard

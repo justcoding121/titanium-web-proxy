@@ -13,8 +13,10 @@ on:
       - '.dockerignore'
       - 'deploy/helm/**'
       - 'src/Titanium.Cli/**'
+      - 'src/Titanium.Gateway/**'
       - 'src/Titanium.Web.Proxy.Configuration/**'
       - 'tests/Titanium.Cli.Tests/HelmChartTests.cs'
+      - 'tests/Titanium.Gateway.Tests/**'
       - '.github/workflows/kubernetes-ci.yml'
   push:
     branches:
@@ -55,6 +57,17 @@ jobs:
         with:
           context: .
           file: packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The Gateway API controller image builds for both architectures too.
+      - name: Build the titanium-gateway image for linux/amd64 and linux/arm64 (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile.gateway
           platforms: linux/amd64,linux/arm64
           push: false
           cache-from: type=gha
@@ -159,3 +172,24 @@ jobs:
       # Renders the chart and loads the rendered twp.yaml with the CLI's own loader and validator.
       - name: Chart config passes the Titanium validator
         run: dotnet test tests/Titanium.Cli.Tests -c Release --filter "FullyQualifiedName~HelmChartTests|FullyQualifiedName~HealthcheckCommandTests"
+
+      # The Gateway API chart: lint, schema-check every rendered object (the GatewayClass schema comes from the CRDs
+      # catalog), and run the chart tests, which also check the bootstrap config and the RBAC.
+      - name: titanium-gateway chart lint
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/titanium-gateway --strict
+          helm lint deploy/helm/titanium-gateway --strict -f deploy/helm/titanium-gateway/ci/kind-values.yaml
+
+      - name: titanium-gateway chart kubeconform
+        run: |
+          set -euo pipefail
+          for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
+            helm template rel deploy/helm/titanium-gateway --namespace gateway-system  \
+              | kubeconform -strict -summary -kubernetes-version "" \
+                  -schema-location default \
+                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          done
+
+      - name: titanium-gateway chart tests
+        run: dotnet test tests/Titanium.Gateway.Tests -c Release --filter "FullyQualifiedName~GatewayChartTests"
