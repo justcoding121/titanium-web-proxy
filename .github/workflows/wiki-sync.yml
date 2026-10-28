@@ -23,10 +23,51 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
+      # The previous publisher cloned the wiki's full history, then pushed.
+      # That clone is large (every past chart is still in the pack) and died
+      # with curl 56 (connection reset) after ~14 minutes. A depth-1 clone
+      # only needs the current tree, HTTP/1.1 avoids the HTTP/2 reset, and a
+      # failed attempt is retried instead of failing the publish.
       - name: Publish wiki
-        uses: Andrew-Chen-Wang/github-wiki-action@1bbb4280446f9630e8e21a18012cbacf3b0f992e # v5
-        with:
-          path: wiki
-          preprocess: false
-          disable-empty-commits: true
-          ignore: README.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${GITHUB_REPOSITORY}.wiki.git"
+          work="${RUNNER_TEMP}/wiki-publish"
+          gh auth setup-git
+
+          publish_once() {
+            rm -rf "$work"
+            git -c http.version=HTTP/1.1 \
+                -c http.lowSpeedLimit=1000 \
+                -c http.lowSpeedTime=60 \
+                clone --depth 1 --branch master "$url" "$work"
+            rsync -a --delete \
+              --exclude '.git/' \
+              --exclude 'README.md' \
+              wiki/ "$work/"
+            git -C "$work" add -A
+            if git -C "$work" diff --cached --quiet; then
+              echo "Wiki already matches wiki/."
+              return 0
+            fi
+            git -C "$work" \
+              -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Update wiki ${GITHUB_SHA}"
+            git -C "$work" -c http.version=HTTP/1.1 \
+                -c http.lowSpeedLimit=1000 \
+                -c http.lowSpeedTime=60 \
+                push origin HEAD:master
+          }
+
+          for attempt in 1 2 3; do
+            if publish_once; then
+              exit 0
+            fi
+            echo "Wiki publish attempt ${attempt} failed."
+            sleep $((attempt * 20))
+          done
+          echo "Wiki publish failed after 3 attempts."
+          exit 1
