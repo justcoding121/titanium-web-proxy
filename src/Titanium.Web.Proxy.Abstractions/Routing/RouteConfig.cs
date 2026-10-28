@@ -72,6 +72,13 @@ public sealed class RouteConfig
     ///     route. Null follows the server setting.
     /// </summary>
     public string? Compression { get; init; }
+
+    /// <summary>
+    ///     Translates binary gRPC-Web (<c>application/grpc-web</c>, <c>application/grpc-web+proto</c>) POSTs to
+    ///     gRPC on an HTTP/2 origin and folds the response trailers into a final gRPC-Web trailer frame.
+    ///     Unary and server-streaming calls only. Off by default.
+    /// </summary>
+    public bool GrpcWeb { get; init; }
 }
 
 /// <summary>One cluster in a traffic split.</summary>

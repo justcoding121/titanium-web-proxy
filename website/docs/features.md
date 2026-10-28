@@ -44,6 +44,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | Self-update | `titanium update` with SHA256 verification |
 | Access logs | Opt-in NDJSON (`server.accessLog`) |
 | Response compression | Opt-in buffered brotli/gzip for HTTP/1.1 and HTTP/2-to-HTTP/1.1 (`server.responseCompression`) |
+| gRPC-Web | Opt-in per route (`grpcWeb: true`): browser gRPC-Web to a native gRPC HTTP/2 origin, binary unary and server-streaming ([guide](/docs/configuration#grpc-web-route-grpcweb)) |
 
 ## Plus
 

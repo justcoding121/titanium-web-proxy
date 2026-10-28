@@ -480,6 +480,71 @@ public class PolicyAndRouteValidationTests
         var bad = new TwpConfig { Clusters = [Cluster("c")], Routes = [Compressed("a", "gzip")] };
         StringAssert.Contains(Errors(bad), "Route 'a' compression 'gzip' is unknown");
     }
+
+    private static RouteConfig GrpcWebRoute(string id, bool grpcWeb, RedirectConfig? redirect = null,
+        DirectResponseConfig? direct = null) => new()
+    {
+        Id = id,
+        ClusterId = "c",
+        Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+        GrpcWeb = grpcWeb,
+        Redirect = redirect,
+        DirectResponse = direct,
+    };
+
+    [TestMethod]
+    public void GrpcWeb_OnAnOriginRoute_IsValid_AndWarnsAboutScope()
+    {
+        var config = new TwpConfig { Clusters = [Cluster("c")], Routes = [GrpcWebRoute("g", true)] };
+
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+        var warning = TwpConfigValidator.CollectWarnings(config)
+            .Single(w => w.Contains("grpcWeb", StringComparison.Ordinal));
+        StringAssert.Contains(warning, "grpc-web-text");
+        StringAssert.Contains(warning, "HTTP/2 origin");
+    }
+
+    [TestMethod]
+    public void GrpcWeb_Off_HasNoWarning()
+    {
+        var config = new TwpConfig { Clusters = [Cluster("c")], Routes = [GrpcWebRoute("g", false)] };
+        Assert.IsFalse(TwpConfigValidator.CollectWarnings(config)
+            .Any(w => w.Contains("grpcWeb", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void GrpcWeb_WithRedirectOrDirectResponse_IsRejected()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Routes =
+            [
+                GrpcWebRoute("a", true, redirect: new RedirectConfig { Host = "example.test" }),
+                GrpcWebRoute("b", true, direct: new DirectResponseConfig { Status = 200, Body = "x" }),
+            ],
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "Route 'a' grpcWeb needs an origin");
+        StringAssert.Contains(errors, "Route 'b' grpcWeb needs an origin");
+    }
+
+    [TestMethod]
+    public void GrpcWeb_BindsFromJson()
+    {
+        var config = TwpConfigLoader.LoadJson("""
+            {
+              "clusters": [ { "id": "c", "destinations": [ { "id": "d", "address": "127.0.0.1", "port": 9000 } ] } ],
+              "routes": [
+                { "id": "g", "clusterId": "c", "grpcWeb": true, "match": { "path": "/pkg.Svc/" } },
+                { "id": "p", "clusterId": "c", "match": { "path": "/" } }
+              ]
+            }
+            """);
+
+        Assert.IsTrue(config.Routes.Single(r => r.Id == "g").GrpcWeb);
+        Assert.IsFalse(config.Routes.Single(r => r.Id == "p").GrpcWeb);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+    }
 }
-
-

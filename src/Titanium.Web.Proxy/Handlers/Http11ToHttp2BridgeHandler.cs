@@ -595,6 +595,9 @@ public partial class ProxyServer
             if (args.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
                 request.IsHttps = false;
 
+            // route grpcWeb: binary gRPC-Web becomes gRPC for the h2 origin; the answer is shaped on delivery.
+            Grpc.GrpcWebTranslation.TryTranslateRequest(args);
+
             PrepareRequestForOrigin(request);
 
             // Expect: 100-continue — H1 clients wait for 100 before sending the body. The h2 origin
@@ -801,6 +804,9 @@ public partial class ProxyServer
         // Http2OriginConnection stamps the response HTTP/1.1 so the client-side status line is valid. The origin
         // leg of this exchange is HTTP/2; record it before BeforeResponse / AfterResponse observe the response.
         args.HttpClient.RecordOriginHttpVersion(HttpHeader.Version20);
+
+        // route grpcWeb: relay the DATA frames and end with a trailer frame instead of HTTP trailers.
+        await Grpc.GrpcWebTranslation.TranslateResponseAsync(args, exchange, cancellationToken);
 
         if (exchange.TrailingHeaders != null)
             foreach (var header in exchange.TrailingHeaders)

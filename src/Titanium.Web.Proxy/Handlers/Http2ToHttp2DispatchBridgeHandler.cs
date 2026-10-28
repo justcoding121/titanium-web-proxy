@@ -245,6 +245,10 @@ public partial class ProxyServer
                 origin.RemotePort, connectHost, connectPort);
 
             sessionArgs.HttpClient.Request.HttpVersion = HttpHeader.Version20;
+
+            // route grpcWeb: binary gRPC-Web becomes gRPC for the h2 origin; the answer is shaped below.
+            Grpc.GrpcWebTranslation.TryTranslateRequest(sessionArgs);
+
             PrepareRequestForOrigin(sessionArgs.HttpClient.Request);
             if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
                 sessionArgs.HttpClient.Request.IsHttps = false;
@@ -359,6 +363,9 @@ public partial class ProxyServer
             // No retry left: the deadline ends the exchange exactly as it would without a retry policy.
             if (perTryTimeout is not null)
                 throw perTryTimeout;
+
+            // route grpcWeb: relay the DATA frames and end with a trailer frame instead of HTTP trailers.
+            await Grpc.GrpcWebTranslation.TranslateResponseAsync(sessionArgs, exchange, cancellationToken);
 
             ApplyHttp2DispatchExchange(sessionArgs, exchange, clientHttpVersion);
 

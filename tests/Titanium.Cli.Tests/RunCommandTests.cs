@@ -40,6 +40,65 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenARouteSetsGrpcWeb()
+    {
+        TwpConfig Config(bool grpcWeb) => new()
+        {
+            Listeners = [new ListenerConfig { Port = 8080 }],
+            Clusters = [new Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig
+                {
+                    Id = "d", Address = "127.0.0.1", Port = 9000,
+                }],
+            }],
+            Routes =
+            [
+                new Titanium.Web.Proxy.Abstractions.Routing.RouteConfig
+                {
+                    Id = "r",
+                    ClusterId = "c",
+                    Match = new Titanium.Web.Proxy.Abstractions.Routing.RouteMatch { Path = "/" },
+                    GrpcWeb = grpcWeb,
+                },
+            ],
+        };
+
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(Config(true)));
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(Config(false)));
+    }
+
+    [TestMethod]
+    public void Load_GrpcWebYaml_BindsTheRouteFlag()
+    {
+        var dir = Directory.CreateTempSubdirectory("twp-grpcweb-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "twp.yaml");
+            File.WriteAllText(path, """
+                listeners:
+                  - port: 8080
+                    host: 127.0.0.1
+                routes:
+                  - id: g
+                    clusterId: c
+                    grpcWeb: true
+                    match:
+                      path: /pkg.Svc/
+                """);
+
+            var loaded = Titanium.Cli.Parsers.ConfigLoader.Load(path);
+            Assert.IsTrue(loaded.Config.Routes.Single().GrpcWeb);
+            Assert.AreEqual(0, loaded.UnknownKeys.Count);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public void ServerConfigApplier_AppliesResponseCompression_OnlyWhenEnabled()
     {
         using var proxy = new ProxyServer(false, false, false);

@@ -44,6 +44,10 @@ Opt-in `server.responseCompression` compresses buffered origin responses (brotli
 | HTTP/3 | No |
 | HTTP/1.1 client, HTTP/2 origin | No |
 
+## gRPC-Web
+
+A route with `grpcWeb: true` translates a binary gRPC-Web call (`application/grpc-web` or `application/grpc-web+proto`) to native gRPC for an HTTP/2 origin, and folds the origin trailers into a final `0x80` frame. It runs on the HTTP/2-to-HTTP/2 dispatch bridge and on the HTTP/1.1-to-HTTP/2 bridge. Unary and server-streaming only; `application/grpc-web-text` is not translated. See [Configuration](/docs/configuration#grpc-web-route-grpcweb) for the flag and CORS guidance.
+
 ## Routing and clusters
 
 Per-request route dispatch runs on the HTTP/1 session path, the HTTP/1-to-HTTP/2 bridge, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/2 dispatch bridge (`SendHttp2ToHttp2DispatchBridge`), the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 native frame relay is unchanged when the listener is forward-host equivalent (no per-request dispatch).

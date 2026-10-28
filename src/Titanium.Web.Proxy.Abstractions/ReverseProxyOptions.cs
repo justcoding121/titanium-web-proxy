@@ -38,6 +38,26 @@ public sealed class ReverseProxyOptions
     internal object? Compiled { get; set; }
 
     private int extAuthState;
+    private int grpcWebState;
+
+    /// <summary>
+    /// True when a route sets <c>grpcWeb</c>. Computed once per options instance, so the request path
+    /// pays a single field read when no route asks for gRPC-Web translation.
+    /// </summary>
+    internal bool HasGrpcWebRoutes
+    {
+        get
+        {
+            var state = Volatile.Read(ref grpcWebState);
+            if (state == 0)
+            {
+                state = Routes is { Count: > 0 } routes && routes.Any(route => route.GrpcWeb) ? 2 : 1;
+                Volatile.Write(ref grpcWebState, state);
+            }
+
+            return state == 2;
+        }
+    }
 
     /// <summary>
     /// True when a route lists an <c>extAuth</c> policy. Computed once per options instance, so the

@@ -154,6 +154,12 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     internal Dictionary<string, string>? ResponseTrailerPlan { get; set; }
 
     /// <summary>
+    ///     Media type the client sent when the request was translated from gRPC-Web, such as
+    ///     <c>application/grpc-web+proto</c>. Null unless <c>grpcWeb</c> rewrote this request.
+    /// </summary>
+    internal string? GrpcWebClientContentType { get; set; }
+
+    /// <summary>
     ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.
     /// </summary>
     public bool EnableWinAuth

@@ -540,6 +540,17 @@ internal sealed class Http2OriginConnection : IDisposable
                                HttpVersion = HttpHeader.Version11
                            };
 
+            // A small gRPC body is complete before the status trailers behind it have arrived, and a buffered
+            // exchange unregisters the stream on return, which would drop them. Wait for END_STREAM first.
+            // Larger and unknown-length bodies are streamed and read their trailers late instead.
+            if (!pending.IsInboundComplete && !pending.IsTunnel && request.Method != "HEAD"
+                && response.ContentLength is >= 0 and <= PendingStream.InlineBodyThresholdBytes
+                && Grpc.GrpcWebAdapter.IsNativeGrpc(response.ContentType))
+            {
+                await ((IOriginTrailerSource)pending).WhenInboundCompleteAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             // An h2 body is delimited by END_STREAM (RFC 9113 §8.1), never by HTTP/1.1 framing headers,
             // and this response object is deliberately stamped HttpVersion 1.1 for the HTTP/1.1 client.
             // Response.HasBody's H1 framing rules (Content-Length / chunked / Connection-close) would
@@ -577,7 +588,7 @@ internal sealed class Http2OriginConnection : IDisposable
                         response.TrailingHeaders.AddHeader(header);
                 }
 
-                return new Http2OriginExchange(response, body, trailers);
+                return new Http2OriginExchange(response, body, trailers) { LateTrailerSource = pending };
             }
 
             // Inbound may have finished (HEADERS+END_STREAM or DATA already drained) before we attach.
@@ -623,7 +634,7 @@ internal sealed class Http2OriginConnection : IDisposable
                         response.TrailingHeaders.AddHeader(header);
                 }
 
-                return new Http2OriginExchange(response, body, trailers);
+                return new Http2OriginExchange(response, body, trailers) { LateTrailerSource = pending };
             }
 
             bodyCancelRegistration = cancellationToken.Register(() =>
@@ -654,7 +665,10 @@ internal sealed class Http2OriginConnection : IDisposable
                     response.TrailingHeaders.AddHeader(header);
             }
 
-            return new Http2OriginExchange(response, Array.Empty<byte>(), trailers, pending.IsInboundComplete);
+            return new Http2OriginExchange(response, Array.Empty<byte>(), trailers, pending.IsInboundComplete)
+            {
+                LateTrailerSource = pending,
+            };
         }
         finally
         {
@@ -1745,8 +1759,8 @@ internal sealed class Http2OriginConnection : IDisposable
         if (!TryUnregisterStream(streamId, out pending) || pending == null) return;
         if (pending.InlineBody != null)
             pending.HeadersReceived.TrySetResult(true);
-        else
-            pending.MarkInboundComplete();
+
+        pending.MarkInboundComplete();
         TryDisposeIfRetiredAndIdle();
     }
 
@@ -1763,6 +1777,7 @@ internal sealed class Http2OriginConnection : IDisposable
         pending.InterimChannel?.Writer.TryComplete(ex);
         pending.TunnelDataChannel?.Writer.TryComplete(ex);
         pending.HeadersReceived.TrySetException(ex);
+        pending.SignalInboundEnd();
     }
 
     /// <param name="ex">The failure to fault every in-flight/future stream with.</param>
@@ -1928,7 +1943,7 @@ internal sealed class Http2OriginConnection : IDisposable
             "Origin socket writes must go through Http2FrameWriter; mixed writes corrupt the HTTP/2 byte stream.");
     }
 
-    private sealed class PendingStream : IDisposable, IBodyConsumptionSink
+    private sealed class PendingStream : IDisposable, IBodyConsumptionSink, IOriginTrailerSource
     {
         /// <summary>
         ///     Known Content-Length bodies ≤ 64 KiB are filled here on the ReadLoop (no <see cref="BoundedBodyPipe" />).
@@ -1980,6 +1995,42 @@ internal sealed class Http2OriginConnection : IDisposable
 
         internal Response? Response;
         internal HeaderCollection? TrailingHeaders;
+
+        HeaderCollection? IOriginTrailerSource.CurrentTrailers => TrailingHeaders;
+
+        bool IOriginTrailerSource.IsInboundComplete => IsInboundComplete;
+
+        /// <summary>Created only when a caller waits for the end of the stream (gRPC-Web trailers).</summary>
+        private TaskCompletionSource? inboundEndSignal;
+
+        /// <summary>Set once the stream is complete or abandoned (disposed, failed): nothing more will arrive.</summary>
+        private int inboundEnded;
+
+        Task IOriginTrailerSource.WhenInboundCompleteAsync(CancellationToken cancellationToken)
+        {
+            if (IsInboundComplete || Volatile.Read(ref inboundEnded) != 0)
+                return Task.CompletedTask;
+
+            var signal = Volatile.Read(ref inboundEndSignal);
+            if (signal == null)
+            {
+                var created = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                signal = Interlocked.CompareExchange(ref inboundEndSignal, created, null) ?? created;
+            }
+
+            // END_STREAM may have landed between the check above and the signal being published.
+            if (IsInboundComplete || Volatile.Read(ref inboundEnded) != 0)
+                signal.TrySetResult();
+
+            return signal.Task.WaitAsync(cancellationToken);
+        }
+
+        /// <summary>Releases anyone waiting for the end of the stream. Idempotent.</summary>
+        internal void SignalInboundEnd()
+        {
+            Volatile.Write(ref inboundEnded, 1);
+            Volatile.Read(ref inboundEndSignal)?.TrySetResult();
+        }
 
         /// <summary>On-wire DATA bytes read but not yet returned as stream WINDOW_UPDATE.</summary>
         internal int StreamCreditOwed;
@@ -2119,6 +2170,7 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             Volatile.Write(ref inboundComplete, 1);
             bodyPipe?.CompleteWriter();
+            SignalInboundEnd();
         }
 
         public void Dispose()
@@ -2128,6 +2180,7 @@ internal sealed class Http2OriginConnection : IDisposable
             InterimChannel?.Writer.TryComplete();
             TunnelDataChannel?.Writer.TryComplete();
             HeadersReceived.TrySetCanceled();
+            SignalInboundEnd();
         }
     }
 
@@ -2189,6 +2242,18 @@ internal sealed class Http2OriginConnection : IDisposable
     }
 }
 
+/// <summary>Current trailers of an in-flight origin stream.</summary>
+internal interface IOriginTrailerSource
+{
+    HeaderCollection? CurrentTrailers { get; }
+
+    /// <summary>True once the origin has ended the stream, so no further trailers can arrive.</summary>
+    bool IsInboundComplete { get; }
+
+    /// <summary>Completes when the origin ends (or abandons) the stream. Trailers follow the last DATA frame.</summary>
+    Task WhenInboundCompleteAsync(CancellationToken cancellationToken);
+}
+
 /// <summary>The fully materialized result of one <see cref="Http2OriginConnection.SendAsync" /> exchange.</summary>
 internal sealed class Http2OriginExchange
 {
@@ -2203,9 +2268,15 @@ internal sealed class Http2OriginExchange
 
     internal Response Response { get; }
 
-    internal byte[] Body { get; }
+    internal byte[] Body { get; set; }
 
-    internal HeaderCollection? TrailingHeaders { get; }
+    internal HeaderCollection? TrailingHeaders { get; set; }
+
+    /// <summary>
+    ///     Reads the trailers of a streamed body once it has drained. Trailers that follow the last DATA frame
+    ///     are not in <see cref="TrailingHeaders" /> when the exchange is returned. Null for a buffered body.
+    /// </summary>
+    internal IOriginTrailerSource? LateTrailerSource { get; init; }
 
     /// <summary>
     ///     True when the origin had already finished the body before the caller started delivering it.

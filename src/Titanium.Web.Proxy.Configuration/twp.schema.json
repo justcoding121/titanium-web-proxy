@@ -770,6 +770,9 @@
               }
             }
           },
+          "grpcWeb": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },

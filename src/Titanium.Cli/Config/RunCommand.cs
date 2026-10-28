@@ -1258,6 +1258,12 @@ internal static class RunCommand
             return true;
         }
 
+        // grpcWeb rewrites the request headers and the origin response.
+        if (config.Routes.Any(r => r.GrpcWeb))
+        {
+            return true;
+        }
+
         // An extAuth policy awaits an authorization service and edits the upstream request.
         if (config.Policies is { Count: > 0 } policies)
         {

@@ -529,6 +529,7 @@ public static class TwpConfigValidator
             ValidateRouteTransforms(route, errors);
             ValidateRouteLimits(route, errors);
             ValidateRouteCompression(route, errors);
+            ValidateRouteGrpcWeb(route, errors);
             ValidateRetry($"routes.{route.Id}.retry", route.Retry, errors);
         }
     }
@@ -1125,6 +1126,14 @@ public static class TwpConfigValidator
         }
     }
 
+    private static void ValidateRouteGrpcWeb(RouteConfig route, List<string> errors)
+    {
+        if (route.GrpcWeb && (route.Redirect is not null || route.DirectResponse is not null))
+        {
+            errors.Add($"Route '{route.Id}' grpcWeb needs an origin. It cannot be combined with redirect or directResponse.");
+        }
+    }
+
     /// <summary>
     /// An entry that does not parse trusts nobody at run time, so a typo would silently stop a real proxy
     /// from being believed. Reject it at load instead.
@@ -1471,6 +1480,14 @@ public static class TwpConfigValidator
             warnings.Add(
                 "server.responseCompression compresses HTTP/1.1 and HTTP/2-to-HTTP/1.1 responses only. " +
                 "It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths.");
+        }
+
+        if (config.Routes.Any(route => route.GrpcWeb))
+        {
+            warnings.Add(
+                "routes[].grpcWeb translates binary application/grpc-web and application/grpc-web+proto POSTs (unary and " +
+                "server-streaming) for an HTTP/2 origin, from HTTP/2 clients and from HTTP/1.1 clients on a translation bridge. " +
+                "application/grpc-web-text is passed through untranslated, and an HTTP/1.1 origin is not translated.");
         }
 
         foreach (var listener in config.Listeners)

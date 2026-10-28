@@ -88,6 +88,7 @@ internal static class ReverseProxySessionDispatch
         destination = null;
         route = null;
         session.ResponseHeaderTransformPlan = null;
+        session.GrpcWebClientContentType = null;
         if (options?.Routes is null || options.Routes.Count == 0)
         {
             return RouteDispatchResult.NotRouted;

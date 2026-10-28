@@ -173,6 +173,34 @@ public class ReverseProxyFastPathTests
     }
 
     [TestMethod]
+    public async Task IsForwardHostEquivalent_False_WhenGrpcWebIsOn()
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c1",
+                Destinations = [new DestinationConfig { Id = "d1", Address = "origin.local", Port = 80 }],
+            },
+        ]);
+
+        List<RouteConfig> Routes(bool grpcWeb) =>
+        [
+            new()
+            {
+                Id = "r1",
+                ClusterId = "c1",
+                Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                GrpcWeb = grpcWeb,
+            },
+        ];
+
+        Assert.IsTrue(ReverseProxyFastPath.IsForwardHostEquivalent(Routes(false), manager.Snapshot, "origin.local", 80));
+        Assert.IsFalse(ReverseProxyFastPath.IsForwardHostEquivalent(Routes(true), manager.Snapshot, "origin.local", 80));
+    }
+
+    [TestMethod]
     public async Task TerminateLiteEligibility_False_WhenDestinationDraining()
     {
         var manager = new ClusterManager();

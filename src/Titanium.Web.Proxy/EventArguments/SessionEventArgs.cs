@@ -85,6 +85,7 @@ public class SessionEventArgs : SessionEventArgsBase
         UpstreamPinnedAddress = null;
         UpstreamHttpClient = null;
         ResponseTrailerPlan = null;
+        GrpcWebClientContentType = null;
         CustomUpStreamProxy = null;
         CustomUpStreamProxyUsed = null;
         UpstreamConnectHost = null;

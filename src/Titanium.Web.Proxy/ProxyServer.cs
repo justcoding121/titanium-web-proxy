@@ -1665,7 +1665,8 @@ public partial class ProxyServer : IDisposable
         || TracingEnabled
         || RequestIdHeader is not null
         || ForwardedHeaders is not null
-        || CompressionPolicy is not null;
+        || CompressionPolicy is not null
+        || ReverseProxy is { HasGrpcWebRoutes: true };
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

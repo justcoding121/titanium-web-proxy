@@ -125,7 +125,8 @@ public static class ReverseProxyFastPath
     private static bool RouteHasExtraBehavior(RouteConfig route) =>
         route.Transforms is { Count: > 0 } || route.Limits is not null || route.Retry is { Attempts: > 0 } ||
         route.Redirect is not null || route.DirectResponse is not null ||
-        route.Clusters is { Count: > 0 } || route.Mirror is not null || route.ErrorPages is { Count: > 0 };
+        route.Clusters is { Count: > 0 } || route.Mirror is not null || route.ErrorPages is { Count: > 0 } ||
+        route.GrpcWeb;
 
     private static bool ClusterHasExtraBehavior(ClusterConfig cluster) =>
         cluster.Retry is { Attempts: > 0 } || cluster.Queue is not null || cluster.SlowStartSeconds > 0 ||

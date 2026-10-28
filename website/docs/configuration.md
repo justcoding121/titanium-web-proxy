@@ -223,6 +223,44 @@ Optional `transforms` on a route rewrite the upstream request (and can stage res
 ]
 ```
 
+### gRPC-Web (route `grpcWeb`)
+
+Off by default. A route with `grpcWeb: true` lets a browser gRPC-Web client reach a native gRPC (HTTP/2) origin:
+
+```yaml
+routes:
+  - id: api
+    clusterId: grpc-backend
+    grpcWeb: true
+```
+
+On a matching `POST` the proxy rewrites `application/grpc-web` or `application/grpc-web+proto` to `application/grpc` and adds `te: trailers`. It answers with the client's own media type, relays each length-prefixed message as the origin sends it, and appends the origin trailers (`grpc-status`, `grpc-message`, and any others) as one final frame whose flag byte is `0x80`. A trailers-only reply (status in the headers, no body) becomes that same final frame. An origin reply that is not `application/grpc` (a 404 page, say) is left alone.
+
+v1 limits:
+
+- Unary and server-streaming calls, binary only. `application/grpc-web-text` is not translated and passes through unchanged. `titanium validate` warns when a route sets `grpcWeb`.
+- The origin must speak HTTP/2. The route is served on the HTTP/2-to-HTTP/2 dispatch path. A route with `grpcWeb` is never treated as forward-host equivalent, so the native frame relay is not used for it. The flag cannot be combined with `redirect` or `directResponse`.
+- An HTTP/1.1 browser connection reaches an HTTP/2 origin only where the HTTP/1.1-to-HTTP/2 bridge is enabled (the library's `UpstreamHttpProtocol` and `AllowHttpProtocolTranslation`, set in `BeforeSslAuthenticate`). `titanium run` does not set that for you.
+- The response is rebuilt as one body for a known-length reply and streamed for a streaming reply. Trailers reach the browser only as that final frame; the trailers are also copied into response headers so a client that reads headers can see `grpc-status`.
+
+**CORS.** Browsers send a preflight `OPTIONS` before a gRPC-Web call. Answer it with a `cors` policy attached to the route, and list the gRPC-Web request headers in `headerName`:
+
+```yaml
+policies:
+  - name: grpc-web-cors
+    kind: cors
+    origins: https://app.example.com
+    methods: POST, OPTIONS
+    headerName: content-type, x-grpc-web, x-user-agent, grpc-timeout
+routes:
+  - id: api
+    clusterId: grpc-backend
+    grpcWeb: true
+    policies: [grpc-web-cors]
+```
+
+The policy answers preflights only. For the real response, expose the status headers with a `ResponseHeaderSet` transform (`Access-Control-Allow-Origin`, and `Access-Control-Expose-Headers: grpc-status, grpc-message`).
+
 ## Static files
 
 ```yaml
