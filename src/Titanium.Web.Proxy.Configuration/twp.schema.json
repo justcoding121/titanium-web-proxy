@@ -549,8 +549,29 @@
           "allow": {
             "type": "string"
           },
+          "cacheMaxEntries": {
+            "type": "integer"
+          },
+          "cacheSeconds": {
+            "type": "integer"
+          },
+          "copyResponseHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "deny": {
             "type": "string"
+          },
+          "denyResponseHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "failOpen": {
+            "type": "boolean"
           },
           "headerName": {
             "type": "string"
@@ -567,6 +588,9 @@
           "maxRequestBodyBytes": {
             "type": "integer"
           },
+          "method": {
+            "type": "string"
+          },
           "methods": {
             "type": "string"
           },
@@ -576,8 +600,20 @@
           "origins": {
             "type": "string"
           },
+          "sendHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeoutMilliseconds": {
+            "type": "integer"
+          },
           "timeoutSeconds": {
             "type": "integer"
+          },
+          "url": {
+            "type": "string"
           },
           "windowSeconds": {
             "type": "integer"

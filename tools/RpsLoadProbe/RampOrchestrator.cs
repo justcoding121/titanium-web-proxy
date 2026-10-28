@@ -304,7 +304,9 @@ internal enum ProbeMode
     /// <summary>CLI session-path status retry configured, origin always 200.</summary>
     TwpCliRetryHttp1,
     /// <summary>CLI concurrent upstream connection cap (budget allocated, high enough not to 503).</summary>
-    TwpCliConnCapHttp1
+    TwpCliConnCapHttp1,
+    /// <summary>CLI extAuth policy whose service allows every request, so each request pays one subrequest.</summary>
+    TwpCliExtAuthHttp1
 }
 
 internal sealed class RampOptions
@@ -1415,6 +1417,8 @@ internal static class RampOrchestrator
                 [new("twp-cli-retry-http1", ProbeMode.TwpCliRetryHttp1, null)],
             ProbeMode.TwpCliConnCapHttp1 =>
                 [new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null)],
+            ProbeMode.TwpCliExtAuthHttp1 =>
+                [new("twp-cli-extauth-http1", ProbeMode.TwpCliExtAuthHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
@@ -1790,7 +1794,8 @@ internal static class RampOrchestrator
         new("twp-cli-mirror-http1", ProbeMode.TwpCliMirrorHttp1, null),
         new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null),
         new("twp-cli-retry-http1", ProbeMode.TwpCliRetryHttp1, null),
-        new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null)
+        new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null),
+        new("twp-cli-extauth-http1", ProbeMode.TwpCliExtAuthHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,

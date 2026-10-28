@@ -271,6 +271,18 @@ internal static class ProxyMetrics
     private static readonly Counter<long> MirrorSkipped =
         Meter.CreateCounter<long>("twp.proxy.mirror.skipped", RequestUnit, "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
 
+    private static readonly Counter<long> ExtAuthRequests =
+        Meter.CreateCounter<long>("twp.extauth.requests", RequestUnit,
+            "External authorization decisions by result: allow, deny, error_open, error_closed, cache_hit.");
+
+    public static void RecordExtAuth(string result)
+    {
+        if (ExtAuthRequests.Enabled)
+        {
+            ExtAuthRequests.Add(1, new KeyValuePair<string, object?>("result", result));
+        }
+    }
+
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>
         Requests.Enabled || RequestDuration.Enabled || ActiveRequests.Enabled;

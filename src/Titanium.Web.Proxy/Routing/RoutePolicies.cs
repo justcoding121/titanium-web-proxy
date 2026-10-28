@@ -105,6 +105,22 @@ internal static class RoutePolicies
         return false;
     }
 
+    /// <summary>
+    ///     True when a route needs the full session path to enforce a policy. An <c>extAuth</c> policy
+    ///     awaits an authorization service and edits the upstream request, which terminate-lite cannot do.
+    /// </summary>
+    internal static bool RequiresSessionPath(ReverseProxyOptions options) => options.HasExtAuthPolicies;
+
+    /// <summary>Gives back the connection slot a passed policy check holds, when a later check refuses the request.</summary>
+    internal static void ReleaseSessionSlot(SessionEventArgsBase session)
+    {
+        if (session.Extras is { HeldConnectionPolicy: { } held } extras)
+        {
+            extras.HeldConnectionPolicy = null;
+            ReleaseHeld(held);
+        }
+    }
+
     public static bool TryDeny(ProxyServer server, SessionEventArgsBase session, RouteConfig route)
     {
         if (route.Policies is not { Count: > 0 } || server.ReverseProxy?.Policies is not { Count: > 0 })

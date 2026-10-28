@@ -165,6 +165,60 @@ public class H1TerminateLiteEligibilityTests
         Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
     }
 
+    [TestMethod]
+    public async Task CanUseH1TerminateLite_False_WhenARouteListsAnExtAuthPolicy()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 80,
+        };
+        var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        request.RequestUriString8 = "/".GetByteString();
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 80 }],
+            },
+        ]);
+        var auth = new RoutePolicyConfig { Name = "auth", Kind = "extAuth", Url = "http://127.0.0.1:9/auth" };
+        var rate = new RoutePolicyConfig { Name = "rate", Kind = "rateLimit", Limit = 1000, WindowSeconds = 1 };
+
+        // Defined but unused: no route lists it, so nothing changes.
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix } }],
+            ClusterManager = manager,
+            LoadBalancer = new LoadBalancer(),
+            Policies = [auth],
+        };
+        Assert.IsFalse(global::Titanium.Web.Proxy.Routing.RoutePolicies.RequiresSessionPath(proxy.ReverseProxy));
+        Assert.IsTrue(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            Routes =
+            [
+                new RouteConfig
+                {
+                    Id = "r",
+                    ClusterId = "c",
+                    Policies = ["rate", "auth"],
+                    Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                },
+            ],
+            ClusterManager = manager,
+            LoadBalancer = new LoadBalancer(),
+            Policies = [rate, auth],
+        };
+        Assert.IsTrue(global::Titanium.Web.Proxy.Routing.RoutePolicies.RequiresSessionPath(proxy.ReverseProxy));
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+    }
+
     private static ReverseProxyOptions Options(ClusterManager manager, RouteConfig route) => new()
     {
         Routes = [route],

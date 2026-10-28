@@ -70,6 +70,93 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void ExtAuthPolicy_RequiresAnAbsoluteHttpUrl_AndSaneLimitsAndHeaders()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "none", Kind = "extAuth" },
+                new RoutePolicyConfig { Name = "rel", Kind = "extAuth", Url = "/auth" },
+                new RoutePolicyConfig { Name = "ftp", Kind = "extAuth", Url = "ftp://auth.test/" },
+                new RoutePolicyConfig { Name = "creds", Kind = "extAuth", Url = "http://user:pw@auth.test/" },
+                new RoutePolicyConfig
+                {
+                    Name = "limits",
+                    Kind = "extAuth",
+                    Url = "http://auth.test/",
+                    Method = "TRACE",
+                    TimeoutMilliseconds = 60_001,
+                    CacheSeconds = -1,
+                    CacheMaxEntries = 0,
+                },
+                new RoutePolicyConfig
+                {
+                    Name = "zero",
+                    Kind = "extAuth",
+                    Url = "http://auth.test/",
+                    TimeoutMilliseconds = 0,
+                },
+                new RoutePolicyConfig
+                {
+                    Name = "headers",
+                    Kind = "extAuth",
+                    Url = "http://auth.test/",
+                    SendHeaders = ["Authorization", "X-Original-Uri", "bad name"],
+                    CopyResponseHeaders = ["X-User", "Transfer-Encoding"],
+                    DenyResponseHeaders = ["Location", "Content-Length"],
+                },
+            ],
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "'none' (extAuth) needs url");
+        StringAssert.Contains(errors, "'rel' (extAuth) needs url");
+        StringAssert.Contains(errors, "'ftp' (extAuth) needs url");
+        StringAssert.Contains(errors, "'creds' (extAuth) needs url");
+        StringAssert.Contains(errors, "method 'TRACE'");
+        StringAssert.Contains(errors, "'limits' (extAuth) timeoutMilliseconds must be 1-60000");
+        StringAssert.Contains(errors, "'zero' (extAuth) timeoutMilliseconds must be 1-60000");
+        StringAssert.Contains(errors, "cacheSeconds must be >= 0");
+        StringAssert.Contains(errors, "cacheMaxEntries must be 1-1000000");
+        StringAssert.Contains(errors, "sendHeaders entry 'X-Original-Uri' is set by the proxy");
+        StringAssert.Contains(errors, "sendHeaders entry 'bad name' is not a header name");
+        StringAssert.Contains(errors, "copyResponseHeaders entry 'Transfer-Encoding' is a connection-level header");
+        StringAssert.Contains(errors, "denyResponseHeaders entry 'Content-Length' is a connection-level header");
+    }
+
+    [TestMethod]
+    public void ExtAuthPolicy_WithDefaults_IsAccepted()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Routes = [Route("r", "c", "gate")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "gate", Kind = "extAuth", Url = "https://auth.test:8443/check" },
+                new RoutePolicyConfig
+                {
+                    Name = "full",
+                    Kind = "extAuth",
+                    Url = "http://auth.test/",
+                    Method = "get",
+                    SendHeaders = ["Authorization", "Cookie", "X-Api-Key"],
+                    CopyResponseHeaders = ["X-User", "X-Email"],
+                    DenyResponseHeaders = ["Location", "Set-Cookie", "WWW-Authenticate"],
+                    TimeoutMilliseconds = 60_000,
+                    FailOpen = true,
+                    CacheSeconds = 30,
+                    CacheMaxEntries = 100,
+                },
+            ],
+        };
+
+        Assert.AreEqual(string.Empty, Errors(config));
+    }
+
+    [TestMethod]
     public void ForwardedHeadersTrustedProxies_RejectsEntriesThatWouldTrustNobody()
     {
         var config = new TwpConfig

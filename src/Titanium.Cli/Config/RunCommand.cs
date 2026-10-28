@@ -1210,7 +1210,23 @@ internal static class RunCommand
             return true;
         }
 
-        return config.Routes.Any(r => r.Transforms is { Count: > 0 } || r.Limits is not null);
+        if (config.Routes.Any(r => r.Transforms is { Count: > 0 } || r.Limits is not null))
+        {
+            return true;
+        }
+
+        // An extAuth policy awaits an authorization service and edits the upstream request.
+        if (config.Policies is { Count: > 0 } policies)
+        {
+            var extAuthNames = policies
+                .Where(p => string.Equals(p.Kind, "extAuth", StringComparison.Ordinal))
+                .Select(p => p.Name)
+                .ToHashSet(StringComparer.Ordinal);
+            return extAuthNames.Count > 0 &&
+                   config.Routes.Any(r => r.Policies is { Count: > 0 } names && names.Any(extAuthNames.Contains));
+        }
+
+        return false;
     }
 
     private static void WriteConfigWarnings(LoadedConfig loaded)

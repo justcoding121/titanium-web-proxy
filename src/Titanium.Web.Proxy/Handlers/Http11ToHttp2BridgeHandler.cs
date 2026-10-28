@@ -202,7 +202,9 @@ public partial class ProxyServer
 
                         await OnBeforeRequest(args);
 
-                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        var routeDispatch = ReverseProxy is { HasExtAuthPolicies: true }
+                            ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, args)
+                            : Routing.ReverseProxySessionDispatch.Apply(this, args);
                         if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
                         {
                             closeConnection = true;

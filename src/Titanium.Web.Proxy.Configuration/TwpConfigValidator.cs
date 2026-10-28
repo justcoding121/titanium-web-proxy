@@ -234,7 +234,25 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth",
+    };
+
+    private static readonly HashSet<string> ExtAuthMethods = new(StringComparer.Ordinal)
+    {
+        "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
+    };
+
+    // The proxy sets these on every subrequest, so a configured sendHeaders entry could only shadow them.
+    private static readonly HashSet<string> ExtAuthReservedHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "X-Original-Method", "X-Original-Uri", "X-Original-Host", "X-Forwarded-For", "X-Titanium-ExtAuth",
+    };
+
+    // Hop-by-hop and framing headers describe one connection. They cannot carry a decision.
+    private static readonly HashSet<string> ExtAuthForbiddenHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Connection", "Keep-Alive", "Proxy-Connection", "Proxy-Authenticate", "Proxy-Authorization", "TE", "Trailer",
+        "Transfer-Encoding", "Upgrade", "Content-Length", "Host",
     };
 
     /// <summary>
@@ -312,7 +330,84 @@ public static class TwpConfigValidator
                 ValidatePrefixList(name, "allow", policy.Allow, errors);
                 ValidatePrefixList(name, "deny", policy.Deny, errors);
                 break;
+            case "extAuth":
+                ValidateExtAuth(policy, errors);
+                break;
         }
+    }
+
+    private static void ValidateExtAuth(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (!Uri.TryCreate(policy.Url, UriKind.Absolute, out var url) ||
+            (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(url.UserInfo))
+        {
+            errors.Add($"Policy '{name}' (extAuth) needs url, an absolute http or https URL without credentials.");
+        }
+
+        if (policy.Method is not null && !ExtAuthMethods.Contains(policy.Method.Trim().ToUpperInvariant()))
+        {
+            errors.Add($"Policy '{name}' (extAuth) method '{policy.Method}' must be one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS.");
+        }
+
+        if (policy.TimeoutMilliseconds is < 1 or > 60_000)
+        {
+            errors.Add($"Policy '{name}' (extAuth) timeoutMilliseconds must be 1-60000.");
+        }
+
+        if (policy.CacheSeconds is < 0)
+        {
+            errors.Add($"Policy '{name}' (extAuth) cacheSeconds must be >= 0.");
+        }
+
+        if (policy.CacheMaxEntries is < 1 or > 1_000_000)
+        {
+            errors.Add($"Policy '{name}' (extAuth) cacheMaxEntries must be 1-1000000.");
+        }
+
+        ValidateExtAuthHeaders(name, "sendHeaders", policy.SendHeaders, rejectReserved: true, errors);
+        ValidateExtAuthHeaders(name, "copyResponseHeaders", policy.CopyResponseHeaders, rejectReserved: false, errors);
+        ValidateExtAuthHeaders(name, "denyResponseHeaders", policy.DenyResponseHeaders, rejectReserved: false, errors);
+    }
+
+    private static void ValidateExtAuthHeaders(
+        string policyName, string field, IReadOnlyList<string>? headers, bool rejectReserved, List<string> errors)
+    {
+        if (headers is null)
+        {
+            return;
+        }
+
+        foreach (var header in headers)
+        {
+            var trimmed = header?.Trim();
+            if (string.IsNullOrEmpty(trimmed) || !IsHeaderToken(trimmed))
+            {
+                errors.Add($"Policy '{policyName}' (extAuth) {field} entry '{header}' is not a header name.");
+            }
+            else if (ExtAuthForbiddenHeaders.Contains(trimmed))
+            {
+                errors.Add($"Policy '{policyName}' (extAuth) {field} entry '{trimmed}' is a connection-level header.");
+            }
+            else if (rejectReserved && ExtAuthReservedHeaders.Contains(trimmed))
+            {
+                errors.Add($"Policy '{policyName}' (extAuth) {field} entry '{trimmed}' is set by the proxy.");
+            }
+        }
+    }
+
+    private static bool IsHeaderToken(string value)
+    {
+        foreach (var c in value)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c, StringComparison.Ordinal)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void ValidatePrefixList(string name, string field, string? csv, List<string> errors)

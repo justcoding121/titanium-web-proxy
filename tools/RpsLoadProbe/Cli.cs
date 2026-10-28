@@ -790,6 +790,9 @@ internal static class Cli
             case "twp-cli-conncap-http1":
                 mode = ProbeMode.TwpCliConnCapHttp1;
                 return true;
+            case "twp-cli-extauth-http1":
+                mode = ProbeMode.TwpCliExtAuthHttp1;
+                return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
                 return true;

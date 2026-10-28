@@ -104,7 +104,9 @@ public partial class ProxyServer
             await OnBeforeRequest(sessionArgs);
 
         // Per-stream destination when ReverseProxy routes are set.
-        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
+        var routeDispatch = ReverseProxy is { HasExtAuthPolicies: true }
+            ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, sessionArgs)
+            : Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
         if (LeaveH2ToH3Early(sessionArgs, ctx, routeDispatch))
             return;
 

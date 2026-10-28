@@ -43,7 +43,50 @@ internal static class ReverseProxySessionDispatch
 
     public static RouteDispatchResult Apply(ProxyServer server, SessionEventArgsBase session)
     {
-        var options = server.ReverseProxy;
+        var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
+        return finished ?? Finish(server, session, options!, resolution, destination, route);
+    }
+
+    /// <summary>
+    /// Same as <see cref="Apply"/>, but asks every <c>extAuth</c> policy of the matched route before a
+    /// destination is bound. Callers use it only when <c>HasExtAuthPolicies</c> is set; the synchronous
+    /// <see cref="Apply"/> stays the default path.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static async ValueTask<RouteDispatchResult> ApplyWithExtAuthAsync(
+        ProxyServer server, SessionEventArgsBase session)
+    {
+        var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
+        if (finished is { } early)
+        {
+            return early;
+        }
+
+        if (route is not null && session is SessionEventArgs args &&
+            await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+        {
+            return RouteDispatchResult.Handled;
+        }
+
+        return Finish(server, session, options!, resolution, destination, route);
+    }
+
+    /// <summary>
+    /// Resets per-session routing state, matches the route, and runs the synchronous policies.
+    /// Returns a result when the session is already settled, or null to continue with <see cref="Finish"/>.
+    /// </summary>
+    private static RouteDispatchResult? Begin(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        out Titanium.Web.Proxy.Abstractions.ReverseProxyOptions? options,
+        out DestinationResolution resolution,
+        out DestinationConfig? destination,
+        out RouteConfig? route)
+    {
+        options = server.ReverseProxy;
+        resolution = default;
+        destination = null;
+        route = null;
         session.ResponseHeaderTransformPlan = null;
         if (options?.Routes is null || options.Routes.Count == 0)
         {
@@ -70,13 +113,25 @@ internal static class ReverseProxySessionDispatch
             fallbackPort = transparent.ForwardPort ?? (request.IsHttps ? 443 : 80);
         }
 
-        var resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
-            out var destination, out var route);
+        resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
+            out destination, out route);
         if (route is not null && RoutePolicies.TryDeny(server, session, route))
         {
             return RouteDispatchResult.Handled;
         }
 
+        return null;
+    }
+
+    private static RouteDispatchResult Finish(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        DestinationResolution resolution,
+        DestinationConfig? destination,
+        RouteConfig? route)
+    {
+        var request = session.HttpClient.Request;
         if (resolution == DestinationResolution.Terminal && route is not null)
         {
             PrepareTerminalResponse(session, route);

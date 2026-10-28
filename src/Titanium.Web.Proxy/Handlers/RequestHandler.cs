@@ -390,7 +390,9 @@ public partial class ProxyServer
                         // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
                         // Taking the baseline before TryApply made MutationCount diverge and forced
                         // the full, slower session path.
-                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        var routeDispatch = ReverseProxy is { HasExtAuthPolicies: true }
+                            ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, args)
+                            : Routing.ReverseProxySessionDispatch.Apply(this, args);
                         if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
                         {
                             closeServerConnection = true;

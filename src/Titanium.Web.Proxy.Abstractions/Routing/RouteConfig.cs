@@ -116,6 +116,36 @@ public sealed class RoutePolicyConfig
     public string? Deny { get; init; }
     public string? Origins { get; init; }
     public string? Methods { get; init; }
+
+    /// <summary><c>extAuth</c>: absolute http or https URL of the authorization service. Fixed in config.</summary>
+    public string? Url { get; init; }
+
+    /// <summary><c>extAuth</c>: HTTP method of the subrequest. Default: GET.</summary>
+    public string? Method { get; init; }
+
+    /// <summary><c>extAuth</c>: client request headers copied onto the subrequest. Default: Authorization, Cookie.</summary>
+    public IReadOnlyList<string>? SendHeaders { get; init; }
+
+    /// <summary><c>extAuth</c>: headers of a 2xx answer set on the upstream request, replacing client-supplied ones.</summary>
+    public IReadOnlyList<string>? CopyResponseHeaders { get; init; }
+
+    /// <summary>
+    /// <c>extAuth</c>: headers of a non-2xx answer relayed to the client.
+    /// Default: Location, Set-Cookie, WWW-Authenticate, Content-Type.
+    /// </summary>
+    public IReadOnlyList<string>? DenyResponseHeaders { get; init; }
+
+    /// <summary><c>extAuth</c>: subrequest deadline in milliseconds, 1-60000. Default: 2000.</summary>
+    public int? TimeoutMilliseconds { get; init; }
+
+    /// <summary><c>extAuth</c>: allow the request when the service times out, fails, or answers 5xx. Default: false.</summary>
+    public bool? FailOpen { get; init; }
+
+    /// <summary><c>extAuth</c>: seconds a 2xx answer is reused for identical credentials. Default: 0 (off).</summary>
+    public int? CacheSeconds { get; init; }
+
+    /// <summary><c>extAuth</c>: most cached answers kept, oldest evicted first. Default: 10000.</summary>
+    public int? CacheMaxEntries { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>

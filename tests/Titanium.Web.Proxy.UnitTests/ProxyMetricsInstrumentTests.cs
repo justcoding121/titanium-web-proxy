@@ -66,6 +66,7 @@ public class ProxyMetricsInstrumentTests
         ProxyMetrics.RecordRetry();
         ProxyMetrics.RecordEjection();
         ProxyMetrics.RecordMirrorDrop();
+        ProxyMetrics.RecordExtAuth("allow");
         ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
         {
             Route = "r", Cluster = "c", Status = 204, Protocol = "h1", Error = "None",
@@ -102,7 +103,7 @@ public class ProxyMetricsInstrumentTests
                      "twp.http2.frame_writer.high_water_crossings", "twp.proxy.requests", "twp.proxy.request.duration",
                      "twp.proxy.requests.active", "twp.proxy.requests.failed", "twp.proxy.bytes",
                      "twp.proxy.upstream.retries", "twp.proxy.destination.ejections", "twp.proxy.mirror.drops",
-                     "twp.certificates.cached",
+                     "twp.certificates.cached", "twp.extauth.requests",
                  })
         {
             Assert.IsTrue(seen.ContainsKey(name), "no measurement arrived for " + name);

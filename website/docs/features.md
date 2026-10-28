@@ -82,6 +82,7 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 | Routing | Order plus specificity, segment prefix, regex, redirects, direct responses, error pages, traffic split, and mirroring |
 | Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |
 | Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
+| External authorization | `extAuth` policy asks an HTTP service to allow or deny each request. Deny status and chosen headers are relayed, redirects are not followed, `failOpen` and a short positive cache are optional. Leaves terminate-lite |
 
 Deeper API notes: [GitHub wiki](https://github.com/justcoding121/titanium-web-proxy/wiki).
 

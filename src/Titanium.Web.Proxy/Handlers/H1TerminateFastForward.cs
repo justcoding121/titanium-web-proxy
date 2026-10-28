@@ -111,6 +111,10 @@ public partial class ProxyServer
             // A connection-limit slot is released when the session ends, which lite does not have.
             if (reverse.Policies is { Count: > 0 } && Routing.RoutePolicies.HoldsConnectionSlot(reverse))
                 return false;
+
+            // An extAuth policy awaits an authorization service and edits the upstream request.
+            if (Routing.RoutePolicies.RequiresSessionPath(reverse))
+                return false;
         }
 
         if (request.HasBody || request.UpgradeToWebSocket)

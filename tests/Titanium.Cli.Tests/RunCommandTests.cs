@@ -34,6 +34,38 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenARouteListsAnExtAuthPolicy()
+    {
+        var route = new RouteConfig
+        {
+            Id = "r",
+            ClusterId = "c",
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            Policies = ["gate"],
+        };
+        var cfg = new TwpConfig
+        {
+            Routes = [route],
+            Policies = [new RoutePolicyConfig { Name = "gate", Kind = "rateLimit", Limit = 5 }],
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(cfg));
+
+        cfg = new TwpConfig
+        {
+            Routes = [route],
+            Policies = [new RoutePolicyConfig { Name = "gate", Kind = "extAuth", Url = "http://127.0.0.1:9/auth" }],
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
+
+        cfg = new TwpConfig
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = route.Match }],
+            Policies = [new RoutePolicyConfig { Name = "gate", Kind = "extAuth", Url = "http://127.0.0.1:9/auth" }],
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(cfg), "an unused extAuth policy changes nothing");
+    }
+
+    [TestMethod]
     public void ConfigNeedsSessionPath_True_ForTransforms()
     {
         var cfg = new TwpConfig

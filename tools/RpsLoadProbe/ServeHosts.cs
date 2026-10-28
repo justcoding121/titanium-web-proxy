@@ -221,6 +221,7 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliClusterClientHttp1:
             case ProbeMode.TwpCliRetryHttp1:
             case ProbeMode.TwpCliConnCapHttp1:
+            case ProbeMode.TwpCliExtAuthHttp1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var kind = mode switch
@@ -250,6 +251,7 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliClusterClientHttp1 => TitaniumCliHost.CliArmKind.ClusterClient,
                     ProbeMode.TwpCliRetryHttp1 => TitaniumCliHost.CliArmKind.StatusRetry,
                     ProbeMode.TwpCliConnCapHttp1 => TitaniumCliHost.CliArmKind.ConnCap,
+                    ProbeMode.TwpCliExtAuthHttp1 => TitaniumCliHost.CliArmKind.ExtAuth,
                     _ => TitaniumCliHost.CliArmKind.ForwardHost
                 };
                 var cli = await TitaniumCliHost.StartAsync(originHttpPort, kind, cancellationToken);
@@ -1283,6 +1285,7 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliClusterClientHttp1 => "twp-cli-cluster-client-http1",
         ProbeMode.TwpCliRetryHttp1 => "twp-cli-retry-http1",
         ProbeMode.TwpCliConnCapHttp1 => "twp-cli-conncap-http1",
+        ProbeMode.TwpCliExtAuthHttp1 => "twp-cli-extauth-http1",
         ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()

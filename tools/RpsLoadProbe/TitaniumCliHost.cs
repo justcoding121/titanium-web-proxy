@@ -92,7 +92,8 @@ internal sealed class TitaniumCliHost : IDisposable
         Mirror,
         ClusterClient,
         StatusRetry,
-        ConnCap
+        ConnCap,
+        ExtAuth
     }
 
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
@@ -107,7 +108,7 @@ internal sealed class TitaniumCliHost : IDisposable
         CliArmKind.SingleRoute or CliArmKind.InterceptTransform or CliArmKind.PlusResilience
         or CliArmKind.PlusDiscoveryFile or CliArmKind.LbLeastTime
         or CliArmKind.Policies or CliArmKind.Mirror or CliArmKind.ClusterClient
-        or CliArmKind.StatusRetry or CliArmKind.ConnCap;
+        or CliArmKind.StatusRetry or CliArmKind.ConnCap or CliArmKind.ExtAuth;
 
     public static async Task<TitaniumCliHost> StartAsync(int originHttpPort, CliArmKind kind,
         CancellationToken cancellationToken = default)
@@ -422,6 +423,7 @@ internal sealed class TitaniumCliHost : IDisposable
             CliArmKind.InterceptTransform =>
                 "\"transforms\": [ { \"kind\": \"RequestHeaderSet\", \"parameters\": { \"name\": \"x-twp-rps-probe\", \"value\": \"1\" } } ],",
             CliArmKind.Policies => "\"policies\": [ \"limit\" ],",
+            CliArmKind.ExtAuth => "\"policies\": [ \"auth\" ],",
             CliArmKind.Mirror => "\"mirror\": { \"clusterId\": \"mirror\", \"samplePercent\": 100 },",
             CliArmKind.StatusRetry => "\"retry\": { \"attempts\": 1 },",
             _ => "",
@@ -443,9 +445,15 @@ internal sealed class TitaniumCliHost : IDisposable
         var mirrorCluster = kind == CliArmKind.Mirror
             ? ", { \"id\": \"mirror\", \"destinations\": [ { \"id\": \"m1\", \"address\": \"127.0.0.1\", \"port\": " + originPort + " } ] }"
             : "";
-        var policiesBlock = kind == CliArmKind.Policies
-            ? ", \"policies\": [ { \"name\": \"limit\", \"kind\": \"rateLimit\", \"limit\": 10000000, \"windowSeconds\": 60 } ]"
-            : "";
+        // extAuth reuses the origin as the authorization service: every GET answers 200, so each request allows.
+        var policiesBlock = kind switch
+        {
+            CliArmKind.Policies =>
+                ", \"policies\": [ { \"name\": \"limit\", \"kind\": \"rateLimit\", \"limit\": 10000000, \"windowSeconds\": 60 } ]",
+            CliArmKind.ExtAuth =>
+                ", \"policies\": [ { \"name\": \"auth\", \"kind\": \"extAuth\", \"url\": \"http://127.0.0.1:" + originPort + "/auth\" } ]",
+            _ => "",
+        };
 
         var plusBlock = "";
         if (kind is CliArmKind.PlusResilience or CliArmKind.PlusDiscoveryFile)

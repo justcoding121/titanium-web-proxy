@@ -278,7 +278,9 @@ internal static class Http3RequestStream
                 }
 
                 // Per-stream route → destination (no-op when ReverseProxy routes unset).
-                var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(server, sessionArgs);
+                var routeDispatch = server.ReverseProxy is { HasExtAuthPolicies: true }
+                    ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(server, sessionArgs)
+                    : Routing.ReverseProxySessionDispatch.Apply(server, sessionArgs);
                 if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination
                     && sessionArgs is SessionEventArgs noDestSession)
                 {
