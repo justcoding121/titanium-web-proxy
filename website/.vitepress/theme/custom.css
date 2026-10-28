@@ -82,6 +82,10 @@
   color: var(--vp-c-text-2);
 }
 
+.quick-picks-alt {
+  font-size: 0.9em;
+}
+
 .download-grid {
   display: grid;
   gap: 0.75rem;

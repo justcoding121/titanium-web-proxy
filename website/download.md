@@ -8,17 +8,47 @@ const channels = [
   { id: 'stable', label: 'Stable', hint: 'Recommended for production', data: links.stable },
   { id: 'beta', label: 'Beta', hint: 'Prerelease — newest features', data: links.beta },
 ]
+
+const stable = links.stable
+
+function fileOr(asset, section) {
+  return asset?.url || section
+}
+
+const picks = {
+  winInspector: fileOr(stable.inspector.msi, '#stable-inspector'),
+  winCli: fileOr(stable.cli['win-x64'], '#stable-cli'),
+  macArmInspector: fileOr(
+    stable.inspector.dmg?.['osx-arm64'] ?? stable.inspector['osx-arm64'],
+    '#stable-inspector',
+  ),
+  macArmCli: fileOr(stable.cli['osx-arm64'], '#stable-cli'),
+  macIntelInspector: fileOr(
+    stable.inspector.dmg?.['osx-x64'] ?? stable.inspector['osx-x64'],
+    '#stable-inspector',
+  ),
+  macIntelCli: fileOr(stable.cli['osx-x64'], '#stable-cli'),
+  linuxInspector: fileOr(
+    stable.inspector.appimage?.['linux-x64'] ?? stable.inspector['linux-x64'],
+    '#stable-inspector',
+  ),
+  linuxCli: fileOr(stable.cli['linux-x64'], '#stable-cli'),
+}
 </script>
 
 Download **Inspector** (desktop debugger) or the **CLI** (reverse proxy) for your OS. Prefer the primary installer when available: **Windows MSI**, **macOS DMG**, **Linux AppImage / deb / rpm**. Portable zips work everywhere and are what `titanium update` uses.
 
 Pick **Stable** for production or **Beta** for the newest builds. Then choose Inspector or CLI below.
 
-::: tip Quick picks
-- **Windows:** MSI (Inspector) or zip (CLI).
-- **macOS:** DMG when published, otherwise zip; CLI also via [Homebrew](#homebrew-macos-cli) when you prefer a tap.
-- **Linux:** AppImage / `.deb` / `.rpm` for normal desktops; Alpine containers need the **musl** zip — see [Advanced](#advanced).
-:::
+<div class="custom-block tip quick-picks">
+  <p class="custom-block-title">Quick picks</p>
+  <p>Stable downloads. Beta and the other packages are in the lists below.</p>
+  <ul>
+    <li><strong>Windows:</strong> <a :href="picks.winInspector">Inspector MSI</a> · <a :href="picks.winCli">CLI zip</a></li>
+    <li><strong>macOS (Apple Silicon):</strong> <a :href="picks.macArmInspector">Inspector DMG</a> · <a :href="picks.macArmCli">CLI zip</a> <span class="quick-picks-alt">· Intel: <a :href="picks.macIntelInspector">Inspector</a> · <a :href="picks.macIntelCli">CLI</a></span> · <a href="#homebrew-macos-cli">Homebrew</a></li>
+    <li><strong>Linux (x64):</strong> <a :href="picks.linuxInspector">Inspector AppImage</a> · <a :href="picks.linuxCli">CLI zip</a> <span class="quick-picks-alt">· <a href="#stable">deb, rpm, arm64, Alpine musl</a></span></li>
+  </ul>
+</div>
 
 <div v-for="ch in channels" :key="ch.id" class="download-channel">
   <h2 :id="ch.id">
