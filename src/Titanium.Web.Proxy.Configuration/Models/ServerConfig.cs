@@ -140,8 +140,14 @@ public sealed class AdminConfig
     /// <summary>TCP port. 0 (default) lets the OS pick a free port, which the CLI prints at start-up.</summary>
     public int? Port { get; set; }
 
+    /// <summary>Bearer token for <c>/metrics</c> and <c>/version</c>. Set at most one of this, <see cref="AuthTokenEnv"/>, and <see cref="AuthTokenFile"/>.</summary>
+    public string? AuthToken { get; set; }
+
     /// <summary>Name of the environment variable holding the bearer token for <c>/metrics</c> and <c>/version</c>.</summary>
     public string? AuthTokenEnv { get; set; }
+
+    /// <summary>File holding the bearer token (a mounted Secret). Relative paths resolve against the config directory.</summary>
+    public string? AuthTokenFile { get; set; }
 
     /// <summary>Readiness tuning for <c>/readyz</c>.</summary>
     public AdminReadinessConfig? Readiness { get; set; }

@@ -162,7 +162,34 @@ server:
 | `GET /metrics` | bearer token | The same Prometheus text as `server.metrics`. |
 | `GET /version` | bearer token | `{"version","commit","runtime","edition","config_hash"}`. |
 
-`/metrics` and `/version` need `Authorization: Bearer <token>` when `authTokenEnv` names a set environment variable. The check is constant time. A non-loopback `host` without `authTokenEnv` is a configuration error. `requireHealthyClusters: true` also makes `/readyz` answer `503` while a cluster has no healthy destination. Changing `server.admin` needs a restart.
+`/metrics` and `/version` need `Authorization: Bearer <token>` when a token is configured (`authToken`, `authTokenEnv`, or `authTokenFile`; see [Secret references](#secret-references)). The check is constant time. A non-loopback `host` without a token is a configuration error. `requireHealthyClusters: true` also makes `/readyz` answer `503` while a cluster has no healthy destination. Changing `server.admin` needs a restart.
+
+### Secret references
+
+A sensitive setting is one of three forms: the literal, a `...Env` sibling that names an environment variable, or a `...File` sibling that names a file (for example a mounted Kubernetes Secret). Set at most one; setting two is a configuration error. There is no `${VAR}` interpolation anywhere else in the file: `${HOME}` in a literal stays the text `${HOME}`.
+
+| Setting | Env sibling | File sibling |
+| --- | --- | --- |
+| `plus.controlPlane.sharedSecret` | `sharedSecretEnv` | `sharedSecretFile` |
+| `plus.options` `security.apiKeys` | `security.apiKeysEnv` | `security.apiKeysFile` |
+| `plus.options` `security.basicUsers` | `security.basicUsersEnv` | `security.basicUsersFile` |
+| `plus.options` `state.redis` | `state.redisEnv` | `state.redisFile` |
+| `server.admin.authToken` | `authTokenEnv` | `authTokenFile` |
+
+```yaml
+server:
+  admin:
+    enabled: true
+    authTokenFile: /etc/titanium/secret/admin-token
+plus:
+  enabled: true
+  controlPlane:
+    sharedSecretEnv: TITANIUM_CONTROL_SECRET
+  options:
+    security.apiKeysFile: /etc/titanium/secret/api-keys   # one key per line is fine
+```
+
+A trailing newline in a file is dropped. For `security.apiKeys` and `security.basicUsers` a file may hold one entry per line. Relative paths resolve against the config directory. A reference that is unset, empty, or unreadable stops start-up (and fails a reload, which keeps the running config) with a message that names the setting and the variable or path, never the value. The CLI masks resolved values in its console output. Rotating `server.admin` token files takes effect on reload; Plus options are read at start-up, so changing them needs a restart.
 
 ## Routes & clusters
 

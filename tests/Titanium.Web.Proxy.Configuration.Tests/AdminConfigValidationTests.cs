@@ -28,9 +28,9 @@ public class AdminConfigValidationTests
     [TestMethod]
     public void NonLoopbackWithoutToken_IsAnError()
     {
-        StringAssert.Contains(Errors(new AdminConfig { Enabled = true, Host = "0.0.0.0", Port = 9090 }), "authTokenEnv is required");
-        StringAssert.Contains(Errors(new AdminConfig { Enabled = true, Host = "10.1.2.3" }), "authTokenEnv is required");
-        StringAssert.Contains(Errors(new AdminConfig { Enabled = true, Host = "::" }), "authTokenEnv is required");
+        StringAssert.Contains(Errors(new AdminConfig { Enabled = true, Host = "0.0.0.0", Port = 9090 }), "authTokenEnv (or authTokenFile) is required");
+        StringAssert.Contains(Errors(new AdminConfig { Enabled = true, Host = "10.1.2.3" }), "authTokenEnv (or authTokenFile) is required");
+        StringAssert.Contains(Errors(new AdminConfig { Enabled = true, Host = "::" }), "authTokenEnv (or authTokenFile) is required");
     }
 
     [TestMethod]

@@ -87,12 +87,19 @@ internal static class RunCommand
             Directory.SetCurrentDirectory(configDir);
         }
 
-        var adminSetup = AdminHost.TryPrepare(loaded.Config.Server?.Admin, out var adminError);
-        if (adminError is not null)
+        // Relative *File paths resolve against the config directory (the working directory set above).
+        var secretErrors = SecretResolver.Resolve(loaded.Config);
+        if (secretErrors.Count > 0)
         {
-            AsyncConsole.WriteError(adminError);
+            foreach (var e in secretErrors)
+            {
+                AsyncConsole.WriteError(e);
+            }
+
             return 1;
         }
+
+        var adminSetup = AdminHost.TryPrepare(loaded.Config.Server?.Admin);
 
         var configHash = AdminHost.ComputeConfigHash(configPath);
 
@@ -235,7 +242,16 @@ internal static class RunCommand
                                 t => grpcJsonTranscoder = t,
                                 RefreshReverseProxy,
                                 policies,
-                                stoppingToken).ConfigureAwait(false);
+                                stoppingToken,
+                                // A rotated Secret takes effect for /metrics and /version without a restart.
+                                // Dropping the token needs a restart: the bind address is not re-applied here.
+                                applied =>
+                                {
+                                    if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
+                                    {
+                                        adminServer?.SetAuthToken(rotated);
+                                    }
+                                }).ConfigureAwait(false);
                             configHash = AdminHost.ComputeConfigHash(configPath);
                             AsyncConsole.WriteLine("Config reloaded.");
                             await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -333,13 +349,21 @@ internal static class RunCommand
         Action<IGrpcJsonTranscoder?> setGrpc,
         Action refreshReverseProxy,
         List<RoutePolicyConfig>? policies = null,
-        CancellationToken stoppingToken = default)
+        CancellationToken stoppingToken = default,
+        Action<TwpConfig>? onApplied = null)
     {
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
         {
             throw new InvalidOperationException(string.Join("; ", errors));
+        }
+
+        // A secret reference that cannot be read fails the reload, so the running config stays in force.
+        var secretErrors = SecretResolver.Resolve(loaded.Config);
+        if (secretErrors.Count > 0)
+        {
+            throw new InvalidOperationException(string.Join("; ", secretErrors));
         }
 
         WriteConfigWarnings(loaded);
@@ -373,6 +397,7 @@ internal static class RunCommand
             refreshReverseProxy();
         }, stoppingToken).ConfigureAwait(false);
         CertificateBootstrap.ApplySniItems(proxy, loaded.Config.Certificates);
+        onApplied?.Invoke(loaded.Config);
         _ = middleware;
         _ = loadBalancer;
         _ = responseCache;

@@ -18,26 +18,19 @@ internal sealed record AdminSetup(
 /// <summary>Glue between <c>server.admin</c>, <see cref="RunCommand" />, and <see cref="AdminServer" />.</summary>
 internal static class AdminHost
 {
-    /// <summary>Returns null when the admin listener is off. Otherwise resolves the bearer token, failing closed.</summary>
-    public static AdminSetup? TryPrepare(AdminConfig? config, out string? error)
+    /// <summary>
+    ///     Returns null when the admin listener is off. The bearer token is read from
+    ///     <see cref="AdminConfig.AuthToken" />, which <see cref="SecretResolver" /> has already filled from
+    ///     <c>authTokenEnv</c> or <c>authTokenFile</c> (a reference that cannot be read stops start-up there).
+    /// </summary>
+    public static AdminSetup? TryPrepare(AdminConfig? config)
     {
-        error = null;
         if (config is not { Enabled: true })
         {
             return null;
         }
 
-        string? token = null;
-        if (!string.IsNullOrWhiteSpace(config.AuthTokenEnv))
-        {
-            token = Environment.GetEnvironmentVariable(config.AuthTokenEnv.Trim());
-            if (string.IsNullOrEmpty(token))
-            {
-                error = $"server.admin.authTokenEnv '{config.AuthTokenEnv}' is not set or is empty.";
-                return null;
-            }
-        }
-
+        var token = config.AuthToken;
         var host = string.IsNullOrWhiteSpace(config.Host) ? AdminServer.DefaultHost : config.Host.Trim();
         return new AdminSetup(
             IPAddress.Parse(host),

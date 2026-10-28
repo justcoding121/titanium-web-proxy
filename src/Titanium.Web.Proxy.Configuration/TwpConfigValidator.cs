@@ -41,7 +41,93 @@ public static class TwpConfigValidator
         ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
         ValidateListeners(config.Listeners, clusterIds, errors);
         ValidateServer(config.Server, errors);
+        ValidatePlusSecrets(config.Plus, errors);
         return errors;
+    }
+
+    private static void ValidatePlusSecrets(PlusConfig? plus, List<string> errors)
+    {
+        if (plus is null)
+        {
+            return;
+        }
+
+        if (plus.ControlPlane is { } controlPlane)
+        {
+            ValidateSecretReference(
+                "plus.controlPlane.sharedSecret",
+                controlPlane.SharedSecret,
+                controlPlane.SharedSecretEnv,
+                controlPlane.SharedSecretFile,
+                errors);
+        }
+
+        if (plus.Options is not { Count: > 0 } options)
+        {
+            return;
+        }
+
+        foreach (var key in SecretReferenceKeys.PlusOptionKeys)
+        {
+            ValidateSecretReference(
+                $"plus.options.{key}",
+                FindOption(options, key),
+                FindOption(options, key + SecretReferenceKeys.EnvSuffix),
+                FindOption(options, key + SecretReferenceKeys.FileSuffix),
+                errors);
+        }
+    }
+
+    private static string? FindOption(IDictionary<string, string> options, string key)
+    {
+        foreach (var (name, value) in options)
+        {
+            if (string.Equals(name, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A secret is given as a literal, an environment variable name, or a file path: at most one of the three.</summary>
+    private static void ValidateSecretReference(string path, string? literal, string? env, string? file, List<string> errors)
+    {
+        var set = new List<string>(3);
+        if (!string.IsNullOrEmpty(literal))
+        {
+            set.Add(path);
+        }
+
+        if (env is not null)
+        {
+            if (string.IsNullOrWhiteSpace(env))
+            {
+                errors.Add($"{path}{SecretReferenceKeys.EnvSuffix} must name an environment variable.");
+            }
+            else
+            {
+                set.Add(path + SecretReferenceKeys.EnvSuffix);
+            }
+        }
+
+        if (file is not null)
+        {
+            if (string.IsNullOrWhiteSpace(file))
+            {
+                errors.Add($"{path}{SecretReferenceKeys.FileSuffix} must name a file.");
+            }
+            else
+            {
+                set.Add(path + SecretReferenceKeys.FileSuffix);
+            }
+        }
+
+        if (set.Count > 1)
+        {
+            errors.Add($"Set exactly one of {string.Join(", ", set)}; they are alternative ways to supply the same secret.");
+        }
     }
 
     private static HashSet<string> ValidateClusters(IEnumerable<ClusterConfig> clusters, List<string> errors)
@@ -1102,10 +1188,10 @@ public static class TwpConfigValidator
             errors.Add($"server.admin.preStopDelaySeconds must be between 0 and {MaxPreStopDelaySeconds}.");
         }
 
-        if (admin.AuthTokenEnv is { } envName && string.IsNullOrWhiteSpace(envName))
-        {
-            errors.Add("server.admin.authTokenEnv must name an environment variable.");
-        }
+        ValidateSecretReference("server.admin.authToken", admin.AuthToken, admin.AuthTokenEnv, admin.AuthTokenFile, errors);
+        var hasToken = !string.IsNullOrEmpty(admin.AuthToken) ||
+                       !string.IsNullOrWhiteSpace(admin.AuthTokenEnv) ||
+                       !string.IsNullOrWhiteSpace(admin.AuthTokenFile);
 
         System.Net.IPAddress? address = System.Net.IPAddress.Loopback;
         if (admin.Host is { } host)
@@ -1117,10 +1203,10 @@ public static class TwpConfigValidator
             }
         }
 
-        if (!System.Net.IPAddress.IsLoopback(address) && string.IsNullOrWhiteSpace(admin.AuthTokenEnv))
+        if (!System.Net.IPAddress.IsLoopback(address) && !hasToken)
         {
             errors.Add(
-                $"server.admin.host '{admin.Host}' is not a loopback address, so server.admin.authTokenEnv is required to protect /metrics and /version.");
+                $"server.admin.host '{admin.Host}' is not a loopback address, so server.admin.authTokenEnv (or authTokenFile) is required to protect /metrics and /version.");
         }
     }
 

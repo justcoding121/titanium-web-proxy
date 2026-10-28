@@ -590,6 +590,12 @@
             },
             "sharedSecret": {
               "type": "string"
+            },
+            "sharedSecretEnv": {
+              "type": "string"
+            },
+            "sharedSecretFile": {
+              "type": "string"
             }
           }
         },
@@ -994,7 +1000,13 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "authToken": {
+              "type": "string"
+            },
             "authTokenEnv": {
+              "type": "string"
+            },
+            "authTokenFile": {
               "type": "string"
             },
             "enabled": {

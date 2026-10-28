@@ -106,7 +106,7 @@ public partial class CliAdminE2ETests
         var (exitCode, stdout, stderr) = await harness.RunOnceAsync(["run", "-c", cfg], TimeSpan.FromSeconds(30));
 
         Assert.AreEqual(1, exitCode, stdout + stderr);
-        StringAssert.Contains(stderr, "server.admin.authTokenEnv is required");
+        StringAssert.Contains(stderr, "authTokenEnv (or authTokenFile) is required");
     }
 
     [TestMethod]
@@ -124,6 +124,44 @@ public partial class CliAdminE2ETests
 
         Assert.AreEqual(1, exitCode, stdout + stderr);
         StringAssert.Contains(stderr, TokenEnv);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    [Timeout(90_000)]
+    public async Task AdminToken_FromAMountedFile_ProtectsMetrics_AndIsNeverLogged()
+    {
+        var secretFile = Path.Combine(_tempDir, "admin-token");
+        await File.WriteAllTextAsync(secretFile, "file-admin-token\n");
+        var (harness, adminPort, _) = await StartAsync(
+            preStopDelaySeconds: 0,
+            tokenLine: $"authTokenFile: \"{secretFile.Replace("\\", "/")}\"");
+        using var running = harness;
+        using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false });
+        var metrics = $"http://127.0.0.1:{adminPort}/metrics";
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.GetAsync(metrics)).StatusCode);
+        using var request = new HttpRequestMessage(HttpMethod.Get, metrics);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "file-admin-token");
+        Assert.AreEqual(HttpStatusCode.OK, (await http.SendAsync(request)).StatusCode);
+        Assert.IsFalse(harness.StdOut.Contains("file-admin-token", StringComparison.Ordinal));
+        Assert.IsFalse(harness.StdErr.Contains("file-admin-token", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    [Timeout(60_000)]
+    public async Task AdminTokenFile_ThatCannotBeRead_FailsClosedAndNamesThePath()
+    {
+        var missing = Path.Combine(_tempDir, "no-such-token").Replace("\\", "/");
+        var cfg = WriteConfig(preStopDelaySeconds: 0, out _, tokenLine: $"authTokenFile: \"{missing}\"");
+
+        using var harness = new CliProcessHarness();
+        var (exitCode, stdout, stderr) = await harness.RunOnceAsync(["run", "-c", cfg], TimeSpan.FromSeconds(30));
+
+        Assert.AreEqual(1, exitCode, stdout + stderr);
+        StringAssert.Contains(stderr, "server.admin.authTokenFile");
+        StringAssert.Contains(stderr, "no-such-token");
     }
 
     [TestMethod]
@@ -182,11 +220,11 @@ public partial class CliAdminE2ETests
             "the process must hold for the pre-stop delay before it stops");
     }
 
-    private async Task<(CliProcessHarness Harness, int AdminPort, int ProxyPort)> StartAsync(int preStopDelaySeconds)
+    private async Task<(CliProcessHarness Harness, int AdminPort, int ProxyPort)> StartAsync(int preStopDelaySeconds, string? tokenLine = null)
     {
         for (var attempt = 1; ; attempt++)
         {
-            var cfg = WriteConfig(preStopDelaySeconds, out var proxyPort);
+            var cfg = WriteConfig(preStopDelaySeconds, out var proxyPort, tokenLine);
             var harness = new CliProcessHarness();
             try
             {
@@ -208,8 +246,9 @@ public partial class CliAdminE2ETests
         }
     }
 
-    private string WriteConfig(int preStopDelaySeconds, out int proxyPort)
+    private string WriteConfig(int preStopDelaySeconds, out int proxyPort, string? tokenLine = null)
     {
+        tokenLine ??= $"authTokenEnv: {TokenEnv}";
         proxyPort = CliProcessHarness.GetFreePort();
         var cfg = Path.Combine(_tempDir, "admin.yaml");
         File.WriteAllText(cfg, $"""
@@ -224,7 +263,7 @@ public partial class CliAdminE2ETests
                 enabled: true
                 host: "127.0.0.1"
                 port: 0
-                authTokenEnv: {TokenEnv}
+                {tokenLine}
                 preStopDelaySeconds: {preStopDelaySeconds}
             """);
         return cfg;

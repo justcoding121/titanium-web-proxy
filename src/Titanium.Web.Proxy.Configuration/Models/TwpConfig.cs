@@ -232,6 +232,12 @@ public sealed class ControlPlaneConfig
     public int? DashboardPort { get; set; }
 
     public string? SharedSecret { get; set; }
+
+    /// <summary>Name of the environment variable holding the shared secret. Set at most one of the three forms.</summary>
+    public string? SharedSecretEnv { get; set; }
+
+    /// <summary>File holding the shared secret (a mounted Secret). Relative paths resolve against the config directory.</summary>
+    public string? SharedSecretFile { get; set; }
 }
 
 /// <summary>Certificate / ACME related paths.</summary>

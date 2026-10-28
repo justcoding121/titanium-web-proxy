@@ -252,8 +252,20 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.Admin.get -> Titanium.Web.P
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Admin.set -> void
 Titanium.Web.Proxy.Configuration.Models.AdminConfig
 Titanium.Web.Proxy.Configuration.Models.AdminConfig.AdminConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthToken.get -> string?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthToken.set -> void
 Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthTokenEnv.get -> string?
 Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthTokenEnv.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthTokenFile.get -> string?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthTokenFile.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretEnv.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretEnv.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretFile.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SharedSecretFile.set -> void
+Titanium.Web.Proxy.Configuration.SecretReferenceKeys
+const Titanium.Web.Proxy.Configuration.SecretReferenceKeys.EnvSuffix = "Env" -> string!
+const Titanium.Web.Proxy.Configuration.SecretReferenceKeys.FileSuffix = "File" -> string!
+static Titanium.Web.Proxy.Configuration.SecretReferenceKeys.PlusOptionKeys.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Titanium.Web.Proxy.Configuration.Models.AdminConfig.Enabled.get -> bool
 Titanium.Web.Proxy.Configuration.Models.AdminConfig.Enabled.set -> void
 Titanium.Web.Proxy.Configuration.Models.AdminConfig.Host.get -> string?
