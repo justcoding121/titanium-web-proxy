@@ -8,7 +8,7 @@
     <owners>justcoding121</owners>
     <copyright>Copyright (c) Jehonathan Thomas</copyright>
     <projectUrl>https://titaniumproxy.com</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/justcoding121/titanium-web-proxy/develop/website/public/logo.svg</iconUrl>
+    <iconUrl>https://cdn.jsdelivr.net/gh/justcoding121/titanium-web-proxy@v7.0.16/website/public/logo.svg</iconUrl>
     <licenseUrl>https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/justcoding121/titanium-web-proxy</projectSourceUrl>

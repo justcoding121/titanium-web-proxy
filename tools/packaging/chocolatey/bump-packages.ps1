@@ -56,7 +56,8 @@ function Update-Nuspec {
   param(
     [string]$Path,
     [string]$Version,
-    [string]$ReleaseNotes
+    [string]$ReleaseNotes,
+    [string]$IconTag
   )
   [xml]$xml = Get-Content -LiteralPath $Path -Raw
   $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
@@ -66,6 +67,10 @@ function Update-Nuspec {
   $meta.SelectSingleNode('n:version', $ns).InnerText = $Version
   $rn = $meta.SelectSingleNode('n:releaseNotes', $ns)
   if ($rn) { $rn.InnerText = $ReleaseNotes }
+  $icon = $meta.SelectSingleNode('n:iconUrl', $ns)
+  if ($icon) {
+    $icon.InnerText = "https://cdn.jsdelivr.net/gh/$Repo@$IconTag/website/public/logo.svg"
+  }
   $xml.Save($Path)
 }
 
@@ -97,8 +102,8 @@ $cliInstall = Join-Path $Root 'titanium-cli\tools\chocolateyInstall.ps1'
 $insNuspec = Join-Path $Root 'titanium-inspector\titanium-inspector.nuspec'
 $insInstall = Join-Path $Root 'titanium-inspector\tools\chocolateyInstall.ps1'
 
-Update-Nuspec -Path $cliNuspec -Version $Version -ReleaseNotes $releaseNotes
-Update-Nuspec -Path $insNuspec -Version $Version -ReleaseNotes $releaseNotes
+Update-Nuspec -Path $cliNuspec -Version $Version -ReleaseNotes $releaseNotes -IconTag $Tag
+Update-Nuspec -Path $insNuspec -Version $Version -ReleaseNotes $releaseNotes -IconTag $Tag
 Update-InstallScript -Path $cliInstall -UrlProperty 'url64bit' -Url $cliUrl -ChecksumProperty 'checksum64' -Checksum $sha[$cliZip]
 Update-InstallScript -Path $insInstall -UrlProperty 'url64bit' -Url $msiUrl -ChecksumProperty 'checksum64' -Checksum $sha[$msi]
 
