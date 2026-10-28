@@ -18,6 +18,12 @@ public sealed class ServerConfig
     /// <summary>Null leaves X-Forwarded-* untouched.</summary>
     public Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
 
+    /// <summary>
+    ///     Buffered gzip / Brotli compression of small known-length responses on HTTP/1.1 and
+    ///     HTTP/2-to-HTTP/1.1. Null (or <c>enabled: false</c>) is off and costs one null check.
+    /// </summary>
+    public Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig? ResponseCompression { get; set; }
+
     public bool? EnableHttp2 { get; set; }
 
     public bool? EnableHttp3 { get; set; }

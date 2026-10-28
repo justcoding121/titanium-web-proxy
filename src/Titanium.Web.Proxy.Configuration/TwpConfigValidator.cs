@@ -528,6 +528,7 @@ public static class TwpConfigValidator
             ValidateRouteRedirect(route, errors);
             ValidateRouteTransforms(route, errors);
             ValidateRouteLimits(route, errors);
+            ValidateRouteCompression(route, errors);
             ValidateRetry($"routes.{route.Id}.retry", route.Retry, errors);
         }
     }
@@ -1058,6 +1059,70 @@ public static class TwpConfigValidator
         ValidateUpstream(server.Upstream, errors);
         ValidateCertificateManager(server.CertificateManager, errors);
         ValidateAccessLog(server.AccessLog, errors);
+        ValidateResponseCompression(server.ResponseCompression, errors);
+    }
+
+    private static readonly string[] CompressionAlgorithmNames = ["br", "gzip"];
+
+    private static void ValidateResponseCompression(ResponseCompressionConfig? compression, List<string> errors)
+    {
+        if (compression is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.responseCompression";
+        if (compression.MinBytes < 1)
+        {
+            errors.Add($"{prefix}.minBytes must be at least 1.");
+        }
+
+        if (compression.MaxBytes < 1 || compression.MaxBytes > ResponseCompressionConfig.DefaultMaxBytes)
+        {
+            errors.Add($"{prefix}.maxBytes must be 1-{ResponseCompressionConfig.DefaultMaxBytes}.");
+        }
+        else if (compression.MinBytes > compression.MaxBytes)
+        {
+            errors.Add($"{prefix}.minBytes must not exceed maxBytes.");
+        }
+
+        if (compression.Algorithms is { } algorithms)
+        {
+            if (algorithms.Count == 0)
+            {
+                errors.Add($"{prefix}.algorithms must list at least one of: br, gzip.");
+            }
+
+            foreach (var name in algorithms.Where(name =>
+                         !CompressionAlgorithmNames.Contains(name?.Trim(), StringComparer.OrdinalIgnoreCase)))
+            {
+                errors.Add($"{prefix}.algorithms entry '{name}' is unknown. Use br or gzip.");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(compression.Level) &&
+            !compression.Level.Trim().Equals("fastest", StringComparison.OrdinalIgnoreCase) &&
+            !compression.Level.Trim().Equals("optimal", StringComparison.OrdinalIgnoreCase) &&
+            !compression.Level.Trim().Equals("smallestSize", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix}.level '{compression.Level}' is unknown. Use fastest, optimal, or smallestSize.");
+        }
+
+        if (compression.MimeTypes is { } mimeTypes)
+        {
+            foreach (var type in mimeTypes.Where(type => string.IsNullOrWhiteSpace(type) || !type.Contains('/')))
+            {
+                errors.Add($"{prefix}.mimeTypes entry '{type}' is not a media type such as text/* or application/json.");
+            }
+        }
+    }
+
+    private static void ValidateRouteCompression(RouteConfig route, List<string> errors)
+    {
+        if (route.Compression is { } mode && !mode.Trim().Equals("off", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Route '{route.Id}' compression '{mode}' is unknown. Only 'off' is supported.");
+        }
     }
 
     /// <summary>
@@ -1401,6 +1466,13 @@ public static class TwpConfigValidator
             warnings.Add("server.limits.maxEncodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
         if (limits?.MaxDecodedBodyBytes is not null)
             warnings.Add("server.limits.maxDecodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
+        if (config.Server?.ResponseCompression is { Enabled: true })
+        {
+            warnings.Add(
+                "server.responseCompression compresses HTTP/1.1 and HTTP/2-to-HTTP/1.1 responses only. " +
+                "It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths.");
+        }
+
         foreach (var listener in config.Listeners)
         {
             if (listener.AcceptProxyProtocol && listener.TrustedProxyProtocolSources is not { Count: > 0 })

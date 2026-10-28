@@ -431,3 +431,5 @@ Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes.get -> 
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes.set -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout.get -> System.TimeSpan
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout.set -> void
+Titanium.Web.Proxy.ProxyServer.ResponseCompression.get -> Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig?
+Titanium.Web.Proxy.ProxyServer.ResponseCompression.set -> void

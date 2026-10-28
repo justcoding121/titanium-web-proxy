@@ -32,6 +32,18 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 
 For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, auth), see the [Protocol-Support wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support).
 
+## Response compression
+
+Opt-in `server.responseCompression` compresses buffered origin responses (brotli or gzip). See [Configuration](/docs/configuration#response-compression-server-responsecompression).
+
+| Path | Compressed |
+|------|------------|
+| HTTP/1.1 client, HTTP/1.1 origin (session path) | Yes |
+| HTTP/2 client, HTTP/1.1 origin (bridge) | Yes |
+| HTTP/2 client, HTTP/2 origin | No |
+| HTTP/3 | No |
+| HTTP/1.1 client, HTTP/2 origin | No |
+
 ## Routing and clusters
 
 Per-request route dispatch runs on the HTTP/1 session path, the HTTP/1-to-HTTP/2 bridge, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/2 dispatch bridge (`SendHttp2ToHttp2DispatchBridge`), the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 native frame relay is unchanged when the listener is forward-host equivalent (no per-request dispatch).

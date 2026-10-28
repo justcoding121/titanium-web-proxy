@@ -1252,6 +1252,12 @@ internal static class RunCommand
             return true;
         }
 
+        // Response compression buffers and rewrites the origin response.
+        if (config.Server?.ResponseCompression is { Enabled: true })
+        {
+            return true;
+        }
+
         // An extAuth policy awaits an authorization service and edits the upstream request.
         if (config.Policies is { Count: > 0 } policies)
         {

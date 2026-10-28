@@ -169,7 +169,7 @@ public partial class ProxyServer
         MaybeInjectClientAltSvc(args);
 
         // if user requested call back then do it
-        if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args);
+        if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args, mayCompress: true);
 
         // it may changed in the user event
         response = args.HttpClient.Response;
@@ -462,14 +462,25 @@ public partial class ProxyServer
     ///     Invoke before response if it is set.
     /// </summary>
     /// <param name="args"></param>
+    /// <param name="mayCompress">
+    ///     True only where the origin leg is HTTP/1.1 wire bytes (H1 session, H2-to-H1 bridge). Other
+    ///     paths (H2 or H3 origin, WebSocket tunnels, synthetic responses) never compress.
+    /// </param>
     /// <returns></returns>
-    private async Task OnBeforeResponse(SessionEventArgs args)
+    private Task OnBeforeResponse(SessionEventArgs args) => OnBeforeResponse(args, mayCompress: false);
+
+    /// <inheritdoc cref="OnBeforeResponse(SessionEventArgs)" />
+    private async Task OnBeforeResponse(SessionEventArgs args, bool mayCompress)
     {
         if (args.IsFastPath)
             return;
 
         // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
         ReverseProxySessionDispatch.ApplyResponseTransforms(args);
+
+        // Buffered response compression (server.responseCompression). Null when off.
+        if (mayCompress && CompressionPolicy is { } compression)
+            await TryCompressResponseAsync(args, compression).ConfigureAwait(false);
 
         // Rewrite gRPC → JSON before user handlers when the request was transcoded.
         if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
@@ -482,6 +493,41 @@ public partial class ProxyServer
 
         if (BeforeResponse != null)
             await BeforeResponse.InvokeAsync(this, args, logger).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Buffers a small known-length origin response and replaces its body with a gzip / Brotli copy when
+    ///     every eligibility rule holds (see <see cref="Compression.ResponseCompressionPolicy.TrySelect" />).
+    ///     Leaves the response untouched otherwise, including when compression would not shrink it.
+    /// </summary>
+    private static async Task TryCompressResponseAsync(SessionEventArgs args,
+        Compression.ResponseCompressionPolicy policy)
+    {
+        var request = args.HttpClient.Request;
+        var response = args.HttpClient.Response;
+
+        if (response.Locked || response.IsBodyRead || response.IsSynthetic
+            || response.StreamBodyWriter != null || response.Http3RawBodyDrain != null
+            || response.HttpVersion.Major != 1 || request.HttpVersion.Major >= 3)
+            return;
+
+        if (Compression.ResponseCompressionPolicy.IsRouteOff(args.MatchedRoute))
+            return;
+
+        if (!policy.TrySelect(request, response, out var algorithm))
+            return;
+
+        // GetResponseBody enforces the buffered-body budget by throwing; stay below it instead.
+        var budget = args.MaxBufferedBodyBytes ?? args.Server.MaxBufferedBodyBytes;
+        if (budget > 0 && response.ContentLength > budget)
+            return;
+
+        var body = await args.GetResponseBody(args.CancellationToken).ConfigureAwait(false);
+        var compressed = policy.Compress(algorithm, body);
+        if (compressed.Length >= body.Length)
+            return;
+
+        Compression.ResponseCompressionPolicy.Apply(response, algorithm, compressed);
     }
 
     /// <summary>

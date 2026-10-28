@@ -21,6 +21,95 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenResponseCompressionIsEnabled()
+    {
+        var listeners = new List<ListenerConfig>
+        {
+            new() { Port = 8080, ForwardHost = "127.0.0.1", ForwardPort = 80 },
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Listeners = listeners,
+            Server = new ServerConfig { ResponseCompression = new ResponseCompressionConfig { Enabled = true } },
+        }));
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Listeners = listeners,
+            Server = new ServerConfig { ResponseCompression = new ResponseCompressionConfig { Enabled = false } },
+        }));
+    }
+
+    [TestMethod]
+    public void ServerConfigApplier_AppliesResponseCompression_OnlyWhenEnabled()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            ResponseCompression = new ResponseCompressionConfig { Enabled = false },
+        });
+        Assert.IsNull(proxy.ResponseCompression);
+
+        var enabled = new ResponseCompressionConfig { Enabled = true, MinBytes = 2048 };
+        ServerConfigApplier.Apply(proxy, new ServerConfig { ResponseCompression = enabled });
+        Assert.AreSame(enabled, proxy.ResponseCompression);
+    }
+
+    [TestMethod]
+    public void Load_ResponseCompressionYaml_BindsServerAndRouteSettings()
+    {
+        var dir = Directory.CreateTempSubdirectory("twp-compress-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "twp.yaml");
+            File.WriteAllText(path, """
+                listeners:
+                  - port: 8080
+                    host: 127.0.0.1
+                server:
+                  responseCompression:
+                    enabled: true
+                    algorithms: [gzip, br]
+                    minBytes: 2048
+                    maxBytes: 524288
+                    level: optimal
+                    mimeTypes: [text/*, application/wasm]
+                """);
+
+            var loaded = Titanium.Cli.Parsers.ConfigLoader.Load(path);
+            var compression = loaded.Config.Server!.ResponseCompression!;
+            Assert.IsTrue(compression.Enabled);
+            CollectionAssert.AreEqual(new[] { "gzip", "br" }, compression.Algorithms!.ToArray());
+            Assert.AreEqual(2048, compression.MinBytes);
+            Assert.AreEqual(524288, compression.MaxBytes);
+            Assert.AreEqual("optimal", compression.Level);
+            CollectionAssert.AreEqual(new[] { "text/*", "application/wasm" }, compression.MimeTypes!.ToArray());
+            
+            Assert.AreEqual(0, Titanium.Web.Proxy.Configuration.TwpConfigValidator.Validate(loaded.Config).Count);
+            Assert.AreEqual(0, loaded.UnknownKeys.Count);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void Load_RouteCompressionJson_BindsTheOverride()
+    {
+        var config = Titanium.Web.Proxy.Configuration.TwpConfigLoader.LoadJson("""
+            {
+              "clusters": [ { "id": "c", "destinations": [ { "id": "d", "address": "127.0.0.1", "port": 9000 } ] } ],
+              "routes": [ { "id": "r", "clusterId": "c", "compression": "off", "match": { "path": "/" } } ],
+              "server": { "responseCompression": { "enabled": true, "algorithms": ["br"] } }
+            }
+            """);
+
+        Assert.AreEqual("off", config.Routes.Single().Compression);
+        Assert.IsTrue(config.Server!.ResponseCompression!.Enabled);
+        Assert.AreEqual(0, Titanium.Web.Proxy.Configuration.TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
     public void ConfigNeedsSessionPath_False_ForPlainForwardHost()
     {
         var cfg = new TwpConfig

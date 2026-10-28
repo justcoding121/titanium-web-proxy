@@ -507,3 +507,5 @@ Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ClusterId.set -> void
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ServerName.get -> string?
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ServerName.set -> void
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.SniRouteConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ResponseCompression.get -> Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ResponseCompression.set -> void

@@ -160,6 +160,7 @@ origin cannot be sent again.
 | Per-chunk streaming hooks - TLS-decrypted connections | Yes | Yes | Yes | Yes | Native H3→H3: `OnRequestBodyWrite` fires per DATA frame during live origin relay (after `BeforeRequest`); `Http3OriginBridge` fires `OnResponseBodyWrite` per origin DATA frame. One-frame lookahead keeps `IsLastChunk` accurate. H1→H3 / H2→H3 translation bridges still buffer the request body before forwarding. |
 | Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. HTTP/2 runs the body on a background task so sibling multiplexed streams keep progressing. |
 | Automatic decompression for body inspection (gzip/deflate/brotli) | Yes | Yes | Yes | Yes | Stacked encodings (e.g. `gzip, deflate`) are unwrapped layer-by-layer. |
+| Buffered response compression (`server.responseCompression`, brotli/gzip) | Yes | Yes | H2→H1 bridge only | No | Opt-in. Buffers the body up to 1 MiB with a known `Content-Length`, sets `Content-Encoding` and `Vary: Accept-Encoding`, weakens a strong `ETag`. Not applied on H2↔H2, H3, or H1→H2 paths; `titanium validate` warns. Streaming compression is not part of v1. |
 | Multipart/form-data boundary-aware streaming | Yes | Yes | Yes | Yes | Multipart request bodies are observed incrementally without buffering the full body. |
 | Bounded body streaming | Yes | Yes | Yes | Yes | `BoundedBodyPipe` wraps the underlying pipe; reads beyond `MaxBufferedBodyBytes` fail fast rather than OOM-ing the process. |
 

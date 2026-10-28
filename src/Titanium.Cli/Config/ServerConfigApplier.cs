@@ -53,6 +53,11 @@ internal static class ServerConfigApplier
         {
             proxy.ForwardedHeaders = server.ForwardedHeaders;
         }
+
+        if (server.ResponseCompression is { Enabled: true } compression)
+        {
+            proxy.ResponseCompression = compression;
+        }
     }
 
     private static void ApplyDecryptFailureBypass(ProxyServer proxy, ServerConfig server)

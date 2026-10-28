@@ -410,7 +410,7 @@ server:
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
-HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
 
 ### Access log (`server.accessLog`)
 
@@ -424,6 +424,45 @@ server:
 ```
 
 Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
+
+### Response compression (`server.responseCompression`)
+
+Opt-in, buffered compression of origin responses. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
+
+```yaml
+server:
+  responseCompression:
+    enabled: true
+    algorithms: [br, gzip]   # default: both; brotli preferred when the client accepts it
+    minBytes: 1024           # default 1024
+    maxBytes: 1048576        # default 1 MiB, upper limit 1 MiB
+    level: fastest           # fastest | optimal | smallestSize
+    mimeTypes:               # default: text/*, application/json, application/javascript, application/xml, image/svg+xml
+      - text/*
+      - application/json
+```
+
+A response is compressed only when **all** of these hold:
+
+- `Accept-Encoding` allows the algorithm (an explicit coding beats `*`; `q=0` forbids it).
+- Status is `200` (not `206`).
+- `Content-Length` is known and between `minBytes` and `maxBytes`.
+- The response has no `Content-Encoding` and no `Cache-Control: no-transform`.
+- The request is not `HEAD`, has no `Range`, and is not a WebSocket upgrade.
+- The `Content-Type` matches `mimeTypes`. `text/event-stream` and `application/grpc*` are never compressed.
+
+When it compresses, the proxy sets `Content-Encoding`, replaces `Content-Length`, adds `Vary: Accept-Encoding`, and weakens a strong `ETag` (`W/"…"`). A body that would not get smaller is sent unchanged.
+
+A route opts out with `compression: off`:
+
+```yaml
+routes:
+  - id: downloads
+    clusterId: files
+    compression: off
+```
+
+v1 buffers the body, so it applies to HTTP/1.1 responses and to the HTTP/2-to-HTTP/1.1 bridge only. It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths; `titanium validate` warns about that. Streaming compression is not part of v1.
 
 ### Graceful reload
 

@@ -725,6 +725,12 @@
               }
             }
           },
+          "compression": {
+            "type": "string",
+            "enum": [
+              "off"
+            ]
+          },
           "directResponse": {
             "type": "object",
             "additionalProperties": false,
@@ -1292,6 +1298,44 @@
             },
             "header": {
               "type": "string"
+            }
+          }
+        },
+        "responseCompression": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "algorithms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "fastest",
+                "optimal",
+                "smallestSize"
+              ]
+            },
+            "maxBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "mimeTypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minBytes": {
+              "type": "integer",
+              "minimum": 1
             }
           }
         },

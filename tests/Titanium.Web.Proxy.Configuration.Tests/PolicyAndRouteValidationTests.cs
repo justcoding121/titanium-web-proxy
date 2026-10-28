@@ -406,6 +406,80 @@ public class PolicyAndRouteValidationTests
         StringAssert.Contains(errors, "samplePercent must be 0-100");
         StringAssert.Contains(errors, "redirect status 200 is not a 3xx code");
     }
+
+    private static TwpConfig WithCompression(ResponseCompressionConfig compression, params RouteConfig[] routes) => new()
+    {
+        Clusters = [Cluster("c")],
+        Routes = routes,
+        Server = new ServerConfig { ResponseCompression = compression },
+    };
+
+    [TestMethod]
+    public void ResponseCompression_Defaults_AreValid_AndWarnAboutUnsupportedPaths()
+    {
+        var config = WithCompression(new ResponseCompressionConfig { Enabled = true });
+
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+        var warning = TwpConfigValidator.CollectWarnings(config)
+            .Single(w => w.Contains("responseCompression", StringComparison.Ordinal));
+        StringAssert.Contains(warning, "HTTP/2-to-HTTP/2");
+        StringAssert.Contains(warning, "HTTP/3");
+        StringAssert.Contains(warning, "HTTP/1.1-to-HTTP/2");
+    }
+
+    [TestMethod]
+    public void ResponseCompression_Disabled_HasNoWarning()
+    {
+        var config = WithCompression(new ResponseCompressionConfig { Enabled = false });
+        Assert.IsFalse(TwpConfigValidator.CollectWarnings(config)
+            .Any(w => w.Contains("responseCompression", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void ResponseCompression_BadValues_AreRejected()
+    {
+        var config = WithCompression(new ResponseCompressionConfig
+        {
+            Enabled = true,
+            Algorithms = ["br", "zstd"],
+            MinBytes = 0,
+            MaxBytes = 2_000_000,
+            Level = "ludicrous",
+            MimeTypes = ["text/*", "html"],
+        });
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "server.responseCompression.algorithms entry 'zstd'");
+        StringAssert.Contains(errors, "server.responseCompression.minBytes");
+        StringAssert.Contains(errors, "server.responseCompression.maxBytes");
+        StringAssert.Contains(errors, "server.responseCompression.level 'ludicrous'");
+        StringAssert.Contains(errors, "server.responseCompression.mimeTypes entry 'html'");
+    }
+
+    [TestMethod]
+    public void ResponseCompression_MinAboveMax_IsRejected()
+    {
+        var config = WithCompression(new ResponseCompressionConfig { Enabled = true, MinBytes = 5000, MaxBytes = 4000 });
+        StringAssert.Contains(Errors(config), "minBytes must not exceed maxBytes");
+    }
+
+    [TestMethod]
+    public void RouteCompression_OnlyOffIsAccepted()
+    {
+        RouteConfig Compressed(string id, string? mode) => new()
+        {
+            Id = id,
+            ClusterId = "c",
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            Compression = mode,
+        };
+
+        var ok = new TwpConfig { Clusters = [Cluster("c")], Routes = [Compressed("a", "off"), Compressed("b", null)] };
+        Assert.AreEqual(0, TwpConfigValidator.Validate(ok).Count, Errors(ok));
+
+        var bad = new TwpConfig { Clusters = [Cluster("c")], Routes = [Compressed("a", "gzip")] };
+        StringAssert.Contains(Errors(bad), "Route 'a' compression 'gzip' is unknown");
+    }
 }
 
 

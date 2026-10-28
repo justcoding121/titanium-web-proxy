@@ -674,7 +674,7 @@ public partial class ProxyServer
             MaybeInjectClientAltSvc(sessionArgs);
 
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
-                await OnBeforeResponse(sessionArgs);
+                await OnBeforeResponse(sessionArgs, mayCompress: true);
 
             var response = sessionArgs.HttpClient.Response;
             closeConnection = !response.KeepAlive;

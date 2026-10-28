@@ -66,6 +66,12 @@ public sealed class RouteConfig
 
     /// <summary>Overrides the server error pages for this route.</summary>
     public IReadOnlyList<ErrorPageConfig>? ErrorPages { get; init; }
+
+    /// <summary>
+    ///     Per-route response compression override. <c>off</c> skips <c>server.responseCompression</c> for this
+    ///     route. Null follows the server setting.
+    /// </summary>
+    public string? Compression { get; init; }
 }
 
 /// <summary>One cluster in a traffic split.</summary>

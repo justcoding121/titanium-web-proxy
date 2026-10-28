@@ -96,6 +96,10 @@ public partial class ProxyServer
         if (enable100Continue || enableWinAuth || hasCustomUpstreamProxyFunc)
             return false;
 
+        // Response compression buffers and rewrites the response, which lite never does.
+        if (CompressionPolicy is not null)
+            return false;
+
         if (endPoint is not TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)
             return false;
 

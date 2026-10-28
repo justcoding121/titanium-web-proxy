@@ -1628,6 +1628,25 @@ public partial class ProxyServer : IDisposable
     /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
     public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
 
+    private Abstractions.Routing.ResponseCompressionConfig? responseCompression;
+
+    /// <summary>
+    /// Buffered gzip / Brotli compression of small known-length responses, applied on HTTP/1.1 and
+    /// HTTP/2-to-HTTP/1.1 sessions only. Null or <c>Enabled = false</c> (the default) is off: one null
+    /// check per response and terminate-lite stays eligible.
+    /// </summary>
+    public Abstractions.Routing.ResponseCompressionConfig? ResponseCompression
+    {
+        get => responseCompression;
+        set
+        {
+            responseCompression = value;
+            CompressionPolicy = Compression.ResponseCompressionPolicy.Create(value);
+        }
+    }
+
+    internal Compression.ResponseCompressionPolicy? CompressionPolicy { get; private set; }
+
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
@@ -1645,7 +1664,8 @@ public partial class ProxyServer : IDisposable
         || EnableDecryptFailureBypass
         || TracingEnabled
         || RequestIdHeader is not null
-        || ForwardedHeaders is not null;
+        || ForwardedHeaders is not null
+        || CompressionPolicy is not null;
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

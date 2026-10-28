@@ -120,6 +120,19 @@ public static class TwpConfigSchema
                 schema[MinimumKey] = 0;
                 schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;
                 break;
+            case "ResponseCompressionConfig.Level":
+                schema["enum"] = new JsonArray { "fastest", "optimal", "smallestSize" };
+                break;
+            case "ResponseCompressionConfig.MinBytes":
+                schema[MinimumKey] = 1;
+                break;
+            case "ResponseCompressionConfig.MaxBytes":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = ResponseCompressionConfig.DefaultMaxBytes;
+                break;
+            case "RouteConfig.Compression":
+                schema["enum"] = new JsonArray { "off" };
+                break;
             case "RoutePolicyConfig.Algorithm":
                 schema["enum"] = new JsonArray { "fixedWindow", "tokenBucket" };
                 break;

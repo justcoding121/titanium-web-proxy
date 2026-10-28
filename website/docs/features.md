@@ -43,6 +43,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | Live reload | `titanium reload` / SIGHUP / `run --watch` — routes and clusters without dropping listeners |
 | Self-update | `titanium update` with SHA256 verification |
 | Access logs | Opt-in NDJSON (`server.accessLog`) |
+| Response compression | Opt-in buffered brotli/gzip for HTTP/1.1 and HTTP/2-to-HTTP/1.1 (`server.responseCompression`) |
 
 ## Plus
 
