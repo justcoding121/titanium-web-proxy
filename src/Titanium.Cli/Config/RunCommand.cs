@@ -87,6 +87,15 @@ internal static class RunCommand
             Directory.SetCurrentDirectory(configDir);
         }
 
+        var adminSetup = AdminHost.TryPrepare(loaded.Config.Server?.Admin, out var adminError);
+        if (adminError is not null)
+        {
+            AsyncConsole.WriteError(adminError);
+            return 1;
+        }
+
+        var configHash = AdminHost.ComputeConfigHash(configPath);
+
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
         // CLI is non-interactive: do not install the MITM root into the user trust store
         // (Windows can block on a security prompt and hang headless CI / services).
@@ -103,6 +112,11 @@ internal static class RunCommand
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
         var clusterManager = new ClusterManager();
+        var readiness = new ReadinessState(
+            TimeProvider.System,
+            adminSetup?.RequireHealthyClusters ?? false,
+            () => AdminHost.ClusterView(clusterManager));
+        readiness.MarkConfigLoaded();
         if (loaded.Config.Clusters.Count > 0)
         {
             await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
@@ -161,17 +175,27 @@ internal static class RunCommand
             LatencyRecorder = loadBalancer,
             Logger = proxy.Logger,
         };
-        await TryActivatePlusAsync(loaded.Config, plusContext).ConfigureAwait(false);
+        var plusActive = await TryActivatePlusAsync(loaded.Config, plusContext).ConfigureAwait(false);
         grpcJsonTranscoder = plusContext.GrpcJsonTranscoder;
 
         RefreshReverseProxy();
-        proxy.Start();
-        StartAcmeIfConfigured(proxy, loaded.Config);
 
         JsonAccessLogWriter? accessLog = null;
         MetricsHttpEndpoint? metricsEndpoint = null;
+        AdminServer? adminServer = null;
         try
         {
+            // The admin port opens before the proxy binds, so /healthz answers and /readyz says 503
+            // (listeners_not_bound) while the process starts.
+            adminServer = AdminHost.TryStart(
+                adminSetup,
+                readiness,
+                metricsExposition,
+                () => AdminHost.BuildVersionInfo(configHash, plusActive));
+            proxy.Start();
+            readiness.MarkListenersBound();
+            StartAcmeIfConfigured(proxy, loaded.Config);
+
             accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
             metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
 
@@ -212,6 +236,7 @@ internal static class RunCommand
                                 RefreshReverseProxy,
                                 policies,
                                 stoppingToken).ConfigureAwait(false);
+                            configHash = AdminHost.ComputeConfigHash(configPath);
                             AsyncConsole.WriteLine("Config reloaded.");
                             await AsyncConsole.FlushAsync().ConfigureAwait(false);
                         }
@@ -219,19 +244,26 @@ internal static class RunCommand
                         {
                             AsyncConsole.WriteError("Config reload failed: " + ex.Message);
                         }
-                    }).ConfigureAwait(false);
+                    },
+                    onStopRequested: () => readiness.BeginDrain()).ConfigureAwait(false);
             }
             finally
             {
                 ConfigReloadGate.TryDeletePidFile(configPath);
             }
 
+            // /readyz is already 503 (flipped by the signal). Keep serving for the pre-stop delay so the
+            // load balancer removes this instance before the proxy stops accepting.
+            await readiness.BeginDrainAsync(
+                TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
+                CancellationToken.None).ConfigureAwait(false);
             await proxy.DrainAsync(TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server))).ConfigureAwait(false);
             await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         finally
         {
+            adminServer?.Dispose();
             metricsEndpoint?.Dispose();
             accessLog?.Dispose();
         }
@@ -401,6 +433,8 @@ internal static class RunCommand
               --watch        Debounced reload when the config file changes (off by default).
 
             Starts the proxy and blocks until Ctrl+C, SIGTERM, or the service manager stops it.
+            With server.admin enabled, /readyz answers 503 as soon as a stop is requested, then the
+            pre-stop delay runs before the drain.
             Reload routes/clusters without restart: `titanium reload -c <config>` (all OS),
             Unix SIGHUP, or systemd `systemctl reload` when installed as a service.
             """);
@@ -523,11 +557,17 @@ internal static class RunCommand
         CancellationToken stoppingToken,
         string configPath,
         bool watch,
-        Func<Task>? onReload)
+        Func<Task>? onReload,
+        Action? onStopRequested = null)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        void RequestStop() => tcs.TrySetResult();
+        void RequestStop()
+        {
+            // Flip readiness first and synchronously, so /readyz is 503 before any drain work starts.
+            onStopRequested?.Invoke();
+            tcs.TrySetResult();
+        }
 
         ConsoleCancelEventHandler? cancelHandler = (_, e) =>
         {
@@ -762,11 +802,12 @@ internal static class RunCommand
         proxy.HttpResponseCacheFiller = cacheMiddleware.TryCacheCurrentResponse;
     }
 
-    private static async Task TryActivatePlusAsync(TwpConfig config, PlusActivationContext context)
+    /// <summary>Returns true when the Plus module loaded and applied.</summary>
+    private static async Task<bool> TryActivatePlusAsync(TwpConfig config, PlusActivationContext context)
     {
         if (config.Plus?.Enabled != true)
         {
-            return;
+            return false;
         }
 
         var plus = PlusLoader.TryLoad(out var warning);
@@ -777,7 +818,7 @@ internal static class RunCommand
 
         if (plus is null)
         {
-            return;
+            return false;
         }
 
         try
@@ -791,6 +832,8 @@ internal static class RunCommand
             AsyncConsole.WriteError("Plus activation failed: " + ex.Message);
             throw;
         }
+
+        return true;
     }
 
     /// <summary>

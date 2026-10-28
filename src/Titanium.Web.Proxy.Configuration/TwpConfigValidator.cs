@@ -1079,7 +1079,49 @@ public static class TwpConfigValidator
         ValidateCertificateManager(server.CertificateManager, errors);
         ValidateAccessLog(server.AccessLog, errors);
         ValidateMetrics(server.Metrics, errors);
+        ValidateAdmin(server.Admin, errors);
         ValidateResponseCompression(server.ResponseCompression, errors);
+    }
+
+    private const int MaxPreStopDelaySeconds = 3600;
+
+    private static void ValidateAdmin(AdminConfig? admin, List<string> errors)
+    {
+        if (admin is not { Enabled: true })
+        {
+            return;
+        }
+
+        if (admin.Port is < 0 or > 65535)
+        {
+            errors.Add("server.admin.port must be between 0 and 65535 (0 picks a free port).");
+        }
+
+        if (admin.PreStopDelaySeconds is < 0 or > MaxPreStopDelaySeconds)
+        {
+            errors.Add($"server.admin.preStopDelaySeconds must be between 0 and {MaxPreStopDelaySeconds}.");
+        }
+
+        if (admin.AuthTokenEnv is { } envName && string.IsNullOrWhiteSpace(envName))
+        {
+            errors.Add("server.admin.authTokenEnv must name an environment variable.");
+        }
+
+        System.Net.IPAddress? address = System.Net.IPAddress.Loopback;
+        if (admin.Host is { } host)
+        {
+            if (string.IsNullOrWhiteSpace(host) || !System.Net.IPAddress.TryParse(host.Trim(), out address))
+            {
+                errors.Add($"server.admin.host '{host}' is not an IP address.");
+                return;
+            }
+        }
+
+        if (!System.Net.IPAddress.IsLoopback(address) && string.IsNullOrWhiteSpace(admin.AuthTokenEnv))
+        {
+            errors.Add(
+                $"server.admin.host '{admin.Host}' is not a loopback address, so server.admin.authTokenEnv is required to protect /metrics and /version.");
+        }
     }
 
     private static void ValidateMetrics(MetricsConfig? metrics, List<string> errors)

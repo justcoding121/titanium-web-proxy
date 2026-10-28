@@ -121,6 +121,43 @@ public sealed class ServerConfig
 
     /// <summary>Opt-in Prometheus text endpoint for the core meter. Null or <c>enabled: false</c> = off (zero cost).</summary>
     public MetricsConfig? Metrics { get; set; }
+
+    /// <summary>
+    ///     Opt-in admin listener (<c>/healthz</c>, <c>/readyz</c>, <c>/metrics</c>, <c>/version</c>) on its own port,
+    ///     never on a proxy listener. Null or <c>enabled: false</c> = off (zero cost).
+    /// </summary>
+    public AdminConfig? Admin { get; set; }
+}
+
+/// <summary>Admin listener under <c>server.admin</c>. Off unless <see cref="Enabled"/> is true.</summary>
+public sealed class AdminConfig
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Bind address. Default <c>127.0.0.1</c>. A non-loopback address requires an auth token.</summary>
+    public string? Host { get; set; }
+
+    /// <summary>TCP port. 0 (default) lets the OS pick a free port, which the CLI prints at start-up.</summary>
+    public int? Port { get; set; }
+
+    /// <summary>Name of the environment variable holding the bearer token for <c>/metrics</c> and <c>/version</c>.</summary>
+    public string? AuthTokenEnv { get; set; }
+
+    /// <summary>Readiness tuning for <c>/readyz</c>.</summary>
+    public AdminReadinessConfig? Readiness { get; set; }
+
+    /// <summary>
+    ///     Seconds to keep serving after <c>/readyz</c> flips to 503 on SIGTERM/SIGINT and before the proxy drains,
+    ///     so a load balancer or Service stops sending new connections first. Default 0.
+    /// </summary>
+    public int? PreStopDelaySeconds { get; set; }
+}
+
+/// <summary>Readiness rules for <c>/readyz</c>.</summary>
+public sealed class AdminReadinessConfig
+{
+    /// <summary>When true, <c>/readyz</c> is 503 while any cluster has no healthy destination.</summary>
+    public bool RequireHealthyClusters { get; set; }
 }
 
 /// <summary>Prometheus exposition under <c>server.metrics</c>. Off unless <see cref="Enabled"/> is true.</summary>

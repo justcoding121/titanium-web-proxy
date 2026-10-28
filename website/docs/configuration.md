@@ -139,6 +139,31 @@ server:
 
 `GET /metrics` serves counters as `_total`, up-down counters as gauges, and the request duration as a histogram with 14 fixed buckets from 1 ms to 30 s. Labels are limited to `route`, `cluster`, `status_class`, `protocol`, `error`, `direction`, `reason`, and `outcome`; at most 200 distinct `route` and 200 distinct `cluster` values are kept before the rest count as `other`. The endpoint is unauthenticated, so keep it on loopback or a private interface. Changing it needs a restart. The full instrument list is in the [Metrics wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics). A .NET host that already uses OpenTelemetry can instead call `AddMeter("Titanium.Web.Proxy")`.
 
+### Admin listener (`server.admin`)
+
+Opt-in probes, metrics, and version on a port of their own, never on a proxy listener. Off by default: with no `server.admin` (or `enabled: false`) no socket is opened and the request path is unchanged.
+
+```yaml
+server:
+  admin:
+    enabled: true
+    host: 127.0.0.1             # default; any other address needs authTokenEnv
+    port: 0                     # 0 picks a free port; the CLI prints "Admin: http://host:port"
+    authTokenEnv: TITANIUM_ADMIN_TOKEN
+    preStopDelaySeconds: 5      # keep serving after /readyz flips to 503, before the proxy drains
+    readiness:
+      requireHealthyClusters: false
+```
+
+| Path | Auth | Answer |
+| --- | --- | --- |
+| `GET /healthz` | none | `200` while the process runs. |
+| `GET /readyz` | none | `200` once the config is loaded and the listeners are bound. Otherwise `503` with `{"status":"not_ready","reasons":[...]}` (`config_not_loaded`, `listeners_not_bound`, `draining`, `cluster_unhealthy:<id>`). It flips to `503` on SIGTERM or SIGINT, before the drain starts. |
+| `GET /metrics` | bearer token | The same Prometheus text as `server.metrics`. |
+| `GET /version` | bearer token | `{"version","commit","runtime","edition","config_hash"}`. |
+
+`/metrics` and `/version` need `Authorization: Bearer <token>` when `authTokenEnv` names a set environment variable. The check is constant time. A non-loopback `host` without `authTokenEnv` is a configuration error. `requireHealthyClusters: true` also makes `/readyz` answer `503` while a cluster has no healthy destination. Changing `server.admin` needs a restart.
+
 ## Routes & clusters
 
 ```json

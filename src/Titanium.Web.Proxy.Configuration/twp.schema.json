@@ -990,6 +990,36 @@
             }
           }
         },
+        "admin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "authTokenEnv": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "preStopDelaySeconds": {
+              "type": "integer"
+            },
+            "readiness": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "requireHealthyClusters": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
         "blockLoopbackDestinations": {
           "type": "boolean"
         },

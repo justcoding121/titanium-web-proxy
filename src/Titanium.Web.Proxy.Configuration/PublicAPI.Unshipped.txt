@@ -248,6 +248,26 @@ Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Port.get -> int?
 Titanium.Web.Proxy.Configuration.Models.MetricsConfig.Port.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Metrics.get -> Titanium.Web.Proxy.Configuration.Models.MetricsConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Metrics.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Admin.get -> Titanium.Web.Proxy.Configuration.Models.AdminConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Admin.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AdminConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthTokenEnv.get -> string?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.AuthTokenEnv.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Host.get -> string?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Host.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Port.get -> int?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Port.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.PreStopDelaySeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.PreStopDelaySeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Readiness.get -> Titanium.Web.Proxy.Configuration.Models.AdminReadinessConfig?
+Titanium.Web.Proxy.Configuration.Models.AdminConfig.Readiness.set -> void
+Titanium.Web.Proxy.Configuration.Models.AdminReadinessConfig
+Titanium.Web.Proxy.Configuration.Models.AdminReadinessConfig.AdminReadinessConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.AdminReadinessConfig.RequireHealthyClusters.get -> bool
+Titanium.Web.Proxy.Configuration.Models.AdminReadinessConfig.RequireHealthyClusters.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.get -> Titanium.Web.Proxy.Configuration.Models.AccessLogConfig?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.AccessLog.set -> void
