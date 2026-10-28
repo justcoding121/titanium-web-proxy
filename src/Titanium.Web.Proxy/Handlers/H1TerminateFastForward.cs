@@ -202,7 +202,8 @@ public partial class ProxyServer
 
         request.Locked = true;
         request.IsBodyReceived = true;
-        CaptureTerminateLiteCacheIdentity(endPoint, request, out var cacheMethod, out var cacheHost, out var cachePath);
+        CaptureTerminateLiteCacheIdentity(endPoint, request, out var cacheMethod, out var cacheHost, out var cachePath,
+            out var cacheAcceptEncoding, out var cacheAuthorization, out var cacheCookie);
 
         // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
         // Connection: close; forwarding it forces the origin to close and defeats pooling (Bare still
@@ -354,7 +355,7 @@ public partial class ProxyServer
                     else
                     {
                         TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response,
-                            body.AsSpan(0, read));
+                            body.AsSpan(0, read), cacheAcceptEncoding, cacheAuthorization, cacheCookie);
                     }
 
                     ApplyResponseHeaderContributor(response);
@@ -391,7 +392,8 @@ public partial class ProxyServer
             else
             {
                 if (response.StatusCode == 200)
-                    TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response, ReadOnlySpan<byte>.Empty);
+                    TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response, ReadOnlySpan<byte>.Empty,
+                        cacheAcceptEncoding, cacheAuthorization, cacheCookie);
                 ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
             }
@@ -446,7 +448,8 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         request.Locked = true;
         request.IsBodyReceived = true;
-        CaptureTerminateLiteCacheIdentity(endPoint, request, out var cacheMethod, out var cacheHost, out var cachePath);
+        CaptureTerminateLiteCacheIdentity(endPoint, request, out var cacheMethod, out var cacheHost, out var cachePath,
+            out var cacheAcceptEncoding, out var cacheAuthorization, out var cacheCookie);
 
         var clientRequestedClose = H1TerminateClientRequestedClose(request);
         request.StripHopByHopConnectionForTransparentOrigin();
@@ -601,7 +604,7 @@ public partial class ProxyServer
                     else
                     {
                         TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response,
-                            body.AsSpan(0, read));
+                            body.AsSpan(0, read), cacheAcceptEncoding, cacheAuthorization, cacheCookie);
                     }
 
                     ApplyResponseHeaderContributor(response);
@@ -647,7 +650,8 @@ public partial class ProxyServer
             else
             {
                 if (response.StatusCode == 200)
-                    TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response, ReadOnlySpan<byte>.Empty);
+                    TryStoreH1TerminateLiteCache(cacheMethod, cacheHost, cachePath, response, ReadOnlySpan<byte>.Empty,
+                        cacheAcceptEncoding, cacheAuthorization, cacheCookie);
                 ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
             }
@@ -844,12 +848,18 @@ public partial class ProxyServer
         Request request,
         out string method,
         out string host,
-        out string path)
+        out string path,
+        out string? acceptEncoding,
+        out string? authorization,
+        out string? cookie)
     {
         var view = CreateTerminateLiteMiddlewareRequest(endPoint, request);
         method = view.Method;
         host = view.Host;
         path = view.Path;
+        acceptEncoding = request.Headers.GetFirstHeader("Accept-Encoding")?.Value;
+        authorization = view.Authorization ?? request.Headers.GetFirstHeader("Authorization")?.Value;
+        cookie = request.Headers.GetFirstHeader("Cookie")?.Value;
     }
 
     private void ApplyResponseHeaderContributor(Response response) =>
@@ -860,7 +870,10 @@ public partial class ProxyServer
         string host,
         string path,
         Response response,
-        ReadOnlySpan<byte> body)
+        ReadOnlySpan<byte> body,
+        string? acceptEncoding,
+        string? authorization,
+        string? cookie)
     {
         var middleware = ReverseProxy?.Middleware;
         if (middleware == null)
@@ -870,7 +883,8 @@ public partial class ProxyServer
         {
             if (middleware[i] is Caching.HttpResponseCacheMiddleware cache)
             {
-                cache.TryStore(method, host, path, response.StatusCode, response.Headers, body);
+                cache.TryStore(method, host, path, response.StatusCode, response.Headers, body,
+                    acceptEncoding, authorization, cookie);
                 return;
             }
         }

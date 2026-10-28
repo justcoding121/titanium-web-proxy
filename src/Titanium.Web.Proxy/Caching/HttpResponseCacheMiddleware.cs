@@ -22,11 +22,13 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
 
     private readonly IHttpResponseCache _cache;
     private readonly TimeSpan _defaultTtl;
+    private readonly bool _allowAuthenticated;
 
-    public HttpResponseCacheMiddleware(IHttpResponseCache cache, TimeSpan? defaultTtl = null)
+    public HttpResponseCacheMiddleware(IHttpResponseCache cache, TimeSpan? defaultTtl = null, bool allowAuthenticated = false)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _defaultTtl = defaultTtl is { } t && t > TimeSpan.Zero ? t : TimeSpan.FromMinutes(1);
+        _allowAuthenticated = allowAuthenticated;
     }
 
     public async ValueTask InvokeAsync(
@@ -34,13 +36,20 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
     {
-        if (!TryResolveCacheable(context, out var method, out var host, out var path))
+        if (!TryResolveCacheable(context, out var method, out var host, out var path, out var acceptEncoding,
+                out var authorization, out var cookie))
         {
             await next(context, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        var key = BuildCacheKey(method, host, path);
+        if (!IsRequestStoreable(authorization, cookie))
+        {
+            await next(context, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        var key = BuildCacheKey(method, host, path, acceptEncoding);
         if (_cache.TryGet(key, out var cached) && cached is not null)
         {
             ServeHit(context, cached);
@@ -58,6 +67,9 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
     /// <summary>
     /// Store a 200 whose body is already in memory (lite coalesce or a buffered session response).
     /// Hop-by-hop headers and bodies larger than <see cref="MaxCachedBodyBytes"/> are skipped.
+    /// Responses with <c>Set-Cookie</c>, <c>Cache-Control: private|no-store|no-cache</c>, or
+    /// <c>Vary: *</c>, and requests carrying <c>Authorization</c> or <c>Cookie</c> (unless
+    /// <c>allowAuthenticated</c>), are never stored.
     /// </summary>
     internal void TryStore(
         string method,
@@ -65,7 +77,10 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         string path,
         int statusCode,
         IEnumerable<HttpHeader> headers,
-        ReadOnlySpan<byte> body)
+        ReadOnlySpan<byte> body,
+        string? acceptEncoding = null,
+        string? authorization = null,
+        string? cookie = null)
     {
         if (statusCode != 200 || body.Length > MaxCachedBodyBytes)
         {
@@ -78,10 +93,15 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
             return;
         }
 
+        if (!IsRequestStoreable(authorization, cookie) || !IsResponseStoreable(headers))
+        {
+            return;
+        }
+
         var copy = new byte[body.Length];
         body.CopyTo(copy);
         _cache.Set(
-            BuildCacheKey(method, host, path),
+            BuildCacheKey(method, host, path, acceptEncoding),
             new CachedHttpResponse
             {
                 StatusCode = 200,
@@ -99,7 +119,8 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (!TryRequestParts(session, out var method, out var host, out var path))
+        if (!TryRequestParts(session, out var method, out var host, out var path, out var acceptEncoding,
+                out var authorization, out var cookie))
         {
             return;
         }
@@ -120,17 +141,70 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
             return;
         }
 
-        TryStore(method, host, path, 200, response.Headers, body);
+        TryStore(method, host, path, 200, response.Headers, body, acceptEncoding, authorization, cookie);
     }
 
-    internal static string BuildCacheKey(string method, string host, string path)
+    internal static string BuildCacheKey(string method, string host, string path, string? acceptEncoding = null)
     {
         if (string.IsNullOrEmpty(path))
         {
             path = "/";
         }
 
-        return $"{method}:{host}{path}";
+        // Include Accept-Encoding until full Vary support lands (WI-19b). Query is part of path
+        // (PathAndQuery) so personalized query strings never collide with each other.
+        return string.Concat(method, ":", host, path, "|ae=", acceptEncoding ?? string.Empty);
+    }
+
+    internal bool IsRequestStoreable(string? authorization, string? cookie)
+    {
+        if (_allowAuthenticated)
+        {
+            return true;
+        }
+
+        return string.IsNullOrEmpty(authorization) && string.IsNullOrEmpty(cookie);
+    }
+
+    internal static bool IsResponseStoreable(IEnumerable<HttpHeader> headers)
+    {
+        foreach (var header in headers)
+        {
+            if (header.Name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (header.Name.Equals("Vary", StringComparison.OrdinalIgnoreCase) &&
+                header.Value.Equals("*", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (header.Name.Equals("Cache-Control", StringComparison.OrdinalIgnoreCase) &&
+                CacheControlForbidsSharedStore(header.Value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool CacheControlForbidsSharedStore(string value)
+    {
+        foreach (var part in value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.Equals("private", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("no-store", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("no-cache", StringComparison.OrdinalIgnoreCase) ||
+                part.StartsWith("no-cache=", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ServeHit(ProxyMiddlewareContext context, CachedHttpResponse cached)
@@ -163,11 +237,15 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         ProxyMiddlewareContext context,
         out string method,
         out string host,
-        out string path)
+        out string path,
+        out string? acceptEncoding,
+        out string? authorization,
+        out string? cookie)
     {
         if (context.Session is SessionEventArgs session)
         {
-            return TryRequestParts(session, out method, out host, out path);
+            return TryRequestParts(session, out method, out host, out path, out acceptEncoding, out authorization,
+                out cookie);
         }
 
         if (context.Request is { } view)
@@ -175,19 +253,41 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
             method = view.Method ?? "GET";
             host = view.Host ?? "";
             path = string.IsNullOrEmpty(view.Path) ? "/" : view.Path;
+            acceptEncoding = FirstHeader(view, "Accept-Encoding");
+            authorization = view.Authorization ?? FirstHeader(view, "Authorization");
+            cookie = FirstHeader(view, "Cookie");
             return IsCacheableMethod(method);
         }
 
         method = "";
         host = "";
         path = "";
+        acceptEncoding = null;
+        authorization = null;
+        cookie = null;
         return false;
     }
 
-    private static bool TryRequestParts(SessionEventArgs session, out string method, out string host, out string path)
+    private static string? FirstHeader(MiddlewareRequestView view, string name)
+    {
+        var values = view.GetHeaderValues?.Invoke(name);
+        return values is { Count: > 0 } ? values[0] : null;
+    }
+
+    private static bool TryRequestParts(
+        SessionEventArgs session,
+        out string method,
+        out string host,
+        out string path,
+        out string? acceptEncoding,
+        out string? authorization,
+        out string? cookie)
     {
         var request = session.HttpClient.Request;
         method = request.Method ?? "";
+        acceptEncoding = null;
+        authorization = null;
+        cookie = null;
         if (!IsCacheableMethod(method))
         {
             host = "";
@@ -196,6 +296,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         }
 
         host = request.Host ?? request.RequestUri?.Host ?? "";
+        // PathAndQuery keeps the query string in the cache key so /a?user=1 never aliases /a?user=2.
         path = request.RequestUri?.PathAndQuery ?? "";
         if (string.IsNullOrEmpty(path))
         {
@@ -206,6 +307,9 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
             }
         }
 
+        acceptEncoding = request.Headers.GetFirstHeader("Accept-Encoding")?.Value;
+        authorization = request.Headers.GetFirstHeader("Authorization")?.Value;
+        cookie = request.Headers.GetFirstHeader("Cookie")?.Value;
         return true;
     }
 
@@ -224,6 +328,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
             "TE",
             "Trailer",
             "Upgrade",
+            "Set-Cookie",
         };
 
         var staged = new List<KeyValuePair<string, string>>();

@@ -161,7 +161,7 @@ Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(string! destinationId
 Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
 Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot, Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext context) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
 Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
-Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache! cache, System.TimeSpan? defaultTtl = null) -> void
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache! cache, System.TimeSpan? defaultTtl = null, bool allowAuthenticated = false) -> void
 Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs! session) -> void
 Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
