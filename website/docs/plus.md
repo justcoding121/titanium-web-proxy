@@ -14,7 +14,7 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | Web application firewall (WAF) | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
 | Control plane | Loopback HTTP API with shared-secret header; snapshot get/put; cache purge |
 | Operations | Drain / healthy / maintenance destination states |
-| Discovery | File watch, DNS poll; Consul / Kubernetes best-effort |
+| Discovery | File watch, DNS poll; Consul blocking queries; Kubernetes EndpointSlice list-then-watch with backoff |
 | State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
 | Resilience | Active HTTP/TCP health probes, circuit outlier ejection, bounded idempotent connection retries |
 | CORS | Opt-in preflight + `Access-Control-*` response headers |
@@ -77,8 +77,13 @@ String values under `plus.options` (examples):
 | `discovery.mode` | `file`, `dns`, `consul`, or `k8s` |
 | `discovery.file` | Path for `mode=file` |
 | `discovery.dnsName` / `discovery.dnsPort` | DNS discovery target |
-| `discovery.consulUrl` / `discovery.k8sUrl` | Best-effort HTTP poll endpoints |
-| `discovery.intervalMs` / `discovery.clusterId` | Poll interval and cluster id |
+| `discovery.consulUrl` | Consul service endpoint, for example `http://consul:8500/v1/health/service/web` |
+| `discovery.consulWaitSeconds` / `discovery.consulPassing` / `discovery.consulToken` | Blocking-query wait (default `30`), passing-only filter (default `true`), ACL token |
+| `discovery.k8sUrl` | API server URL. Optional in a pod: `KUBERNETES_SERVICE_HOST` is used. A URL with a path (or without a selector) is used as the exact EndpointSlice collection to watch; a single Endpoints object there is polled every `discovery.intervalMs` |
+| `discovery.k8sService` / `discovery.k8sLabelSelector` / `discovery.k8sNamespace` / `discovery.k8sPortName` | Which slices to watch (a selector is required unless `k8sUrl` is used as the exact URL: it has a path or no selector is set); namespace defaults to the pod namespace; named port, default first TCP port |
+| `discovery.k8sServiceAccountDir` / `discovery.k8sTokenRefreshSeconds` / `discovery.k8sWatchTimeoutSeconds` | Token and CA directory (default `/var/run/secrets/kubernetes.io/serviceaccount`), token re-read interval (default `60`), watch window (default `300`) |
+| `discovery.backoffMinMs` / `discovery.backoffMaxMs` | Retry backoff bounds for `consul` and `k8s` (defaults `1000` and `30000`) |
+| `discovery.intervalMs` / `discovery.clusterId` | Poll interval for `dns` and for sources that cannot block or watch; cluster id |
 | `security.allowCidrs` | Comma-separated client CIDR allow-list |
 | `security.jwtAuthority` / `security.jwtAudience` / `security.jwksUrl` | JWT/OIDC validation |
 | `security.apiKeys` | Comma-separated API keys (`X-Api-Key` by default) |
@@ -105,6 +110,32 @@ String values under `plus.options` (examples):
 | `grpc.transcode.preserveProtoFieldNames` | Use proto field names in JSON (default false) |
 | `grpc.transcode.alwaysPrintPrimitiveFields` | Always emit primitive defaults in JSON (default false) |
 | `grpc.transcode.compression` | `true` or `gzip` to gzip framed payloads |
+
+## Discovery: Consul and Kubernetes
+
+Both remote modes keep serving the **last known good** destinations. A failed call, an unparseable body, or an empty result is never applied; the next successful non-empty answer replaces the set. Failures retry with exponential backoff and jitter (`discovery.backoffMinMs` to `discovery.backoffMaxMs`) and the delay resets after the next success.
+
+**Consul** uses blocking queries: the first read is plain, then each call sends `?index=<X-Consul-Index>&wait=30s` and returns when the service changes or the wait elapses. An index that goes backwards restarts from a plain read. With `discovery.consulPassing` (default `true`) only instances whose checks all pass are used. A server that sends no index is polled every `discovery.intervalMs`.
+
+```yaml
+plus:
+  options:
+    discovery.mode: "consul"
+    discovery.consulUrl: "http://consul:8500/v1/health/service/web"
+    discovery.clusterId: "web"
+```
+
+**Kubernetes** lists EndpointSlices, then watches from the list `resourceVersion` with bookmarks enabled. Ready endpoints from every matching slice form the destination set. A `410 Gone` (or a watch `ERROR` event with code 410) drops the version and relists. In a pod the API server, namespace, service-account token, and CA come from `KUBERNETES_SERVICE_HOST` and `/var/run/secrets/kubernetes.io/serviceaccount`. The projected token is re-read on a timer and immediately after a 401 or 403, so rotation needs no restart. The service account needs `get`, `list`, and `watch` on `endpointslices` in `discovery.k8s.io`.
+
+```yaml
+plus:
+  options:
+    discovery.mode: "k8s"
+    discovery.k8sService: "web"
+    discovery.k8sNamespace: "prod"
+    discovery.k8sPortName: "http"
+    discovery.clusterId: "web"
+```
 
 ## See also
 

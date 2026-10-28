@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Net;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Titanium.Plus.ControlPlane;
@@ -10,7 +14,9 @@ namespace Titanium.Plus.Discovery;
 
 /// <summary>
 /// Service discovery → <see cref="IClusterManager.ApplyAsync"/>.
-/// Primary modes: <c>file</c> and <c>dns</c>; <c>consul</c>/<c>k8s</c> are best-effort.
+/// Modes: <c>file</c> and <c>dns</c> (timer based), <c>consul</c> (blocking queries), and <c>k8s</c>
+/// (EndpointSlice list-then-watch). Remote modes back off exponentially with jitter and keep the last
+/// known good destinations on every error; an empty or failed result is never applied.
 /// </summary>
 public sealed class ServiceDiscovery : IDisposable
 {
@@ -49,15 +55,11 @@ public sealed class ServiceDiscovery : IDisposable
                 discovery.StartDnsLoop(context, options);
                 break;
             case "consul":
-                PlusLog.Info(context,
-                    "Plus Discovery: mode=consul — polling discovery.consulUrl (file/dns are primary).");
-                discovery.StartConsulBestEffort(context, options);
+                discovery.StartConsul(context, options);
                 break;
             case "k8s":
             case "kubernetes":
-                PlusLog.Info(context,
-                    "Plus Discovery: mode=k8s — use discovery.k8sUrl with Endpoints/EndpointSlice JSON subset, or file/dns.");
-                discovery.StartK8sBestEffort(context, options);
+                discovery.StartKubernetes(context, options);
                 break;
             default:
                 PlusLog.Warn(context, $"Plus Discovery: unknown mode={mode}");
@@ -188,31 +190,168 @@ public sealed class ServiceDiscovery : IDisposable
             _cts.Token);
     }
 
-    private void StartConsulBestEffort(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    private void StartConsul(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
         if (!options.TryGetValue("discovery.consulUrl", out var url) || string.IsNullOrWhiteSpace(url))
         {
-            PlusLog.Warn(context, "Plus Discovery: no discovery.consulUrl — skipping HTTP poll.");
+            PlusLog.Warn(context, "Plus Discovery: mode=consul requires discovery.consulUrl.");
             return;
         }
 
-        var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
-        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? "consul";
-        PlusLog.Info(context, $"Plus Discovery: consul poll {url} every {intervalMs}ms");
-
-        _ = Task.Run(async () =>
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https"))
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            await RunPeriodicAsync(
-                async ct =>
+            PlusLog.Warn(context, "Plus Discovery: discovery.consulUrl must be an absolute http(s) URL.");
+            return;
+        }
+
+        var settings = new ConsulSettings(
+            uri,
+            options.GetValueOrDefault("discovery.clusterId") ?? "consul",
+            ReadInt(options, "discovery.intervalMs", 15000, 100, 3_600_000),
+            ReadInt(options, "discovery.consulWaitSeconds", 30, 1, 600),
+            !string.Equals(options.GetValueOrDefault("discovery.consulPassing"), "false", StringComparison.OrdinalIgnoreCase),
+            options.GetValueOrDefault("discovery.consulToken"),
+            ReadBackoff(options));
+        PlusLog.Info(context,
+            $"Plus Discovery: consul blocking query {uri.GetLeftPart(UriPartial.Path)} (wait {settings.WaitSeconds}s, passing={settings.PassingOnly})");
+
+        _ = Task.Run(() => RunConsulAsync(context, settings, _cts.Token), _cts.Token);
+    }
+
+    private async Task RunConsulAsync(PlusActivationContext context, ConsulSettings settings, CancellationToken ct)
+    {
+        using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        var backoff = new DiscoveryBackoff(settings.Backoff.MinMs, settings.Backoff.MaxMs);
+        var applied = new DiscoveryApplyState();
+        ulong index = 0;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var wait = TimeSpan.FromSeconds(settings.WaitSeconds);
+                using var request = new HttpRequestMessage(HttpMethod.Get, BuildConsulUrl(settings, index));
+                if (!string.IsNullOrEmpty(settings.Token))
                 {
-                    var json = await http.GetStringAsync(url, ct);
-                    await ApplyDestinationsIfAnyAsync(context, clusterId, ParseConsulDestinations(json), ct);
-                },
-                intervalMs,
-                "Plus Discovery: consul poll failed",
-                context);
-        }, _cts.Token);
+                    request.Headers.TryAddWithoutValidation("X-Consul-Token", settings.Token);
+                }
+
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                linked.CancelAfter(wait + TimeSpan.FromTicks(wait.Ticks / 16) + TimeSpan.FromSeconds(10));
+                var started = Stopwatch.GetTimestamp();
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, linked.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"consul returned HTTP {(int)response.StatusCode}");
+                }
+
+                var json = await response.Content.ReadAsStringAsync(linked.Token);
+                var destinations = ParseConsulDestinations(json, settings.PassingOnly);
+                await ApplyDestinationsIfChangedAsync(context, settings.ClusterId, destinations, applied, ct);
+                backoff.Reset();
+
+                var next = ReadConsulIndex(response);
+                var unchanged = next is not null && next == index;
+                if (next is null or 0)
+                {
+                    // Not a blocking-capable answer: fall back to a plain interval.
+                    index = 0;
+                    await DelayAsync(TimeSpan.FromMilliseconds(settings.IntervalMs), ct);
+                }
+                else
+                {
+                    // An index that goes backwards means the server state was reset: start over.
+                    index = next.Value < index ? 0 : next.Value;
+                    if (unchanged && Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(1))
+                    {
+                        await DelayAsync(TimeSpan.FromMilliseconds(settings.IntervalMs), ct);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                var delay = backoff.Next();
+                PlusLog.Warn(context,
+                    $"Plus Discovery: consul query failed ({ex.Message}); keeping last known destinations, retry in {(int)delay.TotalMilliseconds}ms");
+                await DelayAsync(delay, ct);
+            }
+        }
+    }
+
+    private static ulong? ReadConsulIndex(HttpResponseMessage response) =>
+        response.Headers.TryGetValues("X-Consul-Index", out var values) &&
+        ulong.TryParse(values.FirstOrDefault(), out var parsed)
+            ? parsed
+            : null;
+
+    internal static Uri BuildConsulUrl(ConsulSettings settings, ulong index)
+    {
+        var add = new List<KeyValuePair<string, string>>();
+        if (settings.PassingOnly)
+        {
+            add.Add(new("passing", "true"));
+        }
+
+        if (index > 0)
+        {
+            add.Add(new("index", index.ToString(CultureInfo.InvariantCulture)));
+            add.Add(new("wait", settings.WaitSeconds.ToString(CultureInfo.InvariantCulture) + "s"));
+        }
+
+        return WithQuery(settings.Url, add, "passing", "index", "wait");
+    }
+
+    /// <summary>Rebuilds <paramref name="url"/> with <paramref name="add"/> query pairs, dropping <paramref name="remove"/> first.</summary>
+    internal static Uri WithQuery(Uri url, IEnumerable<KeyValuePair<string, string>> add, params string[] remove)
+    {
+        var parts = new List<string>();
+        foreach (var raw in url.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var key = raw.Split('=', 2)[0];
+            if (!remove.Any(r => string.Equals(Uri.UnescapeDataString(key), r, StringComparison.OrdinalIgnoreCase)))
+            {
+                parts.Add(raw);
+            }
+        }
+
+        foreach (var pair in add)
+        {
+            parts.Add(Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value));
+        }
+
+        var builder = new UriBuilder(url) { Query = string.Join('&', parts) };
+        return builder.Uri;
+    }
+
+    private static int ReadInt(IReadOnlyDictionary<string, string> options, string key, int fallback, int min, int max) =>
+        int.TryParse(options.GetValueOrDefault(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? Math.Clamp(value, min, max)
+            : fallback;
+
+    private static BackoffSettings ReadBackoff(IReadOnlyDictionary<string, string> options)
+    {
+        var min = ReadInt(options, "discovery.backoffMinMs", 1000, 1, 600_000);
+        var max = ReadInt(options, "discovery.backoffMaxMs", 30_000, min, 3_600_000);
+        return new BackoffSettings(min, max);
+    }
+
+    /// <summary>Waits for <paramref name="delay"/>; returns false when discovery is shutting down.</summary>
+    private static async Task<bool> DelayAsync(TimeSpan delay, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(delay, ct);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
     }
 
     private async Task RunPeriodicAsync(
@@ -256,22 +395,36 @@ public sealed class ServiceDiscovery : IDisposable
         }
     }
 
-    private static async Task ApplyDestinationsIfAnyAsync(
+    /// <summary>
+    /// Applies <paramref name="destinations"/> when the set is non-empty and differs from what was last applied.
+    /// An empty set is never applied, so the last known good destinations survive upstream outages.
+    /// </summary>
+    private static async Task<bool> ApplyDestinationsIfChangedAsync(
         PlusActivationContext context,
         string clusterId,
         List<DestinationConfig> destinations,
+        DiscoveryApplyState state,
         CancellationToken cancellationToken)
     {
         if (destinations.Count == 0 || context.ClusterManager is null)
         {
-            return;
+            return false;
+        }
+
+        var signature = DiscoveryApplyState.Sign(destinations);
+        if (string.Equals(signature, state.Signature, StringComparison.Ordinal))
+        {
+            return false;
         }
 
         await context.ClusterManager.ApplyAsync(
         [
             new ClusterConfig { Id = clusterId, Destinations = destinations },
         ], cancellationToken);
+        state.Signature = signature;
         context.RefreshReverseProxy?.Invoke();
+        PlusLog.Info(context, $"Plus Discovery: applied {destinations.Count} destination(s) to cluster {clusterId}");
+        return true;
     }
 
     internal static async Task ApplyFileAsync(PlusActivationContext context, string path, CancellationToken cancellationToken)
@@ -343,7 +496,14 @@ public sealed class ServiceDiscovery : IDisposable
         return null;
     }
 
-    public static List<DestinationConfig> ParseConsulDestinations(string json)
+    public static List<DestinationConfig> ParseConsulDestinations(string json) =>
+        ParseConsulDestinations(json, passingOnly: false);
+
+    /// <summary>
+    /// Parses a Consul health or catalog service response. With <paramref name="passingOnly"/>, an entry whose
+    /// <c>Checks</c> array holds any check that is not <c>passing</c> is dropped.
+    /// </summary>
+    public static List<DestinationConfig> ParseConsulDestinations(string json, bool passingOnly)
     {
         var list = new List<DestinationConfig>();
         using var doc = JsonDocument.Parse(json);
@@ -356,6 +516,11 @@ public sealed class ServiceDiscovery : IDisposable
         var i = 0;
         foreach (var item in root.EnumerateArray())
         {
+            if (passingOnly && !AllChecksPassing(item))
+            {
+                continue;
+            }
+
             if (!TryParseConsulItem(item, i, out var dest))
             {
                 continue;
@@ -366,6 +531,25 @@ public sealed class ServiceDiscovery : IDisposable
         }
 
         return list;
+    }
+
+    private static bool AllChecksPassing(JsonElement item)
+    {
+        if (!item.TryGetProperty("Checks", out var checks) || checks.ValueKind != JsonValueKind.Array)
+        {
+            return true;
+        }
+
+        foreach (var check in checks.EnumerateArray())
+        {
+            var status = check.ValueKind == JsonValueKind.Object ? TryGetString(check, "Status") : null;
+            if (!string.Equals(status, "passing", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool TryParseConsulItem(JsonElement item, int index, out DestinationConfig dest)
@@ -384,6 +568,12 @@ public sealed class ServiceDiscovery : IDisposable
             }
 
             id = TryGetString(service, "ID");
+            if (string.IsNullOrWhiteSpace(address) && item.TryGetProperty("Node", out var node) &&
+                node.ValueKind == JsonValueKind.Object)
+            {
+                // Consul leaves Service.Address empty when the service listens on the node address.
+                address = TryGetString(node, "Address");
+            }
         }
         else
         {
@@ -411,32 +601,487 @@ public sealed class ServiceDiscovery : IDisposable
         return true;
     }
 
-    private void StartK8sBestEffort(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    private const string DefaultServiceAccountDir = "/var/run/secrets/kubernetes.io/serviceaccount";
+
+    private void StartKubernetes(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
-        if (!options.TryGetValue("discovery.k8sUrl", out var url) || string.IsNullOrWhiteSpace(url))
+        var saOption = options.GetValueOrDefault("discovery.k8sServiceAccountDir");
+        var explicitSa = !string.IsNullOrWhiteSpace(saOption);
+        var saDir = explicitSa ? saOption!.Trim() : DefaultServiceAccountDir;
+
+        Uri? api;
+        var configured = options.GetValueOrDefault("discovery.k8sUrl");
+        if (!string.IsNullOrWhiteSpace(configured))
         {
-            PlusLog.Warn(context,
-                "Plus Discovery: k8s mode requires discovery.k8sUrl (Endpoints/EndpointSlice JSON). Full API watch is not supported.");
+            if (!Uri.TryCreate(configured.Trim(), UriKind.Absolute, out api) ||
+                api.Scheme is not ("http" or "https"))
+            {
+                PlusLog.Warn(context, "Plus Discovery: discovery.k8sUrl must be an absolute http(s) URL.");
+                return;
+            }
+        }
+        else
+        {
+            api = InClusterApiServer();
+            if (api is null)
+            {
+                PlusLog.Warn(context,
+                    "Plus Discovery: mode=k8s needs discovery.k8sUrl or an in-cluster environment (KUBERNETES_SERVICE_HOST).");
+                return;
+            }
+        }
+
+        var service = options.GetValueOrDefault("discovery.k8sService");
+        var extraSelector = options.GetValueOrDefault("discovery.k8sLabelSelector");
+        var selectors = new List<string>();
+        if (!string.IsNullOrWhiteSpace(service))
+        {
+            selectors.Add("kubernetes.io/service-name=" + service.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(extraSelector))
+        {
+            selectors.Add(extraSelector.Trim());
+        }
+
+        // A path on discovery.k8sUrl, or a bare URL with no selector, is taken as the exact collection
+        // (or single Endpoints/EndpointSlice object, which is polled) URL.
+        var explicitUrl = api.AbsolutePath.Length > 1 ||
+                          (!string.IsNullOrWhiteSpace(configured) && selectors.Count == 0);
+        Uri listUrl;
+        if (explicitUrl)
+        {
+            listUrl = api;
+        }
+        else
+        {
+            if (selectors.Count == 0)
+            {
+                PlusLog.Warn(context,
+                    "Plus Discovery: mode=k8s requires discovery.k8sService or discovery.k8sLabelSelector (or a full EndpointSlice URL in discovery.k8sUrl).");
+                return;
+            }
+
+            var ns = options.GetValueOrDefault("discovery.k8sNamespace");
+            if (string.IsNullOrWhiteSpace(ns))
+            {
+                ns = ReadNamespaceFile(Path.Combine(saDir, "namespace")) ?? "default";
+            }
+
+            listUrl = new Uri(api, $"/apis/discovery.k8s.io/v1/namespaces/{Uri.EscapeDataString(ns.Trim())}/endpointslices");
+        }
+
+        var settings = new KubernetesSettings(
+            listUrl,
+            selectors.Count == 0 ? null : string.Join(',', selectors),
+            options.GetValueOrDefault("discovery.clusterId") ?? "k8s",
+            options.GetValueOrDefault("discovery.k8sPortName"),
+            ReadInt(options, "discovery.intervalMs", 15000, 100, 3_600_000),
+            ReadInt(options, "discovery.k8sWatchTimeoutSeconds", 300, 1, 3600),
+            ReadInt(options, "discovery.k8sTokenRefreshSeconds", 60, 0, 86_400),
+            saDir,
+            explicitSa,
+            ReadBackoff(options));
+        PlusLog.Info(context,
+            $"Plus Discovery: k8s EndpointSlice list-then-watch {listUrl.GetLeftPart(UriPartial.Path)} selector={settings.LabelSelector ?? "(none)"}");
+
+        _ = Task.Run(() => RunKubernetesAsync(context, settings, _cts.Token), _cts.Token);
+    }
+
+    private static Uri? InClusterApiServer()
+    {
+        var host = Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST");
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return null;
+        }
+
+        var port = Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_PORT_HTTPS") ??
+                   Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_PORT") ?? "443";
+        host = host.Trim();
+        if (host.Contains(':', StringComparison.Ordinal) && !host.StartsWith('['))
+        {
+            host = "[" + host + "]";
+        }
+
+        return Uri.TryCreate($"https://{host}:{port}", UriKind.Absolute, out var uri) ? uri : null;
+    }
+
+    private static string? ReadNamespaceFile(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path).Trim() is { Length: > 0 } ns ? ns : null : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private async Task RunKubernetesAsync(PlusActivationContext context, KubernetesSettings s, CancellationToken ct)
+    {
+        var credentials = new ServiceAccountCredentials(
+            Path.Combine(s.ServiceAccountDir, "token"),
+            Path.Combine(s.ServiceAccountDir, "ca.crt"),
+            TimeSpan.FromSeconds(s.TokenRefreshSeconds));
+        var sendToken = s.ListUrl.Scheme == Uri.UriSchemeHttps || s.TokenExplicit;
+        using var handler = new SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        };
+        if (s.ListUrl.Scheme == Uri.UriSchemeHttps)
+        {
+            handler.SslOptions.RemoteCertificateValidationCallback = credentials.ValidateServerCertificate;
+        }
+
+        using var http = new HttpClient(handler, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+        var backoff = new DiscoveryBackoff(s.Backoff.MinMs, s.Backoff.MaxMs);
+        var applied = new DiscoveryApplyState();
+        var slices = new EndpointSliceSet();
+        string? resourceVersion = null;
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                if (resourceVersion is null)
+                {
+                    var list = await ListAsync(s, http, credentials, sendToken, ct);
+                    if (list.Snapshot is not null)
+                    {
+                        // A single Endpoints/EndpointSlice object has no list resourceVersion to watch: poll it.
+                        await ApplyDestinationsIfChangedAsync(context, s.ClusterId, list.Snapshot, applied, ct);
+                        backoff.Reset();
+                        await DelayAsync(TimeSpan.FromMilliseconds(s.IntervalMs), ct);
+                        continue;
+                    }
+
+                    slices.ReplaceAll(list.Slices!);
+                    await ApplyDestinationsIfChangedAsync(context, s.ClusterId, slices.Flatten(), applied, ct);
+                    resourceVersion = list.ResourceVersion ?? string.Empty;
+                }
+
+                resourceVersion = await WatchAsync(
+                    context, s, http, credentials, sendToken, resourceVersion, slices, applied, backoff, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (KubernetesGoneException)
+            {
+                resourceVersion = null;
+                var delay = backoff.Next();
+                PlusLog.Info(context,
+                    $"Plus Discovery: k8s resourceVersion expired (410 Gone); relisting in {(int)delay.TotalMilliseconds}ms");
+                await DelayAsync(delay, ct);
+            }
+            catch (Exception ex)
+            {
+                if (ex is JsonException)
+                {
+                    // Cannot trust the stream position after a malformed event.
+                    resourceVersion = null;
+                }
+
+                var delay = backoff.Next();
+                PlusLog.Warn(context,
+                    $"Plus Discovery: k8s discovery failed ({ex.Message}); keeping last known destinations, retry in {(int)delay.TotalMilliseconds}ms");
+                await DelayAsync(delay, ct);
+            }
+        }
+    }
+
+    private static HttpRequestMessage CreateKubernetesRequest(
+        Uri url, ServiceAccountCredentials credentials, bool sendToken)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.TryAddWithoutValidation("Accept", "application/json");
+        if (sendToken && credentials.GetToken() is { } token)
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + token);
+        }
+
+        return request;
+    }
+
+    private static void ThrowForKubernetesStatus(HttpResponseMessage response, ServiceAccountCredentials credentials)
+    {
+        if (response.IsSuccessStatusCode)
+        {
             return;
         }
 
-        var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
-        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? "k8s";
-        PlusLog.Info(context, $"Plus Discovery: k8s poll {url} every {intervalMs}ms");
-
-        _ = Task.Run(async () =>
+        if (response.StatusCode == HttpStatusCode.Gone)
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            await RunPeriodicAsync(
-                async ct =>
+            throw new KubernetesGoneException();
+        }
+
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            // The projected token may have rotated since the last read.
+            _ = credentials.GetToken(forceReload: true);
+        }
+
+        throw new HttpRequestException($"kubernetes API returned HTTP {(int)response.StatusCode}");
+    }
+
+    private static async Task<KubernetesListResult> ListAsync(
+        KubernetesSettings s, HttpClient http, ServiceAccountCredentials credentials, bool sendToken, CancellationToken ct)
+    {
+        var url = s.LabelSelector is null
+            ? s.ListUrl
+            : WithQuery(s.ListUrl, [new("labelSelector", s.LabelSelector)], "labelSelector");
+        using var request = CreateKubernetesRequest(url, credentials, sendToken);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(TimeSpan.FromSeconds(30));
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseContentRead, linked.Token);
+        ThrowForKubernetesStatus(response, credentials);
+        var json = await response.Content.ReadAsStringAsync(linked.Token);
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("items", out var items) &&
+            items.ValueKind == JsonValueKind.Array)
+        {
+            var slices = new Dictionary<string, List<DestinationConfig>>(StringComparer.Ordinal);
+            var index = 0;
+            foreach (var item in items.EnumerateArray())
+            {
+                slices[ReadSliceName(item) ?? "slice-" + index++] = ParseEndpointSlice(item, s.PortName);
+            }
+
+            return new KubernetesListResult(ReadResourceVersion(root), slices, null);
+        }
+
+        if (root.ValueKind == JsonValueKind.Object &&
+            (root.TryGetProperty("subsets", out _) || root.TryGetProperty("endpoints", out _)))
+        {
+            return new KubernetesListResult(null, null, ParseKubernetesDestinations(json));
+        }
+
+        throw new InvalidDataException("unrecognized kubernetes response (expected an EndpointSliceList)");
+    }
+
+    /// <summary>Streams one watch window. Returns the resourceVersion to resume from.</summary>
+    private static async Task<string> WatchAsync(
+        PlusActivationContext context,
+        KubernetesSettings s,
+        HttpClient http,
+        ServiceAccountCredentials credentials,
+        bool sendToken,
+        string resourceVersion,
+        EndpointSliceSet slices,
+        DiscoveryApplyState applied,
+        DiscoveryBackoff backoff,
+        CancellationToken ct)
+    {
+        // A previous apply may have failed after the set changed; converge before waiting for events.
+        await ApplyDestinationsIfChangedAsync(context, s.ClusterId, slices.Flatten(), applied, ct);
+
+        var query = new List<KeyValuePair<string, string>>
+        {
+            new("watch", "true"),
+            new("allowWatchBookmarks", "true"),
+            new("timeoutSeconds", s.WatchTimeoutSeconds.ToString(CultureInfo.InvariantCulture)),
+        };
+        if (resourceVersion.Length > 0)
+        {
+            query.Add(new("resourceVersion", resourceVersion));
+        }
+
+        if (s.LabelSelector is not null)
+        {
+            query.Add(new("labelSelector", s.LabelSelector));
+        }
+
+        // A selector already present on an explicit discovery.k8sUrl stays unless a configured one replaces it.
+        var replaced = s.LabelSelector is null
+            ? new[] { "watch", "allowWatchBookmarks", "timeoutSeconds", "resourceVersion" }
+            : ["watch", "allowWatchBookmarks", "timeoutSeconds", "resourceVersion", "labelSelector"];
+        var url = WithQuery(s.ListUrl, query, replaced);
+        using var request = CreateKubernetesRequest(url, credentials, sendToken);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(TimeSpan.FromSeconds(s.WatchTimeoutSeconds + 15));
+        var started = Stopwatch.GetTimestamp();
+        var events = 0;
+        var current = resourceVersion;
+
+        try
+        {
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token);
+            ThrowForKubernetesStatus(response, credentials);
+            await using var stream = await response.Content.ReadAsStreamAsync(linked.Token);
+            using var reader = new StreamReader(stream);
+            while (await reader.ReadLineAsync(linked.Token) is { } line)
+            {
+                if (string.IsNullOrWhiteSpace(line))
                 {
-                    var json = await http.GetStringAsync(url, ct);
-                    await ApplyDestinationsIfAnyAsync(context, clusterId, ParseKubernetesDestinations(json), ct);
-                },
-                intervalMs,
-                "Plus Discovery: k8s poll failed",
-                context);
-        }, _cts.Token);
+                    continue;
+                }
+
+                current = await ProcessWatchEventAsync(context, s, line, current, slices, applied, ct);
+                events++;
+                backoff.Reset();
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // The watch window elapsed; resume from the last resourceVersion.
+        }
+
+        if (events == 0 && Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(5))
+        {
+            throw new IOException("watch closed without delivering events");
+        }
+
+        return current;
+    }
+
+    private static async Task<string> ProcessWatchEventAsync(
+        PlusActivationContext context,
+        KubernetesSettings s,
+        string line,
+        string resourceVersion,
+        EndpointSliceSet slices,
+        DiscoveryApplyState applied,
+        CancellationToken ct)
+    {
+        using var doc = JsonDocument.Parse(line);
+        var root = doc.RootElement;
+        var type = TryGetString(root, "type");
+        if (!root.TryGetProperty("object", out var obj) || obj.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException("watch event has no object");
+        }
+
+        switch (type)
+        {
+            case "BOOKMARK":
+                return ReadResourceVersion(obj) ?? resourceVersion;
+            case "ERROR":
+                if (obj.TryGetProperty("code", out var code) && code.TryGetInt32(out var status) && status == 410)
+                {
+                    throw new KubernetesGoneException();
+                }
+
+                throw new InvalidOperationException("watch error: " + (TryGetString(obj, "message") ?? "unknown"));
+            case "ADDED":
+            case "MODIFIED":
+            case "DELETED":
+                var name = ReadSliceName(obj) ?? throw new JsonException("watch event has no metadata.name");
+                if (type == "DELETED")
+                {
+                    slices.Remove(name);
+                }
+                else
+                {
+                    slices.Upsert(name, ParseEndpointSlice(obj, s.PortName));
+                }
+
+                await ApplyDestinationsIfChangedAsync(context, s.ClusterId, slices.Flatten(), applied, ct);
+                return ReadResourceVersion(obj) ?? resourceVersion;
+            default:
+                return resourceVersion;
+        }
+    }
+
+    private static string? ReadResourceVersion(JsonElement element) =>
+        element.TryGetProperty("metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object
+            ? TryGetString(metadata, "resourceVersion")
+            : null;
+
+    private static string? ReadSliceName(JsonElement element) =>
+        element.TryGetProperty("metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object
+            ? TryGetString(metadata, "name")
+            : null;
+
+    /// <summary>
+    /// Ready destinations of one EndpointSlice object. An endpoint whose <c>conditions.ready</c> is false is
+    /// skipped; a missing condition counts as ready. With <paramref name="portName"/> the matching named port
+    /// is used, otherwise the first TCP port.
+    /// </summary>
+    internal static List<DestinationConfig> ParseEndpointSlice(JsonElement slice, string? portName)
+    {
+        var list = new List<DestinationConfig>();
+        var port = 80;
+        if (slice.TryGetProperty("ports", out var ports) && ports.ValueKind == JsonValueKind.Array &&
+            ports.GetArrayLength() > 0)
+        {
+            int? chosen = null;
+            foreach (var candidate in ports.EnumerateArray())
+            {
+                var protocol = TryGetString(candidate, "protocol");
+                if (protocol is not null && !string.Equals(protocol, "TCP", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(portName) &&
+                    !string.Equals(TryGetString(candidate, "name"), portName, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (candidate.TryGetProperty("port", out var number) && number.TryGetInt32(out var parsed))
+                {
+                    chosen = parsed;
+                    break;
+                }
+            }
+
+            if (chosen is null)
+            {
+                return list;
+            }
+
+            port = chosen.Value;
+        }
+
+        if (!slice.TryGetProperty("endpoints", out var endpoints) || endpoints.ValueKind != JsonValueKind.Array)
+        {
+            return list;
+        }
+
+        foreach (var endpoint in endpoints.EnumerateArray())
+        {
+            if (endpoint.TryGetProperty("conditions", out var conditions) &&
+                conditions.ValueKind == JsonValueKind.Object &&
+                conditions.TryGetProperty("ready", out var ready) &&
+                ready.ValueKind == JsonValueKind.False)
+            {
+                continue;
+            }
+
+            if (!endpoint.TryGetProperty("addresses", out var addresses) || addresses.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var element in addresses.EnumerateArray())
+            {
+                var address = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+                if (string.IsNullOrWhiteSpace(address))
+                {
+                    continue;
+                }
+
+                list.Add(new DestinationConfig
+                {
+                    Id = $"k8s-{address}-{port}",
+                    Address = address,
+                    Port = port,
+                });
+            }
+        }
+
+        return list;
     }
 
     /// <summary>
@@ -535,13 +1180,274 @@ public sealed class ServiceDiscovery : IDisposable
     }
 
     private static string? TryGetString(JsonElement element, string propertyName) =>
-        element.TryGetProperty(propertyName, out var value) ? value.GetString() : null;
-
+        element.ValueKind == JsonValueKind.Object &&
+        element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     public void Dispose()
     {
         _cts.Cancel();
         _watcher?.Dispose();
         _cts.Dispose();
+    }
+}
+
+internal sealed record BackoffSettings(int MinMs, int MaxMs);
+
+internal sealed record ConsulSettings(
+    Uri Url,
+    string ClusterId,
+    int IntervalMs,
+    int WaitSeconds,
+    bool PassingOnly,
+    string? Token,
+    BackoffSettings Backoff);
+
+internal sealed record KubernetesSettings(
+    Uri ListUrl,
+    string? LabelSelector,
+    string ClusterId,
+    string? PortName,
+    int IntervalMs,
+    int WatchTimeoutSeconds,
+    int TokenRefreshSeconds,
+    string ServiceAccountDir,
+    bool TokenExplicit,
+    BackoffSettings Backoff);
+
+internal sealed record KubernetesListResult(
+    string? ResourceVersion,
+    Dictionary<string, List<DestinationConfig>>? Slices,
+    List<DestinationConfig>? Snapshot);
+
+/// <summary>The API server rejected a resourceVersion (HTTP 410 or a watch ERROR event): relist.</summary>
+internal sealed class KubernetesGoneException : Exception
+{
+    public KubernetesGoneException()
+        : base("kubernetes resourceVersion is too old (410 Gone)")
+    {
+    }
+}
+
+/// <summary>Remembers what was last applied so unchanged results do not churn the cluster manager.</summary>
+internal sealed class DiscoveryApplyState
+{
+    public string? Signature { get; set; }
+
+    public static string Sign(List<DestinationConfig> destinations)
+    {
+        var parts = new string[destinations.Count];
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var d = destinations[i];
+            parts[i] = $"{d.Id}|{d.Address}|{d.Port}|{d.UseHttps}|{d.Weight}";
+        }
+
+        Array.Sort(parts, StringComparer.Ordinal);
+        return string.Join('\n', parts);
+    }
+}
+
+/// <summary>Ready destinations per EndpointSlice name; the union is what gets applied.</summary>
+internal sealed class EndpointSliceSet
+{
+    private readonly Dictionary<string, List<DestinationConfig>> _slices = new(StringComparer.Ordinal);
+
+    public void ReplaceAll(Dictionary<string, List<DestinationConfig>> slices)
+    {
+        _slices.Clear();
+        foreach (var pair in slices)
+        {
+            _slices[pair.Key] = pair.Value;
+        }
+    }
+
+    public void Upsert(string name, List<DestinationConfig> destinations) => _slices[name] = destinations;
+
+    public void Remove(string name) => _slices.Remove(name);
+
+    public List<DestinationConfig> Flatten()
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<DestinationConfig>();
+        foreach (var name in _slices.Keys.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            foreach (var destination in _slices[name])
+            {
+                if (seen.Add(destination.Id))
+                {
+                    result.Add(destination);
+                }
+            }
+        }
+
+        return result;
+    }
+}
+
+/// <summary>Exponential backoff with equal jitter: each delay is uniform in [cap/2, cap].</summary>
+internal sealed class DiscoveryBackoff
+{
+    private readonly int _minMs;
+    private readonly int _maxMs;
+    private readonly Func<double> _random;
+    private int _attempt;
+
+    public DiscoveryBackoff(int minMs, int maxMs, Func<double>? random = null)
+    {
+        _minMs = Math.Max(1, minMs);
+        _maxMs = Math.Max(_minMs, maxMs);
+        _random = random ?? Random.Shared.NextDouble;
+    }
+
+    public TimeSpan Next()
+    {
+        var delay = Compute(_attempt, _minMs, _maxMs, _random());
+        if (_attempt < 30)
+        {
+            _attempt++;
+        }
+
+        return delay;
+    }
+
+    public void Reset() => _attempt = 0;
+
+    public static TimeSpan Compute(int attempt, int minMs, int maxMs, double jitter)
+    {
+        var cap = Math.Min((double)maxMs, minMs * Math.Pow(2, Math.Clamp(attempt, 0, 30)));
+        var half = cap / 2;
+        return TimeSpan.FromMilliseconds(half + half * Math.Clamp(jitter, 0, 1));
+    }
+}
+
+/// <summary>
+/// Service-account token and CA bundle. The projected token rotates on disk, so it is re-read after
+/// <c>ttl</c> (and immediately after a 401/403); a changed CA file is picked up the same way.
+/// </summary>
+internal sealed class ServiceAccountCredentials
+{
+    private readonly string _tokenPath;
+    private readonly string _caPath;
+    private readonly TimeSpan _ttl;
+    private readonly object _gate = new();
+    private string? _token;
+    private DateTime _tokenLoadedUtc = DateTime.MinValue;
+    private X509Certificate2Collection? _roots;
+    private DateTime _caCheckedUtc = DateTime.MinValue;
+    private DateTime _caWriteUtc = DateTime.MinValue;
+
+    public ServiceAccountCredentials(string tokenPath, string caPath, TimeSpan ttl)
+    {
+        _tokenPath = tokenPath;
+        _caPath = caPath;
+        _ttl = ttl;
+    }
+
+    public string? GetToken(bool forceReload = false)
+    {
+        lock (_gate)
+        {
+            var now = DateTime.UtcNow;
+            if (!forceReload && _token is not null && now - _tokenLoadedUtc < _ttl)
+            {
+                return _token;
+            }
+
+            _tokenLoadedUtc = now;
+            try
+            {
+                if (File.Exists(_tokenPath))
+                {
+                    var text = File.ReadAllText(_tokenPath).Trim();
+                    if (text.Length > 0)
+                    {
+                        _token = text;
+                    }
+                }
+            }
+            catch (IOException)
+            {
+                // Keep the previous token; the file may be mid-rotation.
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+
+            return _token;
+        }
+    }
+
+    public bool ValidateServerCertificate(
+        object sender, X509Certificate? certificate, X509Chain? chain, SslPolicyErrors errors)
+    {
+        if (errors == SslPolicyErrors.None)
+        {
+            return true;
+        }
+
+        if (certificate is null ||
+            (errors & (SslPolicyErrors.RemoteCertificateNameMismatch | SslPolicyErrors.RemoteCertificateNotAvailable)) != 0)
+        {
+            return false;
+        }
+
+        var roots = GetRoots();
+        if (roots is null || roots.Count == 0)
+        {
+            return false;
+        }
+
+        using var leaf = new X509Certificate2(certificate);
+        using var custom = new X509Chain();
+        custom.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        custom.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        custom.ChainPolicy.CustomTrustStore.AddRange(roots);
+        if (chain is not null)
+        {
+            foreach (var element in chain.ChainElements.Skip(1))
+            {
+                custom.ChainPolicy.ExtraStore.Add(element.Certificate);
+            }
+        }
+
+        return custom.Build(leaf);
+    }
+
+    private X509Certificate2Collection? GetRoots()
+    {
+        lock (_gate)
+        {
+            var now = DateTime.UtcNow;
+            if (_roots is not null && now - _caCheckedUtc < _ttl)
+            {
+                return _roots;
+            }
+
+            _caCheckedUtc = now;
+            try
+            {
+                if (!File.Exists(_caPath))
+                {
+                    return _roots;
+                }
+
+                var write = File.GetLastWriteTimeUtc(_caPath);
+                if (_roots is null || write != _caWriteUtc)
+                {
+                    var loaded = new X509Certificate2Collection();
+                    loaded.ImportFromPemFile(_caPath);
+                    _roots = loaded;
+                    _caWriteUtc = write;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+            {
+                // Keep the previous bundle.
+            }
+
+            return _roots;
+        }
     }
 }
