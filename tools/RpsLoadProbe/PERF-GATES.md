@@ -4,6 +4,16 @@ Run on the release SHA via [`.github/workflows/rps-saturation.yml`](../../.githu
 
 Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature commits.
 
+## Commercial-grade parity baseline
+
+Paired A/B for the `feat/commercial-grade-parity` work items compares each commit against this SHA (the `develop` tip before that branch):
+
+| Key | Value |
+|-----|-------|
+| `BASELINE_SHA` | `a6b341d704fb06f9f194080e4908985a90469204` |
+
+Pass thresholds for the default configuration (feature off): median RPS delta at least −1.0%, lower bound of the 95% interval at least −2.0%, p99 latency at most +3%, RSS after warm-up at most +2%, Gen0 collections per 100k requests within 1%, error count zero. Never loosen a floor in [`validate-edition-gates.ps1`](validate-edition-gates.ps1) (floors stay at or above 0.50). Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+
 ## Branch policy + CI gates (beta / stable)
 
 **PR-only merges into `beta` / `stable`** (no direct pushes). Required status checks before merge:

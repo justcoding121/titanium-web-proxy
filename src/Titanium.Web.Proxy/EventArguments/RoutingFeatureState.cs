@@ -39,4 +39,26 @@ internal sealed class RoutingFeatureState
 
         return false;
     }
+
+    /// <summary>
+    /// Clears every mutable field so a recycled extras object cannot leak state across keep-alive
+    /// requests. Prefer disposing Activity and nulling the session's Extras; call this when an
+    /// extras instance is reused without reallocation.
+    /// </summary>
+    public void Reset()
+    {
+        Retry = null;
+        StatusRetried = false;
+        RequestStartTimestamp = 0;
+        Activity?.Dispose();
+        Activity = null;
+        RequestId = null;
+        PendingSetCookie = null;
+        HeldConnectionPolicy = null;
+        if (TriedCount > 0)
+        {
+            System.Array.Clear(Tried, 0, TriedCount);
+            TriedCount = 0;
+        }
+    }
 }

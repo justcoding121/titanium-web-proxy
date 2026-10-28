@@ -98,7 +98,7 @@ public class SessionEventArgs : SessionEventArgsBase
         MatchedRoute = null;
         ClusterConnectionKey = null;
         ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
-        Extras?.Activity?.Dispose();
+        Extras?.Reset();
         Extras = null;
         Deadlines.Reset();
         UserData = connectArgs?.UserData;
