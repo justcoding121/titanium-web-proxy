@@ -54,7 +54,64 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `maxConcurrentClients` | int? | Per-endpoint admission cap |
 | `genericCertificateName` | string? | Fallback hostname when SNI is absent |
 | `maxInboundBidirectionalStreams` / `maxInboundUnidirectionalStreams` | int? | QUIC stream caps |
-| `handshakeTimeoutSeconds` / `idleTimeoutSeconds` | int? | QUIC timeouts |
+| `handshakeTimeoutSeconds` / `idleTimeoutSeconds` | int? | QUIC timeouts. On a `passthrough` listener, `idleTimeoutSeconds` closes a connection with no bytes in either direction for that long (`0`, the default, never) |
+| `passthrough` | bool | Copy TCP bytes to the upstream without parsing. See [TCP passthrough with SNI](#tcp-passthrough-with-sni) |
+| `sniRoutes` | list | Passthrough only. Each entry has `serverName` (exact or `*.example.com`) and `clusterId` |
+| `sniDefaultClusterId` | string? | Passthrough only. Cluster for a client with no match, no server name, or no ClientHello |
+| `sniReadTimeoutSeconds` | int? | Passthrough only. How long to wait for the ClientHello, 1 to 60. Default `5` |
+| `sendProxyProtocol` | string? | Passthrough only. `none` (default) or `v2` |
+
+### TCP passthrough with SNI
+
+A passthrough listener copies bytes between the client and an upstream and never decrypts them. With `sniRoutes`, it first reads the client's TLS ClientHello, takes the server name from it, and sends the connection to a cluster. The ClientHello bytes are forwarded unchanged, so the origin completes the handshake and presents its own certificate.
+
+```yaml
+listeners:
+  - port: 443
+    type: transparent
+    passthrough: true
+    decryptSsl: false
+    sniRoutes:
+      - serverName: "api.example.com"
+        clusterId: tcp-api
+      - serverName: "*.example.com"
+        clusterId: tcp-web
+    sniDefaultClusterId: tcp-web
+    sniReadTimeoutSeconds: 5
+    idleTimeoutSeconds: 300
+    sendProxyProtocol: v2
+```
+
+The clusters are ordinary clusters, defined as in [Routes & clusters](#routes-clusters):
+
+```json
+{
+  "clusters": [
+    {
+      "id": "tcp-api",
+      "algorithm": "LeastRequests",
+      "destinations": [
+        { "id": "api1", "address": "10.0.0.11", "port": 443 },
+        { "id": "api2", "address": "10.0.0.12", "port": 443 }
+      ]
+    },
+    {
+      "id": "tcp-web",
+      "destinations": [{ "id": "web1", "address": "10.0.0.21", "port": 443 }]
+    }
+  ]
+}
+```
+
+- **Match order.** An exact name wins. Otherwise the longest matching `*.suffix` wins (`*.api.example.com` beats `*.example.com`, and `*.example.com` also matches `a.b.example.com` but not `example.com`). Then `sniDefaultClusterId`, then `forwardHost`. Names compare without regard to case. With none of those, the connection is closed.
+- **No server name.** A client that connects by IP address, sends no `server_name`, speaks something other than TLS, or stays silent for `sniReadTimeoutSeconds` (a protocol where the server speaks first) is treated as having no name. Whatever it already sent is forwarded.
+- **Balancing.** The cluster's algorithm, weights, priorities, caps, and passive health apply to connections the same way they do to requests. A connect that fails is tried against another destination, up to the smaller of 3 and the number of eligible destinations, and each failure counts toward passive ejection. Open connections count as active requests for `LeastRequests`.
+- **Half-close.** When one side sends EOF, the proxy shuts down sending to the other side and lets the remaining direction finish for up to 30 seconds. A client that finishes its request and waits for the reply works.
+- **`sendProxyProtocol: v2`.** Writes a PROXY protocol v2 header with the client and listener addresses to the upstream before any client bytes. The upstream must expect it.
+- **Validation.** Every `clusterId` must exist. `serverName` is an exact name or one leading `*.` label. At least one of `sniRoutes`, `sniDefaultClusterId`, or `forwardHost` is required on a passthrough listener, and `sniRoutes` requires `passthrough: true` and `decryptSsl: false`.
+- **Metrics.** `twp.passthrough.connections{route,result}` counts finished connections. `route` is the matching `serverName` pattern, `default`, or `forward`. `result` is `ok`, `idle_timeout`, `grace_expired`, `connect_failed`, `no_destination`, `no_route`, `client_closed`, `cancelled`, or `error`. `twp.passthrough.bytes{direction}` counts bytes relayed (`in` is client to upstream, `out` is upstream to client).
+
+Without `sniRoutes` and `sniDefaultClusterId`, a passthrough listener behaves as before: every connection goes to `forwardHost` and nothing is read ahead.
 
 ## Observability
 

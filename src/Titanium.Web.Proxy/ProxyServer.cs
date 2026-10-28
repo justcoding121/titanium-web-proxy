@@ -1882,7 +1882,7 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost: { Length: > 0 } forwardHost } passthrough)
+            if (endPoint is TransparentBaseProxyEndPoint { HasPassthroughTarget: true } passthrough)
             {
                 if (!TryAdmitClientConnection(endPoint))
                 {
@@ -1892,11 +1892,10 @@ public partial class ProxyServer : IDisposable
 
                 // The relay runs for the life of the connection. Awaiting it here would hold the accept
                 // loop and serialize every passthrough client behind the one before it.
-                var passthroughPort = passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80);
                 var passthroughClient = tcpClient;
                 ThreadPool.UnsafeQueueUserWorkItem(
                     new DeferredWorkItem(() => HandlePassthroughClientAsync(
-                        passthroughClient, endPoint, forwardHost, passthroughPort, cancellationToken)),
+                        passthroughClient, passthrough, cancellationToken)),
                     preferLocal: false);
                 continue;
             }
@@ -1972,28 +1971,6 @@ public partial class ProxyServer : IDisposable
             ReleaseClientConnection(endPoint);
             clientHelloWait = Task.FromResult(0);
             return false;
-        }
-    }
-
-    private async Task HandlePassthroughClientAsync(Socket client, ProxyEndPoint endPoint, string host, int port,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Network.TcpPassthrough.RelayAsync(client, host, port, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // The proxy is stopping. Closing the sockets below ends the relay.
-        }
-        catch (Exception ex)
-        {
-            OnException(null, ex);
-        }
-        finally
-        {
-            client.Dispose();
-            ReleaseClientConnection(endPoint);
         }
     }
 

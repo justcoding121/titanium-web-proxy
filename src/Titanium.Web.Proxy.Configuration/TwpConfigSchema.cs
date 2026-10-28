@@ -109,6 +109,13 @@ public static class TwpConfigSchema
             case "ListenerConfig.ClientCertificateMode":
                 schema["enum"] = new JsonArray { "none", "allow", "require" };
                 break;
+            case "ListenerConfig.SendProxyProtocol":
+                schema["enum"] = new JsonArray { "none", "v2" };
+                break;
+            case "ListenerConfig.SniReadTimeoutSeconds":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 60;
+                break;
             case "MirrorConfig.MaxBodyBytes":
                 schema[MinimumKey] = 0;
                 schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;

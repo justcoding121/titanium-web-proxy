@@ -1,4 +1,6 @@
-﻿using System.Net;
+﻿using System;
+using System.Collections.Generic;
+using System.Net;
 using System.Net.Security;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -36,6 +38,48 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
 
     /// <summary>When true, accepted sockets are copied to <see cref="ForwardHost"/> without HTTP parsing.</summary>
     public bool Passthrough { get; set; }
+
+    private IReadOnlyList<PassthroughSniRoute>? passthroughRoutes;
+
+    /// <summary>
+    ///     TCP passthrough only. Routes chosen by the TLS server name in the client's first record.
+    ///     Each names a cluster whose destinations are balanced. With no match the connection goes to
+    ///     <see cref="PassthroughDefaultClusterId" />, then <see cref="ForwardHost" />.
+    /// </summary>
+    public IReadOnlyList<PassthroughSniRoute>? PassthroughRoutes
+    {
+        get => passthroughRoutes;
+        set
+        {
+            passthroughRoutes = value;
+            PassthroughTable = value is { Count: > 0 } ? new Network.PassthroughRouteTable(value) : null;
+        }
+    }
+
+    /// <summary>TCP passthrough only. Cluster used when no SNI route matches, or the client sends no server name.</summary>
+    public string? PassthroughDefaultClusterId { get; set; }
+
+    /// <summary>
+    ///     TCP passthrough only. How long to wait for the first TLS record when <see cref="PassthroughRoutes" />
+    ///     is set. A client that stays silent (a server-speaks-first protocol) is then sent to the default route.
+    ///     Zero or negative uses 5 seconds.
+    /// </summary>
+    public TimeSpan PassthroughSniReadTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>TCP passthrough only. Closes a connection with no bytes in either direction for this long. Zero disables.</summary>
+    public TimeSpan PassthroughIdleTimeout { get; set; }
+
+    /// <summary>TCP passthrough only. Header written to the upstream before the client's bytes.</summary>
+    public PassthroughProxyProtocolMode PassthroughProxyProtocol { get; set; }
+
+    internal Network.PassthroughRouteTable? PassthroughTable { get; private set; }
+
+    /// <summary>True when the accept loop should hand sockets to the passthrough relay.</summary>
+    internal bool HasPassthroughTarget =>
+        Passthrough &&
+        (!string.IsNullOrEmpty(ForwardHost) ||
+         PassthroughTable is not null ||
+         !string.IsNullOrEmpty(PassthroughDefaultClusterId));
 
     /// <summary>
     ///     When <see langword="true" /> together with <see cref="ProxyEndPoint.DecryptSsl" />, the proxy

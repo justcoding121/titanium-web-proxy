@@ -39,7 +39,7 @@ public static class TwpConfigValidator
         var clusterIds = ValidateClusters(config.Clusters, errors);
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
-        ValidateListeners(config.Listeners, errors);
+        ValidateListeners(config.Listeners, clusterIds, errors);
         ValidateServer(config.Server, errors);
         return errors;
     }
@@ -656,11 +656,13 @@ public static class TwpConfigValidator
         RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
     }
 
-    private static void ValidateListeners(IEnumerable<ListenerConfig> listeners, List<string> errors)
+    private static void ValidateListeners(
+        IEnumerable<ListenerConfig> listeners, HashSet<string> clusterIds, List<string> errors)
     {
         foreach (var listener in listeners)
         {
             ValidateListenerBounds(listener, errors);
+            ValidatePassthrough(listener, clusterIds, errors);
             ValidateMasqueListener(listener, errors);
             ValidateClientCertificate(listener, errors);
             ValidateTrustedProxySources(listener, errors);
@@ -708,6 +710,108 @@ public static class TwpConfigValidator
         {
             errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
         }
+    }
+
+    private static void ValidatePassthrough(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors)
+    {
+        var prefix = $"Listener port {listener.Port}:";
+        var routes = listener.SniRoutes ?? [];
+        var hasDefault = !string.IsNullOrWhiteSpace(listener.SniDefaultClusterId);
+        var usesSni = routes.Count > 0 || hasDefault;
+
+        if (usesSni)
+        {
+            if (!listener.Passthrough)
+            {
+                errors.Add($"{prefix} sniRoutes and sniDefaultClusterId require passthrough: true.");
+            }
+
+            if (listener.DecryptSsl)
+            {
+                errors.Add($"{prefix} sniRoutes and sniDefaultClusterId require decryptSsl: false (the proxy reads the ClientHello but never decrypts).");
+            }
+
+            if (!IsTransparentListener(listener))
+            {
+                errors.Add($"{prefix} sniRoutes and sniDefaultClusterId apply only to transparent listeners.");
+            }
+        }
+        else if (listener.Passthrough && string.IsNullOrEmpty(listener.ForwardHost))
+        {
+            errors.Add($"{prefix} passthrough needs sniRoutes, sniDefaultClusterId, or forwardHost.");
+        }
+
+        if (hasDefault && !clusterIds.Contains(listener.SniDefaultClusterId!))
+        {
+            errors.Add($"{prefix} sniDefaultClusterId '{listener.SniDefaultClusterId}' is not a defined cluster.");
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < routes.Count; i++)
+        {
+            var route = routes[i];
+            var name = route.ServerName?.Trim();
+            if (!IsValidSniPattern(name))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].serverName '{route.ServerName}' must be an exact host name or one leading '*.' label followed by a suffix.");
+            }
+            else if (!seen.Add(name!))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].serverName '{name}' is listed twice.");
+            }
+
+            if (string.IsNullOrWhiteSpace(route.ClusterId))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].clusterId is required.");
+            }
+            else if (!clusterIds.Contains(route.ClusterId))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].clusterId '{route.ClusterId}' is not a defined cluster.");
+            }
+        }
+
+        if (listener.SniReadTimeoutSeconds is < 1 or > 60)
+        {
+            errors.Add($"{prefix} sniReadTimeoutSeconds must be between 1 and 60.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.SendProxyProtocol))
+        {
+            if (!listener.SendProxyProtocol.Equals("none", StringComparison.OrdinalIgnoreCase)
+                && !listener.SendProxyProtocol.Equals("v2", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"{prefix} sendProxyProtocol '{listener.SendProxyProtocol}' is not none or v2.");
+            }
+            else if (!listener.Passthrough && listener.SendProxyProtocol.Equals("v2", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"{prefix} sendProxyProtocol v2 requires passthrough: true.");
+            }
+        }
+    }
+
+    /// <summary>An exact DNS-style name, or <c>*.</c> followed by a suffix with no further wildcard.</summary>
+    private static bool IsValidSniPattern(string? pattern)
+    {
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return false;
+        }
+
+        var host = pattern.StartsWith("*.", StringComparison.Ordinal) ? pattern[2..] : pattern;
+        if (host.Length == 0 || host.Length > 253 || host.StartsWith('.') || host.EndsWith('.') || host.Contains(".."))
+        {
+            return false;
+        }
+
+        foreach (var ch in host)
+        {
+            if (!(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void ValidateMasqueListener(ListenerConfig listener, List<string> errors)
@@ -1332,5 +1436,8 @@ public static class TwpConfigValidator
     /// </summary>
     private static bool IsTransparentListener(ListenerConfig listener) =>
         string.Equals(listener.Type, "transparent", StringComparison.OrdinalIgnoreCase)
-        || (string.IsNullOrWhiteSpace(listener.Type) && !string.IsNullOrEmpty(listener.ForwardHost));
+        || (string.IsNullOrWhiteSpace(listener.Type) &&
+            (!string.IsNullOrEmpty(listener.ForwardHost)
+             || (listener.SniRoutes?.Count ?? 0) > 0
+             || !string.IsNullOrEmpty(listener.SniDefaultClusterId)));
 }

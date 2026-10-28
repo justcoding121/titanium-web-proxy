@@ -97,7 +97,7 @@ public sealed class ListenerConfig
     /// <summary>QUIC handshake timeout in seconds.</summary>
     public int? HandshakeTimeoutSeconds { get; set; }
 
-    /// <summary>QUIC idle timeout in seconds.</summary>
+    /// <summary>QUIC idle timeout in seconds. On a passthrough listener, seconds with no bytes before the connection closes (0 disables).</summary>
     public int? IdleTimeoutSeconds { get; set; }
 
     /// <summary>Require a PROXY protocol preamble before HTTP bytes.</summary>
@@ -111,6 +111,21 @@ public sealed class ListenerConfig
 
     /// <summary>Copy accepted bytes to <see cref="ForwardHost"/> without parsing HTTP.</summary>
     public bool Passthrough { get; set; }
+
+    /// <summary>
+    /// Passthrough only. Sends a connection to a cluster by the TLS server name in the ClientHello.
+    /// Requires <see cref="Passthrough"/> true and <see cref="DecryptSsl"/> false.
+    /// </summary>
+    public IList<SniRouteConfig> SniRoutes { get; set; } = new List<SniRouteConfig>();
+
+    /// <summary>Passthrough only. Cluster for connections with no matching or no server name.</summary>
+    public string? SniDefaultClusterId { get; set; }
+
+    /// <summary>Passthrough only. Seconds to wait for the ClientHello when <see cref="SniRoutes"/> is set. Default 5.</summary>
+    public int? SniReadTimeoutSeconds { get; set; }
+
+    /// <summary>Passthrough only: <c>none</c> (default) or <c>v2</c>, a PROXY protocol v2 header sent to the upstream first.</summary>
+    public string? SendProxyProtocol { get; set; }
 
     /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
     public string? ClientCertificateMode { get; set; }
@@ -126,6 +141,16 @@ public sealed class ListenerConfig
 
     /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
     public MasqueListenerConfig? Masque { get; set; }
+}
+
+/// <summary>One TCP passthrough route chosen by the client's TLS server name.</summary>
+public sealed class SniRouteConfig
+{
+    /// <summary>Exact host name, or <c>*.example.com</c> for any host below that suffix.</summary>
+    public string? ServerName { get; set; }
+
+    /// <summary>Id of the cluster that receives matching connections.</summary>
+    public string? ClusterId { get; set; }
 }
 
 /// <summary>Alt-Svc advertisement for a listener that also accepts HTTP/3.</summary>

@@ -898,7 +898,43 @@ internal static class RunCommand
             return listener.Type.Trim().ToLowerInvariant();
         }
 
-        return string.IsNullOrEmpty(listener.ForwardHost) ? "explicit" : "transparent";
+        return string.IsNullOrEmpty(listener.ForwardHost) && !HasPassthroughClusterRouting(listener)
+            ? "explicit"
+            : "transparent";
+    }
+
+    private static bool HasPassthroughClusterRouting(ListenerConfig listener) =>
+        listener.SniRoutes is { Count: > 0 } || !string.IsNullOrEmpty(listener.SniDefaultClusterId);
+
+    private static void ApplyPassthroughSni(TransparentProxyEndPoint ep, ListenerConfig listener)
+    {
+        if (!listener.Passthrough)
+        {
+            return;
+        }
+
+        if (listener.SniRoutes is { Count: > 0 } sniRoutes)
+        {
+            ep.PassthroughRoutes = sniRoutes
+                .Select(route => new PassthroughSniRoute(route.ServerName ?? string.Empty, route.ClusterId ?? string.Empty))
+                .ToArray();
+        }
+
+        ep.PassthroughDefaultClusterId = listener.SniDefaultClusterId;
+        if (listener.SniReadTimeoutSeconds is int sniRead)
+        {
+            ep.PassthroughSniReadTimeout = TimeSpan.FromSeconds(sniRead);
+        }
+
+        if (listener.IdleTimeoutSeconds is int idle)
+        {
+            ep.PassthroughIdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+
+        if (string.Equals(listener.SendProxyProtocol, "v2", StringComparison.OrdinalIgnoreCase))
+        {
+            ep.PassthroughProxyProtocol = PassthroughProxyProtocolMode.V2;
+        }
     }
 
     private static SocksProxyEndPoint CreateSocksEndPoint(IPAddress ip, ListenerConfig listener)
@@ -964,6 +1000,7 @@ internal static class RunCommand
         }
 
         ep.Passthrough = listener.Passthrough;
+        ApplyPassthroughSni(ep, listener);
         ep.ClientCertificateMode = listener.ClientCertificateMode?.ToLowerInvariant() switch
         {
             "require" => ClientCertificateMode.Require,

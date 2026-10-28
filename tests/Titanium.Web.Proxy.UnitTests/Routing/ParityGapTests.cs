@@ -256,6 +256,10 @@ public class ParityGapTests
             var read = await originClient.GetStream().ReadAsync(buffer, cts.Token);
             Assert.AreEqual("ping", Encoding.ASCII.GetString(buffer, 0, read));
             client.Close();
+
+            // The client's EOF reaches the origin as a half-close. The relay ends once the origin answers it.
+            Assert.AreEqual(0, await originClient.GetStream().ReadAsync(buffer, cts.Token));
+            originClient.Close();
             await relay;
         }
         finally

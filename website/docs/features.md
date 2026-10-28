@@ -81,6 +81,7 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 | Clusters | Passive health, optional active probes, retry, concurrency, priority, backup, hash, and opaque session affinity |
 | Routing | Order plus specificity, segment prefix, regex, redirects, direct responses, error pages, traffic split, and mirroring |
 | Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |
+| TCP passthrough with SNI | A passthrough listener reads the ClientHello and picks a cluster by server name (exact, then longest `*.suffix`, then a default cluster or `forwardHost`) without decrypting. Balancing, connect failover, half-close, an idle timeout, and an optional PROXY protocol v2 header to the upstream |
 | Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
 | Rate limit policy | `rateLimit` counts per client, forwarded client, header, cookie, or route, with a fixed window or token bucket, a bounded key table, and `Retry-After` (plus optional `RateLimit-*`) on a 429. Terminate-lite eligible |
 | External authorization | `extAuth` policy asks an HTTP service to allow or deny each request. Deny status and chosen headers are relayed, redirects are not followed, `failOpen` and a short positive cache are optional. Leaves terminate-lite |

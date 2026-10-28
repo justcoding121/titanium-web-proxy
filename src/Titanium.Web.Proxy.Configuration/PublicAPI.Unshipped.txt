@@ -493,3 +493,17 @@ Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.RequireAuth.get -> 
 Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig.RequireAuth.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Masque.get -> Titanium.Web.Proxy.Configuration.Models.MasqueListenerConfig?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Masque.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SendProxyProtocol.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SendProxyProtocol.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniDefaultClusterId.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniDefaultClusterId.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniReadTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniReadTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniRoutes.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Configuration.Models.SniRouteConfig!>!
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniRoutes.set -> void
+Titanium.Web.Proxy.Configuration.Models.SniRouteConfig
+Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ClusterId.get -> string?
+Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ClusterId.set -> void
+Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ServerName.get -> string?
+Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ServerName.set -> void
+Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.SniRouteConfig() -> void

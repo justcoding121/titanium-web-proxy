@@ -414,3 +414,20 @@ Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyTraceId.get -> strin
 Titanium.Web.Proxy.Http.HttpWebClient.ClientHttpVersion.get -> System.Version!
 Titanium.Web.Proxy.Http.HttpWebClient.OriginHttpVersion.get -> System.Version!
 
+Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.None = 0 -> Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.V2 = 1 -> Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+Titanium.Web.Proxy.Models.PassthroughSniRoute
+Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId.get -> string!
+Titanium.Web.Proxy.Models.PassthroughSniRoute.PassthroughSniRoute(string! serverName, string! clusterId) -> void
+Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName.get -> string!
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId.get -> string?
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol.get -> Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.PassthroughSniRoute!>?
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout.set -> void

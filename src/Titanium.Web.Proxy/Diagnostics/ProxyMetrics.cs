@@ -286,6 +286,37 @@ internal static class ProxyMetrics
         }
     }
 
+    private static readonly Counter<long> PassthroughConnections =
+        Meter.CreateCounter<long>("twp.passthrough.connections", "{connection}",
+            "Finished TCP passthrough connections by route (a configured server name pattern, default, or forward) and result.");
+
+    private static readonly Counter<long> PassthroughBytes =
+        Meter.CreateCounter<long>("twp.passthrough.bytes", "By",
+            "Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client).");
+
+    public static void RecordPassthrough(string route, string result, long bytesIn, long bytesOut)
+    {
+        if (PassthroughConnections.Enabled)
+        {
+            PassthroughConnections.Add(1,
+                new KeyValuePair<string, object?>("route", route),
+                new KeyValuePair<string, object?>("result", result));
+        }
+
+        if (PassthroughBytes.Enabled)
+        {
+            if (bytesIn > 0)
+            {
+                PassthroughBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+            }
+
+            if (bytesOut > 0)
+            {
+                PassthroughBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
+            }
+        }
+    }
+
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>
         Requests.Enabled || RequestDuration.Enabled || ActiveRequests.Enabled;

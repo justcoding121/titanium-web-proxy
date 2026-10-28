@@ -489,6 +489,36 @@
           "port": {
             "type": "integer"
           },
+          "sendProxyProtocol": {
+            "type": "string",
+            "enum": [
+              "none",
+              "v2"
+            ]
+          },
+          "sniDefaultClusterId": {
+            "type": "string"
+          },
+          "sniReadTimeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "sniRoutes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "clusterId": {
+                  "type": "string"
+                },
+                "serverName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "trustedProxyProtocolSources": {
             "type": "array",
             "items": {
