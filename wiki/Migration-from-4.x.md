@@ -23,7 +23,7 @@ the Home page first.
 - [Cumulative body budgets are now enforced end-to-end](#user-content-cumulative-body-budgets-are-now-enforced-end-to-end)
 - [WebSocket protocol violations now close the connection](#user-content-websocket-protocol-violations-now-close-the-connection)
 - [HTTP/2 CONTINUATION and reset abuse budgets](#user-content-http2-continuation-and-reset-abuse-budgets)
-- [HTTP/3 and QPACK behavior changes (experimental)](#user-content-http3-and-qpack-behavior-changes-experimental)
+- [HTTP/3 and QPACK behavior changes](#user-content-http3-and-qpack-behavior-changes)
 - [`ProxyAuthorizationException.Headers` credentials are redacted](#user-content-proxyauthorizationexceptionheaders-credentials-are-redacted)
 - [Stacked `Content-Encoding` is now actually decoded](#user-content-stacked-content-encoding-is-now-actually-decoded)
 - [`HasBody` correctness fix for 204/304/1xx/CONNECT](#user-content-hasbody-correctness-fix-for-2043041xxconnect)
@@ -155,7 +155,7 @@ DATA-frame buffering on HTTP/2, accumulated into memory with **no cumulative cap
 only the streaming/chunk-by-chunk paths (`OnRequestBodyWrite`/`OnResponseBodyWrite`) and the HTTP/2
 origin-bridge pipe were already bounded.
 
-**Now:** every whole-body buffering path on HTTP/1, HTTP/2, and HTTP/3 (experimental) is wrapped by a
+**Now:** every whole-body buffering path on HTTP/1, HTTP/2, and HTTP/3 is wrapped by a
 `BoundedWriteStream` that enforces `MaxBufferedBodyBytes` cumulatively as bytes arrive, not just at the
 end. A request-side breach returns `413 Payload Too Large` before the request reaches the origin; a
 response-side breach closes the connection rather than forwarding a truncated body.
@@ -236,10 +236,10 @@ proxyServer.PolicyModes = proxyServer.PolicyModes.With(PolicyFamily.Http2AbuseBu
 
 ---
 
-## HTTP/3 and QPACK behavior changes (experimental)
+## HTTP/3 and QPACK behavior changes
 
-HTTP/3 remains gated behind `ProxyServer.EnableHttp3 = true` and `[Experimental("TWP001")]`, so these
-only affect you if you've already opted in:
+CLI and Inspector enable HTTP/3 when QUIC is available. Library hosts still set
+`ProxyServer.EnableHttp3 = true` (suppress `TWP001`). These behavior changes apply when HTTP/3 is on:
 
 - **QPACK never blocks a stream:** the proxy advertises `SETTINGS_QPACK_BLOCKED_STREAMS = 0` (already
   the case, but the wiki previously described the opposite — see the corrected

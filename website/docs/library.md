@@ -37,7 +37,7 @@ proxyServer.Start();
 
 - Intercept, modify, redirect, or block HTTP and HTTPS
 - Explicit, transparent, and SOCKS4/5 endpoints
-- HTTP/2 on by default (`ProxyServer.EnableHttp2`); HTTP/3 opt-in (`EnableHttp3`, experimental `TWP001`)
+- HTTP/2 on by default (`ProxyServer.EnableHttp2`). The library leaves HTTP/3 off until the host calls `TryEnableHttp3IfSupported` (or sets `EnableHttp3`). CLI and Inspector do that when QUIC is available.
 - Upstream HTTP/HTTPS/SOCKS + system proxy detection
 - Proxy auth, mTLS, Kerberos, NTLM
 - Connection, certificate, and buffer pooling

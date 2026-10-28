@@ -35,7 +35,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | YAML config | Schema 7.1 listeners, routes, clusters, transforms, static files |
 | Load balancing | RoundRobin, Random, LeastRequests, LeastTime; sticky cookie/header |
 | ACME | Optional Let's Encrypt certificates |
-| Protocols | HTTP/2 by default; optional HTTP/3 (QUIC); protocol bridging |
+| Protocols | HTTP/2 by default; HTTP/3 when QUIC is available; protocol bridging |
 | Listeners | Explicit, transparent, SOCKS, QUIC |
 | OS service | Windows SCM / systemd / launchd via `titanium service` |
 | Config dialects | `.yaml` / `.json`, compact `.twp`, nginx-like `.conf` |
@@ -70,7 +70,7 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 |------------|--------------|
 | Intercept | Inspect, modify, redirect, or block HTTP(S) |
 | Endpoints | Explicit, transparent, SOCKS4/5 |
-| Protocols | HTTP/2 default; HTTP/3 opt-in; stream bodies across versions |
+| Protocols | HTTP/2 default; HTTP/3 when the host enables it and QUIC is available; stream bodies across versions |
 | Upstream | HTTP/HTTPS/SOCKS proxies; system proxy detection |
 | Auth | Proxy auth, mTLS, Kerberos, NTLM |
 | System proxy + CA | Win / macOS / Linux helpers matching Inspector trust |
@@ -88,5 +88,5 @@ Deeper API notes: [GitHub wiki](https://github.com/justcoding121/titanium-web-pr
 
 - [Performance](/docs/performance) — throughput charts and methodology
 - [Protocol support](/docs/protocol-support) — HTTP/1 · HTTP/2 · HTTP/3 matrix
-- [HTTP/3](/docs/http3) — enabling QUIC and packaging
+- [HTTP/3](/docs/http3) — QUIC default and packaging
 - [Security](/docs/security) — MITM and secret handling

@@ -26,7 +26,7 @@ features:
   - title: Automatic tunnel
     details: When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic.
   - title: HTTP/1 · HTTP/2 · HTTP/3
-    details: HTTP/2 is on by default; HTTP/3 (QUIC) is optional. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
+    details: HTTP/2 is on by default. HTTP/3 is on when QUIC is available. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
   - title: Reverse proxy from the CLI
     details: Download the CLI, write a short YAML file, and run `titanium`. Routes, load balancing, TLS, and optional automatic certificates (ACME). Change routes and backends with `titanium reload` without dropping connections.
 ---

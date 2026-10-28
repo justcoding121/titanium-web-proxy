@@ -17,12 +17,13 @@ policy and safety hardening work (HTTP/2 frame/header-list bounds, bounded body 
 over HTTP/2 including the h2-client-to-h1-origin bridge, the native h2↔h2 tunnel, and the h1-client-to-h2-origin
 bridge, WebSocket frame validation, Via header injection, multipart streaming, stacked Content-Encoding parsing,
 and authentication retry
-bounds), and the HTTP/3 (QUIC) opt-in feature — including the six HTTP/3 gap-closure features: request-lifecycle
+bounds), and HTTP/3 (QUIC) — including the six HTTP/3 gap-closure features: request-lifecycle
 timing, 1xx interim response relay, per-chunk streaming body hooks (`OnRequestBodyWrite`/`OnResponseBodyWrite`),
 upstream proxy chaining with TCP fallback, HTTPS/SVCB DNS discovery, and QPACK dynamic table (opt-in via
 `ProxyServer.EnableQpackDynamicTable`). HTTP/2 has gone through a full regression pass and is now **on by
-default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.1 only. HTTP/3 is
-`[Experimental("TWP001")]` and opt-in (`ProxyServer.EnableHttp3 = true`). If you find something inaccurate,
+default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.1 only. The library property
+`ProxyServer.EnableHttp3` defaults to off. CLI and Inspector call `TryEnableHttp3IfSupported`, so HTTP/3 is
+on when `QuicListener.IsSupported` is true. If you find something inaccurate,
 please open an issue.
 
 ## Protocol bridges
@@ -193,10 +194,10 @@ See also the advertised=enforced consolidation in [Migration from 4.x](Migration
 | `Via` header injection | Yes | Yes | `ViaHeaderPseudonym` defaults to `"titanium-web-proxy"`, appending `Via: {version} {pseudonym}` for all protocol versions including HTTP/3 (version token `"3.0"`). Loop detection checks across all `Via` fields and refuses with `508 Loop Detected`. |
 | Authentication retry bounds | Yes | N/A | NTLM/Negotiate 407/401 loops are capped at 3 round-trips for TCP protocols; not applicable to HTTP/3. |
 
-## HTTP/3 (QUIC) — opt-in, experimental
+## HTTP/3 (QUIC)
 
-HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
-A silent QUIC origin is replayed over TCP only for a safe bodiless request, and only when that QUIC
+The library property `ProxyServer.EnableHttp3` defaults to off. CLI and Inspector enable HTTP/3 when
+`QuicListener.IsSupported` is true. A silent QUIC origin is replayed over TCP only for a safe bodiless request, and only when that QUIC
 connection has not delivered a response in the last 30 seconds. A busy connection is left alone.
 The first request on an idle connection can still be replayed. Operators who do not want QUIC set
 an upstream policy of HTTP/2 or HTTP/1.1.
@@ -216,7 +217,7 @@ The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-co
 | Outbound H3→H1.1 bridge | Yes | Falls through to `TcpConnectionFactory` with default ALPN negotiation. |
 | Inbound H1.1/H2 → H3 origin bridge | Yes | H1.1: `RequestHandler` / `Http3OriginBridge.ForwardAsync` when H3 is selected. H2: cold CONNECT-time `SendHttp2ToHttp3Bridge` when H3 is selected; mid-connection upgrades on an existing H2↔H2 MITM relay are not taken. |
 | Alt-Svc discovery | Yes | Response `Alt-Svc: h3=":443"; ma=86400` headers are parsed and cached in `Http3OriginCapabilityCache` with the advertised max-age TTL, enabling H3 on later Auto-mode CONNECTs / new HTTP/1.1 requests. Background QUIC warm-up starts when the cache is filled. Mid-connection H2↔H2 streams are not upgraded. |
-| HTTPS/SVCB DNS discovery | Yes | Enable with `ProxyServer.EnableHttpsSvcbDnsDiscovery = true` (experimental; defaults to on when `EnableHttp3` is on). Auto-mode discovery is **background-only**: CONNECT/request paths consult `Http3OriginCapabilityCache` and never await DNS. `UdpSvcbDnsResolver` performs RFC 9460 HTTPS RR queries over UDP to `DnsServerEndPoint` (default: first usable OS-configured plain-UDP DNS server; never a public third-party fallback). NXDOMAIN / NOERROR-without-h3 are definitive negatives; SERVFAIL/REFUSED/timeouts use short transient backoff. |
+| HTTPS/SVCB DNS discovery | Yes | Defaults to on when `EnableHttp3` is on (`ProxyServer.EnableHttpsSvcbDnsDiscovery`). Auto-mode discovery is **background-only**: CONNECT/request paths consult `Http3OriginCapabilityCache` and never await DNS. `UdpSvcbDnsResolver` performs RFC 9460 HTTPS RR queries over UDP to `DnsServerEndPoint` (default: first usable OS-configured plain-UDP DNS server; never a public third-party fallback). NXDOMAIN / NOERROR-without-h3 are definitive negatives; SERVFAIL/REFUSED/timeouts use short transient backoff. |
 | `BeforeQuicAuthenticate` event | Yes | Fired once per accepted QUIC connection (analogous to `BeforeSslAuthenticate`); allows setting `UpstreamHttpProtocol`, custom cert validation, and `AllowHttpProtocolTranslation` per connection. |
 | `IOriginalDestinationResolver` | Yes | Plug-in interface for resolving the pre-NAT (real) destination of a transparently intercepted QUIC connection. |
 | QUIC connection pool drain on stop | Yes | `QuicConnectionPool.DrainAsync` is called during `ProxyServer.Stop`/`DrainAsync`/`Dispose`. |
@@ -233,7 +234,7 @@ The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-co
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
 | `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and also bridges HTTP/1.1 `Upgrade: websocket` onto h2 origins (extended CONNECT, or HTTP/1.1 fallback when the origin lacks the setting). For h2 clients: if the origin is HTTP/2 and advertises the setting, native h2↔h2 DATA relay is used; if the origin is HTTP/2 and does not, the stream is reset with `REFUSED_STREAM`; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge is used. |
-| `EnableHttp3` | `false` | Enables HTTP/3 (QUIC) support (opt-in, experimental — suppress `TWP001`). See [HTTP-3](HTTP-3) wiki page for full details. |
+| `EnableHttp3` | `false` | Library default. CLI and Inspector turn HTTP/3 on when QUIC is supported. See [HTTP-3](HTTP-3). |
 | `EnableQpackDynamicTable` | `false` | Enables QPACK dynamic table synchronisation per RFC 9204 (full Base-relative decode). Requires `EnableHttp3 = true`. See [HTTP-3](HTTP-3) for details. |
 | `EnableHttpsSvcbDnsDiscovery` | inherits `EnableHttp3` | Enables proactive HTTP/3 capability discovery via HTTPS/SVCB DNS queries (RFC 9460). Background-only in Auto mode; first-connection H3 adoption otherwise comes from `Alt-Svc`. |
 | `PolicyModes[Http2RelayValidation]` | `Disabled` (`Balanced`) / `Enforce` (`PublicFacing`) | Controls HPACK semantic validation on the H2↔H2 compressed-relay path when interception is off. `Disabled` = verbatim HPACK relay (maximum throughput). `Observe` = decode and log without rejecting. `Enforce` = decode and `GOAWAY(PROTOCOL_ERROR)` on RFC 9113 §8.3 violations. |

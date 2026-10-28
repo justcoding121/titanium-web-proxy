@@ -340,7 +340,8 @@ inbound h2c is not implemented. See
 
 ## HTTP/3
 
-HTTP/3 support is available as an opt-in feature. See the **[HTTP/3](HTTP-3)** page for setup,
+CLI and Inspector enable HTTP/3 when QUIC is available. The library property stays off until the host
+turns it on. See the **[HTTP/3](HTTP-3)** page for setup,
 **CLI/Inspector packaging** (which RID zip to download, Alpine/K8s musl zips, `http3-deps`), Alt-Svc,
 and gaps. See also [Protocol Support — Protocol bridges](Protocol-Support#user-content-protocol-bridges) for every
 client→origin direction (including TCP HTTP/1.1 ↔ HTTP/2 translation). Quick start:
@@ -445,9 +446,10 @@ proxy.ShouldInterceptHttp = ctx =>
 independent: after decrypt, hosts can still be fast-forwarded when `ShouldInterceptHttp` returns
 `false`.
 
-Shipped defaults follow `ProxyProfile.Balanced`: networking knobs that are safe for every client are
-on; certificate and experimental-protocol choices that trade compatibility or persistence stay
-opt-in. Examples match those library defaults, except they opt into experimental HTTP/3 so the
+Shipped library defaults follow `ProxyProfile.Balanced`: networking knobs that are safe for every client are
+on; certificate choices that trade compatibility or persistence stay
+opt-in. CLI and Inspector enable HTTP/3 when QUIC is available. The library property stays off until
+the host calls `TryEnableHttp3IfSupported`. Examples turn HTTP/3 on so the
 QUIC endpoint is visible without extra config.
 
 | Knob | Balanced default | Speed opt-in | Notes |
@@ -468,7 +470,7 @@ QUIC endpoint is visible without extra config.
 | `LeafCertificateKeyAlgorithm` | `Rsa2048` | `EcdsaP256` | Biggest first-visit win for modern browsers; see below. |
 | `LeafRsaKeyPairBufferSize` | `8` | raise under RSA stampede | Unused when leaves are ECDSA. |
 | `SaveFakeCertificates` | `false` | `true` | Disk cache across restarts; privacy/disk tradeoff. |
-| `EnableHttp3` / QPACK dynamic / RFC 8441 | off | opt-in | Experimental / feature flags. |
+| `EnableHttp3` / QPACK dynamic / RFC 8441 | off | opt-in | Library property. CLI and Inspector enable HTTP/3 when QUIC is available. QPACK dynamic table and RFC 8441 stay off. |
 | `CertificateEngine` | `BouncyCastle` | `BouncyCastleFast` | Fast shares one leaf key across hosts — weaker isolation. |
 
 - `EnableConnectionPool` — reuse idle upstream TCP connections (enabled by default). Only connections that are safe to reuse under HTTP (persistent, body fully received, not authenticated to a specific identity) are pooled; set to `false` to force a fresh connection per client.

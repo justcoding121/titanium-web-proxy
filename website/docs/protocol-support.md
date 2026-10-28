@@ -1,10 +1,10 @@
 # Protocol support
 
-Titanium speaks HTTP/1.0, HTTP/1.1, HTTP/2, and experimental HTTP/3, and can bridge between them when client and origin disagree.
+Titanium speaks HTTP/1.0, HTTP/1.1, HTTP/2, and HTTP/3, and can bridge between them when client and origin disagree.
 
-> **For implementers / .NET library users** — the tables below use API names (`EnableHttp2`, `EnableHttp3`, `TWP001`). Operators enabling HTTP/3 from the CLI can start with [HTTP/3](/docs/http3).
+> **For implementers / .NET library users** — the tables below use API names (`EnableHttp2`, `EnableHttp3`, `TWP001`). CLI and Inspector enable HTTP/3 when QUIC is available; see [HTTP/3](/docs/http3).
 
-HTTP/2 is **on by default**. HTTP/3 is experimental and opt-in. CLI/Inspector release zips bundle MsQuic natives per platform; Library hosts install system MsQuic — see [HTTP/3](/docs/http3).
+HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspector when QUIC is available. The library property `EnableHttp3` stays off until the host turns it on. CLI/Inspector release zips bundle MsQuic natives per platform; Library hosts install system MsQuic — see [HTTP/3](/docs/http3).
 
 ## Protocol bridges
 

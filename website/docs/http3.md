@@ -1,17 +1,18 @@
 # HTTP/3 (QUIC)
 
-HTTP/3 is an **opt-in experimental** feature. CLI and Inspector release zips already ship the Quic natives for common platforms — pick the zip that matches your OS, then enable it in config.
+CLI and Inspector turn HTTP/3 on when this computer supports QUIC. Release zips already ship the Quic natives for common platforms. Set `enableHttp3: false` on a listener, or `server.enableHttp3: false`, to turn it off.
 
-**Next:** download the matching zip → set `enableHttp3: true` on a listener → `titanium http3-deps status` if Quic is unsupported.
+**Next:** `titanium http3-deps status` if QUIC is unsupported.
 
-## Enable on the CLI
+## CLI
+
+A decrypting listener uses HTTP/3 when QUIC is supported. Omit `enableHttp3` to keep that default:
 
 ```yaml
 listeners:
   - host: "0.0.0.0"
     port: 443
     decryptSsl: true
-    enableHttp3: true
 ```
 
 ```bash
@@ -54,7 +55,7 @@ Embedding the Library in your own app does **not** bundle MsQuic:
 - **Linux**: install `libmsquic` (e.g. packages.microsoft.com / `apk add libmsquic`)
 - **macOS**: bundle `libmsquic` + OpenSSL with `@loader_path`, or `brew install libmsquic`
 
-Confirm `System.Net.Quic.QuicListener.IsSupported == true` before enabling. HTTP/3 uses the experimental `TWP001` surface:
+Confirm `System.Net.Quic.QuicListener.IsSupported == true` before enabling. Library code that sets `EnableHttp3` suppresses `TWP001`:
 
 ```csharp
 #pragma warning disable TWP001
