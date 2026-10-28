@@ -28,7 +28,13 @@ features:
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 is on by default. HTTP/3 is on when QUIC is available. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
   - title: Reverse proxy from the CLI
-    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, load balancing, TLS, and optional automatic certificates (ACME). Change routes and backends with `titanium reload` without dropping connections.
+    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, TLS, and optional automatic certificates (ACME). Change routes and backends with `titanium reload` without dropping connections.
+  - title: Balance across backends
+    details: Round-robin, random, least requests, and least time. Stick a client to one backend with a cookie or a header.
+  - title: Stream large bodies
+    details: Uploads and downloads stream through on HTTP/1, HTTP/2, and HTTP/3, including payloads too large to buffer.
+  - title: Chain and authenticate
+    details: Forward through an upstream HTTP, HTTPS, or SOCKS proxy. Proxy auth, mTLS, Kerberos, and NTLM are included.
 ---
 
 ## What do you want to do?
@@ -58,13 +64,11 @@ features:
 
 ## Performance
 
-Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners. Linux (~4 vCPU) and macOS (Apple Silicon) tiny-GET charts are below. Windows, 64 KB practical charts, and heavier workloads are on the [performance](/docs/performance) page.
+Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners. The Linux tiny-GET chart is below. Charts for the other operating systems, and all other results, are on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 
 ![Practical reverse proxy throughput on Linux (tiny requests)](../wiki/images/rps-practical-linux.png)
-
-![Practical reverse proxy throughput on macOS Apple Silicon (tiny requests)](../wiki/images/rps-practical-macos.png)
 
 </div>
 

@@ -59,10 +59,6 @@
   border-radius: 10px;
 }
 
-.rps-preview img + img {
-  margin-top: 0.75rem;
-}
-
 .inspector-preview {
   margin: 0.75rem 0 1.25rem;
   max-width: 40rem;
