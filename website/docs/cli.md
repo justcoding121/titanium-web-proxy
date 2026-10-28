@@ -30,6 +30,7 @@ Path-based routing and load balancing: [Configuration](/docs/configuration).
 ```text
 titanium run -c <config> [-v|--verbose] [--service]
 titanium test -c <config>
+titanium healthcheck (-c <config> | --url <url>) [--timeout <seconds>]
 titanium service install|uninstall|start|stop|restart|status
 titanium version [--check] [--plus] [--channel beta]
 titanium update [--plus] [--remove-plus] [--channel beta]
@@ -42,6 +43,7 @@ Nested help: `titanium <command> --help` (and `titanium service install --help`,
 |---------|---------|
 | `run` | Start the proxy from a config file |
 | `test` | Validate config without serving traffic |
+| `healthcheck` | Probe the admin `/healthz` once (container `HEALTHCHECK`; exit `0` is healthy) |
 | `service` | Install / start / stop an OS service so the proxy survives reboot |
 | `version` | Print local version; `--check` compares to the update feed |
 | `update` | Self-update the CLI (download, verify SHA256, replace install); `--plus` installs/updates Plus; `--remove-plus` deletes it |
@@ -50,13 +52,14 @@ Nested help: `titanium <command> --help` (and `titanium service install --help`,
 ### `run`
 
 ```text
-titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
+titanium run -c <config> [-v|--verbose] [--watch] [--service] [--name <service-name>]
 ```
 
 | Flag | Meaning |
 |------|---------|
 | `-c`, `--config` | Path to config (required) |
 | `-v`, `--verbose` | Debug console logging |
+| `--watch` | Reload when the config (or a `*File` secret or certificate) changes, including Kubernetes ConfigMap and Secret `..data` symlink swaps. See [Kubernetes](/docs/kubernetes) |
 | `--service` | Service-worker mode (used by `titanium service install`; no “Press Ctrl+C” prompt; SIGTERM / SCM stop) |
 | `--name` | Windows SCM name when `--service` is set (default `titanium`) |
 
@@ -67,6 +70,15 @@ titanium test -c <config>
 ```
 
 Loads and validates the config without opening listeners. Exit `0` when OK; `1` when validation fails.
+
+### `healthcheck`
+
+```text
+titanium healthcheck -c <config>
+titanium healthcheck --url http://127.0.0.1:9901/healthz
+```
+
+With `-c`, the host and port come from `server.admin`; a wildcard bind is probed on loopback. It exits `0` without probing when `server.admin` is off or uses port `0`, so an image without an admin listener does not report unhealthy. `/healthz` needs no token.
 
 ### `service` {#service}
 

@@ -67,6 +67,7 @@ export default defineConfig({
             { text: 'HTTP/3', link: '/docs/http3' },
             { text: 'Streaming bodies', link: '/docs/streaming-bodies' },
             { text: 'gRPC-JSON transcoding', link: '/docs/grpc-json-transcoding' },
+            { text: 'Kubernetes', link: '/docs/kubernetes' },
             { text: 'Security', link: '/docs/security' },
             { text: 'Limits and escape hatches', link: '/docs/limits' },
             { text: 'Why did my request fail', link: '/docs/troubleshooting' },

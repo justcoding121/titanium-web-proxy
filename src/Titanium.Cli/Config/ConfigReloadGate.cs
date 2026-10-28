@@ -24,19 +24,39 @@ internal static partial class ConfigReloadGate
 
     public static string PidFilePath(string configPath) =>
         Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            PidRootDirectory(),
             PidDirName,
             "run-" + ConfigKey(configPath) + ".pid");
+
+    /// <summary>
+    ///     Per-user data directory. <see cref="Environment.SpecialFolderOption.DoNotVerify" /> matters: by default
+    ///     .NET returns an empty string when the folder does not exist yet (a fresh <c>$HOME</c>, a container with
+    ///     <c>HOME=/tmp</c>), which would turn the pid file into a path relative to the config directory.
+    /// </summary>
+    private static string PidRootDirectory()
+    {
+        var local = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify);
+        return string.IsNullOrEmpty(local) ? Path.GetTempPath() : local;
+    }
 
     /// <summary>Windows-only local named event for <c>titanium reload</c>.</summary>
     public static string WindowsEventName(string configPath) =>
         @"Local\TitaniumWebProxy.Reload." + ConfigKey(configPath);
 
+    /// <summary>Best-effort: without a pid file only <c>titanium reload</c> is unavailable; SIGHUP and <c>--watch</c> still work.</summary>
     public static void WritePidFile(string configPath, int pid)
     {
-        var path = PidFilePath(configPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        try
+        {
+            var path = PidFilePath(configPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, pid.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AsyncConsole.WriteError("Could not write the pid file (titanium reload will not find this process): " + ex.Message);
+        }
     }
 
     public static void TryDeletePidFile(string configPath)

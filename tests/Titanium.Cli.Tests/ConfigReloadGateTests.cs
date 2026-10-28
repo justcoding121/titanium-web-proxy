@@ -44,6 +44,56 @@ public class ConfigReloadGateTests
     }
 
     [TestMethod]
+    public void PidFilePath_IsAbsolute_EvenWhenTheHomeDirectoryDoesNotExistYet()
+    {
+        // A container with HOME=/tmp has no ~/.local/share. .NET then reports an empty LocalApplicationData,
+        // which used to make the pid file a path relative to the (read-only) config directory.
+        var oldHome = Environment.GetEnvironmentVariable("HOME");
+        var oldXdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        try
+        {
+            Environment.SetEnvironmentVariable("HOME", Path.Combine(_tempDir, "no-such-home"));
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", null);
+
+            var path = ConfigReloadGate.PidFilePath(_configPath);
+
+            Assert.IsTrue(Path.IsPathRooted(path), path);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOME", oldHome);
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", oldXdg);
+        }
+    }
+
+    [TestMethod]
+    public void WritePidFile_DoesNotThrowWhenTheDirectoryCannotBeCreated()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Needs a HOME that cannot hold a directory (Unix).");
+            return;
+        }
+
+        var oldHome = Environment.GetEnvironmentVariable("HOME");
+        var oldXdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        try
+        {
+            // HOME is a regular file, so creating HOME/.local/share/TitaniumWebProxy fails.
+            var homeFile = Path.Combine(_tempDir, "home-is-a-file");
+            File.WriteAllText(homeFile, "x");
+            Environment.SetEnvironmentVariable("HOME", homeFile);
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", null);
+
+            ConfigReloadGate.WritePidFile(_configPath, 1);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOME", oldHome);
+            Environment.SetEnvironmentVariable("XDG_DATA_HOME", oldXdg);
+        }
+    }
+    [TestMethod]
     public void PidFile_RoundTrips()
     {
         ConfigReloadGate.WritePidFile(_configPath, 424242);

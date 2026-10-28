@@ -1,0 +1,15 @@
+Titanium Web Proxy {{ .Chart.AppVersion }} is deployed as {{ include "titanium.fullname" . }}.
+
+Proxy:  {{ include "titanium.fullname" . }}.{{ .Release.Namespace }}.svc:{{ (index .Values.ports 0).servicePort }}
+Admin:  container port {{ .Values.admin.port }} (/healthz, /readyz, and token-protected /metrics and /version)
+
+Read the admin token:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "titanium.adminSecretName" . }} -o jsonpath='{.data.{{ .Values.admin.token.key }}}' | base64 -d
+
+Try the probes:
+  kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "titanium.fullname" . }} {{ .Values.admin.port }}:{{ .Values.admin.port }}
+  curl -s http://127.0.0.1:{{ .Values.admin.port }}/readyz
+
+Edit `config` in your values and `helm upgrade`: the ConfigMap changes and the pods reload it in place (--watch).
+Listener, certificate, and Plus changes need a pod restart: set rolloutOnConfigChange=true or run
+`kubectl rollout restart deploy/{{ include "titanium.fullname" . }}`.

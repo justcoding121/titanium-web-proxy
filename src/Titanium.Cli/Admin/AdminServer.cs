@@ -36,6 +36,7 @@ internal sealed class AdminServer : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private byte[]? _tokenDigest;
     private Task? _loop;
+    private int _disposed;
 
     public AdminServer(
         IPAddress address,
@@ -70,6 +71,11 @@ internal sealed class AdminServer : IDisposable
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         _stop.Cancel();
         _listener.Stop();
         try

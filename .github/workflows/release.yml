@@ -804,6 +804,70 @@ jobs:
           echo "Dispatching deploy-website.yml --ref develop (channel=$RELEASE_CHANNEL)"
           gh workflow run deploy-website.yml --ref develop
 
+  # Multi-arch container image on GHCR with an SBOM, provenance, and a keyless cosign signature.
+  # Pull-request builds (no push) live in kubernetes-ci.yml.
+  publish-image:
+    needs: [resolve-version, test, cli-e2e]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing (OIDC)
+    env:
+      IMAGE: ghcr.io/justcoding121/titanium-web-proxy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
+          tags: |
+            type=raw,value=${{ needs.resolve-version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.resolve-version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image by digest (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+      - name: Verify the signature
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   publish-chocolatey:
     needs: [resolve-version, publish-release]
     if: |
