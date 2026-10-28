@@ -58,11 +58,13 @@ features:
 
 ## Performance
 
-Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners (Windows / Linux ~4 vCPU; macOS Apple Silicon). Linux tiny-GET chart here; Windows, macOS, 64 KB practical charts, and heavier workloads on the [performance](/docs/performance) page.
+Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners. Linux (~4 vCPU) and macOS (Apple Silicon) tiny-GET charts are below. Windows, 64 KB practical charts, and heavier workloads are on the [performance](/docs/performance) page.
 
 <div class="rps-preview">
 
 ![Practical reverse proxy throughput on Linux (tiny requests)](../wiki/images/rps-practical-linux.png)
+
+![Practical reverse proxy throughput on macOS Apple Silicon (tiny requests)](../wiki/images/rps-practical-macos.png)
 
 </div>
 
