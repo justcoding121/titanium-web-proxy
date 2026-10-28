@@ -711,6 +711,8 @@ public static class TwpConfigValidator
             return;
         }
 
+        ValidateQueryParameters(route, errors);
+
         if (route.Match.PathKind == PathMatchKind.Template)
         {
             ValidateTemplate(route, errors);
@@ -721,6 +723,28 @@ public static class TwpConfigValidator
             !CompilesAsRegex(route.Match.Path))
         {
             errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
+        }
+    }
+
+    private static void ValidateQueryParameters(RouteConfig route, List<string> errors)
+    {
+        if (route.Match.QueryParameters is not { } entries)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            if (entry is null || string.IsNullOrEmpty(entry.Name))
+            {
+                errors.Add($"Route '{route.Id}' has a queryParameters entry without a name.");
+                continue;
+            }
+
+            if (entry.Kind == QueryMatchKind.Regex && !CompilesAsRegex("^(?:" + entry.Value + ")$"))
+            {
+                errors.Add($"Route '{route.Id}' queryParameters '{entry.Name}' has a regex that does not compile.");
+            }
         }
     }
 

@@ -873,6 +873,24 @@
                 "additionalProperties": {
                   "type": "string"
                 }
+              },
+              "queryParameters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           },

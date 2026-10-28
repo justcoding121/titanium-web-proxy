@@ -10,6 +10,28 @@ public enum PathMatchKind
     Regex = 4,
 }
 
+/// <summary>How a <see cref="QueryParameterMatch"/> compares the decoded parameter value.</summary>
+public enum QueryMatchKind
+{
+    /// <summary>Ordinal, case-sensitive equality.</summary>
+    Exact = 0,
+
+    /// <summary>The whole value must match the regular expression (non-backtracking engine).</summary>
+    Regex = 1,
+}
+
+/// <summary>One query parameter constraint.</summary>
+public sealed class QueryParameterMatch
+{
+    /// <summary>Parameter name, compared case-sensitively.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Expected value, or a regular expression when <see cref="Kind"/> is <see cref="QueryMatchKind.Regex"/>.</summary>
+    public required string Value { get; init; }
+
+    public QueryMatchKind Kind { get; init; } = QueryMatchKind.Exact;
+}
+
 /// <summary>Declarative route match criteria (host, path, method, headers, query).</summary>
 public sealed class RouteMatch
 {
@@ -19,6 +41,13 @@ public sealed class RouteMatch
     public string? Method { get; init; }
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
     public IReadOnlyDictionary<string, string>? Query { get; init; }
+
+    /// <summary>
+    ///     Query parameter matches that can use a regular expression. Every entry must match. Null (the default)
+    ///     adds no constraint and no per-request work.
+    /// </summary>
+    public IReadOnlyList<QueryParameterMatch>? QueryParameters { get; init; }
+
     public IReadOnlyList<string>? Hosts { get; init; }
     public IReadOnlyList<string>? Methods { get; init; }
 

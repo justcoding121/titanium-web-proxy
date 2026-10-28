@@ -754,3 +754,16 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LoadedUtc.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.PlusConfigStatus() -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.SchemaVersion.get -> string?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.SchemaVersion.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind.Exact = 0 -> Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind.Regex = 1 -> Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Kind.get -> Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Name.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Name.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.QueryParameterMatch() -> void
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.init -> void

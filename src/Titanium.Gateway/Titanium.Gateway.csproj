@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Titanium.Gateway</RootNamespace>
+    <AssemblyName>titanium-gateway</AssemblyName>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SignAssembly>false</SignAssembly>
+    <VersionPrefix>7.0.27</VersionPrefix>
+    <Authors>Jehonathan Thomas</Authors>
+    <Description>Titanium Gateway: a Kubernetes Gateway API controller that renders Titanium Web Proxy configuration.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Titanium.Gateway.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
+    <ProjectReference Include="..\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
+  </ItemGroup>
+</Project>

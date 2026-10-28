@@ -29,6 +29,7 @@ public static class TwpConfigLoader
         .WithTypeMapping<IReadOnlyList<WeightedCluster>, List<WeightedCluster>>()
         .WithTypeMapping<IReadOnlyList<TransformConfig>, List<TransformConfig>>()
         .WithTypeMapping<IReadOnlyList<ErrorPageConfig>, List<ErrorPageConfig>>()
+        .WithTypeMapping<IReadOnlyList<QueryParameterMatch>, List<QueryParameterMatch>>()
         .WithTypeMapping<IReadOnlyList<string>, List<string>>()
         .WithTypeMapping<IReadOnlyList<int>, List<int>>()
         .WithTypeMapping<IReadOnlyDictionary<string, string>, Dictionary<string, string>>()

@@ -243,9 +243,14 @@ internal static class DashboardData
             parts.Add("headers " + string.Join(",", match.Headers.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase)));
         }
 
-        if (match.Query is { Count: > 0 })
+        var queryNames = (match.Query?.Keys ?? Enumerable.Empty<string>())
+            .Concat(match.QueryParameters?.Select(q => q.Name) ?? Enumerable.Empty<string>())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (queryNames.Count > 0)
         {
-            parts.Add("query " + string.Join(",", match.Query.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase)));
+            parts.Add("query " + string.Join(",", queryNames));
         }
 
         return parts.Count == 0 ? "any" : string.Join("; ", parts);

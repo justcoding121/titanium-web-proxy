@@ -325,6 +325,7 @@ internal sealed class RouteTableRequirements
             {
                 AddKeys(match.Headers, ref headers, StringComparer.OrdinalIgnoreCase);
                 AddKeys(match.Query, ref query, StringComparer.Ordinal);
+                AddQueryParameterNames(match.QueryParameters, ref query);
             }
         }
 
@@ -336,6 +337,20 @@ internal sealed class RouteTableRequirements
         };
         options.Compiled = next;
         return next;
+    }
+
+    private static void AddQueryParameterNames(IReadOnlyList<QueryParameterMatch>? source, ref HashSet<string>? set)
+    {
+        if (source is not { Count: > 0 })
+        {
+            return;
+        }
+
+        set ??= new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < source.Count; i++)
+        {
+            set.Add(source[i].Name);
+        }
     }
 
     private static void AddKeys(
