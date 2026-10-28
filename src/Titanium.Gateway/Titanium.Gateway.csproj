@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Titanium.Gateway</RootNamespace>
     <AssemblyName>titanium-gateway</AssemblyName>
@@ -20,5 +20,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="KubernetesClient" Version="21.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.0" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.7
+#
+# titanium-gateway: the Kubernetes Gateway API controller for Titanium Web Proxy (linux/amd64 and linux/arm64).
+# It renders Gateway, HTTPRoute and ReferenceGrant resources into the data-plane config (see deploy/helm/titanium-gateway).
+#
+# Build from the repository root:
+#   docker buildx build -f packaging/docker/Dockerfile.gateway -t titanium-gateway:dev .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile.gateway .
+#
+# The runtime stage is the same chiseled base as the proxy image: no shell, no package manager, non-root user (UID 1654).
+# The controller only talks to the Kubernetes API (service account token) and to the data-plane pods' admin port.
+
+ARG DOTNET_VERSION=10.0
+
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+ARG TARGETARCH
+ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
+WORKDIR /src
+
+COPY global.json NuGet.config ./
+COPY src/ src/
+RUN case "${TARGETARCH}" in \
+      amd64) RID=linux-x64 ;; \
+      arm64) RID=linux-arm64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && dotnet publish src/Titanium.Gateway/Titanium.Gateway.csproj \
+         -c Release -r "${RID}" --self-contained true \
+         -p:Version="${VERSION}" -p:SourceRevisionId="${COMMIT}" \
+         -p:DebugType=None -p:DebugSymbols=false \
+         -o /out
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:${DOTNET_VERSION}-noble-chiseled-extra AS runtime
+ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="Titanium Gateway" \
+      org.opencontainers.image.description="Kubernetes Gateway API controller for Titanium Web Proxy" \
+      org.opencontainers.image.source="https://github.com/justcoding121/titanium-web-proxy" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+
+WORKDIR /app
+COPY --from=build --chown=1654:1654 /out/ /app/
+
+ENV HOME=/tmp \
+    DOTNET_EnableDiagnostics=0 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1
+
+USER 1654:1654
+
+# 8081 serves /healthz and /readyz for the controller itself.
+EXPOSE 8081
+
+ENTRYPOINT ["/app/titanium-gateway"]
