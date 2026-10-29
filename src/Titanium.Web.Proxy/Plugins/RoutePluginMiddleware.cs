@@ -18,6 +18,17 @@ namespace Titanium.Web.Proxy.Plugins;
 /// The plugin's <c>next</c> only records that the plugin wants the request to continue; the host calls the real
 /// <c>next</c> after the plugin returns. That keeps the timeout to the plugin's own work, and it means code a plugin runs
 /// after awaiting <c>next</c> runs before the following plugin does.
+/// <para>
+/// <b>Known limit: the wall cannot preempt a plugin that never yields.</b> The timeout is cooperative. The plugin is
+/// invoked on the request's own thread, and the wall only starts waiting once <c>InvokeAsync</c> has returned a task.
+/// A plugin that spins, blocks on a lock, or calls blocking I/O before its first real <c>await</c> never returns that
+/// task, so it holds the request thread for as long as it runs. <c>timeoutMs</c> and <c>failMode</c> do not apply to it,
+/// and <c>failMode: open</c> does not help. Only a plugin that awaits (and honours the cancellation token) is stopped by
+/// the timeout. Plugins are in-process, trusted code; a sync spin is an operator risk, not something the host contains.
+/// Moving the call to the thread pool would let the wall time out, but the spinning thread would still burn a pool thread
+/// and CPU until it ends, so the host does not do that. Engines that can enforce limits themselves (a future Lua or WASM
+/// host) will not have this limit.
+/// </para>
 /// </remarks>
 internal sealed class RoutePluginMiddleware : IProxyMiddleware
 {

@@ -77,11 +77,21 @@ The full sample, with a README, is in `examples/Titanium.Web.Proxy.Examples.Rout
 |-----------|--------|
 | Zero cost elsewhere | A route without `middleware` runs no plugin code and adds no per-request work beyond one null check. A plugin that no route names is loaded but never called. |
 | Isolation | A plugin gets a private copy of the request context. If it throws or overruns `timeoutMs`, the host drops that copy and applies `failMode`, so a late write from an abandoned call cannot change the request. |
-| Timeout | Measures the plugin's own work. The host calls the real `next` after the plugin returns, so a slow origin never counts against `timeoutMs`. |
+| Timeout | Measures the plugin's own work. The host calls the real `next` after the plugin returns, so a slow origin never counts against `timeoutMs`. It stops a plugin that awaits; it cannot stop one that never yields (see [A plugin that never yields](#a-plugin-that-never-yields)). |
 | Reload | A config reload loads the new plugin set first. If any plugin fails to load, the old set stays in service and the reload is rejected. After the swap, the old set is retired: calls already running finish, then each plugin is disposed and its load context unloaded so the runtime can reclaim the assembly. |
 | Fresh files | The DLL is read into memory, so a replaced file is picked up by the next reload. |
 | Keep-alive | A keep-alive client connection does not carry plugin state. Each request gets its own context. |
 | Terminate-lite | A config in which a route names a plugin takes the full session path, like `extAuth`. A config in which no route names a plugin keeps terminate-lite, even when plugins are loaded. |
+
+## A plugin that never yields
+
+The timeout is cooperative. A .NET plugin runs on the request's own thread, and the host starts timing it only when `InvokeAsync` hands back a task. A plugin that spins in a loop, waits on a lock, or makes a blocking call before its first real `await` never hands that task back. It holds the request thread until it finishes, `timeoutMs` never fires, and `failMode` (including `open`) does not apply.
+
+- Write plugins so the first thing that can take long is an `await` that honours the `CancellationToken`.
+- Keep CPU-bound work short, or move it behind `await Task.Run(..., ct)` inside the plugin.
+- Treat a plugin that cannot do this as an operator risk: plugins are trusted, in-process code, and a stuck one stalls the requests it holds until it returns.
+
+The host does not move plugin calls to the thread pool to work around this. The call would time out, but the spinning thread would keep running, so the cost would only move. Engines that enforce limits themselves, such as a future Lua or WASM host, will not share this limit.
 
 ## Metrics
 
