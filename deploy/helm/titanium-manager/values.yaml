@@ -1,0 +1,105 @@
+# Default values for Titanium Manager.
+# Single-instance only: keep replicaCount at 1 and use one PVC for the SQLite database.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/justcoding121/titanium-manager
+  # Defaults to the chart appVersion. A digest, when set, wins over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # The manager never calls the Kubernetes API, so no token is mounted.
+  automount: false
+
+podAnnotations: {}
+podLabels: {}
+
+terminationGracePeriodSeconds: 30
+
+strategy:
+  type: Recreate
+
+service:
+  type: ClusterIP
+  port: 7700
+  annotations: {}
+  # loadBalancerClass, externalTrafficPolicy and similar knobs go here verbatim.
+  extra: {}
+
+# Bootstrap admin bearer token (TITANIUM_MANAGER_ADMIN_TOKEN). Hashed into SQLite as role admin.
+admin:
+  token:
+    # Name of an existing Secret. When empty the chart creates one with a random token and keeps it across upgrades.
+    existingSecret: ""
+    key: admin-token
+
+# SQLite database on a PersistentVolumeClaim (ReadWriteOnce). Required for durable state.
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  # Mount path for the volume; the database file is <mountPath>/manager.db.
+  mountPath: /var/lib/titanium-manager
+  annotations: {}
+  # Existing PVC name. When set, the chart does not create a claim.
+  existingClaim: ""
+
+probes:
+  startup:
+    periodSeconds: 2
+    failureThreshold: 30
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 2
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654
+  runAsGroup: 1654
+  fsGroup: 1654
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Writable scratch space for the read-only root filesystem.
+tmpDir:
+  sizeLimit: 64Mi
+
+extraVolumes: []
+extraVolumeMounts: []
+extraEnv: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""

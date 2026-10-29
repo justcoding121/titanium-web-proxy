@@ -1,0 +1,15 @@
+apiVersion: v2
+name: titanium-manager
+description: Titanium Manager — SQLite multi-cluster config control plane (single-instance).
+type: application
+version: 0.1.0
+appVersion: "7.0.27"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/justcoding121/titanium-web-proxy
+sources:
+  - https://github.com/justcoding121/titanium-web-proxy
+keywords:
+  - proxy
+  - control-plane
+  - titanium
+  - manager

@@ -1,0 +1,69 @@
+# syntax=docker/dockerfile:1.7
+#
+# titanium-manager: SQLite multi-cluster config control plane (linux/amd64 and linux/arm64).
+# Single-instance only — do not run multiple replicas against one database.
+#
+# Build from the repository root:
+#   docker buildx build -f packaging/docker/Dockerfile.manager -t titanium-manager:dev .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile.manager .
+#
+# Run with a volume for the SQLite database and an admin bootstrap token:
+#   docker run --rm -p 7700:7700 \
+#     -e TITANIUM_MANAGER_ADMIN_TOKEN=secret \
+#     -v manager-data:/var/lib/titanium-manager \
+#     --read-only --tmpfs /tmp \
+#     titanium-manager:dev
+#
+# The runtime stage matches the CLI/gateway images: chiseled, non-root (UID 1654), no shell.
+
+ARG DOTNET_VERSION=10.0
+
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+ARG TARGETARCH
+ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
+WORKDIR /src
+
+COPY global.json NuGet.config ./
+COPY src/ src/
+RUN case "${TARGETARCH}" in \
+      amd64) RID=linux-x64 ;; \
+      arm64) RID=linux-arm64 ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && dotnet publish src/Titanium.Manager/Titanium.Manager.csproj \
+         -c Release -r "${RID}" --self-contained true \
+         -p:Version="${VERSION}" -p:SourceRevisionId="${COMMIT}" \
+         -p:DebugType=None -p:DebugSymbols=false \
+         -o /out
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:${DOTNET_VERSION}-noble-chiseled-extra AS runtime
+ARG VERSION=0.0.0-dev
+ARG COMMIT=unknown
+LABEL org.opencontainers.image.title="Titanium Manager" \
+      org.opencontainers.image.description="SQLite multi-cluster config control plane for Titanium Web Proxy" \
+      org.opencontainers.image.source="https://github.com/justcoding121/titanium-web-proxy" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+
+WORKDIR /app
+COPY --from=build --chown=1654:1654 /out/ /app/
+
+ENV PATH="/app:${PATH}" \
+    HOME=/tmp \
+    DOTNET_EnableDiagnostics=0 \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1
+
+USER 1654:1654
+
+EXPOSE 7700
+
+STOPSIGNAL SIGTERM
+
+# Exec form only: the image has no shell. healthcheck GETs /v1/healthz on the loopback listener.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["titanium-manager", "healthcheck", "--url", "http://127.0.0.1:7700/v1/healthz"]
+
+ENTRYPOINT ["titanium-manager", "--listen", "http://+:7700/", "--db", "/var/lib/titanium-manager/manager.db"]

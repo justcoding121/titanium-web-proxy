@@ -17,6 +17,34 @@ titanium-manager --listen http://127.0.0.1:7700/ --db ./manager.db --admin-token
 
 Or set `TITANIUM_MANAGER_ADMIN_TOKEN` instead of `--admin-token`.
 
+## Docker
+
+Build from the repository root (multi-arch publish mirrors the CLI/gateway images):
+
+```bash
+docker buildx build -f packaging/docker/Dockerfile.manager -t titanium-manager:dev .
+```
+
+Run with a volume for SQLite and an admin bootstrap token:
+
+```bash
+docker run --rm -p 7700:7700 \
+  -e TITANIUM_MANAGER_ADMIN_TOKEN=secret \
+  -v manager-data:/var/lib/titanium-manager \
+  --read-only --tmpfs /tmp \
+  titanium-manager:dev
+```
+
+The image listens on `http://+:7700/`, stores the DB at `/var/lib/titanium-manager/manager.db`, runs as UID 1654, and HEALTHCHECKs `GET /v1/healthz`. Published releases land at `ghcr.io/justcoding121/titanium-manager`.
+
+## Helm
+
+Chart: [`deploy/helm/titanium-manager`](../../deploy/helm/titanium-manager). Single replica, PVC for SQLite, Secret for `TITANIUM_MANAGER_ADMIN_TOKEN`, probes on `/v1/healthz`.
+
+```bash
+helm install manager deploy/helm/titanium-manager -n titanium-manager --create-namespace
+```
+
 ## Auth
 
 | Surface | Mechanism |
