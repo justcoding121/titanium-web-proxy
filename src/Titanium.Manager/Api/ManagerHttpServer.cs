@@ -22,6 +22,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stop = new();
     private Task? _loop;
+    private Task? _ticker;
 
     public ManagerHttpServer(ManagerStore store, string listenPrefix)
     {
@@ -37,6 +38,35 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     {
         _listener.Start();
         _loop = Task.Run(AcceptLoopAsync);
+        _ticker = Task.Run(RolloutTickLoopAsync);
+    }
+
+    private async Task RolloutTickLoopAsync()
+    {
+        while (!_stop.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), _stop.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            try
+            {
+                var changed = _store.TickRollouts();
+                foreach (var fleetId in changed)
+                {
+                    _waitHub.NotifyFleet(fleetId);
+                }
+            }
+            catch
+            {
+                // keep ticker alive
+            }
+        }
     }
 
     private async Task AcceptLoopAsync()
@@ -145,13 +175,14 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         }
 
         var have = qs["have"] ?? "";
+        var nodeId = qs["node_id"] ?? qs["nodeId"];
         var waitSec = 30;
         if (int.TryParse(qs["wait"], out var w))
         {
             waitSec = Math.Clamp(w, 0, 120);
         }
 
-        var published = _store.GetPublished(fleetId.Value);
+        var published = _store.GetConfigForAgent(fleetId.Value, nodeId);
         if (published is not null && !string.Equals(published.ContentHash, have, StringComparison.OrdinalIgnoreCase))
         {
             await WriteConfigAsync(context, published).ConfigureAwait(false);
@@ -161,7 +192,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         if (waitSec > 0)
         {
             await _waitHub.WaitAsync(fleetId.Value, TimeSpan.FromSeconds(waitSec), _stop.Token).ConfigureAwait(false);
-            published = _store.GetPublished(fleetId.Value);
+            published = _store.GetConfigForAgent(fleetId.Value, nodeId);
             if (published is not null && !string.Equals(published.ContentHash, have, StringComparison.OrdinalIgnoreCase))
             {
                 await WriteConfigAsync(context, published).ConfigureAwait(false);
@@ -206,7 +237,31 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
                 : health.GetRawText();
         }
 
-        var row = _store.UpsertAgentAck(fleet, nodeId!, configHash, ok, error, healthJson);
+        string? labelsJson = null;
+        if (root.TryGetProperty("labels", out var labels))
+        {
+            labelsJson = labels.ValueKind is JsonValueKind.String
+                ? labels.GetString()
+                : labels.GetRawText();
+        }
+        else if (root.TryGetProperty("labelsJson", out var labelsJsonEl))
+        {
+            labelsJson = labelsJsonEl.GetString();
+        }
+
+        var (row, paused) = _store.UpsertAgentAck(fleet, nodeId!, configHash, ok, error, healthJson, labelsJson);
+        if (paused)
+        {
+            _waitHub.NotifyFleet(fleet);
+        }
+        else
+        {
+            foreach (var fleetId in _store.TickRollouts())
+            {
+                _waitHub.NotifyFleet(fleetId);
+            }
+        }
+
         await WriteJsonAsync(context, 200, new
         {
             id = row.Id,
@@ -215,6 +270,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             status = row.Status,
             configHash = row.ConfigHash,
             lastSeen = row.LastSeen,
+            rolloutPaused = paused,
         }).ConfigureAwait(false);
     }
 
@@ -406,6 +462,12 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             return;
         }
 
+        if (action.Equals("rollouts", StringComparison.OrdinalIgnoreCase))
+        {
+            await HandleRolloutsAsync(context, method, fleetId, segments, role, actor).ConfigureAwait(false);
+            return;
+        }
+
         if (action.Equals("agents", StringComparison.OrdinalIgnoreCase) && method == "GET" && segments.Length == 2)
         {
             Require(role, AdminRole.Viewer);
@@ -460,6 +522,125 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             var text = YamlDiff.Unified(from.YamlText, to.YamlText, $"rev-{fromId}", $"rev-{toId}");
             await WriteTextAsync(context, 200, text, "text/plain; charset=utf-8").ConfigureAwait(false);
             return;
+        }
+
+        await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+    }
+
+    private async Task HandleRolloutsAsync(
+        HttpListenerContext context,
+        string method,
+        long fleetId,
+        string[] segments,
+        AdminRole role,
+        string actor)
+    {
+        if (segments.Length == 2 && method == "GET")
+        {
+            Require(role, AdminRole.Viewer);
+            var list = _store.ListRollouts(fleetId).Select(r => new
+            {
+                id = r.Id,
+                fleetId = r.FleetId,
+                revisionId = r.RevisionId,
+                previousRevisionId = r.PreviousRevisionId,
+                state = r.State,
+                createdAt = r.CreatedAt,
+                updatedAt = r.UpdatedAt,
+                pauseReason = r.PauseReason,
+            });
+            await WriteJsonAsync(context, 200, list).ConfigureAwait(false);
+            return;
+        }
+
+        if (segments.Length >= 3 && long.TryParse(segments[2], out var rolloutId))
+        {
+            if (segments.Length == 3 && method == "GET")
+            {
+                Require(role, AdminRole.Viewer);
+                var rollout = _store.GetRollout(fleetId, rolloutId);
+                if (rollout is null)
+                {
+                    await WriteTextAsync(context, 404, "rollout not found").ConfigureAwait(false);
+                    return;
+                }
+
+                var steps = _store.ListRolloutSteps(rolloutId).Select(s => new
+                {
+                    id = s.Id,
+                    ordinal = s.Ordinal,
+                    labelSelectorJson = s.LabelSelectorJson,
+                    maxUnavailable = s.MaxUnavailable,
+                    bakeSeconds = s.BakeSeconds,
+                    state = s.State,
+                    startedAt = s.StartedAt,
+                    finishedAt = s.FinishedAt,
+                });
+                await WriteJsonAsync(context, 200, new
+                {
+                    id = rollout.Id,
+                    fleetId = rollout.FleetId,
+                    revisionId = rollout.RevisionId,
+                    previousRevisionId = rollout.PreviousRevisionId,
+                    state = rollout.State,
+                    createdAt = rollout.CreatedAt,
+                    updatedAt = rollout.UpdatedAt,
+                    pauseReason = rollout.PauseReason,
+                    steps,
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            if (segments.Length == 4 && method == "POST")
+            {
+                var verb = segments[3];
+                try
+                {
+                    if (verb.Equals("pause", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Require(role, AdminRole.Editor);
+                        var paused = _store.PauseRollout(fleetId, rolloutId, "manual");
+                        _store.Audit(actor, "rollout.pause", $"rollout:{rolloutId}", "ok", paused.PauseReason);
+                        await WriteRolloutAsync(context, paused).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (verb.Equals("resume", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Require(role, AdminRole.Editor);
+                        var resumed = _store.ResumeRollout(fleetId, rolloutId);
+                        foreach (var id in _store.TickRollouts())
+                        {
+                            _waitHub.NotifyFleet(id);
+                        }
+
+                        _store.Audit(actor, "rollout.resume", $"rollout:{rolloutId}", "ok");
+                        await WriteRolloutAsync(context, resumed).ConfigureAwait(false);
+                        return;
+                    }
+
+                    if (verb.Equals("rollback", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Require(role, AdminRole.Editor);
+                        var rolled = _store.RollbackRollout(fleetId, rolloutId);
+                        _waitHub.NotifyFleet(fleetId);
+                        _store.Audit(actor, "rollout.rollback", $"rollout:{rolloutId}", "ok",
+                            $"previous:{rolled.PreviousRevisionId}");
+                        await WriteRolloutAsync(context, rolled).ConfigureAwait(false);
+                        return;
+                    }
+                }
+                catch (KeyNotFoundException ex)
+                {
+                    await WriteTextAsync(context, 404, ex.Message).ConfigureAwait(false);
+                    return;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    await WriteTextAsync(context, 409, ex.Message).ConfigureAwait(false);
+                    return;
+                }
+            }
         }
 
         await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
@@ -572,21 +753,41 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
                 Require(role, AdminRole.Editor);
                 try
                 {
-                    var rollout = _store.Publish(fleetId, revId);
+                    var (waves, bakeSeconds) = await ReadPublishBodyAsync(context).ConfigureAwait(false);
+                    var rollout = _store.Publish(fleetId, revId, waves, bakeSeconds);
                     _waitHub.NotifyFleet(fleetId);
                     _store.Audit(actor, "revision.publish", $"revision:{revId}", "ok", $"rollout:{rollout.Id}");
+                    var steps = _store.ListRolloutSteps(rollout.Id).Select(s => new
+                    {
+                        id = s.Id,
+                        ordinal = s.Ordinal,
+                        labelSelectorJson = s.LabelSelectorJson,
+                        maxUnavailable = s.MaxUnavailable,
+                        bakeSeconds = s.BakeSeconds,
+                        state = s.State,
+                        startedAt = s.StartedAt,
+                        finishedAt = s.FinishedAt,
+                    });
                     await WriteJsonAsync(context, 200, new
                     {
                         id = rollout.Id,
                         fleetId = rollout.FleetId,
                         revisionId = rollout.RevisionId,
+                        previousRevisionId = rollout.PreviousRevisionId,
                         state = rollout.State,
                         createdAt = rollout.CreatedAt,
+                        updatedAt = rollout.UpdatedAt,
+                        pauseReason = rollout.PauseReason,
+                        steps,
                     }).ConfigureAwait(false);
                 }
                 catch (KeyNotFoundException ex)
                 {
                     await WriteTextAsync(context, 404, ex.Message).ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    await WriteTextAsync(context, 409, ex.Message).ConfigureAwait(false);
                 }
 
                 return;
@@ -594,6 +795,95 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         }
 
         await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+    }
+
+    private static async Task<(IReadOnlyList<PublishWaveSpec>? Waves, int? BakeSeconds)> ReadPublishBodyAsync(
+        HttpListenerContext context)
+    {
+        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+        var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            int? bakeSeconds = null;
+            if (root.TryGetProperty("bakeSeconds", out var bake) && bake.TryGetInt32(out var b))
+            {
+                bakeSeconds = b;
+            }
+
+            if (!root.TryGetProperty("waves", out var wavesEl) || wavesEl.ValueKind != JsonValueKind.Array)
+            {
+                return (null, bakeSeconds);
+            }
+
+            var waves = new List<PublishWaveSpec>();
+            foreach (var wave in wavesEl.EnumerateArray())
+            {
+                var labels = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (wave.TryGetProperty("matchLabels", out var ml) && ml.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in ml.EnumerateObject())
+                    {
+                        labels[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
+                            ? prop.Value.GetString() ?? ""
+                            : prop.Value.ToString();
+                    }
+                }
+
+                var maxUnavailable = 0;
+                if (wave.TryGetProperty("maxUnavailable", out var mu) && mu.TryGetInt32(out var m))
+                {
+                    maxUnavailable = m;
+                }
+
+                var waveBake = bakeSeconds ?? 0;
+                if (wave.TryGetProperty("bakeSeconds", out var wb) && wb.TryGetInt32(out var wbVal))
+                {
+                    waveBake = wbVal;
+                }
+
+                waves.Add(new PublishWaveSpec(labels, maxUnavailable, waveBake));
+            }
+
+            return (waves.Count == 0 ? null : waves, bakeSeconds);
+        }
+        catch (JsonException)
+        {
+            return (null, null);
+        }
+    }
+
+    private async Task WriteRolloutAsync(HttpListenerContext context, RolloutRow rollout)
+    {
+        var steps = _store.ListRolloutSteps(rollout.Id).Select(s => new
+        {
+            id = s.Id,
+            ordinal = s.Ordinal,
+            labelSelectorJson = s.LabelSelectorJson,
+            maxUnavailable = s.MaxUnavailable,
+            bakeSeconds = s.BakeSeconds,
+            state = s.State,
+            startedAt = s.StartedAt,
+            finishedAt = s.FinishedAt,
+        });
+        await WriteJsonAsync(context, 200, new
+        {
+            id = rollout.Id,
+            fleetId = rollout.FleetId,
+            revisionId = rollout.RevisionId,
+            previousRevisionId = rollout.PreviousRevisionId,
+            state = rollout.State,
+            createdAt = rollout.CreatedAt,
+            updatedAt = rollout.UpdatedAt,
+            pauseReason = rollout.PauseReason,
+            steps,
+        }).ConfigureAwait(false);
     }
 
     private static void Require(AdminRole have, AdminRole need)
@@ -761,6 +1051,18 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             try
             {
                 await _loop.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            }
+            catch
+            {
+                /* ignore */
+            }
+        }
+
+        if (_ticker is not null)
+        {
+            try
+            {
+                await _ticker.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
             }
             catch
             {

@@ -26,8 +26,28 @@ internal sealed record RolloutRow(
     long Id,
     long FleetId,
     long RevisionId,
+    long? PreviousRevisionId,
     string State,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    string? PauseReason);
+
+internal sealed record RolloutStepRow(
+    long Id,
+    long RolloutId,
+    int Ordinal,
+    string LabelSelectorJson,
+    int MaxUnavailable,
+    int BakeSeconds,
+    string State,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt);
+
+/// <summary>One wave in a staged publish. Empty <see cref="MatchLabels"/> matches all agents.</summary>
+internal sealed record PublishWaveSpec(
+    IReadOnlyDictionary<string, string> MatchLabels,
+    int MaxUnavailable,
+    int BakeSeconds);
 
 internal sealed record AgentTokenRow(
     long Id,

@@ -208,5 +208,218 @@ public class ManagerStoreAndApiTests
         Assert.AreEqual(0, host.Store.ListRevisions(fleetId).Count);
     }
 
+    [TestMethod]
+    public async Task Api_TwoWaveRollout_Wave2SeesOldHashUntilBake()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        var (fleetId, agent, hash1, hash2, rolloutId) = await StartTwoWaveAsync(host, admin, bakeSeconds: 1);
+
+        var wave1 = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id=wave1-node&have=&wait=0");
+        Assert.AreEqual(HttpStatusCode.OK, wave1.StatusCode);
+        using var w1 = await ManagerTestHost.ReadJsonAsync(wave1);
+        Assert.AreEqual(hash2, w1.RootElement.GetProperty("hash").GetString());
+
+        var wave2 = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id=wave2-node&have=&wait=0");
+        Assert.AreEqual(HttpStatusCode.OK, wave2.StatusCode);
+        using var w2 = await ManagerTestHost.ReadJsonAsync(wave2);
+        Assert.AreEqual(hash1, w2.RootElement.GetProperty("hash").GetString(),
+            "wave2 must keep previous revision until wave1 bakes");
+
+        await agent.PostAsync("/v1/agent/ack", ManagerTestHost.Json(new
+        {
+            fleet = fleetId,
+            node_id = "wave1-node",
+            config_hash = hash2,
+            ok = true,
+            labels = new { wave = "1" },
+        }));
+
+        await WaitForWave2ExposureAsync(host, fleetId, hash2);
+
+        var wave2After = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id=wave2-node&have=&wait=0");
+        using var w2b = await ManagerTestHost.ReadJsonAsync(wave2After);
+        Assert.AreEqual(hash2, w2b.RootElement.GetProperty("hash").GetString());
+
+        var steps = host.Store.ListRolloutSteps(rolloutId);
+        Assert.AreEqual("succeeded", steps[0].State);
+        Assert.AreEqual("running", steps[1].State);
+    }
+
+    [TestMethod]
+    public async Task Api_NackAutoPauses_Wave2NeverStarts()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        var (fleetId, agent, _, hash2, rolloutId) = await StartTwoWaveAsync(host, admin, bakeSeconds: 0);
+
+        var ack = await agent.PostAsync("/v1/agent/ack", ManagerTestHost.Json(new
+        {
+            fleet = fleetId,
+            node_id = "wave1-node",
+            config_hash = hash2,
+            ok = false,
+            error = "apply failed",
+            labels = new { wave = "1" },
+        }));
+        Assert.AreEqual(HttpStatusCode.OK, ack.StatusCode);
+        using var ackDoc = await ManagerTestHost.ReadJsonAsync(ack);
+        Assert.AreEqual(true, ackDoc.RootElement.GetProperty("rolloutPaused").GetBoolean());
+
+        var rollout = host.Store.GetRollout(fleetId, rolloutId)!;
+        Assert.AreEqual("paused", rollout.State);
+        StringAssert.StartsWith(rollout.PauseReason, "nack:");
+
+        host.Store.TickRollouts();
+        var steps = host.Store.ListRolloutSteps(rolloutId);
+        Assert.AreEqual("running", steps[0].State);
+        Assert.AreEqual("pending", steps[1].State);
+
+        var wave2 = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id=wave2-node&have=&wait=0");
+        using var w2 = await ManagerTestHost.ReadJsonAsync(wave2);
+        Assert.AreNotEqual(hash2, w2.RootElement.GetProperty("hash").GetString());
+    }
+
+    [TestMethod]
+    public async Task Api_RollbackRestoresPreviousRevision()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        var (fleetId, agent, hash1, hash2, rolloutId) = await StartTwoWaveAsync(host, admin, bakeSeconds: 30);
+
+        var before = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id=wave1-node&have=&wait=0");
+        using var beforeDoc = await ManagerTestHost.ReadJsonAsync(before);
+        Assert.AreEqual(hash2, beforeDoc.RootElement.GetProperty("hash").GetString());
+
+        var rollback = await admin.PostAsync(
+            $"/v1/fleets/{fleetId}/rollouts/{rolloutId}/rollback", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.OK, rollback.StatusCode);
+        using var rb = await ManagerTestHost.ReadJsonAsync(rollback);
+        Assert.AreEqual("rolled_back", rb.RootElement.GetProperty("state").GetString());
+
+        foreach (var node in new[] { "wave1-node", "wave2-node" })
+        {
+            var cfg = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id={node}&have=&wait=0");
+            using var doc = await ManagerTestHost.ReadJsonAsync(cfg);
+            Assert.AreEqual(hash1, doc.RootElement.GetProperty("hash").GetString(), node);
+        }
+
+        Assert.AreEqual(host.Store.GetPublished(fleetId)!.ContentHash, hash1);
+    }
+
+    [TestMethod]
+    public async Task Api_PublishWithoutWaves_ExposesAllAgentsImmediately()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fleetDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "immediate" })));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        host.Store.EnsureAgent(fleetId, "a", """{"zone":"x"}""");
+        host.Store.EnsureAgent(fleetId, "b", """{"zone":"y"}""");
+
+        using var revDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", ManagerTestHost.Yaml(ValidYaml)));
+        var revId = revDoc.RootElement.GetProperty("id").GetInt64();
+        var hash = revDoc.RootElement.GetProperty("contentHash").GetString();
+
+        using var pubDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions/{revId}/publish", new StringContent("")));
+        Assert.AreEqual("succeeded", pubDoc.RootElement.GetProperty("state").GetString());
+
+        using var tokenDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/agent-tokens", ManagerTestHost.Json(new { fleetId, name = "t" })));
+        using var agent = host.CreateAgentClient(tokenDoc.RootElement.GetProperty("token").GetString()!);
+
+        foreach (var node in new[] { "a", "b" })
+        {
+            var cfg = await agent.GetAsync($"/v1/agent/config?fleet={fleetId}&node_id={node}&have=&wait=0");
+            using var doc = await ManagerTestHost.ReadJsonAsync(cfg);
+            Assert.AreEqual(hash, doc.RootElement.GetProperty("hash").GetString(), node);
+        }
+    }
+
+    private static async Task<(long FleetId, HttpClient Agent, string Hash1, string Hash2, long RolloutId)>
+        StartTwoWaveAsync(ManagerTestHost host, HttpClient admin, int bakeSeconds)
+    {
+        using var fleetDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = $"waves-{Guid.NewGuid():N}" })));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        host.Store.EnsureAgent(fleetId, "wave1-node", """{"wave":"1"}""");
+        host.Store.EnsureAgent(fleetId, "wave2-node", """{"wave":"2"}""");
+
+        using var rev1Doc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", ManagerTestHost.Yaml(ValidYaml)));
+        var rev1Id = rev1Doc.RootElement.GetProperty("id").GetInt64();
+        var hash1 = rev1Doc.RootElement.GetProperty("contentHash").GetString()!;
+        await admin.PostAsync($"/v1/fleets/{fleetId}/revisions/{rev1Id}/publish", new StringContent(""));
+
+        using var tokenDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/agent-tokens", ManagerTestHost.Json(new { fleetId, name = "nodes" })));
+        var agent = host.CreateAgentClient(tokenDoc.RootElement.GetProperty("token").GetString()!);
+
+        await agent.PostAsync("/v1/agent/ack", ManagerTestHost.Json(new
+        {
+            fleet = fleetId,
+            node_id = "wave1-node",
+            config_hash = hash1,
+            ok = true,
+            labels = new { wave = "1" },
+        }));
+        await agent.PostAsync("/v1/agent/ack", ManagerTestHost.Json(new
+        {
+            fleet = fleetId,
+            node_id = "wave2-node",
+            config_hash = hash1,
+            ok = true,
+            labels = new { wave = "2" },
+        }));
+
+        using var rev2Doc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", ManagerTestHost.Yaml(ValidYamlV2)));
+        var rev2Id = rev2Doc.RootElement.GetProperty("id").GetInt64();
+        var hash2 = rev2Doc.RootElement.GetProperty("contentHash").GetString()!;
+
+        using var pubDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync(
+                $"/v1/fleets/{fleetId}/revisions/{rev2Id}/publish",
+                ManagerTestHost.Json(new
+                {
+                    waves = new object[]
+                    {
+                        new { matchLabels = new { wave = "1" }, maxUnavailable = 0, bakeSeconds },
+                        new { matchLabels = new { wave = "2" }, maxUnavailable = 0, bakeSeconds = 0 },
+                    },
+                })));
+        Assert.AreEqual("running", pubDoc.RootElement.GetProperty("state").GetString());
+        var rolloutId = pubDoc.RootElement.GetProperty("id").GetInt64();
+        return (fleetId, agent, hash1, hash2, rolloutId);
+    }
+
+    private static async Task WaitForWave2ExposureAsync(ManagerTestHost host, long fleetId, string hash2)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        while (DateTime.UtcNow < deadline)
+        {
+            host.Store.TickRollouts();
+            var agent = host.Store.ListAgents(fleetId).First(a => a.NodeId == "wave2-node");
+            if (agent.DesiredRevisionId is not null)
+            {
+                var published = host.Store.GetConfigForAgent(fleetId, "wave2-node");
+                if (published is not null &&
+                    string.Equals(published.ContentHash, hash2, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+
+            await Task.Delay(150);
+        }
+
+        Assert.Fail("wave2 never received the new revision after wave1 bake");
+    }
+
     private static string TempDb() => Path.Combine(Path.GetTempPath(), $"twp-mgr-store-{Guid.NewGuid():N}.db");
 }

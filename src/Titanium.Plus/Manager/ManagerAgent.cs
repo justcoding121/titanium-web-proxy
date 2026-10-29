@@ -389,7 +389,8 @@ public sealed class ManagerAgent : IDisposable
     private async Task<AgentRevision?> LongPollAsync(int waitSeconds, CancellationToken ct)
     {
         var fleetQ = string.IsNullOrEmpty(_fleet) ? "" : $"fleet={Uri.EscapeDataString(_fleet)}&";
-        var path = $"v1/agent/config?{fleetQ}have={Uri.EscapeDataString(_pollHave)}&wait={waitSeconds}";
+        var nodeQ = string.IsNullOrEmpty(_nodeId) ? "" : $"node_id={Uri.EscapeDataString(_nodeId)}&";
+        var path = $"v1/agent/config?{fleetQ}{nodeQ}have={Uri.EscapeDataString(_pollHave)}&wait={waitSeconds}";
         using var response = await _http.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, ct)
             .ConfigureAwait(false);
 
