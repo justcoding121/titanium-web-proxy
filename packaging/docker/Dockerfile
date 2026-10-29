@@ -11,6 +11,8 @@
 #
 # The runtime stage is a chiseled, distroless-style base: no shell, no package manager, non-root user (UID 1654).
 # HTTP/3 needs libmsquic, which this image does not carry; use the release zip or a custom base for QUIC listeners.
+# Scripting (Lua / Wasmtime) natives are not built into this image yet: run tools/packaging/bundle-scripting-native.ps1
+# -Rid linux-x64|linux-arm64 -PublishDir <out> and COPY the resulting liblua54.so / libwasmtime.so into /app, or use the release zip.
 
 ARG DOTNET_VERSION=10.0
 

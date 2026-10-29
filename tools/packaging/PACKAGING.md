@@ -129,6 +129,16 @@ choco install titanium-inspector --pre
 
 Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistribute LGPL/GPL natives (`libnuma`, `lttng-ust`) in the zip — install them on the host.
 
+## Scripting native lock file
+
+`scripting-native.lock.json` pins the natives behind `titanium scripting-deps` (same shape as the HTTP/3 lock):
+
+| Native | Source |
+| --- | --- |
+| Lua 5.4.7 + Titanium Lua shim | Built from the lua.org source tarball (sha256 pinned) plus `tools/scripting/lua-shim/*.c` into `lua54.dll` / `liblua54.so` / `liblua54.dylib`. Needs a native compiler for the RID; skipped with a warning otherwise |
+| Wasmtime C API 50.0.0 | Prebuilt GitHub release `*-c-api` archive per RID (sha256 pinned) → `wasmtime.dll` / `libwasmtime.so` / `libwasmtime.dylib` |
+
+`bundle-scripting-native.ps1 -Rid <rid> -PublishDir <dir>` downloads, verifies, and copies them; release CI runs it as a soft-fail step (`continue-on-error`) after the HTTP/3 bundle. Licenses: `THIRD-PARTY-SCRIPTING.txt`. Local dev: `tools/scripting/README.md`. Bump Wasmtime by updating the version, URLs, and the GitHub asset digests together.
 ## CI
 
 See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):

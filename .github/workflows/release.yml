@@ -189,8 +189,10 @@ jobs:
           dotnet-version: '10.0.x'
       - uses: actions/cache@v6
         with:
-          path: tools/packaging/.cache/http3-natives
-          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          path: |
+            tools/packaging/.cache/http3-natives
+            tools/packaging/.cache/scripting-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json', 'tools/packaging/scripting-native.lock.json') }}-${{ matrix.rid }}
           # Exact RID only — cross-RID restore-keys previously pulled linux-x64 into musl jobs.
       - name: Publish Cli
         shell: pwsh
@@ -216,6 +218,15 @@ jobs:
             Copy-Item "$out/titanium" "$out/twp"
           }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+      # Scripting natives (Lua + shim, Wasmtime). Soft-fail on first landing: the CLI works without them
+      # (titanium scripting-deps status reports what is missing). Lua is skipped with a warning when
+      # the runner cannot build the RID natively or tools/scripting/lua-shim has no sources yet.
+      - name: Bundle scripting natives (Cli)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/cli/$rid"
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3
@@ -382,8 +393,10 @@ jobs:
           dotnet-version: '10.0.x'
       - uses: actions/cache@v6
         with:
-          path: tools/packaging/.cache/http3-natives
-          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          path: |
+            tools/packaging/.cache/http3-natives
+            tools/packaging/.cache/scripting-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json', 'tools/packaging/scripting-native.lock.json') }}-${{ matrix.rid }}
           # Exact RID only — avoid cross-RID cache pollution (see build-cli).
       - name: Publish Inspector
         shell: pwsh
@@ -409,6 +422,12 @@ jobs:
             Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
             Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
           }
+      - name: Bundle scripting natives (Inspector)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/inspector/$rid"
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3
