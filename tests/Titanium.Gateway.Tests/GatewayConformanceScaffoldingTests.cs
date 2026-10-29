@@ -39,7 +39,11 @@ public class GatewayConformanceScaffoldingTests
         StringAssert.Contains(script, "--gateway-class=titanium");
         StringAssert.Contains(script, "--report-output=");
         var line = script.Split('\n').Single(l => l.StartsWith("SUPPORTED_FEATURES=", StringComparison.Ordinal));
-        var features = line["SUPPORTED_FEATURES=".Length..].Trim('"').Split(',');
+        // run.sh is checked out with CRLF on Windows CI; TrimEntries strips the trailing '\r'.
+        var features = line["SUPPORTED_FEATURES=".Length..]
+            .Trim()
+            .Trim('"')
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         CollectionAssert.IsSubsetOf(features, new[]
         {
             "HTTPRouteQueryParamMatching", "HTTPRouteMethodMatching", "HTTPRouteHostRewrite", "HTTPRoutePathRewrite", "HTTPRouteRequestMirror",
