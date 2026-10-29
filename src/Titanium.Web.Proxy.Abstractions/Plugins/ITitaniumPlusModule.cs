@@ -41,6 +41,12 @@ public sealed class PlusActivationContext
     public IPlusHostStatus? HostStatus { get; init; }
 
     /// <summary>
+    /// Runs the same atomic config reload as SIGHUP / <c>titanium reload</c>. Null when the host cannot reload
+    /// (tests without a CLI host). The dashboard Config page exposes a button only when this is set.
+    /// </summary>
+    public Func<CancellationToken, Task<PlusReloadResult>>? RequestReload { get; init; }
+
+    /// <summary>
     /// Handlers for route policy kinds that Plus supplies (for example <c>oidc</c>). The host copies them onto
     /// <c>ReverseProxyOptions.PolicyHandlers</c> during refresh. Null when the host has no such list.
     /// </summary>

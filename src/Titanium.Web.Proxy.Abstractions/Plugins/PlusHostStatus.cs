@@ -20,6 +20,24 @@ public sealed class PlusConfigStatus
 
     /// <summary>The failure text of the last reload, with secrets masked. Null after a success.</summary>
     public string? LastReloadError { get; init; }
+
+    /// <summary>True when this node is enrolled with a Plus manager (<c>plus.manager</c> / managed mode).</summary>
+    public bool Managed { get; init; }
+
+    /// <summary>True when the running config hash differs from the manager's desired revision.</summary>
+    public bool Drifted { get; init; }
+}
+
+/// <summary>Outcome of a host config reload requested from the dashboard.</summary>
+public sealed class PlusReloadResult
+{
+    public required bool Ok { get; init; }
+
+    /// <summary>Failure text with secrets masked. Null on success.</summary>
+    public string? Error { get; init; }
+
+    /// <summary>Config hash after a successful reload, when the host reports one.</summary>
+    public string? ConfigHash { get; init; }
 }
 
 /// <summary>One certificate the host serves or presents.</summary>

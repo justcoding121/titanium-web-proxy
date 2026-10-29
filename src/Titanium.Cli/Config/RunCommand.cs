@@ -227,9 +227,56 @@ internal static class RunCommand
                 pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline), plusContext?.FleetRateStore);
         }
 
+        AdminServer? adminServer = null;
+        async Task<PlusReloadResult> PerformReloadAsync(CancellationToken ct)
+        {
+            try
+            {
+                await ReloadConfigAsync(
+                    configPath,
+                    proxy,
+                    clusterManager,
+                    routes,
+                    middleware,
+                    loadBalancer,
+                    responseCache,
+                    plusOptions,
+                    () => grpcJsonTranscoder,
+                    t => grpcJsonTranscoder = t,
+                    RefreshReverseProxy,
+                    policies,
+                    ct,
+                    // A rotated Secret takes effect for /metrics and /version without a restart.
+                    // Dropping the token needs a restart: the bind address is not re-applied here.
+                    onApplied: applied =>
+                    {
+                        if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
+                        {
+                            adminServer?.SetAuthToken(rotated);
+                        }
+
+                        hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
+                    },
+                    getPlugins: () => pluginHost,
+                    setPlugins: next => pluginHost = next,
+                    scriptPipeline: scriptPipeline).ConfigureAwait(false);
+                configHash = AdminHost.ComputeConfigHash(configPath);
+                AsyncConsole.WriteLine("Config reloaded.");
+                await AsyncConsole.FlushAsync().ConfigureAwait(false);
+                return new PlusReloadResult { Ok = true, ConfigHash = configHash };
+            }
+            catch (Exception ex)
+            {
+                hostStatus.MarkReloadFailed(ex.Message);
+                AsyncConsole.WriteError("Config reload failed: " + ex.Message);
+                return new PlusReloadResult { Ok = false, Error = SecretRedactor.Redact(ex.Message) };
+            }
+        }
+
         plusContext = new PlusActivationContext
         {
             HostStatus = hostStatus,
+            RequestReload = PerformReloadAsync,
             RegisterMetricsAppender = metricsExposition.AddAppender,
             ProxyServer = proxy,
             ClusterManager = clusterManager,
@@ -250,7 +297,6 @@ internal static class RunCommand
 
         JsonAccessLogWriter? accessLog = null;
         MetricsHttpEndpoint? metricsEndpoint = null;
-        AdminServer? adminServer = null;
         var udpRelays = new List<UdpRelayListener>();
         try
         {
@@ -288,48 +334,7 @@ internal static class RunCommand
                     stoppingToken,
                     configPath,
                     watch,
-                    onReload: async () =>
-                    {
-                        try
-                        {
-                            await ReloadConfigAsync(
-                                configPath,
-                                proxy,
-                                clusterManager,
-                                routes,
-                                middleware,
-                                loadBalancer,
-                                responseCache,
-                                plusOptions,
-                                () => grpcJsonTranscoder,
-                                t => grpcJsonTranscoder = t,
-                                RefreshReverseProxy,
-                                policies,
-                                stoppingToken,
-                                // A rotated Secret takes effect for /metrics and /version without a restart.
-                                // Dropping the token needs a restart: the bind address is not re-applied here.
-                                onApplied: applied =>
-                                {
-                                    if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
-                                    {
-                                        adminServer?.SetAuthToken(rotated);
-                                    }
-
-                                    hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
-                                },
-                                getPlugins: () => pluginHost,
-                                setPlugins: next => pluginHost = next,
-                                scriptPipeline: scriptPipeline).ConfigureAwait(false);
-                            configHash = AdminHost.ComputeConfigHash(configPath);
-                            AsyncConsole.WriteLine("Config reloaded.");
-                            await AsyncConsole.FlushAsync().ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            hostStatus.MarkReloadFailed(ex.Message);
-                            AsyncConsole.WriteError("Config reload failed: " + ex.Message);
-                        }
-                    },
+                    onReload: async () => { _ = await PerformReloadAsync(stoppingToken).ConfigureAwait(false); },
                     onStopRequested: () =>
                     {
                         readiness.BeginDrain();

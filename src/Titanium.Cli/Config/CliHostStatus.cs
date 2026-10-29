@@ -24,6 +24,8 @@ internal sealed class CliHostStatus : IPlusHostStatus
     private DateTimeOffset? _lastReload;
     private string? _lastResult;
     private string? _lastError;
+    private bool _managed;
+    private bool _drifted;
     private IReadOnlyList<PlusCertificateInfo>? _inventory;
     private DateTimeOffset _inventoryAt;
 
@@ -59,6 +61,16 @@ internal sealed class CliHostStatus : IPlusHostStatus
         }
     }
 
+    /// <summary>Updates manager enrollment and drift flags shown on the dashboard Config page.</summary>
+    public void SetManagedState(bool managed, bool drifted)
+    {
+        lock (_gate)
+        {
+            _managed = managed;
+            _drifted = drifted;
+        }
+    }
+
     public PlusConfigStatus GetConfigStatus()
     {
         lock (_gate)
@@ -71,6 +83,8 @@ internal sealed class CliHostStatus : IPlusHostStatus
                 LastReloadUtc = _lastReload,
                 LastReloadResult = _lastResult,
                 LastReloadError = _lastError,
+                Managed = _managed,
+                Drifted = _drifted,
             };
         }
     }

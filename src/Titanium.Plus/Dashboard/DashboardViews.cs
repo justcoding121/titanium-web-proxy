@@ -233,21 +233,41 @@ internal static class DashboardViews
         return sb.Append("</tbody></table>").ToString();
     }
 
-    public static string Config(ConfigPageData c)
+    public static string Config(ConfigPageData c, bool canOperate = false)
     {
         if (!c.Available)
         {
             return "<p data-testid=\"config-unavailable\">This host does not report config status.</p>";
         }
 
-        var sb = new StringBuilder("<dl class=\"facts\" data-testid=\"config\">");
+        var sb = new StringBuilder();
+        if (c.Managed && c.Drifted)
+        {
+            sb.Append("<p class=\"banner warn\" role=\"status\" data-testid=\"config-drift\">")
+                .Append("This managed node has drifted from the desired revision. Reload applies the local file; ")
+                .Append("the manager publishes fleet revisions separately.")
+                .Append("</p>");
+        }
+        else if (c.Managed)
+        {
+            sb.Append("<p class=\"hint\" data-testid=\"config-managed\">This node is managed by a Plus manager.</p>");
+        }
+
+        sb.Append("<dl class=\"facts\" data-testid=\"config\">");
         Fact(sb, "schema-version", "Schema version", c.SchemaVersion);
         Fact(sb, "config-hash", "Config hash", c.ConfigHash);
         Fact(sb, "loaded", "Loaded (UTC)", c.Loaded);
         Fact(sb, "last-reload", "Last reload (UTC)", c.LastReload.Length == 0 ? "never" : c.LastReload);
         Fact(sb, "last-result", "Last reload result", c.LastResult.Length == 0 ? "-" : c.LastResult);
         Fact(sb, "last-error", "Last reload error", c.LastError.Length == 0 ? "-" : c.LastError);
-        return sb.Append("</dl>").ToString();
+        sb.Append("</dl>");
+        if (canOperate)
+        {
+            sb.Append("<p><button type=\"button\" data-act=\"reload\" data-id=\"-\" data-testid=\"btn-reload\">")
+                .Append("Reload config</button></p>");
+        }
+
+        return sb.ToString();
     }
 
     public static string Certificates(IReadOnlyList<CertificateView> certs)

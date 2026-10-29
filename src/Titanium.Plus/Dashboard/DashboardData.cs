@@ -67,7 +67,9 @@ internal sealed record ConfigPageData(
     string Loaded,
     string LastReload,
     string LastResult,
-    string LastError);
+    string LastError,
+    bool Managed = false,
+    bool Drifted = false);
 
 internal sealed record AuditView(string Time, string Actor, string Remote, string Action, string Target, string Result);
 
@@ -183,7 +185,9 @@ internal static class DashboardData
             s.LoadedUtc is { } loaded ? Iso(loaded) : "",
             s.LastReloadUtc is { } reload ? Iso(reload) : "",
             s.LastReloadResult ?? "",
-            s.LastReloadError ?? "");
+            s.LastReloadError ?? "",
+            s.Managed,
+            s.Drifted);
     }
 
     public static IReadOnlyList<CertificateView> Certificates(

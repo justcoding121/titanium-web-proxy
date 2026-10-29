@@ -173,7 +173,10 @@ internal static class DashboardAssets
               var act = b.getAttribute('data-act');
               var id = b.getAttribute('data-id');
               post('/' + act + '/' + encodeURIComponent(id), function (r, text) {
-                say(r.ok ? (act === 'drain' ? 'Draining ' : 'Marked healthy: ') + id : 'Refused (' + r.status + '): ' + text);
+                var okMsg = act === 'drain' ? 'Draining ' + id
+                  : act === 'reload' ? 'Reload ' + text
+                  : 'Marked healthy: ' + id;
+                say(r.ok ? okMsg : 'Refused (' + r.status + '): ' + text);
                 tick();
               });
               return;
@@ -202,6 +205,7 @@ internal static class DashboardAssets
         .card .label { font-size: .8rem; opacity: .75; }
         .card .value { font-size: 1.5rem; font-weight: 600; }
         .hint { opacity: .75; font-size: .9rem; }
+        .banner.warn { border: 1px solid var(--warn); color: var(--warn); padding: .6rem .8rem; border-radius: .4rem; }
         .facts { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1rem; }
         .facts dt { font-weight: 600; }
         .facts dd { margin: 0; overflow-wrap: anywhere; }

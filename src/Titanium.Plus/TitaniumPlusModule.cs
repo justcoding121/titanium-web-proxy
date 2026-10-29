@@ -99,6 +99,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
                 BreakGlass = breakGlass,
                 UsersFile = usersFile,
                 Oidc = oidc,
+                RequestReload = context.RequestReload,
             });
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");

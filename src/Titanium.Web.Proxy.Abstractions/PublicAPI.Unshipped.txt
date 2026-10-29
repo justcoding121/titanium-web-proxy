@@ -770,6 +770,20 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.LoadedUtc.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.PlusConfigStatus() -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.SchemaVersion.get -> string?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.SchemaVersion.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.Managed.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.Managed.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.Drifted.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.PlusConfigStatus.Drifted.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.PlusReloadResult() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.Ok.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.Ok.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.Error.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.Error.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.ConfigHash.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult.ConfigHash.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RequestReload.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<Titanium.Web.Proxy.Abstractions.Plugins.PlusReloadResult!>!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RequestReload.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind
 Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind.Exact = 0 -> Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind
 Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind.Regex = 1 -> Titanium.Web.Proxy.Abstractions.Routing.QueryMatchKind

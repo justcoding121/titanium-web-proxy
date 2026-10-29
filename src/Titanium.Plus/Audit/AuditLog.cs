@@ -23,6 +23,7 @@ public static class AuditActions
     public const string Login = "login";
     public const string LoginFailed = "login-failed";
     public const string Logout = "logout";
+    public const string Reload = "reload";
 }
 
 /// <summary>Result values written to the audit log.</summary>

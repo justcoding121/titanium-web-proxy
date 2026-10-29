@@ -53,6 +53,9 @@ public sealed class DashboardOptions
 
     /// <summary>OIDC SSO for the dashboard. Null leaves the OIDC code path unconstructed.</summary>
     public DashboardOidcOptions? Oidc { get; init; }
+
+    /// <summary>Host reload callback (same path as SIGHUP). Null hides the Config reload button.</summary>
+    public Func<CancellationToken, Task<PlusReloadResult>>? RequestReload { get; init; }
 }
 
 /// <summary>
@@ -250,7 +253,7 @@ public sealed class DashboardHost : IDisposable
         var remote = request.RemoteAddress?.ToString();
         if (isPost)
         {
-            return Post(request, path, caller, remote);
+            return await PostAsync(request, path, caller, remote).ConfigureAwait(false);
         }
 
         if (!isGet)
@@ -318,7 +321,9 @@ public sealed class DashboardHost : IDisposable
             case DashboardView.Health:
                 return DashboardViews.Health(DashboardData.Health(_options.HealthEvents));
             case DashboardView.Config:
-                return DashboardViews.Config(DashboardData.Config(_options.HostStatus));
+                return DashboardViews.Config(
+                    DashboardData.Config(_options.HostStatus),
+                    canOperate: role == DashboardRole.Operator && _options.RequestReload is not null);
             case DashboardView.Certificates:
                 return DashboardViews.Certificates(CertificateData());
             default:
@@ -400,20 +405,26 @@ public sealed class DashboardHost : IDisposable
         });
     }
 
-    private ControlHttpResponse Post(ControlHttpRequest request, string path, Caller caller, string? remote)
+    private async Task<ControlHttpResponse> PostAsync(ControlHttpRequest request, string path, Caller caller, string? remote)
     {
         // A trailing slash was trimmed from the path, so "/drain/" arrives as "/drain": a blank id, answered 400.
         var isDrain = path.StartsWith("/drain/", StringComparison.Ordinal) || path.Equals("/drain", StringComparison.Ordinal);
         var isHealthy = path.StartsWith("/healthy/", StringComparison.Ordinal) || path.Equals("/healthy", StringComparison.Ordinal);
+        var isReload = path.StartsWith("/reload/", StringComparison.Ordinal) || path.Equals("/reload", StringComparison.Ordinal);
         var isLogout = path.Equals("/logout", StringComparison.Ordinal);
-        if (!isDrain && !isHealthy && !isLogout)
+        if (!isDrain && !isHealthy && !isReload && !isLogout)
         {
             return ControlHttpResponse.Text(404, "text/plain; charset=utf-8", "not found");
         }
 
-        var action = isLogout ? AuditActions.Logout : isDrain ? AuditActions.Drain : AuditActions.Healthy;
-        var prefixLength = isDrain ? "/drain/".Length : "/healthy/".Length;
-        var target = isLogout ? "-" : path.Length > prefixLength ? Uri.UnescapeDataString(path[prefixLength..]) : "";
+        var action = isLogout ? AuditActions.Logout
+            : isReload ? AuditActions.Reload
+            : isDrain ? AuditActions.Drain
+            : AuditActions.Healthy;
+        var prefixLength = isDrain ? "/drain/".Length : isHealthy ? "/healthy/".Length : "/reload/".Length;
+        var target = isLogout || isReload
+            ? "-"
+            : path.Length > prefixLength ? Uri.UnescapeDataString(path[prefixLength..]) : "";
 
         // A cookie rides along on a forged cross-site request; a header secret does not, so only sessions need the token.
         if (caller.Session is { } session && !DashboardSessionStore.CsrfMatches(session, request.Header(CsrfHeader)))
@@ -435,6 +446,11 @@ public sealed class DashboardHost : IDisposable
             return ControlHttpResponse.Text(403, "text/plain; charset=utf-8", "operator role required");
         }
 
+        if (isReload)
+        {
+            return await ReloadAsync(caller, remote).ConfigureAwait(false);
+        }
+
         try
         {
             if (isDrain)
@@ -454,6 +470,37 @@ public sealed class DashboardHost : IDisposable
 
         Audit.Record(caller.Actor, remote, action, target, AuditResults.Ok);
         return ControlHttpResponse.Text(200, "text/plain; charset=utf-8", "ok");
+    }
+
+    private async Task<ControlHttpResponse> ReloadAsync(Caller caller, string? remote)
+    {
+        if (_options.RequestReload is null)
+        {
+            Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Unavailable);
+            return ControlHttpResponse.Text(503, "text/plain; charset=utf-8", "reload is not available");
+        }
+
+        PlusReloadResult result;
+        try
+        {
+            result = await _options.RequestReload(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Error);
+            return ControlHttpResponse.Text(500, "text/plain; charset=utf-8", "reload failed");
+        }
+
+        if (!result.Ok)
+        {
+            Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Error);
+            return ControlHttpResponse.Text(500, "text/plain; charset=utf-8",
+                string.IsNullOrEmpty(result.Error) ? "reload failed" : result.Error);
+        }
+
+        Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Ok);
+        return ControlHttpResponse.Text(200, "text/plain; charset=utf-8",
+            string.IsNullOrEmpty(result.ConfigHash) ? "ok" : "ok " + result.ConfigHash);
     }
 
     private ControlHttpResponse LoginPage(ControlHttpRequest request)
