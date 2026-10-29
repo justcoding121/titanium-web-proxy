@@ -108,6 +108,12 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/plus
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/manager
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/scripting
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/gateway
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/inspector
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/cli

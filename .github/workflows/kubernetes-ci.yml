@@ -199,7 +199,7 @@ jobs:
           set -euo pipefail
           for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
             helm template rel deploy/helm/titanium-gateway --namespace gateway-system  \
-              | kubeconform -strict -summary -kubernetes-version "" \
+              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
                   -schema-location default \
                   -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
           done

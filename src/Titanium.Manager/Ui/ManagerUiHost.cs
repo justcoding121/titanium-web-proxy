@@ -59,22 +59,18 @@ internal sealed class ManagerUiHost
 
         if (path.Equals("/login", StringComparison.OrdinalIgnoreCase))
         {
-            if (method == "GET")
+            // Same shape as Plus DashboardHost: route by method without nesting a user-controlled
+            // method check around session lookups (avoids CodeQL cs/user-controlled-bypass).
+            if (method.Equals("POST", StringComparison.OrdinalIgnoreCase))
             {
-                var existing = FindSession(context.Request, touch: true);
-                if (existing is not null)
-                {
-                    await RedirectAsync(context, "/").ConfigureAwait(false);
-                    return true;
-                }
-
-                await WriteHtmlAsync(context, 200, ManagerUiViews.Login(null)).ConfigureAwait(false);
+                await SignInAsync(context).ConfigureAwait(false);
                 return true;
             }
 
-            if (method == "POST")
+            if (method.Equals("GET", StringComparison.OrdinalIgnoreCase)
+                || method.Equals("HEAD", StringComparison.OrdinalIgnoreCase))
             {
-                await SignInAsync(context).ConfigureAwait(false);
+                await ShowLoginPageAsync(context).ConfigureAwait(false);
                 return true;
             }
 
@@ -439,6 +435,18 @@ internal sealed class ManagerUiHost
         }
 
         await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+    }
+
+    private async Task ShowLoginPageAsync(HttpListenerContext context)
+    {
+        var existing = FindSession(context.Request, touch: true);
+        if (existing is not null)
+        {
+            await RedirectAsync(context, "/").ConfigureAwait(false);
+            return;
+        }
+
+        await WriteHtmlAsync(context, 200, ManagerUiViews.Login(null)).ConfigureAwait(false);
     }
 
     private async Task SignInAsync(HttpListenerContext context)
