@@ -39,6 +39,7 @@ public static class TwpConfigValidator
         var clusterIds = ValidateClusters(config.Clusters, errors);
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateOidcNeedsPlus(config, errors);
+        ValidateWafNeedsPlus(config, errors);
         ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
         ValidateListeners(config.Listeners, clusterIds, errors);
         ValidateServer(config.Server, errors);
@@ -428,7 +429,17 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth", "oidc",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth", "oidc", "waf",
+    };
+
+    private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "off", "detect", "block",
+    };
+
+    private static readonly HashSet<string> WafExclusionTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "path", "query", "header", "cookie", "body",
     };
 
     private static readonly HashSet<string> ExtAuthMethods = new(StringComparer.Ordinal)
@@ -535,6 +546,101 @@ public static class TwpConfigValidator
             case "oidc":
                 ValidateOidc(policy, errors);
                 break;
+            case "waf":
+                ValidateWaf(policy, errors);
+                break;
+        }
+    }
+
+    private static void ValidateWaf(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.Mode is not null && !WafModes.Contains(policy.Mode))
+        {
+            errors.Add($"Policy '{name}' (waf) mode must be off, detect, or block.");
+        }
+
+        if (policy.ParanoiaLevel is not null and (< 1 or > 3))
+        {
+            errors.Add($"Policy '{name}' (waf) paranoiaLevel must be 1-3.");
+        }
+
+        if (policy.BlockThreshold is not null and (< 1 or > 1000))
+        {
+            errors.Add($"Policy '{name}' (waf) blockThreshold must be 1-1000.");
+        }
+
+        if (policy.DisabledRules is { } disabled)
+        {
+            foreach (var rule in disabled)
+            {
+                if (string.IsNullOrWhiteSpace(rule))
+                {
+                    errors.Add($"Policy '{name}' (waf) disabledRules has an empty entry.");
+                }
+            }
+        }
+
+        if (policy.Exclusions is not { } exclusions)
+        {
+            return;
+        }
+
+        foreach (var exclusion in exclusions)
+        {
+            if (!IsWafExclusion(exclusion))
+            {
+                errors.Add($"Policy '{name}' (waf) exclusion '{exclusion}' must be rule[@target] with a target of path, query[:name], header[:Name], cookie[:name], or body[:field].");
+            }
+        }
+    }
+
+    private static bool IsWafExclusion(string? exclusion)
+    {
+        if (string.IsNullOrWhiteSpace(exclusion))
+        {
+            return false;
+        }
+
+        var at = exclusion.IndexOf('@', StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return true;
+        }
+
+        if (at == 0 || at == exclusion.Length - 1)
+        {
+            return false;
+        }
+
+        var target = exclusion[(at + 1)..];
+        var colon = target.IndexOf(':', StringComparison.Ordinal);
+        var kind = colon < 0 ? target : target[..colon];
+        return WafExclusionTargets.Contains(kind) && (colon < 0 || colon < target.Length - 1);
+    }
+
+    /// <summary>The override is read by the Plus WAF. Without it, or with the WAF switched off, the policy would do nothing.</summary>
+    private static void ValidateWafNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        var wafEnabled = config.Plus?.Enabled == true && config.Plus.Options is { } options &&
+                         options.Any(pair => string.Equals(pair.Key, "waf.enabled", StringComparison.OrdinalIgnoreCase) &&
+                                             (string.Equals(pair.Value, "true", StringComparison.OrdinalIgnoreCase) || pair.Value == "1"));
+        if (wafEnabled)
+        {
+            return;
+        }
+
+        foreach (var policy in policies)
+        {
+            if (string.Equals(policy.Kind, "waf", StringComparison.Ordinal))
+            {
+                errors.Add($"Policy '{policy.Name}' (waf) needs plus.enabled: true and plus.options waf.enabled: \"true\". The WAF is enforced by Titanium Plus.");
+            }
         }
     }
 

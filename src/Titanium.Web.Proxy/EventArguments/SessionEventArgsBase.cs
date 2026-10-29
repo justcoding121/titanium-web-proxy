@@ -261,6 +261,24 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// <summary>Route chosen for this request. Null when the request was not routed.</summary>
     public Abstractions.Routing.RouteConfig? MatchedRoute { get; internal set; }
 
+    /// <summary>
+    ///     The route this request matches, found without selecting a destination or changing the session.
+    ///     <see cref="MatchedRoute" /> is only set after routing runs, so a <c>BeforeRequest</c> hook or middleware
+    ///     that needs the route's policies calls this instead. Null without routes or without a match.
+    /// </summary>
+    public Abstractions.Routing.RouteConfig? PeekRoute()
+    {
+        if (MatchedRoute is { } routed)
+        {
+            return routed;
+        }
+
+        var fallbackHost = ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent
+            ? transparent.ForwardHost
+            : null;
+        return Routing.DestinationResolver.MatchRoute(Server.ReverseProxy, HttpClient.Request, fallbackHost);
+    }
+
     /// <summary>Request id assigned when <see cref="ProxyServer.RequestIdHeader"/> is set.</summary>
     public string? ProxyRequestId => Extras?.RequestId;
 

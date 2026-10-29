@@ -450,6 +450,33 @@ routes:
 ```
 
 `cookieSecretEnv` or `cookieSecretFile` holds 32 bytes (64 hex digits or base64); list a second key to rotate. `titanium validate` rejects a missing issuer, client, or cookie key, a path that is not a single-slash path, a session lifetime outside 60 to 2592000 seconds, and a `passClaims` header such as `Authorization` or `Cookie`. Fields, the flow, and the limits are in [Plus](/docs/plus#login-with-openid-connect-oidc-policy).
+
+### Request screening (route policy `waf`, Plus)
+
+With `plus.options` `waf.enabled: "true"`, Titanium Plus screens requests by signature in `detect` mode (log and count, never refuse) unless you choose otherwise. A route can override the global WAF settings by listing a `waf` policy. The route that matches the request supplies the policy, and every field is optional.
+
+```yaml
+plus:
+  enabled: true
+  options:
+    waf.enabled: "true"
+policies:
+  - name: checkout-strict
+    kind: waf
+    mode: block              # off | detect | block
+    paranoiaLevel: 2         # 1-3
+    blockThreshold: 5        # 1-1000
+    disabledRules: [TW-SQLI-008]
+    exclusions: ["sqli@query:search", "*@header:Referer"]
+routes:
+  - id: checkout
+    clusterId: shop
+    match: { path: /checkout, pathKind: Prefix }
+    policies: [checkout-strict]
+```
+
+`exclusions` entries are `rule[@target]`: the rule is an id, a category, or `*`, and the target is `path`, `query[:name]`, `header[:Name]`, `cookie[:name]`, or `body[:field]`. `titanium test -c twp.yaml` rejects an unknown mode, a paranoia level or threshold out of range, an empty `disabledRules` entry, a malformed exclusion, and a `waf` policy without `plus.enabled` and `waf.enabled`. Screening reads headers, cookies, and small bodies, so requests use the full session path rather than terminate-lite. The rule pack, scoring, custom rules, and limits are in [Plus](/docs/plus#web-application-firewall-waf).
+
 ## Static files
 
 ```yaml

@@ -513,3 +513,4 @@ Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient.set -> void
 Titanium.Web.Proxy.Udp.UdpRelayOptions.Port.get -> int
 Titanium.Web.Proxy.Udp.UdpRelayOptions.Port.set -> void
 Titanium.Web.Proxy.Udp.UdpRelayOptions.UdpRelayOptions() -> void
+Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute() -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?

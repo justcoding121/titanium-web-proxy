@@ -204,6 +204,7 @@ internal static class RunCommand
             Options = plusOptions,
             Middleware = middleware,
             PolicyHandlers = policyHandlers,
+            Policies = policies,
             Routes = routes,
             RefreshReverseProxy = RefreshReverseProxy,
             ResponseCache = responseCache,

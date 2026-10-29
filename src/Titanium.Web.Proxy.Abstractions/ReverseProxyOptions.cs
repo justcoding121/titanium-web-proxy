@@ -46,6 +46,28 @@ public sealed class ReverseProxyOptions
     private int asyncPolicyState;
     private int handledPolicyState;
     private int grpcWebState;
+    private int sessionOnlyMiddlewareState;
+
+    /// <summary>
+    /// True when a registered middleware implements <see cref="IRequiresSessionPathMiddleware"/> (the Plus WAF). Computed
+    /// once per options instance, so the terminate-lite check pays a single field read.
+    /// </summary>
+    internal bool HasSessionOnlyMiddleware
+    {
+        get
+        {
+            var state = Volatile.Read(ref sessionOnlyMiddlewareState);
+            if (state == 0)
+            {
+                state = Middleware is { Count: > 0 } middleware && middleware.Any(m => m is IRequiresSessionPathMiddleware)
+                    ? 2
+                    : 1;
+                Volatile.Write(ref sessionOnlyMiddlewareState, state);
+            }
+
+            return state == 2;
+        }
+    }
 
     /// <summary>
     /// True when a route sets <c>grpcWeb</c>. Computed once per options instance, so the request path

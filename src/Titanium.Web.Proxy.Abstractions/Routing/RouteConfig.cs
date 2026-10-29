@@ -274,6 +274,28 @@ public sealed class RoutePolicyConfig
 
     /// <summary><c>oidc</c>: renew the session with the refresh token shortly before the ID token expires. Default: false.</summary>
     public bool? RefreshTokens { get; init; }
+
+    /// <summary>
+    /// <c>waf</c> (Plus): <c>off</c>, <c>detect</c> (log and count only), or <c>block</c> for this route. Omit to follow
+    /// <c>plus.options</c> <c>waf.mode</c>. Core ignores this kind; the Plus WAF reads it.
+    /// </summary>
+    public string? Mode { get; init; }
+
+    /// <summary><c>waf</c>: paranoia level 1-3 for this route. Omit to follow <c>waf.paranoia</c>.</summary>
+    public int? ParanoiaLevel { get; init; }
+
+    /// <summary><c>waf</c>: anomaly score at which <c>block</c> mode refuses the request. Omit to follow <c>waf.blockThreshold</c>.</summary>
+    public int? BlockThreshold { get; init; }
+
+    /// <summary><c>waf</c>: rule ids or categories switched off for this route, in addition to <c>waf.disableRules</c>.</summary>
+    public IReadOnlyList<string>? DisabledRules { get; init; }
+
+    /// <summary>
+    /// <c>waf</c>: exclusions as <c>rule[@target]</c>. <c>rule</c> is a rule id, a category, or <c>*</c>.
+    /// <c>target</c> is <c>path</c>, <c>query</c>, <c>query:name</c>, <c>header</c>, <c>header:Name</c>, <c>cookie</c>,
+    /// <c>cookie:name</c>, <c>body</c>, or <c>body:field</c>. Without a target the rule is excluded everywhere.
+    /// </summary>
+    public IReadOnlyList<string>? Exclusions { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>

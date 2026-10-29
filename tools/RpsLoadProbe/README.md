@@ -204,7 +204,7 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-plus-base-http1` | Plus ALC + control plane (no options) |
 | `twp-cli-plus-cache-http1` | Plus + `cache.enable` (cold) |
 | `twp-cli-intercept-http1` | Route `RequestHeaderSet` transform → session path |
-| `twp-cli-plus-waf-http1` | WAF denyPaths that do not match `/` |
+| `twp-cli-plus-waf-http1` | WAF defaults (detect-mode screening on the session path) plus denyPaths that do not match `/` |
 | `twp-cli-plus-cidr-http1` | `security.allowCidrs=127.0.0.0/8` |
 | `twp-cli-plus-jwt-http1` | RS256 JWT + JWKS mini-server; Bearer on every request |
 | `twp-cli-plus-ratelimit-http1` | `state.mode=memory` + very high rate limit |

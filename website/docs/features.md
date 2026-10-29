@@ -56,7 +56,7 @@ Optional ops sidecar for the CLI (and Inspector panels). [Plus guide](/docs/plus
 | Dashboard | HTML admin on the control-plane port |
 | Observability | Prometheus-style metrics |
 | Auth | CIDR allow-list, JWT/OIDC, API key, Basic |
-| Thin WAF | Deny-list for paths, methods, headers, body size |
+| WAF | Signature-based request screening with detect mode and anomaly scoring (built-in rule pack, custom YAML rules, per-route `waf` policy), plus an operator deny-list; see [Plus](/docs/plus#web-application-firewall-waf) |
 | Control plane | Loopback HTTP API; snapshot get/put; cache purge |
 | Resilience | Health probes, circuit ejection, bounded retries |
 | Discovery | File, DNS; Consul / Kubernetes best-effort |

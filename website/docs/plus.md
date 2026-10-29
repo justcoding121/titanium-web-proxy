@@ -1,6 +1,6 @@
 # Plus
 
-Optional ops plugin for the CLI (and Inspector panels). For operators who want a dashboard, metrics, auth, and a thin web application firewall (WAF) without writing custom code.
+Optional ops plugin for the CLI (and Inspector panels). For operators who want a dashboard, metrics, auth, and signature-based request screening (WAF) without writing custom code.
 
 **Next:** install with `titanium update --plus`, enable in YAML, open the dashboard.
 
@@ -12,7 +12,7 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | Observability | Prometheus-style metrics for destination state / latency |
 | Security | CIDR allow-list, JWT/OIDC (JWKS), API key / Basic auth |
 | Login | `oidc` route policy: OpenID Connect authorization-code login with PKCE, encrypted session cookie, silent refresh, and claim headers; see [Login with OpenID Connect](#login-with-openid-connect-oidc-policy) |
-| Web application firewall (WAF) | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
+| Web application firewall (WAF) | Signature-based request screening with detect mode and anomaly scoring, plus an operator deny-list; see [Web application firewall](#web-application-firewall-waf) |
 | Control plane | Loopback-default HTTP(S) API with shared-secret header; snapshot get/put; cache purge; optional TLS; audit trail; failed-login throttle |
 | Operations | Drain / healthy / maintenance destination states |
 | Discovery | File watch, DNS poll; Consul blocking queries; Kubernetes EndpointSlice list-then-watch with backoff |
@@ -235,6 +235,139 @@ When both an e-mail rule and a group rule are set, both must hold.
 - The proxy does not call the provider's end-session endpoint.
 - Not available on terminate-lite, which cannot hold a request for a login; a route with an `oidc` policy always uses the full session path.
 
+## Web application firewall (WAF)
+
+The WAF is signature-based request screening with detect mode and anomaly scoring. It complements a managed WAF and does not claim full OWASP Core Rule Set coverage. It screens the request only; responses are not inspected.
+
+```yaml
+plus:
+  enabled: true
+  options:
+    waf.enabled: "true"
+    waf.mode: detect        # off | detect | block (default detect)
+    waf.paranoia: "1"       # 1-3
+    waf.blockThreshold: "5"
+```
+
+### Modes
+
+| Mode | What happens |
+|------|--------------|
+| `off` | No screening. Only the deny-list below runs. |
+| `detect` (default) | Every request is screened. A match is logged (rule ids and the path, never query values or bodies) and counted. Nothing is refused. |
+| `block` | A request whose anomaly score reaches `waf.blockThreshold` is answered with `403 forbidden` before it reaches the origin. |
+
+Start in `detect`, watch `titanium_waf_would_block_total` and the log, add exclusions for the false positives you find, then move the routes you trust to `block`.
+
+### What is inspected
+
+| Part | Detail |
+|------|--------|
+| Path and query | Percent-decoded up to four rounds, `+` read as a space in the query, NUL bytes removed, HTML entities decoded, and matched in that normalized form. Each query value is matched on its own. |
+| Headers | Every header value except `Authorization` and `Proxy-Authorization`. |
+| Cookies | Each cookie value, by name. |
+| Bodies | Up to `waf.inspectBodyBytes` (default 8192) for `application/x-www-form-urlencoded`, `application/json` (and `+json`), and the text fields of `multipart/form-data`. File parts and parts with a non-text type are skipped. Other content types are never inspected. |
+
+A body is **not** inspected when it is chunked or has no declared length, is compressed (`Content-Encoding`), is longer than the limit, or has another content type. The request is still screened on everything else, and `titanium_waf_bodies_total{outcome="..."}` counts each case. Set `waf.inspectBodyBytes` to `0` to skip bodies entirely. The limit is at most 1048576.
+
+### Rule pack `waf-pack-1`
+
+The pack is versioned and ships inside Plus. Each rule has an id, a category, a severity, and the parts it reads.
+
+| Category | Rule ids | Examples |
+|----------|----------|----------|
+| `sqli` | `TW-SQLI-001` to `010` | `UNION SELECT`, quote-break tautologies, stacked queries, time-based functions, catalog tables |
+| `xss` | `TW-XSS-001` to `009` | script tags, inline event handlers, script URLs, embedding elements |
+| `path-traversal` | `TW-PT-001`, `002` | `../` after decoding, `..;/` |
+| `lfi` | `TW-LFI-001` to `004` | system files, stream wrappers, `.git/`, `.env` |
+| `command-injection` | `TW-CMDI-001` to `006` | separator plus command, `$(...)`, shell paths, function-definition headers |
+| `ssrf` | `TW-SSRF-001` to `003` | cloud metadata addresses (`169.254.169.254` and its other spellings), private-range URLs, `gopher://` and similar schemes |
+| `scanner` | `TW-SCAN-001`, `002` | user agents of known scanners |
+| `protocol` | `TW-PROTO-001` to `006` | invalid `Content-Length`, duplicate `Host`, NUL bytes, oversized arguments (`waf.maxArgLength`, default 4096), deep encoding, `Content-Length` with `Transfer-Encoding` |
+| `log4j` | `TW-LOG4J-001` to `003` | `${jndi:` lookups |
+
+### Scoring and paranoia
+
+Each rule that matches adds its weight **once per request**, however many values match. Weights follow severity: critical 5, error 4, warning 3, notice 2 (`waf.score.critical`, `waf.score.error`, `waf.score.warning`, `waf.score.notice`). The request would be blocked when the total reaches `waf.blockThreshold` (default 5), so one critical rule is enough and one error rule is not.
+
+`waf.paranoia` picks the rule subset:
+
+| Level | Adds |
+|-------|------|
+| 1 | High-confidence rules. Start here. |
+| 2 | Rules that can match ordinary prose or markup (`select ... from`, `<img`, private-range URLs). |
+| 3 | Noisy rules (any SQL verb followed by a word, anything shaped like a tag, scripting HTTP libraries). |
+
+`waf.disableRules` (comma-separated ids) removes rules. `waf.exclusions` skips a rule, a category, or `*` for one part of the request: `rule[@target]`, where the target is `path`, `query[:name]`, `header[:Name]`, `cookie[:name]`, or `body[:field]`. For example `sqli@query:q,*@header:Referer,TW-XSS-001@body:comment`.
+
+### Per-route override
+
+A route can change the WAF with a `waf` policy. The route that matches the request picks the policy; the options above are the default for every other route.
+
+```yaml
+policies:
+  - name: checkout-strict
+    kind: waf
+    mode: block
+    paranoiaLevel: 2
+    blockThreshold: 5
+    disabledRules: [TW-SQLI-008]
+    exclusions: ["sqli@query:search"]
+routes:
+  - id: checkout
+    clusterId: shop
+    match: { path: /checkout, pathKind: Prefix }
+    policies: [checkout-strict]
+```
+
+Every field is optional and falls back to the global value. `mode: off` turns screening off for that route. `titanium test -c twp.yaml` rejects a bad mode, a paranoia level outside 1 to 3, a threshold outside 1 to 1000, and a malformed exclusion, and requires `plus.enabled` with `waf.enabled`.
+
+### Custom rules (`waf.rulesFile`)
+
+`waf.rulesFile` points at a YAML file. The WAF refuses to start when the file is missing or any rule is invalid, and the message names every problem.
+
+```yaml
+rules:
+  - id: ACME-001
+    description: Internal token in a query value
+    category: acme
+    severity: critical        # critical | error | warning | notice
+    paranoia: 1
+    targets: [query, header:X-Debug, cookie, path, body]
+    regex: 'secret-token-[0-9]+'     # or: contains: ["a", "b"]
+    ignoreCase: false
+    transformations: [urlDecode, lowercase]   # also removeNulls, htmlEntityDecode
+    action: score             # score | block | log
+    score: 7                  # optional; default is the severity weight
+```
+
+`block` adds the score and refuses the request in `block` mode whatever the total. `log` records the match and adds nothing. Ids must be unique and cannot reuse a pack id. A rule needs exactly one of `regex` or `contains`. A file may list at most 1000 rules.
+
+The earlier deny-list file (`{"denyPaths": [...]}`) is still read by the deny-list and adds no signature rules.
+
+### Regular-expression safety
+
+A pattern runs on attacker-chosen input, so every pattern is checked when the rules load. Empty patterns, patterns over 1024 characters, patterns that match the empty string, and patterns that nest an unbounded repeat inside an unbounded repeat are rejected. Patterns compile with `RegexOptions.NonBacktracking`, which cannot backtrack catastrophically; a pattern that needs lookarounds or backreferences falls back to the backtracking engine with a 5 ms match timeout. A timed-out rule counts as no match and is counted in `titanium_waf_rule_timeouts_total`; it does not add to the score. The test suite runs every pack rule against one-mebibyte adversarial inputs under a time budget.
+
+### Cost and the fast path
+
+A request on which no rule matches allocates nothing in the screening itself: rule sets are built once per paranoia level and disable list and cached, and values are decoded into pooled or stack buffers. Because the WAF reads headers, cookies, and small bodies, it needs the session. **When screening is on, requests leave H1 terminate-lite and use the full session path**, so expect the cost of the session path rather than the lite path. With `waf.mode: off` and no `waf` policy only the deny-list is registered, and requests stay on terminate-lite. Re-measure on your own hardware before relying on a number.
+
+### Metrics
+
+Plus adds these series to its Prometheus scrape: `titanium_waf_info{pack}`, `titanium_waf_requests_total{mode}`, `titanium_waf_would_block_total`, `titanium_waf_blocked_total`, `titanium_waf_detections_total{category}`, `titanium_waf_bodies_total{outcome}`, and `titanium_waf_rule_timeouts_total`.
+
+### Limits
+
+- Signatures find known shapes. They do not understand your application, and a determined attacker can find a shape the pack misses.
+- Chunked, compressed, over-limit, and non-form, non-JSON bodies are not inspected.
+- Responses and WebSocket frames are not screened.
+- A single value is screened up to its first 65536 characters.
+- Paranoia 2 and 3 produce false positives on ordinary text. Use `detect` and exclusions before `block`.
+
+### Deny-list
+
+`waf.denyPaths`, `waf.denyMethods`, `waf.denyHeader`, `waf.maxBodyBytes`, and the JSON deny file in `waf.rulesFile` still work exactly as before. They are exact operator rules, run before screening, and stay on terminate-lite.
 ## `plus.options` keys (reference)
 
 String values under `plus.options` (examples):
@@ -260,9 +393,15 @@ String values under `plus.options` (examples):
 | `audit.maxBytes` / `audit.maxFiles` | Size at which the audit file rolls (default `10485760`) and how many rolled files to keep (default `5`) |
 | `cors.enabled` | Enable CORS helper (`true`) |
 | `cors.allowOrigin` / `cors.allowMethods` / `cors.allowHeaders` / `cors.allowCredentials` / `cors.maxAgeSeconds` | CORS knobs |
-| `waf.enabled` | Enable thin deny-list WAF |
-| `waf.denyPaths` / `waf.denyMethods` / `waf.denyHeader` | Deny rules |
-| `waf.maxBodyBytes` / `waf.rulesFile` | Body cap and optional rules file |
+| `waf.enabled` | Enable the WAF (deny-list and screening). See [Web application firewall](#web-application-firewall-waf) |
+| `waf.mode` | `off`, `detect` (default), or `block` |
+| `waf.paranoia` / `waf.blockThreshold` | Rule subset 1-3 (default 1) and anomaly score that blocks (default 5) |
+| `waf.score.critical` / `waf.score.error` / `waf.score.warning` / `waf.score.notice` | Severity weights (defaults 5, 4, 3, 2) |
+| `waf.inspectBodyBytes` / `waf.maxArgLength` | Largest body that is inspected (default 8192, `0` disables, at most 1048576) and longest single value before the oversized-argument rule fires (default 4096) |
+| `waf.disableRules` / `waf.exclusions` | Comma-separated rule ids to drop, and `rule[@target]` exclusions |
+| `waf.denyPaths` / `waf.denyMethods` / `waf.denyHeader` | Deny-list rules |
+| `waf.maxBodyBytes` | Deny-list body cap |
+| `waf.rulesFile` | YAML custom rules (also read by the deny-list as the earlier JSON `denyPaths` file) |
 | `state.mode` | `memory` or use Redis via `state.redis` |
 | `state.redis` / `state.rateLimitPerMinute` | Redis connection and rate limit |
 | `resilience.activeHealth` | Enable active probes |

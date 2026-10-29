@@ -7,7 +7,7 @@ Short catalog of what Titanium offers. Product how-tos live on the **[website Fe
 - **Modern protocols** — HTTP/2 by default, optional HTTP/3, WebSocket, SSE, gRPC/Protobuf, GraphQL `operationName` rules
 - **CLI reverse / edge proxy** — YAML routes, load balancing, ACME, live reload, OS service ([CLI](https://titaniumproxy.com/docs/cli))
 - **Library** — embed the same engine in .NET ([Library](https://titaniumproxy.com/docs/library)); wiki Home below covers the API in depth
-- **Plus** — optional dashboard, metrics, auth, thin WAF, gRPC-JSON ([Plus](https://titaniumproxy.com/docs/plus))
+- **Plus** — optional dashboard, metrics, auth, WAF request screening (detect mode, anomaly scoring), gRPC-JSON ([Plus](https://titaniumproxy.com/docs/plus))
 
 ## By product
 

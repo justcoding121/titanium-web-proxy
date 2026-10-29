@@ -260,7 +260,7 @@ internal enum ProbeMode
     TwpCliPlusCacheHttp1,
     /// <summary>CLI + route RequestHeaderSet transform (forces session / intercept path).</summary>
     TwpCliInterceptHttp1,
-    /// <summary>CLI + Plus WAF denyPaths that do not match probe traffic.</summary>
+    /// <summary>CLI + Plus WAF defaults (detect-mode screening) and denyPaths that do not match probe traffic.</summary>
     TwpCliPlusWafHttp1,
     /// <summary>CLI + Plus CIDR allow 127.0.0.0/8.</summary>
     TwpCliPlusCidrHttp1,

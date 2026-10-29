@@ -71,3 +71,12 @@ public interface IProxyMiddleware
 {
     ValueTask InvokeAsync(ProxyMiddlewareContext context, ProxyMiddlewareDelegate next, CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Marks a middleware that must see the full request (headers, cookies, and a buffered body) on the session path.
+/// While one is registered, the host keeps every request off H1 terminate-lite, which has no session and never
+/// reads a body.
+/// </summary>
+public interface IRequiresSessionPathMiddleware
+{
+}

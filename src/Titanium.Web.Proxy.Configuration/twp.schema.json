@@ -696,6 +696,9 @@
               "type": "string"
             }
           },
+          "blockThreshold": {
+            "type": "integer"
+          },
           "burst": {
             "type": "integer",
             "minimum": 1
@@ -739,8 +742,20 @@
               "type": "string"
             }
           },
+          "disabledRules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "emitHeaders": {
             "type": "boolean"
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "failOpen": {
             "type": "boolean"
@@ -784,11 +799,17 @@
           "methods": {
             "type": "string"
           },
+          "mode": {
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
           "origins": {
             "type": "string"
+          },
+          "paranoiaLevel": {
+            "type": "integer"
           },
           "passClaims": {
             "type": "object",

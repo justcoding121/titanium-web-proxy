@@ -45,6 +45,12 @@ public sealed class PlusActivationContext
     /// <c>ReverseProxyOptions.PolicyHandlers</c> during refresh. Null when the host has no such list.
     /// </summary>
     public IList<IRoutePolicyHandler>? PolicyHandlers { get; init; }
+
+    /// <summary>
+    /// Named route policies of the running configuration. Plus reads policy kinds that only it enforces
+    /// (for example <c>waf</c>) from here. Null when the host has none.
+    /// </summary>
+    public IReadOnlyList<RoutePolicyConfig>? Policies { get; init; }
 }
 
 /// <summary>

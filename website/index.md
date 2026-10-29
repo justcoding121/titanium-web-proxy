@@ -53,7 +53,7 @@ features:
   <div class="edition-card">
     <h3>Ops add-on</h3>
     <p class="license"><a href="/docs/plus">Plus</a> · optional</p>
-    <p>Dashboard, metrics, auth helpers, and a thin WAF. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
+    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Embed in .NET</h3>

@@ -1,0 +1,314 @@
+{
+  "pack": "waf-pack-1",
+  "rules": [
+    {
+      "id": "TW-SQLI-001", "category": "sqli", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "pattern": "\\bunion\\b[\\s/*()+]{1,40}(all\\b[\\s/*()+]{1,40}|distinct\\b[\\s/*()+]{1,40})?select\\b",
+      "prefilter": ["union"],
+      "description": "UNION SELECT injection."
+    },
+    {
+      "id": "TW-SQLI-002", "category": "sqli", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "['\"`][\\s)]*(\\b(or|and|xor)\\b|\\|\\||&&)[\\s(]*['\"`]?[\\w.]+['\"`]?[\\s)]*(=|<|>|\\blike\\b|\\bis\\b)",
+      "description": "Quote break followed by a boolean tautology such as ' OR '1'='1."
+    },
+    {
+      "id": "TW-SQLI-003", "category": "sqli", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(or|and)\\s+(\\d+|true|false)\\s*(=|<|>|<=|>=|!=)\\s*(\\d+|true|false)\\b",
+      "description": "Numeric tautology such as OR 1=1."
+    },
+    {
+      "id": "TW-SQLI-004", "category": "sqli", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": ";\\s*(drop\\s+(table|database|schema|view|index)|truncate\\s+table|alter\\s+table|delete\\s+from|insert\\s+into|update\\s+\\w+\\s+set|exec(ute)?\\s*(\\(|\\s+(xp|sp)_)|shutdown\\b|declare\\s+@)",
+      "prefilter": [";"],
+      "description": "Stacked query that changes or drops data."
+    },
+    {
+      "id": "TW-SQLI-005", "category": "sqli", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\bwaitfor\\s+delay\\b|\\b(pg_sleep|benchmark|sleep|dbms_pipe\\.receive_message|dbms_lock\\.sleep)\\s*\\(\\s*\\d",
+      "prefilter": ["waitfor", "sleep", "benchmark", "dbms_"],
+      "description": "Time-based blind injection."
+    },
+    {
+      "id": "TW-SQLI-006", "category": "sqli", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "contains": ["information_schema", "pg_catalog", "sysobjects", "syscolumns", "sqlite_master", "mysql.user", "xp_cmdshell", "into outfile", "into dumpfile", "load_file(", "utl_http", "utl_inaddr"],
+      "description": "Database catalog, file, or shell primitives."
+    },
+    {
+      "id": "TW-SQLI-007", "category": "sqli", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "['\"`]\\s*(--|#|/\\*)",
+      "description": "Quote followed by a comment that cuts the rest of a statement."
+    },
+    {
+      "id": "TW-SQLI-008", "category": "sqli", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\bselect\\b[^;]{1,100}\\bfrom\\b",
+      "prefilter": ["select"],
+      "description": "SELECT ... FROM in a value. Ordinary prose can match."
+    },
+    {
+      "id": "TW-SQLI-009", "category": "sqli", "severity": "error", "paranoia": 2,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(extractvalue|updatexml|group_concat|concat_ws)\\s*\\(",
+      "prefilter": ["extractvalue", "updatexml", "group_concat", "concat_ws"],
+      "description": "Error-based and data-extraction functions."
+    },
+    {
+      "id": "TW-SQLI-010", "category": "sqli", "severity": "notice", "paranoia": 3,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(select|insert|update|delete|drop|alter|truncate)\\b\\s+\\w",
+      "prefilter": ["select", "insert", "update", "delete", "drop", "alter", "truncate"],
+      "description": "A SQL verb followed by a word. Very noisy; paranoia 3 only."
+    },
+
+    {
+      "id": "TW-XSS-001", "category": "xss", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "pattern": "<\\s*/?\\s*script\\b",
+      "prefilter": ["script"],
+      "description": "Script tag."
+    },
+    {
+      "id": "TW-XSS-002", "category": "xss", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "pattern": "<\\s*[a-z][a-z0-9:-]{0,20}\\b[^>]{0,200}\\bon[a-z]{3,20}\\s*=",
+      "prefilter": ["<"],
+      "description": "Tag with an inline event handler."
+    },
+    {
+      "id": "TW-XSS-003", "category": "xss", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(href|src|action|formaction|data|poster|background|xlink:href)\\s*=\\s*[\"']?\\s*(javascript|vbscript)\\s*:",
+      "prefilter": ["script"],
+      "description": "Script URL in a URL-bearing attribute."
+    },
+    {
+      "id": "TW-XSS-004", "category": "xss", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "<\\s*(iframe|object|embed|applet|frameset)\\b",
+      "prefilter": ["<"],
+      "description": "Embedding element."
+    },
+    {
+      "id": "TW-XSS-005", "category": "xss", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\bdocument\\s*\\.\\s*(cookie|domain|write|location)\\b|\\bwindow\\s*\\.\\s*(location|name)\\s*=|\\balert\\s*[(`]|\\bString\\s*\\.\\s*fromCharCode\\b",
+      "prefilter": ["document", "window", "alert", "fromcharcode"],
+      "description": "Script that reads cookies, rewrites the location, or probes with alert()."
+    },
+    {
+      "id": "TW-XSS-006", "category": "xss", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(javascript|vbscript)\\s*:",
+      "prefilter": ["script"],
+      "description": "Script URL scheme outside an attribute."
+    },
+    {
+      "id": "TW-XSS-007", "category": "xss", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "<\\s*(svg|math|meta|link|base|form|style|video|audio|details|marquee|body|input|img)\\b",
+      "prefilter": ["<"],
+      "description": "Markup that is often an injection carrier. Rich-text fields can match."
+    },
+    {
+      "id": "TW-XSS-008", "category": "xss", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\beval\\s*\\(|\\bsetTimeout\\s*\\(\\s*[\"']|\\bnew\\s+Function\\s*\\(|\\bconstructor\\s*\\.\\s*constructor\\b",
+      "prefilter": ["eval", "settimeout", "function", "constructor"],
+      "description": "Dynamic code evaluation."
+    },
+    {
+      "id": "TW-XSS-009", "category": "xss", "severity": "notice", "paranoia": 3,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "<\\s*[a-z/!]",
+      "prefilter": ["<"],
+      "description": "Anything that looks like a tag. Paranoia 3 only."
+    },
+
+    {
+      "id": "TW-PT-001", "category": "path-traversal", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "(^|[\\\\/])\\.\\.([\\\\/]|$)",
+      "prefilter": [".."],
+      "description": "Parent directory segment, after URL decoding."
+    },
+    {
+      "id": "TW-PT-002", "category": "path-traversal", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "contains": ["..;/", "..;\\"],
+      "description": "Servlet-container path parameter trick for traversal."
+    },
+
+    {
+      "id": "TW-LFI-001", "category": "lfi", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "(^|[\\\\/=\\s\"':;,])(etc[\\\\/](passwd|shadow|group|gshadow|hosts|issue|sudoers|ssh[\\\\/])|proc[\\\\/]self[\\\\/](environ|cmdline|maps|fd[\\\\/])|root[\\\\/]\\.ssh)",
+      "prefilter": ["etc", "proc", "root"],
+      "description": "Unix system file."
+    },
+    {
+      "id": "TW-LFI-002", "category": "lfi", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "(^|[\\\\/=\\s\"':;,])(windows[\\\\/](win\\.ini|system\\.ini|system32[\\\\/])|winnt[\\\\/]|boot\\.ini)",
+      "prefilter": ["windows", "winnt", "boot.ini"],
+      "description": "Windows system file."
+    },
+    {
+      "id": "TW-LFI-003", "category": "lfi", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(php://(filter|input|stdin|memory|temp)|phar://|expect://|zip://|data://text|glob://|file:///)",
+      "prefilter": ["://"],
+      "description": "Stream wrapper used to read files or run code."
+    },
+    {
+      "id": "TW-LFI-004", "category": "lfi", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query"],
+      "pattern": "(^|[\\\\/])(\\.git[\\\\/]|\\.svn[\\\\/]|\\.hg[\\\\/]|\\.env(\\.[\\w-]+)?($|[?#\\\\/])|\\.ds_store|\\.htaccess|\\.htpasswd|web\\.config|wp-config\\.php|id_rsa|\\.aws[\\\\/]credentials)",
+      "prefilter": [".git/", ".git\\", ".svn", ".hg", ".env", ".ds_store", ".ht", "web.config", "wp-config", "id_rsa", ".aws"],
+      "description": "Probe for source control, environment, or credential files."
+    },
+
+    {
+      "id": "TW-CMDI-001", "category": "command-injection", "severity": "critical", "paranoia": 1,
+      "targets": ["query", "header", "cookie", "body"],
+      "pattern": "[;|&`\\r\\n]\\s*(whoami|wget|curl|netcat|ncat|bash|zsh|powershell|pwsh|certutil|bitsadmin|nslookup|chmod|chown|mkfifo|telnet)([\\s;|&<>$(`'\"]|$)",
+      "description": "Shell separator followed by a well-known command."
+    },
+    {
+      "id": "TW-CMDI-002", "category": "command-injection", "severity": "critical", "paranoia": 1,
+      "targets": ["query", "header", "cookie", "body"],
+      "pattern": "\\$\\(\\s*(id|whoami|uname|cat|ls|curl|wget|nc|bash|sh|echo|sleep|ping|printf|base64)\\b|\\$\\{\\s*ifs\\s*\\}",
+      "prefilter": ["$(", "${"],
+      "description": "Command substitution."
+    },
+    {
+      "id": "TW-CMDI-003", "category": "command-injection", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "pattern": "/bin/(ba|z|da|k|c|a)?sh\\b|/usr/bin/(env|python[0-9.]*|perl|php|ruby|nc|ncat|curl|wget)\\b|\\bcmd(\\.exe)?\\s+/c\\b|\\bpowershell(\\.exe)?\\s+[-/]\\w|/dev/tcp/|\\bnc\\s+-[a-z]*e\\b|\\bmkfifo\\b",
+      "prefilter": ["/bin/", "/usr/bin/", "cmd", "powershell", "/dev/tcp/", "nc ", "mkfifo"],
+      "description": "Shell, interpreter, or reverse-shell invocation."
+    },
+    {
+      "id": "TW-CMDI-004", "category": "command-injection", "severity": "critical", "paranoia": 1,
+      "targets": ["header", "cookie"],
+      "pattern": "\\(\\s*\\)\\s*\\{[^}]{0,200}\\}\\s*;",
+      "prefilter": ["{"],
+      "description": "Function definition in a header (Shellshock)."
+    },
+    {
+      "id": "TW-CMDI-005", "category": "command-injection", "severity": "warning", "paranoia": 2,
+      "targets": ["query", "cookie", "body"],
+      "pattern": "[;|&`\\r\\n]\\s*(cat|ls|id|echo|sleep|ping|rm|mv|cp|touch|kill|ps|env|printenv|uname|nc|sh|dir|type|ver|net|set)\\s+[\\w\\-/.\\\\$%\"'<>]",
+      "description": "Shell separator followed by a short command and an argument."
+    },
+    {
+      "id": "TW-CMDI-006", "category": "command-injection", "severity": "notice", "paranoia": 3,
+      "targets": ["query", "cookie", "body"],
+      "pattern": "`\\s*[a-z_/][^`\\r\\n]{0,60}`",
+      "prefilter": ["`"],
+      "description": "Backtick command substitution. Markdown code spans match."
+    },
+
+    {
+      "id": "TW-SSRF-001", "category": "ssrf", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "headers": ["X-Forwarded-Host", "X-Forwarded-Server", "X-Original-URL", "X-Rewrite-URL", "Referer", "Origin", "Forwarded"],
+      "contains": ["169.254.169.254", "169.254.170.2", "metadata.google.internal", "metadata.goog", "100.100.100.200", "fd00:ec2::254", "instance-data.ec2.internal", "/latest/meta-data", "/computemetadata/v1", "2852039166", "0xa9fea9fe", "0xa9.0xfe.0xa9.0xfe", "0251.0376.0251.0376", "::ffff:a9fe:a9fe", "::ffff:169.254.169.254"],
+      "description": "Cloud instance metadata address in any common spelling."
+    },
+    {
+      "id": "TW-SSRF-002", "category": "ssrf", "severity": "error", "paranoia": 2,
+      "targets": ["query", "body"],
+      "pattern": "\\b(https?|ftp)://(localhost|127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|0\\.0\\.0\\.0|0x7f[0-9a-f.x]{0,12}|2130706433|10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|172\\.(1[6-9]|2[0-9]|3[01])\\.\\d{1,3}\\.\\d{1,3}|169\\.254\\.\\d{1,3}\\.\\d{1,3}|\\[::1?\\]|\\[f[cde][0-9a-f]{0,2}:)",
+      "prefilter": ["://"],
+      "description": "URL parameter that points at loopback, link-local, or private addresses."
+    },
+    {
+      "id": "TW-SSRF-003", "category": "ssrf", "severity": "error", "paranoia": 1,
+      "targets": ["path", "query", "cookie", "body"],
+      "pattern": "\\b(gopher|dict|tftp|ldaps?|jar|netdoc|sftp)://",
+      "prefilter": ["://"],
+      "description": "URL scheme used to smuggle requests to internal services."
+    },
+
+    {
+      "id": "TW-SCAN-001", "category": "scanner", "severity": "critical", "paranoia": 1,
+      "targets": ["header"],
+      "headers": ["User-Agent"],
+      "contains": ["sqlmap", "nikto", "nessus", "acunetix", "nmap scripting engine", "masscan", "dirbuster", "gobuster", "wfuzz", "ffuf", "feroxbuster", "havij", "w3af", "zgrab", "nuclei", "openvas", "appscan", "netsparker", "arachni", "skipfish", "wpscan", "whatweb", "commix", "jaeles", "xsstrike", "dirsearch", "burpcollaborator"],
+      "description": "User agent of a known vulnerability scanner or exploitation tool."
+    },
+    {
+      "id": "TW-SCAN-002", "category": "scanner", "severity": "notice", "paranoia": 3,
+      "targets": ["header"],
+      "headers": ["User-Agent"],
+      "contains": ["curl/", "wget/", "python-requests", "python-urllib", "go-http-client", "libwww-perl", "okhttp", "scrapy", "aiohttp", "node-fetch", "axios/", "httpie"],
+      "description": "Scripting HTTP library or tool. Legitimate automation matches; paranoia 3 only."
+    },
+
+    {
+      "id": "TW-PROTO-001", "category": "protocol", "severity": "error", "paranoia": 1,
+      "targets": ["header"],
+      "check": "invalidContentLength",
+      "description": "Content-Length that is not a plain non-negative integer, or two that disagree."
+    },
+    {
+      "id": "TW-PROTO-002", "category": "protocol", "severity": "error", "paranoia": 1,
+      "targets": ["header"],
+      "check": "duplicateHost",
+      "description": "More than one Host header."
+    },
+    {
+      "id": "TW-PROTO-003", "category": "protocol", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "check": "nullByte",
+      "description": "NUL byte, literal or percent-encoded, in any inspected value."
+    },
+    {
+      "id": "TW-PROTO-004", "category": "protocol", "severity": "warning", "paranoia": 1,
+      "targets": ["query", "body"],
+      "check": "oversizedArg",
+      "description": "One query or body value longer than waf.maxArgLength."
+    },
+    {
+      "id": "TW-PROTO-005", "category": "protocol", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "check": "encodingDepth",
+      "description": "Value that needs three or more rounds of URL decoding."
+    },
+    {
+      "id": "TW-PROTO-006", "category": "protocol", "severity": "critical", "paranoia": 1,
+      "targets": ["header"],
+      "check": "contentLengthWithTransferEncoding",
+      "description": "Content-Length together with Transfer-Encoding, the shape of a request smuggling attempt."
+    },
+
+    {
+      "id": "TW-LOG4J-001", "category": "log4j", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "contains": ["${jndi:"],
+      "description": "JNDI lookup."
+    },
+    {
+      "id": "TW-LOG4J-002", "category": "log4j", "severity": "critical", "paranoia": 1,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "pattern": "\\$\\{[^}]{0,30}\\$\\{[^}]{0,30}(:-|lower:|upper:|env:|sys:|date:|java:)",
+      "prefilter": ["${"],
+      "description": "Nested lookups that rebuild jndi: from pieces."
+    },
+    {
+      "id": "TW-LOG4J-003", "category": "log4j", "severity": "warning", "paranoia": 2,
+      "targets": ["path", "query", "header", "cookie", "body"],
+      "pattern": "\\$\\{\\s*(env|sys|java|ctx|main|bundle|docker|k8s|spring|date|log4j|jvmrunargs|web)\\s*:",
+      "prefilter": ["${"],
+      "description": "Any other log4j lookup. Template syntax can match."
+    }
+  ]
+}

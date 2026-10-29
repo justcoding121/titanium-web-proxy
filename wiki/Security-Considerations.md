@@ -125,6 +125,26 @@ deadlock. Titanium keeps the `IsCompletedSuccessfully` fast path for already-com
 and otherwise runs the incomplete task via `Task.Run` so it does not capture the handshake
 thread's `SynchronizationContext`.
 
+## The Plus WAF screens requests by signature; it is not a full WAF
+
+Titanium Plus can screen requests against a versioned built-in rule pack (`waf-pack-1`) and your own
+YAML rules, score the matches, and refuse a request at a block threshold. It is signature-based
+request screening with detect mode and anomaly scoring; it complements a managed WAF and does not
+claim full OWASP Core Rule Set coverage.
+
+- The default mode is `detect`: matches are logged and counted, nothing is refused. Move a route to
+  `block` only after you have read the false positives.
+- Only urlencoded forms, JSON, and the text fields of multipart bodies up to `waf.inspectBodyBytes`
+  (default 8 KiB) are inspected. Chunked, compressed, over-limit, and binary bodies are not, and
+  responses are never screened.
+- Paranoia levels 2 and 3 match ordinary prose and markup. Use exclusions rather than disabling the
+  WAF for a route.
+- Turning screening on moves requests from H1 terminate-lite to the session path, which costs
+  throughput. Re-measure on your hardware.
+- Log lines carry rule ids and the path, not query strings or bodies.
+
+Options, rule categories, and the per-route `waf` policy are in
+[Plus](https://titaniumproxy.com/docs/plus#web-application-firewall-waf).
 ## See also
 
 - [Migration from 4.x](Migration-from-4.x) — cumulative behavior changes from 4.x through current 7.x.

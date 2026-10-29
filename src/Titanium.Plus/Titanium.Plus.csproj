@@ -28,11 +28,15 @@
     <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Security\Waf\waf-pack-1.json" LogicalName="Titanium.Plus.Security.Waf.waf-pack-1.json" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Google.Api.CommonProtos" Version="2.17.0" />
     <PackageReference Include="Google.Protobuf" Version="3.31.1" />
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.6.1" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.6.1" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 </Project>

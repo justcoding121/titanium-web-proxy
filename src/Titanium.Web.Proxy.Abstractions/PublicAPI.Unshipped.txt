@@ -858,3 +858,16 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scopes.get -> System.C
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scopes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.SessionTtlSeconds.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.SessionTtlSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Middleware.IRequiresSessionPathMiddleware
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Policies.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Policies.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.BlockThreshold.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.BlockThreshold.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.DisabledRules.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.DisabledRules.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Exclusions.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Exclusions.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Mode.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Mode.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ParanoiaLevel.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ParanoiaLevel.init -> void

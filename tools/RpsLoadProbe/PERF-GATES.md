@@ -112,7 +112,7 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 | `twp-cli-plus-base-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plus-cache-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-intercept-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
-| `twp-cli-plus-waf-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
+| `twp-cli-plus-waf-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** (screening is on the session path; re-measure before trusting the earlier deny-list-only ratio) |
 | `twp-cli-plus-cidr-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plus-jwt-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plus-ratelimit-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |

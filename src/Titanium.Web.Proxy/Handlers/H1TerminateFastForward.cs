@@ -81,8 +81,10 @@ public partial class ProxyServer
     ///     avoids the allocation and GC cost of building it for every connection under concurrency.
     ///     Callers must also refuse <see cref="UpstreamHttpProtocol.Http2"/> / <see cref="UpstreamHttpProtocol.Http3"/>
     ///     at the connection level — this path only speaks HTTP/1.1 TCP to the origin.
-    ///     Pre-origin middleware (CIDR/WAF/JWT/rate-limit/cache/CORS) runs on this path via
-    ///     <see cref="ProxyMiddlewareContext"/> without a session bag. A <see cref="BeforeResponse"/>
+    ///     Pre-origin middleware (CIDR/deny-list/JWT/rate-limit/cache/CORS) runs on this path via
+    ///     <see cref="ProxyMiddlewareContext"/> without a session bag. Middleware that needs the session
+    ///     (<see cref="IRequiresSessionPathMiddleware"/>, such as the WAF screening) keeps the request off this
+    ///     path. A <see cref="BeforeResponse"/>
     ///     or <see cref="AfterResponse"/> subscriber still forces the full session path via
     ///     <see cref="NeedsHttpInterception"/>.
     /// </summary>
@@ -105,6 +107,11 @@ public partial class ProxyServer
 
         // Route table present but not ForwardHost-equivalent → full session / LB path.
         var reverse = ReverseProxy;
+
+        // A middleware that reads headers, cookies, and bodies (the Plus WAF) needs the session. Lite has none.
+        if (reverse is { HasSessionOnlyMiddleware: true })
+            return false;
+
         if (reverse?.Routes is { Count: > 0 })
         {
             var snapshot = reverse.ClusterManager?.Snapshot;

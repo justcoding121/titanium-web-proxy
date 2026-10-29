@@ -46,13 +46,7 @@ internal static class DestinationResolver
             return DestinationResolution.NoRoute;
         }
 
-        var matcher = options.RouteMatcher ?? new RouteMatcher();
-        var target = RouteTarget.Get(request, fallbackHost);
-        var requirements = RouteTableRequirements.Get(options);
-        var headers = requirements.HeaderNames is null ? null : CollectHeaders(request, requirements.HeaderNames);
-        var query = requirements.QueryNames is null ? null : CollectQuery(request, requirements.QueryNames);
-        var method = request.Method ?? "GET";
-        route = matcher.Match(new RouteMatchContext(target.Host, target.Path, method, headers, query), options.Routes);
+        route = MatchRoute(options, request, fallbackHost);
         if (route is null)
         {
             return DestinationResolution.NoRoute;
@@ -85,6 +79,23 @@ internal static class DestinationResolver
         }
 
         return destination is null ? DestinationResolution.RouteWithoutDestination : DestinationResolution.Resolved;
+    }
+
+    /// <summary>The route the request matches. No cluster is chosen and no destination is picked.</summary>
+    public static RouteConfig? MatchRoute(ReverseProxyOptions? options, Request request, string? fallbackHost)
+    {
+        if (options?.Routes is null || options.Routes.Count == 0)
+        {
+            return null;
+        }
+
+        var matcher = options.RouteMatcher ?? new RouteMatcher();
+        var target = RouteTarget.Get(request, fallbackHost);
+        var requirements = RouteTableRequirements.Get(options);
+        var headers = requirements.HeaderNames is null ? null : CollectHeaders(request, requirements.HeaderNames);
+        var query = requirements.QueryNames is null ? null : CollectQuery(request, requirements.QueryNames);
+        var method = request.Method ?? "GET";
+        return matcher.Match(new RouteMatchContext(target.Host, target.Path, method, headers, query), options.Routes);
     }
 
     private static string? HashInput(Request request, ClusterConfig cluster)
