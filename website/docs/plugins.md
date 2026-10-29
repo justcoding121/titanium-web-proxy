@@ -6,7 +6,7 @@ Run your own .NET code for the routes you choose, and for no other route. A plug
 
 ## Configure
 
-```yaml
+```yaml twp-fragment
 plugins:
   - name: header-gate                 # 1-64 characters of A-Z a-z 0-9 . _ -, unique
     assembly: ./plugins/Titanium.Web.Proxy.Examples.RoutePlugin.dll

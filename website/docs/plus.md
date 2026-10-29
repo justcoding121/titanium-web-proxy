@@ -42,7 +42,7 @@ titanium version --check --plus --channel beta
 
 Day-to-day control is config — keep Plus installed and toggle features:
 
-```yaml
+```yaml twp
 plus:
   enabled: true
   controlPlane:
@@ -146,7 +146,7 @@ A remote that fails authentication five times in one minute gets `429 Too Many R
 
 The control plane and dashboard listen on `plus.controlPlane.host` (default `127.0.0.1`). On any other address they must be encrypted:
 
-```yaml
+```yaml twp
 plus:
   enabled: true
   controlPlane:
@@ -166,9 +166,9 @@ On Kubernetes the Helm chart listens on `0.0.0.0` in the pod, so set `plus.contr
 
 A route that lists an `oidc` policy sends an unauthenticated browser to your identity provider, takes it back through the authorization-code flow with PKCE, and then keeps the person signed in with an encrypted cookie. The origin sees only the requests of people who signed in, plus the claims you choose to pass on as headers.
 
-The policy needs Plus (`plus.enabled: true`; `titanium validate` refuses it otherwise). If Plus is not loaded, or the policy cannot start (an unset secret, a key of the wrong size), every request to the route is answered `503`. It never lets a request through unprotected. A route without an `oidc` policy pays nothing.
+The policy needs Plus (`plus.enabled: true`; `titanium test` refuses it otherwise). If Plus is not loaded, or the policy cannot start (an unset secret, a key of the wrong size), every request to the route is answered `503`. It never lets a request through unprotected. A route without an `oidc` policy pays nothing.
 
-```yaml
+```yaml twp-fragment
 plus:
   enabled: true
 policies:
@@ -239,7 +239,7 @@ When both an e-mail rule and a group rule are set, both must hold.
 
 The WAF is signature-based request screening with detect mode and anomaly scoring. It complements a managed WAF and does not claim full OWASP Core Rule Set coverage. It screens the request only; responses are not inspected.
 
-```yaml
+```yaml twp
 plus:
   enabled: true
   options:
@@ -304,7 +304,7 @@ Each rule that matches adds its weight **once per request**, however many values
 
 A route can change the WAF with a `waf` policy. The route that matches the request picks the policy; the options above are the default for every other route.
 
-```yaml
+```yaml twp-fragment
 policies:
   - name: checkout-strict
     kind: waf
@@ -425,7 +425,7 @@ Both remote modes keep serving the **last known good** destinations. A failed ca
 
 **Consul** uses blocking queries: the first read is plain, then each call sends `?index=<X-Consul-Index>&wait=30s` and returns when the service changes or the wait elapses. An index that goes backwards restarts from a plain read. With `discovery.consulPassing` (default `true`) only instances whose checks all pass are used. A server that sends no index is polled every `discovery.intervalMs`.
 
-```yaml
+```yaml twp
 plus:
   options:
     discovery.mode: "consul"
@@ -435,7 +435,7 @@ plus:
 
 **Kubernetes** lists EndpointSlices, then watches from the list `resourceVersion` with bookmarks enabled. Ready endpoints from every matching slice form the destination set. A `410 Gone` (or a watch `ERROR` event with code 410) drops the version and relists. In a pod the API server, namespace, service-account token, and CA come from `KUBERNETES_SERVICE_HOST` and `/var/run/secrets/kubernetes.io/serviceaccount`. The projected token is re-read on a timer and immediately after a 401 or 403, so rotation needs no restart. The service account needs `get`, `list`, and `watch` on `endpointslices` in `discovery.k8s.io`.
 
-```yaml
+```yaml twp
 plus:
   options:
     discovery.mode: "k8s"

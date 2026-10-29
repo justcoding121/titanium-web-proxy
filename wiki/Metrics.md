@@ -10,7 +10,7 @@ The proxy publishes one `System.Diagnostics.Metrics.Meter` named `Titanium.Web.P
 | `server.admin.enabled: true` | A meter listener is attached the first time `/metrics` is requested, not at start. |
 | neither | No listener exists. Every recording call in the request path stays a single `Enabled` check, so the cost is the same as before this feature. |
 
-```yaml
+```yaml twp
 server:
   metrics:
     enabled: true

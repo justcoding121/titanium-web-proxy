@@ -18,6 +18,7 @@ See [CLA.md](CLA.md) and [README.md](README.md) Editions section.
 3. Run `dotnet build src/Titanium.Web.Proxy.sln -c Release` and `dotnet test` for affected test projects.
 4. Do not introduce third-party product names of other proxies or traffic debuggers into source, tests, CLI help, or docs.
 5. Keep hot-path changes minimal; preserve `ForwardHost` terminate-lite eligibility when routes are unset or equivalent to a single sticky destination.
+6. A `yaml` example in `website/docs/*.md` or `wiki/*.md` that is a whole `twp.yaml` is tagged <code>```yaml twp</code>, and `dotnet test tests/Titanium.Web.Proxy.Configuration.Tests` loads, validates, and schema-checks it. A snippet that only makes sense inside a larger file is tagged <code>```yaml twp-fragment</code> and skipped. A wiki page does not start with a `#` heading that repeats its file name.
 
 ### Local QA tooling (maintainers)
 

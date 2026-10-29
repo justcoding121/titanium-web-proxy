@@ -22,10 +22,12 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 - Decrypt and inspect HTTPS in a native desktop Inspector on Windows, macOS, and Linux — AutoResponder, Map Local/Remote, breakpoints, Composer, HAR, curl/fetch
 - When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 - Speak modern HTTP — HTTP/2 by default, optional HTTP/3, WebSocket, gRPC, SSE, GraphQL rules in the same grid
-- Run the same engine as a reverse / edge proxy from the CLI (YAML, load balancing, ACME, live reload)
+- Run the same engine as a reverse / edge proxy from the CLI — YAML routes, load balancing and failover, retries, rate limits, response compression, gRPC-Web, TCP and UDP relay, ACME, live reload
+- Deploy on Kubernetes with a hardened container image, a Helm chart, probes, and a Gateway API and Ingress controller
+- Observe it with Prometheus text, OTLP traces and metrics, and an access log; Plus adds a dashboard, OpenID Connect login, a response cache, and WAF screening
 - Embed in .NET via NuGet (MIT); Inspector is free for personal and education use
 
-Full catalog: [Features](https://titaniumproxy.com/docs/features). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
+Full catalog: [Features](https://titaniumproxy.com/docs/features). What is supported, partial, and not supported: [capability coverage](https://titaniumproxy.com/docs/capabilities). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
 
 ## Performance
 
@@ -55,6 +57,13 @@ titanium update
 `titanium run` is foreground (Ctrl+C to stop). Boot persistence: `titanium service install -c twp.yaml` — [CLI — service](https://titaniumproxy.com/docs/cli#service). Each CLI zip also includes a `twp` alias.
 
 **Optional Plus:** `titanium update --plus`, then `plus.enabled: true` — [Plus](https://titaniumproxy.com/docs/plus).
+
+**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64) and a chart in `deploy/helm/titanium` — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). To run Titanium behind Gateway API or Ingress resources, see [Gateway API](https://titaniumproxy.com/docs/gateway-api).
+
+```shell
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest
+helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
+```
 
 <img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 

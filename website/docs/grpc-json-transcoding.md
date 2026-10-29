@@ -53,7 +53,8 @@ Include `google/api/annotations.proto` (and its imports) on the include path.
 
 ## CLI config
 
-```yaml
+```yaml twp
+schemaVersion: "7.1"
 plus:
   enabled: true
   controlPlane:
@@ -71,18 +72,22 @@ plus:
     grpc.transcode.compression: "gzip"
 
 listeners:
-  - name: main
+  - host: "127.0.0.1"
     port: 8080
     enableHttp2: true
 
 routes:
-  - match: { pathPrefix: "/" }
-    cluster: greeter
+  - id: greeter
+    clusterId: greeter
+    match: { path: /, pathKind: Prefix }
 
 clusters:
-  - name: greeter
+  - id: greeter
     destinations:
-      - address: "https://127.0.0.1:50051"
+      - id: greeter-1
+        address: "127.0.0.1"
+        port: 50051
+        useHttps: true
 ```
 
 Startup fails if the feature is enabled but the descriptor file is missing or `services` is empty.

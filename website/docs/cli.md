@@ -6,7 +6,7 @@ Standalone reverse / edge proxy for any backend stack. MIT licensed. For operato
 
 ## Quick start
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
@@ -28,7 +28,8 @@ Path-based routing and load balancing: [Configuration](/docs/configuration).
 ## Commands
 
 ```text
-titanium run -c <config> [-v|--verbose] [--service]
+titanium run -c <config> [-v|--verbose] [--watch] [--service]
+titanium reload -c <config>
 titanium test -c <config>
 titanium healthcheck (-c <config> | --url <url>) [--timeout <seconds>]
 titanium service install|uninstall|start|stop|restart|status
@@ -42,6 +43,7 @@ Nested help: `titanium <command> --help` (and `titanium service install --help`,
 | Command | Purpose |
 |---------|---------|
 | `run` | Start the proxy from a config file |
+| `reload` | Ask a running proxy to reload its config in place; see [Reload without restart](#reload-without-restart) |
 | `test` | Validate config without serving traffic |
 | `healthcheck` | Probe the admin `/healthz` once (container `HEALTHCHECK`; exit `0` is healthy) |
 | `service` | Install / start / stop an OS service so the proxy survives reboot |

@@ -6,7 +6,7 @@ Native schema version **7.1**. For CLI operators: start with a minimal reverse f
 
 ## Minimal reverse
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
@@ -25,7 +25,7 @@ titanium run -c twp.yaml
 
 ## Top-level shape
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners: []
 routes: []
@@ -74,7 +74,7 @@ On a `udp` listener `idleTimeoutSeconds` is how long a session may go without a 
 
 A passthrough listener copies bytes between the client and an upstream and never decrypts them. With `sniRoutes`, it first reads the client's TLS ClientHello, takes the server name from it, and sends the connection to a cluster. The ClientHello bytes are forwarded unchanged, so the origin completes the handshake and presents its own certificate.
 
-```yaml
+```yaml twp-fragment
 listeners:
   - port: 443
     type: transparent
@@ -126,7 +126,7 @@ Without `sniRoutes` and `sniDefaultClusterId`, a passthrough listener behaves as
 
 A `type: udp` listener relays datagrams between clients and one upstream, for protocols such as DNS, syslog, or game traffic. It shares nothing with the HTTP paths, so a config may contain only UDP listeners.
 
-```yaml
+```yaml twp
 listeners:
   - host: "0.0.0.0"
     port: 5353
@@ -168,7 +168,7 @@ Request instruments on the `Titanium.Web.Proxy` meter stay quiet until a listene
 
 Opt-in text exposition of the core meter. Off by default: with no `server.metrics` (or `enabled: false`) no meter listener exists and the request path costs what it did before.
 
-```yaml
+```yaml twp
 server:
   metrics:
     enabled: true
@@ -182,7 +182,7 @@ server:
 
 Opt-in probes, metrics, and version on a port of their own, never on a proxy listener. Off by default: with no `server.admin` (or `enabled: false`) no socket is opened and the request path is unchanged.
 
-```yaml
+```yaml twp
 server:
   admin:
     enabled: true
@@ -207,7 +207,7 @@ server:
 
 Opt-in OTLP export of request spans and the proxy meters, with W3C trace context carried through the proxy. Off by default: with no `server.telemetry` and no `OTEL_*` exporter variable, no listener is attached and the request path allocates nothing for tracing.
 
-```yaml
+```yaml twp
 server:
   telemetry:
     serviceName: edge-gateway        # default: titanium
@@ -276,7 +276,7 @@ A sensitive setting is one of three forms: the literal, a `...Env` sibling that 
 | `plus.options` `discovery.consulToken` | `discovery.consulTokenEnv` | `discovery.consulTokenFile` |
 | `server.admin.authToken` | `authTokenEnv` | `authTokenFile` |
 
-```yaml
+```yaml twp
 server:
   admin:
     enabled: true
@@ -393,7 +393,7 @@ Optional `transforms` on a route rewrite the upstream request (and can stage res
 
 Off by default. A route with `grpcWeb: true` lets a browser gRPC-Web client reach a native gRPC (HTTP/2) origin:
 
-```yaml
+```yaml twp-fragment
 routes:
   - id: api
     clusterId: grpc-backend
@@ -404,14 +404,14 @@ On a matching `POST` the proxy rewrites `application/grpc-web` or `application/g
 
 v1 limits:
 
-- Unary and server-streaming calls, binary only. `application/grpc-web-text` is not translated and passes through unchanged. `titanium validate` warns when a route sets `grpcWeb`.
+- Unary and server-streaming calls, binary only. `application/grpc-web-text` is not translated and passes through unchanged. `titanium test` warns when a route sets `grpcWeb`.
 - The origin must speak HTTP/2. The route is served on the HTTP/2-to-HTTP/2 dispatch path. A route with `grpcWeb` is never treated as forward-host equivalent, so the native frame relay is not used for it. The flag cannot be combined with `redirect` or `directResponse`.
 - An HTTP/1.1 browser connection reaches an HTTP/2 origin only where the HTTP/1.1-to-HTTP/2 bridge is enabled (the library's `UpstreamHttpProtocol` and `AllowHttpProtocolTranslation`, set in `BeforeSslAuthenticate`). `titanium run` does not set that for you.
 - The response is rebuilt as one body for a known-length reply and streamed for a streaming reply. Trailers reach the browser only as that final frame; the trailers are also copied into response headers so a client that reads headers can see `grpc-status`.
 
 **CORS.** Browsers send a preflight `OPTIONS` before a gRPC-Web call. Answer it with a `cors` policy attached to the route, and list the gRPC-Web request headers in `headerName`:
 
-```yaml
+```yaml twp-fragment
 policies:
   - name: grpc-web-cors
     kind: cors
@@ -431,7 +431,7 @@ The policy answers preflights only. For the real response, expose the status hea
 
 A route can require an OpenID Connect sign-in by listing an `oidc` policy. The proxy runs the authorization-code flow with PKCE against your identity provider, keeps the person signed in with an AES-256-GCM encrypted cookie, can renew the session quietly, and passes chosen claims to the origin as headers (client-sent copies of those headers are removed). It needs `plus.enabled: true`, and a route that lists it always uses the full session path.
 
-```yaml
+```yaml twp-fragment
 plus:
   enabled: true
 policies:
@@ -450,13 +450,13 @@ routes:
     policies: [login]
 ```
 
-`cookieSecretEnv` or `cookieSecretFile` holds 32 bytes (64 hex digits or base64); list a second key to rotate. `titanium validate` rejects a missing issuer, client, or cookie key, a path that is not a single-slash path, a session lifetime outside 60 to 2592000 seconds, and a `passClaims` header such as `Authorization` or `Cookie`. Fields, the flow, and the limits are in [Plus](/docs/plus#login-with-openid-connect-oidc-policy).
+`cookieSecretEnv` or `cookieSecretFile` holds 32 bytes (64 hex digits or base64); list a second key to rotate. `titanium test` rejects a missing issuer, client, or cookie key, a path that is not a single-slash path, a session lifetime outside 60 to 2592000 seconds, and a `passClaims` header such as `Authorization` or `Cookie`. Fields, the flow, and the limits are in [Plus](/docs/plus#login-with-openid-connect-oidc-policy).
 
 ### Request screening (route policy `waf`, Plus)
 
 With `plus.options` `waf.enabled: "true"`, Titanium Plus screens requests by signature in `detect` mode (log and count, never refuse) unless you choose otherwise. A route can override the global WAF settings by listing a `waf` policy. The route that matches the request supplies the policy, and every field is optional.
 
-```yaml
+```yaml twp-fragment
 plus:
   enabled: true
   options:
@@ -484,7 +484,7 @@ routes:
 
 ## Static files
 
-```yaml
+```yaml twp
 staticFiles:
   root: "./www"
   enableGzip: true
@@ -495,7 +495,7 @@ staticFiles:
 
 Automatic Certificate Management Environment (**ACME**) can obtain Let’s Encrypt (or other directory) certificates for public listeners:
 
-```yaml
+```yaml twp
 certificates:
   certificatePath: "./certs/fullchain.pem"
   privateKeyPath: "./certs/privkey.pem"
@@ -508,7 +508,7 @@ Use real paths and emails in your environment. Do not commit private keys. MITM 
 
 ## Logging
 
-```yaml
+```yaml twp
 logging:
   enabled: true
   minimumLevel: "Error"   # Error shows limit rejections. Use Debug, or titanium run -v, for Observe lines.
@@ -523,7 +523,7 @@ logging:
 
 ## Plus
 
-```yaml
+```yaml twp
 plus:
   enabled: true
   controlPlane:
@@ -581,7 +581,7 @@ titanium test -c twp.yaml
 
 Null nested objects and null properties leave the library or profile default. Apply order: `profile` first, then overlays.
 
-```yaml
+```yaml twp
 server:
   profile: Balanced   # Balanced | LegacyCompatible | PublicFacing. PublicFacing sets streams to 256, idle 60s, request 120s.
   enableHttp2: true
@@ -598,7 +598,7 @@ server:
   blockLoopbackDestinations: false
   checkCertificateRevocation: NoCheck
   dnsServerEndPoint: "8.8.8.8:53"
-  accessLog:
+  accessLog:                     # opt-in NDJSON access log (see below)
     path: "logs/access.ndjson"   # omit or null = off (zero cost)
     sampleRate: 1.0              # 0.0–1.0
   timeouts:
@@ -702,7 +702,6 @@ server:
     rootCertificateIssuerName: null
     saveFakeCertificates: true
     disableWildCardCertificates: false
-  accessLog: null   # opt-in NDJSON access log (see below)
 ```
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
@@ -719,7 +718,7 @@ These keys shape the handshake the proxy completes with its own clients on termi
 | `cipherSuites` | `TlsCipherSuite` names such as `TLS_AES_256_GCM_SHA384`. Linux and macOS only: .NET has no cipher suite policy on Windows, where the list is ignored, a validation warning is printed, and the OS default applies. Leaving out every TLS 1.3 suite turns TLS 1.3 off for listeners. |
 | `ocspStapling` | `true` builds server certificate contexts with `offline: false`, so .NET may fetch an OCSP response and staple it. The default builds them offline: no network use and no stapling. Only a certificate whose authority information access extension names an OCSP responder can be stapled, and the certificates the proxy mints per host have none, so this matters for a certificate you supply. Chain building may touch the network the first time a certificate is presented. |
 
-```yaml
+```yaml twp
 server:
   tls:
     minVersion: Tls13
@@ -748,7 +747,7 @@ server:
 
 Opt-in JSON Lines (NDJSON) access log written **after** each response. Bodies are never buffered for this feature.
 
-```yaml
+```yaml twp
 server:
   accessLog:
     path: "./logs/access.ndjson"
@@ -761,7 +760,7 @@ Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `c
 
 Opt-in compression of origin responses, buffered or streaming. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
 
-```yaml
+```yaml twp
 server:
   responseCompression:
     enabled: true
@@ -808,20 +807,20 @@ The [response cache](#response-cache) keys each entry on the client's normalized
 
 A route opts out with `compression: off`:
 
-```yaml
+```yaml twp-fragment
 routes:
   - id: downloads
     clusterId: files
     compression: off
 ```
 
-Both modes apply to HTTP/1.1 responses and to the HTTP/2-to-HTTP/1.1 bridge only. They are not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths; `titanium validate` warns about that.
+Both modes apply to HTTP/1.1 responses and to the HTTP/2-to-HTTP/1.1 bridge only. They are not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths; `titanium test` warns about that.
 
 ### Request decompression (`server.requestDecompression`)
 
 Opt-in, bounded decompression of request bodies. A request with `Content-Encoding: gzip` or `br` is decompressed before it is sent to the origin, so the origin (and a body-aware policy) sees plain bytes: the `Content-Encoding` header is removed and `Content-Length` is set to the decompressed size. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
 
-```yaml
+```yaml twp
 server:
   requestDecompression:
     enabled: true
@@ -836,7 +835,7 @@ Both the compressed and the decompressed body are held in memory, so two limits 
 
 A body that breaches either limit is answered with `413` and the connection is closed. A body that is corrupt or cut short is answered with `400`. Truncation is detected for both codings (gzip by its length trailer, brotli by the decoder state). Only single-member gzip is accepted. Every decompressed body is recorded in the `twp.body.decompressed_bytes` histogram, tagged `direction=request`; see [Metrics](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics).
 
-Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium validate` warns about that.
+Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium test` warns about that.
 
 ### Graceful reload
 

@@ -39,12 +39,14 @@ It does **not** bound:
   the proxy.
 - **A custom `RespondStreaming` producer** you supply — the proxy imposes no ceiling on how much you
   choose to write.
-- **HTTP/1 aggregate header-block bytes** — `PolicyFamily.HeaderLimits` exists as a named policy
-  family (see `PolicyFamily.cs`) but is not yet wired to numeric enforcement at every header-reading
-  call site; only the HTTP/2 decoded-header-list cap (`MaxDecodedHeaderListBytes`) and the client
-  header *read deadline* (a time bound, not a byte bound — see
-  [New: client header read deadline](Migration-from-4.x#user-content-new-client-header-read-deadline-opt-in)) are
-  actually enforced today.
+
+Header blocks are bounded by their own limits, not by the body budgets. An HTTP/1 request or origin response
+over `MaxHeaderCount` or `MaxHeaderAggregateBytes` (CLI keys `server.limits.maxHeaderCount` and
+`server.limits.maxHeaderAggregateBytes`) is rejected under the `HeaderLimits` policy family: `431` for a request,
+`502` for an origin response. HTTP/2 has its own decoded-header-list cap (`MaxDecodedHeaderListBytes`), and the
+client header *read deadline* bounds time rather than bytes (see
+[New: client header read deadline](Migration-from-4.x#user-content-new-client-header-read-deadline-opt-in)).
+`LegacyCompatible` keeps `HeaderLimits` at `Observe`; see [Limits and escape hatches](Limits-and-Escape-Hatches).
 
 Treat memory-exhaustion protection as scoped to the specific mechanism you're using, and prefer the
 streaming APIs for anything whose size you can't bound in advance.
