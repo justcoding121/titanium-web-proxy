@@ -114,7 +114,13 @@ public partial class ProxyServer
 
     private static TcpPassthroughOptions CreatePassthroughOptions(Socket client, TransparentBaseProxyEndPoint endPoint)
     {
-        var options = new TcpPassthroughOptions { IdleTimeout = endPoint.PassthroughIdleTimeout };
+        // Zero grace keeps the plain forward-host path on the zero-cost close-on-EOF relay. Idle timeout
+        // or a PROXY preamble alone opts into the enhanced path (NeedsEnhanced already checks those).
+        var options = new TcpPassthroughOptions
+        {
+            IdleTimeout = endPoint.PassthroughIdleTimeout,
+            HalfCloseGrace = TimeSpan.Zero,
+        };
         if (endPoint.PassthroughProxyProtocol == PassthroughProxyProtocolMode.V2)
         {
             options.Preamble = ProxyProtocolWriter.BuildV2(
