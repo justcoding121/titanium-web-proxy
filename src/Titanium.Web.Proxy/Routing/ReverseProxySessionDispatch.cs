@@ -952,6 +952,14 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ctx = new TransformRequestContext { Path = path };
+        if (HasKind(transforms, TransformKinds.RequestHeaderAppend))
+        {
+            // Append extends what the client sent (Gateway API Add semantics). Only wired when a transform
+            // needs it, so the common path pays no closure.
+            var clientHeaders = request.Headers;
+            ctx.ExistingRequestHeader = name => JoinHeaderValues(clientHeaders.GetHeaders(name));
+        }
+
         if (session.ClientConnection is Network.Tcp.TcpClientConnection { ClientCertificate: { } clientCert })
         {
             ctx.ClientCertificateSubject = clientCert.Subject;
@@ -995,10 +1003,46 @@ internal static class ReverseProxySessionDispatch
         if (ctx.ResponseHeadersToSet.Count > 0 || ctx.ResponseHeadersToRemove.Count > 0)
         {
             session.ResponseHeaderTransformPlan =
-                new TransformResponseHeaderPlan(ctx.ResponseHeadersToSet, ctx.ResponseHeadersToRemove);
+                new TransformResponseHeaderPlan(ctx.ResponseHeadersToSet, ctx.ResponseHeadersToRemove,
+                    ctx.ResponseHeadersToAppend);
         }
 
         return ctx.UseDestinationHost;
+    }
+
+    private static bool HasKind(IReadOnlyList<TransformConfig> transforms, string kind)
+    {
+        for (var i = 0; i < transforms.Count; i++)
+        {
+            if (string.Equals(transforms[i].Kind, kind, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>All lines of one header joined with <c>", "</c>; null when the header is absent.</summary>
+    internal static string? JoinHeaderValues(List<HttpHeader>? lines)
+    {
+        if (lines is null || lines.Count == 0)
+        {
+            return null;
+        }
+
+        if (lines.Count == 1)
+        {
+            return lines[0].Value;
+        }
+
+        var values = new string[lines.Count];
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = lines[i].Value;
+        }
+
+        return string.Join(", ", values);
     }
 
     /// <summary>Applies staged response header transforms when present.</summary>
@@ -1198,10 +1242,14 @@ internal static class ReverseProxySessionDispatch
 /// <summary>Stashed on the session so response transforms apply without an always-on middleware.</summary>
 internal sealed class TransformResponseHeaderPlan(
     Dictionary<string, string> set,
-    HashSet<string> remove)
+    HashSet<string> remove,
+    HashSet<string>? append = null)
 {
     public Dictionary<string, string> Set { get; } = set;
     public HashSet<string> Remove { get; } = remove;
+
+    /// <summary>Names in <see cref="Set" /> that extend the origin's values instead of replacing them.</summary>
+    public HashSet<string>? Append { get; } = append;
 
     public void Apply(HeaderCollection headers)
     {
@@ -1212,7 +1260,34 @@ internal sealed class TransformResponseHeaderPlan(
 
         foreach (var pair in Set)
         {
+            if (Append is not null && Append.Contains(pair.Key))
+            {
+                ApplyAppend(headers, pair.Key, pair.Value);
+                continue;
+            }
+
             headers.SetOrAddHeaderValue(pair.Key, pair.Value);
         }
+    }
+
+    private static void ApplyAppend(HeaderCollection headers, string name, string value)
+    {
+        // Set-Cookie cannot be comma-folded (RFC 6265 §3); each cookie keeps its own line.
+        if (string.Equals(name, "Set-Cookie", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.AddHeader(name, value);
+            return;
+        }
+
+        var existing = ReverseProxySessionDispatch.JoinHeaderValues(headers.GetHeaders(name));
+        if (string.IsNullOrEmpty(existing))
+        {
+            headers.SetOrAddHeaderValue(name, value);
+            return;
+        }
+
+        // Replace every origin line with the merged value (also collapses duplicate lines).
+        headers.RemoveHeader(name);
+        headers.AddHeader(name, existing + ", " + value);
     }
 }

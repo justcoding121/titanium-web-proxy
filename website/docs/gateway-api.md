@@ -131,11 +131,10 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 These follow from how the data plane works. They are deliberate and listed so nothing surprises you.
 
 - **Gateways of one class share one data plane.** Listeners of different Gateways on the same port merge into one data-plane listener, and routes are not scoped to a Gateway. Two listeners with the same hostname conflict only inside one Gateway. A request no route matches answers `404`; it is never forwarded to the host the client named.
-- **`RequestHeaderModifier` `add` replaces a header the client already sent**, where the specification appends to it. The data plane's header transforms start from an empty header set, so they cannot see the client's value. A header the client did not send is added as the specification says.
+- **`add` in a header modifier joins values with `, `.** A request or response header that already carries a value gets the new one appended (`foo` and `bar` become `foo, bar`), which is the same list as the specification's `foo,bar`. Repeated lines of one header collapse into one. `Set-Cookie` is the exception: each added cookie keeps its own line.
 - **Routes are global across listeners.** The data plane matches routes by host, path, header, query, and method, not by listener port. Two Gateway listeners that would serve different routes on different ports serve the same routes.
 - **A mix of valid and invalid backends answers `503` for the invalid share**, where the specification says `500`. When no backend of a rule is usable, the rule answers `500`.
 - **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive.
-- **`ResponseHeaderModifier` add acts as set.** The data plane keeps one value per response header.
 - **A listener with a mix of supported and unsupported `allowedRoutes.kinds`** serves the supported ones (`supportedKinds` lists `HTTPRoute`) and reports `ResolvedRefs` `False`, reason `InvalidRouteKinds`.
 - **Privileged ports are mapped.** The data plane runs as non-root, so Gateway port `80` is bound as `8080` and `443` as `8443` (`dataPlane.ports`). The Service maps them back.
 
@@ -146,12 +145,14 @@ The repository runs the upstream Gateway API conformance suite (v1.2.1, profile 
 - `tools/gateway-conformance/run.sh` builds both images, creates a `kind` cluster, installs MetalLB (so the data-plane Service gets an address), installs the chart with `deploy/helm/titanium-gateway/ci/kind-values.yaml`, runs the suite in a `golang` container on the `kind` network, and writes the report to `artifacts/gateway-conformance-report.yaml`.
 - `.github/workflows/gateway-conformance.yml` runs it on Linux for pull requests that touch the controller, the chart, or the images, and weekly. It uploads the report. **The first runs report only**: a failing suite does not fail the workflow until the repository variable `GATEWAY_CONFORMANCE_ENFORCE` is `true`.
 - **It needs Linux, Docker, `kind`, `kubectl`, and Helm. It does not run on a Windows host**, because the suite reaches the Gateway address over the container network; use WSL 2 or a Linux machine.
-- Only features this controller implements are claimed (`--supported-features`). Not claimed: response header `add` (the data plane keeps one value per header), redirects without a hostname, the request and backend timeout features (not yet verified against the suite), `GRPCRoute`, `TLSRoute`, and port-based listener features. The report lists what passed, failed, and was skipped.
+- Only features this controller implements are claimed (`--supported-features`). Not claimed: `HTTPRouteResponseHeaderModification` (response header `add` now appends, but the feature is not claimed until the suite has been re-run against it), redirects without a hostname, the request and backend timeout features (not yet verified against the suite), `GRPCRoute`, `TLSRoute`, and port-based listener features. The report lists what passed, failed, and was skipped.
 
-**Status.** The suite was run on a `kind` cluster (Linux containers on Docker Desktop) before release: 31 of the 33 core tests pass, and 2 of the 5 extended tests. The failures have two causes, both in the data plane rather than the controller:
+**Status.** The suite was last run on a `kind` cluster (Linux containers on Docker Desktop) before two data-plane fixes: 31 of the 33 core tests passed, and 2 of the 5 extended tests. The failures had two causes, both in the data plane rather than the controller, and both are now fixed in the data plane:
 
-- `HTTPRouteRequestHeaderModifier`, `HTTPRouteRewriteHost`, `HTTPRouteRewritePath`, and `HTTPRouteRequestMirror` each include a rule that adds a header the request already carries, and the data plane replaces it instead of appending.
-- `HTTPRouteHTTPSListener`: the data plane closes the TLS handshake of a transparent decrypting listener on this runtime, so an `HTTPS` Gateway listener is accepted and programmed but does not yet serve traffic.
+- A header modifier `add` replaced a header the request already carried instead of appending to it (`HTTPRouteRequestHeaderModifier`, `HTTPRouteRewriteHost`, `HTTPRouteRewritePath`, and `HTTPRouteRequestMirror` each include such a rule).
+- A transparent decrypting listener that selects its certificate by SNI failed every TLS handshake (`HTTPRouteHTTPSListener`), so an `HTTPS` Gateway listener was accepted and programmed but did not serve traffic.
+
+The suite has not been re-run since those fixes; run it on Linux to refresh the numbers.
 
 ## Configuration
 

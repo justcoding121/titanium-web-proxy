@@ -767,3 +767,7 @@ Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch!>?
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ExistingRequestHeader.get -> System.Func<string!, string?>?
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ExistingRequestHeader.set -> void
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseHeadersToAppend.get -> System.Collections.Generic.HashSet<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ResponseHeadersToAppend.set -> void

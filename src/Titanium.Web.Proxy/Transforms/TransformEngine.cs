@@ -71,10 +71,15 @@ public sealed class TransformEngine : ITransformEngine
                                               t.Parameters.TryGetValue("name", out var rhName) &&
                                               t.Parameters.TryGetValue(ValueParameter, out var rhValue):
                     context.ResponseHeadersToSet[rhName] = rhValue;
+                    // A later Set replaces whatever an earlier Append staged for the same name.
+                    context.ResponseHeadersToAppend?.Remove(rhName);
                     break;
                 case TransformKinds.ResponseHeaderRemove when t.Parameters is not null &&
                                                  t.Parameters.TryGetValue("name", out var rrName):
                     context.ResponseHeadersToRemove.Add(rrName);
+                    // Config order wins: a Set/Append staged before this Remove must not resurrect the header.
+                    context.ResponseHeadersToSet.Remove(rrName);
+                    context.ResponseHeadersToAppend?.Remove(rrName);
                     break;
                 case TransformKinds.PathSet when Param(t, "path") is { } setPath:
                     context.Path = setPath.StartsWith(Slash) ? setPath : Slash + setPath;
@@ -105,7 +110,7 @@ public sealed class TransformEngine : ITransformEngine
                     context.Path = SetQueryValue(context.Path, routeQuery, routeValue);
                     break;
                 case TransformKinds.RequestHeaderAppend when Param(t, "name") is { } appendHeader && Param(t, ValueParameter) is { } appendHeaderValue:
-                    context.Headers[appendHeader] = context.Headers.TryGetValue(appendHeader, out var current) && current.Length > 0
+                    context.Headers[appendHeader] = ExistingRequestValue(context, appendHeader) is { Length: > 0 } current
                         ? current + ", " + appendHeaderValue
                         : appendHeaderValue;
                     break;
@@ -134,7 +139,17 @@ public sealed class TransformEngine : ITransformEngine
 
                     break;
                 case TransformKinds.ResponseHeaderAppend when Param(t, "name") is { } responseName && Param(t, ValueParameter) is { } responseValue:
-                    context.ResponseHeadersToSet[responseName] = responseValue;
+                    if (context.ResponseHeadersToSet.TryGetValue(responseName, out var stagedResponse) && stagedResponse.Length > 0)
+                    {
+                        // Joins an earlier Set/Append of the same name; the staged entry keeps its own mode.
+                        context.ResponseHeadersToSet[responseName] = stagedResponse + ", " + responseValue;
+                    }
+                    else
+                    {
+                        context.ResponseHeadersToSet[responseName] = responseValue;
+                        (context.ResponseHeadersToAppend ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(responseName);
+                    }
+
                     break;
                 case TransformKinds.ResponseHeadersAllowed when Param(t, "headers") is { } responseAllowed:
                     context.ResponseHeadersToRemove.Add("*" + responseAllowed);
@@ -169,6 +184,31 @@ public sealed class TransformEngine : ITransformEngine
                 return;
             }
         }
+    }
+
+    /// <summary>
+    ///     Value an append must extend: what an earlier transform staged, else what the client sent. When the
+    ///     client's lines are merged they are also queued for removal, so the merged value replaces all of them.
+    /// </summary>
+    private static string? ExistingRequestValue(TransformRequestContext context, string name)
+    {
+        if (context.Headers.TryGetValue(name, out var staged))
+        {
+            return staged;
+        }
+
+        if (context.HeadersToRemove.Contains(name) || context.ExistingRequestHeader is not { } lookup)
+        {
+            return null;
+        }
+
+        var existing = lookup(name);
+        if (!string.IsNullOrEmpty(existing))
+        {
+            context.HeadersToRemove.Add(name);
+        }
+
+        return existing;
     }
 
     private static string? Param(TransformConfig transform, string name) =>
