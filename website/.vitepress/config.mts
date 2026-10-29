@@ -57,6 +57,7 @@ export default defineConfig({
             { text: 'Configuration (`twp.yaml`)', link: '/docs/configuration' },
             { text: 'Library (embed)', link: '/docs/library' },
             { text: 'Plus', link: '/docs/plus' },
+            { text: 'Manager', link: '/docs/manager' },
             { text: 'Inspector', link: '/docs/inspector' },
           ],
         },

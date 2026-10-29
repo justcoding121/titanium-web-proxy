@@ -36,8 +36,6 @@ public class CapabilityCoverageTests
         "xDS",
         "OpenResty",
         "route editing",
-        "Multi-user dashboard accounts",
-        "SSO beyond",
         "Hot binary upgrade",
         "Geo-IP",
     ];

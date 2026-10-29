@@ -51,7 +51,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |
 | TCP passthrough with SNI | A passthrough listener reads the ClientHello and picks a cluster by server name (exact, then longest `*.suffix`, then a default cluster or `forwardHost`) without decrypting. Balancing, connect failover, half-close, an idle timeout, and an optional PROXY protocol v2 header to the upstream |
 | Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
-| Rate limit policy | `rateLimit` counts per client, forwarded client, header, cookie, or route, with a fixed window or token bucket, a bounded key table, and `Retry-After` (plus optional `RateLimit-*`) on a 429. Terminate-lite eligible |
+| Rate limit policy | `rateLimit` counts per client, forwarded client, header, cookie, or route, with a fixed window or token bucket, a bounded key table, and `Retry-After` (plus optional `RateLimit-*`) on a 429. Default `scope: node` is in-process; `scope: fleet` (Plus + Redis) shares a leased token bucket across instances ([Configuration](/docs/configuration#fleet-rate-limit)). Terminate-lite eligible |
 | External authorization | `extAuth` policy asks an HTTP service to allow or deny each request. Deny status and chosen headers are relayed, redirects are not followed, `failOpen` and a short positive cache are optional. Leaves terminate-lite |
 | Per-route .NET plugins | `plugins` loads an `IProxyMiddleware` DLL into its own collectible load context; `routes[].middleware` runs it for that route only. Per-plugin `failMode` (open or closed) and `timeoutMs`, `twp.plugin.duration` and `twp.plugin.errors` metrics, unloaded on reload. Script engines are a separate row. A config in which a route names a plugin leaves terminate-lite ([guide](/docs/plugins)) |
 | Lua and WebAssembly scripting | `kind: lua` (Lua 5.4) and `kind: wasm` (proxy-wasm 0.1.0 to 0.2.1 on Wasmtime) plugins, named in `routes[].middleware`. Sandboxed, with memory, instruction or fuel, and CPU-time limits inside the engine, `failMode` and `timeoutMs`, allow-listed HTTP callouts (`calloutHosts`), shared state, and metrics. Natives ship per RID; `titanium scripting-deps status` reports whether they load ([guide](/docs/scripting)) |
@@ -67,14 +67,15 @@ Optional ops sidecar for the CLI (and Inspector panels). [Plus guide](/docs/plus
 
 | Capability | What it does |
 |------------|--------------|
-| Dashboard | HTML admin on the control-plane port |
+| Dashboard | HTML admin on the control-plane port; local users, optional OIDC SSO, break-glass secrets, reload, and managed-config drift |
 | Observability | Prometheus-style metrics |
-| Auth | CIDR allow-list, JWT (JWKS), API key, Basic, and the `oidc` login policy |
+| Auth | CIDR allow-list, JWT (JWKS), API key, Basic, the `oidc` login policy, and dashboard OIDC SSO |
 | WAF | Signature-based request screening with detect mode and anomaly scoring (built-in rule pack, custom YAML rules, per-route `waf` policy), plus an operator deny-list; see [Plus](/docs/plus#web-application-firewall-waf) |
 | Control plane | Loopback HTTP API; snapshot get/put; cache purge |
+| Managed fleet | Agent long-polls [titanium-manager](/docs/manager) (`manager.url`); staged rollouts and last-known-good |
 | Resilience | Health probes, circuit ejection, bounded retries |
 | Discovery | File, DNS; Consul / Kubernetes best-effort |
-| Rate limit | Per-IP window (memory or Redis) |
+| Rate limit | Per-IP window (memory or Redis); fleet `rateLimit` leases over Redis |
 | Cache | In-memory shared response cache (an RFC 9111 subset): never stores `Set-Cookie`, `private`, or `no-store` responses, keys on `Vary`, revalidates, and collapses concurrent misses ([reference](/docs/configuration#response-cache)) |
 | gRPC-JSON | REST/JSON ↔ gRPC transcoding ([guide](/docs/grpc-json-transcoding)) |
 

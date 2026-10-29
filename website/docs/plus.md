@@ -8,15 +8,16 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 
 | Outcome | Capability |
 |---------|------------|
-| Dashboard | Sign-in page and six views (overview, routes and clusters, health, config, certificates, audit) on an ephemeral port (or explicit `controlPlane.dashboardPort`); see [Dashboard](#dashboard) |
+| Dashboard | Sign-in page and six views (overview, routes and clusters, health, config, certificates, audit) on an ephemeral port (or explicit `controlPlane.dashboardPort`); local users, optional OIDC SSO, break-glass secrets, and reload; see [Dashboard](#dashboard) |
 | Observability | Prometheus-style metrics for destination state / latency |
 | Security | CIDR allow-list, JWT/OIDC (JWKS), API key / Basic auth |
 | Login | `oidc` route policy: OpenID Connect authorization-code login with PKCE, encrypted session cookie, silent refresh, and claim headers; see [Login with OpenID Connect](#login-with-openid-connect-oidc-policy) |
 | Web application firewall (WAF) | Signature-based request screening with detect mode and anomaly scoring, plus an operator deny-list; see [Web application firewall](#web-application-firewall-waf) |
 | Control plane | Loopback-default HTTP(S) API with shared-secret header; snapshot get/put; cache purge; optional TLS; audit trail; failed-login throttle |
-| Operations | Drain / healthy / maintenance destination states |
+| Managed fleet | Optional agent that long-polls [titanium-manager](/docs/manager) (`manager.url`); see [Managed fleet agent](#managed-fleet-agent) |
+| Operations | Drain / healthy / maintenance destination states; dashboard reload of the local file |
 | Discovery | File watch, DNS poll; Consul blocking queries; Kubernetes EndpointSlice list-then-watch with backoff |
-| State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
+| State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`); fleet `rateLimit` leases over Redis ([Configuration](/docs/configuration#fleet-rate-limit)) |
 | Resilience | Active HTTP/TCP health probes, circuit outlier ejection, bounded idempotent connection retries |
 | CORS | Opt-in preflight + `Access-Control-*` response headers |
 | Cache | In-memory RFC 9111 response cache with Vary, revalidation, size limits and request collapsing (`cache.enable`; see [Configuration](/docs/configuration#response-cache)) |
@@ -88,20 +89,61 @@ Per-route counters cover at most 1024 routes; further routes are counted under `
 
 ### Sign-in and roles
 
-Opening a page without a session redirects to `/login`. Signing in with a secret sets the `titanium_plus_session` cookie: a random 256-bit id, `HttpOnly`, `SameSite=Strict` (and `Secure` when TLS is on). A session ends after 30 minutes without use or on **Sign out**; the script's own polling does not count as use. At most 64 sessions are kept, and the least recently used one is dropped to make room.
+Opening a page without a session redirects to `/login`. A successful sign-in sets the `titanium_plus_session` cookie: a random 256-bit id, `HttpOnly`, `SameSite=Strict` (and `Secure` when TLS is on). A session ends after 30 minutes without use or on **Sign out**; the script's own polling does not count as use. At most 64 sessions are kept, and the least recently used one is dropped to make room.
 
-| Role | Secret | Can do |
-|------|--------|--------|
-| operator | `plus.controlPlane.sharedSecret` | Everything, including Drain and Healthy |
-| viewer | `plus.controlPlane.dashboardViewerSecret` | Read every view; the buttons are disabled and the server answers `403` to a mutation |
+| Role | How to get it | Can do |
+|------|---------------|--------|
+| operator | Shared secret, local user with role `operator`, or OIDC group/email mapped to operator | Everything, including Drain, Healthy, and Reload |
+| viewer | Viewer secret, local user with role `viewer`, or OIDC group/email mapped to viewer | Read every view; the buttons are disabled and the server answers `403` to a mutation |
 
-`dashboardViewerSecret` takes the same `...Env` / `...File` forms as the shared secret (see [Secret references](/docs/configuration#secret-references)). It must differ from the shared secret and may not be a well-known default.
+#### Break-glass secrets
 
-Every change a session makes (Drain, Healthy, Sign out) needs the CSRF token the page carries in the `X-Titanium-Csrf` header; a request without it gets `403` and changes nothing. Scripts and browser-automation tests can skip the cookie and send the `X-Titanium-Control-Secret` header on each request instead: that header is the credential, so it needs no CSRF token. A wrong secret at the login page or in the header counts toward the [failed-login throttle](#failed-login-throttle); a request carrying an expired cookie does not.
+`plus.controlPlane.sharedSecret` (operator) and `plus.controlPlane.dashboardViewerSecret` (viewer) still work when `dashboardBreakGlass` is true (the default). `dashboardViewerSecret` takes the same `...Env` / `...File` forms as the shared secret (see [Secret references](/docs/configuration#secret-references)). It must differ from the shared secret and may not be a well-known default. Set `dashboardBreakGlass: false` once local users or dashboard OIDC are the primary path; the login form then hides the secret field.
+
+#### Local users file
+
+Point `plus.controlPlane.dashboardUsersFile` at a file with one PBKDF2 line per person:
+
+```text
+user:role:iterations:saltBase64:hashBase64
+```
+
+`role` is `operator` or `viewer`. Generate a line with:
+
+```shell
+titanium plus hash-password --user alice --role operator
+```
+
+Relative paths resolve against the config directory. Unset leaves username/password sign-in off.
+
+#### Dashboard SSO (OpenID Connect) {#dashboard-sso-openid-connect}
+
+`plus.controlPlane.dashboardOidc` (also exposed as `plus.options` keys `controlPlane.dashboardOidc.*`) turns on authorization-code login with PKCE for the dashboard itself — separate from the route `oidc` policy. Required: `issuer`, `clientId`, and `cookieSecret` (or `cookieSecretEnv` / `cookieSecretFile`). Optional: `clientSecret`, `redirectUri`, `groupsClaim`, `operatorGroups`, `viewerGroups`, `allowedEmails`, `allowedEmailDomains`.
+
+```yaml twp
+plus:
+  enabled: true
+  controlPlane:
+    dashboardBreakGlass: false
+    dashboardUsersFile: /etc/titanium/dashboard-users.txt
+    dashboardOidc:
+      issuer: https://idp.example/
+      clientId: titanium-dashboard
+      clientSecretEnv: DASHBOARD_OIDC_CLIENT_SECRET
+      cookieSecretEnv: DASHBOARD_OIDC_COOKIE_KEY
+      operatorGroups: [titanium-ops]
+      viewerGroups: [titanium-view]
+```
+
+#### Reload and drift
+
+The Config view can **Reload** the local YAML (same path as SIGHUP) when the host supplies a reload callback. On a node enrolled with [titanium-manager](/docs/manager) in managed mode, a drift banner appears when the running config hash no longer matches the desired revision; Reload applies the local file (not a fresh pull from the manager).
+
+Every change a session makes (Drain, Healthy, Reload, Sign out) needs the CSRF token the page carries in the `X-Titanium-Csrf` header; a request without it gets `403` and changes nothing. Scripts and browser-automation tests can skip the cookie and send the `X-Titanium-Control-Secret` header on each request instead: that header is the credential, so it needs no CSRF token. A wrong secret at the login page or in the header counts toward the [failed-login throttle](#failed-login-throttle); a request carrying an expired cookie does not.
 
 Every response carries `Content-Security-Policy: default-src 'self'` (no inline script or style), `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. Values from your config, such as a destination id, are HTML-encoded.
 
-Editing routes from the dashboard and single sign-on are not provided.
+Editing routes from the dashboard is not provided — change routes in the file, push a snapshot through the control plane, or publish through [titanium-manager](/docs/manager).
 
 ## Control-plane and credential hardening
 
@@ -403,7 +445,9 @@ String values under `plus.options` (examples):
 | `waf.maxBodyBytes` | Deny-list body cap |
 | `waf.rulesFile` | YAML custom rules (also read by the deny-list as the earlier JSON `denyPaths` file) |
 | `state.mode` | `memory` or use Redis via `state.redis` |
-| `state.redis` / `state.rateLimitPerMinute` | Redis connection and rate limit |
+| `state.redis` / `state.rateLimitPerMinute` | Redis connection and the older per-IP fixed window; also used by fleet `rateLimit` leases ([Configuration](/docs/configuration#fleet-rate-limit)) |
+| `manager.url` / `manager.tokenFile` / `manager.fleet` / `manager.mode` | Enroll the [managed fleet agent](#managed-fleet-agent); see [Manager](/docs/manager) |
+| `controlPlane.dashboardUsersFile` / `controlPlane.dashboardBreakGlass` / `controlPlane.dashboardOidc.*` | Dashboard local users, break-glass, and SSO (usually set under `plus.controlPlane` in YAML instead) |
 | `resilience.activeHealth` | Enable active probes |
 | `resilience.intervalMs` / `resilience.unhealthyThreshold` / `resilience.path` / `resilience.protocol` / `resilience.timeoutMs` | Probe knobs |
 | `resilience.circuit.enabled` | Outlier ejection on consecutive 5xx → Unhealthy |
@@ -418,6 +462,10 @@ String values under `plus.options` (examples):
 | `grpc.transcode.preserveProtoFieldNames` | Use proto field names in JSON (default false) |
 | `grpc.transcode.alwaysPrintPrimitiveFields` | Always emit primitive defaults in JSON (default false) |
 | `grpc.transcode.compression` | `true` or `gzip` to gzip framed payloads |
+
+## Managed fleet agent {#managed-fleet-agent}
+
+When `manager.url` and an agent token are set, Plus starts a background agent that long-polls [titanium-manager](/docs/manager), applies published YAML in `managed` mode, acks or nacks each revision, and keeps a last-known-good file for cold starts. Default-off: without `manager.url` nothing enrolls. Full flags, staged rollouts, and the single-instance SQLite caveat are on the [Manager](/docs/manager) page.
 
 ## Discovery: Consul and Kubernetes
 
@@ -449,5 +497,6 @@ plus:
 
 - [CLI](/docs/cli)
 - [Configuration](/docs/configuration)
+- [Manager](/docs/manager)
 - [Editions](/docs/editions)
 - [gRPC-JSON transcoding](/docs/grpc-json-transcoding)

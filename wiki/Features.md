@@ -10,7 +10,7 @@ Short catalog of what Titanium offers. Product how-tos live on the **[website Fe
 - **Kubernetes** — hardened container image, Helm chart, Gateway API and Ingress controller ([Kubernetes](Kubernetes), [Gateway API](Gateway-API))
 - **Per-route .NET plugins** — load your own `IProxyMiddleware` for chosen routes, with per-plugin timeout and fail-open or fail-closed isolation ([Plugins](https://titaniumproxy.com/docs/plugins))
 - **Library** — embed the same engine in .NET ([Library](https://titaniumproxy.com/docs/library)); wiki Home below covers the API in depth
-- **Plus** — optional dashboard, metrics, auth, OpenID Connect login, response cache, WAF request screening (detect mode, anomaly scoring), gRPC-JSON ([Plus](https://titaniumproxy.com/docs/plus))
+- **Plus** — optional dashboard (local users, OIDC SSO, break-glass), metrics, auth, OpenID Connect login, fleet rate limits, managed fleet agent, response cache, WAF request screening (detect mode, anomaly scoring), gRPC-JSON ([Plus](https://titaniumproxy.com/docs/plus), [Manager](https://titaniumproxy.com/docs/manager))
 
 ## By product
 
@@ -18,7 +18,7 @@ Short catalog of what Titanium offers. Product how-tos live on the **[website Fe
 |---------|------------|
 | Inspector | [Inspector guide](https://titaniumproxy.com/docs/inspector) |
 | CLI | [CLI](https://titaniumproxy.com/docs/cli) · [Configuration](https://titaniumproxy.com/docs/configuration) |
-| Plus | [Plus](https://titaniumproxy.com/docs/plus) · [gRPC-JSON](https://titaniumproxy.com/docs/grpc-json-transcoding) |
+| Plus | [Plus](https://titaniumproxy.com/docs/plus) · [Manager](https://titaniumproxy.com/docs/manager) · [gRPC-JSON](https://titaniumproxy.com/docs/grpc-json-transcoding) |
 | Library | [Library](https://titaniumproxy.com/docs/library) · [Home](Home) (API) · [Synthetic responses](Synthetic-Responses) · [Streaming](Streaming-Bodies) |
 
 Full tables: **[titaniumproxy.com/docs/features](https://titaniumproxy.com/docs/features)**. What is supported, partial, and not supported, by config key: [Capabilities](Capabilities).

@@ -60,7 +60,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 |------------|--------|------------|-------|------|
 | Request rate limit per key | supported | `policies[].key`, `policies[].algorithm`, `policies[].limit`, `policies[].windowSeconds`, `policies[].burst` | Fixed window or token bucket, keyed by client, forwarded client, header, cookie, or route. Answers 429 with Retry-After. | [Configuration](/docs/configuration#routes-clusters) |
 | Concurrent connection caps | supported | `listeners[].maxConcurrentClients`, `server.limits.maxConcurrentClients` | Admission control per listener or for the whole server. | [Limits](/docs/limits#reference) |
-| Rate limit shared across instances | partial | `plus.options: state.mode`, `plus.options: state.redis` | A Plus per-IP fixed window can use Redis. The core rateLimit policy counts in process memory for each instance. | [Plus](/docs/plus#what-you-get) |
+| Rate limit shared across instances | supported | `policies[].scope`, `policies[].fleetFailMode`, `policies[].localShare`, `plus.options: state.mode`, `plus.options: state.redis` | Leased fleet token bucket over Redis; the request path stays sync. Default scope node is unchanged. | [Configuration](/docs/configuration#fleet-rate-limit) |
 
 ## Auth methods
 
@@ -72,8 +72,8 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 | JWT, API key, and Basic authentication | supported | `plus.options: security.*` | JWKS-verified JWT, API keys, and Basic users with bcrypt or PBKDF2 hashes (Plus). | [Plus](/docs/plus#plus-options-keys-reference) |
 | Address allow and deny lists | supported | `policies[].allow`, `policies[].deny` | IPv4 and IPv6 addresses and CIDR prefixes. | [Configuration](/docs/configuration#routes-clusters) |
 | Kerberos and NTLM to upstream proxies | partial | `server.enableWinAuth` | Switch is in the file; credential and proxy-auth callbacks are set in .NET code. | [Code-only callbacks](/docs/configuration#code-only-callbacks) |
-| Multi-user dashboard accounts | not supported | — | The dashboard has an operator and a viewer role, each opened with its own shared secret. There are no per-person accounts. | [Plus](/docs/plus#sign-in-and-roles) |
-| SSO beyond the OIDC login policy | not supported | — | Only the oidc route policy signs people in. The dashboard has no single sign-on. | [Plus](/docs/plus#dashboard) |
+| Multi-user dashboard accounts | supported | `plus.controlPlane.dashboardUsersFile` | Per-person operator and viewer accounts from a local users file (PBKDF2 hashes). Shared secrets remain as optional break-glass. | [Plus](/docs/plus#sign-in-and-roles) |
+| SSO beyond the OIDC login policy | supported | `plus.options: controlPlane.dashboardOidc.*` | Plus dashboard OpenID Connect (authorization code + PKCE), with group and email allow-lists for operator and viewer roles. | [Plus](/docs/plus#dashboard-sso-openid-connect) |
 
 ## mTLS
 
@@ -168,7 +168,8 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 | Per-route .NET plugins | supported | `plugins[].assembly`, `plugins[].failMode`, `plugins[].timeoutMs`, `routes[].middleware` | Each plugin loads into its own collectible context, behind a timeout and an exception wall. | [Plugins](/docs/plugins) |
 | Embedding the engine in .NET | supported | `ProxyServer events` | The same engine with event handlers, synthetic responses, and stream hooks. | [Library](/docs/library) |
 | Programmatic route and cluster swap | supported | `PUT /v1/snapshot` | Plus control-plane call. File reload needs no Plus. | [Graceful reload](/docs/configuration#graceful-reload) |
-| xDS control plane | not supported | — | Configuration comes from the file, titanium reload, the Plus snapshot call, or the Kubernetes controllers. There is no xDS client. | [Graceful reload](/docs/configuration#graceful-reload) |
+| Managed fleet control plane | supported | `plus.options: manager.url`, `titanium-manager` | titanium-manager publishes YAML revisions; Plus agents long-poll, ack or nack, and keep a last-known-good file. Not an xDS client. | [Manager](/docs/manager) |
+| xDS control plane | not supported | — | There is no xDS client. Use titanium-manager (or the file, titanium reload, the Plus snapshot call, or the Kubernetes controllers) instead. | [Manager](/docs/manager) |
 | Lua scripting | supported | `plugins[].kind`, `plugins[].file`, `plugins[].settings`, `plugins[].bodyMode`, `routes[].middleware` | Lua 5.4 in sandboxed states, named in a route middleware list. A file runs the request-headers and buffered request-body phases; every phase runs when a .NET host sets the script pipeline. Needs the lua54 native. | [Scripting](/docs/scripting#lua-plugins) |
 | Lua sandbox, limits, and failure mode | supported | `plugins[].failMode`, `plugins[].timeoutMs`, `plugins[].limits.memoryMb`, `plugins[].limits.maxInstructions`, `plugins[].limits.epochDeadlineMs`, `plugins[].limits.poolSize` | No io, require, load, or bytecode. Memory, instruction, and CPU-time limits hold inside the engine even when the script catches errors. A failed call answers 503, or passes the request with failMode open. | [Scripting](/docs/scripting#lua-limits) |
 | Lua libraries, shared dictionaries, and JWT verification | supported | `plugins[].settings`, `plugins[].limits.sharedDataBytes` | json, base64, hex, url, crypto, linear-time regex, cidr, uuid, timers, metrics, process-wide shared dictionaries with TTL and eviction, and JWKS-based jwt.verify. | [Scripting](/docs/scripting#libraries) |

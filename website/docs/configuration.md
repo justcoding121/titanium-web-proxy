@@ -323,7 +323,29 @@ Match fields typically include host, path (`Exact` / `Prefix` / `Template`), met
 
 `retry` also replays a gateway answer onto another destination before anything reaches the client. `attempts` bounds the replays, `statusCodes` replaces the default 502, 503, and 504 (429 and 500-599 are accepted), and `perTryTimeoutMilliseconds` ends a slow try as a 504 on every try but the last. `backoffMilliseconds` doubles per replay up to `maxBackoffMilliseconds`, with `jitterPercent` added. `honorRetryAfter` takes a delta-seconds `Retry-After` instead, capped the same way. `budgetPercent` limits replays in flight for a cluster to that share of its in-flight requests, never below `budgetMinConcurrent`, and refused replays count in `twp.proxy.status.retries_refused`. HTTP/2 origins also replay a request whose body was fully buffered. See [Protocol support](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for the paths that retry.
 
-A `rateLimit` policy counts requests per key and answers 429 with `Retry-After` (whole seconds until the window ends or a token is back) when the limit is spent. `key` picks what is counted: `client` (default, the socket address), `forwardedClient` (the rightmost `X-Forwarded-For` entry that is not in `server.forwardedHeaders.trustedProxies`, used only when the peer itself is trusted, otherwise the socket address), `header:<Name>`, `cookie:<Name>`, or `route`. A header or cookie value is stored as a 16-byte SHA-256 prefix, and a request without it is counted by client address. `algorithm` is `fixedWindow` (default, `limit` requests per `windowSeconds`) or `tokenBucket` (refills `limit` tokens per `windowSeconds` up to `burst`, which defaults to `limit`). `maxKeys` (1000 to 10000000, default 100000) bounds the counters kept per policy: when full, expired counters are dropped, and any further new key shares one overflow counter, so a client that rotates header values cannot grow memory or dodge the limit. `emitHeaders` (default false) adds `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` to the 429. With the default keys and algorithm, counting is unchanged. Rate limits stay in process memory per proxy instance.
+A `rateLimit` policy counts requests per key and answers 429 with `Retry-After` (whole seconds until the window ends or a token is back) when the limit is spent. `key` picks what is counted: `client` (default, the socket address), `forwardedClient` (the rightmost `X-Forwarded-For` entry that is not in `server.forwardedHeaders.trustedProxies`, used only when the peer itself is trusted, otherwise the socket address), `header:<Name>`, `cookie:<Name>`, or `route`. A header or cookie value is stored as a 16-byte SHA-256 prefix, and a request without it is counted by client address. `algorithm` is `fixedWindow` (default, `limit` requests per `windowSeconds`) or `tokenBucket` (refills `limit` tokens per `windowSeconds` up to `burst`, which defaults to `limit`). `maxKeys` (1000 to 10000000, default 100000) bounds the counters kept per policy: when full, expired counters are dropped, and any further new key shares one overflow counter, so a client that rotates header values cannot grow memory or dodge the limit. `emitHeaders` (default false) adds `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` to the 429. With the default keys and algorithm, counting is unchanged. The default `scope` is `node`: counters stay in process memory per proxy instance.
+
+### Fleet rate limit {#fleet-rate-limit}
+
+Set `scope: fleet` on a `rateLimit` policy (Plus) to share one token bucket across instances through Redis (`plus.options` `state.redis`, or `state.mode` / `state.redis` as for the older per-IP window). Each node keeps a small local reserve and refills it with a background lease; the request path never awaits Redis. Overshoot across N nodes is bounded by `limit + burst + N * leaseSize` (a node may hold an unused lease). Lease size shrinks toward 1 when `limit` is small, so a single node cannot drain a low fleet budget — accuracy at low limits prefers smaller leases over perfect fairness. When Redis is down or the store is not started, `fleetFailMode` applies: `local` (default) falls back to a per-node bucket at `limit * localShare` (default `0.25`), `open` allows traffic, and `closed` answers 429. `fleetFailMode` and `localShare` are valid only with `scope: fleet`.
+
+```yaml twp
+policies:
+  - name: api
+    kind: rateLimit
+    key: client
+    algorithm: tokenBucket
+    limit: 1000
+    windowSeconds: 60
+    burst: 1000
+    scope: fleet
+    fleetFailMode: local
+    localShare: 0.25
+plus:
+  enabled: true
+  options:
+    state.redis: "localhost:6379"
+```
 
 A route `mirror` sends a copy of matching requests to another cluster and discards the answer. `samplePercent` (0-100, default 100) picks the share, `maxBodyBytes` (default 64 KiB, at most 1 MiB) is the largest body copied and larger bodies are skipped, and `maxConcurrency` (1-16, default 2) bounds the sends in flight. Each mirror route has its own queue and workers, so a slow mirror cannot starve another route. A request line or header that contains a control character is not mirrored. `server.forwardedHeaders.trustedProxies` takes addresses and CIDR prefixes for IPv4 and IPv6; an entry that does not parse fails validation, and an IPv4-mapped client address is written as IPv4. Active health probes run concurrently, probe unix-socket destinations by connecting, and bracket IPv6 hosts.
 

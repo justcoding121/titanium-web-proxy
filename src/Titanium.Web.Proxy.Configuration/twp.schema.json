@@ -720,8 +720,74 @@
             "allowInsecureNonLoopback": {
               "type": "boolean"
             },
+            "dashboardBreakGlass": {
+              "type": "boolean"
+            },
+            "dashboardOidc": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "allowedEmailDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowedEmails": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "clientId": {
+                  "type": "string"
+                },
+                "clientSecret": {
+                  "type": "string"
+                },
+                "clientSecretEnv": {
+                  "type": "string"
+                },
+                "clientSecretFile": {
+                  "type": "string"
+                },
+                "cookieSecret": {
+                  "type": "string"
+                },
+                "cookieSecretEnv": {
+                  "type": "string"
+                },
+                "cookieSecretFile": {
+                  "type": "string"
+                },
+                "groupsClaim": {
+                  "type": "string"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "operatorGroups": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "redirectUri": {
+                  "type": "string"
+                },
+                "viewerGroups": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
             "dashboardPort": {
               "type": "integer"
+            },
+            "dashboardUsersFile": {
+              "type": "string"
             },
             "dashboardViewerSecret": {
               "type": "string"
@@ -871,23 +937,13 @@
             "type": "boolean"
           },
           "fleetFailMode": {
-            "type": "string",
-            "enum": [
-              "local",
-              "open",
-              "closed"
-            ]
+            "type": "string"
           },
           "groupsClaim": {
             "type": "string"
           },
           "headerName": {
             "type": "string"
-          },
-          "localShare": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "maximum": 1
           },
           "headerValue": {
             "type": "string"
@@ -904,6 +960,9 @@
           },
           "limit": {
             "type": "integer"
+          },
+          "localShare": {
+            "type": "number"
           },
           "logoutPath": {
             "type": "string"
@@ -956,11 +1015,7 @@
             "type": "boolean"
           },
           "scope": {
-            "type": "string",
-            "enum": [
-              "node",
-              "fleet"
-            ]
+            "type": "string"
           },
           "scopes": {
             "type": "array",
