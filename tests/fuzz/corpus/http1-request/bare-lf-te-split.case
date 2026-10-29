@@ -1,0 +1,12 @@
+# expect: normalize
+# reason: bare LF between Content-Length and Transfer-Encoding still yields the CL.TE normalization
+# assert-no-header: Content-Length
+# assert-header: Transfer-Encoding=chunked
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 4\nTransfer-Encoding: chunked\r\n
+\r\n
+1\r\nZ\r\n
+0\r\n
+\r\n

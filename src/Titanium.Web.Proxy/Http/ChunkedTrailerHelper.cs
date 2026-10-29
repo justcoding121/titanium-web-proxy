@@ -89,7 +89,9 @@ internal static class ChunkedTrailerHelper
             }
 
             var colonIndex = line.IndexOf(':');
-            if (colonIndex == -1)
+            // Raw trailer lines are relayed verbatim, so a bare CR or NUL (a line break to peers that accept a
+            // lone CR) and an empty field name are refused here the same way HeaderParser refuses them.
+            if (colonIndex <= 0 || line.AsSpan().IndexOfAny('\r', '\0') >= 0)
                 throw new ProxyHttpException($"Invalid trailer header line: '{line}'.", null, null);
 
             rawLines?.Add(line);

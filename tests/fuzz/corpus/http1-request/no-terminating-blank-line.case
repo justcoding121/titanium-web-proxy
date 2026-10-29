@@ -1,0 +1,4 @@
+# expect: accept
+# reason: a header block that ends at EOF without the blank line is treated as complete input, never as a body
+GET / HTTP/1.1\r\n
+Host: a\r\n

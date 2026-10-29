@@ -1,0 +1,10 @@
+# Plain-TCP reverse listener that speaks prior-knowledge HTTP/2 (h2c) to h2spec and HTTP/1.1 to a trivial origin.
+# conformance.yml starts the origin on 127.0.0.1:9100 and h2spec against 127.0.0.1:9101.
+schemaVersion: "7.1"
+listeners:
+  - host: "127.0.0.1"
+    port: 9101
+    decryptSsl: false
+    enableHttp2: true
+    forwardHost: "127.0.0.1"
+    forwardPort: 9100

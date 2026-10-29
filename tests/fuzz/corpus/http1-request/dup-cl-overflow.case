@@ -1,0 +1,7 @@
+# expect: reject
+# reason: value that does not fit in 64 bits
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 99999999999999999999\r\n
+\r\n

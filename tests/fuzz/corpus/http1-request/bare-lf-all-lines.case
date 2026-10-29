@@ -1,0 +1,6 @@
+# expect: normalize
+# reason: bare LF line endings are tolerated and forwarded as CRLF
+# assert-header: Host=a
+GET / HTTP/1.1\n
+Host: a\n
+\n

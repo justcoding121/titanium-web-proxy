@@ -1,0 +1,6 @@
+# expect: reject
+# reason: request target over MaxHeaderLineBytes (64 KiB)
+# reject-type: ProxyHttpException
+GET /%REPEAT(a,70000)% HTTP/1.1\r\n
+Host: a\r\n
+\r\n

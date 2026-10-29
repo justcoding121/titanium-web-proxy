@@ -1,0 +1,11 @@
+# expect: normalize
+# reason: TE.CL - an empty Transfer-Encoding is dropped and the surviving Content-Length frames the body
+# assert-no-header: Transfer-Encoding
+# assert-header: Content-Length=3
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding:\r\n
+Content-Length: 3\r\n
+\r\n
+abc

@@ -1,0 +1,10 @@
+# expect: normalize
+# reason: surplus bytes after a chunk are discarded as the chunk trailer line and the relay re-frames the chunk itself, so the origin only ever sees the announced 3 bytes with canonical CRLF framing
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+3\r\nabcdef\r\n
+0\r\n
+\r\n

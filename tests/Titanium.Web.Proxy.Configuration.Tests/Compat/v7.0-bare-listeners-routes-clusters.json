@@ -1,0 +1,5 @@
+{
+  "listeners": [{ "host": "127.0.0.1", "port": 8080, "forwardHost": "example.com", "forwardPort": 80 }],
+  "clusters": [{ "id": "c1", "destinations": [{ "id": "d1", "address": "example.com", "port": 80 }] }],
+  "routes": [{ "id": "r1", "clusterId": "c1", "match": { "path": "/", "pathKind": "prefix" }, "order": 0 }]
+}

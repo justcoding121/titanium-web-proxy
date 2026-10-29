@@ -1,0 +1,8 @@
+# expect: reject
+# reason: obsolete line folding introduced by a tab
+# reject-type: FormatException
+GET / HTTP/1.1\r\n
+Host: a\r\n
+X-A: b\r\n
+\tX-Folded: c\r\n
+\r\n

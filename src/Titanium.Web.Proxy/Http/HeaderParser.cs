@@ -189,6 +189,7 @@ internal static class HeaderParser
 
         var nameSpan = tmpLine.AsSpan(0, colonIndex);
         var valueSpan = tmpLine.AsSpan(colonIndex + 1).TrimStart();
+        EnsureFieldLineSafe(nameSpan.Trim(), valueSpan);
 
         if (KnownHeaders.TryMatchName(nameSpan, out var knownName))
         {
@@ -214,6 +215,7 @@ internal static class HeaderParser
 
         var nameSpan = TrimAscii(tmpLine.Slice(0, colonIndex));
         var valueSpan = TrimAscii(tmpLine.Slice(colonIndex + 1));
+        EnsureFieldLineSafe(nameSpan, valueSpan);
 
         if (KnownHeaders.TryMatchName(nameSpan, out var knownName))
         {
@@ -225,6 +227,36 @@ internal static class HeaderParser
         }
 
         headerCollection.AddHeader(new HttpHeader(CopyBytes(nameSpan), CopyBytes(valueSpan)));
+    }
+
+    /// <summary>
+    ///     RFC 9110 §5.5 / RFC 9112 §5: a field name is a non-empty token, and a field value must not carry a
+    ///     bare CR or a NUL. Lines are split on LF only, so a CR left inside a line is a line break to every peer
+    ///     that treats a lone CR as one, and the bytes after it would be read there as a further header (for
+    ///     example a <c>Content-Length</c> this proxy never saw). Such a message is rejected, not forwarded.
+    /// </summary>
+    private static void EnsureFieldLineSafe(ReadOnlySpan<char> name, ReadOnlySpan<char> value)
+    {
+        if (name.Length == 0)
+            throw new FormatException("HTTP/1.x header field name must not be empty.");
+
+        if (name.IndexOfAnyInRange('\0', ' ') >= 0 || name.Contains((char)0x7f))
+            throw new FormatException("HTTP/1.x header field name must not contain whitespace or control characters.");
+
+        if (value.IndexOfAny('\r', '\0') >= 0)
+            throw new FormatException("HTTP/1.x header field value must not contain a bare CR or NUL.");
+    }
+
+    private static void EnsureFieldLineSafe(ReadOnlySpan<byte> name, ReadOnlySpan<byte> value)
+    {
+        if (name.Length == 0)
+            throw new FormatException("HTTP/1.x header field name must not be empty.");
+
+        if (name.IndexOfAnyInRange((byte)0, (byte)' ') >= 0 || name.Contains((byte)0x7f))
+            throw new FormatException("HTTP/1.x header field name must not contain whitespace or control characters.");
+
+        if (value.IndexOfAny((byte)'\r', (byte)0) >= 0)
+            throw new FormatException("HTTP/1.x header field value must not contain a bare CR or NUL.");
     }
 
     private static ByteString CopyBytes(ReadOnlySpan<byte> span) => new(span.ToArray());

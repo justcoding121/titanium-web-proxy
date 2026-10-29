@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "7.0",
+  "listeners": [
+    { "host": "0.0.0.0", "port": 8080, "decryptSsl": false }
+  ],
+  "clusters": [
+    {
+      "id": "web",
+      "destinations": [
+        { "id": "a", "address": "backend-a.internal", "port": 8080 },
+        { "id": "b", "address": "backend-b.internal", "port": 8080 }
+      ]
+    },
+    {
+      "id": "api",
+      "destinations": [
+        { "id": "api1", "address": "10.0.0.5", "port": 9000 }
+      ]
+    }
+  ],
+  "routes": [
+    { "id": "api", "clusterId": "api", "match": { "path": "/api", "pathKind": "prefix" }, "order": 0 },
+    { "id": "default", "clusterId": "web", "match": { "path": "/", "pathKind": "prefix" }, "order": 1 }
+  ],
+  "staticFiles": { "root": "./public", "enableGzip": true },
+  "plus": { "enabled": false }
+}

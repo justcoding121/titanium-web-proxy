@@ -87,7 +87,8 @@ param(
     [double] $LossPercent = 0,
     [switch] $SkipBuild,
     [switch] $BombardierCheck,
-    [switch] $NoStopOnSloFail
+    [switch] $NoStopOnSloFail,
+    [int]    $ArmTimeoutMin = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -190,6 +191,9 @@ if ($EnvoyPath) {
 }
 if ($NoStopOnSloFail) {
     $probeArgs += '--no-stop-on-slo-fail'
+}
+if ($ArmTimeoutMin -gt 0) {
+    $probeArgs += @('--arm-timeout-min', $ArmTimeoutMin)
 }
 
 & $probeCmd @probeArgs

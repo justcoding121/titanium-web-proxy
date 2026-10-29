@@ -10,6 +10,8 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 
 **macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` with `USE_QUIC` (fail if missing; 3.2 osx source fallback), Homebrew `envoy` when a bottle exists otherwise pinned darwin-arm64 1.36.7, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-arm64, and YARP via the same .NET probe arms as Linux/Windows.
 
+**Soak:** [soak.yml](../../.github/workflows/soak.yml) runs `twp-cli-reverse-http1` for 60 minutes at c=64 and gates on errors, RSS growth and fd growth (assertions are in the workflow header). A window longer than the default 25-minute per-arm budget needs `-ArmTimeoutMin` on `run-rps.ps1` (`--arm-timeout-min` on the probe).
+
 ## Tiered cadence
 
 | Tier | Mode | When |
