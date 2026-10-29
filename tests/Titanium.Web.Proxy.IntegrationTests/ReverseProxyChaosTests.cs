@@ -225,10 +225,20 @@ public class ReverseProxyChaosTests
             var head = Encoding.ASCII.GetBytes(
                 "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1000000\r\n\r\n");
             await stream.WriteAsync(head);
-            await stream.WriteAsync(new byte[200]);
-            await stream.FlushAsync();
 
-            await originSawBody.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            // Keep feeding the declared body until the origin has seen ≥100 bytes. A single 200-byte
+            // write is enough on a quiet machine; under CI load the first chunk can sit behind the
+            // proxy's origin connect, so we write more while waiting instead of failing at 10s.
+            var chunk = new byte[200];
+            var fed = Stopwatch.StartNew();
+            while (!originSawBody.Task.IsCompleted && fed.Elapsed < PreCommitFailureBound)
+            {
+                await stream.WriteAsync(chunk);
+                await stream.FlushAsync();
+                await Task.WhenAny(originSawBody.Task, Task.Delay(50));
+            }
+
+            await originSawBody.Task.WaitAsync(TimeSpan.FromSeconds(1));
 
             // Abort with an RST in the middle of the declared body.
             raw.Client.LingerState = new LingerOption(true, 0);
