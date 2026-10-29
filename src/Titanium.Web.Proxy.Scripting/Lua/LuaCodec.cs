@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 
 namespace Titanium.Web.Proxy.Scripting.Lua;
 
@@ -176,69 +175,6 @@ internal sealed class LuaWriter
             }
             default:
                 String(Convert.ToString(value, CultureInfo.InvariantCulture));
-                break;
-        }
-    }
-
-    /// <summary>Writes JSON as Lua values: objects and arrays become tables, <c>null</c> becomes nil.</summary>
-    public void Json(JsonElement element, int depth = 0)
-    {
-        if (depth > MaxDepth)
-        {
-            throw new InvalidOperationException("JSON nested too deeply for a script");
-        }
-
-        switch (element.ValueKind)
-        {
-            case JsonValueKind.Object:
-            {
-                var mark = BeginTable();
-                var pairs = 0;
-                foreach (var property in element.EnumerateObject())
-                {
-                    String(property.Name);
-                    Json(property.Value, depth + 1);
-                    pairs++;
-                }
-
-                EndTable(mark, pairs);
-                break;
-            }
-            case JsonValueKind.Array:
-            {
-                var mark = BeginTable();
-                var index = 0;
-                foreach (var item in element.EnumerateArray())
-                {
-                    Int(++index);
-                    Json(item, depth + 1);
-                }
-
-                EndTable(mark, index);
-                break;
-            }
-            case JsonValueKind.String:
-                String(element.GetString());
-                break;
-            case JsonValueKind.Number:
-                if (element.TryGetInt64(out var integer))
-                {
-                    Int(integer);
-                }
-                else
-                {
-                    Double(element.GetDouble());
-                }
-
-                break;
-            case JsonValueKind.True:
-                Bool(true);
-                break;
-            case JsonValueKind.False:
-                Bool(false);
-                break;
-            default:
-                Nil();
                 break;
         }
     }

@@ -220,6 +220,11 @@ static int open_sandbox(lua_State *L)
     lua_pop(L, 1);
 
     twp_open_strguard(L);
+    twp_open_crypto(L);
+    twp_open_json(L);
+    twp_open_regex(L);
+    twp_open_shared(L);
+    twp_open_libs(L);
 
     lua_newtable(L);
     lua_rawsetp(L, LUA_REGISTRYINDEX, &CALLS_KEY);
@@ -834,7 +839,15 @@ static int do_prepare_resume(lua_State *L)
     lua_rawsetp(L, LUA_REGISTRYINDEX, &CUR_CMDS_KEY);
 
     twp_decode(L, a->p, a->len, 0);
-    n = lua_istable(L, -1) ? (lua_Integer)lua_rawlen(L, -1) : 0;
+    n = 0;
+    if (lua_istable(L, -1)) {
+        /* "n" carries the count, since a leading nil (nil, err) leaves a hole the length operator cannot see. */
+        n = lua_getfield(L, -1, "n") == LUA_TNUMBER ? lua_tointeger(L, -1) : (lua_Integer)lua_rawlen(L, -2);
+        lua_pop(L, 1);
+    }
+    if (n < 0) {
+        n = 0;
+    }
     if (n > 16) {
         n = 16;
     }

@@ -25,6 +25,9 @@ internal sealed class TelemetryHost : IDisposable
 {
     internal const string SourceName = "Titanium.Web.Proxy";
 
+    /// <summary>Lua and WASM plugin instruments, including the metrics scripts record.</summary>
+    internal const string ScriptingMeterName = "Titanium.Web.Proxy.Scripting";
+
     private readonly TelemetryOptions options;
     private readonly TracerProvider? tracer;
     private readonly MeterProvider? meter;
@@ -62,7 +65,7 @@ internal sealed class TelemetryHost : IDisposable
                 options.TimeoutMs);
             meter = Sdk.CreateMeterProviderBuilder()
                 .SetResourceBuilder(resource)
-                .AddMeter(SourceName, TelemetryInstruments.MeterName)
+                .AddMeter(SourceName, TelemetryInstruments.MeterName, ScriptingMeterName)
                 .AddReader(reader)
                 .Build();
         }

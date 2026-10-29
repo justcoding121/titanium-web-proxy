@@ -49,6 +49,11 @@ Set `TITANIUM_SCRIPTING_NATIVE_DIR` to load `lua54` from another folder.
 | `twp_codec.c` | Tagged binary format shared with `LuaCodec.cs` (snapshots in, command buffers out). |
 | `twp_strlib.c` | Step-bounded Lua pattern matcher; `string.rep` / `string.format` caps; no `string.dump`. |
 | `twp_platform.c` | Clocks, OS random bytes, locks. |
+| `twp_libs.c` | `base64`, `hex`, `url`, `uuid`, `random`, `time`, `cidr`, `log`, `metrics`, `timer`, and the waiting calls `http.call` / `jwt.verify`. |
+| `twp_json.c` | `json.encode` / `json.decode` with depth and size caps. |
+| `twp_crypto.c` | MD5, SHA-1, SHA-256, SHA-512, HMAC, constant-time compare. |
+| `twp_regex.c` | Linear-time (Pike VM) regex with pattern and input caps. |
+| `twp_shared.c` | Process-wide shared dictionaries: TTL, LRU eviction, one lock per dictionary. |
 
 Exported functions never let a Lua error leave the library: each runs the state through `lua_pcall` or
 `lua_resume`, and the panic handler jumps back to the exported function as a last resort and marks the state broken.

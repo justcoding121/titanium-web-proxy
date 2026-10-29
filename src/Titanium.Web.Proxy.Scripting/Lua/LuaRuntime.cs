@@ -18,19 +18,24 @@ internal sealed partial class LuaRuntime : IDisposable
     public static readonly string[] EntryPoints =
     [
         OnConfigure, "on_request_headers", "on_request_body", "on_request_trailers", "on_response_headers", "on_response_body",
-        "on_response_trailers", "on_log",
+        "on_response_trailers", "on_log", "on_connect", "on_data", "on_close",
     ];
 
     private static readonly byte[] NoValues = [(byte)'T', 0, 0, 0, 0];
 
     private readonly byte[] _settings;
     private readonly CancellationTokenSource _disposed = new();
+    private readonly LuaCallouts _callouts;
+    private readonly LuaJwt _jwt;
     private LuaPool? _pool;
+    private int _configureTimers;
 
-    private LuaRuntime(LuaOptions options, ILogger? logger)
+    private LuaRuntime(LuaOptions options, ILogger? logger, HttpMessageHandler? calloutHandler)
     {
         Options = options;
         Logger = logger;
+        _callouts = new LuaCallouts(options, calloutHandler);
+        _jwt = LuaJwt.FromSettings(options.Settings);
         var writer = new LuaWriter();
         var mark = writer.BeginTable();
         foreach (var pair in options.Settings)
@@ -55,12 +60,23 @@ internal sealed partial class LuaRuntime : IDisposable
 
     internal CancellationToken Stopping => _disposed.Token;
 
-    /// <summary>Compiles the script into every pooled state and runs <c>on_configure</c> in each before returning.</summary>
-    public static LuaRuntime Create(LuaOptions options, ILogger? logger)
+    /// <summary>Callouts waiting on an answer right now.</summary>
+    public int CalloutsInFlight => _callouts.InFlight;
+
+    /// <summary>
+    /// Compiles the script into every pooled state and runs <c>on_configure</c> in each before returning.
+    /// <paramref name="calloutHandler"/> replaces the network for <c>http.call</c> (tests).
+    /// </summary>
+    public static LuaRuntime Create(LuaOptions options, ILogger? logger, HttpMessageHandler? calloutHandler = null)
     {
-        var runtime = new LuaRuntime(options, logger);
+        var runtime = new LuaRuntime(options, logger, calloutHandler);
         try
         {
+            foreach (var (name, maxItems) in options.SharedDicts)
+            {
+                LuaCalls.DictConfigure(name, maxItems, options.SharedDictBytes);
+            }
+
             runtime._pool = LuaPool.Create(options.Name, options.PoolSize, runtime.CreateInstance, logger);
             runtime.Functions = runtime._pool.Live.First().Functions;
             return runtime;
@@ -94,7 +110,6 @@ internal sealed partial class LuaRuntime : IDisposable
                 }
             }
 
-            ExtendFunctions(handle, functions);
             if (functions.Contains(OnConfigure))
             {
                 Configure(handle);
@@ -108,8 +123,6 @@ internal sealed partial class LuaRuntime : IDisposable
             throw;
         }
     }
-
-    partial void ExtendFunctions(LuaStateHandle handle, HashSet<string> functions);
 
     private void Configure(LuaStateHandle handle)
     {
@@ -125,7 +138,8 @@ internal sealed partial class LuaRuntime : IDisposable
             throw new LuaScriptException(LuaFailure.Load, "on_configure cannot wait (no http.call, time.sleep, or jwt.verify)");
         }
 
-        Finish(segment, configuring: true);
+        // Every state runs on_configure, but timers it starts belong to the plugin, so only the first state's count.
+        Finish(segment, acceptTimers: Interlocked.Exchange(ref _configureTimers, 1) == 0);
     }
 
     /// <summary>
@@ -201,7 +215,7 @@ internal sealed partial class LuaRuntime : IDisposable
                 LuaMetrics.RecordRetired(Name, LuaScriptException.Reason(LuaScriptException.FailureOf(segment.Code)));
             }
 
-            return Finish(segment, configuring: false);
+            return Finish(segment, acceptTimers: true);
         }
         finally
         {
@@ -239,7 +253,7 @@ internal sealed partial class LuaRuntime : IDisposable
 
     private partial ValueTask<byte[]?> RunOperationAsync(string? kind, LuaTable? op, CancellationToken token);
 
-    /// <summary>Encodes resume values: an array of up to 16 values.</summary>
+    /// <summary>Encodes resume values: an array of up to 16 values, with <c>n</c> so a leading nil survives.</summary>
     internal static byte[] Values(params object?[] values)
     {
         if (values.Length == 0)
@@ -249,7 +263,8 @@ internal sealed partial class LuaRuntime : IDisposable
 
         var writer = new LuaWriter();
         var mark = writer.BeginTable();
-        var pairs = 0;
+        writer.Field("n", values.Length);
+        var pairs = 1;
         for (var i = 0; i < values.Length; i++)
         {
             if (values[i] is null)
@@ -266,7 +281,7 @@ internal sealed partial class LuaRuntime : IDisposable
         return writer.ToArray();
     }
 
-    private LuaCallResult Finish(LuaSegment segment, bool configuring)
+    private LuaCallResult Finish(LuaSegment segment, bool acceptTimers)
     {
         var output = segment.Output;
         if (output.Length == 0)
@@ -293,7 +308,7 @@ internal sealed partial class LuaRuntime : IDisposable
                     result.Vars = raw.Length > 1 ? raw.ToArray() : null;
                     break;
                 case "cmds":
-                    Apply(reader.Read() as LuaTable, result, configuring);
+                    Apply(reader.Read() as LuaTable, result, acceptTimers);
                     break;
                 case "ret":
                     result.Return = reader.Read();
@@ -316,7 +331,7 @@ internal sealed partial class LuaRuntime : IDisposable
         return result;
     }
 
-    private void Apply(LuaTable? commands, LuaCallResult result, bool configuring)
+    private void Apply(LuaTable? commands, LuaCallResult result, bool acceptTimers)
     {
         if (commands is null)
         {
@@ -350,14 +365,21 @@ internal sealed partial class LuaRuntime : IDisposable
                 case "log":
                     Log(LuaReader.AsString(command[2]), LuaReader.AsString(command[3]));
                     break;
-                default:
-                    ApplyExtension(command, configuring);
+                case "metric" when LuaReader.AsString(command[2]) is { } kind && LuaReader.AsString(command[3]) is { } name:
+                    if (!LuaMetrics.RecordUser(Name, kind, name, command[4] switch { long l => l, double d => d, _ => 1 },
+                            command[5] as LuaTable))
+                    {
+                        Log("warn", $"metric '{name}' dropped: more than {LuaMetrics.MaxUserInstruments} script instruments or a kind clash");
+                    }
+
+                    break;
+                case "timer" when acceptTimers && LuaReader.AsString(command[2]) is { } kind &&
+                                  LuaReader.AsInt(command[3]) is { } delay && LuaReader.AsString(command[4]) is { } function:
+                    StartTimer(kind == "every", TimeSpan.FromMilliseconds(delay), function, command[5]);
                     break;
             }
         }
     }
-
-    partial void ApplyExtension(LuaTable command, bool configuring);
 
     private static List<KeyValuePair<string, string>>? Headers(LuaTable? table)
     {
@@ -410,5 +432,6 @@ internal sealed partial class LuaRuntime : IDisposable
 
         _disposed.Cancel();
         _pool?.Dispose();
+        _callouts.Dispose();
     }
 }

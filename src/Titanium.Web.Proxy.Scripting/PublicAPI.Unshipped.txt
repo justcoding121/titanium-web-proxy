@@ -9,6 +9,19 @@ Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction
 Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunctions
 virtual Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction.Invoke(System.ReadOnlySpan<byte> arguments) -> byte[]!
 Titanium.Web.Proxy.Scripting.ScriptingBootstrap
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.BodyMode.get -> Titanium.Web.Proxy.Abstractions.Scripting.ScriptBodyMode
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.Hosts.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Scripting.IScriptPhaseHost!>!
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnLogAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnRequestBodyAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnRequestHeadersAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnRequestTrailersAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnResponseBodyAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnResponseHeadersAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnResponseTrailersAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.OnResumeAsync(Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!>
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.Phases.get -> Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhases
+Titanium.Web.Proxy.Scripting.ScriptPhaseHostChain.ScriptPhaseHostChain(System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Abstractions.Scripting.IScriptPhaseHost!>! hosts) -> void
 Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine
 Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine.Kind.get -> string!
 Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine.LuaPluginEngine() -> void

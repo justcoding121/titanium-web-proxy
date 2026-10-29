@@ -114,5 +114,14 @@ size_t twp_decode(lua_State *L, const unsigned char *p, size_t len, int depth);
 
 /* Libraries */
 void twp_open_strguard(lua_State *L);
+void twp_open_libs(lua_State *L);
+void twp_open_crypto(lua_State *L);
+void twp_open_json(lua_State *L);
+void twp_open_regex(lua_State *L);
+void twp_open_shared(lua_State *L);
+
+/* Crypto primitives shared by the HMAC and UUID code. */
+typedef enum { TWP_MD5, TWP_SHA1, TWP_SHA256, TWP_SHA512 } twp_hash_alg;
+size_t twp_hash(twp_hash_alg alg, const void *data, size_t len, unsigned char *out);
 
 #endif
