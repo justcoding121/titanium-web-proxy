@@ -1,0 +1,87 @@
+# Wires every recipe in this folder. Run it from here, or merge the parts you need into your own twp.yaml.
+# Script paths are relative to the directory of the twp.yaml, so keep this file beside the scripts.
+
+plugins:
+  # Ask an auth service. Anything but a 2xx denies.
+  - name: auth-callout
+    kind: lua
+    file: ./auth_callout.lua
+    timeoutMs: 1000
+    calloutHosts: [auth.internal]          # the only host the script may call
+    settings:
+      authUrl: http://auth.internal/check
+      timeoutMs: "300"                     # the callout's own timeout, below the plugin's wall time
+
+  # Verify a bearer token against a key set.
+  - name: jwt-check
+    kind: lua
+    file: ./jwt_check.lua
+    settings:
+      jwks: '{"keys":[{"kty":"oct","kid":"demo","alg":"HS256","k":"c2VjcmV0LXNlY3JldC1zZWNyZXQtc2VjcmV0LTEyMzQ"}]}'
+      issuer: https://issuer.example
+      audience: api
+
+  # Fixed-window rate limit per client IP, kept in a dictionary shared by every Lua state.
+  - name: rate-limit
+    kind: lua
+    file: ./rate_limit.lua
+    settings:
+      sharedDicts: "rate:100000"
+      limit: "100"
+      windowSeconds: "60"
+
+  # Rewrite text in response bodies. Buffered, so a match never straddles two pieces.
+  - name: body-rewrite
+    kind: lua
+    file: ./body_rewrite.lua
+    bodyMode: buffered
+    limits:
+      bufferedBodyBytes: 1048576
+    settings:
+      from: http://internal.example
+      to: https://www.example.com
+
+  # One log line per finished request. on_log only runs in the listener-wide script pipeline.
+  - name: request-logger
+    kind: lua
+    file: ./request_logger.lua
+
+  # L4: refuse clients by CIDR and cap the bytes of one connection.
+  - name: tcp-filter
+    kind: lua
+    file: ./tcp_filter.lua
+    settings:
+      denyCidrs: "192.0.2.0/24, 198.51.100.0/24"
+      maxBytes: "104857600"
+
+# Listener-wide: these run on every request of every route, in this order. Each script sees the header and body edits of the
+# ones before it, and the first deny wins.
+scriptPipeline: [rate-limit, jwt-check, body-rewrite, request-logger]
+
+routes:
+  # Per-route: auth-callout runs on_request_headers for this route only.
+  - id: admin
+    clusterId: backend
+    match: { path: /admin, pathKind: Prefix }
+    middleware: [auth-callout]
+
+  - id: default
+    clusterId: backend
+    match: { path: / , pathKind: Prefix }
+
+clusters:
+  - id: backend
+    destinations:
+      - { id: web-one, address: 127.0.0.1, port: 9000 }
+  - id: tcp-backend
+    destinations:
+      - { id: tcp-one, address: 127.0.0.1, port: 9443 }
+
+listeners:
+  - port: 8080
+
+  # L4: a passthrough listener hands each raw connection to its stream filters.
+  - port: 8443
+    passthrough: true
+    sniDefaultClusterId: tcp-backend
+    streamFilters: [tcp-filter]
