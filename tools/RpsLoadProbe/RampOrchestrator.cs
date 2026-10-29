@@ -270,6 +270,8 @@ internal enum ProbeMode
     TwpCliPlusRateLimitHttp1,
     /// <summary>CLI + fleet rateLimit (scope:fleet, local fail-mode, no Redis) with a very high ceiling.</summary>
     TwpCliPlusFleetRateLimitHttp1,
+    /// <summary>CLI + Plus advisory manager agent against an unreachable manager (loop cost only).</summary>
+    TwpCliPlusManagerAgentHttp1,
     /// <summary>CLI + Plus active health against ForwardHost+cluster destinations.</summary>
     TwpCliPlusResilienceHttp1,
     /// <summary>CLI + Plus file discovery with mid-ramp rewrite.</summary>
@@ -1398,6 +1400,8 @@ internal static class RampOrchestrator
                 [new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null)],
             ProbeMode.TwpCliPlusFleetRateLimitHttp1 =>
                 [new("twp-cli-plus-fleet-ratelimit-http1", ProbeMode.TwpCliPlusFleetRateLimitHttp1, null)],
+            ProbeMode.TwpCliPlusManagerAgentHttp1 =>
+                [new("twp-cli-plus-manager-agent-http1", ProbeMode.TwpCliPlusManagerAgentHttp1, null)],
             ProbeMode.TwpCliPlusResilienceHttp1 =>
                 [new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null)],
             ProbeMode.TwpCliPlusDiscoveryFileHttp1 =>
@@ -1806,6 +1810,7 @@ internal static class RampOrchestrator
         new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null),
         new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null),
         new("twp-cli-plus-fleet-ratelimit-http1", ProbeMode.TwpCliPlusFleetRateLimitHttp1, null),
+        new("twp-cli-plus-manager-agent-http1", ProbeMode.TwpCliPlusManagerAgentHttp1, null),
         new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null),
         new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
             RewriteDiscoveryMidRamp: true),

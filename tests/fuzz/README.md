@@ -101,6 +101,21 @@ same shape as above (every prefix, then fixed-seed edits favoring NUL, 0xFF, 0x7
 with SharpFuzz, link `WasmHostCallFuzzTarget.cs` into a console project that references the scripting assembly and
 call `Fuzzer.OutOfProcess.Run(WasmHostCallFuzzTarget.HeaderMap)` (or `.PropertyPath`) under `afl-fuzz`.
 
+## Manager revision YAML and agent payloads
+
+Control-plane parsers that take untrusted (or fleet-operator) bytes:
+
+| Folder | Entry point | What it checks |
+|---|---|---|
+| `corpus/manager-revision-yaml` (`.case`) | `RevisionYamlFuzzTarget.Yaml` | Manager revision YAML via `ConfigRevisionValidator`: never throws; `accept` / `reject` seeds pin validation. |
+| `corpus/manager-agent-ack` (`.case`) | `AgentAckPayload.Fuzz` | `POST /v1/agent/ack` JSON: malformed input returns false, never throws. |
+| `corpus/manager-agent-config` (`.case`) | `AgentConfigPayload.Fuzz` | `GET /v1/agent/config` JSON the agent parses: missing hash/yaml is reject; never throws. |
+
+```powershell
+dotnet test tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj -c Release --filter "FullyQualifiedName~ManagerPayloadCorpusTests"
+dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj -c Release --filter "FullyQualifiedName~AgentConfigCorpusTests"
+```
+
 ## Adding a seed
 
 1. Write the `.case` file with the right prefix and a `reason:`.

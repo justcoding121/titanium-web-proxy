@@ -14,4 +14,12 @@
     <ProjectReference Include="..\..\src\Titanium.Manager\Titanium.Manager.csproj" />
     <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Manager revision YAML + agent ack fuzz corpus (tests/fuzz/README.md). -->
+    <None Include="..\fuzz\corpus\manager-revision-yaml\**\*" Link="fuzz\corpus\manager-revision-yaml\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\fuzz\corpus\manager-agent-ack\**\*" Link="fuzz\corpus\manager-agent-ack\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Titanium.Web.Proxy.UnitTests\Fuzz\FuzzCorpus.cs" Link="Fuzz\FuzzCorpus.cs" />
+  </ItemGroup>
 </Project>

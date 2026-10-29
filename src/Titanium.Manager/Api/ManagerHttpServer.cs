@@ -217,48 +217,32 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
 
     private async Task AgentAckAsync(HttpListenerContext context, AgentTokenRow agent)
     {
-        using var doc = await ReadJsonAsync(context).ConfigureAwait(false);
-        var root = doc.RootElement;
-        var fleet = root.TryGetProperty("fleet", out var f)
-            ? f.ValueKind == JsonValueKind.Number ? f.GetInt64() : long.TryParse(f.GetString(), out var parsed) ? parsed : 0
-            : agent.ClusterId;
+        var body = await ReadBodyBytesAsync(context).ConfigureAwait(false);
+        if (!AgentAckPayload.TryParse(body, out var ack, out var parseError) || ack is null)
+        {
+            await WriteTextAsync(context, 400, parseError ?? "invalid ack body").ConfigureAwait(false);
+            return;
+        }
+
+        var fleet = ack.Fleet ?? agent.ClusterId;
         if (fleet != agent.ClusterId)
         {
             await WriteTextAsync(context, 403, "token not scoped to fleet").ConfigureAwait(false);
             return;
         }
 
-        var nodeId = root.TryGetProperty("node_id", out var n) ? n.GetString()
-            : root.TryGetProperty("nodeId", out var n2) ? n2.GetString() : null;
+        var nodeId = ack.NodeId;
         if (string.IsNullOrWhiteSpace(nodeId))
         {
             await WriteTextAsync(context, 400, "node_id required").ConfigureAwait(false);
             return;
         }
 
-        var configHash = root.TryGetProperty("config_hash", out var h) ? h.GetString()
-            : root.TryGetProperty("configHash", out var h2) ? h2.GetString() : null;
-        var ok = !root.TryGetProperty("ok", out var o) || o.ValueKind != JsonValueKind.False;
-        var error = root.TryGetProperty("error", out var e) ? e.GetString() : null;
-        string? healthJson = null;
-        if (root.TryGetProperty("health", out var health))
-        {
-            healthJson = health.ValueKind is JsonValueKind.String
-                ? health.GetString()
-                : health.GetRawText();
-        }
-
-        string? labelsJson = null;
-        if (root.TryGetProperty("labels", out var labels))
-        {
-            labelsJson = labels.ValueKind is JsonValueKind.String
-                ? labels.GetString()
-                : labels.GetRawText();
-        }
-        else if (root.TryGetProperty("labelsJson", out var labelsJsonEl))
-        {
-            labelsJson = labelsJsonEl.GetString();
-        }
+        var configHash = ack.ConfigHash;
+        var ok = ack.Ok;
+        var error = ack.Error;
+        var healthJson = ack.HealthJson;
+        var labelsJson = ack.LabelsJson;
 
         var (row, paused) = _store.UpsertAgentAck(fleet, nodeId!, configHash, ok, error, healthJson, labelsJson);
         if (paused)
@@ -1027,6 +1011,13 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         }
 
         return body;
+    }
+
+    private static async Task<byte[]> ReadBodyBytesAsync(HttpListenerContext context)
+    {
+        await using var ms = new MemoryStream();
+        await context.Request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
+        return ms.ToArray();
     }
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpListenerContext context)

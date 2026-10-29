@@ -750,6 +750,9 @@ internal static class Cli
             case "twp-cli-plus-fleet-ratelimit-http1":
                 mode = ProbeMode.TwpCliPlusFleetRateLimitHttp1;
                 return true;
+            case "twp-cli-plus-manager-agent-http1":
+                mode = ProbeMode.TwpCliPlusManagerAgentHttp1;
+                return true;
             case "twp-cli-plus-resilience-http1":
                 mode = ProbeMode.TwpCliPlusResilienceHttp1;
                 return true;

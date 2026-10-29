@@ -1,0 +1,3 @@
+# expect: accept
+# reason: smallest valid revision the manager accepts
+listeners:\n  - port: 8000\n    type: explicit\n

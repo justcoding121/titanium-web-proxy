@@ -1,0 +1,3 @@
+# expect: any
+# reason: wrong types must not throw
+{"fleet":[],"node_id":{},"ok":"yes","health":[1],"labels":{"a":1}}\n

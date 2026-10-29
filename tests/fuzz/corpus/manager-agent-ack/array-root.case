@@ -1,0 +1,3 @@
+# expect: reject
+# reason: root must be object
+[1,2,3]\n

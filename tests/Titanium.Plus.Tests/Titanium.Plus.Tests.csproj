@@ -23,5 +23,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Manager→agent config JSON fuzz corpus (tests/fuzz/README.md). -->
+    <None Include="..\fuzz\corpus\manager-agent-config\**\*" Link="fuzz\corpus\manager-agent-config\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Titanium.Web.Proxy.UnitTests\Fuzz\FuzzCorpus.cs" Link="Fuzz\FuzzCorpus.cs" />
   </ItemGroup>
 </Project>

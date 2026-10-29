@@ -1,0 +1,3 @@
+# expect: accept
+# reason: happy-path ack
+{"fleet":1,"node_id":"n1","config_hash":"abc","ok":true}\n

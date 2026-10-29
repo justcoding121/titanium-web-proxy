@@ -411,17 +411,14 @@ public sealed class ManagerAgent : IDisposable
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
-        var root = doc.RootElement;
-        var hash = ReadString(root, "configHash", "config_hash", "hash") ?? "";
-        var yaml = ReadString(root, "yaml", "configYaml", "config_yaml") ?? "";
-        var revisionId = ReadString(root, "revisionId", "revision_id") ?? hash;
-        if (string.IsNullOrWhiteSpace(hash) || string.IsNullOrWhiteSpace(yaml))
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms, ct).ConfigureAwait(false);
+        if (!AgentConfigPayload.TryParse(ms.ToArray(), out var parsed, out var parseError) || parsed is null)
         {
-            throw new InvalidOperationException("manager config response missing hash or yaml");
+            throw new InvalidOperationException(parseError ?? "manager config response missing hash or yaml");
         }
 
-        return new AgentRevision(hash, yaml, revisionId);
+        return new AgentRevision(parsed.ConfigHash, parsed.Yaml, parsed.RevisionId);
     }
 
     private async Task AckAsync(string configHash, bool ok, string? error, CancellationToken ct)
@@ -563,19 +560,6 @@ public sealed class ManagerAgent : IDisposable
         }
 
         return map.Count == 0 ? null : JsonSerializer.Serialize(map);
-    }
-
-    private static string? ReadString(JsonElement root, params string[] names)
-    {
-        foreach (var name in names)
-        {
-            if (root.TryGetProperty(name, out var el) && el.ValueKind == JsonValueKind.String)
-            {
-                return el.GetString();
-            }
-        }
-
-        return null;
     }
 
     private static bool TryGet(IReadOnlyDictionary<string, string> options, out string? value, params string[] keys)

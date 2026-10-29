@@ -22,9 +22,17 @@ internal static class ConfigRevisionValidator
             return [$"YAML parse error: {ex.Message}"];
         }
 
-        var errors = new List<string>(TwpConfigValidator.Validate(config));
-        RejectInlineSecrets(config, errors);
-        return errors;
+        try
+        {
+            var errors = new List<string>(TwpConfigValidator.Validate(config));
+            RejectInlineSecrets(config, errors);
+            return errors;
+        }
+        catch (Exception ex)
+        {
+            // Hostile / half-parsed YAML can leave null members the schema validator does not expect.
+            return [$"YAML validate error: {ex.Message}"];
+        }
     }
 
     private static void RejectInlineSecrets(TwpConfig config, List<string> errors)

@@ -1,0 +1,3 @@
+# expect: reject
+# reason: non-numeric listener port
+listeners:\n  - port: not-a-number\n

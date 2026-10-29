@@ -78,6 +78,48 @@ public sealed class ManagerHarness : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Stops accepting without disposing the harness so a chaos test can flap the manager on the same URL.
+    /// </summary>
+    public async Task SuspendAsync()
+    {
+        try
+        {
+            _listener.Stop();
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        if (_loop is not null)
+        {
+            try
+            {
+                await _loop.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            _loop = null;
+        }
+    }
+
+    /// <summary>Restarts the listener on the same prefix after <see cref="SuspendAsync"/>.</summary>
+    public Task ResumeAsync()
+    {
+        if (_listener.IsListening)
+        {
+            return Task.CompletedTask;
+        }
+
+        _listener.Start();
+        _loop = Task.Run(AcceptLoopAsync);
+        return Task.CompletedTask;
+    }
+
     private async Task AcceptLoopAsync()
     {
         while (!_stop.IsCancellationRequested && _listener.IsListening)

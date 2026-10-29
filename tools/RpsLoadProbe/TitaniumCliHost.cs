@@ -78,6 +78,8 @@ internal sealed class TitaniumCliHost : IDisposable
         PlusJwt,
         PlusRateLimit,
         PlusFleetRateLimit,
+        /// <summary>Plus base + advisory manager agent pointing at an unreachable manager (loop cost only).</summary>
+        PlusManagerAgent,
         PlusResilience,
         PlusDiscoveryFile,
         PlusMetricsScrape,
@@ -130,6 +132,7 @@ internal sealed class TitaniumCliHost : IDisposable
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
         CliArmKind.PlusBase or CliArmKind.PlusCache or CliArmKind.PlusWaf or CliArmKind.PlusCidr
         or CliArmKind.PlusJwt or CliArmKind.PlusRateLimit or CliArmKind.PlusFleetRateLimit
+        or CliArmKind.PlusManagerAgent
         or CliArmKind.PlusResilience
         or CliArmKind.PlusDiscoveryFile or CliArmKind.PlusMetricsScrape or CliArmKind.PlusCacheHit
         or CliArmKind.PlusCors or CliArmKind.PlusCircuit or CliArmKind.PlusRetry;
@@ -273,9 +276,16 @@ internal sealed class TitaniumCliHost : IDisposable
                 logFile = Path.Combine(workDir, "twp-rps.log");
             }
 
+            string? managerTokenFile = null;
+            if (kind == CliArmKind.PlusManagerAgent)
+            {
+                managerTokenFile = Path.Combine(workDir, "manager-agent.token");
+                await File.WriteAllTextAsync(managerTokenFile, "rps-agent-token", cancellationToken);
+            }
+
             await File.WriteAllTextAsync(configPath,
                 BuildYaml(kind, port, originHttpPort, controlPlanePort, jwtAuthority, jwksUrl, staticRoot, logFile,
-                    dashboardPort),
+                    dashboardPort, managerTokenFile),
                 Encoding.UTF8, cancellationToken);
         }
 
@@ -665,7 +675,7 @@ internal sealed class TitaniumCliHost : IDisposable
 
     internal static string BuildYaml(CliArmKind kind, int listenPort, int originPort, int controlPlanePort,
         string? jwtAuthority = null, string? jwksUrl = null, string? staticRoot = null, string? logFile = null,
-        int dashboardPort = 0)
+        int dashboardPort = 0, string? managerTokenFile = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("schemaVersion: \"7.0\"");
@@ -709,6 +719,20 @@ internal sealed class TitaniumCliHost : IDisposable
             case CliArmKind.PlusMetricsScrape:
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
                 AppendPlus(sb, controlPlanePort, null, dashboardPort);
+                break;
+            case CliArmKind.PlusManagerAgent:
+                // Advisory agent against a closed port: LiveLoops runs, no apply, request path stays Plus-base.
+                AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
+                AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
+                {
+                    ["manager.url"] = "http://127.0.0.1:1",
+                    ["manager.mode"] = "advisory",
+                    ["manager.tokenFile"] = (managerTokenFile ?? "manager-agent.token")
+                        .Replace("\\", "/", StringComparison.Ordinal),
+                    ["manager.fleet"] = "1",
+                    ["manager.nodeId"] = "rps-node",
+                    ["manager.applyDebounceMs"] = "250",
+                }, dashboardPort);
                 break;
             case CliArmKind.PlusCache:
             case CliArmKind.PlusCacheHit:

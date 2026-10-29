@@ -1,0 +1,3 @@
+# expect: any
+# reason: hostile whitespace and control bytes
+\t\tlisteners:\n\x00port: 1\n
