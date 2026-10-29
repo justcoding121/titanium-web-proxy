@@ -1,0 +1,9 @@
+#nullable enable
+const Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.ConfigurationSetting = "configuration" -> string!
+const Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.VmConfigurationSetting = "vmConfiguration" -> string!
+static Titanium.Web.Proxy.Scripting.ScriptingBootstrap.Register() -> void
+Titanium.Web.Proxy.Scripting.ScriptingBootstrap
+Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine
+Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.Kind.get -> string!
+Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.TryCreate(Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig! config, Microsoft.Extensions.Logging.ILogger? logger, out Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware? middleware, out string? error) -> bool
+Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.WasmPluginEngine() -> void

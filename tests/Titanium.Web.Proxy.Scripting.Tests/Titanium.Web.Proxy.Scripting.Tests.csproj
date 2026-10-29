@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The Wasmtime native is not committed. Point this at a folder the bundle script filled
+         (tools/packaging/bundle-scripting-native.ps1 -PublishDir artifacts/scripting-natives/<rid>); tests that need it
+         are inconclusive when it is missing. -->
+    <ScriptingNativeDir Condition="'$(ScriptingNativeDir)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\scripting-natives\$(NETCoreSdkRuntimeIdentifier)\</ScriptingNativeDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Scripting\Titanium.Web.Proxy.Scripting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Wasm\Samples\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(ScriptingNativeDir)*wasmtime*" Exclude="$(ScriptingNativeDir)*.txt" Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ScriptingNativeDir)')" />
+  </ItemGroup>
+
+</Project>
