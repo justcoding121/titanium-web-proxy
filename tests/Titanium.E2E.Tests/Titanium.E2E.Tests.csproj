@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Cli\Titanium.Cli.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Plus\Titanium.Plus.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Manager\Titanium.Manager.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Inspector\Titanium.Inspector.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />

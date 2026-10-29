@@ -63,6 +63,18 @@ internal sealed class ManagerTestHost : IAsyncDisposable
         return client;
     }
 
+    /// <summary>Cookie jar client for HTML UI login/session tests (follows redirects off).</summary>
+    public HttpClient CreateCookieClient()
+    {
+        var handler = new HttpClientHandler
+        {
+            AllowAutoRedirect = false,
+            UseCookies = true,
+            CookieContainer = new CookieContainer(),
+        };
+        return new HttpClient(handler) { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(60) };
+    }
+
     public HttpClient CreateAgentClient(string agentToken)
     {
         var client = new HttpClient { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(60) };

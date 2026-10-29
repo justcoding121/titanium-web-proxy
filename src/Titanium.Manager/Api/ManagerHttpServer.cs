@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Titanium.Manager.Auth;
 using Titanium.Manager.Store;
+using Titanium.Manager.Ui;
 using Titanium.Manager.Validation;
 
 namespace Titanium.Manager.Api;
@@ -19,20 +20,25 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
 
     private readonly ManagerStore _store;
     private readonly ConfigWaitHub _waitHub = new();
+    private readonly ManagerUiHost _ui;
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stop = new();
     private Task? _loop;
     private Task? _ticker;
 
-    public ManagerHttpServer(ManagerStore store, string listenPrefix)
+    public ManagerHttpServer(ManagerStore store, string listenPrefix, TimeProvider? timeProvider = null)
     {
         _store = store;
+        _ui = new ManagerUiHost(store, _waitHub, timeProvider);
         var prefix = listenPrefix.EndsWith('/') ? listenPrefix : listenPrefix + "/";
         _listener.Prefixes.Add(prefix);
         BaseUrl = prefix;
     }
 
     public string BaseUrl { get; }
+
+    /// <summary>Browser sessions for the HTML UI (tests assert login/CSRF).</summary>
+    internal ManagerSessionStore Sessions => _ui.Sessions;
 
     public void Start()
     {
@@ -101,6 +107,11 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             if (method == "GET" && path.Equals("/v1/healthz", StringComparison.OrdinalIgnoreCase))
             {
                 await WriteJsonAsync(context, 200, new { status = "ok" }).ConfigureAwait(false);
+                return;
+            }
+
+            if (await _ui.TryHandleAsync(context, method, path).ConfigureAwait(false))
+            {
                 return;
             }
 
@@ -276,15 +287,10 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
 
     private async Task HandleAdminAsync(HttpListenerContext context, string method, string path)
     {
-        var token = ReadBearer(context.Request);
-        var admin = token is null ? null : _store.FindAdminByToken(token);
-        if (admin is null || !AdminRoleParser.TryParse(admin.Role, out var role))
+        if (!TryAuthenticateAdmin(context, method, out var role, out var actor))
         {
-            await WriteTextAsync(context, 401, "unauthorized").ConfigureAwait(false);
             return;
         }
-
-        var actor = $"admin:{admin.Name}:{AdminRoleParser.ToApi(role)}";
 
         if (method == "GET" && path.Equals("/v1/fleets", StringComparison.OrdinalIgnoreCase))
         {
@@ -892,6 +898,46 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         {
             throw new UnauthorizedAccessException("insufficient role");
         }
+    }
+
+    /// <summary>
+    ///     Bearer admin token (scripts) or UI session cookie. Session mutations require <see cref="ManagerUiHost.CsrfHeader"/>.
+    /// </summary>
+    private bool TryAuthenticateAdmin(
+        HttpListenerContext context,
+        string method,
+        out AdminRole role,
+        out string actor)
+    {
+        role = AdminRole.Viewer;
+        actor = "";
+
+        var token = ReadBearer(context.Request);
+        var admin = token is null ? null : _store.FindAdminByToken(token);
+        if (admin is not null && AdminRoleParser.TryParse(admin.Role, out role))
+        {
+            actor = $"admin:{admin.Name}:{AdminRoleParser.ToApi(role)}";
+            return true;
+        }
+
+        var session = _ui.FindSession(context.Request, touch: true);
+        if (session is null)
+        {
+            WriteTextAsync(context, 401, "unauthorized").GetAwaiter().GetResult();
+            return false;
+        }
+
+        if (!method.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+            !method.Equals("HEAD", StringComparison.OrdinalIgnoreCase) &&
+            !ManagerSessionStore.CsrfMatches(session, context.Request.Headers[ManagerUiHost.CsrfHeader]))
+        {
+            WriteTextAsync(context, 403, "csrf token missing or wrong").GetAwaiter().GetResult();
+            return false;
+        }
+
+        role = session.Role;
+        actor = session.Actor;
+        return true;
     }
 
     private static long? ParseFleetQuery(NameValueCollection qs, long fallback)
