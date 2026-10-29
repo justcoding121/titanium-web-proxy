@@ -105,17 +105,20 @@ public class CliConfigMapReloadE2ETests
 
         var data = Path.Combine(_mount, "..data");
         var tmp = Path.Combine(_mount, "..data_tmp");
+        if (Directory.Exists(tmp) || File.Exists(tmp))
+        {
+            Directory.Delete(tmp);
+        }
+
         Directory.CreateSymbolicLink(tmp, revision);
-        if (OperatingSystem.IsWindows())
+        // Neither Windows nor .NET's Directory.Move will replace an existing directory symlink;
+        // kubelet uses rename(2) -T. Delete then move is the portable equivalent.
+        if (Directory.Exists(data) || File.Exists(data))
         {
-            // Windows cannot rename over a directory link; delete + move is the closest equivalent.
             Directory.Delete(data);
-            Directory.Move(tmp, data);
         }
-        else
-        {
-            Directory.Move(tmp, data);
-        }
+
+        Directory.Move(tmp, data);
     }
 
     private static int Count(string text, string needle)
