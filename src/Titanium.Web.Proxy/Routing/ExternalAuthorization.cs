@@ -139,7 +139,17 @@ internal static class ExternalAuthorization
         public int Status { get; init; }
         public byte[]? Body { get; init; }
         public List<HttpHeader>? Headers { get; init; }
-        public List<KeyValuePair<string, string>>? Copy { get; init; }
+        /// <summary>Headers the service set. Read-only: a cached or coalesced answer is shared by many requests.</summary>
+        public IReadOnlyList<KeyValuePair<string, string>>? Copy { get; init; }
+    }
+
+    /// <summary>Protection against an authorization service that is slow or down. Not part of the public configuration.</summary>
+    /// <param name="MaxInFlight">Most subrequests running at once for one policy. Beyond it a request is decided by <c>failOpen</c> at once.</param>
+    /// <param name="FailureThreshold">Consecutive service failures that start a cooldown.</param>
+    /// <param name="Cooldown">How long requests are decided by <c>failOpen</c> without calling the service, then one probe is let through.</param>
+    internal readonly record struct ExtAuthLimits(int MaxInFlight, int FailureThreshold, TimeSpan Cooldown)
+    {
+        public static ExtAuthLimits Default { get; } = new(256, 5, TimeSpan.FromSeconds(1));
     }
 
     internal sealed class ExtAuthClient
@@ -177,8 +187,25 @@ internal static class ExternalAuthorization
         private readonly Dictionary<string, LinkedListNode<CacheEntry>> cache = new(StringComparer.Ordinal);
         private readonly LinkedList<CacheEntry> cacheOrder = new();
 
+        private readonly SemaphoreSlim inFlight;
+        private readonly int failureThreshold;
+        private readonly long cooldownTicks;
+        private int consecutiveFailures;
+        private long cooldownUntilTicks;
+        private readonly Dictionary<string, Task<ExtAuthVerdict>> pending = new(StringComparer.Ordinal);
+
         public ExtAuthClient(RoutePolicyConfig policy)
+            : this(policy, ExtAuthLimits.Default)
         {
+        }
+
+        public ExtAuthClient(RoutePolicyConfig policy, ExtAuthLimits limits)
+        {
+            var maxInFlight = Math.Max(limits.MaxInFlight, 1);
+            inFlight = new SemaphoreSlim(maxInFlight, maxInFlight);
+            MaxInFlight = maxInFlight;
+            failureThreshold = Math.Max(limits.FailureThreshold, 1);
+            cooldownTicks = Math.Max(limits.Cooldown.Ticks, 1);
             url = Uri.TryCreate(policy.Url, UriKind.Absolute, out var parsed) &&
                   (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps)
                 ? parsed
@@ -206,6 +233,11 @@ internal static class ExternalAuthorization
 
         /// <summary>Header names the service may set on the upstream request. Client copies are removed on allow.</summary>
         public string[] CopyNames { get; }
+
+        internal int MaxInFlight { get; }
+
+        /// <summary>Subrequests running now.</summary>
+        internal int InFlight => MaxInFlight - inFlight.CurrentCount;
 
         private static string[] Filter(IEnumerable<string> names, bool rejectReserved)
         {
@@ -248,15 +280,74 @@ internal static class ExternalAuthorization
                 return Failure();
             }
 
-            string? cacheKey = null;
-            if (cacheSeconds > 0)
+            if (cacheSeconds <= 0)
             {
-                cacheKey = BuildCacheKey(request);
-                if (TryGetCached(cacheKey, out var hit))
+                return await FetchAsync(request, peer, cacheKey: null).ConfigureAwait(false);
+            }
+
+            var cacheKey = BuildCacheKey(request);
+            if (TryGetCached(cacheKey, out var hit))
+            {
+                ProxyMetrics.RecordExtAuth("cache_hit");
+                return new ExtAuthVerdict { Allowed = true, Copy = hit };
+            }
+
+            // Identical requests that arrive while one is being decided wait for that answer instead of each asking the service.
+            TaskCompletionSource<ExtAuthVerdict>? mine = null;
+            Task<ExtAuthVerdict>? shared;
+            lock (gate)
+            {
+                if (TryGetCached(cacheKey, out hit))
                 {
                     ProxyMetrics.RecordExtAuth("cache_hit");
                     return new ExtAuthVerdict { Allowed = true, Copy = hit };
                 }
+
+                if (!pending.TryGetValue(cacheKey, out shared))
+                {
+                    mine = new TaskCompletionSource<ExtAuthVerdict>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    pending[cacheKey] = mine.Task;
+                }
+            }
+
+            if (shared is not null)
+            {
+                ProxyMetrics.RecordExtAuth("coalesced");
+                return Clone(await shared.ConfigureAwait(false));
+            }
+
+            try
+            {
+                var verdict = await FetchAsync(request, peer, cacheKey).ConfigureAwait(false);
+                mine!.TrySetResult(verdict);
+                return verdict;
+            }
+            catch (Exception ex)
+            {
+                mine!.TrySetException(ex);
+                throw;
+            }
+            finally
+            {
+                lock (gate)
+                {
+                    pending.Remove(cacheKey);
+                }
+            }
+        }
+
+        /// <summary>One decision from the service, behind the cooldown and the in-flight bound.</summary>
+        private async ValueTask<ExtAuthVerdict> FetchAsync(Request request, IPAddress? peer, string? cacheKey)
+        {
+            if (InCooldown())
+            {
+                return Failure("cooldown");
+            }
+
+            // Never queue: a service that cannot keep up must not turn into an unbounded pile of waiting requests.
+            if (!inFlight.Wait(0))
+            {
+                return Failure("saturated");
             }
 
             try
@@ -276,12 +367,14 @@ internal static class ExternalAuthorization
                         Store(cacheKey, copy);
                     }
 
+                    NoteSuccess();
                     ProxyMetrics.RecordExtAuth("allow");
                     return new ExtAuthVerdict { Allowed = true, Copy = copy };
                 }
 
                 if (status < 200 || status >= 500)
                 {
+                    NoteFailure();
                     return Failure();
                 }
 
@@ -292,28 +385,99 @@ internal static class ExternalAuthorization
                     relayed.Add(new HttpHeader(pair.Key, pair.Value));
                 }
 
+                NoteSuccess();
                 ProxyMetrics.RecordExtAuth("deny");
                 return new ExtAuthVerdict { Status = status, Body = body, Headers = relayed };
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 // Timeout, refused connection, TLS failure, or a malformed answer: one outcome, set by FailOpen.
+                NoteFailure();
                 return Failure();
+            }
+            finally
+            {
+                inFlight.Release();
             }
         }
 
-        private ExtAuthVerdict Failure()
+        /// <summary>
+        /// True while the service is being left alone after repeated failures. Once the cooldown has run out, exactly one
+        /// request is let through as a probe and the rest keep waiting out another cooldown until the probe answers.
+        /// </summary>
+        private bool InCooldown()
+        {
+            var until = Volatile.Read(ref cooldownUntilTicks);
+            if (until == 0)
+            {
+                return false;
+            }
+
+            var now = RoutePolicies.Clock.GetUtcNow().UtcTicks;
+            if (now < until)
+            {
+                return true;
+            }
+
+            return Interlocked.CompareExchange(ref cooldownUntilTicks, now + cooldownTicks, until) != until;
+        }
+
+        private void NoteSuccess()
+        {
+            if (Volatile.Read(ref cooldownUntilTicks) != 0 || Volatile.Read(ref consecutiveFailures) != 0)
+            {
+                Volatile.Write(ref consecutiveFailures, 0);
+                Volatile.Write(ref cooldownUntilTicks, 0);
+            }
+        }
+
+        private void NoteFailure()
+        {
+            if (Interlocked.Increment(ref consecutiveFailures) >= failureThreshold)
+            {
+                Volatile.Write(ref cooldownUntilTicks, RoutePolicies.Clock.GetUtcNow().UtcTicks + cooldownTicks);
+            }
+        }
+
+        /// <summary>A coalesced follower gets its own copy of anything a response can still change.</summary>
+        private static ExtAuthVerdict Clone(ExtAuthVerdict verdict)
+        {
+            if (verdict.Headers is null && verdict.Body is null)
+            {
+                return verdict;
+            }
+
+            List<HttpHeader>? headers = null;
+            if (verdict.Headers is { } source)
+            {
+                headers = new List<HttpHeader>(source.Count);
+                foreach (var header in source)
+                {
+                    headers.Add(new HttpHeader(header.Name, header.Value));
+                }
+            }
+
+            return new ExtAuthVerdict
+            {
+                Allowed = verdict.Allowed,
+                Status = verdict.Status,
+                Body = (byte[]?)verdict.Body?.Clone(),
+                Headers = headers,
+                Copy = verdict.Copy,
+            };
+        }
+
+        private ExtAuthVerdict Failure(string? reason = null)
         {
             if (failOpen)
             {
-                ProxyMetrics.RecordExtAuth("error_open");
+                ProxyMetrics.RecordExtAuth(reason is null ? "error_open" : reason + "_open");
                 return new ExtAuthVerdict { Allowed = true };
             }
 
-            ProxyMetrics.RecordExtAuth("error_closed");
+            ProxyMetrics.RecordExtAuth(reason is null ? "error_closed" : reason + "_closed");
             return new ExtAuthVerdict { Status = 503 };
         }
-
         private HttpRequestMessage BuildMessage(Request request, IPAddress? peer)
         {
             var message = new HttpRequestMessage(method, url)
@@ -417,7 +581,7 @@ internal static class ExternalAuthorization
             hash.AppendData(bytes);
         }
 
-        private bool TryGetCached(string key, out List<KeyValuePair<string, string>> copy)
+        private bool TryGetCached(string key, out IReadOnlyList<KeyValuePair<string, string>> copy)
         {
             var now = RoutePolicies.Clock.GetUtcNow();
             lock (gate)
@@ -435,11 +599,11 @@ internal static class ExternalAuthorization
                 }
             }
 
-            copy = [];
+            copy = Array.Empty<KeyValuePair<string, string>>();
             return false;
         }
 
-        private void Store(string key, List<KeyValuePair<string, string>> copy)
+        private void Store(string key, IReadOnlyList<KeyValuePair<string, string>> copy)
         {
             var expires = RoutePolicies.Clock.GetUtcNow().AddSeconds(cacheSeconds);
             lock (gate)
@@ -458,7 +622,8 @@ internal static class ExternalAuthorization
             }
         }
 
-        private static List<KeyValuePair<string, string>> Collect(HttpResponseMessage response, string[] names)
+        /// <summary>The headers a response asked for, as a read-only list: the answer may be cached and handed to many requests.</summary>
+        private static IReadOnlyList<KeyValuePair<string, string>> Collect(HttpResponseMessage response, string[] names)
         {
             var result = new List<KeyValuePair<string, string>>();
             foreach (var name in names)
@@ -467,7 +632,7 @@ internal static class ExternalAuthorization
                 AddValues(result, name, response.Content.Headers.TryGetValues(name, out var content) ? content : null);
             }
 
-            return result;
+            return result.AsReadOnly();
         }
 
         private static void AddValues(List<KeyValuePair<string, string>> result, string name, IEnumerable<string>? values)
@@ -532,6 +697,6 @@ internal static class ExternalAuthorization
             return length == buffer.Length ? buffer : buffer.AsSpan(0, length).ToArray();
         }
 
-        private sealed record CacheEntry(string Key, DateTimeOffset Expires, List<KeyValuePair<string, string>> Copy);
+        private sealed record CacheEntry(string Key, DateTimeOffset Expires, IReadOnlyList<KeyValuePair<string, string>> Copy);
     }
 }

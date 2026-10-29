@@ -276,7 +276,7 @@ internal static class ProxyMetrics
 
     private static readonly Counter<long> ExtAuthRequests =
         Meter.CreateCounter<long>("twp.extauth.requests", RequestUnit,
-            "External authorization decisions by result: allow, deny, error_open, error_closed, cache_hit.");
+            "External authorization decisions by result: allow, deny, error_open, error_closed, cache_hit, coalesced, and saturated_* or cooldown_* (open or closed) when the service was not called.");
 
     public static void RecordExtAuth(string result)
     {
