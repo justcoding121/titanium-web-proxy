@@ -41,13 +41,14 @@ public static class RedisTestHelper
     }
 
     /// <summary>
-    /// Locally: <see cref="Assert.Inconclusive"/>. In CI (<c>CI=true</c>): <see cref="Assert.Fail"/> so a missing Redis is a real failure.
+    /// When <c>TITANIUM_REQUIRE_REDIS=1</c> (Linux Redis CI job): <see cref="Assert.Fail"/>.
+    /// Otherwise (including the Windows main build, which has no Redis service container): inconclusive.
     /// </summary>
-    public static void SkipOrFailIfUnavailable(bool isCi)
+    public static void SkipOrFailIfUnavailable(bool requireRedis = false)
     {
-        if (isCi)
+        if (requireRedis || RequireRedis)
         {
-            Assert.Fail($"Redis is required in CI but was unreachable at {EndPoints}.");
+            Assert.Fail($"Redis is required but was unreachable at {EndPoints}.");
         }
 
         Assert.Inconclusive($"Redis unavailable at {EndPoints}; set TITANIUM_TEST_REDIS or start Redis to run this test.");
@@ -55,4 +56,9 @@ public static class RedisTestHelper
 
     public static bool IsCi =>
         string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when the dedicated Redis CI job set <c>TITANIUM_REQUIRE_REDIS=1</c>.</summary>
+    public static bool RequireRedis =>
+        string.Equals(Environment.GetEnvironmentVariable("TITANIUM_REQUIRE_REDIS"), "1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(Environment.GetEnvironmentVariable("TITANIUM_REQUIRE_REDIS"), "true", StringComparison.OrdinalIgnoreCase);
 }

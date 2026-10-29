@@ -206,6 +206,41 @@ jobs:
         }
         throw "Failed to publish documentation after retries"
 
+  # Fleet Redis rate-limit store (Linux only: Actions service containers are not available on Windows).
+  redis-fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TITANIUM_TEST_REDIS: 127.0.0.1:6379
+      TITANIUM_REQUIRE_REDIS: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Restore and build
+      run: |
+        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+        dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
+    - name: Redis fleet rate-limit tests
+      run: |
+        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Redis"
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~FleetRateLimitChaos"
+
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
   # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).
   ui-portable:

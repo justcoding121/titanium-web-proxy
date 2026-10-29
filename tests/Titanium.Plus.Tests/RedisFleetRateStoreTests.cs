@@ -31,7 +31,7 @@ public class RedisFleetRateStoreTests
         using var mux = await RedisTestHelper.TryConnectAsync();
         if (mux is null)
         {
-            RedisTestHelper.SkipOrFailIfUnavailable(RedisTestHelper.IsCi);
+            RedisTestHelper.SkipOrFailIfUnavailable();
             return;
         }
 
@@ -61,7 +61,7 @@ public class RedisFleetRateStoreTests
         using var mux = await RedisTestHelper.TryConnectAsync();
         if (mux is null)
         {
-            RedisTestHelper.SkipOrFailIfUnavailable(RedisTestHelper.IsCi);
+            RedisTestHelper.SkipOrFailIfUnavailable();
             return;
         }
 
@@ -153,11 +153,11 @@ public class RedisFleetRateStoreTests
             // expected — never stop the user's docker Redis; only probe a closed local port
         }
 
-        // Disposed store reports unavailable (fault path without touching a live Redis).
+        // Disposed store reports unavailable. Prefer a live mux when present; otherwise the closed-port
+        // probe above already covers "store unreachable" without requiring Redis on the Windows CI host.
         using var good = await RedisTestHelper.TryConnectAsync();
         if (good is null)
         {
-            RedisTestHelper.SkipOrFailIfUnavailable(RedisTestHelper.IsCi);
             return;
         }
 
