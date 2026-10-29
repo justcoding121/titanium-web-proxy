@@ -167,7 +167,7 @@ public class GapClosureTests
             Assert.IsTrue(Allowed(IPAddress.Parse("10.0.0." + (i % 20))));
         }
 
-        Assert.IsTrue(RoutePolicies.RateWindowCount <= 20);
+        Assert.IsTrue(RoutePolicies.RateWindowCount(options) <= 20);
         RoutePolicies.ResetForTests();
     }
 

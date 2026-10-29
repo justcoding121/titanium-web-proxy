@@ -37,6 +37,9 @@ internal sealed class RoutingFeatureState
     /// <summary><c>Set-Cookie</c> a plugin policy handler asked to add to the response (a renewed login session).</summary>
     public string? PolicySetCookie { get; set; }
     public string? HeldConnectionPolicy { get; set; }
+
+    /// <summary>Counters the held slots were taken from, so they go back to the same options instance after a reload.</summary>
+    internal Routing.RoutePolicies.Runtime? HeldConnectionRuntime { get; set; }
     public string[] Tried { get; } = new string[8];
     public int TriedCount { get; private set; }
 
@@ -105,6 +108,7 @@ internal sealed class RoutingFeatureState
         PendingSetCookie = null;
         PolicySetCookie = null;
         HeldConnectionPolicy = null;
+        HeldConnectionRuntime = null;
         if (TriedCount > 0)
         {
             System.Array.Clear(Tried, 0, TriedCount);

@@ -49,6 +49,25 @@ public sealed class ReverseProxyOptions
     /// </summary>
     internal object? Compiled { get; set; }
 
+    private object? policyRuntime;
+
+    /// <summary>
+    /// Mutable enforcement state (rate-limit counters, connection-limit slots) owned by this options instance. Two proxies in
+    /// one process never share it, and a reload that builds a new options instance starts from empty counters.
+    /// Created on first use; not part of the public contract.
+    /// </summary>
+    internal T GetOrCreatePolicyRuntime<T>(Func<T> create) where T : class
+    {
+        var existing = Volatile.Read(ref policyRuntime);
+        if (existing is not null)
+        {
+            return (T)existing;
+        }
+
+        var created = create();
+        return (T)(Interlocked.CompareExchange(ref policyRuntime, created, null) ?? created);
+    }
+
     private int asyncPolicyState;
     private int handledPolicyState;
     private int grpcWebState;

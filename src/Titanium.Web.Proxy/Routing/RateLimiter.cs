@@ -18,20 +18,20 @@ namespace Titanium.Web.Proxy.Routing;
 ///     <c>MaxKeys</c> counters: when full, expired ones are dropped, and any new key then shares one
 ///     overflow counter so a flood of distinct values cannot grow memory without bound.
 /// </summary>
-internal static class RateLimiter
+internal sealed class RateLimiter
 {
     private const int DefaultMaxKeys = 100_000;
     private const double Epsilon = 1e-9;
     private const string OverflowSuffix = "|*overflow";
 
-    private static readonly ConcurrentDictionary<string, RateState> States = new(StringComparer.Ordinal);
-    private static readonly ConcurrentDictionary<string, KeyCounter> Counters = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, RateState> States = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, KeyCounter> Counters = new(StringComparer.Ordinal);
     private static readonly ConditionalWeakTable<RoutePolicyConfig, RateSpec> Specs = new();
-    private static int _writes;
+    private int _writes;
 
-    internal static int Count => States.Count;
+    internal int Count => States.Count;
 
-    internal static void Reset()
+    internal void Reset()
     {
         States.Clear();
         Counters.Clear();
@@ -47,7 +47,7 @@ internal static class RateLimiter
         public int ResetSeconds { get; init; }
     }
 
-    internal static Verdict Check(
+    internal Verdict Check(
         RoutePolicyConfig policy,
         string routeId,
         Request request,
@@ -135,7 +135,7 @@ internal static class RateLimiter
 
     private static int WholeSeconds(double seconds) => (int)Math.Max(1, Math.Ceiling(seconds - Epsilon));
 
-    private static RateState Acquire(RateSpec spec, string policyName, string key, DateTimeOffset now)
+    private RateState Acquire(RateSpec spec, string policyName, string key, DateTimeOffset now)
     {
         if (States.TryGetValue(key, out var existing))
         {
@@ -166,7 +166,7 @@ internal static class RateLimiter
     }
 
     /// <summary>Scans at most once a second per policy, so a flood of new keys cannot force a scan per request.</summary>
-    private static void EvictExpired(string policyName, KeyCounter counter, DateTimeOffset now)
+    private void EvictExpired(string policyName, KeyCounter counter, DateTimeOffset now)
     {
         var last = Interlocked.Read(ref counter.LastEvictTicks);
         if (last != 0 && now.UtcTicks - last < TimeSpan.TicksPerSecond)
@@ -200,7 +200,7 @@ internal static class RateLimiter
         }
     }
 
-    private static void Remove(KeyValuePair<string, RateState> pair)
+    private void Remove(KeyValuePair<string, RateState> pair)
     {
         if (States.TryRemove(pair) && !pair.Value.IsOverflow && Counters.TryGetValue(pair.Value.Policy, out var counter))
         {
@@ -208,7 +208,7 @@ internal static class RateLimiter
         }
     }
 
-    private static void Sweep(DateTimeOffset now)
+    private void Sweep(DateTimeOffset now)
     {
         if ((Interlocked.Increment(ref _writes) & 31) != 0)
         {

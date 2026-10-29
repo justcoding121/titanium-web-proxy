@@ -1195,7 +1195,8 @@ internal static class ReverseProxySessionDispatch
         {
             // Cleared so a second finish cannot hand the same slot back twice.
             extras.HeldConnectionPolicy = null;
-            RoutePolicies.Release(held);
+            RoutePolicies.ReleaseHeld(extras.HeldConnectionRuntime, held);
+            extras.HeldConnectionRuntime = null;
         }
 
         if (started != 0)

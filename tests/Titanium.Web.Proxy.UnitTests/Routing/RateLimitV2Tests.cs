@@ -312,6 +312,24 @@ public class RateLimitV2Tests
     }
 
     [TestMethod]
+    public void TwoOptionsInstances_DoNotShareRateCounters()
+    {
+        var first = Options(Rate(b => { b.Limit = 1; b.WindowSeconds = 60; }));
+        var second = Options(Rate(b => { b.Limit = 1; b.WindowSeconds = 60; }));
+
+        Assert.IsFalse(Denied(first, Req(), "10.0.0.1"));
+        Assert.IsTrue(Denied(first, Req(), "10.0.0.1"), "the first instance spent its allowance");
+        Assert.IsFalse(Denied(second, Req(), "10.0.0.1"), "a second proxy in the process starts with its own counters");
+        Assert.AreEqual(1, RoutePolicies.RateWindowCount(first));
+        Assert.AreEqual(1, RoutePolicies.RateWindowCount(second));
+
+        // A reload builds a new options instance from the same configuration and gets fresh state.
+        var reloaded = Options(Rate(b => { b.Limit = 1; b.WindowSeconds = 60; }));
+        Assert.AreEqual(0, RoutePolicies.RateWindowCount(reloaded));
+        Assert.IsFalse(Denied(reloaded, Req(), "10.0.0.1"));
+    }
+
+    [TestMethod]
     public void MaxKeys_SharesOneOverflowCounter_OnceFullOfLiveKeys()
     {
         var options = Options(Rate(b => { b.Key = "header:X-Id"; b.Limit = 1; b.MaxKeys = 1000; b.WindowSeconds = 60; }));
@@ -323,7 +341,7 @@ public class RateLimitV2Tests
         Assert.IsFalse(Denied(options, Req(("X-Id", "new-a")), "10.0.0.1"), "the first new key spends the overflow counter");
         Assert.IsTrue(Denied(options, Req(("X-Id", "new-b")), "10.0.0.1"), "later new keys share it");
         Assert.IsTrue(Denied(options, Req(("X-Id", "k5")), "10.0.0.1"), "a known key keeps its own counter");
-        Assert.IsTrue(RoutePolicies.RateWindowCount <= 1001, "the cap holds");
+        Assert.IsTrue(RoutePolicies.RateWindowCount(options) <= 1001, "the cap holds");
     }
 
     [TestMethod]
@@ -339,7 +357,7 @@ public class RateLimitV2Tests
         Assert.IsFalse(Denied(options, Req(("X-Id", "fresh-a")), "10.0.0.1"));
         Assert.IsTrue(Denied(options, Req(("X-Id", "fresh-a")), "10.0.0.1"), "a fresh key got its own counter, not the shared one");
         Assert.IsFalse(Denied(options, Req(("X-Id", "fresh-b")), "10.0.0.1"));
-        Assert.IsTrue(RoutePolicies.RateWindowCount < 1000);
+        Assert.IsTrue(RoutePolicies.RateWindowCount(options) < 1000);
     }
 
     [TestMethod]

@@ -21,32 +21,62 @@ namespace Titanium.Web.Proxy.Routing;
 /// <summary>Enforces route policies before a destination is selected. No work when the route lists none.</summary>
 internal static class RoutePolicies
 {
-    private static readonly ConcurrentDictionary<string, int> Connections = new(StringComparer.Ordinal);
+    /// <summary>
+    ///     Counters and slots that belong to one <see cref="ReverseProxyOptions" /> instance, so two proxies in a process
+    ///     do not share them and a reload (a new options instance) starts clean.
+    /// </summary>
+    internal sealed class Runtime
+    {
+        public RateLimiter Rates { get; } = new();
+        public ConcurrentDictionary<string, int> Connections { get; } = new(StringComparer.Ordinal);
+
+        public void Reset()
+        {
+            Rates.Reset();
+            Connections.Clear();
+        }
+    }
+
+    private static readonly ConditionalWeakTable<Runtime, object> LiveRuntimes = new();
+
+    /// <summary>The enforcement state owned by <paramref name="options" />, created on first use.</summary>
+    internal static Runtime RuntimeFor(ReverseProxyOptions options) =>
+        options.GetOrCreatePolicyRuntime(static () => Register(new Runtime()));
+
+    private static Runtime Register(Runtime runtime)
+    {
+        LiveRuntimes.Add(runtime, runtime);
+        return runtime;
+    }
 
     internal static TimeProvider Clock { get; set; } = TimeProvider.System;
 
+    /// <summary>Restores the clock and clears the counters of every live options instance.</summary>
     internal static void ResetForTests()
     {
-        RateLimiter.Reset();
-        Connections.Clear();
+        foreach (var pair in LiveRuntimes)
+        {
+            pair.Key.Reset();
+        }
+
         Clock = TimeProvider.System;
     }
 
     private const char HeldSeparator = '\u001f';
 
     /// <summary>Gives back every slot named in a held-policy value (one name, or several joined by a separator).</summary>
-    public static void Release(string policyNames) => ReleaseHeld(policyNames);
+    public static void Release(ReverseProxyOptions options, string policyNames) => ReleaseHeld(RuntimeFor(options), policyNames);
 
-    private static void ReleaseHeld(string? policyNames)
+    internal static void ReleaseHeld(Runtime? runtime, string? policyNames)
     {
-        if (string.IsNullOrEmpty(policyNames))
+        if (runtime is null || string.IsNullOrEmpty(policyNames))
         {
             return;
         }
 
         foreach (var policyName in policyNames.Split(HeldSeparator))
         {
-            Connections.AddOrUpdate(policyName, 0, (_, count) => count > 0 ? count - 1 : 0);
+            runtime.Connections.AddOrUpdate(policyName, 0, (_, count) => count > 0 ? count - 1 : 0);
         }
     }
 
@@ -116,7 +146,8 @@ internal static class RoutePolicies
         if (session.Extras is { HeldConnectionPolicy: { } held } extras)
         {
             extras.HeldConnectionPolicy = null;
-            ReleaseHeld(held);
+            ReleaseHeld(extras.HeldConnectionRuntime, held);
+            extras.HeldConnectionRuntime = null;
         }
     }
 
@@ -192,6 +223,7 @@ internal static class RoutePolicies
         {
             args.Extras ??= new RoutingFeatureState();
             args.Extras.HeldConnectionPolicy = decision.Held;
+            args.Extras.HeldConnectionRuntime = decision.HeldRuntime;
         }
 
         if (!decision.Rejected)
@@ -230,6 +262,7 @@ internal static class RoutePolicies
 
         var decision = default(PolicyDecision);
         string? heldNames = null;
+        var runtime = RuntimeFor(options);
         foreach (var name in names)
         {
             var policy = FindNamedPolicy(policies, name);
@@ -238,10 +271,10 @@ internal static class RoutePolicies
                 continue;
             }
 
-            var stop = ApplyKind(policy, route, request, client, trustedProxies, ref decision, ref heldNames);
+            var stop = ApplyKind(runtime, policy, route, request, client, trustedProxies, ref decision, ref heldNames);
             if (stop is { } denied)
             {
-                ReleaseHeld(heldNames);
+                ReleaseHeld(runtime, heldNames);
                 return denied;
             }
         }
@@ -264,6 +297,7 @@ internal static class RoutePolicies
 
     /// <summary>Null means keep evaluating. A decision means stop and give back any held connection slots.</summary>
     private static PolicyDecision? ApplyKind(
+        Runtime runtime,
         RoutePolicyConfig policy,
         RouteConfig route,
         Request request,
@@ -293,12 +327,12 @@ internal static class RoutePolicies
                     Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
                 };
             case "rateLimit":
-                return CheckRate(policy, route, request, client, trustedProxies);
-            case "connectionLimit" when !AllowConnection(policy):
+                return CheckRate(runtime, policy, route, request, client, trustedProxies);
+            case "connectionLimit" when !AllowConnection(runtime, policy):
                 return Stop(503, string.Empty);
             case "connectionLimit":
                 heldNames = heldNames is null ? policy.Name : heldNames + HeldSeparator + policy.Name;
-                decision = decision with { Held = heldNames };
+                decision = decision with { Held = heldNames, HeldRuntime = runtime };
                 return null;
             case "ipAllowDeny" when !AllowAddress(policy, client):
                 return Stop(403, string.Empty);
@@ -314,17 +348,19 @@ internal static class RoutePolicies
         Body = body,
     };
 
-    internal static int RateWindowCount => RateLimiter.Count;
+    /// <summary>Rate-limit counters held for <paramref name="options" />.</summary>
+    internal static int RateWindowCount(ReverseProxyOptions options) => RuntimeFor(options).Rates.Count;
 
     /// <summary>Null means the request passes. Otherwise a 429 with Retry-After, and RateLimit-* when asked.</summary>
     private static PolicyDecision? CheckRate(
+        Runtime runtime,
         RoutePolicyConfig policy,
         RouteConfig route,
         Request request,
         IPAddress? client,
         IReadOnlyList<string>? trustedProxies)
     {
-        var verdict = RateLimiter.Check(policy, route.Id, request, client, trustedProxies, Clock.GetUtcNow());
+        var verdict = runtime.Rates.Check(policy, route.Id, request, client, trustedProxies, Clock.GetUtcNow());
         if (verdict.Allowed)
         {
             return null;
@@ -350,18 +386,19 @@ internal static class RoutePolicies
         };
     }
 
-    private static bool AllowConnection(RoutePolicyConfig policy)
+    private static bool AllowConnection(Runtime runtime, RoutePolicyConfig policy)
     {
         var limit = policy.Limit ?? 1;
+        var connections = runtime.Connections;
         while (true)
         {
-            var count = Connections.GetOrAdd(policy.Name, 0);
+            var count = connections.GetOrAdd(policy.Name, 0);
             if (count >= limit)
             {
                 return false;
             }
 
-            if (Connections.TryUpdate(policy.Name, count + 1, count))
+            if (connections.TryUpdate(policy.Name, count + 1, count))
             {
                 return true;
             }
@@ -486,6 +523,7 @@ internal static class RoutePolicies
         public int Status { get; init; }
         public string? Body { get; init; }
         public string? Held { get; init; }
+        public Runtime? HeldRuntime { get; init; }
         public int? TimeoutSeconds { get; init; }
         public List<KeyValuePair<string, string>>? Headers { get; init; }
     }
