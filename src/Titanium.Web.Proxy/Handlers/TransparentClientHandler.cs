@@ -110,33 +110,54 @@ public partial class ProxyServer
                         var sniBindings = endPoint.SniCertificates;
                         var clientCertMode = endPoint.ClientCertificateMode;
                         var requestsClientCert = Certificates.ClientCertificateHandshake.RequestsCertificate(clientCertMode);
-                        var options = sniBindings is { Count: > 0 } || requestsClientCert ? null : endPoint.CachedServerAuthOptions;
-                        if (options == null)
+                        var hasSniBindings = sniBindings is { Count: > 0 };
+                        var clientCertificateTrustedRoots = endPoint.ClientCertificateTrustedRoots;
+
+                        SslServerAuthenticationOptions BuildOptions(X509Certificate2 serverCertificate)
                         {
-                            var fallback = certificate ?? (sniBindings is { Count: > 0 } ? sniBindings[0].Certificate : null);
-                            options = new SslServerAuthenticationOptions
+                            var built = new SslServerAuthenticationOptions
                             {
                                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                                 ApplicationProtocols = SslExtensions.Http11ProtocolAsList,
                                 AllowRenegotiation = false
                             };
-                            ApplyListenerTlsPolicy(options);
-                            CertificateManager.ConfigureServerCertificate(options, fallback!);
-                            Certificates.ClientCertificateHandshake.Apply(options, clientCertMode, endPoint.ClientCertificateTrustedRoots);
-                            if (sniBindings is { Count: > 0 })
-                            {
-                                options.ServerCertificateSelectionCallback = (_, name) =>
-                                    Certificates.SniCertificateSelector.Select(name, sniBindings) ?? fallback!;
-                            }
-
-                            if (sniBindings is not { Count: > 0 } && !requestsClientCert)
-                            {
-                                endPoint.CachedServerAuthOptions = options;
-                            }
+                            ApplyListenerTlsPolicy(built);
+                            CertificateManager.ConfigureServerCertificate(built, serverCertificate);
+                            Certificates.ClientCertificateHandshake.Apply(built, clientCertMode, clientCertificateTrustedRoots);
+                            return built;
                         }
 
-                        await AwaitPendingClientHelloAsync(clientConnection);
-                        await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        if (hasSniBindings)
+                        {
+                            // Per-SNI certificates: SslServerAuthenticationOptions.ServerCertificateSelectionCallback
+                            // cannot be combined with the pre-built ServerCertificateContext (it throws
+                            // "already set in the SslStream constructor"). Hand SslStream one options object per
+                            // handshake instead, chosen from the ClientHello server name.
+                            var bindings = sniBindings!;
+                            var fallback = certificate ?? bindings[0].Certificate;
+                            await AwaitPendingClientHelloAsync(clientConnection);
+                            await sslStream.AuthenticateAsServerAsync(
+                                (_, hello, _, _) => new ValueTask<SslServerAuthenticationOptions>(
+                                    BuildOptions(Certificates.SniCertificateSelector.Select(hello.ServerName, bindings)
+                                                 ?? fallback)),
+                                null, cancellationToken);
+                        }
+                        else
+                        {
+                            var options = requestsClientCert ? null : endPoint.CachedServerAuthOptions;
+                            if (options == null)
+                            {
+                                options = BuildOptions(certificate!);
+                                if (!requestsClientCert)
+                                {
+                                    endPoint.CachedServerAuthOptions = options;
+                                }
+                            }
+
+                            await AwaitPendingClientHelloAsync(clientConnection);
+                            await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        }
+
                         Certificates.ClientCertificateHandshake.Capture(clientConnection, sslStream, clientCertMode);
                         RecordClientHandshakeSuccess(httpsHostName);
                         clientConnection.NegotiatedApplicationProtocol = sslStream.NegotiatedApplicationProtocol;
@@ -315,26 +336,40 @@ public partial class ProxyServer
                     {
                         sslStream = new SslStream(clientStream, false);
 
-                        var options = new SslServerAuthenticationOptions
-                        {
-                            CertificateRevocationCheckMode = X509RevocationMode.NoCheck
-                        };
-                        ApplyListenerTlsPolicy(options);
-                        CertificateManager.ConfigureServerCertificate(options, certificate);
                         var peekClientCertMode = endPoint.ClientCertificateMode;
-                        Certificates.ClientCertificateHandshake.Apply(options, peekClientCertMode, endPoint.ClientCertificateTrustedRoots);
-                        if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)
+                        var peekTrustedRoots = endPoint.ClientCertificateTrustedRoots;
+                        var offerHttp2 = http2Supported;
+
+                        SslServerAuthenticationOptions BuildOptions(X509Certificate2 serverCertificate)
                         {
-                            var fallbackCert = certificate;
-                            options.ServerCertificateSelectionCallback = (_, name) =>
-                                Certificates.SniCertificateSelector.Select(name, handshakeBindings) ?? fallbackCert;
+                            var built = new SslServerAuthenticationOptions
+                            {
+                                CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                            };
+                            ApplyListenerTlsPolicy(built);
+                            CertificateManager.ConfigureServerCertificate(built, serverCertificate);
+                            Certificates.ClientCertificateHandshake.Apply(built, peekClientCertMode, peekTrustedRoots);
+                            built.ApplicationProtocols = offerHttp2
+                                ? SslExtensions.Http2AndHttp11ProtocolAsList
+                                : SslExtensions.Http11ProtocolAsList;
+                            return built;
                         }
 
-                        options.ApplicationProtocols = http2Supported
-                            ? SslExtensions.Http2AndHttp11ProtocolAsList
-                            : SslExtensions.Http11ProtocolAsList;
-
-                        await sslStream.AuthenticateAsServerAsync(options, cancellationToken);
+                        if (endPoint.SniCertificates is { Count: > 0 } handshakeBindings)
+                        {
+                            // See the fixed-certificate path: the selection callback option conflicts with the
+                            // pre-built certificate context, so choose the whole options object per handshake.
+                            var fallbackCert = certificate;
+                            await sslStream.AuthenticateAsServerAsync(
+                                (_, hello, _, _) => new ValueTask<SslServerAuthenticationOptions>(
+                                    BuildOptions(Certificates.SniCertificateSelector.Select(hello.ServerName,
+                                        handshakeBindings) ?? fallbackCert)),
+                                null, cancellationToken);
+                        }
+                        else
+                        {
+                            await sslStream.AuthenticateAsServerAsync(BuildOptions(certificate), cancellationToken);
+                        }
                         Certificates.ClientCertificateHandshake.Capture(clientStream.Connection, sslStream, peekClientCertMode);
                         RecordClientHandshakeSuccess(httpsHostName);
 
