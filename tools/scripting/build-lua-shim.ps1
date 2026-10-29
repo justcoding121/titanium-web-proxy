@@ -114,7 +114,7 @@ try {
         # Trailing '/' (not '\') so quoting the /Fo arg in an .rsp file cannot escape the closing '"'.
         $foDir = $objDir.TrimEnd('\', '/') + '/'
         $clArgs = @("/nologo", "/O2", "/MT", "/W3", "/LD", "/DLUA_BUILD_AS_DLL", "/D_CRT_SECURE_NO_WARNINGS",
-            "/I$srcDir", "/I$shimDir", "/Fo$foDir") + $all + @("/Fe:$outPath", "/link", "/NOLOGO")
+            "/I$srcDir", "/I$shimDir", "/Fo$foDir") + $all + @("/Fe:$outPath", "/link")
         if ($cl) {
             & $cl @clArgs
             if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
