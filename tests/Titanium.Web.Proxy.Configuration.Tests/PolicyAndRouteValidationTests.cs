@@ -463,6 +463,64 @@ public class PolicyAndRouteValidationTests
         StringAssert.Contains(Errors(config), "minBytes must not exceed maxBytes");
     }
 
+    [DataTestMethod]
+    [DataRow("buffered")]
+    [DataRow("streaming")]
+    [DataRow("Streaming")]
+    public void ResponseCompression_KnownModes_AreValid(string mode)
+    {
+        var config = WithCompression(new ResponseCompressionConfig { Enabled = true, Mode = mode });
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+    }
+
+    [TestMethod]
+    public void ResponseCompression_UnknownMode_IsRejected()
+    {
+        var config = WithCompression(new ResponseCompressionConfig { Enabled = true, Mode = "chunked" });
+        StringAssert.Contains(Errors(config), "server.responseCompression.mode 'chunked' is unknown");
+    }
+
+    private static TwpConfig WithRequestDecompression(RequestDecompressionConfig decompression) => new()
+    {
+        Clusters = [Cluster("c")],
+        Routes = [],
+        Server = new ServerConfig { RequestDecompression = decompression },
+    };
+
+    [TestMethod]
+    public void RequestDecompression_Defaults_AreValid_AndWarnAboutScope()
+    {
+        var config = WithRequestDecompression(new RequestDecompressionConfig { Enabled = true });
+
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+        var warning = TwpConfigValidator.CollectWarnings(config)
+            .Single(w => w.Contains("requestDecompression", StringComparison.Ordinal));
+        StringAssert.Contains(warning, "HTTP/1.x");
+    }
+
+    [TestMethod]
+    public void RequestDecompression_Disabled_HasNoWarning()
+    {
+        var config = WithRequestDecompression(new RequestDecompressionConfig { Enabled = false });
+        Assert.IsFalse(TwpConfigValidator.CollectWarnings(config)
+            .Any(w => w.Contains("requestDecompression", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void RequestDecompression_OutOfRangeLimits_AreRejected()
+    {
+        var config = WithRequestDecompression(new RequestDecompressionConfig
+        {
+            Enabled = true,
+            MaxDecompressedBytes = RequestDecompressionConfig.MaxAllowedDecompressedBytes + 1,
+            MaxRatio = 0,
+        });
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "server.requestDecompression.maxDecompressedBytes");
+        StringAssert.Contains(errors, "server.requestDecompression.maxRatio");
+    }
+
     [TestMethod]
     public void RouteCompression_OnlyOffIsAccepted()
     {

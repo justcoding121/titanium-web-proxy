@@ -375,6 +375,58 @@ public class SessionEventArgs : SessionEventArgsBase
     }
 
     /// <summary>
+    ///     Replaces a gzip or Brotli HTTP/1.x request body with its decompressed bytes (<c>server.requestDecompression</c>),
+    ///     inside the policy's size and ratio limits. Both the compressed and the decompressed body are held, each
+    ///     under <see cref="RequestDecompressionPolicy.MaxDecompressedBytes" />. Call before the request is locked and
+    ///     before anything is sent to the origin.
+    /// </summary>
+    /// <returns>
+    ///     Null when nothing applies (no body, an unsupported or stacked encoding, a body read already, an
+    ///     <c>Expect: 100-continue</c> request) and the body is left to stream as it was. Otherwise the outcome; on
+    ///     anything but <see cref="RequestDecompressionOutcome.Decompressed" /> the request is unusable and the caller
+    ///     answers the client.
+    /// </returns>
+    internal async Task<RequestDecompressionOutcome?> DecompressRequestBodyAsync(RequestDecompressionPolicy policy,
+        CancellationToken cancellationToken)
+    {
+        var request = HttpClient.Request;
+        if (request.IsBodyRead || !request.HasBody || request.ExpectContinue || request.UpgradeToWebSocket
+            || !RequestDecompressionPolicy.TryGetEncoding(request, out var encoding))
+            return null;
+
+        if (request.ContentLength > policy.MaxDecompressedBytes)
+            return RequestDecompressionOutcome.TooLarge;
+
+        byte[] compressed;
+        try
+        {
+            using var sink = new CappedMemoryWriteStream(policy.MaxDecompressedBytes);
+            using var writer = new HttpStream(Server, sink, BufferPool, cancellationToken);
+            await CopyRequestBodyAsync(writer, TransformationMode.RemoveChunked, cancellationToken)
+                .ConfigureAwait(false);
+            compressed = sink.ToArray();
+        }
+        catch (BodySizeLimitExceededException)
+        {
+            return RequestDecompressionOutcome.TooLarge;
+        }
+
+        var outcome = policy.TryDecompress(encoding, compressed, out var plain);
+        if (outcome != RequestDecompressionOutcome.Decompressed)
+            return outcome;
+
+        request.Headers.RemoveHeader(KnownHeaders.ContentEncoding);
+        request.Body = plain;
+        // A fixed length also replaces chunked framing: the whole body is in hand.
+        request.ContentLength = plain.Length;
+        request.IsBodyRead = true;
+        request.IsBodyReceived = true;
+
+        Diagnostics.ProxyMetrics.BodyDecompressed(plain.Length, "request");
+        return outcome;
+    }
+
+    /// <summary>
     /// reinit response object
     /// </summary>
     internal async Task ClearResponse(CancellationToken cancellationToken)

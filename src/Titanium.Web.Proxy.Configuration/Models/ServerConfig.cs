@@ -25,10 +25,17 @@ public sealed class ServerConfig
     public Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
 
     /// <summary>
-    ///     Buffered gzip / Brotli compression of small known-length responses on HTTP/1.1 and
-    ///     HTTP/2-to-HTTP/1.1. Null (or <c>enabled: false</c>) is off and costs one null check.
+    ///     gzip / Brotli compression of responses on HTTP/1.1 and HTTP/2-to-HTTP/1.1: buffered for small known-length
+    ///     bodies (default) or streaming (<c>mode: streaming</c>) for any length. Null (or <c>enabled: false</c>) is
+    ///     off and costs one null check.
     /// </summary>
     public Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig? ResponseCompression { get; set; }
+
+    /// <summary>
+    ///     Bounded decompression of gzip / Brotli HTTP/1.x request bodies, with a decompressed-size limit and a ratio
+    ///     limit. Null (or <c>enabled: false</c>) is off and costs one null check.
+    /// </summary>
+    public Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig? RequestDecompression { get; set; }
 
     public bool? EnableHttp2 { get; set; }
 

@@ -1653,6 +1653,25 @@ public partial class ProxyServer : IDisposable
 
     internal Compression.ResponseCompressionPolicy? CompressionPolicy { get; private set; }
 
+    private Abstractions.Routing.RequestDecompressionConfig? requestDecompression;
+
+    /// <summary>
+    /// Bounded decompression of gzip and Brotli HTTP/1.x request bodies before they reach the origin, with a
+    /// decompressed-size limit and a ratio limit. A body over either limit is answered with 413. Null or
+    /// <c>Enabled = false</c> (the default) is off: one null check per request.
+    /// </summary>
+    public Abstractions.Routing.RequestDecompressionConfig? RequestDecompression
+    {
+        get => requestDecompression;
+        set
+        {
+            requestDecompression = value;
+            RequestDecompressionPolicy = Compression.RequestDecompressionPolicy.Create(value);
+        }
+    }
+
+    internal Compression.RequestDecompressionPolicy? RequestDecompressionPolicy { get; private set; }
+
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
     /// endpoint: any session event handler is subscribed, <see cref="EnableHttpInterception"/> is
@@ -1672,6 +1691,7 @@ public partial class ProxyServer : IDisposable
         || RequestIdHeader is not null
         || ForwardedHeaders is not null
         || CompressionPolicy is not null
+        || RequestDecompressionPolicy is not null
         || ReverseProxy is { HasGrpcWebRoutes: true }
         || ReverseProxy is { HasHandledPolicies: true };
 

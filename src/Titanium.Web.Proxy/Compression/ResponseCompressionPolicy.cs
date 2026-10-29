@@ -30,6 +30,7 @@ internal sealed class ResponseCompressionPolicy
     private ResponseCompressionPolicy(ResponseCompressionConfig config)
     {
         algorithms = ParseAlgorithms(config.Algorithms);
+        Streaming = IsStreamingMode(config.Mode);
         MinBytes = config.MinBytes;
         MaxBytes = config.MaxBytes;
         Level = ParseLevel(config.Level);
@@ -56,6 +57,26 @@ internal sealed class ResponseCompressionPolicy
     internal int MaxBytes { get; }
 
     internal CompressionLevel Level { get; }
+
+    /// <summary>True for <c>mode: streaming</c>: the body is compressed while it is relayed, never buffered.</summary>
+    internal bool Streaming { get; }
+
+    /// <summary>True when <paramref name="mode" /> is unset (buffered) or names a known mode.</summary>
+    internal static bool TryParseMode(string? mode, out bool streaming)
+    {
+        streaming = false;
+        if (string.IsNullOrWhiteSpace(mode)
+            || mode.Trim().Equals(ResponseCompressionConfig.ModeBuffered, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!mode.Trim().Equals(ResponseCompressionConfig.ModeStreaming, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        streaming = true;
+        return true;
+    }
+
+    private static bool IsStreamingMode(string? mode) => TryParseMode(mode, out var streaming) && streaming;
 
     /// <summary>Null (off) unless the config is present and enabled.</summary>
     internal static ResponseCompressionPolicy? Create(ResponseCompressionConfig? config) =>
@@ -119,6 +140,36 @@ internal sealed class ResponseCompressionPolicy
     {
         algorithm = HttpCompression.Unsupported;
 
+        if (response.IsChunked)
+            return false;
+
+        var length = response.ContentLength;
+        if (length < MinBytes || length > MaxBytes)
+            return false;
+
+        return TrySelectCore(request, response, out algorithm);
+    }
+
+    /// <summary>
+    ///     Streaming variant of <see cref="TrySelect" />: the same rules, except that a chunked or close-delimited
+    ///     body is eligible, a known Content-Length is only held to <see cref="MinBytes" />, and there is no upper
+    ///     bound because nothing is buffered. The body has to be relayed by the caller.
+    /// </summary>
+    internal bool TrySelectStreaming(Request request, Response response, out HttpCompression algorithm)
+    {
+        algorithm = HttpCompression.Unsupported;
+
+        var length = response.ContentLength;
+        if (!response.IsChunked && length >= 0 && length < MinBytes)
+            return false;
+
+        return TrySelectCore(request, response, out algorithm);
+    }
+
+    private bool TrySelectCore(Request request, Response response, out HttpCompression algorithm)
+    {
+        algorithm = HttpCompression.Unsupported;
+
         if (response.StatusCode != 200)
             return false;
 
@@ -127,11 +178,7 @@ internal sealed class ResponseCompressionPolicy
             || request.Headers.HeaderExists("Range"))
             return false;
 
-        if (response.IsChunked || response.Headers.HeaderExists("Content-Encoding"))
-            return false;
-
-        var length = response.ContentLength;
-        if (length < MinBytes || length > MaxBytes)
+        if (response.Headers.HeaderExists("Content-Encoding") || response.Headers.HeaderExists("Content-Range"))
             return false;
 
         if (HasToken(response.Headers.GetHeaders("Cache-Control"), "no-transform"))
@@ -144,16 +191,19 @@ internal sealed class ResponseCompressionPolicy
         if (accept is null)
             return false;
 
+        // The highest client weight wins; the configured order only breaks a tie.
+        var best = 0d;
         foreach (var candidate in algorithms)
         {
-            if (Accepts(accept, candidate == HttpCompression.Brotli ? "br" : "gzip"))
+            var weight = Weight(accept, candidate == HttpCompression.Brotli ? "br" : "gzip");
+            if (weight > best)
             {
+                best = weight;
                 algorithm = candidate;
-                return true;
             }
         }
 
-        return false;
+        return algorithm != HttpCompression.Unsupported;
     }
 
     /// <summary>Compresses <paramref name="body" /> with the configured level.</summary>
@@ -177,11 +227,29 @@ internal sealed class ResponseCompressionPolicy
         response.Body = compressed;
         response.BodyIsWireEncoded = true;
 
-        response.Headers.SetOrAddHeaderValue(KnownHeaders.ContentEncoding,
-            algorithm == HttpCompression.Brotli ? KnownHeaders.ContentEncodingBrotli : KnownHeaders.ContentEncodingGzip);
-
         response.Headers.RemoveHeader(KnownHeaders.ContentLength);
         response.ContentLength = compressed.Length;
+
+        RewriteHeaders(response, algorithm);
+    }
+
+    /// <summary>
+    ///     Rewrites the headers for a body that is compressed while it is relayed: sets Content-Encoding, drops
+    ///     Content-Length (the compressed length is unknown), frames the body as chunked, adds
+    ///     <c>Vary: Accept-Encoding</c>, and weakens a strong ETag.
+    /// </summary>
+    internal static void ApplyStreaming(Response response, HttpCompression algorithm)
+    {
+        response.Headers.RemoveHeader(KnownHeaders.ContentLength);
+        response.IsChunked = true;
+
+        RewriteHeaders(response, algorithm);
+    }
+
+    private static void RewriteHeaders(Response response, HttpCompression algorithm)
+    {
+        response.Headers.SetOrAddHeaderValue(KnownHeaders.ContentEncoding,
+            algorithm == HttpCompression.Brotli ? KnownHeaders.ContentEncodingBrotli : KnownHeaders.ContentEncodingGzip);
 
         if (!HasToken(response.Headers.GetHeaders("Vary"), "accept-encoding")
             && !HasToken(response.Headers.GetHeaders("Vary"), "*"))
@@ -257,7 +325,14 @@ internal sealed class ResponseCompressionPolicy
     /// <summary>
     ///     RFC 9110 §12.5.3: an explicit coding beats <c>*</c>, and a zero weight forbids it.
     /// </summary>
-    internal static bool Accepts(List<HttpHeader> acceptEncoding, string coding)
+    internal static bool Accepts(List<HttpHeader> acceptEncoding, string coding) =>
+        Weight(acceptEncoding, coding) > 0;
+
+    /// <summary>
+    ///     The client's weight for <paramref name="coding" />: its explicit <c>q</c>, else the <c>*</c> weight,
+    ///     else 0. A coding the client does not list (or lists with <c>q=0</c>) has weight 0.
+    /// </summary>
+    internal static double Weight(List<HttpHeader> acceptEncoding, string coding)
     {
         var explicitWeight = -1d;
         var starWeight = -1d;
@@ -289,6 +364,6 @@ internal sealed class ResponseCompressionPolicy
             }
         }
 
-        return explicitWeight >= 0 ? explicitWeight > 0 : starWeight > 0;
+        return Math.Max(0d, explicitWeight >= 0 ? explicitWeight : starWeight);
     }
 }

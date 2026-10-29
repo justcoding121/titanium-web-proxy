@@ -238,6 +238,11 @@ public partial class ProxyServer
             return;
         }
 
+        // Streaming compression decides last, so BeforeResponse handlers and the cache saw the origin's headers.
+        StreamingCompressionPlan? streamingCompression = null;
+        if (CompressionPolicy is { Streaming: true } streamingPolicy && !args.IsFastPath)
+            streamingCompression = TryBeginStreamingCompression(args, streamingPolicy, clientIsHttp2: false);
+
         response.Locked = true;
 
         // FramingValidator already ran wire CL/TE rules above. Explicit proxy still needs
@@ -279,8 +284,29 @@ public partial class ProxyServer
                         ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
                     try
                     {
-                        await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                            false, args, idleDeadline.Token);
+                        if (streamingCompression is { } compressionPlan)
+                        {
+                            var bodyWriter = new BodyStreamWriter(clientStream, isChunked: true);
+                            var relayed = await RelayCompressedBodyAsync(args, CompressionPolicy!, compressionPlan,
+                                bodyWriter, () => clientStream.IsWriteClosed, idleDeadline.Token);
+                            if (!relayed)
+                            {
+                                // The client went away mid-body: nothing more can be delivered, the partial body
+                                // is not cacheable, and the origin connection was marked for closing.
+                                args.ResponseCache?.State?.Abandon();
+                                response.IsBodyReceived = true;
+                                return;
+                            }
+
+                            await bodyWriter.CompleteAsync(
+                                response.HasTrailingHeaders ? response.TrailingHeaders : null, idleDeadline.Token);
+                        }
+                        else
+                        {
+                            await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
+                                false, args, idleDeadline.Token);
+                        }
+
                         args.ResponseCache?.FinishStore();
                     }
                     catch (OperationCanceledException ex)
@@ -480,8 +506,9 @@ public partial class ProxyServer
         // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
         ReverseProxySessionDispatch.ApplyResponseTransforms(args);
 
-        // Buffered response compression (server.responseCompression). Null when off.
-        if (mayCompress && CompressionPolicy is { } compression)
+        // Buffered response compression (server.responseCompression). Null when off; streaming mode compresses
+        // later, while the body is relayed (see TryBeginStreamingCompression).
+        if (mayCompress && CompressionPolicy is { Streaming: false } compression)
             await TryCompressResponseAsync(args, compression).ConfigureAwait(false);
 
         // Rewrite gRPC → JSON before user handlers when the request was transcoded.

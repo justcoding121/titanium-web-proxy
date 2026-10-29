@@ -59,6 +59,11 @@ internal static class ServerConfigApplier
         {
             proxy.ResponseCompression = compression;
         }
+
+        if (server.RequestDecompression is { Enabled: true } decompression)
+        {
+            proxy.RequestDecompression = decompression;
+        }
     }
 
     private static void ApplyDecryptFailureBypass(ProxyServer proxy, ServerConfig server)

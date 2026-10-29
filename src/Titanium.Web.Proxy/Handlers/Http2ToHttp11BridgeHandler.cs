@@ -681,6 +681,11 @@ public partial class ProxyServer
             var restoreResponseVersionAfterEmit = false;
             byte[]? eagerWireBody = null;
 
+            // Streaming compression decides last, so BeforeResponse handlers saw the origin's headers.
+            StreamingCompressionPlan? streamingCompression = null;
+            if (!response.Locked && !sessionArgs.IsFastPath && CompressionPolicy is { Streaming: true } streamingPolicy)
+                streamingCompression = TryBeginStreamingCompression(sessionArgs, streamingPolicy, clientIsHttp2: true);
+
             if (!response.Locked)
             {
                 // HTTP/2 forbids connection-specific header fields (RFC 7540 §8.1.2.2) that an HTTP/1.1
@@ -718,6 +723,7 @@ public partial class ProxyServer
                 var eagerBodyThreshold = EagerBufferBodyThreshold(
                     sessionArgs.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes);
                 if (originHasBody && !response.IsBodyRead
+                    && streamingCompression is null
                     && !originIsChunked
                     && originContentLength >= 0
                     && originContentLength <= eagerBodyThreshold)
@@ -798,6 +804,15 @@ public partial class ProxyServer
 
                     response.StreamBodyWriter = async (clientBodyStream, ct) =>
                     {
+                        // Streaming compression: the response headers were rewritten above; compress each
+                        // origin read into DATA frames. The emitter ends the stream afterwards.
+                        if (streamingCompression is { } compressionPlan && CompressionPolicy is { } compressionPolicy)
+                        {
+                            await RelayCompressedBodyAsync(sessionArgs, compressionPolicy, compressionPlan,
+                                clientBodyStream, null, ct).ConfigureAwait(false);
+                            return;
+                        }
+
                         // Known-CL non-chunked: read origin HttpStream directly into pre-framed DATA
                         // buffers (skip LimitedStream + QueueDataFrame payload memcpy). Chunked /
                         // close-delimited still need LimitedStream for framing + trailers.

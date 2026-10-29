@@ -488,6 +488,23 @@ public partial class ProxyServer
                                     return;
                                 }
 
+                            // Bounded request-body decompression (server.requestDecompression). Null when off.
+                            // Same position as the WinAuth buffering above: before Locked, before the origin
+                            // sees a byte, so a breach can still be answered with a normal 4xx.
+                            if (RequestDecompressionPolicy is { } requestDecompressionPolicy && request.HasBody)
+                            {
+                                var decompression = await args.DecompressRequestBodyAsync(
+                                    requestDecompressionPolicy, requestToken);
+                                if (decompression is { } decompressionOutcome
+                                    && decompressionOutcome != Compression.RequestDecompressionOutcome.Decompressed)
+                                {
+                                    await RejectRequestDecompressionAsync(args, decompressionOutcome, clientStream,
+                                        requestToken);
+                                    closeServerConnection = true;
+                                    return;
+                                }
+                            }
+
                             // Must run before Request.Locked is set (a few lines below, inside the
                             // Locked = true overload) - GetRequestBody() throws once Locked, exactly like
                             // the WinAuth buffering immediately above it.
@@ -1377,6 +1394,24 @@ public partial class ProxyServer
                && request.HttpVersion.Major == 1;
     }
 
+    /// <summary>True when the <c>;</c>-separated parameters of an Accept-Encoding entry carry <c>q=0</c>.</summary>
+    private static bool IsZeroWeight(ReadOnlySpan<char> parameters)
+    {
+        foreach (var range in parameters.Split(';'))
+        {
+            var parameter = parameters[range].Trim();
+            if (parameter.Length > 2 && (parameter[0] is 'q' or 'Q') && parameter[1] == '='
+                && double.TryParse(parameter.Slice(2), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var weight)
+                && weight <= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
     /// </summary>
@@ -1398,9 +1433,16 @@ public partial class ProxyServer
                     // parameter list, so we do not collapse Accept-Encoding to identity.
                     var coding = token;
                     var semicolon = coding.IndexOf(';');
+                    var refused = false;
                     if (semicolon >= 0)
+                    {
+                        // A zero weight forbids the coding (RFC 9110 section 12.5.3); keep it out of the list so
+                        // response compression, which reads this header, cannot pick it.
+                        refused = IsZeroWeight(coding.Slice(semicolon + 1));
                         coding = coding.Slice(0, semicolon).Trim();
-                    if (coding.Length > 0)
+                    }
+
+                    if (coding.Length > 0 && !refused)
                     {
                         var s = coding.ToString();
                         if (ProxyConstants.ProxySupportedCompressions.Contains(s))

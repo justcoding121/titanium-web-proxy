@@ -637,7 +637,7 @@ server:
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
-HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
 
 ### Listener TLS policy (`server.tls`)
 
@@ -689,15 +689,16 @@ Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `c
 
 ### Response compression (`server.responseCompression`)
 
-Opt-in, buffered compression of origin responses. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
+Opt-in compression of origin responses, buffered or streaming. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
 
 ```yaml
 server:
   responseCompression:
     enabled: true
+    mode: buffered           # buffered (default) | streaming
     algorithms: [br, gzip]   # default: both; brotli preferred when the client accepts it
     minBytes: 1024           # default 1024
-    maxBytes: 1048576        # default 1 MiB, upper limit 1 MiB
+    maxBytes: 1048576        # default 1 MiB, upper limit 1 MiB (buffered mode only)
     level: fastest           # fastest | optimal | smallestSize
     mimeTypes:               # default: text/*, application/json, application/javascript, application/xml, image/svg+xml
       - text/*
@@ -706,14 +707,34 @@ server:
 
 A response is compressed only when **all** of these hold:
 
-- `Accept-Encoding` allows the algorithm (an explicit coding beats `*`; `q=0` forbids it).
+- `Accept-Encoding` allows the algorithm (an explicit coding beats `*`; `q=0` forbids it). When the client allows several of the configured algorithms, the highest `q` wins and the order of `algorithms` breaks a tie. On an explicit-proxy listener the proxy first reduces `Accept-Encoding` to the codings it can decode, so `q` weights other than `q=0` are not seen there and `algorithms` decides.
 - Status is `200` (not `206`).
-- `Content-Length` is known and between `minBytes` and `maxBytes`.
-- The response has no `Content-Encoding` and no `Cache-Control: no-transform`.
+- `Content-Length` is known and between `minBytes` and `maxBytes` in buffered mode. In streaming mode a known length only has to reach `minBytes`, and a chunked body (no length) is always eligible.
+- The response has no `Content-Encoding`, no `Content-Range` and no `Cache-Control: no-transform`.
 - The request is not `HEAD`, has no `Range`, and is not a WebSocket upgrade.
 - The `Content-Type` matches `mimeTypes`. `text/event-stream` and `application/grpc*` are never compressed.
 
-When it compresses, the proxy sets `Content-Encoding`, replaces `Content-Length`, adds `Vary: Accept-Encoding`, and weakens a strong `ETag` (`W/"…"`). A body that would not get smaller is sent unchanged.
+When it compresses, the proxy sets `Content-Encoding`, replaces (buffered) or removes (streaming) `Content-Length`, adds `Vary: Accept-Encoding`, and weakens a strong `ETag` (`W/"…"`). A `HEAD` response and a `304` are left alone. In buffered mode a body that would not get smaller is sent unchanged.
+
+#### Streaming mode
+
+`mode: streaming` compresses the origin body while it is relayed, so there is no `maxBytes` limit and the first compressed bytes reach the client before the origin has finished. This suits large downloads, long exports and slowly produced bodies.
+
+- **Flush per upstream chunk.** The compressor is flushed after every read from the origin (a sync flush for gzip and brotli), so a chunk the origin sends is readable by the client without waiting for later data. Each flush costs a little compression ratio; that is the price of low latency.
+- **Chunked output.** The response has no `Content-Length`. An HTTP/1.1 client gets `Transfer-Encoding: chunked`; an HTTP/2 client (the HTTP/2-to-HTTP/1.1 bridge) gets DATA frames.
+- **Backpressure.** The write to the client is awaited before the next origin read, so a slow client holds the origin back and memory stays flat (a few tens of KiB per response), however large the body is.
+- **Early abort.** When the client goes away the relay stops reading, no gzip trailer is written, and the origin connection is closed rather than reused, because its body was only partly read. A response that was being stored by the [response cache](#response-cache) is abandoned, not stored.
+- **Algorithms.** gzip and brotli. zstd is not offered: .NET 10 has no zstd stream in the base library, and `algorithms` rejects it.
+- **Left uncompressed.** Everything in the list above, plus `text/event-stream` (server-sent events must reach the client event by event), HTTP/1.0 clients (they cannot take a chunked body), a response whose body a handler already read (`GetResponseBody` in `BeforeResponse`) or replaced, and any proxy that has a body-write hook (`OnResponseBodyWrite`), since those hooks expect the origin's plain bytes.
+- **Sizes and WebAssembly.** `application/wasm` is not in the default `mimeTypes`; add it to compress `.wasm` files.
+
+Streaming mode applies to the same paths as buffered mode (HTTP/1.1 clients and the HTTP/2-to-HTTP/1.1 bridge) and also keeps the H1 terminate-lite shortcut off.
+
+#### BREACH and caches
+
+Compressing a response that mixes a secret (a CSRF token, a session identifier) with attacker-chosen text, over TLS, leaks the secret through the compressed size (BREACH). Compression is therefore off by default and applies to every response whose type matches `mimeTypes`. Exclude such pages with `compression: off` on their route, or narrow `mimeTypes`, and use per-request token masking at the origin.
+
+The [response cache](#response-cache) keys each entry on the client's normalized `Accept-Encoding` as well as on the `Vary` headers the response names, so a gzip client and an identity client never share an entry. The cache decision is made before the response is compressed: it stores the origin's representation, and a cache hit is served as stored, not compressed again. A response that streaming compression rewrote carries `Vary: Accept-Encoding`, so downstream caches also keep the variants apart.
 
 A route opts out with `compression: off`:
 
@@ -724,7 +745,28 @@ routes:
     compression: off
 ```
 
-v1 buffers the body, so it applies to HTTP/1.1 responses and to the HTTP/2-to-HTTP/1.1 bridge only. It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths; `titanium validate` warns about that. Streaming compression is not part of v1.
+Both modes apply to HTTP/1.1 responses and to the HTTP/2-to-HTTP/1.1 bridge only. They are not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths; `titanium validate` warns about that.
+
+### Request decompression (`server.requestDecompression`)
+
+Opt-in, bounded decompression of request bodies. A request with `Content-Encoding: gzip` or `br` is decompressed before it is sent to the origin, so the origin (and a body-aware policy) sees plain bytes: the `Content-Encoding` header is removed and `Content-Length` is set to the decompressed size. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
+
+```yaml
+server:
+  requestDecompression:
+    enabled: true
+    maxDecompressedBytes: 10485760   # default 10 MiB, upper limit 64 MiB
+    maxRatio: 100                    # default 100, upper limit 10000
+```
+
+Both the compressed and the decompressed body are held in memory, so two limits stop a zip bomb while decompressing, before the origin sees a byte:
+
+- `maxDecompressedBytes` is the most decompressed bytes a request may produce. The compressed body is read under the same limit.
+- `maxRatio` is the largest decompressed-to-compressed ratio. It is not applied while the output is still under 4 KiB, so tiny bodies are not refused for compressing well.
+
+A body that breaches either limit is answered with `413` and the connection is closed. A body that is corrupt or cut short is answered with `400`. Truncation is detected for both codings (gzip by its length trailer, brotli by the decoder state). Only single-member gzip is accepted. Every decompressed body is recorded in the `twp.body.decompressed_bytes` histogram, tagged `direction=request`; see [Metrics](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics).
+
+Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium validate` warns about that.
 
 ### Graceful reload
 

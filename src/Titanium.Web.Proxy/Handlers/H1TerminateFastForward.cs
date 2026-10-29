@@ -97,7 +97,7 @@ public partial class ProxyServer
             return false;
 
         // Response compression buffers and rewrites the response, which lite never does.
-        if (CompressionPolicy is not null)
+        if (CompressionPolicy is not null || RequestDecompressionPolicy is not null)
             return false;
 
         if (endPoint is not TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)

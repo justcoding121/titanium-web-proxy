@@ -686,6 +686,20 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.init -> void
 const Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.DefaultMaxBytes = 1048576 -> int
 const Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.DefaultMinBytes = 1024 -> int
+const Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.ModeBuffered = "buffered" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.ModeStreaming = "streaming" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.DefaultMaxDecompressedBytes = 10485760 -> int
+const Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.DefaultMaxRatio = 100 -> int
+const Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.MaxAllowedDecompressedBytes = 67108864 -> int
+const Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.MaxAllowedRatio = 10000 -> int
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.Enabled.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.MaxDecompressedBytes.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.MaxDecompressedBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.MaxRatio.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.MaxRatio.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig.RequestDecompressionConfig() -> void
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.Algorithms.get -> System.Collections.Generic.IList<string!>?
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.Algorithms.init -> void
@@ -696,6 +710,8 @@ Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.Level.init -> 
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MaxBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MaxBytes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MimeTypes.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.Mode.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.Mode.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MimeTypes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MinBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MinBytes.init -> void

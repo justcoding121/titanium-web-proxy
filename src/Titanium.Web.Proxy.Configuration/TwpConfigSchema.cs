@@ -124,6 +124,17 @@ public static class TwpConfigSchema
             case "ResponseCompressionConfig.Level":
                 schema["enum"] = new JsonArray { "fastest", "optimal", "smallestSize" };
                 break;
+            case "ResponseCompressionConfig.Mode":
+                schema["enum"] = new JsonArray { "buffered", "streaming" };
+                break;
+            case "RequestDecompressionConfig.MaxDecompressedBytes":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = RequestDecompressionConfig.MaxAllowedDecompressedBytes;
+                break;
+            case "RequestDecompressionConfig.MaxRatio":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = RequestDecompressionConfig.MaxAllowedRatio;
+                break;
             case "ResponseCompressionConfig.MinBytes":
                 schema[MinimumKey] = 1;
                 break;

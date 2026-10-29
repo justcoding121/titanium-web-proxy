@@ -1457,6 +1457,12 @@ internal static class RunCommand
             return true;
         }
 
+        // Request decompression reads and rewrites the request body, which terminate-lite never does.
+        if (config.Server?.RequestDecompression is { Enabled: true })
+        {
+            return true;
+        }
+
         // grpcWeb rewrites the request headers and the origin response.
         if (config.Routes.Any(r => r.GrpcWeb))
         {

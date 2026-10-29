@@ -1473,6 +1473,25 @@
         "proxyLoopback": {
           "type": "boolean"
         },
+        "requestDecompression": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxDecompressedBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864
+            },
+            "maxRatio": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          }
+        },
         "requestId": {
           "type": "object",
           "additionalProperties": false,
@@ -1520,6 +1539,13 @@
             "minBytes": {
               "type": "integer",
               "minimum": 1
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "buffered",
+                "streaming"
+              ]
             }
           }
         },

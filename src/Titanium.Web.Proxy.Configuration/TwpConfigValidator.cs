@@ -1412,6 +1412,7 @@ public static class TwpConfigValidator
         ValidateTelemetry(server.Telemetry, errors);
         ValidateAdmin(server.Admin, errors);
         ValidateResponseCompression(server.ResponseCompression, errors);
+        ValidateRequestDecompression(server.RequestDecompression, errors);
     }
 
     private static readonly string[] OtlpProtocolNames = ["grpc", "http"];
@@ -1621,6 +1622,34 @@ public static class TwpConfigValidator
             {
                 errors.Add($"{prefix}.mimeTypes entry '{type}' is not a media type such as text/* or application/json.");
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(compression.Mode) &&
+            !compression.Mode.Trim().Equals(ResponseCompressionConfig.ModeBuffered, StringComparison.OrdinalIgnoreCase) &&
+            !compression.Mode.Trim().Equals(ResponseCompressionConfig.ModeStreaming, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix}.mode '{compression.Mode}' is unknown. Use buffered or streaming.");
+        }
+    }
+
+    private static void ValidateRequestDecompression(RequestDecompressionConfig? decompression, List<string> errors)
+    {
+        if (decompression is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.requestDecompression";
+        if (decompression.MaxDecompressedBytes < 1
+            || decompression.MaxDecompressedBytes > RequestDecompressionConfig.MaxAllowedDecompressedBytes)
+        {
+            errors.Add(
+                $"{prefix}.maxDecompressedBytes must be 1-{RequestDecompressionConfig.MaxAllowedDecompressedBytes}.");
+        }
+
+        if (decompression.MaxRatio < 1 || decompression.MaxRatio > RequestDecompressionConfig.MaxAllowedRatio)
+        {
+            errors.Add($"{prefix}.maxRatio must be 1-{RequestDecompressionConfig.MaxAllowedRatio}.");
         }
     }
 
@@ -2070,6 +2099,14 @@ public static class TwpConfigValidator
             warnings.Add(
                 "server.responseCompression compresses HTTP/1.1 and HTTP/2-to-HTTP/1.1 responses only. " +
                 "It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths.");
+        }
+
+        if (config.Server?.RequestDecompression is { Enabled: true })
+        {
+            warnings.Add(
+                "server.requestDecompression decompresses HTTP/1.x request bodies on the full session path only. " +
+                "HTTP/2 and HTTP/3 request bodies, Expect: 100-continue requests, deflate and stacked encodings " +
+                "are forwarded as sent.");
         }
 
         if (config.Routes.Any(route => route.GrpcWeb))

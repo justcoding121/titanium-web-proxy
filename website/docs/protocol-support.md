@@ -34,7 +34,7 @@ For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, aut
 
 ## Response compression
 
-Opt-in `server.responseCompression` compresses buffered origin responses (brotli or gzip). See [Configuration](/docs/configuration#response-compression-server-responsecompression).
+Opt-in `server.responseCompression` compresses origin responses (brotli or gzip), either buffered (up to 1 MiB with a known length) or, with `mode: streaming`, while the body is relayed. Streaming has no size limit, flushes per upstream chunk and uses chunked framing (HTTP/1.1) or DATA frames (the HTTP/2 bridge); HTTP/1.0 clients get identity. See [Configuration](/docs/configuration#response-compression-server-responsecompression).
 
 | Path | Compressed |
 |------|------------|
@@ -43,6 +43,8 @@ Opt-in `server.responseCompression` compresses buffered origin responses (brotli
 | HTTP/2 client, HTTP/2 origin | No |
 | HTTP/3 | No |
 | HTTP/1.1 client, HTTP/2 origin | No |
+
+Opt-in `server.requestDecompression` decompresses gzip and brotli request bodies before they reach the origin, with a decompressed-size cap and a ratio limit; a breach answers `413`, a corrupt body `400`. It applies to HTTP/1.x requests on the session path only. See [Configuration](/docs/configuration#request-decompression-server-requestdecompression).
 
 ## gRPC-Web
 
