@@ -32,6 +32,21 @@ public sealed record GatewayTranslatorOptions
     public string? DataPlaneServiceNamespace { get; init; }
 
     public string? DataPlaneServiceName { get; init; }
+
+    /// <summary>Value of <c>IngressClass.spec.controller</c> this controller owns.</summary>
+    public string IngressControllerName { get; init; } = IngressApiNames.DefaultControllerName;
+
+    /// <summary>
+    ///     When true, an Ingress with no <c>ingressClassName</c> that carries <c>kubernetes.io/ingress.class</c> is
+    ///     ours if the value names one of our IngressClasses or is <c>titanium</c>. Off by default: the annotation is deprecated.
+    /// </summary>
+    public bool WatchLegacyAnnotation { get; init; }
+
+    /// <summary>Port an Ingress is served on over HTTP. It must be a key of <see cref="ListenerPortMap"/>.</summary>
+    public int IngressHttpPort { get; init; } = 80;
+
+    /// <summary>Port an Ingress is served on over HTTPS (when at least one <c>tls</c> entry resolves). A key of <see cref="ListenerPortMap"/>.</summary>
+    public int IngressHttpsPort { get; init; } = 443;
 }
 
 /// <summary>Which resource a <see cref="StatusPatch"/> targets.</summary>
@@ -40,6 +55,9 @@ public enum StatusKind
     GatewayClass,
     Gateway,
     HttpRoute,
+
+    /// <summary>An Ingress. Only <see cref="StatusPatch.Addresses"/> (the load balancer) is written.</summary>
+    Ingress,
 }
 
 /// <summary>The status this controller wants on one resource. The writer merges it; it never touches other controllers' entries.</summary>
@@ -56,9 +74,32 @@ public sealed record StatusPatch(
     public string Key => Namespace is null ? $"{Kind}/{Name}" : $"{Kind}/{Namespace}/{Name}";
 }
 
+/// <summary>What a generated file holds.</summary>
+public enum TlsFileKind
+{
+    /// <summary>Certificate and key as a password-less PFX (a listener or Ingress serving certificate).</summary>
+    Pfx,
+
+    /// <summary>The Secret's <c>tls.crt</c> as PEM (an upstream client certificate).</summary>
+    CertificatePem,
+
+    /// <summary>The Secret's <c>tls.key</c> as PEM (the upstream client key).</summary>
+    PrivateKeyPem,
+
+    /// <summary>The Secret's <c>ca.crt</c> as PEM (upstream trust anchors).</summary>
+    CaPem,
+}
+
 /// <summary>A certificate the data plane needs as a file. The controller builds the file from the named Secret.</summary>
 /// <param name="FileName">File name inside the generated Secret and under <see cref="GatewayTranslatorOptions.TlsMountPath"/>.</param>
-public sealed record TlsFile(string FileName, string SecretNamespace, string SecretName);
+public sealed record TlsFile(string FileName, string SecretNamespace, string SecretName, TlsFileKind Kind = TlsFileKind.Pfx);
+
+/// <summary>A Kubernetes Event the controller wants on an Ingress. Warnings explain a rejected rule or annotation.</summary>
+/// <param name="Type"><c>Warning</c> or <c>Normal</c>.</param>
+public sealed record IngressEvent(string Namespace, string Name, string? Uid, string Type, string Reason, string Message)
+{
+    public string Key => $"{Namespace}/{Name}|{Reason}|{Message}";
+}
 
 /// <summary>The output of one render: the data-plane config, the certificate files it needs, and status.</summary>
 public sealed class RenderResult
@@ -69,13 +110,18 @@ public sealed class RenderResult
         TwpConfig config,
         IReadOnlyList<TlsFile> tlsFiles,
         IReadOnlyList<string> notes,
-        Func<bool, IReadOnlyList<StatusPatch>> patches)
+        Func<bool, IReadOnlyList<StatusPatch>> patches,
+        IReadOnlyList<IngressEvent>? events = null)
     {
         Config = config;
         TlsFiles = tlsFiles;
         Notes = notes;
         _patches = patches;
+        Events = events ?? [];
     }
+
+    /// <summary>Events for Ingresses (rejected rules, unknown or invalid annotations). The controller posts each once.</summary>
+    public IReadOnlyList<IngressEvent> Events { get; }
 
     public TwpConfig Config { get; }
 

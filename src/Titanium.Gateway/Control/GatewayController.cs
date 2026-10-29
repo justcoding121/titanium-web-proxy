@@ -51,6 +51,7 @@ public sealed class GatewayController
     private readonly GatewayTranslator _translator;
     private readonly OutputWriter _output;
     private readonly StatusWriter _status;
+    private readonly EventWriter? _events;
     private readonly IDataPlaneObserver _observer;
     private readonly LeaderElector? _leader;
     private readonly GatewayControllerOptions _options;
@@ -72,8 +73,10 @@ public sealed class GatewayController
         LeaderElector? leader,
         GatewayControllerOptions options,
         ILogger log,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        EventWriter? events = null)
     {
+        _events = events;
         _cache = cache;
         _output = output;
         _status = status;
@@ -196,9 +199,9 @@ public sealed class GatewayController
         var files = new Dictionary<string, byte[]>(StringComparer.Ordinal);
         foreach (var file in render.TlsFiles)
         {
-            if (_cache.GetPfx(file.SecretNamespace, file.SecretName) is { } pfx)
+            if (_cache.GetFile(file) is { } content)
             {
-                files[file.FileName] = pfx;
+                files[file.FileName] = content;
             }
         }
 
@@ -213,6 +216,11 @@ public sealed class GatewayController
         var confirmed = observation.Confirms(hash);
         await PokeAsync(wrote, hash, observation, pods, cancellationToken).ConfigureAwait(false);
         var (written, failed) = await _status.ApplyAsync(render.Finalize(observation, hash), state, cancellationToken).ConfigureAwait(false);
+        if (_events is not null)
+        {
+            await _events.ApplyAsync(render.Events, cancellationToken).ConfigureAwait(false);
+        }
+
         return new ReconcileOutcome(true, hash, wrote, written, failed, confirmed, hasListeners);
     }
 

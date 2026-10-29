@@ -101,6 +101,29 @@ public sealed class StatusWriter
                 break;
             }
 
+            case StatusKind.Ingress:
+            {
+                var existing = current.Ingresses.FirstOrDefault(i => i.Metadata.Namespace == patch.Namespace && i.Metadata.Name == patch.Name);
+                if (existing is null)
+                {
+                    return false;
+                }
+
+                var entries = (patch.Addresses ?? [])
+                    .Select(a => a.Type == "Hostname"
+                        ? new IngressLoadBalancerEntry { Hostname = a.Value }
+                        : new IngressLoadBalancerEntry { Ip = a.Value })
+                    .ToList();
+                if (Json(entries) == Json(existing.Status?.LoadBalancer?.Ingress ?? []))
+                {
+                    return false;
+                }
+
+                desired = new { loadBalancer = new { ingress = entries } };
+                path = $"/apis/{IngressApiNames.Group}/{IngressApiNames.Version}/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/ingresses/{Uri.EscapeDataString(patch.Name)}/status";
+                break;
+            }
+
             default:
             {
                 var existing = current.HttpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name);

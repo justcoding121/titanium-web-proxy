@@ -1,6 +1,7 @@
 using System.Globalization;
 using Titanium.Gateway.Control;
 using Titanium.Gateway.Kube;
+using Titanium.Gateway.Model;
 using Titanium.Gateway.Translation;
 
 namespace Titanium.Gateway;
@@ -47,6 +48,12 @@ public sealed class GatewayOptions
 
     public IReadOnlyList<string> SecretNamespaces { get; private set; } = [];
 
+    /// <summary><c>IngressClass.spec.controller</c> this controller owns.</summary>
+    public string IngressControllerName { get; private set; } = IngressApiNames.DefaultControllerName;
+
+    /// <summary>Also treat <c>kubernetes.io/ingress.class</c> as a class selector (deprecated upstream). Off by default.</summary>
+    public bool WatchLegacyAnnotation { get; private set; }
+
     public int MinReconcileMilliseconds { get; private set; } = 500;
 
     public bool Verbose { get; private set; }
@@ -63,6 +70,7 @@ public sealed class GatewayOptions
         "controller-name", "data-plane-namespace", "data-plane-service", "data-plane-deployment", "config-map", "tls-secret",
         "config-key", "lease-name", "lease-namespace", "identity", "no-leader-election", "admin-port", "admin-token-env",
         "health-port", "tls-mount-path", "port-map", "secret-namespaces", "min-reconcile-ms", "verbose", "pod-namespace", "pod-name",
+        "ingress-controller-name", "watch-legacy-annotation",
     };
 
     private static string KnownList => string.Join(", ", Known.Order(StringComparer.Ordinal));
@@ -102,7 +110,7 @@ public sealed class GatewayOptions
             {
                 values[name[..eq]] = name[(eq + 1)..];
             }
-            else if (name is "verbose" or "no-leader-election")
+            else if (name is "verbose" or "no-leader-election" or "watch-legacy-annotation")
             {
                 values[name] = "true";
             }
@@ -151,6 +159,8 @@ public sealed class GatewayOptions
         options.TlsMountPath = Get("tls-mount-path") ?? options.TlsMountPath;
         options.MinReconcileMilliseconds = Int(Get("min-reconcile-ms"), options.MinReconcileMilliseconds, "min-reconcile-ms");
         options.Verbose = Get("verbose") is "true";
+        options.IngressControllerName = Get("ingress-controller-name") ?? options.IngressControllerName;
+        options.WatchLegacyAnnotation = Get("watch-legacy-annotation") is "true";
         if (Get("port-map") is { } map)
         {
             options.PortMap = ParsePortMap(map);
@@ -197,6 +207,8 @@ public sealed class GatewayOptions
             TlsMountPath = TlsMountPath,
             DataPlaneServiceNamespace = DataPlaneNamespace,
             DataPlaneServiceName = DataPlaneService,
+            IngressControllerName = IngressControllerName,
+            WatchLegacyAnnotation = WatchLegacyAnnotation,
         },
         Output = new OutputOptions
         {

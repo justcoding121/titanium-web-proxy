@@ -4,7 +4,7 @@ using Titanium.Gateway.Model;
 namespace Titanium.Gateway.Kube;
 
 /// <summary>A TLS Secret as the informer holds it. The key bytes stay here; the translator only sees a <see cref="SecretInfo"/>.</summary>
-internal sealed record SecretData(string Namespace, string Name, string? Type, string ResourceVersion, byte[]? Certificate, byte[]? PrivateKey);
+internal sealed record SecretData(string Namespace, string Name, string? Type, string ResourceVersion, byte[]? Certificate, byte[]? PrivateKey, byte[]? CaCertificate = null);
 
 /// <summary>Turns watched JSON into the records the translator reads.</summary>
 internal static class ResourceParsers
@@ -120,7 +120,8 @@ internal static class ResourceParsers
             element.GetString("type"),
             element.GetString("metadata", "resourceVersion") ?? string.Empty,
             Decode(element.GetString("data", "tls.crt")),
-            Decode(element.GetString("data", "tls.key")));
+            Decode(element.GetString("data", "tls.key")),
+            Decode(element.GetString("data", "ca.crt")));
     }
 
     private static byte[]? Decode(string? base64)

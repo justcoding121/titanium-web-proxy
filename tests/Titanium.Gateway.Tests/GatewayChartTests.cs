@@ -143,6 +143,53 @@ public sealed class GatewayChartTests
     }
 
     [TestMethod]
+    public void Rbac_GrantsTheIngressAccessAndNothingMore()
+    {
+        var rbac = Read("templates", "rbac.yaml");
+
+        StringAssert.Matches(rbac, new Regex(@"apiGroups: \[""networking\.k8s\.io""\]\s+resources: \[""ingresses"", ""ingressclasses""\]\s+verbs: \[""get"", ""list"", ""watch""\]"));
+        StringAssert.Matches(rbac, new Regex(@"apiGroups: \[""networking\.k8s\.io""\]\s+resources: \[""ingresses/status""\]\s+verbs: \[""get"", ""patch"", ""update""\]"));
+        StringAssert.Matches(rbac, new Regex(@"apiGroups: \[""""\]\s+resources: \[""events""\]\s+verbs: \[""create"", ""patch""\]"));
+        Assert.IsFalse(Regex.IsMatch(rbac, @"resources: \[""ingresses""[^\]]*\]\s+verbs: \[[^\]]*(update|patch|create)"), "the Ingress spec is read-only");
+    }
+
+    [TestMethod]
+    public void IngressValues_AndTheIngressClass_AgreeWithTheController()
+    {
+        var values = Values();
+        Assert.AreEqual(IngressApiNames.DefaultControllerName, ((YamlScalarNode)Path_(values, "controller", "ingressControllerName")).Value);
+        Assert.AreEqual("false", ((YamlScalarNode)Path_(values, "controller", "watchLegacyAnnotation")).Value);
+        Assert.AreEqual(IngressApiNames.DefaultClassName, ((YamlScalarNode)Path_(values, "ingressClass", "name")).Value);
+        Assert.AreEqual(new GatewayTranslatorOptions().IngressControllerName, IngressApiNames.DefaultControllerName);
+
+        var template = Read("templates", "ingressclass.yaml");
+        StringAssert.Contains(template, "kind: IngressClass");
+        StringAssert.Contains(template, "controller: {{ .Values.controller.ingressControllerName }}");
+        StringAssert.Contains(template, IngressApiNames.DefaultClassAnnotation);
+
+        var deployment = Read("templates", "controller-deployment.yaml");
+        StringAssert.Contains(deployment, "TITANIUM_GATEWAY_INGRESS_CONTROLLER_NAME");
+        StringAssert.Contains(deployment, "if .Values.controller.watchLegacyAnnotation");
+    }
+
+    [TestMethod]
+    public void IngressEnvironment_FlowsIntoTheTranslatorOptions()
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            ["TITANIUM_GATEWAY_DATA_PLANE_SERVICE"] = "titanium-data",
+            ["POD_NAMESPACE"] = "gw",
+            ["TITANIUM_GATEWAY_INGRESS_CONTROLLER_NAME"] = "example.com/mine",
+            ["TITANIUM_GATEWAY_WATCH_LEGACY_ANNOTATION"] = "true",
+        };
+
+        var translator = GatewayOptions.Parse([], environment).ToControllerOptions().Translator;
+
+        Assert.AreEqual("example.com/mine", translator.IngressControllerName);
+        Assert.IsTrue(translator.WatchLegacyAnnotation);
+    }
+
+    [TestMethod]
     public void Dockerfile_KeepsItsHardeningAndContract()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "packaging", "docker", "Dockerfile.gateway"));

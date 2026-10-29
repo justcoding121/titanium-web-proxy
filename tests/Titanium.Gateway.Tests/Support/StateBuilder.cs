@@ -26,6 +26,10 @@ internal sealed class StateBuilder
 
     public List<SecretInfo> Secrets { get; } = [];
 
+    public List<IngressClassResource> IngressClasses { get; } = [];
+
+    public List<IngressResource> Ingresses { get; } = [];
+
     public static GatewayTranslatorOptions Options { get; } = new()
     {
         DataPlaneServiceNamespace = "titanium-system",
@@ -127,7 +131,71 @@ internal sealed class StateBuilder
         Services = Services,
         EndpointSlices = Slices,
         Secrets = Secrets,
+        IngressClasses = IngressClasses,
+        Ingresses = Ingresses,
     };
 
-    public RenderResult Render() => new GatewayTranslator(Options).Render(Build());
+    public RenderResult Render(GatewayTranslatorOptions? options = null) => new GatewayTranslator(options ?? Options).Render(Build());
+
+    /// <summary>An IngressClass owned by this controller, a Service with two ready endpoints, and the data-plane Service. No Gateway.</summary>
+    public static StateBuilder IngressOnly()
+    {
+        var b = new StateBuilder();
+        b.IngressClasses.Add(IngressClass("titanium"));
+        b.Namespaces.Add(new NamespaceInfo("default", Labels("default")));
+        b.AddService("default", "web", 8080, "10.0.0.1", "10.0.0.2");
+        b.Services.Add(new ServiceInfo(
+            "titanium-system",
+            "titanium-data",
+            "LoadBalancer",
+            "10.96.0.9",
+            [new ServicePortInfo("http", 80, 8080, null)],
+            [new ServiceAddress("203.0.113.10", false)]));
+        return b;
+    }
+
+    public static IngressClassResource IngressClass(string name, bool isDefault = false, string controller = IngressApiNames.DefaultControllerName) => new()
+    {
+        Metadata = new ObjectMeta
+        {
+            Name = name,
+            Annotations = isDefault ? new Dictionary<string, string> { [IngressApiNames.DefaultClassAnnotation] = "true" } : null,
+        },
+        Spec = new IngressClassSpec { Controller = controller },
+    };
+
+    public static IngressResource Ingress(
+        string name,
+        string? className,
+        IngressRule[]? rules = null,
+        Dictionary<string, string>? annotations = null,
+        string ns = "default",
+        DateTimeOffset? created = null) => new()
+    {
+        Metadata = new ObjectMeta
+        {
+            Name = name,
+            Namespace = ns,
+            Generation = 1,
+            Uid = "uid-" + name,
+            CreationTimestamp = created ?? T0,
+            Annotations = annotations,
+        },
+        Spec = new IngressSpec { IngressClassName = className, Rules = rules?.ToList() },
+    };
+
+    public static IngressRule IRule(string? host, params IngressPath[] paths) =>
+        new() { Host = host, Http = new IngressHttpRuleValue { Paths = paths.ToList() } };
+
+    public static IngressPath IPath(string path, string type, string service = "web", int port = 8080) => new()
+    {
+        Path = path,
+        PathType = type,
+        Backend = IBackend(service, port),
+    };
+
+    public static IngressBackend IBackend(string service, int port = 8080) => new()
+    {
+        Service = new IngressServiceBackend { Name = service, Port = new IngressServicePort { Number = port } },
+    };
 }

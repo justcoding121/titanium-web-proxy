@@ -35,6 +35,11 @@ internal sealed partial class TranslationPass
             patches.Add(BuildRoutePatch(route));
         }
 
+        foreach (var ingress in _ingresses)
+        {
+            patches.Add(BuildIngressPatch(ingress, addresses));
+        }
+
         return patches;
     }
 
@@ -185,6 +190,11 @@ internal sealed partial class TranslationPass
             {
                 _notes.Add($"HTTPRoute {route.Key}: {message}");
             }
+        }
+
+        foreach (var item in _ingressEvents)
+        {
+            _notes.Add($"Ingress {item.Namespace}/{item.Name}: {item.Reason}: {item.Message}");
         }
     }
 

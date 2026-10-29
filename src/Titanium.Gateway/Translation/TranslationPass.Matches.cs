@@ -144,7 +144,8 @@ internal sealed partial class TranslationPass
 
     private static List<RouteDraft> SortDrafts(List<RouteDraft> drafts) =>
         drafts
-            .OrderBy(d => d.HostRank)
+            .OrderBy(d => d.Tail)
+            .ThenBy(d => d.HostRank)
             .ThenByDescending(d => d.HostRank == 1 ? d.HostLength : 0)
             .ThenBy(d => d.PathRank)
             .ThenByDescending(d => d.PathLength)

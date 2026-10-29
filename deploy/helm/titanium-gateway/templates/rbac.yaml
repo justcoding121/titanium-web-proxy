@@ -37,6 +37,17 @@ rules:
   - apiGroups: ["gateway.networking.k8s.io"]
     resources: ["gatewayclasses/status", "gateways/status", "httproutes/status"]
     verbs: ["get", "patch", "update"]
+  # Ingress: the classes and Ingresses to serve, and the address written to an Ingress's status.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["get", "patch", "update"]
+  # A rejected Ingress rule or an unknown annotation is reported as a Warning event on the Ingress.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
   - apiGroups: [""]
     resources: ["namespaces", "services"]
     verbs: ["get", "list", "watch"]

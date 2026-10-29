@@ -35,6 +35,9 @@ internal sealed class RouteDraft
 
     public int MatchIndex { get; init; }
 
+    /// <summary>1 sorts after every route with 0: an Ingress <c>defaultBackend</c> answers only what no other route matched.</summary>
+    public int Tail { get; init; }
+
     public RouteConfig Build(int order) => Factory(order);
 }
 

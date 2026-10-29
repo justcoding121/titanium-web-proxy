@@ -59,7 +59,8 @@ try
         observer,
         leader,
         controllerOptions,
-        log);
+        log,
+        events: new EventWriter(api, options.IngressControllerName, log));
 
     using var health = new HealthServer(options.HealthPort, () => controller.Ready, log);
     log.LogInformation(

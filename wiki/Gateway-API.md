@@ -39,7 +39,7 @@ helm install titanium-gateway ./deploy/helm/titanium-gateway --namespace gateway
 
 ## Ingress
 
-`Ingress` resources are not handled by this controller. An Ingress controller is the next planned step (WI-21).
+The controller also serves `networking.k8s.io/v1` `Ingress` resources of its `IngressClass` (`titanium.io/ingress-controller`). Hosts and paths (`Exact`, `Prefix`, `ImplementationSpecific`), `defaultBackend`, `tls`, and `Service` backends are translated; `backend.resource` is rejected with an event. `titanium.io/` annotations map to existing data-plane features (rewrite, timeout, body size, backend protocol, affinity, load balancing, allow list, rate limit, CORS preflight, external auth, canary, upstream TLS); an unknown or invalid annotation raises a warning event and is never ignored silently. `kubernetes.io/ingress.class` is honored only with `--watch-legacy-annotation`. The Ingress gets `status.loadBalancer` from the data-plane Service. The full annotation table is in the [website guide](https://titaniumproxy.com/docs/ingress).
 
 ## Security
 

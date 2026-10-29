@@ -4,7 +4,7 @@ Run Titanium as a [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) imp
 
 **Next:** [install the chart](#install) → apply a [Gateway and an HTTPRoute](#quick-start) → read [what is not supported](#what-is-not-supported) before you migrate real routes.
 
-> Gateway API support covers the HTTP core of the **standard channel** (v1.2.1). `Ingress` resources are not handled by this controller; an Ingress controller is the next planned step (tracked as WI-21).
+> Gateway API support covers the HTTP core of the **standard channel** (v1.2.1). The same controller also serves `networking.k8s.io/v1` `Ingress` resources and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
 
 ## Install
 
@@ -81,7 +81,7 @@ kubectl -n apps get httproute shop -o jsonpath='{.status.parents[0].conditions[*
 
 ## How it works
 
-1. **Informers** keep an in-memory view of `GatewayClass`, `Gateway`, `HTTPRoute`, `ReferenceGrant`, `Namespace`, `Service`, `EndpointSlice`, and the `kubernetes.io/tls` Secrets. Nothing is written to disk.
+1. **Informers** keep an in-memory view of `GatewayClass`, `Gateway`, `HTTPRoute`, `ReferenceGrant`, `Namespace`, `Service`, `EndpointSlice`, the `kubernetes.io/tls` Secrets, and, for [Ingress](/docs/ingress), `IngressClass` and `Ingress`. Nothing is written to disk.
 2. **A coalesced reconcile** runs at most once every 500 ms, however many changes arrive. It renders the whole cluster state through a pure function: the same state always gives the same config.
 3. **Only the leader writes.** Replicas elect a leader with a `Lease`. The leader writes the data-plane ConfigMap (`twp.yaml`), the Secret with converted certificates, and resource status. A follower keeps its caches warm and takes over within the lease duration (15 s) if the leader stops.
 4. **The data plane reloads in place.** The pods mount the ConfigMap and the Secret in one directory and run with `--watch`, so routes, clusters, and certificates reload without a restart. The kubelet refreshes a mounted ConfigMap only on its next periodic sync, up to about a minute later, so after each write the controller annotates the data-plane pods (`gateway.titaniumproxy.com/config-poke`), which makes the kubelet refresh the volume at once. A change reaches the pods in a few seconds.
@@ -167,6 +167,8 @@ The controller reads flags or the matching `TITANIUM_GATEWAY_*` environment vari
 | `--config-map` / `--tls-secret` | the Service name, and the Service name plus `-tls` | Objects the controller writes |
 | `--port-map` | `80=8080,443=8443` | Gateway port to data-plane port |
 | `--secret-namespaces` | all | Namespaces whose TLS Secrets are read |
+| `--ingress-controller-name` | `titanium.io/ingress-controller` | `IngressClass.spec.controller` to own |
+| `--watch-legacy-annotation` | off | Also own Ingresses that carry the `kubernetes.io/ingress.class` annotation. See [Ingress](/docs/ingress#choosing-the-ingresses-this-controller-serves). |
 | `--admin-port` | `9901` | Data-plane admin port. `TITANIUM_ADMIN_TOKEN` is the bearer token. |
 | `--lease-name`, `--lease-namespace`, `--identity`, `--no-leader-election` | | Leader election |
 | `--min-reconcile-ms` | `500` | Smallest gap between reconciles |
@@ -175,12 +177,13 @@ The controller reads flags or the matching `TITANIUM_GATEWAY_*` environment vari
 
 ## Security
 
-- **RBAC is least privilege.** Reads cover the watched kinds. Writes are status on `gatewayclasses`, `gateways`, and `httproutes`, plus `update` and `patch` on exactly the data-plane ConfigMap, the certificate Secret, the data-plane Deployment, and the Lease, all by name, in the release namespace. The one write that cannot be limited by name is `patch` on `pods` in the release namespace, used only to set the `config-poke` annotation described in [How it works](#how-it-works); pod names are not known ahead of time.
+- **RBAC is least privilege.** Reads cover the watched kinds. Writes are status on `gatewayclasses`, `gateways`, `httproutes`, and `ingresses`, `create` and `patch` on `events` (to report a rejected Ingress rule), plus `update` and `patch` on exactly the data-plane ConfigMap, the certificate Secret, the data-plane Deployment, and the Lease, all by name, in the release namespace. The one write that cannot be limited by name is `patch` on `pods` in the release namespace, used only to set the `config-poke` annotation described in [How it works](#how-it-works); pod names are not known ahead of time.
 - **Secret read access is the broad part.** By default the controller can read TLS Secrets in every namespace, because a Gateway may reference any of them. Set `controller.secretNamespaces` to limit both the watch and the RBAC to listed namespaces; the chart then creates a `Role` in each instead of a cluster-wide rule.
 - **The admin token** protects `/metrics` and `/version` on the data plane. The chart creates one and shares it with the controller, which needs `/version` to confirm `Programmed`.
 - **Both images run as non-root** (UID `1654`) with a read-only root file system and no capabilities.
 
 ## See also
 
+- [Ingress](/docs/ingress): `networking.k8s.io` Ingress and the `titanium.io/` annotations.
 - [Kubernetes](/docs/kubernetes): the container image and the plain Helm chart for the `titanium` CLI.
 - [Configuration](/docs/configuration): the `twp.yaml` the controller renders.

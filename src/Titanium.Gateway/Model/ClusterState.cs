@@ -41,7 +41,8 @@ public sealed record EndpointSliceInfo(
     IReadOnlyList<EndpointInfo> Endpoints);
 
 /// <summary>A Secret the controller may read as a certificate. Key bytes never reach the translator.</summary>
-public sealed record SecretInfo(string Namespace, string Name, string? Type, bool HasCertificate, bool HasPrivateKey);
+/// <param name="HasCa">True when the Secret also holds a parseable <c>ca.crt</c> (a trust anchor for an upstream).</param>
+public sealed record SecretInfo(string Namespace, string Name, string? Type, bool HasCertificate, bool HasPrivateKey, bool HasCa = false);
 
 /// <summary>
 /// Everything the translator reads. The informers fill it; tests build it by hand. Every list may be empty and
@@ -64,6 +65,10 @@ public sealed class ClusterState
     public IReadOnlyList<EndpointSliceInfo> EndpointSlices { get; init; } = [];
 
     public IReadOnlyList<SecretInfo> Secrets { get; init; } = [];
+
+    public IReadOnlyList<IngressClassResource> IngressClasses { get; init; } = [];
+
+    public IReadOnlyList<IngressResource> Ingresses { get; init; } = [];
 }
 
 /// <summary>What the controller saw on the data-plane pods at the last poll.</summary>

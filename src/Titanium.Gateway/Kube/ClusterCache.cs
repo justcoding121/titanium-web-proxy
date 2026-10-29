@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Titanium.Gateway.Model;
+using Titanium.Gateway.Translation;
 
 namespace Titanium.Gateway.Kube;
 
@@ -15,19 +16,22 @@ public sealed record ClusterCacheOptions
 
 /// <summary>
 ///     The informers behind <see cref="ClusterState"/>: GatewayClass, Gateway, HTTPRoute, ReferenceGrant,
-///     Namespace, Service, EndpointSlice, and the TLS Secrets Gateways reference. Reads are snapshots; any change
+///     Namespace, Service, EndpointSlice, IngressClass, Ingress, and the TLS Secrets Gateways and Ingresses reference. Reads are snapshots; any change
 ///     raises <see cref="Changed"/>.
 /// </summary>
 public sealed class ClusterCache
 {
     private const string GatewayApi = "/apis/gateway.networking.k8s.io/v1";
     private const string ReferenceGrantApi = "/apis/gateway.networking.k8s.io/v1beta1";
+    private const string IngressApi = "/apis/networking.k8s.io/v1";
 
     private readonly Informer<GatewayClass> _classes;
     private readonly Informer<GatewayResource> _gateways;
     private readonly Informer<HttpRoute> _routes;
     private readonly Informer<ReferenceGrant> _grants;
     private readonly Informer<NamespaceInfo> _namespaces;
+    private readonly Informer<IngressClassResource> _ingressClasses;
+    private readonly Informer<IngressResource> _ingresses;
     private readonly Informer<ServiceInfo> _services;
     private readonly Informer<EndpointSliceInfo> _slices;
     private readonly List<Informer<SecretData>> _secrets = [];
@@ -39,6 +43,8 @@ public sealed class ClusterCache
         _gateways = new(api, GatewayApi + "/gateways", null, ResourceParsers.Typed<GatewayResource>, log, time);
         _routes = new(api, GatewayApi + "/httproutes", null, ResourceParsers.Typed<HttpRoute>, log, time);
         _grants = new(api, ReferenceGrantApi + "/referencegrants", null, ResourceParsers.Typed<ReferenceGrant>, log, time);
+        _ingressClasses = new(api, IngressApi + "/ingressclasses", null, ResourceParsers.Typed<IngressClassResource>, log, time);
+        _ingresses = new(api, IngressApi + "/ingresses", null, ResourceParsers.Typed<IngressResource>, log, time);
         _namespaces = new(api, "/api/v1/namespaces", null, ResourceParsers.Namespace, log, time);
         _services = new(api, "/api/v1/services", null, ResourceParsers.Service, log, time);
         _slices = new(api, "/apis/discovery.k8s.io/v1/endpointslices", null, ResourceParsers.EndpointSlice, log, time);
@@ -69,7 +75,7 @@ public sealed class ClusterCache
     /// <summary>True once every collection has been listed at least once.</summary>
     public bool HasSynced =>
         _classes.HasSynced && _gateways.HasSynced && _routes.HasSynced && _grants.HasSynced && _namespaces.HasSynced &&
-        _services.HasSynced && _slices.HasSynced && _secrets.All(s => s.HasSynced);
+        _services.HasSynced && _slices.HasSynced && _ingressClasses.HasSynced && _ingresses.HasSynced && _secrets.All(s => s.HasSynced);
 
     /// <summary>Runs every informer until cancelled.</summary>
     public Task RunAsync(CancellationToken cancellationToken) =>
@@ -82,6 +88,8 @@ public sealed class ClusterCache
             _namespaces.RunAsync(cancellationToken),
             _services.RunAsync(cancellationToken),
             _slices.RunAsync(cancellationToken),
+            _ingressClasses.RunAsync(cancellationToken),
+            _ingresses.RunAsync(cancellationToken),
         }.Concat(_secrets.Select(s => s.RunAsync(cancellationToken))));
 
     /// <summary>The current view of the cluster, in a stable order.</summary>
@@ -98,22 +106,27 @@ public sealed class ClusterCache
             Namespaces = _namespaces.Items.OrderBy(n => n.Name, StringComparer.Ordinal).ToList(),
             Services = _services.Items.OrderBy(s => s.Namespace, StringComparer.Ordinal).ThenBy(s => s.Name, StringComparer.Ordinal).ToList(),
             EndpointSlices = _slices.Items.OrderBy(s => s.Namespace, StringComparer.Ordinal).ThenBy(s => s.Name, StringComparer.Ordinal).ToList(),
+            IngressClasses = _ingressClasses.Items.OrderBy(c => c.Metadata.Name, StringComparer.Ordinal).ToList(),
+            Ingresses = _ingresses.Items.OrderBy(i => i.Metadata.Namespace, StringComparer.Ordinal).ThenBy(i => i.Metadata.Name, StringComparer.Ordinal).ToList(),
             Secrets = secrets
                 .OrderBy(s => s.Namespace, StringComparer.Ordinal).ThenBy(s => s.Name, StringComparer.Ordinal)
                 .Select(s =>
                 {
                     var usable = _certificates.GetPfx(s) is not null;
-                    return new SecretInfo(s.Namespace, s.Name, s.Type, usable, usable);
+                    return new SecretInfo(s.Namespace, s.Name, s.Type, usable, usable, _certificates.HasCa(s));
                 })
                 .ToList(),
         };
     }
 
     /// <summary>The PFX for a Secret the translator asked for, or null when the Secret is gone or does not convert.</summary>
-    internal byte[]? GetPfx(string ns, string name)
+    internal byte[]? GetPfx(string ns, string name) => GetFile(new TlsFile(string.Empty, ns, name));
+
+    /// <summary>The bytes of one generated file (PFX or PEM) for the Secret the translator named, or null when it is gone or unusable.</summary>
+    internal byte[]? GetFile(TlsFile file)
     {
-        var secret = _secrets.SelectMany(s => s.Items).FirstOrDefault(s => s.Namespace == ns && s.Name == name);
-        return secret is null ? null : _certificates.GetPfx(secret);
+        var secret = _secrets.SelectMany(s => s.Items).FirstOrDefault(s => s.Namespace == file.SecretNamespace && s.Name == file.SecretName);
+        return secret is null ? null : _certificates.GetPem(secret, file.Kind);
     }
 
     private IEnumerable<Action<Action>> AllHooks()
@@ -125,6 +138,8 @@ public sealed class ClusterCache
         yield return h => _namespaces.Changed += h;
         yield return h => _services.Changed += h;
         yield return h => _slices.Changed += h;
+        yield return h => _ingressClasses.Changed += h;
+        yield return h => _ingresses.Changed += h;
         foreach (var secret in _secrets)
         {
             var captured = secret;

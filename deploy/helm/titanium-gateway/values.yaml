@@ -15,6 +15,13 @@ gatewayClass:
   name: titanium
   description: Titanium Web Proxy
 
+# An IngressClass owned by this controller. Ingresses name it in spec.ingressClassName. Set default to true to make it
+# the class of Ingresses that name none (only one default class per cluster is meaningful).
+ingressClass:
+  create: true
+  name: titanium
+  default: false
+
 controller:
   replicaCount: 2
 
@@ -27,6 +34,13 @@ controller:
 
   # GatewayClass.spec.controllerName this controller owns.
   controllerName: titaniumproxy.com/gateway-controller
+
+  # IngressClass.spec.controller this controller owns. An Ingress of a class with another controller is never touched.
+  ingressControllerName: titanium.io/ingress-controller
+
+  # Also serve Ingresses that name their class in the legacy kubernetes.io/ingress.class annotation (and no
+  # ingressClassName). Off by default: the annotation is deprecated.
+  watchLegacyAnnotation: false
 
   # Namespaces whose kubernetes.io/tls Secrets Gateways may reference. Empty grants read access to TLS Secrets in every
   # namespace (a ClusterRole rule). A list limits both the watch and the RBAC to those namespaces.

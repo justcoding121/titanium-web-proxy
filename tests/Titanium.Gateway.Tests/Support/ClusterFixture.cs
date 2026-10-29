@@ -64,7 +64,8 @@ public sealed class ClusterFixture : IAsyncDisposable
             Observer,
             leader,
             options,
-            NullLogger.Instance);
+            NullLogger.Instance,
+            events: new EventWriter(Api, Controller, NullLogger.Instance));
         _running = Cache.RunAsync(_stop.Token);
         await WaitForAsync(() => Cache.HasSynced);
     }

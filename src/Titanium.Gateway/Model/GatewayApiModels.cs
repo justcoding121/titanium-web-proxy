@@ -36,6 +36,8 @@ public sealed class ObjectMeta
     public DateTimeOffset? CreationTimestamp { get; set; }
 
     public Dictionary<string, string>? Labels { get; set; }
+
+    public Dictionary<string, string>? Annotations { get; set; }
 }
 
 /// <summary>A status condition as the Gateway API defines it.</summary>

@@ -73,6 +73,48 @@ public sealed class GatewayOptionsAndObserverTests
     }
 
     [TestMethod]
+    public void IngressOptions_DefaultToOurControllerNameAndNoLegacyAnnotation()
+    {
+        var options = GatewayOptions.Parse(["--data-plane-service", "titanium"], new Dictionary<string, string?> { ["POD_NAMESPACE"] = "gw" });
+
+        Assert.AreEqual("titanium.io/ingress-controller", options.IngressControllerName);
+        Assert.IsFalse(options.WatchLegacyAnnotation);
+        var translator = options.ToControllerOptions().Translator;
+        Assert.AreEqual("titanium.io/ingress-controller", translator.IngressControllerName);
+        Assert.IsFalse(translator.WatchLegacyAnnotation);
+    }
+
+    [TestMethod]
+    public void IngressOptions_AreReadFromFlags_AndTheLegacyFlagTakesNoValue()
+    {
+        var options = GatewayOptions.Parse(
+            ["--data-plane-service", "titanium", "--watch-legacy-annotation", "--ingress-controller-name", "example.com/mine"],
+            new Dictionary<string, string?> { ["POD_NAMESPACE"] = "gw" });
+
+        Assert.AreEqual("example.com/mine", options.IngressControllerName);
+        Assert.IsTrue(options.WatchLegacyAnnotation);
+        Assert.IsTrue(options.ToControllerOptions().Translator.WatchLegacyAnnotation);
+    }
+
+    [TestMethod]
+    public void IngressOptions_AreReadFromTheEnvironment()
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            ["POD_NAMESPACE"] = "gw",
+            ["TITANIUM_GATEWAY_DATA_PLANE_SERVICE"] = "titanium",
+            ["TITANIUM_GATEWAY_WATCH_LEGACY_ANNOTATION"] = "true",
+            ["TITANIUM_GATEWAY_INGRESS_CONTROLLER_NAME"] = "example.com/mine",
+        };
+
+        var options = GatewayOptions.Parse([], environment);
+
+        Assert.IsTrue(options.WatchLegacyAnnotation);
+        Assert.AreEqual("example.com/mine", options.IngressControllerName);
+        Assert.AreEqual(0, options.IgnoredEnvironment.Count);
+    }
+
+    [TestMethod]
     public void Options_RequireTheDataPlaneService()
     {
         Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse(["--data-plane-namespace", "x", "--no-leader-election"], NoEnvironment));

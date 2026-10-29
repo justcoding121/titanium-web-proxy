@@ -83,6 +83,12 @@ spec:
               value: {{ .Values.dataPlane.admin.port | quote }}
             - name: TITANIUM_GATEWAY_HEALTH_PORT
               value: {{ .Values.controller.healthPort | quote }}
+            - name: TITANIUM_GATEWAY_INGRESS_CONTROLLER_NAME
+              value: {{ .Values.controller.ingressControllerName | quote }}
+            {{- if .Values.controller.watchLegacyAnnotation }}
+            - name: TITANIUM_GATEWAY_WATCH_LEGACY_ANNOTATION
+              value: "true"
+            {{- end }}
             {{- with .Values.controller.secretNamespaces }}
             - name: TITANIUM_GATEWAY_SECRET_NAMESPACES
               value: {{ join "," . | quote }}

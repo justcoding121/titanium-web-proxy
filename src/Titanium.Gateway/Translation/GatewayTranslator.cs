@@ -64,9 +64,10 @@ internal sealed partial class TranslationPass
             TranslateRoute(route, clusters, drafts);
         }
 
+        PlanIngresses(clusters, drafts);
         var config = BuildConfig(drafts, clusters, out var tlsFiles);
         CollectNotes();
-        return new RenderResult(config, tlsFiles, _notes, BuildPatches);
+        return new RenderResult(config, tlsFiles, _notes, BuildPatches, _ingressEvents);
     }
 
     private HashSet<string> SelectClasses()
@@ -90,14 +91,28 @@ internal sealed partial class TranslationPass
         // One data-plane listener per mapped port. HTTPS listeners decrypt; a port never mixes the two (conflicts
         // were resolved earlier).
         var programmable = _gateways.SelectMany(g => g.Listeners).Where(l => l.Programmable).ToList();
-        foreach (var group in programmable.GroupBy(l => l.MappedPort).OrderBy(g => g.Key))
+
+        // Ingress shares the data plane: its HTTP port (and its HTTPS port, when a certificate resolved) merge with
+        // Gateway listeners on the same port. A protocol clash was resolved when the Ingress ports were reserved.
+        var ports = new SortedDictionary<int, bool>();
+        foreach (var group in programmable.GroupBy(l => l.MappedPort))
+        {
+            ports[group.Key] = group.Any(l => l.IsHttps);
+        }
+
+        foreach (var (port, https) in _ingressListeners)
+        {
+            ports[port] = (ports.TryGetValue(port, out var existing) && existing) || https;
+        }
+
+        foreach (var (port, decrypt) in ports)
         {
             config.Listeners.Add(new ListenerConfig
             {
                 Host = "0.0.0.0",
-                Port = group.Key,
+                Port = port,
                 Type = "transparent",
-                DecryptSsl = group.Any(l => l.IsHttps),
+                DecryptSsl = decrypt,
             });
         }
 
@@ -123,24 +138,43 @@ internal sealed partial class TranslationPass
             config.Clusters.Add(cluster);
         }
 
-        var files = new Dictionary<string, TlsFile>(StringComparer.Ordinal);
-        var items = new List<CertificateFileConfig>();
+        foreach (var policy in _ingressPolicies.OrderBy(p => p.Name, StringComparer.Ordinal))
+        {
+            config.Policies.Add(policy);
+        }
+
+        // Listener certificates and Ingress tls entries share one list, and a Secret both name is one file.
+        var bindings = new List<(TlsFile File, string Host)>();
         foreach (var listener in programmable.Where(l => l.IsHttps))
         {
             foreach (var file in listener.Certificates)
             {
-                files[file.FileName] = file;
-                var path = _options.TlsMountPath.TrimEnd('/') + "/" + file.FileName;
-                var host = Hostnames.Normalize(listener.Listener.Hostname) ?? "*";
-
-                // Listeners of different Gateways can merge onto one host and share a Secret.
-                if (items.Any(i => i.Path == path && i.Hosts is [var existing] && existing == host))
-                {
-                    continue;
-                }
-
-                items.Add(new CertificateFileConfig { Path = path, Hosts = [host] });
+                bindings.Add((file, Hostnames.Normalize(listener.Listener.Hostname) ?? "*"));
             }
+        }
+
+        bindings.AddRange(_ingressCerts);
+
+        var files = new Dictionary<string, TlsFile>(StringComparer.Ordinal);
+        var items = new List<CertificateFileConfig>();
+        foreach (var (file, host) in bindings)
+        {
+            files[file.FileName] = file;
+            var path = _options.TlsMountPath.TrimEnd('/') + "/" + file.FileName;
+
+            // Listeners of different Gateways, and Ingresses, can merge onto one host and share a Secret.
+            if (items.Any(i => i.Path == path && i.Hosts is [var existing] && existing == host))
+            {
+                continue;
+            }
+
+            items.Add(new CertificateFileConfig { Path = path, Hosts = [host] });
+        }
+
+        // Upstream trust anchors and client certificates are files in the same generated Secret, but not serving certificates.
+        foreach (var file in _upstreamFiles)
+        {
+            files[file.FileName] = file;
         }
 
         if (items.Count > 0)
