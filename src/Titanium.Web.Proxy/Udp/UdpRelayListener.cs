@@ -805,7 +805,20 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
 
         session.Lease?.Dispose();
         ReleaseClient(session.Client);
-        Interlocked.Decrement(ref sessionCount);
+
+        // Upstream loops may CloseSession after DisposeAsync has already zeroed the counter.
+        // Never publish a negative ActiveSessions.
+        int count;
+        do
+        {
+            count = Volatile.Read(ref sessionCount);
+            if (count <= 0)
+            {
+                return;
+            }
+        }
+        while (Interlocked.CompareExchange(ref sessionCount, count - 1, count) != count);
+
         ProxyMetrics.UdpSessionClosed();
         stats.CountClosed();
     }
