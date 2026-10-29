@@ -286,6 +286,36 @@ internal static class ProxyMetrics
         }
     }
 
+    private static readonly Histogram<double> PluginDuration =
+        Meter.CreateHistogram<double>("twp.plugin.duration", "s",
+            "Time one per-route plugin call took, tagged by the plugin name from the configuration.");
+
+    private static readonly Counter<long> PluginErrors =
+        Meter.CreateCounter<long>("twp.plugin.errors", "{error}",
+            "Per-route plugin calls that failed, tagged by plugin name and kind: exception, timeout, or unloaded.");
+
+    /// <param name="plugin">The configured plugin name (a bounded set; never a request value).</param>
+    /// <param name="seconds">Wall time of the call.</param>
+    public static void RecordPluginCall(string plugin, double seconds)
+    {
+        if (PluginDuration.Enabled)
+        {
+            PluginDuration.Record(seconds, new KeyValuePair<string, object?>("plugin", plugin));
+        }
+    }
+
+    /// <param name="plugin">The configured plugin name.</param>
+    /// <param name="kind"><c>exception</c>, <c>timeout</c> or <c>unloaded</c>.</param>
+    public static void RecordPluginError(string plugin, string kind)
+    {
+        if (PluginErrors.Enabled)
+        {
+            PluginErrors.Add(1,
+                new KeyValuePair<string, object?>("plugin", plugin),
+                new KeyValuePair<string, object?>("kind", kind));
+        }
+    }
+
     private static readonly Counter<long> CacheRequests =
         Meter.CreateCounter<long>("twp.cache.requests", RequestUnit,
             "Response cache outcomes by result: hit, miss, stale, bypass, revalidated.");

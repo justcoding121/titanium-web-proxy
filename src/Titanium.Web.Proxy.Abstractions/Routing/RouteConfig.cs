@@ -108,6 +108,12 @@ public sealed class RouteConfig
     ///     Unary and server-streaming calls only. Off by default.
     /// </summary>
     public bool GrpcWeb { get; init; }
+
+    /// <summary>
+    ///     Names of <c>plugins</c> that run for this route only, in order, after its policies. Null (the default) means the
+    ///     route pays nothing for plugins.
+    /// </summary>
+    public IReadOnlyList<string>? Middleware { get; init; }
 }
 
 /// <summary>One cluster in a traffic split.</summary>

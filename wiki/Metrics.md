@@ -63,6 +63,8 @@ Generated from the instruments the core meter declares. A unit test fails when t
 | `twp.parser.errors` | Counter | `{error}` | not exposed | Rejected malformed input, tagged by parser (framing, chunk, header, websocket, http2, http3, qpack). |
 | `twp.passthrough.bytes` | Counter | `By` | not exposed | Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client). |
 | `twp.passthrough.connections` | Counter | `{connection}` | not exposed | Finished TCP passthrough connections by route (a configured server name pattern, default, or forward) and result. |
+| `twp.plugin.duration` | Histogram | `s` | not exposed | Time one per-route plugin call took, tagged by the plugin name from the configuration. |
+| `twp.plugin.errors` | Counter | `{error}` | not exposed | Per-route plugin calls that failed, tagged by plugin name and kind: exception, timeout, or unloaded. |
 | `twp.policy.breaches` | Counter | `{breach}` | not exposed | Resource-bound policy family breaches, tagged by family, the mode that was active, and whether the breach was enforced. |
 | `twp.pool.outcomes` | Counter | `{connection}` | `twp_pool_outcomes_total` (counter) | Upstream connection pool outcomes: reuse, retry after a dead pooled connection, or protocol downgrade. |
 | `twp.proxy.bytes` | Counter | `By` | `twp_proxy_bytes_total` (counter) | Bytes observed on a proxied request. |

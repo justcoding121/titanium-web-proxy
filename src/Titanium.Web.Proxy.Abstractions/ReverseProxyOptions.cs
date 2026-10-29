@@ -38,6 +38,12 @@ public sealed class ReverseProxyOptions
     public IReadOnlyList<IRoutePolicyHandler>? PolicyHandlers { get; init; }
 
     /// <summary>
+    /// Per-route plugins by name, as <c>PluginHost.Plugins</c> builds them. A route runs only the ones it lists in
+    /// <see cref="RouteConfig.Middleware"/>. A route that lists a name with no entry here is refused with 503.
+    /// </summary>
+    public IReadOnlyDictionary<string, IProxyMiddleware>? RoutePlugins { get; init; }
+
+    /// <summary>
     /// Per-options cache for data derived from <see cref="Routes"/> (requirements, compiled table).
     /// Core replaces it when <see cref="Routes"/> is a different instance. Not part of the public contract.
     /// </summary>
@@ -47,6 +53,7 @@ public sealed class ReverseProxyOptions
     private int handledPolicyState;
     private int grpcWebState;
     private int sessionOnlyMiddlewareState;
+    private int routePluginState;
 
     /// <summary>
     /// True when a registered middleware implements <see cref="IRequiresSessionPathMiddleware"/> (the Plus WAF). Computed
@@ -89,8 +96,9 @@ public sealed class ReverseProxyOptions
     }
 
     /// <summary>
-    /// True when a route lists an <c>extAuth</c> or a plugin-handled (<c>oidc</c>) policy. Computed once per options instance, so the
-    /// request path pays a single field read when no route awaits a service or a login.
+    /// True when a route lists an <c>extAuth</c> or a plugin-handled (<c>oidc</c>) policy, or names a per-route plugin.
+    /// Computed once per options instance, so the request path pays a single field read when no route awaits a service,
+    /// a login, or a plugin.
     /// </summary>
     internal bool HasAsyncPolicies
     {
@@ -99,8 +107,27 @@ public sealed class ReverseProxyOptions
             var state = Volatile.Read(ref asyncPolicyState);
             if (state == 0)
             {
-                state = AnyReferencedPolicy(handledOnly: false) ? 2 : 1;
+                state = AnyReferencedPolicy(handledOnly: false) || HasRoutePlugins ? 2 : 1;
                 Volatile.Write(ref asyncPolicyState, state);
+            }
+
+            return state == 2;
+        }
+    }
+
+    /// <summary>
+    /// True when a route names a per-route plugin in <see cref="RouteConfig.Middleware"/>. Only such routes leave the
+    /// terminate-lite path, and only they run any plugin code.
+    /// </summary>
+    internal bool HasRoutePlugins
+    {
+        get
+        {
+            var state = Volatile.Read(ref routePluginState);
+            if (state == 0)
+            {
+                state = Routes is { Count: > 0 } routes && routes.Any(route => route.Middleware is { Count: > 0 }) ? 2 : 1;
+                Volatile.Write(ref routePluginState, state);
             }
 
             return state == 2;

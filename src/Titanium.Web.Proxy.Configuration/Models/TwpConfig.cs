@@ -1,4 +1,5 @@
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Configuration.Models;
@@ -16,6 +17,12 @@ public sealed class TwpConfig
 
     /// <summary>Named policies referenced by <see cref="RouteConfig.Policies"/>. Empty leaves evaluation off.</summary>
     public IList<RoutePolicyConfig> Policies { get; set; } = new List<RoutePolicyConfig>();
+
+    /// <summary>
+    ///     Per-route .NET plugins (see <see cref="PluginConfig"/>). A plugin runs only on a route that lists its name in
+    ///     <see cref="RouteConfig.Middleware"/>. Unset or empty loads nothing.
+    /// </summary>
+    public IList<PluginConfig>? Plugins { get; set; }
 
     public StaticFilesConfig? StaticFiles { get; set; }
 

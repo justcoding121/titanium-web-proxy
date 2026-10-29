@@ -30,6 +30,7 @@ schemaVersion: "7.1"
 listeners: []
 routes: []
 clusters: []
+plugins: []
 staticFiles: null
 plus: null
 certificates: null
@@ -476,6 +477,10 @@ routes:
 ```
 
 `exclusions` entries are `rule[@target]`: the rule is an id, a category, or `*`, and the target is `path`, `query[:name]`, `header[:Name]`, `cookie[:name]`, or `body[:field]`. `titanium test -c twp.yaml` rejects an unknown mode, a paranoia level or threshold out of range, an empty `disabledRules` entry, a malformed exclusion, and a `waf` policy without `plus.enabled` and `waf.enabled`. Screening reads headers, cookies, and small bodies, so requests use the full session path rather than terminate-lite. The rule pack, scoring, custom rules, and limits are in [Plus](/docs/plus#web-application-firewall-waf).
+
+## Plugins
+
+`plugins` lists .NET assemblies (`name`, `assembly`, optional `typeName`, `settings`, `failMode`, `timeoutMs`) that a route runs through `routes[].middleware: [name]`. Each plugin loads into its own collectible load context, runs behind a timeout and an exception wall (`failMode: closed` answers 503, `open` continues), and is unloaded when the configuration reloads. A route that names no plugin pays nothing, and only a config in which a route names one leaves terminate-lite. Metrics are `twp.plugin.duration` and `twp.plugin.errors`. See [Per-route plugins](/docs/plugins).
 
 ## Static files
 

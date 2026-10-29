@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Plugins;
 using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Transforms;
 using Titanium.Web.Proxy.Udp;
@@ -186,10 +187,23 @@ internal static class RunCommand
 
         clusterManager.AttachHealthTracker(loadBalancer.Health);
 
+        // One collectible load context per plugin. A reload builds a new host, swaps it in, and retires this one.
+        PluginHost pluginHost;
+        try
+        {
+            pluginHost = PluginHost.Load(loaded.Config.Plugins, proxy.Logger);
+        }
+        catch (InvalidOperationException ex)
+        {
+            AsyncConsole.WriteError(ex.Message);
+            return 1;
+        }
+
         void RefreshReverseProxy()
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
-                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers);
+                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers,
+                pluginHost.Plugins);
         }
 
         // No meter listener is attached until server.metrics is on or /metrics is first served.
@@ -276,7 +290,7 @@ internal static class RunCommand
                                 stoppingToken,
                                 // A rotated Secret takes effect for /metrics and /version without a restart.
                                 // Dropping the token needs a restart: the bind address is not re-applied here.
-                                applied =>
+                                onApplied: applied =>
                                 {
                                     if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
                                     {
@@ -284,7 +298,9 @@ internal static class RunCommand
                                     }
 
                                     hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
-                                }).ConfigureAwait(false);
+                                },
+                                getPlugins: () => pluginHost,
+                                setPlugins: next => pluginHost = next).ConfigureAwait(false);
                             configHash = AdminHost.ComputeConfigHash(configPath);
                             AsyncConsole.WriteLine("Config reloaded.");
                             await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -332,6 +348,7 @@ internal static class RunCommand
             adminServer?.Dispose();
             metricsEndpoint?.Dispose();
             accessLog?.Dispose();
+            pluginHost.Dispose();
         }
     }
 
@@ -400,7 +417,9 @@ internal static class RunCommand
         Action refreshReverseProxy,
         List<RoutePolicyConfig>? policies = null,
         CancellationToken stoppingToken = default,
-        Action<TwpConfig>? onApplied = null)
+        Action<TwpConfig>? onApplied = null,
+        Func<PluginHost?>? getPlugins = null,
+        Action<PluginHost>? setPlugins = null)
     {
         // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
         // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
@@ -430,25 +449,55 @@ internal static class RunCommand
             Routes = loaded.Config.Routes.ToList(),
             Clusters = loaded.Config.Clusters.ToList(),
         };
-        await host.ApplyAsync(snapshot, clusterManager, options =>
+
+        // Plugins load before anything is swapped, so a plugin that fails to load fails the reload and the running
+        // config (and its plugins) stays in force.
+        var nextPlugins = setPlugins is null ? null : PluginHost.Load(loaded.Config.Plugins, proxy.Logger);
+        PluginHost? previousPlugins = null;
+        var swapped = false;
+        try
         {
-            // Swap policies together with routes. A failed apply leaves both as they were, and no request
-            // sees a route naming a policy that has already been replaced.
-            if (policies is not null)
+            await host.ApplyAsync(snapshot, clusterManager, options =>
             {
-                policies.Clear();
-                if (loaded.Config.Policies is not null)
+                // Swap policies together with routes. A failed apply leaves both as they were, and no request
+                // sees a route naming a policy that has already been replaced.
+                if (policies is not null)
                 {
-                    foreach (var policy in loaded.Config.Policies)
+                    policies.Clear();
+                    if (loaded.Config.Policies is not null)
                     {
-                        policies.Add(policy);
+                        foreach (var policy in loaded.Config.Policies)
+                        {
+                            policies.Add(policy);
+                        }
                     }
                 }
+
+                // Plugins swap with routes too, so no request sees a route naming a plugin of the other generation.
+                previousPlugins = getPlugins?.Invoke();
+                if (nextPlugins is not null)
+                {
+                    setPlugins!(nextPlugins);
+                    swapped = true;
+                }
+
+                ReplaceRoutes(routes, options.Routes ?? []);
+                refreshReverseProxy();
+            }, stoppingToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (swapped && previousPlugins is not null)
+            {
+                setPlugins!(previousPlugins);
             }
 
-            ReplaceRoutes(routes, options.Routes ?? []);
-            refreshReverseProxy();
-        }, stoppingToken).ConfigureAwait(false);
+            nextPlugins?.Dispose();
+            throw;
+        }
+
+        // Calls in flight finish on the old plugins; the last one out disposes them and unloads their contexts.
+        previousPlugins?.Retire();
         CertificateBootstrap.ApplySniItems(proxy, loaded.Config.Certificates);
         onApplied?.Invoke(loaded.Config);
         _ = middleware;
@@ -472,7 +521,8 @@ internal static class RunCommand
         IReadOnlyCollection<IProxyMiddleware> middleware,
         IGrpcJsonTranscoder? grpcJsonTranscoder,
         IReadOnlyCollection<RoutePolicyConfig>? policies = null,
-        IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null)
+        IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null,
+        IReadOnlyDictionary<string, IProxyMiddleware>? routePlugins = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
@@ -488,6 +538,7 @@ internal static class RunCommand
             LatencyRecorder = loadBalancer,
             GrpcJsonTranscoder = grpcJsonTranscoder,
             PolicyHandlers = policyHandlers is { Count: > 0 } ? policyHandlers.ToArray() : null,
+            RoutePlugins = routePlugins is { Count: > 0 } ? routePlugins : null,
         };
     }
 
@@ -1549,6 +1600,12 @@ internal static class RunCommand
 
         // grpcWeb rewrites the request headers and the origin response.
         if (config.Routes.Any(r => r.GrpcWeb))
+        {
+            return true;
+        }
+
+        // A per-route plugin reads the session, which terminate-lite does not have.
+        if (config.Routes.Any(r => r.Middleware is { Count: > 0 }))
         {
             return true;
         }

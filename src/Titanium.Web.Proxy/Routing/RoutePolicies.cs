@@ -106,7 +106,7 @@ internal static class RoutePolicies
     /// <summary>
     ///     True when a route needs the full session path to enforce a policy. An <c>extAuth</c> policy
     ///     awaits an authorization service and edits the upstream request, and an <c>oidc</c> policy awaits a login
-    ///     and edits headers and cookies. Terminate-lite can do neither.
+    ///     and edits headers and cookies. A route that names a per-route plugin needs the session too. Terminate-lite can do none of these.
     /// </summary>
     internal static bool RequiresSessionPath(ReverseProxyOptions options) => options.HasAsyncPolicies;
 

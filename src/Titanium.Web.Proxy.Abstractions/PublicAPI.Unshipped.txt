@@ -871,3 +871,39 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Mode.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Mode.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ParanoiaLevel.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ParanoiaLevel.init -> void
+const Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract.CurrentVersion = 1 -> int
+const Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract.DefaultTimeoutMilliseconds = 1000 -> int
+const Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract.FailClosed = "closed" -> string!
+const Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract.FailOpen = "open" -> string!
+const Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract.MaxTimeoutMilliseconds = 60000 -> int
+const Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract.MinimumSupportedVersion = 1 -> int
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginTypeResolver.Create(System.Type! type, System.Collections.Generic.IReadOnlyDictionary<string!, string!>? settings) -> Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginTypeResolver.Probe(string! assemblyPath, string? typeName) -> string?
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginTypeResolver.TryResolve(System.Reflection.Assembly! assembly, string? typeName, out System.Type? type, out string? error) -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Assembly.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Assembly.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.FailMode.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.FailMode.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Name.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Name.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.PluginConfig() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Settings.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Settings.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.TimeoutMs.get -> int?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.TimeoutMs.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.TypeName.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.TypeName.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLoadContext
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLoadContext.AssemblyPath.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLoadContext.LoadPluginAssembly() -> System.Reflection.Assembly!
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLoadContext.PluginLoadContext(string! name, string! assemblyPath) -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginTypeResolver
+Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginAttribute
+Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginAttribute.ContractVersion.get -> int
+Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginAttribute.ProxyPluginAttribute(int contractVersion) -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ProxyPluginContract
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.RoutePlugins.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!>?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.RoutePlugins.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Middleware.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Middleware.init -> void

@@ -163,6 +163,16 @@ public static class TwpConfigSchema
             case "RouteConfig.Compression":
                 schema["enum"] = new JsonArray { "off" };
                 break;
+            case "PluginConfig.FailMode":
+                schema["enum"] = new JsonArray { "closed", "open" };
+                break;
+            case "PluginConfig.TimeoutMs":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 60_000;
+                break;
+            case "PluginConfig.Name":
+                schema["pattern"] = "^[A-Za-z0-9._-]{1,64}$";
+                break;
             case "RoutePolicyConfig.Algorithm":
                 schema["enum"] = new JsonArray { "fixedWindow", "tokenBucket" };
                 break;

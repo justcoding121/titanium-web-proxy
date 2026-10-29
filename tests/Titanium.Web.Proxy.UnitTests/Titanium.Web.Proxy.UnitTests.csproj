@@ -29,4 +29,13 @@
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>
 
+  <!-- Plugin assemblies the tests load into their own contexts. They are unsigned, so they are built and copied beside the
+       tests but never referenced at compile time. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Titanium.Web.Proxy.TestPlugins\Titanium.Web.Proxy.TestPlugins.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\..\examples\Titanium.Web.Proxy.Examples.RoutePlugin\Titanium.Web.Proxy.Examples.RoutePlugin.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -599,6 +599,43 @@
         }
       }
     },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "type": "string"
+          },
+          "failMode": {
+            "type": "string",
+            "enum": [
+              "closed",
+              "open"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60000
+          },
+          "typeName": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "plus": {
       "type": "object",
       "additionalProperties": false,
@@ -1016,6 +1053,12 @@
                   }
                 }
               }
+            }
+          },
+          "middleware": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "mirror": {

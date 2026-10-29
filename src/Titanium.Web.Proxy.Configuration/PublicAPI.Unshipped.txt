@@ -634,3 +634,5 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxSessionsPerClient.get 
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxSessionsPerClient.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SessionAffinity.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SessionAffinity.set -> void
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plugins.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig!>?
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plugins.set -> void

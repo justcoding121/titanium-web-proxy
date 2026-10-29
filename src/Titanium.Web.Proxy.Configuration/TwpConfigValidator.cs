@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Network;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -40,7 +41,8 @@ public static class TwpConfigValidator
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateOidcNeedsPlus(config, errors);
         ValidateWafNeedsPlus(config, errors);
-        ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
+        var pluginNames = ValidatePlugins(config.Plugins, errors);
+        ValidateRoutes(config.Routes, clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners, clusterIds, errors);
         ValidateServer(config.Server, errors);
         ValidatePlusSecrets(config.Plus, errors);
@@ -946,6 +948,7 @@ public static class TwpConfigValidator
         IEnumerable<RouteConfig> routes,
         HashSet<string> clusterIds,
         HashSet<string> policyNames,
+        HashSet<string> pluginNames,
         List<string> errors)
     {
         var routeIds = new HashSet<string>(StringComparer.Ordinal);
@@ -954,6 +957,7 @@ public static class TwpConfigValidator
             ValidateRouteIdentity(route, routeIds, clusterIds, errors);
             ValidateRouteMatch(route, errors);
             ValidateRoutePolicies(route, policyNames, errors);
+            ValidateRoutePlugins(route, pluginNames, errors);
             ValidateRouteMirror(route, clusterIds, errors);
             ValidateRouteRedirect(route, errors);
             ValidateRouteTransforms(route, errors);
@@ -1037,6 +1041,115 @@ public static class TwpConfigValidator
         foreach (var policyName in route.Policies.Where(policyName => !policyNames.Contains(policyName)))
         {
             errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
+        }
+    }
+
+    private static void ValidateRoutePlugins(RouteConfig route, HashSet<string> pluginNames, List<string> errors)
+    {
+        if (route.Middleware is not { } names)
+        {
+            return;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errors.Add($"Route '{route.Id}' has a middleware entry without a name.");
+            }
+            else if (!pluginNames.Contains(name))
+            {
+                errors.Add($"Route '{route.Id}' references unknown plugin '{name}'.");
+            }
+            else if (!seen.Add(name))
+            {
+                errors.Add($"Route '{route.Id}' lists plugin '{name}' more than once.");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Checks every <c>plugins</c> entry: a safe unique name, an assembly that exists and loads, a class in it that
+    ///     implements the plugin contract at a supported version (checked without running any plugin code), a known
+    ///     <c>failMode</c>, and a timeout in range. Returns the names that routes may reference.
+    /// </summary>
+    private static HashSet<string> ValidatePlugins(IEnumerable<PluginConfig>? plugins, List<string> errors)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        if (plugins is null)
+        {
+            return names;
+        }
+
+        foreach (var plugin in plugins)
+        {
+            if (plugin is null)
+            {
+                errors.Add("plugins has an empty entry.");
+                continue;
+            }
+
+            var label = string.IsNullOrWhiteSpace(plugin.Name) ? "(unnamed)" : plugin.Name;
+            ValidatePluginName(plugin, names, errors);
+            ValidatePluginLimits(plugin, label, errors);
+            ValidatePluginAssembly(plugin, label, errors);
+        }
+
+        return names;
+    }
+
+    private static void ValidatePluginName(PluginConfig plugin, HashSet<string> names, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(plugin.Name))
+        {
+            errors.Add("A plugin is missing name.");
+            return;
+        }
+
+        if (plugin.Name.Length > 64 || !plugin.Name.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'))
+        {
+            errors.Add($"Plugin '{plugin.Name}': name must be 1 to 64 letters, digits, '.', '_' or '-'.");
+        }
+
+        if (!names.Add(plugin.Name))
+        {
+            errors.Add($"Duplicate plugin name '{plugin.Name}'.");
+        }
+    }
+
+    private static void ValidatePluginLimits(PluginConfig plugin, string label, List<string> errors)
+    {
+        if (!string.IsNullOrEmpty(plugin.FailMode) &&
+            !string.Equals(plugin.FailMode, "closed", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(plugin.FailMode, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Plugin '{label}': failMode '{plugin.FailMode}' must be 'closed' or 'open'.");
+        }
+
+        if (plugin.TimeoutMs is < 1 or > 60_000)
+        {
+            errors.Add($"Plugin '{label}': timeoutMs must be 1 to 60000.");
+        }
+
+        if (plugin.Settings is { } settings && settings.Keys.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add($"Plugin '{label}': settings has an empty key.");
+        }
+    }
+
+    private static void ValidatePluginAssembly(PluginConfig plugin, string label, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(plugin.Assembly))
+        {
+            errors.Add($"Plugin '{label}' is missing assembly.");
+            return;
+        }
+
+        var problem = PluginTypeResolver.Probe(plugin.Assembly, plugin.TypeName);
+        if (problem is not null)
+        {
+            errors.Add($"Plugin '{label}': {problem}.");
         }
     }
 
@@ -2275,6 +2388,22 @@ public static class TwpConfigValidator
                port is > 0 and <= 65535;
     }
 
+    private static void CollectPluginWarnings(TwpConfig config, List<string> warnings)
+    {
+        if (config.Plugins is not { Count: > 0 } plugins)
+        {
+            return;
+        }
+
+        var used = new HashSet<string>(
+            config.Routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
+            StringComparer.Ordinal);
+        foreach (var plugin in plugins.Where(plugin => plugin is { Name: not null } && !used.Contains(plugin.Name)))
+        {
+            warnings.Add($"Plugin '{plugin.Name}' is loaded but no route lists it in middleware, so it never runs.");
+        }
+    }
+
     /// <summary>
     ///     Limits that are accepted by config but not enforced on a live path. Callers print these
     ///     without failing validation.
@@ -2320,6 +2449,8 @@ public static class TwpConfigValidator
                 "HTTP/2 and HTTP/3 request bodies, Expect: 100-continue requests, deflate and stacked encodings " +
                 "are forwarded as sent.");
         }
+
+        CollectPluginWarnings(config, warnings);
 
         if (config.Routes.Any(route => route.GrpcWeb))
         {

@@ -81,8 +81,8 @@ internal static class ReverseProxySessionDispatch
     }
 
     /// <summary>
-    /// Same as <see cref="Apply"/>, but runs every <c>oidc</c> and <c>extAuth</c> policy of the matched route before a
-    /// destination is bound. Callers use it only when <c>HasAsyncPolicies</c> is set; the synchronous
+    /// Same as <see cref="Apply"/>, but runs every <c>oidc</c> and <c>extAuth</c> policy and then every per-route plugin of
+    /// the matched route before a destination is bound. Callers use it only when <c>HasAsyncPolicies</c> is set; the synchronous
     /// <see cref="Apply"/> stays the default path.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -100,6 +100,13 @@ internal static class ReverseProxySessionDispatch
             // A login comes first, so a service that decides on identity headers sees the ones it set.
             if (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
                 await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+            {
+                return RouteDispatchResult.Handled;
+            }
+
+            // Plugins come last, so a request that failed authentication never reaches plugin code.
+            if (route.Middleware is { Count: > 0 } &&
+                await RoutePluginDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false))
             {
                 return RouteDispatchResult.Handled;
             }
