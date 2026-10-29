@@ -84,6 +84,10 @@ Generated from the instruments the core meter declares. A unit test fails when t
 | `twp.svcb.duration_ms` | Histogram | `ms` | not exposed | HTTPS/SVCB discovery duration in milliseconds, tagged by result. |
 | `twp.svcb.queued` | Counter | `{lookup}` | not exposed | HTTPS/SVCB background discovery lookups queued after an Auto-mode cache miss. |
 | `twp.timeouts` | Counter | `{timeout}` | not exposed | Deadlines that fired, tagged by ProxyTimeoutKind. |
+| `twp.udp.bytes` | Counter | `By` | not exposed | Payload bytes relayed by UDP listeners, by direction: in (client to upstream) or out (upstream to client). |
+| `twp.udp.datagrams` | Counter | `{datagram}` | not exposed | Datagrams relayed by UDP listeners, by direction: in (client to upstream) or out (upstream to client). |
+| `twp.udp.dropped` | Counter | `{datagram}` | not exposed | Datagrams a UDP listener did not relay, by reason: oversized, empty, malformed, rate_limited, session_cap, client_cap, draining, no_destination, resolve_failed, or upstream_error. |
+| `twp.udp.sessions.active` | UpDownCounter | `{session}` | not exposed | UDP relay sessions currently open (one per client endpoint), summed across UDP listeners. |
 <!-- metric-catalog:end -->
 
 ## Plus series

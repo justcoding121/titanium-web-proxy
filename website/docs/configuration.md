@@ -46,7 +46,7 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `host` | string | Bind address. Default `0.0.0.0` (all IPv4 interfaces). `*` is the same as `0.0.0.0`. Use `127.0.0.1` for localhost only. |
 | `port` | int | Default `8000`. `0` is an OS-chosen (ephemeral) port. Inspector toolbar `*` / empty means the same. |
 | `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
-| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, or `masque` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE) |
+| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, or `udp` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
 | `enableHttp3` | bool? | Per-listener; any `false` disables global H3 |
@@ -60,6 +60,14 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `sniDefaultClusterId` | string? | Passthrough only. Cluster for a client with no match, no server name, or no ClientHello |
 | `sniReadTimeoutSeconds` | int? | Passthrough only. How long to wait for the ClientHello, 1 to 60. Default `5` |
 | `sendProxyProtocol` | string? | Passthrough only. `none` (default) or `v2` |
+| `clusterId` | string? | `udp` only. Cluster that supplies the upstream for each new session. Use it or `forwardHost` / `forwardPort`, not both |
+| `maxSessions` | int? | `udp` only. Open sessions across the listener, 1 to 1,000,000. Default `10000` |
+| `maxSessionsPerClient` | int? | `udp` only. Open sessions for one client IP. Default `256`, at most `maxSessions` |
+| `maxDatagramBytes` | int? | `udp` only. Largest datagram relayed, 1 to 65507. Default `1500` |
+| `maxDatagramsPerSecondPerClient` | int? | `udp` only. Datagrams per second one client IP may send. Default `10000` |
+| `sessionAffinity` | string? | `udp` only. `clientEndpoint` (the only value and the default) |
+
+On a `udp` listener `idleTimeoutSeconds` is how long a session may go without a datagram in either direction (1 to 86400, default `30`).
 
 ### TCP passthrough with SNI
 
@@ -112,6 +120,36 @@ The clusters are ordinary clusters, defined as in [Routes & clusters](#routes-cl
 - **Metrics.** `twp.passthrough.connections{route,result}` counts finished connections. `route` is the matching `serverName` pattern, `default`, or `forward`. `result` is `ok`, `idle_timeout`, `grace_expired`, `connect_failed`, `no_destination`, `no_route`, `client_closed`, `cancelled`, or `error`. `twp.passthrough.bytes{direction}` counts bytes relayed (`in` is client to upstream, `out` is upstream to client).
 
 Without `sniRoutes` and `sniDefaultClusterId`, a passthrough listener behaves as before: every connection goes to `forwardHost` and nothing is read ahead.
+
+### UDP listeners
+
+A `type: udp` listener relays datagrams between clients and one upstream, for protocols such as DNS, syslog, or game traffic. It shares nothing with the HTTP paths, so a config may contain only UDP listeners.
+
+```yaml
+listeners:
+  - host: "0.0.0.0"
+    port: 5353
+    type: udp
+    clusterId: dns
+    idleTimeoutSeconds: 30
+    maxSessions: 10000
+clusters:
+  - id: dns
+    destinations:
+      - { id: dns-1, address: "10.0.0.53", port: 53 }
+      - { id: dns-2, address: "10.0.0.54", port: 53 }
+```
+
+- **Sessions.** Each client endpoint (IP and port) gets a session with its own connected upstream socket. Every datagram from that client uses the same upstream, and replies are sent only to that client endpoint, so a third party cannot inject traffic into a session or use the relay to amplify.
+- **Destination.** With `clusterId`, the load balancer picks a destination once, when the session opens. Unhealthy, draining, and maintenance destinations are skipped, and a change in health moves new sessions only. Existing sessions keep their upstream until they expire. With `forwardHost` and `forwardPort`, every session goes to that address, which must be an IP address or a name that resolves when the listener starts.
+- **Health.** A send failure or an ICMP port-unreachable on a session's upstream counts as a failure for that destination. A reply clears the streak.
+- **Idle expiry.** Sessions expire after `idleTimeoutSeconds` with no datagram in either direction. A single hashed timer wheel sweeps them, so there is no timer per session. Expiry is accurate to about one eighth of the timeout, and no more than one second.
+- **Limits.** A datagram above `maxDatagramBytes` or an empty datagram is dropped. A new session beyond `maxSessions` or `maxSessionsPerClient` is dropped. A client IP that exceeds `maxDatagramsPerSecondPerClient` has the excess dropped. Datagrams from port 0 or from multicast, broadcast, or unspecified source addresses are dropped as malformed.
+- **IPv4 and IPv6.** A `host` of `::` accepts both families. Upstream sockets use the family of their destination.
+- **Windows.** The listener turns off `SIO_UDP_CONNRESET`, so a client that closed its port does not make the receive loop fail.
+- **Drain.** On shutdown or drain the listener stops opening sessions, keeps relaying for open ones until they expire or the drain timeout passes, and then closes.
+- **Not supported.** `proxyProtocol`, `decryptSsl`, `passthrough`, SNI routing, and the HTTP, MASQUE, and QUIC settings are rejected on a `udp` listener. Validation warns when a non-loopback `udp` listener has no authentication, because UDP has no handshake to authenticate.
+- **Metrics.** `twp.udp.sessions.active` is the number of open sessions. `twp.udp.datagrams{direction}` and `twp.udp.bytes{direction}` count relayed datagrams and payload bytes (`in` is client to upstream, `out` is upstream to client). `twp.udp.dropped{reason}` counts datagrams not relayed, with `reason` one of `oversized`, `empty`, `malformed`, `rate_limited`, `session_cap`, `client_cap`, `draining`, `no_destination`, `resolve_failed`, or `upstream_error`.
 
 ## Observability
 

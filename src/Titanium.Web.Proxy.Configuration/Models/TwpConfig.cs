@@ -65,7 +65,7 @@ public sealed class ListenerConfig
 
     /// <summary>
     ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
-    ///     <c>socks</c>, <c>quic</c>, or <c>masque</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    ///     <c>socks</c>, <c>quic</c>, <c>masque</c>, or <c>udp</c>. When null, classic ForwardHost rules choose transparent vs explicit.
     /// </summary>
     public string? Type { get; set; }
 
@@ -97,7 +97,10 @@ public sealed class ListenerConfig
     /// <summary>QUIC handshake timeout in seconds.</summary>
     public int? HandshakeTimeoutSeconds { get; set; }
 
-    /// <summary>QUIC idle timeout in seconds. On a passthrough listener, seconds with no bytes before the connection closes (0 disables).</summary>
+    /// <summary>
+    /// QUIC idle timeout in seconds. On a passthrough listener, seconds with no bytes before the connection closes (0 disables).
+    /// On a <c>udp</c> listener, seconds with no datagram in either direction before a session closes (default 30, at least 1).
+    /// </summary>
     public int? IdleTimeoutSeconds { get; set; }
 
     /// <summary>Require a PROXY protocol preamble before HTTP bytes.</summary>
@@ -141,6 +144,27 @@ public sealed class ListenerConfig
 
     /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
     public MasqueListenerConfig? Masque { get; set; }
+
+    /// <summary>
+    /// <c>type: udp</c> only. Cluster whose load balancer picks the upstream once per new session.
+    /// Set this or <see cref="ForwardHost"/> (with <see cref="ForwardPort"/>), not both.
+    /// </summary>
+    public string? ClusterId { get; set; }
+
+    /// <summary><c>type: udp</c> only. Sessions open at once (default 10000). A datagram that would open another is dropped.</summary>
+    public int? MaxSessions { get; set; }
+
+    /// <summary><c>type: udp</c> only. Sessions one client address (an IPv6 client counts by /64) may hold (default 256).</summary>
+    public int? MaxSessionsPerClient { get; set; }
+
+    /// <summary><c>type: udp</c> only. Largest datagram payload relayed in either direction (default 1500, at most 65507).</summary>
+    public int? MaxDatagramBytes { get; set; }
+
+    /// <summary><c>type: udp</c> only. Datagrams per second one client address may send, with a one second burst (default 10000).</summary>
+    public int? MaxDatagramsPerSecondPerClient { get; set; }
+
+    /// <summary><c>type: udp</c> only. How a session is keyed. <c>clientEndpoint</c> (the default and only value) is one session per client address and port.</summary>
+    public string? SessionAffinity { get; set; }
 }
 
 /// <summary>One TCP passthrough route chosen by the client's TLS server name.</summary>

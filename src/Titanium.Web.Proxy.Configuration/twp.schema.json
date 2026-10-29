@@ -390,6 +390,9 @@
               "require"
             ]
           },
+          "clusterId": {
+            "type": "string"
+          },
           "decryptSsl": {
             "type": "boolean"
           },
@@ -484,11 +487,30 @@
           "maxConcurrentClients": {
             "type": "integer"
           },
+          "maxDatagramBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65507
+          },
+          "maxDatagramsPerSecondPerClient": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000
+          },
           "maxInboundBidirectionalStreams": {
             "type": "integer"
           },
           "maxInboundUnidirectionalStreams": {
             "type": "integer"
+          },
+          "maxSessions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "maxSessionsPerClient": {
+            "type": "integer",
+            "minimum": 1
           },
           "passthrough": {
             "type": "boolean"
@@ -501,6 +523,12 @@
             "enum": [
               "none",
               "v2"
+            ]
+          },
+          "sessionAffinity": {
+            "type": "string",
+            "enum": [
+              "clientEndpoint"
             ]
           },
           "sniDefaultClusterId": {

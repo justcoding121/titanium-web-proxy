@@ -24,7 +24,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownListenerTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explicit", "transparent", "socks", "quic", "masque",
+        "explicit", "transparent", "socks", "quic", "masque", "udp",
     };
 
     private static readonly HashSet<string> KnownProxyTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -1014,9 +1014,115 @@ public static class TwpConfigValidator
             ValidateListenerBounds(listener, errors);
             ValidatePassthrough(listener, clusterIds, errors);
             ValidateMasqueListener(listener, errors);
+            ValidateUdpListener(listener, clusterIds, errors);
             ValidateClientCertificate(listener, errors);
             ValidateTrustedProxySources(listener, errors);
         }
+    }
+
+    private static bool IsUdpListener(ListenerConfig listener) =>
+        string.Equals(listener.Type, "udp", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateUdpListener(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors)
+    {
+        var prefix = $"Listener port {listener.Port}:";
+        if (!IsUdpListener(listener))
+        {
+            var stray = listener.ClusterId is not null
+                        || listener.MaxSessions is not null
+                        || listener.MaxSessionsPerClient is not null
+                        || listener.MaxDatagramBytes is not null
+                        || listener.MaxDatagramsPerSecondPerClient is not null
+                        || listener.SessionAffinity is not null;
+            if (stray)
+            {
+                errors.Add(
+                    $"{prefix} clusterId, maxSessions, maxSessionsPerClient, maxDatagramBytes, maxDatagramsPerSecondPerClient, and sessionAffinity apply only to type: udp.");
+            }
+
+            return;
+        }
+
+        var hasCluster = !string.IsNullOrWhiteSpace(listener.ClusterId);
+        var hasForward = !string.IsNullOrWhiteSpace(listener.ForwardHost);
+        if (hasCluster == hasForward)
+        {
+            errors.Add($"{prefix} a udp listener needs exactly one of clusterId or forwardHost.");
+        }
+
+        if (hasCluster && !clusterIds.Contains(listener.ClusterId!))
+        {
+            errors.Add($"{prefix} clusterId '{listener.ClusterId}' is not a defined cluster.");
+        }
+
+        if (hasForward && listener.ForwardPort is not (>= 1 and <= 65535))
+        {
+            errors.Add($"{prefix} a udp listener with forwardHost needs forwardPort between 1 and 65535.");
+        }
+
+        if (hasCluster && listener.ForwardPort is not null)
+        {
+            errors.Add($"{prefix} forwardPort applies only with forwardHost.");
+        }
+
+        if (hasForward && listener.ForwardPort == listener.Port && IsSelfAddress(listener.ForwardHost!, listener.Host))
+        {
+            errors.Add($"{prefix} forwardHost and forwardPort point back at this listener.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.Host) && listener.Host != "*"
+            && !System.Net.IPAddress.TryParse(listener.Host, out _))
+        {
+            errors.Add($"{prefix} a udp listener's host must be an IP address (0.0.0.0, ::, or a specific address).");
+        }
+
+        if (listener.IdleTimeoutSeconds is not null and not (>= 1 and <= 86400))
+        {
+            errors.Add($"{prefix} a udp listener's idleTimeoutSeconds must be between 1 and 86400.");
+        }
+
+        AddUnless(errors, listener.Port, "maxSessions must be positive.", listener.MaxSessions is <= 0);
+        AddUnless(errors, listener.Port, "maxSessions must be at most 1000000.", listener.MaxSessions is > 1_000_000);
+        AddUnless(errors, listener.Port, "maxSessionsPerClient must be positive.", listener.MaxSessionsPerClient is <= 0);
+        AddUnless(
+            errors,
+            listener.Port,
+            "maxSessionsPerClient must not exceed maxSessions.",
+            listener.MaxSessions is int total && listener.MaxSessionsPerClient is int perClient && perClient > total);
+        AddUnless(errors, listener.Port, "maxDatagramBytes must be between 1 and 65507.", listener.MaxDatagramBytes is <= 0 or > 65507);
+        AddUnless(
+            errors,
+            listener.Port,
+            "maxDatagramsPerSecondPerClient must be between 1 and 10000000.",
+            listener.MaxDatagramsPerSecondPerClient is <= 0 or > 10_000_000);
+
+        if (!string.IsNullOrWhiteSpace(listener.SessionAffinity)
+            && !listener.SessionAffinity.Equals("clientEndpoint", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix} sessionAffinity '{listener.SessionAffinity}' is not clientEndpoint.");
+        }
+
+        if (listener.AcceptProxyProtocol || string.Equals(listener.SendProxyProtocol, "v2", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix} PROXY protocol is not supported on a udp listener.");
+        }
+
+        if (listener.DecryptSsl || listener.Passthrough || (listener.SniRoutes?.Count ?? 0) > 0
+            || !string.IsNullOrEmpty(listener.SniDefaultClusterId) || listener.Masque is not null
+            || listener.EnableHttp2 is not null || listener.EnableHttp3 is not null || listener.AltSvc is not null
+            || !string.IsNullOrWhiteSpace(listener.ClientCertificateMode))
+        {
+            errors.Add(
+                $"{prefix} a udp listener has no HTTP, TLS, passthrough, or MASQUE settings (decryptSsl, passthrough, sniRoutes, masque, enableHttp2, enableHttp3, altSvc, clientCertificateMode).");
+        }
+    }
+
+    private static bool IsSelfAddress(string forwardHost, string? listenerHost)
+    {
+        var bound = string.IsNullOrWhiteSpace(listenerHost) || listenerHost is "*" ? "0.0.0.0" : listenerHost;
+        var loopback = forwardHost is "127.0.0.1" or "::1" or "localhost";
+        return string.Equals(forwardHost, bound, StringComparison.OrdinalIgnoreCase)
+               || (loopback && bound is "0.0.0.0" or "::" or "127.0.0.1" or "::1" or "localhost");
     }
 
     private static void ValidateListenerBounds(ListenerConfig listener, List<string> errors)
@@ -1028,7 +1134,7 @@ public static class TwpConfigValidator
 
         if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
         {
-            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque).");
+            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque, udp).");
         }
 
         if (listener.MaxCachedConnections is <= 0)
@@ -2137,6 +2243,13 @@ public static class TwpConfigValidator
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: masque authentication is off on a non-loopback address.");
+            }
+
+            if (IsUdpListener(listener) && listener.Host is not ("127.0.0.1" or "::1" or "localhost"))
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: a udp listener has no authentication. Any host that can reach it is relayed " +
+                    "to the upstream, so limit who can reach the port with a firewall.");
             }
         }
 

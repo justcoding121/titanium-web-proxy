@@ -113,6 +113,24 @@ public static class TwpConfigSchema
             case "ListenerConfig.SendProxyProtocol":
                 schema["enum"] = new JsonArray { "none", "v2" };
                 break;
+            case "ListenerConfig.SessionAffinity":
+                schema["enum"] = new JsonArray { "clientEndpoint" };
+                break;
+            case "ListenerConfig.MaxSessions":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 1_000_000;
+                break;
+            case "ListenerConfig.MaxSessionsPerClient":
+                schema[MinimumKey] = 1;
+                break;
+            case "ListenerConfig.MaxDatagramBytes":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 65507;
+                break;
+            case "ListenerConfig.MaxDatagramsPerSecondPerClient":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 10_000_000;
+                break;
             case "ListenerConfig.SniReadTimeoutSeconds":
                 schema[MinimumKey] = 1;
                 schema["maximum"] = 60;

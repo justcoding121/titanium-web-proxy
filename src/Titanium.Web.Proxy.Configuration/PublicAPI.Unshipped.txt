@@ -622,3 +622,15 @@ Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Ratio.set -> void
 Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Sampler.get -> string?
 Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Sampler.set -> void
 Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.TelemetryTracesConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClusterId.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.ClusterId.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxDatagramBytes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxDatagramBytes.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxDatagramsPerSecondPerClient.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxDatagramsPerSecondPerClient.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxSessions.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxSessions.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxSessionsPerClient.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxSessionsPerClient.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SessionAffinity.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SessionAffinity.set -> void

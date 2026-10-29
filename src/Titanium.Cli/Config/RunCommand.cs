@@ -20,6 +20,7 @@ using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Routing;
 using Titanium.Web.Proxy.Transforms;
+using Titanium.Web.Proxy.Udp;
 
 namespace Titanium.Cli.Config;
 
@@ -142,8 +143,16 @@ internal static class RunCommand
             await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
         }
 
+        // A udp listener is a datagram relay that never touches the HTTP server, so it is started on its own below.
+        var udpListeners = new List<ListenerConfig>();
         foreach (var listener in loaded.Config.Listeners)
         {
+            if (IsUdpListener(listener))
+            {
+                udpListeners.Add(listener);
+                continue;
+            }
+
             AddListener(proxy, listener);
         }
 
@@ -209,6 +218,7 @@ internal static class RunCommand
         JsonAccessLogWriter? accessLog = null;
         MetricsHttpEndpoint? metricsEndpoint = null;
         AdminServer? adminServer = null;
+        var udpRelays = new List<UdpRelayListener>();
         try
         {
             // The admin port opens before the proxy binds, so /healthz answers and /readyz says 503
@@ -219,6 +229,7 @@ internal static class RunCommand
                 metricsExposition,
                 () => AdminHost.BuildVersionInfo(configHash, plusActive));
             proxy.Start();
+            StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
             readiness.MarkListenersBound();
             StartAcmeIfConfigured(proxy, loaded.Config);
 
@@ -283,7 +294,14 @@ internal static class RunCommand
                             AsyncConsole.WriteError("Config reload failed: " + ex.Message);
                         }
                     },
-                    onStopRequested: () => readiness.BeginDrain(),
+                    onStopRequested: () =>
+                    {
+                        readiness.BeginDrain();
+                        foreach (var relay in udpRelays)
+                        {
+                            relay.BeginDrain();
+                        }
+                    },
                     extraWatchPaths: secretFiles,
                     loadedConfigHash: configHash).ConfigureAwait(false);
             }
@@ -297,12 +315,19 @@ internal static class RunCommand
             await readiness.BeginDrainAsync(
                 TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
                 CancellationToken.None).ConfigureAwait(false);
-            await proxy.DrainAsync(TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server))).ConfigureAwait(false);
+            var drainTimeout = TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server));
+            await proxy.DrainAsync(drainTimeout).ConfigureAwait(false);
+            await Task.WhenAll(udpRelays.Select(relay => relay.DrainAsync(drainTimeout))).ConfigureAwait(false);
             await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         finally
         {
+            foreach (var relay in udpRelays)
+            {
+                relay.Dispose();
+            }
+
             adminServer?.Dispose();
             metricsEndpoint?.Dispose();
             accessLog?.Dispose();
@@ -1032,6 +1057,64 @@ internal static class RunCommand
         }
 
         proxy.ApplyLoggingConfiguration();
+    }
+
+    private static bool IsUdpListener(ListenerConfig listener) =>
+        string.Equals(listener.Type?.Trim(), "udp", StringComparison.OrdinalIgnoreCase);
+
+    private static void StartUdpRelays(
+        IReadOnlyList<ListenerConfig> configs, List<UdpRelayListener> started, ClusterManager clusterManager, LoadBalancer loadBalancer)
+    {
+        foreach (var listener in configs)
+        {
+            var options = BuildUdpOptions(listener);
+            var relay = new UdpRelayListener(options, clusterManager, loadBalancer);
+            started.Add(relay);
+            relay.Start();
+            var target = string.IsNullOrWhiteSpace(options.ClusterId)
+                ? $"{options.ForwardHost}:{options.ForwardPort}"
+                : $"cluster {options.ClusterId}";
+            AsyncConsole.WriteLine($"Listener {relay.LocalEndPoint} udp -> {target}");
+        }
+    }
+
+    internal static UdpRelayOptions BuildUdpOptions(ListenerConfig listener)
+    {
+        var host = listener.Host ?? "0.0.0.0";
+        var options = new UdpRelayOptions
+        {
+            BindAddress = host is "0.0.0.0" or "*" ? IPAddress.Any : IPAddress.Parse(host),
+            Port = listener.Port,
+            ClusterId = listener.ClusterId,
+            ForwardHost = listener.ForwardHost,
+            ForwardPort = listener.ForwardPort ?? 0,
+        };
+        if (listener.IdleTimeoutSeconds is int idle)
+        {
+            options.IdleTimeout = TimeSpan.FromSeconds(idle);
+        }
+
+        if (listener.MaxSessions is int maxSessions)
+        {
+            options.MaxSessions = maxSessions;
+        }
+
+        if (listener.MaxSessionsPerClient is int perClient)
+        {
+            options.MaxSessionsPerClient = perClient;
+        }
+
+        if (listener.MaxDatagramBytes is int maxBytes)
+        {
+            options.MaxDatagramBytes = maxBytes;
+        }
+
+        if (listener.MaxDatagramsPerSecondPerClient is int rate)
+        {
+            options.MaxDatagramsPerSecondPerClient = rate;
+        }
+
+        return options;
     }
 
     private static void AddListener(ProxyServer proxy, ListenerConfig listener)

@@ -370,6 +370,60 @@ internal static class ProxyMetrics
         }
     }
 
+    private static readonly UpDownCounter<long> UdpSessionsActive =
+        Meter.CreateUpDownCounter<long>("twp.udp.sessions.active", "{session}",
+            "UDP relay sessions currently open (one per client endpoint), summed across UDP listeners.");
+
+    private static readonly Counter<long> UdpDatagrams =
+        Meter.CreateCounter<long>("twp.udp.datagrams", "{datagram}",
+            "Datagrams relayed by UDP listeners, by direction: in (client to upstream) or out (upstream to client).");
+
+    private static readonly Counter<long> UdpBytes =
+        Meter.CreateCounter<long>("twp.udp.bytes", "By",
+            "Payload bytes relayed by UDP listeners, by direction: in (client to upstream) or out (upstream to client).");
+
+    private static readonly Counter<long> UdpDropped =
+        Meter.CreateCounter<long>("twp.udp.dropped", "{datagram}",
+            "Datagrams a UDP listener did not relay, by reason: oversized, empty, malformed, rate_limited, session_cap, client_cap, draining, no_destination, resolve_failed, or upstream_error.");
+
+    public static void UdpSessionOpened()
+    {
+        if (UdpSessionsActive.Enabled)
+        {
+            UdpSessionsActive.Add(1);
+        }
+    }
+
+    public static void UdpSessionClosed()
+    {
+        if (UdpSessionsActive.Enabled)
+        {
+            UdpSessionsActive.Add(-1);
+        }
+    }
+
+    /// <param name="direction"><c>in</c> (client to upstream) or <c>out</c> (upstream to client).</param>
+    public static void UdpDatagramRelayed(string direction, int bytes)
+    {
+        if (UdpDatagrams.Enabled)
+        {
+            UdpDatagrams.Add(1, new KeyValuePair<string, object?>("direction", direction));
+        }
+
+        if (UdpBytes.Enabled)
+        {
+            UdpBytes.Add(bytes, new KeyValuePair<string, object?>("direction", direction));
+        }
+    }
+
+    public static void UdpDatagramDropped(string reason)
+    {
+        if (UdpDropped.Enabled)
+        {
+            UdpDropped.Add(1, new KeyValuePair<string, object?>("reason", reason));
+        }
+    }
+
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>
         Requests.Enabled || RequestDuration.Enabled || ActiveRequests.Enabled;

@@ -475,3 +475,41 @@ Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes.init -> void
 Titanium.Web.Proxy.Caching.ResponseCacheOptions.ResponseCacheOptions() -> void
 Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention.get -> System.TimeSpan
 Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention.init -> void
+const Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultIdleTimeoutSeconds = 30 -> int
+const Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramBytes = 1500 -> int
+const Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramsPerSecondPerClient = 10000 -> int
+const Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessions = 10000 -> int
+const Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessionsPerClient = 256 -> int
+const Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxAllowedDatagramBytes = 65507 -> int
+Titanium.Web.Proxy.Udp.UdpRelayListener
+Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain() -> void
+Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose() -> void
+Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync(System.TimeSpan timeout) -> System.Threading.Tasks.Task<bool>!
+Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining.get -> bool
+Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint.get -> System.Net.IPEndPoint?
+Titanium.Web.Proxy.Udp.UdpRelayListener.Start() -> void
+Titanium.Web.Proxy.Udp.UdpRelayListener.UdpRelayListener(Titanium.Web.Proxy.Udp.UdpRelayOptions! options, Titanium.Web.Proxy.Clusters.ClusterManager? clusters = null, Titanium.Web.Proxy.Clusters.LoadBalancer? loadBalancer = null) -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions
+Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress.get -> System.Net.IPAddress!
+Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId.get -> string?
+Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost.get -> string?
+Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.Port.get -> int
+Titanium.Web.Proxy.Udp.UdpRelayOptions.Port.set -> void
+Titanium.Web.Proxy.Udp.UdpRelayOptions.UdpRelayOptions() -> void
