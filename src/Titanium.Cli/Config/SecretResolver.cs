@@ -1,4 +1,5 @@
 using System.Text;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -57,6 +58,17 @@ internal static class SecretResolver
             }
         }
 
+        if (config.Policies is { Count: > 0 } policies)
+        {
+            foreach (var policy in policies)
+            {
+                if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
+                {
+                    CheckOidcSecrets(policy, readEnv, errors);
+                }
+            }
+        }
+
         if (config.Server?.Admin is { Enabled: true } admin)
         {
             admin.AuthToken = ResolveOne(
@@ -72,6 +84,22 @@ internal static class SecretResolver
         return errors;
     }
 
+    /// <summary>
+    ///     An <c>oidc</c> policy reads its own secrets when it first runs. Checking them here fails a load or reload
+    ///     whose variable is unset or whose file is missing, and registers the values so logs never show them.
+    /// </summary>
+    private static void CheckOidcSecrets(RoutePolicyConfig policy, Func<string, string?> readEnv, List<string> errors)
+    {
+        var path = $"policies.{policy.Name}";
+        if (!string.IsNullOrWhiteSpace(policy.ClientSecretEnv) || !string.IsNullOrWhiteSpace(policy.ClientSecretFile))
+        {
+            ResolveOne($"{path}.clientSecret", null, policy.ClientSecretEnv, policy.ClientSecretFile, multiline: false, readEnv, errors);
+        }
+
+        // Two keys may sit one per line while a rotation is under way. Each is registered on its own.
+        ResolveOne($"{path}.cookieSecret", null, policy.CookieSecretEnv, policy.CookieSecretFile, multiline: true, readEnv, errors);
+    }
+
     /// <summary>Every file a config reads for a secret, so a Secret rotation can trigger a reload.</summary>
     public static IReadOnlyList<string> SecretFiles(TwpConfig config)
     {
@@ -79,6 +107,18 @@ internal static class SecretResolver
         Add(files, config.Plus?.ControlPlane?.SharedSecretFile);
         Add(files, config.Plus?.ControlPlane?.DashboardViewerSecretFile);
         Add(files, config.Server?.Admin?.AuthTokenFile);
+        if (config.Policies is { Count: > 0 } policies)
+        {
+            foreach (var policy in policies)
+            {
+                if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
+                {
+                    Add(files, policy.ClientSecretFile);
+                    Add(files, policy.CookieSecretFile);
+                }
+            }
+        }
+
         if (config.Plus?.Options is { } options)
         {
             foreach (var key in SecretReferenceKeys.PlusOptionKeys)

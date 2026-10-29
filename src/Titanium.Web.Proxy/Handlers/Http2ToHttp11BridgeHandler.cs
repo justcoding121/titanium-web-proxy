@@ -125,7 +125,7 @@ public partial class ProxyServer
             await OnBeforeRequest(sessionArgs);
 
         // Per-stream destination when ReverseProxy routes are set (overrides connection ForwardHost).
-        var routeDispatch = ReverseProxy is { HasExtAuthPolicies: true }
+        var routeDispatch = ReverseProxy is { HasAsyncPolicies: true }
             ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, sessionArgs)
             : Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
         if (routeDispatch is Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination

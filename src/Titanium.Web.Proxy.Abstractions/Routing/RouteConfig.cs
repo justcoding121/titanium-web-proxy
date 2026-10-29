@@ -211,6 +211,69 @@ public sealed class RoutePolicyConfig
 
     /// <summary><c>rateLimit</c>: add RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset to a 429. Default: false.</summary>
     public bool? EmitHeaders { get; init; }
+
+    /// <summary><c>oidc</c> (Plus): issuer URL. Must match the <c>issuer</c> of its discovery document exactly.</summary>
+    public string? Issuer { get; init; }
+
+    /// <summary><c>oidc</c>: client id registered with the provider.</summary>
+    public string? ClientId { get; init; }
+
+    /// <summary><c>oidc</c>: name of the environment variable that holds the client secret. Omit both secret forms for a public client.</summary>
+    public string? ClientSecretEnv { get; init; }
+
+    /// <summary><c>oidc</c>: file that holds the client secret (a mounted Secret).</summary>
+    public string? ClientSecretFile { get; init; }
+
+    /// <summary>
+    /// <c>oidc</c>: path the provider returns the browser to. Default: <c>/_titanium/oidc/callback</c>.
+    /// The route must match this path, or the callback never reaches the policy.
+    /// </summary>
+    public string? RedirectPath { get; init; }
+
+    /// <summary><c>oidc</c>: absolute http(s) origin the provider redirects to. Default: scheme and Host of the request.</summary>
+    public string? PublicBaseUrl { get; init; }
+
+    /// <summary><c>oidc</c>: scopes to request. Default: <c>openid email profile</c> (plus <c>offline_access</c> with refreshTokens).</summary>
+    public IReadOnlyList<string>? Scopes { get; init; }
+
+    /// <summary><c>oidc</c>: session cookie name. Default: <c>titanium_oidc</c>.</summary>
+    public string? CookieName { get; init; }
+
+    /// <summary>
+    /// <c>oidc</c>: name of the environment variable that holds the cookie key (32 bytes as base64 or 64 hex digits).
+    /// A second key (separated by a comma or a new line) decrypts cookies made before a rotation.
+    /// </summary>
+    public string? CookieSecretEnv { get; init; }
+
+    /// <summary><c>oidc</c>: file that holds the cookie key, or two keys one per line during a rotation.</summary>
+    public string? CookieSecretFile { get; init; }
+
+    /// <summary><c>oidc</c>: how long a session lasts, 60 to 2592000. Default: 28800.</summary>
+    public int? SessionTtlSeconds { get; init; }
+
+    /// <summary><c>oidc</c>: e-mail addresses that may sign in (case-insensitive).</summary>
+    public IReadOnlyList<string>? AllowedEmails { get; init; }
+
+    /// <summary><c>oidc</c>: e-mail domains that may sign in (exact, case-insensitive).</summary>
+    public IReadOnlyList<string>? AllowedEmailDomains { get; init; }
+
+    /// <summary><c>oidc</c>: groups of which a person must be a member.</summary>
+    public IReadOnlyList<string>? AllowedGroups { get; init; }
+
+    /// <summary><c>oidc</c>: claim that lists the groups. Default: <c>groups</c>.</summary>
+    public string? GroupsClaim { get; init; }
+
+    /// <summary><c>oidc</c>: claim name to request header name. Client values for these headers are always removed.</summary>
+    public IReadOnlyDictionary<string, string>? PassClaims { get; init; }
+
+    /// <summary><c>oidc</c>: path that ends the session. Default: none.</summary>
+    public string? LogoutPath { get; init; }
+
+    /// <summary><c>oidc</c>: absolute origins an <c>rd</c> redirect may name. Relative paths are always allowed.</summary>
+    public IReadOnlyList<string>? PostLoginRedirectAllowlist { get; init; }
+
+    /// <summary><c>oidc</c>: renew the session with the refresh token shortly before the ID token expires. Default: false.</summary>
+    public bool? RefreshTokens { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>

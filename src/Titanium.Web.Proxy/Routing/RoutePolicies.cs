@@ -105,9 +105,10 @@ internal static class RoutePolicies
 
     /// <summary>
     ///     True when a route needs the full session path to enforce a policy. An <c>extAuth</c> policy
-    ///     awaits an authorization service and edits the upstream request, which terminate-lite cannot do.
+    ///     awaits an authorization service and edits the upstream request, and an <c>oidc</c> policy awaits a login
+    ///     and edits headers and cookies. Terminate-lite can do neither.
     /// </summary>
-    internal static bool RequiresSessionPath(ReverseProxyOptions options) => options.HasExtAuthPolicies;
+    internal static bool RequiresSessionPath(ReverseProxyOptions options) => options.HasAsyncPolicies;
 
     /// <summary>Gives back the connection slot a passed policy check holds, when a later check refuses the request.</summary>
     internal static void ReleaseSessionSlot(SessionEventArgsBase session)

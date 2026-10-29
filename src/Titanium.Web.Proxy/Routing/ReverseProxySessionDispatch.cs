@@ -81,8 +81,8 @@ internal static class ReverseProxySessionDispatch
     }
 
     /// <summary>
-    /// Same as <see cref="Apply"/>, but asks every <c>extAuth</c> policy of the matched route before a
-    /// destination is bound. Callers use it only when <c>HasExtAuthPolicies</c> is set; the synchronous
+    /// Same as <see cref="Apply"/>, but runs every <c>oidc</c> and <c>extAuth</c> policy of the matched route before a
+    /// destination is bound. Callers use it only when <c>HasAsyncPolicies</c> is set; the synchronous
     /// <see cref="Apply"/> stays the default path.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -95,10 +95,14 @@ internal static class ReverseProxySessionDispatch
             return BeginUpstreamIfForwarded(server, session, early);
         }
 
-        if (route is not null && session is SessionEventArgs args &&
-            await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+        if (route is not null && session is SessionEventArgs args)
         {
-            return RouteDispatchResult.Handled;
+            // A login comes first, so a service that decides on identity headers sees the ones it set.
+            if (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
+                await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+            {
+                return RouteDispatchResult.Handled;
+            }
         }
 
         return BeginUpstreamIfForwarded(server, session,
@@ -1108,6 +1112,11 @@ internal static class ReverseProxySessionDispatch
         if (session.Extras?.PendingSetCookie is { Length: > 0 } cookie && session.HttpClient.Response is not null)
         {
             session.HttpClient.Response.Headers.AddHeader("Set-Cookie", cookie);
+        }
+
+        if (session.Extras?.PolicySetCookie is { Length: > 0 } policyCookie && session.HttpClient.Response is not null)
+        {
+            session.HttpClient.Response.Headers.AddHeader("Set-Cookie", policyCookie);
         }
     }
 

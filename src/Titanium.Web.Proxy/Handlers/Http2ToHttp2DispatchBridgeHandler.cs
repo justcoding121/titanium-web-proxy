@@ -56,7 +56,7 @@ public partial class ProxyServer
         if (!sessionArgs.IsFastPath)
             await OnBeforeRequest(sessionArgs);
 
-        var routeDispatch = ReverseProxy is { HasExtAuthPolicies: true }
+        var routeDispatch = ReverseProxy is { HasAsyncPolicies: true }
             ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, sessionArgs)
             : Routing.ReverseProxySessionDispatch.Apply(this, sessionArgs);
         if (routeDispatch is Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination

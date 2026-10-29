@@ -11,6 +11,7 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | Dashboard | Sign-in page and six views (overview, routes and clusters, health, config, certificates, audit) on an ephemeral port (or explicit `controlPlane.dashboardPort`); see [Dashboard](#dashboard) |
 | Observability | Prometheus-style metrics for destination state / latency |
 | Security | CIDR allow-list, JWT/OIDC (JWKS), API key / Basic auth |
+| Login | `oidc` route policy: OpenID Connect authorization-code login with PKCE, encrypted session cookie, silent refresh, and claim headers; see [Login with OpenID Connect](#login-with-openid-connect-oidc-policy) |
 | Web application firewall (WAF) | Thin deny-list (paths, methods, headers, body size) — not a full WAF suite |
 | Control plane | Loopback-default HTTP(S) API with shared-secret header; snapshot get/put; cache purge; optional TLS; audit trail; failed-login throttle |
 | Operations | Drain / healthy / maintenance destination states |
@@ -160,6 +161,79 @@ plus:
 Both listeners then serve HTTPS from that certificate. `titanium test` and `titanium run` refuse a non-loopback host without `tls`, unless you set `allowInsecureNonLoopback: true` for a network that already encrypts and isolates the port (a service mesh, a locked-down pod network). That opt-out is allowed but prints a warning, because the shared secret then crosses the network in clear text. Relative certificate paths resolve against the config directory; a certificate change needs a restart.
 
 On Kubernetes the Helm chart listens on `0.0.0.0` in the pod, so set `plus.controlPlane.tls.existingSecret` to a `kubernetes.io/tls` Secret (mounted at `/etc/titanium-plus-tls`) or `plus.controlPlane.allowInsecureNonLoopback=true`; the chart refuses to render with neither. See [Kubernetes](/docs/kubernetes).
+
+## Login with OpenID Connect (`oidc` policy)
+
+A route that lists an `oidc` policy sends an unauthenticated browser to your identity provider, takes it back through the authorization-code flow with PKCE, and then keeps the person signed in with an encrypted cookie. The origin sees only the requests of people who signed in, plus the claims you choose to pass on as headers.
+
+The policy needs Plus (`plus.enabled: true`; `titanium validate` refuses it otherwise). If Plus is not loaded, or the policy cannot start (an unset secret, a key of the wrong size), every request to the route is answered `503`. It never lets a request through unprotected. A route without an `oidc` policy pays nothing.
+
+```yaml
+plus:
+  enabled: true
+policies:
+  - name: login
+    kind: oidc
+    issuer: https://idp.example.com/realms/main
+    clientId: titanium
+    clientSecretEnv: OIDC_CLIENT_SECRET
+    cookieSecretEnv: OIDC_COOKIE_KEY       # 32 bytes: 64 hex digits or base64
+    allowedEmailDomains: [example.com]
+    allowedGroups: [staff]
+    passClaims:
+      email: X-User-Email
+      sub: X-User-Id
+    logoutPath: /logout
+routes:
+  - id: app
+    clusterId: web
+    match: { path: /, pathKind: Prefix }
+    policies: [login]
+```
+
+Register `https://<your host>/_titanium/oidc/callback` (or your `redirectPath`) as a redirect URI with the provider.
+
+| Field | Meaning |
+|-------|---------|
+| `issuer` | Provider URL. The discovery document at `<issuer>/.well-known/openid-configuration` must name the same issuer. `https` only; plain `http` is accepted for a loopback host, for local development |
+| `clientId`, `clientSecretEnv` or `clientSecretFile` | The client. Leave the secret out for a public client. The secret is sent with HTTP Basic, or in the form body when the provider lists only `client_secret_post` |
+| `cookieSecretEnv` or `cookieSecretFile` | The key that seals the cookies: 32 bytes as 64 hex digits or base64. List up to four, separated by commas or one per line, to rotate: the first key seals, every key opens, so sessions made under the old key survive until you drop it |
+| `redirectPath` | Callback path. Default `/_titanium/oidc/callback` |
+| `publicBaseUrl` | Origin used to build the redirect URI, such as `https://app.example.com`. Without it the request's `Host` header is used. Set it when the proxy sits behind something that rewrites the host |
+| `scopes` | Default `openid email profile`, plus `offline_access` with `refreshTokens`. `openid` is always requested |
+| `cookieName` | Session cookie name. Default `titanium_oidc`. Login-in-progress cookies use `<cookieName>_f<hash>` |
+| `sessionTtlSeconds` | Hard limit on a session, 60 to 2592000. Default 28800 (8 hours) |
+| `allowedEmails`, `allowedEmailDomains` | The person's e-mail must match an address or a domain (exact, not a suffix). An address the provider marks `email_verified: false` never matches |
+| `allowedGroups`, `groupsClaim` | The person must be in one of these groups. `groupsClaim` names the claim that lists them (default `groups`; a dotted name reads a nested claim) |
+| `passClaims` | Map of claim name to request header, for example `email: X-User-Email`. The proxy removes any client-sent header of that name first, so a client cannot forge it. Headers that carry meaning of their own (`Authorization`, `Cookie`, `Host`, and similar) are refused |
+| `logoutPath` | A request to this path clears the session and redirects to `rd` (when allowed) or `/`. It is answered by the proxy and never forwarded |
+| `postLoginRedirectAllowlist` | Origins (`https://app.example.com`) that a `?rd=` value may name, after sign-in and sign-out. Local paths are always allowed |
+| `refreshTokens` | Renew the session quietly shortly before the ID token expires, using the refresh token |
+
+When both an e-mail rule and a group rule are set, both must hold.
+
+**Flow.** A browser request without a valid session is redirected to the provider with `response_type=code`, `code_challenge_method=S256`, a random `state`, and a random `nonce`. The state, nonce, PKCE verifier, and return target travel in a short-lived (10 minute) cookie, encrypted and authenticated with the same cookie key, one per login so several tabs can sign in at once. The callback must carry the state that matches that cookie, and a state can be used once. The ID token must carry a valid signature (RSA, RSASSA-PSS, or ECDSA keys from the provider's JWKS; shared-secret algorithms and unsigned tokens are refused), the right `iss`, the client as `aud` (and a matching `azp` when there are several audiences), an unexpired `exp` with 60 seconds of clock-skew allowance, and the `nonce` that was sent.
+
+**Session cookie.** AES-256-GCM, with a key derived per purpose and the cookie name bound into the authentication, so a cookie cannot be moved to another name or used for another purpose. It is `HttpOnly`, `Secure`, `SameSite=Lax`, and `Path=/`, and holds the person's subject, e-mail, the groups a rule names, the claims you pass on, and (with `refreshTokens`) the refresh token. It never holds the ID token or the access token. The sealed value has to stay under 4 KB. When it would not fit, the proxy first leaves the refresh token out (the session then ends with the ID token), and if it still does not fit it answers `500` at sign-in rather than truncate: trim `passClaims` or `allowedGroups`. The cookie is `Secure`, so serve the route over HTTPS. The origin never sees the session cookie or the login-in-progress cookies.
+
+**Requests that cannot follow a redirect.** A request with `Accept: application/json` (and no `text/html`) or an `X-Requested-With` header, and any method other than `GET` or `HEAD`, gets `401` with `{"error":"unauthenticated"}` instead of a redirect, so scripts can handle it.
+
+**Refresh.** With `refreshTokens: true` the proxy redeems the refresh token when the ID token is within a minute of expiring, and sends a renewed `Set-Cookie` with the response. Concurrent requests that carry the same session share one call to the provider, and a request that still carries the old cookie for a minute afterwards gets the same answer, so a refresh token that rotates is never redeemed twice. A provider that refuses the refresh ends the session: browsers go back to sign-in, scripts get `401`. While the provider is unreachable the session keeps working until the ID token is more than a minute past expiry, then requests get `503` with `Retry-After`. A provider that issues no refresh token ends the session when the ID token expires.
+
+**Provider documents.** Discovery is cached for an hour and the key set follows. An ID token that names an unknown key id makes the proxy fetch the keys again, but no more often than every 30 seconds. A failed fetch is retried with exponential backoff up to five minutes, and the last good document stays in use meanwhile.
+
+**Safeguards.**
+
+- A post-login or post-logout target is a local path or an allow-listed origin. Anything else (`//host`, `/\host`, other schemes, credentials in the URL, control characters) is dropped, and the browser goes to the page it asked for.
+- The callback is limited to 60 requests per minute per client, answers only `GET`, and refuses a callback whose state was already used.
+- Secrets, tokens, codes, states, and cookie values are never logged. `titanium run` also redacts the secret values from console output.
+- Cookie and client secrets are read when the policy first runs. A reload creates new policies and so reads them again. A missing variable or file is reported when the config loads or reloads.
+
+**Limits.**
+
+- A session is stateless: signing out clears the browser's cookie, but a copy of the cookie stays valid until `sessionTtlSeconds` runs out. Keep the TTL short where that matters, or rotate the cookie key to end every session at once.
+- The proxy does not call the provider's end-session endpoint.
+- Not available on terminate-lite, which cannot hold a request for a login; a route with an `oidc` policy always uses the full session path.
 
 ## `plus.options` keys (reference)
 

@@ -789,3 +789,56 @@ Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.StoredUtc.get -> Syst
 Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.StoredUtc.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.VaryNames.get -> System.Collections.Generic.IReadOnlyList<string!>?
 Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse.VaryNames.init -> void
+static Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.Continue.get -> Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict
+static Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.Respond.get -> Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict
+Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler
+Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler.EvaluateAsync(object! session, Titanium.Web.Proxy.Abstractions.Routing.RouteConfig! route, Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig! policy, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict>
+Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler.Kind.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.PolicyHandlers.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.PolicyHandlers.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict
+Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.Responded.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.Responded.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.ResponseSetCookie.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.ResponseSetCookie.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.RoutePolicyVerdict() -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.PolicyHandlers.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler!>?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.PolicyHandlers.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowedEmailDomains.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowedEmailDomains.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowedEmails.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowedEmails.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowedGroups.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowedGroups.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ClientId.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ClientId.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ClientSecretEnv.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ClientSecretEnv.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ClientSecretFile.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ClientSecretFile.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.CookieName.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.CookieName.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.CookieSecretEnv.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.CookieSecretEnv.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.CookieSecretFile.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.CookieSecretFile.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.GroupsClaim.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.GroupsClaim.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Issuer.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Issuer.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.LogoutPath.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.LogoutPath.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.PassClaims.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.PassClaims.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.PostLoginRedirectAllowlist.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.PostLoginRedirectAllowlist.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.PublicBaseUrl.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.PublicBaseUrl.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RedirectPath.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RedirectPath.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RefreshTokens.get -> bool?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RefreshTokens.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scopes.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scopes.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.SessionTtlSeconds.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.SessionTtlSeconds.init -> void

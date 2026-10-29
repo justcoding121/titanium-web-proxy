@@ -39,6 +39,50 @@ public sealed class PlusActivationContext
 
     /// <summary>Config identity, last reload outcome, and certificate inventory for the Plus dashboard. Null when the host has none.</summary>
     public IPlusHostStatus? HostStatus { get; init; }
+
+    /// <summary>
+    /// Handlers for route policy kinds that Plus supplies (for example <c>oidc</c>). The host copies them onto
+    /// <c>ReverseProxyOptions.PolicyHandlers</c> during refresh. Null when the host has no such list.
+    /// </summary>
+    public IList<IRoutePolicyHandler>? PolicyHandlers { get; init; }
+}
+
+/// <summary>
+/// Enforces a route policy kind that Core does not implement. Core calls it only for routes that list a policy
+/// of <see cref="Kind"/>, so a handler costs nothing on routes without one.
+/// </summary>
+public interface IRoutePolicyHandler
+{
+    /// <summary>The policy <c>kind</c> this handler enforces (for example <c>oidc</c>).</summary>
+    string Kind { get; }
+
+    /// <summary>
+    /// Decides one request. The handler may stage a response on the session (a redirect, a 401) and report
+    /// <see cref="RoutePolicyVerdict.Responded"/>, or let the request continue, optionally with a
+    /// <c>Set-Cookie</c> value to add to the response.
+    /// </summary>
+    /// <param name="session">The <c>SessionEventArgs</c> of the request.</param>
+    /// <param name="route">The matched route.</param>
+    /// <param name="policy">The policy of <see cref="Kind"/> that the route lists.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask<RoutePolicyVerdict> EvaluateAsync(
+        object session, RouteConfig route, RoutePolicyConfig policy, CancellationToken cancellationToken = default);
+}
+
+/// <summary>What an <see cref="IRoutePolicyHandler"/> decided for one request.</summary>
+public readonly struct RoutePolicyVerdict
+{
+    /// <summary>Let the request continue with no change to the response.</summary>
+    public static RoutePolicyVerdict Continue => default;
+
+    /// <summary>A response was staged on the session. The request is not forwarded.</summary>
+    public static RoutePolicyVerdict Respond => new() { Responded = true };
+
+    /// <summary>True when the handler staged a response and the request must not be forwarded.</summary>
+    public bool Responded { get; init; }
+
+    /// <summary>A <c>Set-Cookie</c> value to add to the response of a request that continues. Null adds nothing.</summary>
+    public string? ResponseSetCookie { get; init; }
 }
 
 /// <summary>Opt-in GET/HEAD response cache (empty/off = zero cost when unused).</summary>

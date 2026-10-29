@@ -650,6 +650,24 @@
           "allow": {
             "type": "string"
           },
+          "allowedEmailDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedEmails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "burst": {
             "type": "integer",
             "minimum": 1
@@ -659,6 +677,24 @@
           },
           "cacheSeconds": {
             "type": "integer"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecretEnv": {
+            "type": "string"
+          },
+          "clientSecretFile": {
+            "type": "string"
+          },
+          "cookieName": {
+            "type": "string"
+          },
+          "cookieSecretEnv": {
+            "type": "string"
+          },
+          "cookieSecretFile": {
+            "type": "string"
           },
           "copyResponseHeaders": {
             "type": "array",
@@ -681,10 +717,16 @@
           "failOpen": {
             "type": "boolean"
           },
+          "groupsClaim": {
+            "type": "string"
+          },
           "headerName": {
             "type": "string"
           },
           "headerValue": {
+            "type": "string"
+          },
+          "issuer": {
             "type": "string"
           },
           "key": {
@@ -696,6 +738,9 @@
           },
           "limit": {
             "type": "integer"
+          },
+          "logoutPath": {
+            "type": "string"
           },
           "maxKeys": {
             "type": "integer",
@@ -717,11 +762,41 @@
           "origins": {
             "type": "string"
           },
+          "passClaims": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "postLoginRedirectAllowlist": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "publicBaseUrl": {
+            "type": "string"
+          },
+          "redirectPath": {
+            "type": "string"
+          },
+          "refreshTokens": {
+            "type": "boolean"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "sendHeaders": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "sessionTtlSeconds": {
+            "type": "integer"
           },
           "timeoutMilliseconds": {
             "type": "integer"

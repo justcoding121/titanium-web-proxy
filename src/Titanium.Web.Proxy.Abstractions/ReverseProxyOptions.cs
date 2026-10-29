@@ -32,12 +32,19 @@ public sealed class ReverseProxyOptions
     public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; init; }
 
     /// <summary>
+    /// Handlers for policy kinds that Plus supplies (<c>oidc</c>). A route that lists such a policy is refused with
+    /// 503 when no handler is present, so a missing plugin never turns a login into an open route.
+    /// </summary>
+    public IReadOnlyList<IRoutePolicyHandler>? PolicyHandlers { get; init; }
+
+    /// <summary>
     /// Per-options cache for data derived from <see cref="Routes"/> (requirements, compiled table).
     /// Core replaces it when <see cref="Routes"/> is a different instance. Not part of the public contract.
     /// </summary>
     internal object? Compiled { get; set; }
 
-    private int extAuthState;
+    private int asyncPolicyState;
+    private int handledPolicyState;
     private int grpcWebState;
 
     /// <summary>
@@ -60,25 +67,44 @@ public sealed class ReverseProxyOptions
     }
 
     /// <summary>
-    /// True when a route lists an <c>extAuth</c> policy. Computed once per options instance, so the
-    /// request path pays a single field read when no route asks an authorization service.
+    /// True when a route lists an <c>extAuth</c> or a plugin-handled (<c>oidc</c>) policy. Computed once per options instance, so the
+    /// request path pays a single field read when no route awaits a service or a login.
     /// </summary>
-    internal bool HasExtAuthPolicies
+    internal bool HasAsyncPolicies
     {
         get
         {
-            var state = Volatile.Read(ref extAuthState);
+            var state = Volatile.Read(ref asyncPolicyState);
             if (state == 0)
             {
-                state = ComputeHasExtAuthPolicies() ? 2 : 1;
-                Volatile.Write(ref extAuthState, state);
+                state = AnyReferencedPolicy(handledOnly: false) ? 2 : 1;
+                Volatile.Write(ref asyncPolicyState, state);
             }
 
             return state == 2;
         }
     }
 
-    private bool ComputeHasExtAuthPolicies()
+    /// <summary>
+    /// True when a route lists a plugin-handled (<c>oidc</c>) policy. These rewrite request headers and set response cookies,
+    /// so the host must keep such traffic on the full session path.
+    /// </summary>
+    internal bool HasHandledPolicies
+    {
+        get
+        {
+            var state = Volatile.Read(ref handledPolicyState);
+            if (state == 0)
+            {
+                state = AnyReferencedPolicy(handledOnly: true) ? 2 : 1;
+                Volatile.Write(ref handledPolicyState, state);
+            }
+
+            return state == 2;
+        }
+    }
+
+    private bool AnyReferencedPolicy(bool handledOnly)
     {
         if (Policies is not { Count: > 0 } policies || Routes is not { Count: > 0 } routes)
         {
@@ -97,7 +123,7 @@ public sealed class ReverseProxyOptions
                 for (var p = 0; p < policies.Count; p++)
                 {
                     if (string.Equals(policies[p].Name, names[n], StringComparison.Ordinal) &&
-                        string.Equals(policies[p].Kind, "extAuth", StringComparison.Ordinal))
+                        (handledOnly ? PolicyKinds.IsHandled(policies[p].Kind) : PolicyKinds.AwaitsService(policies[p].Kind)))
                     {
                         return true;
                     }

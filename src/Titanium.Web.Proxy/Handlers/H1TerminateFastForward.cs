@@ -116,7 +116,7 @@ public partial class ProxyServer
             if (reverse.Policies is { Count: > 0 } && Routing.RoutePolicies.HoldsConnectionSlot(reverse))
                 return false;
 
-            // An extAuth policy awaits an authorization service and edits the upstream request.
+            // An extAuth or oidc policy awaits a service or a login and edits the upstream request.
             if (Routing.RoutePolicies.RequiresSessionPath(reverse))
                 return false;
         }

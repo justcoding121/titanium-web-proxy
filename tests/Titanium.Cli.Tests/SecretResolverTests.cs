@@ -203,6 +203,48 @@ public class SecretResolverTests
     }
 
     [TestMethod]
+    public void OidcSecrets_AreChecked_NamedOnFailure_AndRedacted()
+    {
+        var keyFile = WriteSecret("cookie-keys", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\nfedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210\n");
+        var config = new TwpConfig
+        {
+            Policies =
+            [
+                new Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig
+                {
+                    Name = "login", Kind = "oidc", ClientSecretEnv = "OIDC_SECRET", CookieSecretFile = keyFile,
+                },
+            ],
+        };
+
+        var errors = SecretResolver.Resolve(config, Env(("OIDC_SECRET", "idp-client-secret")));
+
+        Assert.AreEqual(0, errors.Count, string.Join("\n", errors));
+        Assert.AreEqual("masked", SecretRedactor.Redact("masked"));
+        StringAssert.DoesNotMatch(SecretRedactor.Redact("the secret is idp-client-secret"), new System.Text.RegularExpressions.Regex("idp-client-secret"));
+        StringAssert.DoesNotMatch(
+            SecretRedactor.Redact("key 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+            new System.Text.RegularExpressions.Regex("0123456789abcdef0123456789abcdef"));
+        CollectionAssert.Contains(SecretResolver.SecretFiles(config).ToArray(), keyFile);
+
+        var broken = new TwpConfig
+        {
+            Policies =
+            [
+                new Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig
+                {
+                    Name = "login", Kind = "oidc", ClientSecretEnv = "NOT_SET", CookieSecretFile = Path.Combine(_dir, "missing"),
+                },
+                new Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig { Name = "other", Kind = "extAuth", Url = "http://auth.test/" },
+            ],
+        };
+        var failures = SecretResolver.Resolve(broken, Env());
+        Assert.IsTrue(failures.Any(e => e.Contains("policies.login.clientSecretEnv 'NOT_SET' is not set", StringComparison.Ordinal)), string.Join("\n", failures));
+        Assert.IsTrue(failures.Any(e => e.Contains("policies.login.cookieSecretFile", StringComparison.Ordinal) && e.Contains("could not be read", StringComparison.Ordinal)), string.Join("\n", failures));
+        Assert.AreEqual(2, failures.Count);
+    }
+
+    [TestMethod]
     public void AdminToken_FromFile_IsOnlyResolvedWhenAdminIsEnabled()
     {
         var path = WriteSecret("admin", "admin-from-file\n");

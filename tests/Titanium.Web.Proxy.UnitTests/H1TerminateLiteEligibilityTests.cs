@@ -219,6 +219,52 @@ public class H1TerminateLiteEligibilityTests
         Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
     }
 
+    [TestMethod]
+    public async Task OidcPolicy_NeedsTheSessionPath_AndTheInterceptionGate_OnlyWhenARouteListsIt()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 80,
+        };
+        var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        request.RequestUriString8 = "/".GetByteString();
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 80 }],
+            },
+        ]);
+        var login = new RoutePolicyConfig { Name = "login", Kind = "oidc", Issuer = "https://idp.test", ClientId = "c" };
+        var match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix };
+
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match }],
+            ClusterManager = manager,
+            LoadBalancer = new LoadBalancer(),
+            Policies = [login],
+        };
+        Assert.IsFalse(global::Titanium.Web.Proxy.Routing.RoutePolicies.RequiresSessionPath(proxy.ReverseProxy));
+        Assert.IsFalse(proxy.NeedsHttpInterception(ep));
+        Assert.IsTrue(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match, Policies = ["login"] }],
+            ClusterManager = manager,
+            LoadBalancer = new LoadBalancer(),
+            Policies = [login],
+        };
+        Assert.IsTrue(global::Titanium.Web.Proxy.Routing.RoutePolicies.RequiresSessionPath(proxy.ReverseProxy));
+        Assert.IsTrue(proxy.NeedsHttpInterception(ep), "claim headers and the renewed cookie need the full session path");
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+    }
+
     private static ReverseProxyOptions Options(ClusterManager manager, RouteConfig route) => new()
     {
         Routes = [route],

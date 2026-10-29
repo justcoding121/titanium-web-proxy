@@ -214,6 +214,47 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenARouteListsAnOidcPolicy()
+    {
+        var oidc = new RoutePolicyConfig { Name = "login", Kind = "oidc", Issuer = "https://idp.test", ClientId = "c" };
+        var match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix };
+
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match, Policies = ["login"] }],
+            Policies = [oidc],
+        }), "terminate-lite cannot hold a request for a login or add the claim headers");
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match }],
+            Policies = [oidc],
+        }), "an unused oidc policy changes nothing");
+    }
+
+    [TestMethod]
+    public void BuildReverseProxyOptions_CarriesThePolicyHandlers_OnlyWhenThereAreSome()
+    {
+        var manager = new Titanium.Web.Proxy.Clusters.ClusterManager();
+        var balancer = new Titanium.Web.Proxy.Clusters.LoadBalancer();
+        var handler = new FakeHandler();
+
+        var without = RunCommand.BuildReverseProxyOptions([], manager, balancer, [], null, null, []);
+        var with = RunCommand.BuildReverseProxyOptions([], manager, balancer, [], null, null, [handler]);
+
+        Assert.IsNull(without.PolicyHandlers);
+        CollectionAssert.AreEqual(new[] { handler }, with.PolicyHandlers!.ToArray());
+    }
+
+    private sealed class FakeHandler : Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler
+    {
+        public string Kind => "oidc";
+
+        public ValueTask<Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict> EvaluateAsync(
+            object session, RouteConfig route, RoutePolicyConfig policy, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.Continue);
+    }
+
+    [TestMethod]
     public void ConfigNeedsSessionPath_True_ForTransforms()
     {
         var cfg = new TwpConfig

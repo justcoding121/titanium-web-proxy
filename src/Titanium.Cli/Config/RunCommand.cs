@@ -160,6 +160,7 @@ internal static class RunCommand
 
         var loadBalancer = new LoadBalancer();
         var middleware = new List<IProxyMiddleware>();
+        var policyHandlers = new List<IRoutePolicyHandler>();
         var routes = loaded.Config.Routes.ToList();
         var policies = loaded.Config.Policies?.ToList() ?? new List<RoutePolicyConfig>();
         var plusOptions = loaded.Config.Plus is not null
@@ -179,7 +180,7 @@ internal static class RunCommand
         void RefreshReverseProxy()
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
-                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies);
+                routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers);
         }
 
         // No meter listener is attached until server.metrics is on or /metrics is first served.
@@ -193,6 +194,7 @@ internal static class RunCommand
             ClusterManager = clusterManager,
             Options = plusOptions,
             Middleware = middleware,
+            PolicyHandlers = policyHandlers,
             Routes = routes,
             RefreshReverseProxy = RefreshReverseProxy,
             ResponseCache = responseCache,
@@ -443,7 +445,8 @@ internal static class RunCommand
         LoadBalancer loadBalancer,
         IReadOnlyCollection<IProxyMiddleware> middleware,
         IGrpcJsonTranscoder? grpcJsonTranscoder,
-        IReadOnlyCollection<RoutePolicyConfig>? policies = null)
+        IReadOnlyCollection<RoutePolicyConfig>? policies = null,
+        IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
@@ -458,6 +461,7 @@ internal static class RunCommand
             Middleware = middleware.Count > 0 ? middleware.ToArray() : null,
             LatencyRecorder = loadBalancer,
             GrpcJsonTranscoder = grpcJsonTranscoder,
+            PolicyHandlers = policyHandlers is { Count: > 0 } ? policyHandlers.ToArray() : null,
         };
     }
 
@@ -1459,15 +1463,17 @@ internal static class RunCommand
             return true;
         }
 
-        // An extAuth policy awaits an authorization service and edits the upstream request.
+        // An extAuth policy awaits an authorization service, and an oidc policy awaits a login. Both edit the
+        // upstream request, which terminate-lite cannot do.
         if (config.Policies is { Count: > 0 } policies)
         {
-            var extAuthNames = policies
-                .Where(p => string.Equals(p.Kind, "extAuth", StringComparison.Ordinal))
+            var awaiting = policies
+                .Where(p => string.Equals(p.Kind, "extAuth", StringComparison.Ordinal) ||
+                            string.Equals(p.Kind, "oidc", StringComparison.Ordinal))
                 .Select(p => p.Name)
                 .ToHashSet(StringComparer.Ordinal);
-            return extAuthNames.Count > 0 &&
-                   config.Routes.Any(r => r.Policies is { Count: > 0 } names && names.Any(extAuthNames.Contains));
+            return awaiting.Count > 0 &&
+                   config.Routes.Any(r => r.Policies is { Count: > 0 } names && names.Any(awaiting.Contains));
         }
 
         return false;

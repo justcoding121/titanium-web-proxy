@@ -388,6 +388,30 @@ routes:
 
 The policy answers preflights only. For the real response, expose the status headers with a `ResponseHeaderSet` transform (`Access-Control-Allow-Origin`, and `Access-Control-Expose-Headers: grpc-status, grpc-message`).
 
+### Login (route policy `oidc`, Plus)
+
+A route can require an OpenID Connect sign-in by listing an `oidc` policy. The proxy runs the authorization-code flow with PKCE against your identity provider, keeps the person signed in with an AES-256-GCM encrypted cookie, can renew the session quietly, and passes chosen claims to the origin as headers (client-sent copies of those headers are removed). It needs `plus.enabled: true`, and a route that lists it always uses the full session path.
+
+```yaml
+plus:
+  enabled: true
+policies:
+  - name: login
+    kind: oidc
+    issuer: https://idp.example.com/realms/main
+    clientId: titanium
+    clientSecretEnv: OIDC_CLIENT_SECRET
+    cookieSecretEnv: OIDC_COOKIE_KEY
+    allowedEmailDomains: [example.com]
+    passClaims: { email: X-User-Email }
+routes:
+  - id: app
+    clusterId: web
+    match: { path: /, pathKind: Prefix }
+    policies: [login]
+```
+
+`cookieSecretEnv` or `cookieSecretFile` holds 32 bytes (64 hex digits or base64); list a second key to rotate. `titanium validate` rejects a missing issuer, client, or cookie key, a path that is not a single-slash path, a session lifetime outside 60 to 2592000 seconds, and a `passClaims` header such as `Authorization` or `Cookie`. Fields, the flow, and the limits are in [Plus](/docs/plus#login-with-openid-connect-oidc-policy).
 ## Static files
 
 ```yaml

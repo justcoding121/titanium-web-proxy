@@ -7,6 +7,7 @@ using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
 using Titanium.Plus.Resilience;
 using Titanium.Plus.Security;
+using Titanium.Plus.Security.Oidc;
 using Titanium.Plus.State;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
@@ -105,6 +106,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         _ = CircuitBreakerController.TryStart(context, options);
         _ = IdempotentRetryGuard.TryStart(context, options);
         _ = GrpcTranscodeGuard.TryStart(context, options);
+        _ = OidcLogin.TryStart(context);
     }
 
     /// <summary>

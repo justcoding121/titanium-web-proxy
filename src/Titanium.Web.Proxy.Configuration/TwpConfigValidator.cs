@@ -38,6 +38,7 @@ public static class TwpConfigValidator
         var errors = new List<string>();
         var clusterIds = ValidateClusters(config.Clusters, errors);
         var policyNames = ValidatePolicies(config.Policies, errors);
+        ValidateOidcNeedsPlus(config, errors);
         ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
         ValidateListeners(config.Listeners, clusterIds, errors);
         ValidateServer(config.Server, errors);
@@ -427,7 +428,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth", "oidc",
     };
 
     private static readonly HashSet<string> ExtAuthMethods = new(StringComparer.Ordinal)
@@ -531,9 +532,181 @@ public static class TwpConfigValidator
             case "extAuth":
                 ValidateExtAuth(policy, errors);
                 break;
+            case "oidc":
+                ValidateOidc(policy, errors);
+                break;
         }
     }
 
+    // Connection-level headers and the ones the proxy owns cannot carry a claim.
+    private static readonly HashSet<string> OidcForbiddenClaimHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Connection", "Keep-Alive", "Proxy-Connection", "Proxy-Authenticate", "Proxy-Authorization", "TE", "Trailer",
+        "Transfer-Encoding", "Upgrade", "Content-Length", "Host", "Cookie", "Set-Cookie", "Authorization",
+    };
+
+    /// <summary>The login is enforced by the Plus module. Without it the policy would refuse every request.</summary>
+    private static void ValidateOidcNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Plus?.Enabled == true || config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        foreach (var policy in policies)
+        {
+            if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
+            {
+                errors.Add($"Policy '{policy.Name}' (oidc) needs plus.enabled: true. The login is enforced by Titanium Plus.");
+            }
+        }
+    }
+
+    private static void ValidateOidc(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (!IsOidcIssuer(policy.Issuer))
+        {
+            errors.Add($"Policy '{name}' (oidc) needs issuer, an absolute https URL (http only for a loopback host) without credentials, query, or fragment.");
+        }
+
+        if (string.IsNullOrWhiteSpace(policy.ClientId))
+        {
+            errors.Add($"Policy '{name}' (oidc) needs clientId.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(policy.ClientSecretEnv) && !string.IsNullOrWhiteSpace(policy.ClientSecretFile))
+        {
+            errors.Add($"Policy '{name}' (oidc) sets both clientSecretEnv and clientSecretFile. Set at most one.");
+        }
+
+        var hasCookieEnv = !string.IsNullOrWhiteSpace(policy.CookieSecretEnv);
+        var hasCookieFile = !string.IsNullOrWhiteSpace(policy.CookieSecretFile);
+        if (hasCookieEnv == hasCookieFile)
+        {
+            errors.Add($"Policy '{name}' (oidc) needs exactly one of cookieSecretEnv or cookieSecretFile (a 32-byte key as base64 or 64 hex digits).");
+        }
+
+        ValidateOidcPath(name, "redirectPath", policy.RedirectPath, errors);
+        ValidateOidcPath(name, "logoutPath", policy.LogoutPath, errors);
+        if (policy.RedirectPath is not null && policy.LogoutPath is not null &&
+            string.Equals(policy.RedirectPath, policy.LogoutPath, StringComparison.Ordinal))
+        {
+            errors.Add($"Policy '{name}' (oidc) redirectPath and logoutPath must differ.");
+        }
+
+        if (policy.CookieName is not null && (policy.CookieName.Length is < 1 or > 64 || !IsHeaderToken(policy.CookieName)))
+        {
+            errors.Add($"Policy '{name}' (oidc) cookieName must be 1-64 token characters.");
+        }
+
+        if (policy.SessionTtlSeconds is < 60 or > 2_592_000)
+        {
+            errors.Add($"Policy '{name}' (oidc) sessionTtlSeconds must be 60-2592000.");
+        }
+
+        if (policy.PublicBaseUrl is not null && !IsOrigin(policy.PublicBaseUrl))
+        {
+            errors.Add($"Policy '{name}' (oidc) publicBaseUrl must be an absolute http or https origin such as https://app.example.com.");
+        }
+
+        ValidateOidcList(name, "scopes", policy.Scopes, static v => !HasWhitespace(v), "a scope without spaces", errors);
+        ValidateOidcList(name, "allowedEmails", policy.AllowedEmails,
+            static v => v.IndexOf('@', StringComparison.Ordinal) > 0 && !HasWhitespace(v), "an e-mail address", errors);
+        ValidateOidcList(name, "allowedEmailDomains", policy.AllowedEmailDomains,
+            static v => !v.Contains('@', StringComparison.Ordinal) && !HasWhitespace(v), "a domain without @", errors);
+        ValidateOidcList(name, "allowedGroups", policy.AllowedGroups, static _ => true, "a group name", errors);
+        ValidateOidcList(name, "postLoginRedirectAllowlist", policy.PostLoginRedirectAllowlist,
+            static v => IsOrigin(v), "an absolute http or https origin", errors);
+
+        if (policy.GroupsClaim is not null && string.IsNullOrWhiteSpace(policy.GroupsClaim))
+        {
+            errors.Add($"Policy '{name}' (oidc) groupsClaim must not be empty.");
+        }
+
+        if (policy.PassClaims is { } pass)
+        {
+            foreach (var pair in pass)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                {
+                    errors.Add($"Policy '{name}' (oidc) passClaims has an empty claim name.");
+                }
+
+                var header = pair.Value?.Trim();
+                if (string.IsNullOrEmpty(header) || !IsHeaderToken(header))
+                {
+                    errors.Add($"Policy '{name}' (oidc) passClaims header '{pair.Value}' is not a header name.");
+                }
+                else if (OidcForbiddenClaimHeaders.Contains(header))
+                {
+                    errors.Add($"Policy '{name}' (oidc) passClaims header '{header}' cannot carry a claim.");
+                }
+            }
+        }
+    }
+
+    private static bool IsOidcIssuer(string? issuer)
+    {
+        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var uri) ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        return uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
+    }
+
+    private static bool IsOrigin(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
+        (uri.AbsolutePath.Length == 0 || uri.AbsolutePath == "/");
+
+    private static bool HasWhitespace(string value)
+    {
+        foreach (var c in value)
+        {
+            if (char.IsWhiteSpace(c) || char.IsControl(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ValidateOidcPath(string policyName, string field, string? path, List<string> errors)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        if (path.Length < 2 || path[0] != '/' || path[1] == '/' || path[1] == '\\' ||
+            path.Contains('?', StringComparison.Ordinal) || path.Contains('#', StringComparison.Ordinal) || HasWhitespace(path))
+        {
+            errors.Add($"Policy '{policyName}' (oidc) {field} must start with a single '/' and carry no query, fragment, or spaces.");
+        }
+    }
+
+    private static void ValidateOidcList(
+        string policyName, string field, IReadOnlyList<string>? values, Func<string, bool> accepts, string expected,
+        List<string> errors)
+    {
+        if (values is null)
+        {
+            return;
+        }
+
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value) || !accepts(value.Trim()))
+            {
+                errors.Add($"Policy '{policyName}' (oidc) {field} entry '{value}' must be {expected}.");
+            }
+        }
+    }
     private static void ValidateRateLimit(RoutePolicyConfig policy, List<string> errors)
     {
         var name = policy.Name;

@@ -33,6 +33,9 @@ internal sealed class RoutingFeatureState
     public System.Diagnostics.Activity? UpstreamActivity { get; set; }
     public string? RequestId { get; set; }
     public string? PendingSetCookie { get; set; }
+
+    /// <summary><c>Set-Cookie</c> a plugin policy handler asked to add to the response (a renewed login session).</summary>
+    public string? PolicySetCookie { get; set; }
     public string? HeldConnectionPolicy { get; set; }
     public string[] Tried { get; } = new string[8];
     public int TriedCount { get; private set; }
@@ -100,6 +103,7 @@ internal sealed class RoutingFeatureState
         Activity = null;
         RequestId = null;
         PendingSetCookie = null;
+        PolicySetCookie = null;
         HeldConnectionPolicy = null;
         if (TriedCount > 0)
         {

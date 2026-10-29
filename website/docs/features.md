@@ -87,6 +87,7 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 | Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
 | Rate limit policy | `rateLimit` counts per client, forwarded client, header, cookie, or route, with a fixed window or token bucket, a bounded key table, and `Retry-After` (plus optional `RateLimit-*`) on a 429. Terminate-lite eligible |
 | External authorization | `extAuth` policy asks an HTTP service to allow or deny each request. Deny status and chosen headers are relayed, redirects are not followed, `failOpen` and a short positive cache are optional. Leaves terminate-lite |
+| OpenID Connect login | `oidc` policy (Plus) signs people in with the authorization-code flow and PKCE, keeps an AES-256-GCM encrypted session cookie, renews it quietly, and passes chosen claims as headers. Scripts get `401` instead of a redirect. Leaves terminate-lite |
 
 Deeper API notes: [GitHub wiki](https://github.com/justcoding121/titanium-web-proxy/wiki).
 
