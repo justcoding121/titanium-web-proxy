@@ -298,6 +298,21 @@ public sealed class ControlPlaneConfig
     public string? DashboardViewerSecretFile { get; set; }
 
     /// <summary>
+    /// Local dashboard users file (<c>user:role:iterations:saltBase64:hashBase64</c>). Relative paths resolve against
+    /// the config directory. Unset leaves username/password sign-in off.
+    /// </summary>
+    public string? DashboardUsersFile { get; set; }
+
+    /// <summary>
+    /// When true (default), the shared secret and viewer secret may still sign in (break-glass). Set false once OIDC
+    /// or local users are the primary path.
+    /// </summary>
+    public bool? DashboardBreakGlass { get; set; }
+
+    /// <summary>Optional OpenID Connect SSO for the dashboard. Unset leaves SSO off.</summary>
+    public DashboardOidcConfig? DashboardOidc { get; set; }
+
+    /// <summary>
     /// Optional TLS for the control plane and dashboard listeners (PEM certificate chain and private key).
     /// Required when <see cref="Host"/> is not loopback, unless <see cref="AllowInsecureNonLoopback"/> is set.
     /// </summary>
@@ -318,6 +333,40 @@ public sealed class ControlPlaneTlsConfig
 
     /// <summary>PEM private key for <see cref="CertificatePath"/>. Relative paths resolve against the config directory.</summary>
     public string? KeyPath { get; set; }
+}
+
+/// <summary>OpenID Connect settings for the Plus dashboard (authorization code + PKCE).</summary>
+public sealed class DashboardOidcConfig
+{
+    public string? Issuer { get; set; }
+
+    public string? ClientId { get; set; }
+
+    public string? ClientSecret { get; set; }
+
+    public string? ClientSecretEnv { get; set; }
+
+    public string? ClientSecretFile { get; set; }
+
+    /// <summary>Cookie encryption key (32 bytes as base64 or 64 hex digits). Required when SSO is enabled.</summary>
+    public string? CookieSecret { get; set; }
+
+    public string? CookieSecretEnv { get; set; }
+
+    public string? CookieSecretFile { get; set; }
+
+    /// <summary>Absolute redirect URI registered with the IdP. Default: derived from the dashboard Host header.</summary>
+    public string? RedirectUri { get; set; }
+
+    public List<string>? OperatorGroups { get; set; }
+
+    public List<string>? ViewerGroups { get; set; }
+
+    public List<string>? AllowedEmails { get; set; }
+
+    public List<string>? AllowedEmailDomains { get; set; }
+
+    public string? GroupsClaim { get; set; }
 }
 
 /// <summary>Certificate / ACME related paths.</summary>

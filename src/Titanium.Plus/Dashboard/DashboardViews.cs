@@ -4,6 +4,9 @@ using System.Text;
 
 namespace Titanium.Plus.Dashboard;
 
+/// <summary>Which sign-in controls the login page shows.</summary>
+internal sealed record DashboardLoginFeatures(bool ShowSecret, bool ShowLocalUsers, bool ShowOidc);
+
 /// <summary>The dashboard's views, and the one place that turns values into HTML text.</summary>
 internal enum DashboardView
 {
@@ -47,19 +50,48 @@ internal static class DashboardViews
 
     public static string Rate(double perSecond) => perSecond.ToString("0.##", CultureInfo.InvariantCulture) + " /s";
 
-    public static string Login(string? error)
+    public static string Login(string? error, DashboardLoginFeatures? features = null)
     {
+        features ??= new DashboardLoginFeatures(ShowSecret: true, ShowLocalUsers: false, ShowOidc: false);
         var sb = new StringBuilder()
             .Append("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/>")
             .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>")
             .Append("<title>Titanium Plus - Sign in</title>")
             .Append("<link rel=\"stylesheet\" href=\"/assets/dashboard.css\"/></head>")
             .Append("<body data-testid=\"plus-login\" class=\"login\"><main>")
-            .Append("<h1>Titanium Plus</h1><p>Sign in with the dashboard secret.</p>")
-            .Append("<form method=\"post\" action=\"/login\" data-testid=\"login-form\">")
-            .Append("<label for=\"secret\">Secret</label>")
-            .Append("<input id=\"secret\" name=\"secret\" type=\"password\" autocomplete=\"current-password\" required data-testid=\"login-secret\"/>")
-            .Append("<button type=\"submit\" data-testid=\"login-submit\">Sign in</button></form>");
+            .Append("<h1>Titanium Plus</h1>");
+
+        if (features.ShowOidc)
+        {
+            sb.Append("<p><a href=\"/login/oidc\" data-testid=\"login-oidc\">Sign in with SSO</a></p>");
+        }
+
+        if (features.ShowLocalUsers || features.ShowSecret)
+        {
+            sb.Append("<form method=\"post\" action=\"/login\" data-testid=\"login-form\">");
+            if (features.ShowLocalUsers)
+            {
+                sb.Append("<label for=\"user\">Username</label>")
+                    .Append("<input id=\"user\" name=\"user\" type=\"text\" autocomplete=\"username\" data-testid=\"login-user\"/>")
+                    .Append("<label for=\"password\">Password</label>")
+                    .Append("<input id=\"password\" name=\"password\" type=\"password\" autocomplete=\"current-password\" data-testid=\"login-password\"/>");
+            }
+
+            if (features.ShowSecret)
+            {
+                sb.Append("<label for=\"secret\">").Append(features.ShowLocalUsers ? "Break-glass secret" : "Secret").Append("</label>")
+                    .Append("<input id=\"secret\" name=\"secret\" type=\"password\" autocomplete=\"current-password\" data-testid=\"login-secret\"");
+                if (!features.ShowLocalUsers)
+                {
+                    sb.Append(" required");
+                }
+
+                sb.Append("/>");
+            }
+
+            sb.Append("<button type=\"submit\" data-testid=\"login-submit\">Sign in</button></form>");
+        }
+
         if (error is not null)
         {
             sb.Append("<p class=\"error\" role=\"alert\" data-testid=\"login-error\">").Append(Enc(error)).Append("</p>");

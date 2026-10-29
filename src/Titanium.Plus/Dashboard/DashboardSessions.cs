@@ -10,18 +10,43 @@ public enum DashboardRole
     Operator = 1,
 }
 
+/// <summary>How the person signed in. Recorded on every mutation audit entry.</summary>
+public enum DashboardAuthSource
+{
+    /// <summary>Shared-secret (break-glass) form or header.</summary>
+    Secret = 0,
+
+    /// <summary>OpenID Connect authorization-code sign-in.</summary>
+    Oidc = 1,
+
+    /// <summary>Local users file (username + password).</summary>
+    Local = 2,
+}
+
 /// <summary>A signed-in browser. The id is only ever in the cookie; the store keeps its hash.</summary>
 public sealed class DashboardSession
 {
-    internal DashboardSession(DashboardRole role, string csrfToken, DateTimeOffset created)
+    internal DashboardSession(
+        DashboardRole role,
+        string actor,
+        DashboardAuthSource source,
+        string csrfToken,
+        DateTimeOffset created)
     {
         Role = role;
+        Actor = actor;
+        Source = source;
         CsrfToken = csrfToken;
         Created = created;
         LastSeen = created;
     }
 
     public DashboardRole Role { get; }
+
+    /// <summary>Audit identity such as <c>dashboard:oidc:alice@example.test:operator</c>.</summary>
+    public string Actor { get; }
+
+    public DashboardAuthSource Source { get; }
 
     /// <summary>Token the page sends in <c>X-Titanium-Csrf</c> on every change.</summary>
     public string CsrfToken { get; }
@@ -72,11 +97,16 @@ public sealed class DashboardSessionStore
     }
 
     /// <summary>Starts a session and returns the cookie value (the only copy of the id).</summary>
-    public string Create(DashboardRole role, out DashboardSession session)
+    public string Create(
+        DashboardRole role,
+        string actor,
+        DashboardAuthSource source,
+        out DashboardSession session)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(actor);
         var id = NewToken();
         var now = _time.GetUtcNow();
-        session = new DashboardSession(role, NewToken(), now);
+        session = new DashboardSession(role, actor.Trim(), source, NewToken(), now);
         lock (_gate)
         {
             RemoveExpired(now);

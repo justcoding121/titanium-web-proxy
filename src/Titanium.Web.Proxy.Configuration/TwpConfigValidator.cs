@@ -134,6 +134,37 @@ public static class TwpConfigValidator
                 controlPlane.DashboardViewerSecretEnv,
                 controlPlane.DashboardViewerSecretFile,
                 errors);
+            if (controlPlane.DashboardOidc is { } oidc)
+            {
+                ValidateSecretReference(
+                    "plus.controlPlane.dashboardOidc.clientSecret",
+                    oidc.ClientSecret,
+                    oidc.ClientSecretEnv,
+                    oidc.ClientSecretFile,
+                    errors);
+                ValidateSecretReference(
+                    "plus.controlPlane.dashboardOidc.cookieSecret",
+                    oidc.CookieSecret,
+                    oidc.CookieSecretEnv,
+                    oidc.CookieSecretFile,
+                    errors);
+                if (plus.Enabled &&
+                    (!string.IsNullOrWhiteSpace(oidc.Issuer) || !string.IsNullOrWhiteSpace(oidc.ClientId)))
+                {
+                    if (string.IsNullOrWhiteSpace(oidc.Issuer) || string.IsNullOrWhiteSpace(oidc.ClientId))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc needs both issuer and clientId.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(oidc.CookieSecret) &&
+                        string.IsNullOrWhiteSpace(oidc.CookieSecretEnv) &&
+                        string.IsNullOrWhiteSpace(oidc.CookieSecretFile))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc needs cookieSecret, cookieSecretEnv, or cookieSecretFile.");
+                    }
+                }
+            }
+
             ValidateControlPlaneTransport(plus.Enabled, controlPlane, errors);
         }
 

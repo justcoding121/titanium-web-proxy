@@ -44,6 +44,9 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         ControlPlaneServer.ValidateSecret(host, secret, allowDev);
         var viewerSecret = options.GetValueOrDefault("controlPlane.dashboardViewerSecret");
         ValidateViewerSecret(viewerSecret, secret);
+        var usersFile = First(options, "controlPlane.dashboardUsersFile", "dashboard.usersFile");
+        var breakGlass = !IsFalse(First(options, "controlPlane.dashboardBreakGlass", "dashboard.breakGlass"));
+        var oidc = ParseDashboardOidc(options);
 
         var tls = ParseTls(options);
         var allowInsecure = IsTrue(options.GetValueOrDefault("controlPlane.allowInsecureNonLoopback"));
@@ -93,6 +96,9 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
                 HostStatus = context.HostStatus,
                 Metrics = new DashboardMetrics(),
                 HealthEvents = new HealthEventLog(context.ClusterManager),
+                BreakGlass = breakGlass,
+                UsersFile = usersFile,
+                Oidc = oidc,
             });
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");
@@ -146,8 +152,75 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         return new ControlPlaneTlsOptions(cert, key);
     }
 
+    internal static DashboardOidcOptions? ParseDashboardOidc(IReadOnlyDictionary<string, string> options)
+    {
+        var issuer = First(options, "controlPlane.dashboardOidc.issuer", "dashboard.oidc.issuer");
+        var clientId = First(options, "controlPlane.dashboardOidc.clientId", "dashboard.oidc.clientId");
+        if (string.IsNullOrWhiteSpace(issuer) && string.IsNullOrWhiteSpace(clientId))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(clientId))
+        {
+            throw new InvalidOperationException("controlPlane.dashboardOidc needs both issuer and clientId.");
+        }
+
+        var cookieSecret = First(options, "controlPlane.dashboardOidc.cookieSecret", "dashboard.oidc.cookieSecret");
+        if (string.IsNullOrWhiteSpace(cookieSecret))
+        {
+            throw new InvalidOperationException(
+                "controlPlane.dashboardOidc needs cookieSecret (or cookieSecretEnv / cookieSecretFile resolved by the host).");
+        }
+
+        return new DashboardOidcOptions
+        {
+            Issuer = issuer,
+            ClientId = clientId,
+            ClientSecret = First(options, "controlPlane.dashboardOidc.clientSecret", "dashboard.oidc.clientSecret"),
+            CookieSecret = cookieSecret,
+            RedirectUri = First(options, "controlPlane.dashboardOidc.redirectUri", "dashboard.oidc.redirectUri"),
+            GroupsClaim = First(options, "controlPlane.dashboardOidc.groupsClaim", "dashboard.oidc.groupsClaim"),
+            OperatorGroups = SplitList(First(options, "controlPlane.dashboardOidc.operatorGroups", "dashboard.oidc.operatorGroups")),
+            ViewerGroups = SplitList(First(options, "controlPlane.dashboardOidc.viewerGroups", "dashboard.oidc.viewerGroups")),
+            AllowedEmails = SplitList(First(options, "controlPlane.dashboardOidc.allowedEmails", "dashboard.oidc.allowedEmails")),
+            AllowedEmailDomains = SplitList(First(options, "controlPlane.dashboardOidc.allowedEmailDomains", "dashboard.oidc.allowedEmailDomains")),
+        };
+    }
+
+    private static string? First(IReadOnlyDictionary<string, string> options, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string>? SplitList(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var list = value.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static s => s.Length > 0)
+            .ToArray();
+        return list.Length == 0 ? null : list;
+    }
+
     private static bool IsTrue(string? value) =>
         value is not null &&
         (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1" ||
          value.Equals("yes", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsFalse(string? value) =>
+        value is not null &&
+        (value.Equals("false", StringComparison.OrdinalIgnoreCase) || value == "0" ||
+         value.Equals("no", StringComparison.OrdinalIgnoreCase));
 }

@@ -45,6 +45,7 @@ internal static class Program
                     "http3-deps" => await Http3DepsCommand.ExecuteAsync(args),
                     "scripting-deps" => await ScriptingDepsCommand.ExecuteAsync(args),
                     "service" => await ServiceCommand.ExecuteAsync(args),
+                    "plus" => await PlusCommand.ExecuteAsync(args),
                     "help" or "-h" or "--help" => PrintHelp(),
                     _ => await UnknownAsync(command),
                 };
@@ -76,6 +77,7 @@ internal static class Program
               titanium http3-deps status|install
               titanium scripting-deps status|install
               titanium service install|uninstall|start|stop|restart|status
+              titanium plus hash-password [--user <name>] [--role operator|viewer] [password]
 
             Nested help: titanium <command> --help
             """);

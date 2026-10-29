@@ -54,7 +54,7 @@ public class DashboardV2Tests
         StringAssert.Contains(page.Text, "Titanium Plus");
         Assert.AreEqual(1, rig.Host.Sessions.Count);
         Assert.AreEqual("login", rig.Audit()[0].Action);
-        Assert.AreEqual("dashboard:operator", rig.Audit()[0].Actor);
+        Assert.AreEqual("dashboard:break-glass:operator", rig.Audit()[0].Actor);
     }
 
     [TestMethod]
@@ -199,12 +199,12 @@ public class DashboardV2Tests
     {
         var clock = new ManualTime();
         var store = new DashboardSessionStore(clock);
-        var first = store.Create(DashboardRole.Viewer, out _);
+        var first = store.Create(DashboardRole.Viewer, "a", DashboardAuthSource.Local, out _);
         clock.Advance(TimeSpan.FromSeconds(1));
         var ids = new List<string>();
         for (var i = 0; i < DashboardSessionStore.DefaultMaxSessions - 1; i++)
         {
-            ids.Add(store.Create(DashboardRole.Viewer, out _));
+            ids.Add(store.Create(DashboardRole.Viewer, "b", DashboardAuthSource.Local, out _));
         }
 
         Assert.AreEqual(64, store.Count);
@@ -213,7 +213,7 @@ public class DashboardV2Tests
         // Touching the first session makes the second-oldest the eviction candidate.
         clock.Advance(TimeSpan.FromSeconds(1));
         Assert.IsNotNull(store.Find(first, touch: true));
-        var extra = store.Create(DashboardRole.Operator, out _);
+        var extra = store.Create(DashboardRole.Operator, "c", DashboardAuthSource.Local, out _);
 
         Assert.AreEqual(64, store.Count);
         Assert.IsNotNull(store.Find(first, touch: false));
@@ -226,7 +226,7 @@ public class DashboardV2Tests
     {
         var clock = new ManualTime();
         var store = new DashboardSessionStore(clock, TimeSpan.FromMinutes(5));
-        var id = store.Create(DashboardRole.Viewer, out var session);
+        var id = store.Create(DashboardRole.Viewer, "viewer", DashboardAuthSource.Local, out var session);
 
         Assert.IsNull(store.Find(null, true));
         Assert.IsNull(store.Find("", true));
@@ -282,7 +282,7 @@ public class DashboardV2Tests
 
         var ok = rig.Audit().Where(e => e.Result == "ok" && e.Action is "drain" or "healthy").ToList();
         Assert.AreEqual(2, ok.Count);
-        Assert.AreEqual("dashboard:operator", ok[0].Actor);
+        Assert.AreEqual("dashboard:break-glass:operator", ok[0].Actor);
     }
 
     [TestMethod]
@@ -327,7 +327,7 @@ public class DashboardV2Tests
         Assert.AreEqual(403, healthy.Status);
         Assert.AreEqual(DestinationState.Healthy, rig.Manager.GetDestinationState("d1"));
         Assert.AreEqual("denied", rig.Audit()[0].Result);
-        Assert.AreEqual("dashboard:viewer", rig.Audit()[0].Actor);
+        Assert.AreEqual("dashboard:break-glass:viewer", rig.Audit()[0].Actor);
 
         // The viewer secret through the script header is read-only as well.
         Assert.AreEqual(200, (await rig.SendAsync("GET", "/api/overview", secret: ViewerSecret)).Status);

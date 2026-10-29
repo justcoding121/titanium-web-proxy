@@ -48,6 +48,29 @@ internal static class SecretResolver
                 errors);
             controlPlane.DashboardViewerSecretEnv = null;
             controlPlane.DashboardViewerSecretFile = null;
+            if (controlPlane.DashboardOidc is { } oidc)
+            {
+                oidc.ClientSecret = ResolveOne(
+                    "plus.controlPlane.dashboardOidc.clientSecret",
+                    oidc.ClientSecret,
+                    oidc.ClientSecretEnv,
+                    oidc.ClientSecretFile,
+                    multiline: false,
+                    readEnv,
+                    errors);
+                oidc.ClientSecretEnv = null;
+                oidc.ClientSecretFile = null;
+                oidc.CookieSecret = ResolveOne(
+                    "plus.controlPlane.dashboardOidc.cookieSecret",
+                    oidc.CookieSecret,
+                    oidc.CookieSecretEnv,
+                    oidc.CookieSecretFile,
+                    multiline: true,
+                    readEnv,
+                    errors);
+                oidc.CookieSecretEnv = null;
+                oidc.CookieSecretFile = null;
+            }
         }
 
         if (config.Plus?.Options is { Count: > 0 } options)
@@ -106,6 +129,9 @@ internal static class SecretResolver
         var files = new List<string>();
         Add(files, config.Plus?.ControlPlane?.SharedSecretFile);
         Add(files, config.Plus?.ControlPlane?.DashboardViewerSecretFile);
+        Add(files, config.Plus?.ControlPlane?.DashboardOidc?.ClientSecretFile);
+        Add(files, config.Plus?.ControlPlane?.DashboardOidc?.CookieSecretFile);
+        Add(files, config.Plus?.ControlPlane?.DashboardUsersFile);
         Add(files, config.Server?.Admin?.AuthTokenFile);
         if (config.Policies is { Count: > 0 } policies)
         {

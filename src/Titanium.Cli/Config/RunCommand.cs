@@ -1640,6 +1640,30 @@ internal static class RunCommand
                 options["controlPlane.dashboardViewerSecret"] = plus.ControlPlane.DashboardViewerSecret;
             }
 
+            if (!string.IsNullOrEmpty(plus.ControlPlane.DashboardUsersFile))
+            {
+                options["controlPlane.dashboardUsersFile"] = plus.ControlPlane.DashboardUsersFile;
+            }
+
+            if (plus.ControlPlane.DashboardBreakGlass is { } breakGlass)
+            {
+                options["controlPlane.dashboardBreakGlass"] = breakGlass ? "true" : "false";
+            }
+
+            if (plus.ControlPlane.DashboardOidc is { } oidc)
+            {
+                PutOidcOption(options, "controlPlane.dashboardOidc.issuer", oidc.Issuer);
+                PutOidcOption(options, "controlPlane.dashboardOidc.clientId", oidc.ClientId);
+                PutOidcOption(options, "controlPlane.dashboardOidc.clientSecret", oidc.ClientSecret);
+                PutOidcOption(options, "controlPlane.dashboardOidc.cookieSecret", oidc.CookieSecret);
+                PutOidcOption(options, "controlPlane.dashboardOidc.redirectUri", oidc.RedirectUri);
+                PutOidcOption(options, "controlPlane.dashboardOidc.groupsClaim", oidc.GroupsClaim);
+                PutOidcList(options, "controlPlane.dashboardOidc.operatorGroups", oidc.OperatorGroups);
+                PutOidcList(options, "controlPlane.dashboardOidc.viewerGroups", oidc.ViewerGroups);
+                PutOidcList(options, "controlPlane.dashboardOidc.allowedEmails", oidc.AllowedEmails);
+                PutOidcList(options, "controlPlane.dashboardOidc.allowedEmailDomains", oidc.AllowedEmailDomains);
+            }
+
             if (plus.ControlPlane.AllowInsecureNonLoopback)
             {
                 options["controlPlane.allowInsecureNonLoopback"] = "true";
@@ -1660,6 +1684,22 @@ internal static class RunCommand
         }
 
         return options;
+    }
+
+    private static void PutOidcOption(Dictionary<string, string> options, string key, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            options[key] = value;
+        }
+    }
+
+    private static void PutOidcList(Dictionary<string, string> options, string key, IReadOnlyList<string>? values)
+    {
+        if (values is { Count: > 0 })
+        {
+            options[key] = string.Join(',', values.Where(static v => !string.IsNullOrWhiteSpace(v)).Select(static v => v.Trim()));
+        }
     }
 
     internal static bool ConfigNeedsSessionPath(TwpConfig config)

@@ -41,6 +41,18 @@ public sealed class DashboardOptions
 
     /// <summary>Overrides the session cap (default 64).</summary>
     public int? MaxSessions { get; init; }
+
+    /// <summary>
+    ///     When true (default), the shared secret and viewer secret still sign people in (break-glass). When false,
+    ///     only OIDC and local users may sign in through the form; a wrong secret is refused like any other bad login.
+    /// </summary>
+    public bool BreakGlass { get; init; } = true;
+
+    /// <summary>Path to the local users file (<c>user:role:iterations:salt:hash</c>). Null leaves local login off.</summary>
+    public string? UsersFile { get; init; }
+
+    /// <summary>OIDC SSO for the dashboard. Null leaves the OIDC code path unconstructed.</summary>
+    public DashboardOidcOptions? Oidc { get; init; }
 }
 
 /// <summary>
@@ -80,6 +92,9 @@ public sealed class DashboardHost : IDisposable
     private readonly DashboardOptions _options;
     private readonly TimeProvider _time;
     private readonly int? _requestedPort;
+    private readonly LocalUsersStore? _localUsers;
+    private readonly DashboardOidc? _oidc;
+    private readonly AuthThrottle _userThrottle;
     private ControlHttpServer? _server;
 
     public DashboardHost(
@@ -101,7 +116,23 @@ public sealed class DashboardHost : IDisposable
             _options.SessionIdleTimeout,
             _options.MaxSessions ?? DashboardSessionStore.DefaultMaxSessions);
         _requestedPort = dashboardPort is > 0 and < 65536 ? dashboardPort : null;
+        _userThrottle = new AuthThrottle(timeProvider: _time);
+        if (!string.IsNullOrWhiteSpace(_options.UsersFile))
+        {
+            _localUsers = new LocalUsersStore(_options.UsersFile);
+        }
+
+        if (_options.Oidc is { } oidc)
+        {
+            _oidc = DashboardOidc.Create(oidc, _time);
+        }
     }
+
+    /// <summary>True when the OIDC provider was constructed (tests assert default-off).</summary>
+    internal bool HasOidc => _oidc is not null;
+
+    /// <summary>True when a local users file was configured.</summary>
+    internal bool HasLocalUsers => _localUsers is not null;
 
     public string? Prefix { get; private set; }
 
@@ -157,16 +188,17 @@ public sealed class DashboardHost : IDisposable
         _server?.Dispose();
         _server = null;
         BoundPort = null;
+        _oidc?.Dispose();
+        _localUsers?.Dispose();
     }
 
     /// <summary>Handles one request. Internal so tests can call it without a socket.</summary>
-    internal Task<ControlHttpResponse> HandleAsync(ControlHttpRequest request, CancellationToken cancellationToken)
+    internal async Task<ControlHttpResponse> HandleAsync(ControlHttpRequest request, CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
-        return Task.FromResult(Harden(Route(request)));
+        return Harden(await RouteAsync(request, cancellationToken).ConfigureAwait(false));
     }
 
-    private ControlHttpResponse Route(ControlHttpRequest request)
+    private async Task<ControlHttpResponse> RouteAsync(ControlHttpRequest request, CancellationToken cancellationToken)
     {
         var path = request.Path.Length > 1 ? request.Path.TrimEnd('/') : request.Path;
         var isGet = request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase);
@@ -186,6 +218,16 @@ public sealed class DashboardHost : IDisposable
         if (throttled is not null)
         {
             return throttled;
+        }
+
+        if (_oidc is not null && isGet && path.Equals("/login/oidc", StringComparison.Ordinal))
+        {
+            return await _oidc.StartLoginAsync(request, _controlPlane.IsTls, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (_oidc is not null && isGet && path.Equals("/login/oidc/callback", StringComparison.Ordinal))
+        {
+            return await CompleteOidcAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
         if (path.Equals("/login", StringComparison.Ordinal))
@@ -422,47 +464,131 @@ public sealed class DashboardHost : IDisposable
             return denied;
         }
 
-        return caller is null ? Html(200, DashboardViews.Login(null)) : Redirect("/");
+        return caller is null ? Html(200, DashboardViews.Login(null, LoginFeatures())) : Redirect("/");
+    }
+
+    private async Task<ControlHttpResponse> CompleteOidcAsync(ControlHttpRequest request, CancellationToken cancellationToken)
+    {
+        var remote = request.RemoteAddress?.ToString();
+        var (response, identity, role) = await _oidc!.CompleteCallbackAsync(request, _controlPlane.IsTls, cancellationToken)
+            .ConfigureAwait(false);
+        if (identity is null)
+        {
+            if (response.Status is 401 or 403)
+            {
+                Security.Throttle.RecordFailure(remote ?? "unknown");
+                Audit.Record($"{ControlPlaneSecurity.DashboardSurface}:oidc", remote, AuditActions.LoginFailed,
+                    "/login/oidc/callback", response.Status == 403 ? AuditResults.Denied : AuditResults.Denied);
+            }
+
+            return response;
+        }
+
+        var label = identity.Email is { Length: > 0 } email ? email : identity.Subject!;
+        var actor = $"{ControlPlaneSecurity.DashboardSurface}:oidc:{label}:{RoleName(role)}";
+        var id = Sessions.Create(role, actor, DashboardAuthSource.Oidc, out _);
+        Audit.Record(actor, remote, AuditActions.Login, "/login/oidc/callback", AuditResults.Ok);
+        var headers = new List<KeyValuePair<string, string>>(response.Headers) { SessionCookieHeader(id), new("Location", "/") };
+        return ControlHttpResponse.Text(303, "text/plain; charset=utf-8", "", headers.ToArray());
     }
 
     private ControlHttpResponse SignIn(ControlHttpRequest request)
     {
-        var remote = request.RemoteAddress?.ToString();
+        var remote = request.RemoteAddress?.ToString() ?? "unknown";
         if (request.Body.Length > MaxLoginBodyBytes)
         {
             return ControlHttpResponse.Text(413, "text/plain; charset=utf-8", "request too large");
         }
 
-        var presented = FormValue(request.BodyText(), "secret");
-        DashboardRole? role = null;
+        var body = request.BodyText();
+        var user = FormValue(body, "user");
+        var password = FormValue(body, "password");
+        var presented = FormValue(body, "secret");
+
+        if (_localUsers is not null && !string.IsNullOrEmpty(user))
+        {
+            return SignInLocal(request, remote, user, password);
+        }
+
         if (!string.IsNullOrEmpty(presented))
         {
-            if (ConstantTime.StringEquals(presented, _controlPlane.SharedSecret))
+            return SignInBreakGlass(request, remote, presented);
+        }
+
+        return LoginRejected(request, "Sign-in failed.");
+    }
+
+    private ControlHttpResponse SignInLocal(ControlHttpRequest request, string remote, string user, string? password)
+    {
+        var userKey = "user:" + user;
+        if (_userThrottle.IsBlocked(userKey, out var retryAfter, out var firstUser))
+        {
+            if (firstUser)
             {
-                role = DashboardRole.Operator;
+                Audit.Record($"{ControlPlaneSecurity.DashboardSurface}:local:{user}", remote, AuditActions.LoginFailed,
+                    "/login", AuditResults.Throttled);
             }
-            else if (HasViewerSecret && ConstantTime.StringEquals(presented, _options.ViewerSecret))
-            {
-                role = DashboardRole.Viewer;
-            }
+
+            return ControlHttpResponse.Text(429, "text/plain; charset=utf-8", "too many failed attempts",
+                new KeyValuePair<string, string>("Retry-After", retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        if (_localUsers!.TryAuthenticate(user, password, out var record) && record is not null)
+        {
+            var actor = $"{ControlPlaneSecurity.DashboardSurface}:local:{record.User}:{RoleName(record.Role)}";
+            var id = Sessions.Create(record.Role, actor, DashboardAuthSource.Local, out _);
+            Audit.Record(actor, remote, AuditActions.Login, "/login", AuditResults.Ok);
+            return Redirect("/", SessionCookieHeader(id));
+        }
+
+        _userThrottle.RecordFailure(userKey);
+        return LoginRejected(request, "Wrong username or password.");
+    }
+
+    private ControlHttpResponse SignInBreakGlass(ControlHttpRequest request, string remote, string presented)
+    {
+        if (!_options.BreakGlass)
+        {
+            return LoginRejected(request, "Break-glass sign-in is disabled.");
+        }
+
+        DashboardRole? role = null;
+        if (ConstantTime.StringEquals(presented, _controlPlane.SharedSecret))
+        {
+            role = DashboardRole.Operator;
+        }
+        else if (HasViewerSecret && ConstantTime.StringEquals(presented, _options.ViewerSecret))
+        {
+            role = DashboardRole.Viewer;
         }
 
         if (role is not { } granted)
         {
-            // Counts toward the lockout and audits login-failed; the answer is the form again, not a bare 401.
-            var rejected = Security.RejectCredentials(request, ControlPlaneSecurity.DashboardSurface);
-            return new ControlHttpResponse
-            {
-                Status = rejected.Status,
-                ContentType = "text/html; charset=utf-8",
-                Body = System.Text.Encoding.UTF8.GetBytes(DashboardViews.Login("Wrong secret.")),
-            };
+            return LoginRejected(request, "Wrong secret.");
         }
 
-        var id = Sessions.Create(granted, out _);
-        Audit.Record($"dashboard:{RoleName(granted)}", remote, AuditActions.Login, "/login", AuditResults.Ok);
+        var actor = $"{ControlPlaneSecurity.DashboardSurface}:break-glass:{RoleName(granted)}";
+        var id = Sessions.Create(granted, actor, DashboardAuthSource.Secret, out _);
+        Audit.Record(actor, remote, AuditActions.Login, "/login", AuditResults.Ok);
         return Redirect("/", SessionCookieHeader(id));
     }
+
+    private ControlHttpResponse LoginRejected(ControlHttpRequest request, string message)
+    {
+        var rejected = Security.RejectCredentials(request, ControlPlaneSecurity.DashboardSurface);
+        return new ControlHttpResponse
+        {
+            Status = rejected.Status,
+            ContentType = "text/html; charset=utf-8",
+            Body = System.Text.Encoding.UTF8.GetBytes(DashboardViews.Login(message, LoginFeatures())),
+            Headers = rejected.Headers,
+        };
+    }
+
+    private DashboardLoginFeatures LoginFeatures() => new(
+        ShowSecret: _options.BreakGlass,
+        ShowLocalUsers: _localUsers is not null,
+        ShowOidc: _oidc is not null);
 
     private bool HasViewerSecret => !string.IsNullOrEmpty(_options.ViewerSecret);
 
@@ -475,12 +601,18 @@ public sealed class DashboardHost : IDisposable
         {
             if (ConstantTime.StringEquals(header, _controlPlane.SharedSecret))
             {
-                return new Caller(DashboardRole.Operator, $"{ControlPlaneSecurity.DashboardSurface}:shared-secret", null);
+                return new Caller(
+                    DashboardRole.Operator,
+                    $"{ControlPlaneSecurity.DashboardSurface}:shared-secret",
+                    null);
             }
 
             if (HasViewerSecret && ConstantTime.StringEquals(header, _options.ViewerSecret))
             {
-                return new Caller(DashboardRole.Viewer, $"{ControlPlaneSecurity.DashboardSurface}:viewer-secret", null);
+                return new Caller(
+                    DashboardRole.Viewer,
+                    $"{ControlPlaneSecurity.DashboardSurface}:viewer-secret",
+                    null);
             }
 
             denied = Security.RejectCredentials(request, ControlPlaneSecurity.DashboardSurface);
@@ -488,9 +620,7 @@ public sealed class DashboardHost : IDisposable
         }
 
         var session = Sessions.Find(ReadCookie(request, SessionCookie), touch: !isPoll);
-        return session is null
-            ? null
-            : new Caller(session.Role, $"{ControlPlaneSecurity.DashboardSurface}:{RoleName(session.Role)}", session);
+        return session is null ? null : new Caller(session.Role, session.Actor, session);
     }
 
     private KeyValuePair<string, string> SessionCookieHeader(string id)

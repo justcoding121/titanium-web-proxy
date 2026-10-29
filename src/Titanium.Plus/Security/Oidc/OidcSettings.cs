@@ -43,6 +43,47 @@ internal sealed class OidcSettings
     public string FlowCookiePrefix => CookieName + "_f";
 
     /// <summary>
+    /// Builds settings for the Plus dashboard SSO path. Cookie crypto is already loaded; discovery and tokens reuse
+    /// the same <see cref="OidcProvider"/> rules as the route-policy path.
+    /// </summary>
+    public static OidcSettings CreateDashboard(
+        string issuer,
+        string clientId,
+        string? clientSecret,
+        OidcCookieCrypto crypto,
+        IReadOnlyList<string>? allowedEmails = null,
+        IReadOnlyList<string>? allowedEmailDomains = null,
+        string? groupsClaim = null)
+    {
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(clientId))
+        {
+            throw new OidcConfigException("dashboard OIDC needs issuer and clientId.");
+        }
+
+        return new OidcSettings
+        {
+            PolicyName = "dashboard",
+            Issuer = issuer.Trim(),
+            ClientId = clientId.Trim(),
+            ClientSecret = string.IsNullOrWhiteSpace(clientSecret) ? null : clientSecret.TrimEnd('\r', '\n'),
+            RedirectPath = "/login/oidc/callback",
+            LogoutPath = null,
+            PublicBase = null,
+            Scopes = ["openid", "email", "profile"],
+            CookieName = "titanium_plus_oidc",
+            Crypto = crypto,
+            SessionTtl = TimeSpan.FromSeconds(DefaultSessionTtlSeconds),
+            AllowedEmails = ToSet(allowedEmails, StringComparer.OrdinalIgnoreCase, lower: true),
+            AllowedDomains = ToSet(allowedEmailDomains, StringComparer.OrdinalIgnoreCase, lower: true),
+            AllowedGroups = new HashSet<string>(StringComparer.Ordinal),
+            GroupsClaim = string.IsNullOrWhiteSpace(groupsClaim) ? DefaultGroupsClaim : groupsClaim.Trim(),
+            PassClaims = [],
+            RedirectOrigins = [],
+            RefreshTokens = false,
+        };
+    }
+
+    /// <summary>
     /// Throws <see cref="OidcConfigException"/> for anything the validator cannot see: an unset variable, a missing
     /// file, a key of the wrong size.
     /// </summary>
