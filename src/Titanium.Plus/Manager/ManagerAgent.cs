@@ -134,8 +134,7 @@ public sealed class ManagerAgent : IDisposable
         if (insecure)
         {
             // Explicit operator opt-in: manager.tls.insecure disables upstream cert validation (lab/dev only).
-            handler.SslOptions.RemoteCertificateValidationCallback =
-                static (_, _, _, _) => true; // NOSONAR S4830 -- manager.tls.insecure is an explicit opt-in.
+            handler.SslOptions.RemoteCertificateValidationCallback = AcceptAnyServerCertificate; // NOSONAR csharpsquid:S4830 -- manager.tls.insecure is an explicit opt-in.
         }
 
         var http = new HttpClient(handler, disposeHandler: true)
@@ -586,6 +585,13 @@ public sealed class ManagerAgent : IDisposable
         value is not null &&
         (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1" ||
          value.Equals("yes", StringComparison.OrdinalIgnoreCase));
+
+    // Lab/dev only — wired solely when manager.tls.insecure is set.
+    private static bool AcceptAnyServerCertificate(
+        object sender,
+        System.Security.Cryptography.X509Certificates.X509Certificate? certificate,
+        System.Security.Cryptography.X509Certificates.X509Chain? chain,
+        System.Net.Security.SslPolicyErrors sslPolicyErrors) => true; // NOSONAR csharpsquid:S4830 -- opt-in insecure TLS.
 
     public void Dispose()
     {

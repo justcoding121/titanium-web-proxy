@@ -247,19 +247,15 @@ public sealed partial class BasicUserStore
     {
         try
         {
-            // Well-known bcrypt test vector — probes that BCrypt.Net-Next.dll loaded; not a real credential.
-            _ = BCrypt.Net.BCrypt.Verify("x", "$2b$04$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW"); // NOSONAR S8215 -- bcrypt load probe, not a live password hash.
+            // Touch the type so a missing BCrypt.Net-Next.dll fails here, not on the first login.
+            _ = BCrypt.Net.BCrypt.GenerateSalt(4);
         }
-        catch (Exception ex) when (ex is FileNotFoundException or FileLoadException)
+        catch (Exception ex) when (ex is FileNotFoundException or FileLoadException or TypeLoadException)
         {
             throw new InvalidOperationException(
                 "security.basicUsers uses {bcrypt} hashes, but BCrypt.Net-Next.dll was not found beside Titanium.Plus.dll. " +
                 "Use {pbkdf2} hashes, or install the file next to the Plus assembly.",
                 ex);
-        }
-        catch (Exception ex) when (ex is ArgumentException or BCrypt.Net.SaltParseException)
-        {
-            // The probe hash is arbitrary; only whether the library loads matters here.
         }
     }
 
