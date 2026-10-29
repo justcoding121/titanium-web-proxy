@@ -105,6 +105,22 @@ public class TerminateLiteEligibilityTests
                 new RoutePolicyConfig { Name = "rate", Kind = "rateLimit", Limit = 5 }),
         };
         Assert.AreEqual(0, rate.LiteBlockers().Count);
+
+        // Fleet rateLimit stays on terminate-lite (sync Check; refill is background-only).
+        using var fleet = new ProxyServer(false, false, false)
+        {
+            ReverseProxy = Options(
+                Route(b => b.Policies = ["fleet"]),
+                new RoutePolicyConfig
+                {
+                    Name = "fleet",
+                    Kind = "rateLimit",
+                    Limit = 5,
+                    Scope = "fleet",
+                    FleetFailMode = "local",
+                }),
+        };
+        Assert.AreEqual(0, fleet.LiteBlockers().Count);
     }
 
     [TestMethod]

@@ -27,8 +27,10 @@ internal static class RoutePolicies
     /// </summary>
     internal sealed class Runtime
     {
-        public RateLimiter Rates { get; } = new();
+        public RateLimiter Rates { get; }
         public ConcurrentDictionary<string, int> Connections { get; } = new(StringComparer.Ordinal);
+
+        public Runtime(IFleetRateStore? fleetStore = null) => Rates = new RateLimiter(fleetStore);
 
         public void Reset()
         {
@@ -41,7 +43,7 @@ internal static class RoutePolicies
 
     /// <summary>The enforcement state owned by <paramref name="options" />, created on first use.</summary>
     internal static Runtime RuntimeFor(ReverseProxyOptions options) =>
-        options.GetOrCreatePolicyRuntime(static () => Register(new Runtime()));
+        options.GetOrCreatePolicyRuntime(() => Register(new Runtime(options.FleetRateStore)));
 
     private static Runtime Register(Runtime runtime)
     {

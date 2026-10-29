@@ -270,10 +270,38 @@ public class PolicyAndRouteValidationTests
                 new RoutePolicyConfig { Name = "p3", Kind = "rateLimit", Key = "header:X-Api-Key", MaxKeys = 1000 },
                 new RoutePolicyConfig { Name = "p4", Kind = "rateLimit", Key = "cookie:sid", MaxKeys = 10_000_000, EmitHeaders = true },
                 new RoutePolicyConfig { Name = "p5", Kind = "rateLimit", Key = "route", Limit = 5, WindowSeconds = 10 },
+                new RoutePolicyConfig { Name = "p6", Kind = "rateLimit", Scope = "fleet", FleetFailMode = "local", LocalShare = 0.5 },
+                new RoutePolicyConfig { Name = "p7", Kind = "rateLimit", Scope = "node" },
             ],
         };
 
         Assert.AreEqual(string.Empty, Errors(config));
+    }
+
+    [TestMethod]
+    public void RateLimitFleet_RejectsInvalidScopeFailModeAndLocalShare()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "s1", Kind = "rateLimit", Scope = "cluster" },
+                new RoutePolicyConfig { Name = "f1", Kind = "rateLimit", Scope = "fleet", FleetFailMode = "panic" },
+                new RoutePolicyConfig { Name = "l1", Kind = "rateLimit", Scope = "fleet", LocalShare = 0 },
+                new RoutePolicyConfig { Name = "l2", Kind = "rateLimit", Scope = "fleet", LocalShare = 1.5 },
+                new RoutePolicyConfig { Name = "n1", Kind = "rateLimit", Scope = "node", FleetFailMode = "local" },
+                new RoutePolicyConfig { Name = "n2", Kind = "rateLimit", LocalShare = 0.5 },
+            ],
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "'s1' (rateLimit) scope");
+        StringAssert.Contains(errors, "'f1' (rateLimit) fleetFailMode");
+        StringAssert.Contains(errors, "'l1' (rateLimit) localShare");
+        StringAssert.Contains(errors, "'l2' (rateLimit) localShare");
+        StringAssert.Contains(errors, "'n1' (rateLimit) fleetFailMode requires scope: fleet");
+        StringAssert.Contains(errors, "'n2' (rateLimit) localShare requires scope: fleet");
     }
 
     [TestMethod]

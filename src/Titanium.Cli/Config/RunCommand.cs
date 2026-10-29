@@ -216,17 +216,18 @@ internal static class RunCommand
         // Names of the scripts that run on every request. A reload swaps the list with the routes.
         var scriptPipeline = new List<string>(loaded.Config.ScriptPipeline ?? []);
 
+        // No meter listener is attached until server.metrics is on or /metrics is first served.
+        using var metricsExposition = new MetricsExposition();
+        var hostStatus = new CliHostStatus(loaded.Config, configHash);
+        PlusActivationContext? plusContext = null;
         void RefreshReverseProxy()
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
                 routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers,
-                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline));
+                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline), plusContext?.FleetRateStore);
         }
 
-        // No meter listener is attached until server.metrics is on or /metrics is first served.
-        using var metricsExposition = new MetricsExposition();
-        var hostStatus = new CliHostStatus(loaded.Config, configHash);
-        var plusContext = new PlusActivationContext
+        plusContext = new PlusActivationContext
         {
             HostStatus = hostStatus,
             RegisterMetricsAppender = metricsExposition.AddAppender,
@@ -563,7 +564,8 @@ internal static class RunCommand
         IReadOnlyCollection<RoutePolicyConfig>? policies = null,
         IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null,
         IReadOnlyDictionary<string, IProxyMiddleware>? routePlugins = null,
-        IScriptPhaseHost? scriptPipeline = null)
+        IScriptPhaseHost? scriptPipeline = null,
+        IFleetRateStore? fleetRateStore = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
@@ -581,6 +583,7 @@ internal static class RunCommand
             PolicyHandlers = policyHandlers is { Count: > 0 } ? policyHandlers.ToArray() : null,
             RoutePlugins = routePlugins is { Count: > 0 } ? routePlugins : null,
             ScriptPipeline = scriptPipeline,
+            FleetRateStore = fleetRateStore,
         };
     }
 

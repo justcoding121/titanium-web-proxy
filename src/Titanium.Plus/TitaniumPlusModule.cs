@@ -100,6 +100,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         // Stretch modules — activate only when configured.
         _ = ServiceDiscovery.TryStart(context, options);
         _ = SharedStateStore.TryStart(context, options);
+        _ = RedisFleetRateStore.TryStart(context, options);
         _ = AccessSecurity.TryStart(context, options);
         _ = WafGuard.TryStart(context, options);
         _ = ResilienceController.TryStart(context, options);

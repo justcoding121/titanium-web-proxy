@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Transforms;
@@ -18,23 +19,35 @@ namespace Titanium.Web.Proxy.Routing;
 ///     <c>MaxKeys</c> counters: when full, expired ones are dropped, and any new key then shares one
 ///     overflow counter so a flood of distinct values cannot grow memory without bound.
 /// </summary>
+/// <remarks>
+///     Fleet scope (<c>scope: fleet</c>) keeps the request path synchronous: one Interlocked/lock take
+///     from a local reserve, and a single-flight background refill via <see cref="IFleetRateStore"/>.
+///     Overshoot bound across N nodes: <c>limit + burst + N * leaseSize</c> (each node may hold an
+///     unused lease). Redis is never referenced here.
+/// </remarks>
 internal sealed class RateLimiter
 {
     private const int DefaultMaxKeys = 100_000;
     private const double Epsilon = 1e-9;
     private const string OverflowSuffix = "|*overflow";
+    private const string FleetLocalSuffix = "|*fleet-local";
 
     private readonly ConcurrentDictionary<string, RateState> States = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, KeyCounter> Counters = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, FleetReserve> FleetReserves = new(StringComparer.Ordinal);
     private static readonly ConditionalWeakTable<RoutePolicyConfig, RateSpec> Specs = new();
+    private readonly IFleetRateStore? _fleetStore;
     private int _writes;
 
-    internal int Count => States.Count;
+    internal RateLimiter(IFleetRateStore? fleetStore = null) => _fleetStore = fleetStore;
+
+    internal int Count => States.Count + FleetReserves.Count;
 
     internal void Reset()
     {
         States.Clear();
         Counters.Clear();
+        FleetReserves.Clear();
         _writes = 0;
     }
 
@@ -56,6 +69,11 @@ internal sealed class RateLimiter
         DateTimeOffset now)
     {
         var spec = Specs.GetValue(policy, static p => RateSpec.From(p));
+        if (spec.Fleet)
+        {
+            return CheckFleet(spec, policy, routeId, request, client, trustedProxies, now);
+        }
+
         var key = BuildKey(policy.Name, spec, routeId, request, client, trustedProxies);
         var state = Acquire(spec, policy.Name, key, now);
         Verdict verdict;
@@ -69,6 +87,158 @@ internal sealed class RateLimiter
         Sweep(now);
         return verdict;
     }
+
+    /// <summary>
+    /// Synchronous fleet check: take from the local reserve; kick a background lease when low.
+    /// Never awaits Redis on the request path.
+    /// </summary>
+    private Verdict CheckFleet(
+        RateSpec spec,
+        RoutePolicyConfig policy,
+        string routeId,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies,
+        DateTimeOffset now)
+    {
+        var key = BuildKey(policy.Name, spec, routeId, request, client, trustedProxies);
+        var reserve = FleetReserves.GetOrAdd(key, static (_, s) => new FleetReserve(s), spec);
+
+        if (TryTakeFleetToken(reserve))
+        {
+            MaybeKickRefill(key, reserve, spec);
+            return FleetAllowed(spec, Interlocked.Read(ref reserve.Tokens));
+        }
+
+        MaybeKickRefill(key, reserve, spec);
+
+        // No local tokens. When the store is missing or marked down, apply fleetFailMode.
+        if (_fleetStore is null || !Volatile.Read(ref reserve.StoreAvailable))
+        {
+            return ApplyFleetFailMode(spec, policy, key, now);
+        }
+
+        // Store is up but this node has nothing left while a refill is in flight (or just finished empty).
+        return FleetDenied(spec, retryAfter: 1);
+    }
+
+    private Verdict ApplyFleetFailMode(RateSpec spec, RoutePolicyConfig policy, string key, DateTimeOffset now)
+    {
+        switch (spec.FailMode)
+        {
+            case FleetFailMode.Open:
+                return FleetAllowed(spec, remaining: spec.Limit);
+            case FleetFailMode.Closed:
+                return FleetDenied(spec, retryAfter: Math.Max(1, spec.Window.Seconds));
+            default:
+                // local: per-node bucket at limit * localShare (default 0.25).
+                var localSpec = spec.WithLocalShareLimit();
+                var localKey = key + FleetLocalSuffix;
+                var state = Acquire(localSpec, policy.Name, localKey, now);
+                Verdict verdict;
+                lock (state)
+                {
+                    verdict = localSpec.TokenBucket
+                        ? TakeToken(state, localSpec, now)
+                        : CountInWindow(state, localSpec, now);
+                }
+
+                Sweep(now);
+                return verdict;
+        }
+    }
+
+    private static bool TryTakeFleetToken(FleetReserve reserve)
+    {
+        while (true)
+        {
+            var tokens = Interlocked.Read(ref reserve.Tokens);
+            if (tokens <= 0)
+            {
+                return false;
+            }
+
+            if (Interlocked.CompareExchange(ref reserve.Tokens, tokens - 1, tokens) == tokens)
+            {
+                return true;
+            }
+        }
+    }
+
+    private void MaybeKickRefill(string key, FleetReserve reserve, RateSpec spec)
+    {
+        if (_fleetStore is null)
+        {
+            return;
+        }
+
+        var tokens = Interlocked.Read(ref reserve.Tokens);
+        if (tokens > reserve.LowWater)
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref reserve.Refilling, 1, 0) != 0)
+        {
+            return;
+        }
+
+        var store = _fleetStore;
+        var want = reserve.LeaseSize;
+        var fleetSpec = new FleetRateSpec
+        {
+            Limit = spec.Limit,
+            WindowSeconds = (int)Math.Max(1, spec.Window.TotalSeconds),
+            Burst = spec.Burst,
+            TokenBucket = spec.TokenBucket,
+        };
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var result = await store.LeaseAsync(key, want, fleetSpec).ConfigureAwait(false);
+                if (result.StoreAvailable)
+                {
+                    Volatile.Write(ref reserve.StoreAvailable, true);
+                    if (result.Granted > 0)
+                    {
+                        Interlocked.Add(ref reserve.Tokens, result.Granted);
+                    }
+                }
+                else
+                {
+                    Volatile.Write(ref reserve.StoreAvailable, false);
+                }
+            }
+            catch
+            {
+                Volatile.Write(ref reserve.StoreAvailable, false);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref reserve.Refilling, 0);
+            }
+        });
+    }
+
+    private static Verdict FleetAllowed(RateSpec spec, long remaining) => new()
+    {
+        Allowed = true,
+        Limit = spec.Limit,
+        Remaining = (int)Math.Max(0, remaining),
+        RetryAfterSeconds = 0,
+        ResetSeconds = Math.Max(1, (int)spec.Window.TotalSeconds),
+    };
+
+    private static Verdict FleetDenied(RateSpec spec, int retryAfter) => new()
+    {
+        Allowed = false,
+        Limit = spec.Limit,
+        Remaining = 0,
+        RetryAfterSeconds = retryAfter,
+        ResetSeconds = Math.Max(1, (int)spec.Window.TotalSeconds),
+    };
 
     private static Verdict CountInWindow(RateState state, RateSpec spec, DateTimeOffset now)
     {
@@ -403,6 +573,13 @@ internal sealed class RateLimiter
         Cookie,
     }
 
+    private enum FleetFailMode
+    {
+        Local,
+        Open,
+        Closed,
+    }
+
     private sealed class RateSpec
     {
         public KeySource Source { get; private init; }
@@ -417,6 +594,10 @@ internal sealed class RateLimiter
         /// <summary>How long an idle token bucket takes to refill completely. A bucket removed sooner would come back fuller than it should.</summary>
         public TimeSpan Horizon { get; private init; }
 
+        public bool Fleet { get; private init; }
+        public FleetFailMode FailMode { get; private init; }
+        public double LocalShare { get; private init; }
+
         public static RateSpec From(RoutePolicyConfig policy)
         {
             var limit = Math.Max(policy.Limit ?? 1, 1);
@@ -424,6 +605,9 @@ internal sealed class RateLimiter
             var burst = Math.Max(policy.Burst ?? limit, 1);
             var rate = (double)limit / windowSeconds;
             var (source, name) = ParseKey(policy.Key);
+            var fleet = string.Equals(policy.Scope, "fleet", StringComparison.OrdinalIgnoreCase);
+            var failMode = ParseFailMode(policy.FleetFailMode);
+            var localShare = policy.LocalShare is > 0 and <= 1 ? policy.LocalShare.Value : 0.25;
             return new RateSpec
             {
                 Source = source,
@@ -435,7 +619,67 @@ internal sealed class RateLimiter
                 Window = TimeSpan.FromSeconds(windowSeconds),
                 RatePerSecond = rate,
                 Horizon = TimeSpan.FromSeconds(Math.Max(windowSeconds, burst / rate)),
+                Fleet = fleet,
+                FailMode = failMode,
+                LocalShare = localShare,
             };
+        }
+
+        public RateSpec WithLocalShareLimit()
+        {
+            var reduced = Math.Max(1, (int)Math.Floor(Limit * LocalShare));
+            var burst = Math.Max(1, (int)Math.Floor(Burst * LocalShare));
+            var rate = (double)reduced / Math.Max(Window.TotalSeconds, 1);
+            return new RateSpec
+            {
+                Source = Source,
+                Name = Name,
+                TokenBucket = TokenBucket,
+                Limit = reduced,
+                Burst = burst,
+                MaxKeys = MaxKeys,
+                Window = Window,
+                RatePerSecond = rate,
+                Horizon = TimeSpan.FromSeconds(Math.Max(Window.TotalSeconds, burst / rate)),
+                Fleet = false,
+                FailMode = FailMode,
+                LocalShare = LocalShare,
+            };
+        }
+
+        private static FleetFailMode ParseFailMode(string? mode)
+        {
+            if (string.Equals(mode, "open", StringComparison.OrdinalIgnoreCase))
+            {
+                return FleetFailMode.Open;
+            }
+
+            if (string.Equals(mode, "closed", StringComparison.OrdinalIgnoreCase))
+            {
+                return FleetFailMode.Closed;
+            }
+
+            return FleetFailMode.Local;
+        }
+
+        /// <summary>
+        /// Lease size for one background refill. Caps at burst/4, shrinks toward 1 when the limit is
+        /// small relative to expected concurrency so a single node cannot drain the fleet budget.
+        /// </summary>
+        public int ComputeLeaseSize()
+        {
+            var quarter = Math.Max(1, Burst / 4);
+            if (Limit <= 16)
+            {
+                return 1;
+            }
+
+            if (Limit <= 64)
+            {
+                return Math.Min(quarter, 4);
+            }
+
+            return Math.Min(quarter, Math.Max(1, Limit / 20));
         }
 
         private static (KeySource Source, string? Name) ParseKey(string? key)
@@ -494,5 +738,24 @@ internal sealed class RateLimiter
         public bool Initialized;
         public double Tokens;
         public DateTimeOffset Last;
+    }
+
+    /// <summary>Per-key local reserve for fleet leases. Tokens are taken with Interlocked on the request path.</summary>
+    private sealed class FleetReserve
+    {
+        public long Tokens;
+        public int Refilling;
+        /// <summary>True until a lease reports the store down. Starts true so a cold empty reserve
+        /// denies (awaiting refill) rather than immediately falling into fail-mode.</summary>
+        public bool StoreAvailable = true;
+        public readonly int LeaseSize;
+        public readonly int LowWater;
+
+        public FleetReserve(RateSpec spec)
+        {
+            LeaseSize = spec.ComputeLeaseSize();
+            LowWater = Math.Max(1, LeaseSize / 2);
+            Tokens = 0;
+        }
     }
 }

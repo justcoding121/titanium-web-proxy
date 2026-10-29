@@ -902,6 +902,32 @@ public static class TwpConfigValidator
         {
             errors.Add($"Policy '{name}' (rateLimit) maxKeys must be 1000-10000000.");
         }
+
+        if (policy.Scope is not null && policy.Scope is not ("node" or "fleet"))
+        {
+            errors.Add($"Policy '{name}' (rateLimit) scope '{policy.Scope}' must be node or fleet.");
+        }
+
+        if (policy.FleetFailMode is not null && policy.FleetFailMode is not ("local" or "open" or "closed"))
+        {
+            errors.Add($"Policy '{name}' (rateLimit) fleetFailMode '{policy.FleetFailMode}' must be local, open, or closed.");
+        }
+
+        if (policy.LocalShare is <= 0 or > 1)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) localShare must be in (0, 1].");
+        }
+
+        var isFleet = string.Equals(policy.Scope, "fleet", StringComparison.OrdinalIgnoreCase);
+        if (!isFleet && policy.FleetFailMode is not null)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) fleetFailMode requires scope: fleet.");
+        }
+
+        if (!isFleet && policy.LocalShare is not null)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) localShare requires scope: fleet.");
+        }
     }
 
     private static bool IsRateLimitKey(string key)

@@ -870,11 +870,24 @@
           "failOpen": {
             "type": "boolean"
           },
+          "fleetFailMode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "open",
+              "closed"
+            ]
+          },
           "groupsClaim": {
             "type": "string"
           },
           "headerName": {
             "type": "string"
+          },
+          "localShare": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1
           },
           "headerValue": {
             "type": "string"
@@ -941,6 +954,13 @@
           },
           "refreshTokens": {
             "type": "boolean"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "node",
+              "fleet"
+            ]
           },
           "scopes": {
             "type": "array",
