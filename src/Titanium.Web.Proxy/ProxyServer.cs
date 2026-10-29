@@ -1625,6 +1625,12 @@ public partial class ProxyServer : IDisposable
     /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
     public bool PropagateTraceContext { get; set; }
 
+    /// <summary>
+    /// Request header names recorded as <c>http.request.header.*</c> span attributes. Null or empty records none.
+    /// Cookies, credentials and similar secret-bearing headers are never recorded, even when listed.
+    /// </summary>
+    public IReadOnlyList<string>? TracingHeaderAllowList { get; set; }
+
     /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
     public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
 

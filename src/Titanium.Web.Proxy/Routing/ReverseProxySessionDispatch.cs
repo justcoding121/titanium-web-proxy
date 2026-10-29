@@ -44,7 +44,40 @@ internal static class ReverseProxySessionDispatch
     public static RouteDispatchResult Apply(ProxyServer server, SessionEventArgsBase session)
     {
         var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
-        return finished ?? Finish(server, session, options!, resolution, destination, route);
+        return BeginUpstreamIfForwarded(server, session,
+            finished ?? Finish(server, session, options!, resolution, destination, route));
+    }
+
+    /// <summary>
+    /// A request no route claimed is still forwarded, so it gets its upstream span here. Routed requests
+    /// get theirs when the destination is bound, and a settled one never reaches an upstream.
+    /// </summary>
+    private static RouteDispatchResult BeginUpstreamIfForwarded(
+        ProxyServer server, SessionEventArgsBase session, RouteDispatchResult result)
+    {
+        if (result == RouteDispatchResult.NotRouted && session.Extras?.Activity is not null)
+        {
+            ProxyTracing.BeginUpstream(server, session, null);
+        }
+
+        return result;
+    }
+
+    private static void BeginServerSpan(ProxyServer server, SessionEventArgsBase session)
+    {
+        if (!server.TracingEnabled)
+        {
+            return;
+        }
+
+        var activity = ProxyTracing.StartServer(server, session);
+        if (activity is null)
+        {
+            return;
+        }
+
+        session.Extras ??= new RoutingFeatureState();
+        session.Extras.Activity = activity;
     }
 
     /// <summary>
@@ -59,7 +92,7 @@ internal static class ReverseProxySessionDispatch
         var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
         if (finished is { } early)
         {
-            return early;
+            return BeginUpstreamIfForwarded(server, session, early);
         }
 
         if (route is not null && session is SessionEventArgs args &&
@@ -68,7 +101,8 @@ internal static class ReverseProxySessionDispatch
             return RouteDispatchResult.Handled;
         }
 
-        return Finish(server, session, options!, resolution, destination, route);
+        return BeginUpstreamIfForwarded(server, session,
+            Finish(server, session, options!, resolution, destination, route));
     }
 
     /// <summary>
@@ -91,6 +125,7 @@ internal static class ReverseProxySessionDispatch
         session.GrpcWebClientContentType = null;
         if (options?.Routes is null || options.Routes.Count == 0)
         {
+            BeginServerSpan(server, session);
             return RouteDispatchResult.NotRouted;
         }
 
@@ -102,8 +137,10 @@ internal static class ReverseProxySessionDispatch
         session.MatchedRoute = null;
         session.ClusterConnectionKey = null;
         session.ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
+        session.Extras?.UpstreamActivity?.Dispose();
         session.Extras?.Activity?.Dispose();
         session.Extras = null;
+        BeginServerSpan(server, session);
 
         var request = session.HttpClient.Request;
         string? fallbackHost = null;
@@ -116,6 +153,11 @@ internal static class ReverseProxySessionDispatch
 
         resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
             out destination, out route);
+        if (route is not null)
+        {
+            ProxyTracing.RecordRoute(session.Extras?.Activity, route.Id, route.ClusterId);
+        }
+
         if (route is not null && RoutePolicies.TryDeny(server, session, route))
         {
             return RouteDispatchResult.Handled;
@@ -583,6 +625,7 @@ internal static class ReverseProxySessionDispatch
         }
 
         ProxyMetrics.RecordStatusRetry(timedOut ? "timeout" : "status");
+        ProxyTracing.RecordRetry(session, index + 1, timedOut, status ?? session.HttpClient.Response.StatusCode);
         return true;
     }
 
@@ -1085,24 +1128,9 @@ internal static class ReverseProxySessionDispatch
             session.HttpClient.Request.Headers.SetOrAddHeaderValue(headerName, id);
         }
 
-        if (!server.TracingEnabled)
+        if (server.TracingEnabled)
         {
-            return;
-        }
-
-        var activity = ProxyMetrics.ActivitySource.StartActivity("twp.proxy.request", ActivityKind.Server);
-        if (activity is null)
-        {
-            return;
-        }
-
-        activity.SetTag("twp.route", route.Id);
-        activity.SetTag("twp.cluster", route.ClusterId);
-        session.Extras ??= new RoutingFeatureState();
-        session.Extras.Activity = activity;
-        if (server.PropagateTraceContext)
-        {
-            session.HttpClient.Request.Headers.SetOrAddHeaderValue("traceparent", activity.Id ?? string.Empty);
+            ProxyTracing.BeginUpstream(server, session, session.UpstreamDestinationId);
         }
     }
 
@@ -1160,8 +1188,10 @@ internal static class ReverseProxySessionDispatch
             ProxyMetrics.AddActiveRequest(-1);
         }
 
-        extras.Activity?.SetTag("http.response.status_code", session.HttpClient.Response.StatusCode);
-        extras.Activity?.Stop();
+        if (extras.Activity is not null)
+        {
+            ProxyTracing.Finish(extras, session.HttpClient.Response.StatusCode, error);
+        }
     }
 
     internal static ForwarderError Classify(SessionEventArgsBase session)

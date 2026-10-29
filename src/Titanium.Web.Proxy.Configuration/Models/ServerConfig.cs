@@ -15,6 +15,12 @@ public sealed class ServerConfig
     /// <summary>Off unless <see cref="TracingConfig.Enabled"/> is true.</summary>
     public TracingConfig? Tracing { get; set; }
 
+    /// <summary>
+    ///     OTLP export of traces and metrics, with W3C trace context propagation. Null, or neither signal enabled,
+    ///     is off. Environment variables named <c>OTEL_*</c> supply defaults for anything left unset here.
+    /// </summary>
+    public TelemetryConfig? Telemetry { get; set; }
+
     /// <summary>Null leaves X-Forwarded-* untouched.</summary>
     public Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
 
@@ -441,4 +447,89 @@ public sealed class TracingConfig
 {
     public bool Enabled { get; set; }
     public bool Propagate { get; set; }
+}
+
+/// <summary>
+///     <c>server.telemetry</c>: where spans and metrics go and how they are sampled. Nothing is exported until
+///     <see cref="TelemetryTracesConfig.Enabled" /> or <see cref="TelemetryMetricsConfig.Enabled" /> is true
+///     (or <c>OTEL_TRACES_EXPORTER</c> / <c>OTEL_METRICS_EXPORTER</c> says <c>otlp</c>).
+/// </summary>
+public sealed class TelemetryConfig
+{
+    /// <summary>The collector. Applies to both signals.</summary>
+    public OtlpExporterConfig? Otlp { get; set; }
+
+    /// <summary>Server, upstream and external-authorization spans.</summary>
+    public TelemetryTracesConfig? Traces { get; set; }
+
+    /// <summary>The proxy's <c>twp.*</c> instruments, exported on an interval.</summary>
+    public TelemetryMetricsConfig? Metrics { get; set; }
+
+    /// <summary>Extra <c>Resource</c> attributes. Overrides <c>OTEL_RESOURCE_ATTRIBUTES</c> key by key.</summary>
+    public Dictionary<string, string>? ResourceAttributes { get; set; }
+
+    /// <summary><c>service.name</c>. Defaults to <c>OTEL_SERVICE_NAME</c>, then <c>titanium</c>.</summary>
+    public string? ServiceName { get; set; }
+}
+
+/// <summary>Collector endpoint and transport.</summary>
+public sealed class OtlpExporterConfig
+{
+    /// <summary>
+    ///     Collector URL. Default <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>, then <c>http://localhost:4317</c> for
+    ///     <c>grpc</c> and <c>http://localhost:4318</c> for <c>http</c>. For <c>http</c> the signal path
+    ///     (<c>/v1/traces</c>, <c>/v1/metrics</c>) is appended when the URL has none.
+    /// </summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary><c>grpc</c> or <c>http</c> (OTLP over HTTP with protobuf). Default <c>OTEL_EXPORTER_OTLP_PROTOCOL</c>, then <c>grpc</c>.</summary>
+    public string? Protocol { get; set; }
+
+    /// <summary>
+    ///     Name of the environment variable holding request headers as <c>key=value,key2=value2</c> (for an API
+    ///     key). Credentials stay out of the config file. Default <c>OTEL_EXPORTER_OTLP_HEADERS</c>.
+    /// </summary>
+    public string? HeadersEnv { get; set; }
+
+    /// <summary>Per-export deadline. Default <c>OTEL_EXPORTER_OTLP_TIMEOUT</c>, then 10000.</summary>
+    public int? TimeoutMs { get; set; }
+
+    /// <summary>
+    ///     Use cleartext when the endpoint names no scheme. An explicit <c>http://</c> or <c>https://</c> wins.
+    ///     Default <c>OTEL_EXPORTER_OTLP_INSECURE</c>, then false.
+    /// </summary>
+    public bool? Insecure { get; set; }
+}
+
+/// <summary>Trace export and sampling.</summary>
+public sealed class TelemetryTracesConfig
+{
+    /// <summary>Default: true when <c>OTEL_TRACES_EXPORTER</c> is <c>otlp</c>, otherwise false.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>
+    ///     <c>always</c> records every trace. <c>ratio</c> records <see cref="Ratio" /> of traces by trace id.
+    ///     <c>parentbased</c> follows the incoming sampled flag and applies <see cref="Ratio" /> to new roots.
+    ///     Default <c>OTEL_TRACES_SAMPLER</c>, then <c>parentbased</c>.
+    /// </summary>
+    public string? Sampler { get; set; }
+
+    /// <summary>0 to 1. Default <c>OTEL_TRACES_SAMPLER_ARG</c>, then 1.</summary>
+    public double? Ratio { get; set; }
+
+    /// <summary>
+    ///     Request header names recorded as <c>http.request.header.*</c> attributes. None by default.
+    ///     Cookie, authorization and similar names are refused whatever is listed.
+    /// </summary>
+    public List<string>? HeaderAllowList { get; set; }
+}
+
+/// <summary>Metric export.</summary>
+public sealed class TelemetryMetricsConfig
+{
+    /// <summary>Default: true when <c>OTEL_METRICS_EXPORTER</c> is <c>otlp</c>, otherwise false.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>Export period in milliseconds. Default <c>OTEL_METRIC_EXPORT_INTERVAL</c>, then 60000.</summary>
+    public int? IntervalMs { get; set; }
 }

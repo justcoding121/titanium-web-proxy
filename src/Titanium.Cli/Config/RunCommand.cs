@@ -123,6 +123,14 @@ internal static class RunCommand
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
+        // Spans and metrics leave through OTLP; the host is disposed after the drain so the last spans are flushed.
+        using var telemetry = Telemetry.TelemetryHost.TryStart(
+            proxy, loaded.Config.Server?.Telemetry, Environment.GetEnvironmentVariable, AsyncConsole.WriteError);
+        if (telemetry is not null)
+        {
+            AsyncConsole.WriteLine(Telemetry.TelemetryHost.Describe(telemetry.Options));
+        }
+
         var clusterManager = new ClusterManager();
         var readiness = new ReadinessState(
             TimeProvider.System,

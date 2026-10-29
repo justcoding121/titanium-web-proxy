@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -77,7 +78,19 @@ internal static class ExternalAuthorization
         List<KeyValuePair<string, string>>? copied = null;
         for (var i = 0; i < clients.Count; i++)
         {
-            var verdict = await clients[i].CheckAsync(request, peer).ConfigureAwait(false);
+            var span = ProxyTracing.StartExtAuth(session);
+            ExtAuthVerdict verdict;
+            try
+            {
+                verdict = await clients[i].CheckAsync(request, peer).ConfigureAwait(false);
+            }
+            catch
+            {
+                ProxyTracing.EndExtAuth(span, allowed: false, status: 0);
+                throw;
+            }
+
+            ProxyTracing.EndExtAuth(span, verdict.Allowed, verdict.Status);
             if (!verdict.Allowed)
             {
                 Refuse(session, verdict);
@@ -308,6 +321,17 @@ internal static class ExternalAuthorization
                 Version = HttpVersion.Version11,
                 VersionPolicy = HttpVersionPolicy.RequestVersionOrLower,
             };
+
+            // The decision call is a child of this request's trace, so the service's own spans join it.
+            if (Activity.Current is { IdFormat: ActivityIdFormat.W3C } current &&
+                ReferenceEquals(current.Source, ProxyMetrics.ActivitySource) && current.Id is { } traceparent)
+            {
+                message.Headers.TryAddWithoutValidation("traceparent", traceparent);
+                if (current.TraceStateString is { Length: > 0 } tracestate)
+                {
+                    message.Headers.TryAddWithoutValidation("tracestate", tracestate);
+                }
+            }
 
             foreach (var name in sendHeaders)
             {

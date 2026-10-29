@@ -1236,8 +1236,104 @@ public static class TwpConfigValidator
         ValidateCertificateManager(server.CertificateManager, errors);
         ValidateAccessLog(server.AccessLog, errors);
         ValidateMetrics(server.Metrics, errors);
+        ValidateTelemetry(server.Telemetry, errors);
         ValidateAdmin(server.Admin, errors);
         ValidateResponseCompression(server.ResponseCompression, errors);
+    }
+
+    private static readonly string[] OtlpProtocolNames = ["grpc", "http"];
+    private static readonly string[] TraceSamplerNames = ["always", "ratio", "parentbased"];
+
+    private static void ValidateTelemetry(TelemetryConfig? telemetry, List<string> errors)
+    {
+        if (telemetry is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.telemetry";
+        if (telemetry.ServiceName is { } serviceName && string.IsNullOrWhiteSpace(serviceName))
+        {
+            errors.Add($"{prefix}.serviceName must not be blank.");
+        }
+
+        if (telemetry.ResourceAttributes is { } attributes && attributes.Keys.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add($"{prefix}.resourceAttributes must not contain a blank key.");
+        }
+
+        ValidateOtlp(telemetry.Otlp, errors);
+        if (telemetry.Traces is { } traces)
+        {
+            if (traces.Sampler is { } sampler &&
+                !TraceSamplerNames.Contains(sampler.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                errors.Add($"{prefix}.traces.sampler '{sampler}' must be one of: {string.Join(", ", TraceSamplerNames)}.");
+            }
+
+            if (traces.Ratio is { } ratio && !(ratio >= 0 && ratio <= 1))
+            {
+                errors.Add($"{prefix}.traces.ratio must be between 0 and 1.");
+            }
+
+            if (traces.HeaderAllowList is { } names && names.Any(name => string.IsNullOrWhiteSpace(name) || !IsHeaderToken(name.Trim())))
+            {
+                errors.Add($"{prefix}.traces.headerAllowList must hold valid header names.");
+            }
+        }
+
+        if (telemetry.Metrics?.IntervalMs is < 100 or > 86_400_000)
+        {
+            errors.Add($"{prefix}.metrics.intervalMs must be between 100 and 86400000.");
+        }
+    }
+
+    private static void ValidateOtlp(OtlpExporterConfig? otlp, List<string> errors)
+    {
+        if (otlp is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.telemetry.otlp";
+        if (otlp.Protocol is { } protocol &&
+            !OtlpProtocolNames.Contains(protocol.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix}.protocol '{protocol}' must be one of: {string.Join(", ", OtlpProtocolNames)}.");
+        }
+
+        if (otlp.Endpoint is { } endpoint && !IsOtlpEndpoint(endpoint))
+        {
+            errors.Add($"{prefix}.endpoint '{endpoint}' must be an http(s) URL or host:port.");
+        }
+
+        if (otlp.TimeoutMs is < 1 or > 600_000)
+        {
+            errors.Add($"{prefix}.timeoutMs must be between 1 and 600000.");
+        }
+
+        if (otlp.HeadersEnv is { } headersEnv && (string.IsNullOrWhiteSpace(headersEnv) || headersEnv.Contains('=')))
+        {
+            errors.Add($"{prefix}.headersEnv must name an environment variable, not hold the headers themselves.");
+        }
+    }
+
+    private static bool IsOtlpEndpoint(string endpoint)
+    {
+        var text = endpoint.Trim();
+        if (text.Length == 0)
+        {
+            return false;
+        }
+
+        if (!text.Contains("://", StringComparison.Ordinal))
+        {
+            text = "http://" + text;
+        }
+
+        return Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+               !string.IsNullOrEmpty(uri.Host);
     }
 
     private const int MaxPreStopDelaySeconds = 3600;

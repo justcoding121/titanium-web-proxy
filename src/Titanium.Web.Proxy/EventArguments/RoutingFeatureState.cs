@@ -28,6 +28,9 @@ internal sealed class RoutingFeatureState
 
     public long RequestStartTimestamp { get; set; }
     public System.Diagnostics.Activity? Activity { get; set; }
+
+    /// <summary>Client span for the upstream exchange. A child of <see cref="Activity" />; stopped first.</summary>
+    public System.Diagnostics.Activity? UpstreamActivity { get; set; }
     public string? RequestId { get; set; }
     public string? PendingSetCookie { get; set; }
     public string? HeldConnectionPolicy { get; set; }
@@ -91,6 +94,8 @@ internal sealed class RoutingFeatureState
         PerTryTimeoutActive = false;
         ResponseHeaderTimeoutBeforePerTry = null;
         RequestStartTimestamp = 0;
+        UpstreamActivity?.Dispose();
+        UpstreamActivity = null;
         Activity?.Dispose();
         Activity = null;
         RequestId = null;

@@ -1454,6 +1454,75 @@
             "type": "string"
           }
         },
+        "telemetry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "metrics": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "intervalMs": {
+                  "type": "integer"
+                }
+              }
+            },
+            "otlp": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "endpoint": {
+                  "type": "string"
+                },
+                "headersEnv": {
+                  "type": "string"
+                },
+                "insecure": {
+                  "type": "boolean"
+                },
+                "protocol": {
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "type": "integer"
+                }
+              }
+            },
+            "resourceAttributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "serviceName": {
+              "type": "string"
+            },
+            "traces": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "headerAllowList": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ratio": {
+                  "type": "number"
+                },
+                "sampler": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
         "timeouts": {
           "type": "object",
           "additionalProperties": false,

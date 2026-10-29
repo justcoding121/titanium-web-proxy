@@ -164,6 +164,65 @@ server:
 
 `/metrics` and `/version` need `Authorization: Bearer <token>` when a token is configured (`authToken`, `authTokenEnv`, or `authTokenFile`; see [Secret references](#secret-references)). The check is constant time. A non-loopback `host` without a token is a configuration error. `requireHealthyClusters: true` also makes `/readyz` answer `503` while a cluster has no healthy destination. Changing `server.admin` needs a restart.
 
+### Traces and metrics export (`server.telemetry`)
+
+Opt-in OTLP export of request spans and the proxy meters, with W3C trace context carried through the proxy. Off by default: with no `server.telemetry` and no `OTEL_*` exporter variable, no listener is attached and the request path allocates nothing for tracing.
+
+```yaml
+server:
+  telemetry:
+    serviceName: edge-gateway        # default: titanium
+    resourceAttributes:
+      deployment.environment: prod
+    otlp:
+      endpoint: https://collector.example:4318   # default: http://localhost:4317 (grpc) or :4318 (http)
+      protocol: http                 # grpc (default) | http
+      headersEnv: OTLP_HEADERS       # NAME of a variable holding "key=value,key2=value2"; never the value
+      timeoutMs: 10000
+      insecure: false                # plain HTTP for an endpoint written without a scheme
+    traces:
+      enabled: true
+      sampler: parentbased           # always | ratio | parentbased (default)
+      ratio: 0.1                     # 0..1; used by ratio, and by parentbased for new roots
+      headerAllowList: [x-request-id]   # request headers to record as attributes (optional)
+    metrics:
+      enabled: true
+      intervalMs: 60000
+```
+
+Every key is optional. A value in the file wins over the matching `OTEL_*` variable, which wins over the default:
+
+| Setting | Environment default |
+| --- | --- |
+| `otlp.endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` |
+| `otlp.protocol`, `otlp.timeoutMs`, `otlp.insecure` | `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, `http/protobuf`), `_TIMEOUT`, `_INSECURE` |
+| `otlp.headersEnv` | `OTEL_EXPORTER_OTLP_HEADERS` |
+| `traces.enabled`, `metrics.enabled` | `OTEL_TRACES_EXPORTER=otlp`, `OTEL_METRICS_EXPORTER=otlp` |
+| `traces.sampler`, `traces.ratio` | `OTEL_TRACES_SAMPLER` (`always_on`, `always_off`, `traceidratio`, `parentbased_*`), `OTEL_TRACES_SAMPLER_ARG` |
+| `metrics.intervalMs` | `OTEL_METRIC_EXPORT_INTERVAL` |
+| `serviceName`, `resourceAttributes` | `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` |
+| queue size, batch size, delay | `OTEL_BSP_MAX_QUEUE_SIZE`, `OTEL_BSP_MAX_EXPORT_BATCH_SIZE`, `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BSP_EXPORT_TIMEOUT` |
+
+`OTEL_SDK_DISABLED=true` turns everything off. With the HTTP protocol, `/v1/traces` and `/v1/metrics` are appended to a general endpoint; a signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `_METRICS_ENDPOINT` is used as written. The startup banner prints the endpoints, never the header values.
+
+**Spans.** Each proxied request produces a tree on the `Titanium.Web.Proxy` activity source:
+
+| Span | Kind | Attributes |
+| --- | --- | --- |
+| `twp.proxy.request` | server | `http.request.method`, `url.path` (no query), `url.scheme`, `server.address`, `server.port`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `twp.route`, `twp.cluster`, `error.type` |
+| `twp.proxy.upstream` | client | `server.address`, `server.port`, `http.request.method`, `http.response.status_code`, `twp.destination`, `twp.route`, `twp.cluster`; a `twp.retry` event per retry with `twp.retry.attempt`, `twp.retry.reason` (`status` or `timeout`), `http.response.status_code`, `twp.destination` |
+| `twp.extauth` | client | `twp.extauth.allowed`, `http.response.status_code` |
+
+A server span is an error for a `5xx` status or a proxy error; an upstream span is an error from `400` up. The sampler runs when the server span starts, so a trace that is not sampled costs no attributes and no export.
+
+**Context.** A valid incoming `traceparent` (and `tracestate`) is the parent of the server span; a missing or malformed one starts a new root that the sampler decides on. The upstream request carries a `traceparent` for the upstream span, so two proxies in a chain, and the origin behind them, join one trace. The sampled flag follows the decision, so an unsampled trace is propagated with flag `00`. `baggage` passes through unchanged, and the external authorization sub-request gets the context as well. The JSON access log gains a `traceId` field (see [Access log](#access-log-server-accesslog)).
+
+**Privacy.** The query string, cookies, credentials, and bodies are never recorded. `traces.headerAllowList` adds `http.request.header.<name>` attributes for the names you list, and refuses `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `proxy-authenticate`, `www-authenticate`, `x-api-key`, `x-auth-token`, `x-csrf-token`, and `x-forwarded-client-cert` whatever the list says.
+
+**Failure.** Export runs on a background thread behind a bounded queue (2048 spans by default). A collector that is down, slow, or refusing never delays a request: spans that cannot be queued or delivered are dropped and counted in `twp.telemetry.dropped{reason}` (`queue_full` or `export_failed`) on the `Titanium.Web.Proxy.Telemetry` meter. On shutdown the CLI flushes for up to five seconds and moves on.
+
+Changing `server.telemetry` needs a restart. A .NET host that embeds the library takes no OpenTelemetry dependency from it: set `ProxyServer.TracingEnabled` and `PropagateTraceContext`, then attach an SDK with `AddSource("Titanium.Web.Proxy")`.
+
 ### Secret references
 
 A sensitive setting is one of three forms: the literal, a `...Env` sibling that names an environment variable, or a `...File` sibling that names a file (for example a mounted Kubernetes Secret). Set at most one; setting two is a configuration error. There is no `${VAR}` interpolation anywhere else in the file: `${HOME}` in a literal stays the text `${HOME}`.
@@ -602,7 +661,7 @@ server:
     sampleRate: 1.0   # 0.0–1.0; omit for 1.0
 ```
 
-Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
+Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. A request that has a trace also carries `traceId` (see [Traces and metrics export](#traces-and-metrics-export-server-telemetry)). Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
 
 ### Response compression (`server.responseCompression`)
 

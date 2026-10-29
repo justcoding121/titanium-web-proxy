@@ -1,0 +1,10 @@
+﻿<Project>
+  <!--
+    Versions that more than one project must agree on. The repository does not use NuGet central package
+    management, so these are MSBuild properties that PackageReference items read. The OpenTelemetry SDK and the
+    OTLP exporter are referenced by the CLI only; the NuGet libraries depend on System.Diagnostics alone.
+  -->
+  <PropertyGroup>
+    <OpenTelemetryVersion>1.20.1</OpenTelemetryVersion>
+  </PropertyGroup>
+</Project>

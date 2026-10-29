@@ -578,3 +578,45 @@ Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecret
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretEnv.set -> void
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretFile.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardViewerSecretFile.set -> void
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.Endpoint.get -> string?
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.Endpoint.set -> void
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.HeadersEnv.get -> string?
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.HeadersEnv.set -> void
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.Insecure.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.Insecure.set -> void
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.OtlpExporterConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.Protocol.get -> string?
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.Protocol.set -> void
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.TimeoutMs.get -> int?
+Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig.TimeoutMs.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Telemetry.get -> Titanium.Web.Proxy.Configuration.Models.TelemetryConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Telemetry.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.Metrics.get -> Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig?
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.Metrics.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.Otlp.get -> Titanium.Web.Proxy.Configuration.Models.OtlpExporterConfig?
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.Otlp.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.ResourceAttributes.get -> System.Collections.Generic.Dictionary<string!, string!>?
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.ResourceAttributes.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.ServiceName.get -> string?
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.ServiceName.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.TelemetryConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.Traces.get -> Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig?
+Titanium.Web.Proxy.Configuration.Models.TelemetryConfig.Traces.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig
+Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig.Enabled.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig.IntervalMs.get -> int?
+Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig.IntervalMs.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryMetricsConfig.TelemetryMetricsConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Enabled.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.HeaderAllowList.get -> System.Collections.Generic.List<string!>?
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.HeaderAllowList.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Ratio.get -> double?
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Ratio.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Sampler.get -> string?
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.Sampler.set -> void
+Titanium.Web.Proxy.Configuration.Models.TelemetryTracesConfig.TelemetryTracesConfig() -> void
