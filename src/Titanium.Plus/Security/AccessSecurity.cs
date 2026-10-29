@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -249,6 +251,13 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
 public sealed class JwtAccessMiddleware : IProxyMiddleware
 {
     private static readonly TimeSpan ClockSkew = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// How long a successful JWKS fetch may be reused without a refetch. A shorter window than the old
+    /// one-hour skip means a key the IdP has dropped is discovered sooner.
+    /// </summary>
+    internal static readonly TimeSpan KeysCacheLifetime = TimeSpan.FromMinutes(5);
+
     private static readonly JwtSecurityTokenHandler SharedHandler = new();
     private const int MaxCachedTokens = 1024;
 
@@ -261,6 +270,7 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
     private readonly ConcurrentDictionary<string, long> _validUntilUnix = new(StringComparer.Ordinal);
     private TokenValidationParameters? _validation;
     private DateTimeOffset _keysLoadedAt = DateTimeOffset.MinValue;
+    private string? _keysFingerprint;
 
     public JwtAccessMiddleware(
         string jwtAuthority,
@@ -419,11 +429,23 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
     {
         _validation = parameters;
         _keysLoadedAt = DateTimeOffset.UtcNow;
+        _keysFingerprint = "test";
+    }
+
+    /// <summary>
+    /// Ages the JWKS cache so the next validation must refetch, and drops the positive token cache so
+    /// the test exercises the JWKS path rather than a previously accepted token string. Used by tests
+    /// that prove a refresh failure fails closed instead of reusing keys the IdP may have rotated away.
+    /// </summary>
+    internal void ExpireKeysCacheForTests()
+    {
+        _keysLoadedAt = DateTimeOffset.UtcNow - KeysCacheLifetime - TimeSpan.FromSeconds(1);
+        _validUntilUnix.Clear();
     }
 
     private async Task<TokenValidationParameters?> EnsureValidationParametersAsync(CancellationToken cancellationToken)
     {
-        if (_validation is not null && DateTimeOffset.UtcNow - _keysLoadedAt < TimeSpan.FromHours(1))
+        if (_validation is not null && DateTimeOffset.UtcNow - _keysLoadedAt < KeysCacheLifetime)
         {
             return _validation;
         }
@@ -431,7 +453,7 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_validation is not null && DateTimeOffset.UtcNow - _keysLoadedAt < TimeSpan.FromHours(1))
+            if (_validation is not null && DateTimeOffset.UtcNow - _keysLoadedAt < KeysCacheLifetime)
             {
                 return _validation;
             }
@@ -449,11 +471,20 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
             if (string.IsNullOrEmpty(jwksUrl))
             {
                 _logger?.LogWarning("Plus Security: could not resolve JWKS URL for {Authority}", _authority);
+                // Fail closed: never keep validating with keys that may already have been rotated away.
                 return null;
             }
 
             var jwksJson = await http.GetStringAsync(jwksUrl, cancellationToken).ConfigureAwait(false);
             var keys = JsonWebKeySet.Create(jwksJson).GetSigningKeys();
+            var fingerprint = Fingerprint(jwksJson);
+            if (!string.Equals(_keysFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                // A rotated JWKS must not leave previously accepted tokens trusted until near exp.
+                _validUntilUnix.Clear();
+                _keysFingerprint = fingerprint;
+            }
+
             _validation = new TokenValidationParameters
             {
                 ValidateIssuer = true,
@@ -473,12 +504,20 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "Plus Security: failed to load JWKS for {Authority}", _authority);
-            return _validation;
+            // Fail closed: a refresh outage must not keep admitting tokens signed with keys the IdP
+            // may already have removed from JWKS.
+            return null;
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private static string Fingerprint(string jwksJson)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(jwksJson));
+        return Convert.ToHexString(hash);
     }
 
     private sealed class OidcDiscoveryDocument

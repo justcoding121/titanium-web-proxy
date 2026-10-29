@@ -55,6 +55,7 @@ internal sealed class FakeIdp : IAsyncDisposable
     private readonly OidcClock _clock;
     private readonly object _gate = new();
     private readonly List<Key> _published = [];
+    private readonly List<Key> _revoked = [];
     private readonly Dictionary<string, Pending> _codes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _refreshTokens = new(StringComparer.Ordinal);
     private Key _active;
@@ -109,10 +110,16 @@ internal sealed class FakeIdp : IAsyncDisposable
 
     public bool Down { get; set; }
 
+    /// <summary>JWKS alone returns 503 while discovery and token keep working. Proves key refresh fails closed.</summary>
+    public bool JwksDown { get; set; }
+
     public bool DenyAtAuthorize { get; set; }
 
     /// <summary>When set, the next tokens are signed with a key the JWKS does not list.</summary>
     public bool SignWithUnpublishedKey { get; set; }
+
+    /// <summary>When set, the next tokens are signed with a key that used to be in JWKS and was revoked.</summary>
+    public bool SignWithRevokedKey { get; set; }
 
     public int RefreshCalls => Volatile.Read(ref _refreshCalls);
 
@@ -143,11 +150,35 @@ internal sealed class FakeIdp : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Drops every published key except the active one from JWKS. Tokens signed with a removed key must
+    /// fail once the proxy refreshes. Revoked keys stay available for <see cref="SignWithRevokedKey"/>.
+    /// </summary>
+    public void RevokeInactiveKeys()
+    {
+        lock (_gate)
+        {
+            for (var i = _published.Count - 1; i >= 0; i--)
+            {
+                if (!ReferenceEquals(_published[i], _active))
+                {
+                    _revoked.Add(_published[i]);
+                    _published.RemoveAt(i);
+                }
+            }
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _host.StopAsync();
         _host.Dispose();
         foreach (var key in _published)
+        {
+            key.Rsa.Dispose();
+        }
+
+        foreach (var key in _revoked)
         {
             key.Rsa.Dispose();
         }
@@ -189,6 +220,12 @@ internal sealed class FakeIdp : IAsyncDisposable
                 break;
             case "/jwks":
                 Interlocked.Increment(ref _jwksHits);
+                if (JwksDown)
+                {
+                    context.Response.StatusCode = 503;
+                    break;
+                }
+
                 await WriteJsonAsync(context, new Dictionary<string, object> { ["keys"] = PublishedJwks() });
                 break;
             case "/authorize":
@@ -395,6 +432,15 @@ internal sealed class FakeIdp : IAsyncDisposable
         lock (_gate)
         {
             key = _active;
+            if (SignWithRevokedKey)
+            {
+                if (_revoked.Count == 0)
+                {
+                    throw new InvalidOperationException("RevokeInactiveKeys before SignWithRevokedKey.");
+                }
+
+                key = _revoked[^1];
+            }
         }
 
         if (SignWithUnpublishedKey)

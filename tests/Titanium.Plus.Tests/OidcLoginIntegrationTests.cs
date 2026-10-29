@@ -897,6 +897,53 @@ public class OidcLoginIntegrationTests
 
     [TestMethod]
     [Timeout(60_000)]
+    public async Task KeyRotation_AKeyDroppedFromJwks_IsRejectedAfterRefresh()
+    {
+        await using var h = await OidcHarness.StartAsync();
+        using var first = h.NewBrowser();
+        using (var accepted = await h.SignInAsync(first))
+        {
+            Assert.AreEqual(HttpStatusCode.Found, accepted.StatusCode);
+        }
+
+        h.Idp.RotateKeys();
+        h.Clock.Advance(TimeSpan.FromSeconds(31));
+        using var overlap = h.NewBrowser();
+        using (var stillOk = await h.SignInAsync(overlap))
+        {
+            Assert.AreEqual(HttpStatusCode.Found, stillOk.StatusCode, "both keys published: new kid works");
+        }
+
+        h.Idp.RevokeInactiveKeys();
+        h.Idp.SignWithRevokedKey = true;
+        h.Clock.Advance(TimeSpan.FromMinutes(6));
+        using var other = h.NewBrowser();
+        using var refused = await h.SignInAsync(other);
+        Assert.AreEqual(HttpStatusCode.Unauthorized, refused.StatusCode,
+            "a kid dropped from JWKS must fail once the proxy refreshes");
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task Keys_RefreshFailure_FailsClosedWith503()
+    {
+        await using var h = await OidcHarness.StartAsync();
+        using var first = h.NewBrowser();
+        using (var done = await h.SignInAsync(first))
+        {
+            Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
+        }
+
+        h.Idp.JwksDown = true;
+        h.Clock.Advance(TimeSpan.FromMinutes(6));
+        using var second = h.NewBrowser();
+        using var refused = await h.SignInAsync(second);
+        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, refused.StatusCode,
+            "a JWKS outage must not keep validating with keys that may already have been rotated away");
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
     public async Task Discovery_IsCached_RefreshedAfterAnHour_AndKeptWhenTheProviderFails()
     {
         await using var h = await OidcHarness.StartAsync();

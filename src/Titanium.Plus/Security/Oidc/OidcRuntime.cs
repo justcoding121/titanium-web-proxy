@@ -455,7 +455,8 @@ internal sealed class OidcRuntime
         }
         catch (OidcProviderUnavailableException)
         {
-            return Reply(session, 502, "text/plain", "login provider unavailable", [], clear);
+            // Fail closed: a JWKS or token-endpoint outage must not keep admitting logins on stale keys.
+            return Reply(session, 503, "text/plain", "login provider unavailable", [("Retry-After", "5")], clear);
         }
 
         if (string.IsNullOrEmpty(identity.Subject))

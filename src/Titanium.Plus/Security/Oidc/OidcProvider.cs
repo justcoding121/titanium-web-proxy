@@ -9,7 +9,8 @@ using Microsoft.IdentityModel.Tokens;
 namespace Titanium.Plus.Security.Oidc;
 
 /// <summary>The provider could not be reached or answered something unusable. Retrying later may work.</summary>
-internal sealed class OidcProviderUnavailableException(string message) : Exception(message);
+internal sealed class OidcProviderUnavailableException(string message, Exception? inner = null)
+    : Exception(message, inner);
 
 /// <summary>The token endpoint refused the request (a spent or wrong code, a revoked refresh token).</summary>
 internal sealed class OidcTokenRejectedException(string message) : Exception(message);
@@ -35,13 +36,19 @@ internal sealed class OidcIdentity
 }
 
 /// <summary>
-/// One OpenID provider: discovery document, signing keys, and token endpoint. Discovery and keys are cached;
-/// a failed refresh keeps the last good copy and backs off, and a key the cache does not know triggers at most
-/// one key refresh per <see cref="ForcedRefreshInterval"/>.
+/// One OpenID provider: discovery document, signing keys, and token endpoint. Discovery is cached for
+/// <see cref="CacheLifetime"/> and a failed discovery refresh keeps the last good copy. Signing keys are
+/// cached for <see cref="KeysCacheLifetime"/>; a failed key refresh fails closed (never validates with keys
+/// that may already have been rotated away). A key the cache does not know triggers at most one key
+/// refresh per <see cref="ForcedRefreshInterval"/>.
 /// </summary>
 internal sealed class OidcProvider
 {
     internal static readonly TimeSpan CacheLifetime = TimeSpan.FromHours(1);
+
+    /// <summary>How long a successful JWKS fetch may be reused. Shorter than discovery so removed kids are noticed sooner.</summary>
+    internal static readonly TimeSpan KeysCacheLifetime = TimeSpan.FromMinutes(5);
+
     internal static readonly TimeSpan ForcedRefreshInterval = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan ClockSkew = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(5);
@@ -295,7 +302,7 @@ internal sealed class OidcProvider
     {
         var now = _time.GetUtcNow();
         var cached = _keys;
-        if (cached is not null && now - _keysAt < CacheLifetime && (kid is null || Has(cached, kid)))
+        if (cached is not null && now - _keysAt < KeysCacheLifetime && (kid is null || Has(cached, kid)))
         {
             return cached;
         }
@@ -305,7 +312,7 @@ internal sealed class OidcProvider
         {
             now = _time.GetUtcNow();
             cached = _keys;
-            var fresh = cached is not null && now - _keysAt < CacheLifetime;
+            var fresh = cached is not null && now - _keysAt < KeysCacheLifetime;
             if (cached is not null && fresh && (kid is null || Has(cached, kid)))
             {
                 return cached;
@@ -320,7 +327,9 @@ internal sealed class OidcProvider
 
             if (now < _keysRetryAt)
             {
-                return cached ?? throw new OidcProviderUnavailableException("keys are backing off");
+                // Fail closed while backing off after a failed refresh: do not keep trusting keys that may
+                // already have been removed from the IdP JWKS.
+                throw new OidcProviderUnavailableException("keys are backing off");
             }
 
             _keysAttemptAt = now;
@@ -341,7 +350,8 @@ internal sealed class OidcProvider
                 _keysRetryAt = now + Backoff(_keysFailures);
                 _logger?.LogWarning("Plus OIDC: policy {Policy}: signing keys unavailable ({Kind}); retrying later.",
                     _settings.PolicyName, ex.GetType().Name);
-                return cached ?? throw new OidcProviderUnavailableException("keys unavailable");
+                // Fail closed: never return the previous key set after a refresh failure.
+                throw new OidcProviderUnavailableException("keys unavailable", ex);
             }
         }
         finally
