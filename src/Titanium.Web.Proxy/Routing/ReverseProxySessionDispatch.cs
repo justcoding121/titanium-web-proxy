@@ -148,8 +148,8 @@ internal static class ReverseProxySessionDispatch
         session.MatchedRoute = null;
         session.ClusterConnectionKey = null;
         session.ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
-        session.Extras?.UpstreamActivity?.Dispose();
-        session.Extras?.Activity?.Dispose();
+        // Reset releases a retry-budget slot a cancelled mid-replay request still holds, and disposes both spans.
+        session.Extras?.Reset();
         session.Extras = null;
         BeginServerSpan(server, session);
 

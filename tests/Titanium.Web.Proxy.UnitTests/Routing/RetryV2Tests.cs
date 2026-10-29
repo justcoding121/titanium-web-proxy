@@ -303,6 +303,33 @@ public class RetryV2Tests
     }
 
     [TestMethod]
+    public async Task Budget_CancelledMidReplay_ReturnsTheSlotWhenTheNextRequestBegins()
+    {
+        var (proxy, manager) = await StartAsync(
+            new RetryConfig { Attempts = 2, BudgetPercent = 50, BudgetMinConcurrent = 1, BackoffMilliseconds = 5_000 });
+        using var _p = proxy;
+        var runtime = ClusterRuntime.Find(manager.Snapshot, "c")!;
+
+        // HTTP/1.x keep-alive: one session object serves request after request.
+        var session = Session(proxy, "GET");
+        ReverseProxySessionDispatch.Apply(proxy, session);
+        session.HttpClient.Response.StatusCode = 503;
+        Assert.IsTrue(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, session));
+        Assert.AreEqual(1, runtime.ActiveRetries);
+
+        // The client goes away while the replay waits out its backoff, so EndGatewayRetry never runs.
+        using var cts = new CancellationTokenSource();
+        var wait = ReverseProxySessionDispatch.WaitBeforeRetryAsync(proxy, session, cts.Token).AsTask();
+        cts.Cancel();
+        await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await wait.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.AreEqual(1, runtime.ActiveRetries);
+
+        // The next request on the same session starts clean and gives the slot back.
+        ReverseProxySessionDispatch.Apply(proxy, session);
+        Assert.AreEqual(0, runtime.ActiveRetries);
+    }
+
+    [TestMethod]
     public async Task PerTryTimeout_NeedsAnotherDestination_AndCountsAsA504()
     {
         var (proxy, _) = await StartAsync(new RetryConfig { Attempts = 1, PerTryTimeoutMilliseconds = 300 });
