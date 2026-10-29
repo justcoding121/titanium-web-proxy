@@ -1534,14 +1534,34 @@ public partial class ProxyServer
 
     internal bool ShouldCallBeforeRequestBodyWrite()
     {
-        return OnRequestBodyWrite != null;
+        return OnRequestBodyWrite != null || ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, true);
     }
 
     internal Task OnBeforeRequestBodyWrite(BeforeBodyWriteEventArgs args)
     {
+        if (ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, true))
+            return ScriptedBodyWriteAsync(script, args, isRequest: true);
+
         return OnRequestBodyWrite != null
             ? OnRequestBodyWrite.InvokeAsync(this, args, logger)
             : Task.CompletedTask;
+    }
+
+    /// <summary>True when the script host wants body pieces as they stream (not one buffered body).</summary>
+    private static bool StreamsBody(Abstractions.Scripting.IScriptPhaseHost script, bool isRequest) =>
+        script.BodyMode == Abstractions.Scripting.ScriptBodyMode.Streaming &&
+        (script.Phases & (isRequest
+            ? Abstractions.Scripting.ScriptPhases.RequestBody | Abstractions.Scripting.ScriptPhases.RequestTrailers
+            : Abstractions.Scripting.ScriptPhases.ResponseBody | Abstractions.Scripting.ScriptPhases.ResponseTrailers)) != 0;
+
+    /// <summary>Script phase first, then the application handler on whatever bytes the script left.</summary>
+    private async Task ScriptedBodyWriteAsync(
+        Abstractions.Scripting.IScriptPhaseHost script, BeforeBodyWriteEventArgs args, bool isRequest)
+    {
+        await Routing.ScriptPhaseDispatch.RunBodyChunkAsync(script, args, isRequest).ConfigureAwait(false);
+        var handler = isRequest ? OnRequestBodyWrite : OnResponseBodyWrite;
+        if (handler != null)
+            await handler.InvokeAsync(this, args, logger).ConfigureAwait(false);
     }
 
     /// <summary>

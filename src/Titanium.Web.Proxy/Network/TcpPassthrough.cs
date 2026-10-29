@@ -23,6 +23,22 @@ internal enum PassthroughOutcome
 
     /// <summary>The proxy was stopping.</summary>
     Cancelled,
+
+    /// <summary>An L4 script filter closed the connection.</summary>
+    Denied,
+}
+
+/// <summary>Which relay loop a set of options selects. Chosen once per connection, at accept.</summary>
+internal enum PassthroughRelayVariant
+{
+    /// <summary>No timers, no filters. Closes both sockets on the first EOF.</summary>
+    Plain,
+
+    /// <summary>Idle or grace timers, or a PROXY preamble.</summary>
+    Enhanced,
+
+    /// <summary>Enhanced loop with L4 script filters between the sockets.</summary>
+    Filtered,
 }
 
 /// <summary>Byte totals and outcome of a relay. Preamble bytes (PROXY header) are not counted.</summary>
@@ -47,11 +63,25 @@ internal sealed class TcpPassthroughOptions
     public TimeSpan HalfCloseGrace { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    ///     L4 script filters for this connection, or null. Set at accept only when the listener has filters; a non-null
+    ///     value selects the filtered relay, so the plain relay never tests it per read.
+    /// </summary>
+    internal StreamFilterChain? Filters { get; set; }
+
+    /// <summary>
     ///     True when the relay needs idle or grace timers, or a PROXY preamble. Otherwise the plain relay runs: no
     ///     cancellation sources, and both sockets close on the first EOF.
     /// </summary>
     internal bool NeedsEnhancedRelay =>
         IdleTimeout > TimeSpan.Zero || HalfCloseGrace > TimeSpan.Zero || !Preamble.IsEmpty;
+
+    /// <summary>The relay loop these options select.</summary>
+    internal PassthroughRelayVariant Variant =>
+        Filters is not null
+            ? PassthroughRelayVariant.Filtered
+            : NeedsEnhancedRelay
+                ? PassthroughRelayVariant.Enhanced
+                : PassthroughRelayVariant.Plain;
 }
 
 /// <summary>Copies bytes between a client socket and an upstream TCP endpoint.</summary>
@@ -63,6 +93,11 @@ internal static class TcpPassthrough
 
     /// <summary>How many relays took the timer-backed path. The plain path never increments it.</summary>
     internal static long EnhancedRelayCount => Interlocked.Read(ref enhancedRelayCount);
+
+    private static long filteredRelayCount;
+
+    /// <summary>How many relays ran with L4 script filters. Neither other path increments it.</summary>
+    internal static long FilteredRelayCount => Interlocked.Read(ref filteredRelayCount);
 
     /// <summary>
     ///     Connects to <paramref name="host" />:<paramref name="port" /> and relays until the first side ends, then
@@ -141,9 +176,9 @@ internal static class TcpPassthrough
     /// </summary>
     public static Task<PassthroughRelayResult> RelayAsync(
         Socket client, Socket upstream, TcpPassthroughOptions options, CancellationToken cancellationToken) =>
-        options.NeedsEnhancedRelay
-            ? RelayEnhancedAsync(client, upstream, options, cancellationToken)
-            : RelayPlainAsync(client, upstream, cancellationToken);
+        options.Variant == PassthroughRelayVariant.Plain
+            ? RelayPlainAsync(client, upstream, cancellationToken)
+            : RelayEnhancedAsync(client, upstream, options, cancellationToken);
 
     /// <summary>Closes both sockets on the first EOF or failure. No timers, no linked tokens, no shared counters.</summary>
     private static async Task<PassthroughRelayResult> RelayPlainAsync(
@@ -210,7 +245,15 @@ internal static class TcpPassthrough
     private static async Task<PassthroughRelayResult> RelayEnhancedAsync(
         Socket client, Socket upstream, TcpPassthroughOptions options, CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref enhancedRelayCount);
+        var filters = options.Filters;
+        if (filters is null)
+        {
+            Interlocked.Increment(ref enhancedRelayCount);
+        }
+        else
+        {
+            Interlocked.Increment(ref filteredRelayCount);
+        }
 
         // The idle and grace sources only exist when their option is set.
         var useIdle = options.IdleTimeout > TimeSpan.Zero;
@@ -227,8 +270,8 @@ internal static class TcpPassthrough
         state.Arm();
 
         var token = relayCts.Token;
-        var forward = PumpAsync(client, upstream, state, toUpstream: true, token);
-        var back = PumpAsync(upstream, client, state, toUpstream: false, token);
+        var forward = PumpAsync(client, upstream, state, toUpstream: true, filters, token);
+        var back = PumpAsync(upstream, client, state, toUpstream: false, filters, token);
 
         var first = await Task.WhenAny(forward, back).ConfigureAwait(false);
         if (first.IsCompletedSuccessfully)
@@ -281,7 +324,8 @@ internal static class TcpPassthrough
     }
 
     private static async Task PumpAsync(
-        Socket from, Socket to, RelayState state, bool toUpstream, CancellationToken cancellationToken)
+        Socket from, Socket to, RelayState state, bool toUpstream, StreamFilterChain? filters,
+        CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
         long total = 0;
@@ -297,7 +341,23 @@ internal static class TcpPassthrough
                 }
 
                 state.Arm();
-                await SendAllAsync(to, buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                var data = buffer.AsMemory(0, read);
+                if (filters is not null)
+                {
+                    var verdict = await filters.OnDataAsync(toUpstream, data, cancellationToken).ConfigureAwait(false);
+                    if (verdict.Action == Abstractions.Scripting.ScriptAction.Deny)
+                    {
+                        state.Stop(PassthroughOutcome.Denied);
+                        break;
+                    }
+
+                    if (verdict.ReplaceData is not null)
+                    {
+                        data = verdict.ReplaceData;
+                    }
+                }
+
+                await SendAllAsync(to, data, cancellationToken).ConfigureAwait(false);
                 total += read;
                 state.Publish(toUpstream, total);
                 state.Arm();

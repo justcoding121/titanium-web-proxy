@@ -2,6 +2,7 @@ using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Abstractions.Scripting;
 
 namespace Titanium.Web.Proxy.Abstractions;
 
@@ -42,6 +43,18 @@ public sealed class ReverseProxyOptions
     /// <see cref="RouteConfig.Middleware"/>. A route that lists a name with no entry here is refused with 503.
     /// </summary>
     public IReadOnlyDictionary<string, IProxyMiddleware>? RoutePlugins { get; init; }
+
+    /// <summary>
+    /// Listener-wide script hook set (Lua or WASM host). Null (default) costs one null check per seam. When set, requests
+    /// leave H1 terminate-lite and take the full session path, because the host may edit headers and bodies.
+    /// </summary>
+    public IScriptPhaseHost? ScriptPipeline { get; init; }
+
+    /// <summary>
+    /// Interim listener-wide script chain. It runs, in order, before any per-route plugin and before the request is
+    /// forwarded; a plugin that handles the request or stops the chain ends it. Null or empty costs nothing.
+    /// </summary>
+    public IReadOnlyList<IProxyMiddleware>? GlobalMiddleware { get; init; }
 
     /// <summary>
     /// Per-options cache for data derived from <see cref="Routes"/> (requirements, compiled table).
@@ -127,7 +140,7 @@ public sealed class ReverseProxyOptions
             var state = Volatile.Read(ref asyncPolicyState);
             if (state == 0)
             {
-                state = AnyReferencedPolicy(handledOnly: false) || HasRoutePlugins ? 2 : 1;
+                state = AnyReferencedPolicy(handledOnly: false) || HasRoutePlugins || HasScriptHooks ? 2 : 1;
                 Volatile.Write(ref asyncPolicyState, state);
             }
 
@@ -172,6 +185,12 @@ public sealed class ReverseProxyOptions
             return state == 2;
         }
     }
+
+    /// <summary>
+    /// True when <see cref="ScriptPipeline"/> is set or <see cref="GlobalMiddleware"/> is non-empty. Only such options leave
+    /// terminate-lite and run script code. Init-only inputs, so this is a plain read.
+    /// </summary>
+    internal bool HasScriptHooks => ScriptPipeline is not null || GlobalMiddleware is { Count: > 0 };
 
     /// <summary>
     /// True when a route lists a plugin-handled (<c>oidc</c>) policy. These rewrite request headers and set response cookies,

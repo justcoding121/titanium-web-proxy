@@ -70,6 +70,11 @@ public partial class ProxyServer
             blockers.Add("a route names a per-route plugin (scripted route)");
         }
 
+        if (reverse.HasScriptHooks)
+        {
+            blockers.Add("a listener-wide script host or global script chain is configured");
+        }
+
         if (reverse.HasServicePolicies)
         {
             blockers.Add("a route lists an extAuth or oidc policy");

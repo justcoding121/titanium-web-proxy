@@ -44,6 +44,25 @@ internal static class RoutePluginDispatch
             chain.Add(plugin);
         }
 
+        return await RunChainAsync(chain, session).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs <see cref="ReverseProxyOptions.GlobalMiddleware"/> before any route plugin. Same contract as
+    /// <see cref="DeniedAsync"/>; callers check the list is non-empty first.
+    /// </summary>
+    internal static async ValueTask<bool> GlobalDeniedAsync(ReverseProxyOptions options, SessionEventArgs session)
+    {
+        if (options.GlobalMiddleware is not { Count: > 0 } global)
+        {
+            return false;
+        }
+
+        return await RunChainAsync(global, session).ConfigureAwait(false);
+    }
+
+    private static async ValueTask<bool> RunChainAsync(IReadOnlyList<IProxyMiddleware> chain, SessionEventArgs session)
+    {
         var context = new ProxyMiddlewareContext
         {
             Session = session,
@@ -65,7 +84,7 @@ internal static class RoutePluginDispatch
         return true;
     }
 
-    private static void Stage(
+    internal static void Stage(
         SessionEventArgs session,
         int status,
         string? body,

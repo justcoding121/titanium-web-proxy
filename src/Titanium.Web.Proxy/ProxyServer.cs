@@ -1694,7 +1694,8 @@ public partial class ProxyServer : IDisposable
         || RequestDecompressionPolicy is not null
         || ReverseProxy is { HasGrpcWebRoutes: true }
         || ReverseProxy is { HasHandledPolicies: true }
-        || ReverseProxy is { HasRoutePlugins: true };
+        || ReverseProxy is { HasRoutePlugins: true }
+        || ReverseProxy is { HasScriptHooks: true };
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the

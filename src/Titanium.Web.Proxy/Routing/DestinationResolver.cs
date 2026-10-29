@@ -58,9 +58,22 @@ internal static class DestinationResolver
             return DestinationResolution.Terminal;
         }
 
+        return ResolveCluster(options, request, TrafficSplit.Select(route, request), out destination);
+    }
+
+    /// <summary>
+    /// Picks a destination in <paramref name="clusterId"/> through the normal load-balancer path (affinity, health,
+    /// priority). Also the entry point a script phase uses when it chooses a cluster.
+    /// </summary>
+    public static DestinationResolution ResolveCluster(
+        ReverseProxyOptions options,
+        Request request,
+        string clusterId,
+        out DestinationConfig? destination)
+    {
+        destination = null;
         var manager = options.ClusterManager;
         var snapshot = manager?.Snapshot ?? ImmutableClusterSnapshot.Empty;
-        var clusterId = TrafficSplit.Select(route, request);
         if (!snapshot.Clusters.TryGetValue(clusterId, out var cluster))
         {
             return DestinationResolution.RouteWithoutDestination;

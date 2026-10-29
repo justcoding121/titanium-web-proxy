@@ -506,6 +506,10 @@ public partial class ProxyServer
         // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
         ReverseProxySessionDispatch.ApplyResponseTransforms(args);
 
+        // Listener-wide script phases (response headers, buffered body, trailers). Null host: one check, nothing else.
+        if (ReverseProxy?.ScriptPipeline is { } scriptHost)
+            await ScriptPhaseDispatch.RunResponseAsync(scriptHost, args).ConfigureAwait(false);
+
         // Buffered response compression (server.responseCompression). Null when off; streaming mode compresses
         // later, while the body is relayed (see TryBeginStreamingCompression).
         if (mayCompress && CompressionPolicy is { Streaming: false } compression)
@@ -805,6 +809,21 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnAfterResponse(SessionEventArgs args)
     {
+        // Log phase of a listener-wide script host. Null host: one check.
+        if (ReverseProxy?.ScriptPipeline is { } scriptHost)
+            return OnAfterResponseWithScriptLogAsync(args, scriptHost);
+
+        return OnAfterResponseCore(args);
+    }
+
+    private async Task OnAfterResponseWithScriptLogAsync(SessionEventArgs args, Abstractions.Scripting.IScriptPhaseHost scriptHost)
+    {
+        await ScriptPhaseDispatch.RunLogAsync(scriptHost, args).ConfigureAwait(false);
+        await OnAfterResponseCore(args).ConfigureAwait(false);
+    }
+
+    private Task OnAfterResponseCore(SessionEventArgs args)
+    {
         // Fast-path skips OnBeforeResponse; still learn HTTP blocks (no meta-refresh rewrite).
         if (args.IsFastPath && EnableDecryptFailureBypass &&
             Network.Tcp.DecryptFailureLearning.IsLearnableHttpBlock(args))
@@ -847,11 +866,14 @@ public partial class ProxyServer
     }
     internal bool ShouldCallBeforeResponseBodyWrite()
     {
-        return OnResponseBodyWrite != null;
+        return OnResponseBodyWrite != null || ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, false);
     }
 
     internal Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
     {
+        if (ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, false))
+            return ScriptedBodyWriteAsync(script, args, isRequest: false);
+
         return OnResponseBodyWrite != null
             ? OnResponseBodyWrite.InvokeAsync(this, args, logger)
             : Task.CompletedTask;

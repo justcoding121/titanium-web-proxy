@@ -110,7 +110,7 @@ public static class ReverseProxyFastPath
         }
 
         // Plugins also need the session, which that path does not have.
-        if (options.HasRoutePlugins)
+        if (options.HasRoutePlugins || options.HasScriptHooks)
         {
             return true;
         }

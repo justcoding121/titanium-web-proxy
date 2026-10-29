@@ -112,6 +112,10 @@ public partial class ProxyServer
         if (reverse is { HasSessionOnlyMiddleware: true })
             return false;
 
+        // Listener-wide scripts may edit headers and bodies, which lite never lets them see.
+        if (reverse is { HasScriptHooks: true })
+            return false;
+
         if (reverse?.Routes is { Count: > 0 })
         {
             var snapshot = reverse.ClusterManager?.Snapshot;

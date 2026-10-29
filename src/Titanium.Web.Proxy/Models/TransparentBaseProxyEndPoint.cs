@@ -72,6 +72,18 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// <summary>TCP passthrough only. Header written to the upstream before the client's bytes.</summary>
     public PassthroughProxyProtocolMode PassthroughProxyProtocol { get; set; }
 
+    private IReadOnlyList<Abstractions.Scripting.IStreamScriptFilter>? streamFilters;
+
+    /// <summary>
+    ///     TCP passthrough only. L4 script filters, run in order. Null (the default) or empty keeps the plain relay:
+    ///     the accept loop picks the filtered relay only when this holds at least one filter.
+    /// </summary>
+    public IReadOnlyList<Abstractions.Scripting.IStreamScriptFilter>? StreamFilters
+    {
+        get => streamFilters;
+        set => streamFilters = value is { Count: > 0 } ? value : null;
+    }
+
     internal Network.PassthroughRouteTable? PassthroughTable { get; private set; }
 
     /// <summary>True when the accept loop should hand sockets to the passthrough relay.</summary>

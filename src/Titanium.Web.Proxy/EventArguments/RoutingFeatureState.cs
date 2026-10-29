@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Clusters;
@@ -10,6 +11,9 @@ namespace Titanium.Web.Proxy.EventArguments;
 internal sealed class RoutingFeatureState
 {
     public RetryConfig? Retry { get; set; }
+
+    /// <summary>State a script host keeps across the phases of this request. Null until a script phase runs.</summary>
+    public Dictionary<string, object?>? ScriptItems { get; set; }
 
     /// <summary>Replays staged because the origin answered with a retryable status or ran out of time.</summary>
     public int StatusRetries { get; set; }
@@ -94,6 +98,7 @@ internal sealed class RoutingFeatureState
     public void Reset()
     {
         ReleaseRetryBudget();
+        ScriptItems = null;
         Retry = null;
         StatusRetries = 0;
         PendingRetryDelayMilliseconds = 0;

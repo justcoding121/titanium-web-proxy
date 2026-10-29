@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -90,30 +90,92 @@ internal static class ReverseProxySessionDispatch
         ProxyServer server, SessionEventArgsBase session)
     {
         var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
-        if (finished is { } early)
+
+        // With script hooks configured an unmatched request still runs them, so the early NotRouted return waits.
+        if (finished is { } early &&
+            !(early == RouteDispatchResult.NotRouted && options is { HasScriptHooks: true } && session is SessionEventArgs))
         {
             return BeginUpstreamIfForwarded(server, session, early);
         }
 
-        if (route is not null && session is SessionEventArgs args)
+        string? scriptCluster = null;
+        if (session is SessionEventArgs args)
         {
-            // A login comes first, so a service that decides on identity headers sees the ones it set.
-            if (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
-                await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+            if (route is not null)
             {
-                return RouteDispatchResult.Handled;
+                // A login comes first, so a service that decides on identity headers sees the ones it set.
+                if (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
+                    await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+                {
+                    return RouteDispatchResult.Handled;
+                }
+            }
+
+            if (options is { HasScriptHooks: true })
+            {
+                // Listener-wide scripts run after authentication and before any per-route plugin.
+                if (options.GlobalMiddleware is { Count: > 0 } &&
+                    await RoutePluginDispatch.GlobalDeniedAsync(options, args).ConfigureAwait(false))
+                {
+                    return RouteDispatchResult.Handled;
+                }
             }
 
             // Plugins come last, so a request that failed authentication never reaches plugin code.
-            if (route.Middleware is { Count: > 0 } &&
+            if (route?.Middleware is { Count: > 0 } &&
                 await RoutePluginDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false))
             {
                 return RouteDispatchResult.Handled;
             }
+
+            if (options?.ScriptPipeline is not null)
+            {
+                var scripted = await ScriptPhaseDispatch.RunRequestAsync(options, route, args).ConfigureAwait(false);
+                if (scripted.Denied)
+                {
+                    return RouteDispatchResult.Handled;
+                }
+
+                scriptCluster = scripted.ClusterId;
+            }
+        }
+
+        if (scriptCluster is not null && resolution != DestinationResolution.Terminal)
+        {
+            return BeginUpstreamIfForwarded(server, session,
+                BindScriptCluster(server, session, options!, route, scriptCluster));
         }
 
         return BeginUpstreamIfForwarded(server, session,
-            Finish(server, session, options!, resolution, destination, route));
+            finished ?? Finish(server, session, options!, resolution, destination, route));
+    }
+
+    /// <summary>
+    /// A script chose a cluster. The destination is picked again through the load balancer of that cluster, so
+    /// affinity, health, and limits apply as for a routed request. An unmatched request gets a synthetic route.
+    /// </summary>
+    private static RouteDispatchResult BindScriptCluster(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        RouteConfig? route,
+        string clusterId)
+    {
+        var request = session.HttpClient.Request;
+        var picked = DestinationResolver.ResolveCluster(options, request, clusterId, out var destination);
+        if (picked != DestinationResolution.Resolved || destination is null)
+        {
+            session.MatchedRoute = route;
+            return RouteDispatchResult.NoDestination;
+        }
+
+        route ??= new RouteConfig
+        {
+            Id = "script",
+            ClusterId = clusterId,
+            Match = new RouteMatch(),
+        };
+        return BindDestination(server, session, options, request, destination, route, clusterId);
     }
 
     /// <summary>
@@ -218,7 +280,8 @@ internal static class ReverseProxySessionDispatch
         Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         Request request,
         DestinationConfig destination,
-        RouteConfig route)
+        RouteConfig route,
+        string? clusterOverride = null)
     {
         var port = destination.Port;
         if (port == 0)
@@ -247,7 +310,7 @@ internal static class ReverseProxySessionDispatch
             server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId), route.Id);
         }
 
-        var cluster = ApplyCluster(options, session, route, destination, request);
+        var cluster = ApplyCluster(options, session, route, destination, request, clusterOverride);
 
         var retry = route.Retry ?? cluster?.Retry;
         if (retry is { Attempts: > 0 })
@@ -288,9 +351,10 @@ internal static class ReverseProxySessionDispatch
         SessionEventArgsBase session,
         RouteConfig route,
         DestinationConfig destination,
-        Request request)
+        Request request,
+        string? clusterOverride = null)
     {
-        var clusterId = SelectedClusterId(options, route, destination.Id);
+        var clusterId = clusterOverride ?? SelectedClusterId(options, route, destination.Id);
         var manager = options.ClusterManager;
         if (manager is null || !manager.Snapshot.Clusters.TryGetValue(clusterId, out var cluster))
         {
@@ -977,6 +1041,13 @@ internal static class ReverseProxySessionDispatch
         }
 
         var reverse = server.ReverseProxy;
+
+        // A script may send any request to another cluster, so the origin socket cannot be pinned to ForwardHost.
+        if (reverse?.ScriptPipeline is not null)
+        {
+            return false;
+        }
+
         if (reverse?.Routes is not { Count: > 0 })
         {
             return true;

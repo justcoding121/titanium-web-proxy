@@ -32,6 +32,7 @@ public partial class ProxyServer
         long bytesIn = 0;
         long bytesOut = 0;
         byte[]? helloBuffer = null;
+        StreamFilterChain? filters = null;
         try
         {
             var initial = ReadOnlyMemory<byte>.Empty;
@@ -65,7 +66,38 @@ public partial class ProxyServer
                 route = "default";
             }
 
+            // L4 script filters are chosen here, once per connection. A listener without them skips this block.
+            if (endPoint.StreamFilters is { } streamFilters)
+            {
+                filters = StreamFilterChain.Create(streamFilters, client, serverName, clusterId);
+                var accepted = await filters.OnNewConnectionAsync(cancellationToken).ConfigureAwait(false);
+                var admitted = accepted.Action != Abstractions.Scripting.ScriptAction.Deny;
+                if (admitted && !initial.IsEmpty)
+                {
+                    var first = await filters.OnDataAsync(true, initial, cancellationToken).ConfigureAwait(false);
+                    admitted = first.Action != Abstractions.Scripting.ScriptAction.Deny;
+                    if (first.ReplaceData is { } replaced)
+                    {
+                        initial = replaced;
+                    }
+                }
+
+                if (!admitted)
+                {
+                    route = "filter";
+                    result = "denied";
+                    return;
+                }
+
+                if (accepted.ClusterId is { } chosenCluster)
+                {
+                    clusterId = chosenCluster;
+                    route = "script";
+                }
+            }
+
             var relayOptions = CreatePassthroughOptions(client, endPoint);
+            relayOptions.Filters = filters;
             PassthroughRelayResult relayed;
             if (clusterId is not null)
             {
@@ -107,6 +139,11 @@ public partial class ProxyServer
             }
 
             client.Dispose();
+            if (filters is not null)
+            {
+                await filters.OnCloseAsync().ConfigureAwait(false);
+            }
+
             ReleaseClientConnection(endPoint);
             ProxyMetrics.RecordPassthrough(route, result, bytesIn, bytesOut);
         }
@@ -278,6 +315,7 @@ public partial class ProxyServer
         PassthroughOutcome.IdleTimeout => "idle_timeout",
         PassthroughOutcome.GraceExpired => "grace_expired",
         PassthroughOutcome.Cancelled => "cancelled",
+        PassthroughOutcome.Denied => "denied",
         _ => "error",
     };
 }
