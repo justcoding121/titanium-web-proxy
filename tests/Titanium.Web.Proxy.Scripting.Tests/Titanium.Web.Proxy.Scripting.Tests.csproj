@@ -26,6 +26,10 @@
 
   <ItemGroup>
     <None Include="Wasm\Samples\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- proxy-wasm host-call fuzz corpus (tests/fuzz/README.md) and the loader the parser corpus already uses. -->
+    <None Include="..\fuzz\corpus\proxy-wasm-*\**\*" Link="fuzz\corpus\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Titanium.Web.Proxy.UnitTests\Fuzz\FuzzCorpus.cs" Link="Fuzz\FuzzCorpus.cs" />
     <None Include="$(ScriptingNativeDir)*wasmtime*" Exclude="$(ScriptingNativeDir)*.txt" Link="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ScriptingNativeDir)')" />
   </ItemGroup>

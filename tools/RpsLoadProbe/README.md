@@ -220,6 +220,12 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-static-http1` | `staticFiles.root` tiny file |
 | `twp-cli-logging-http1` | Logging enabled + Info file sink |
 | `twp-cli-lb-leasttime-http1` | LeastTime across two healthy origins |
+| `twp-cli-script-lua-noop-http1` | Route middleware: Lua plugin that does nothing (needs the `lua54` native) |
+| `twp-cli-script-lua-header-http1` | Route middleware: Lua plugin that sets one request header |
+| `twp-cli-script-wasm-noop-http1` | Route middleware: proxy-wasm module that continues (needs the `wasmtime` native) |
+| `twp-cli-slow-upstream-http1` | Route to a 20 ms origin, no script (baseline for the next arm) |
+| `twp-cli-script-lua-slow-upstream-http1` | No-op Lua plugin in front of the 20 ms origin |
+| `twp-cli-script-1in50-http1` | One of fifty routes carries a Lua plugin; the load hits a plugin-free route |
 | `twp-cli-dialect-twp-http1` | `.twp` `listen`/`forward` site-file |
 
 Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the control-plane port). Prometheus `/metrics` lives on the **dashboard** listener, not `controlPort + 1`. The metrics-scrape arm polls control `/v1/snapshot` and dashboard `/metrics` every 10s via the CLI host’s `DashboardUrl`.

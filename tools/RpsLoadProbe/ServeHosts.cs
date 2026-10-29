@@ -222,6 +222,12 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliRetryHttp1:
             case ProbeMode.TwpCliConnCapHttp1:
             case ProbeMode.TwpCliExtAuthHttp1:
+            case ProbeMode.TwpCliScriptLuaNoopHttp1:
+            case ProbeMode.TwpCliScriptLuaHeaderHttp1:
+            case ProbeMode.TwpCliScriptWasmNoopHttp1:
+            case ProbeMode.TwpCliSlowUpstreamHttp1:
+            case ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1:
+            case ProbeMode.TwpCliScript1In50Http1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var kind = mode switch
@@ -252,6 +258,12 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliRetryHttp1 => TitaniumCliHost.CliArmKind.StatusRetry,
                     ProbeMode.TwpCliConnCapHttp1 => TitaniumCliHost.CliArmKind.ConnCap,
                     ProbeMode.TwpCliExtAuthHttp1 => TitaniumCliHost.CliArmKind.ExtAuth,
+                    ProbeMode.TwpCliScriptLuaNoopHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaNoop,
+                    ProbeMode.TwpCliScriptLuaHeaderHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaHeader,
+                    ProbeMode.TwpCliScriptWasmNoopHttp1 => TitaniumCliHost.CliArmKind.ScriptWasmNoop,
+                    ProbeMode.TwpCliSlowUpstreamHttp1 => TitaniumCliHost.CliArmKind.SlowUpstream,
+                    ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaSlowUpstream,
+                    ProbeMode.TwpCliScript1In50Http1 => TitaniumCliHost.CliArmKind.ScriptOneInFifty,
                     _ => TitaniumCliHost.CliArmKind.ForwardHost
                 };
                 var cli = await TitaniumCliHost.StartAsync(originHttpPort, kind, cancellationToken);
@@ -1286,6 +1298,12 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliRetryHttp1 => "twp-cli-retry-http1",
         ProbeMode.TwpCliConnCapHttp1 => "twp-cli-conncap-http1",
         ProbeMode.TwpCliExtAuthHttp1 => "twp-cli-extauth-http1",
+        ProbeMode.TwpCliScriptLuaNoopHttp1 => "twp-cli-script-lua-noop-http1",
+        ProbeMode.TwpCliScriptLuaHeaderHttp1 => "twp-cli-script-lua-header-http1",
+        ProbeMode.TwpCliScriptWasmNoopHttp1 => "twp-cli-script-wasm-noop-http1",
+        ProbeMode.TwpCliSlowUpstreamHttp1 => "twp-cli-slow-upstream-http1",
+        ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 => "twp-cli-script-lua-slow-upstream-http1",
+        ProbeMode.TwpCliScript1In50Http1 => "twp-cli-script-1in50-http1",
         ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()

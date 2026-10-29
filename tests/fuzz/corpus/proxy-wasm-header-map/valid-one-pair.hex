@@ -1,0 +1,3 @@
+# expect: parsed:1
+# reason: sanity seed: one pair a=b in the proxy-wasm map form
+01 00 00 00 01 00 00 00 01 00 00 00 61 00 62 00

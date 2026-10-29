@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: connection attributes belong to the stream table
+connection.requested_server_name

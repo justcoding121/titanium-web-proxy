@@ -58,6 +58,20 @@ internal sealed class WasmRuntime
 
     private static long _epochTicks;
 
+    private static volatile bool _nativeLoadAttempted;
+
+    /// <summary>True once anything asked to load the Wasmtime library or build an engine. Stays false while scripting is off.</summary>
+    internal static bool LoadAttempted
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _nativeLoadAttempted || _plain is not null || _fueled is not null;
+            }
+        }
+    }
+
     /// <summary>Returns the engine for the fuel setting, creating it (and the shared epoch ticker) on first use.</summary>
     public static WasmRuntime Get(bool consumeFuel)
     {
@@ -78,6 +92,7 @@ internal sealed class WasmRuntime
     /// <summary>True when the Wasmtime native library loads. Sets <paramref name="error"/> to a fix the operator can act on.</summary>
     public static bool TryLoadNative(out string? error)
     {
+        _nativeLoadAttempted = true;
         if (NativeLibrary.TryLoad(Wasmtime.Library, typeof(WasmRuntime).Assembly, null, out _))
         {
             error = null;

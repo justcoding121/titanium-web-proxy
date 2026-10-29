@@ -64,6 +64,8 @@ param(
         'twp-cli-plus-discovery-file-http1', 'twp-cli-plus-metrics-scrape-http1',
         'twp-cli-plus-cache-hit-http1', 'twp-cli-static-http1', 'twp-cli-logging-http1',
         'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1',
+        'twp-cli-script-lua-noop-http1', 'twp-cli-script-lua-header-http1', 'twp-cli-script-wasm-noop-http1',
+        'twp-cli-slow-upstream-http1', 'twp-cli-script-lua-slow-upstream-http1', 'twp-cli-script-1in50-http1',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 

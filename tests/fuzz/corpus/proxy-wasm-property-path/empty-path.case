@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: zero-length path
+

@@ -1,0 +1,3 @@
+# expect: malformed
+# reason: key and value lengths that only overflow when added in 32 bits
+01 00 00 00 00 00 00 80 00 00 00 80 00 00

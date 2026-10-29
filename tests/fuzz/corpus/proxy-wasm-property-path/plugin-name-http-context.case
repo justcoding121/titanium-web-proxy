@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: plugin-level attributes are answered above the context table
+plugin_name

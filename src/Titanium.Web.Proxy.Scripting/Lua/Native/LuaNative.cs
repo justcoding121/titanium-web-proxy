@@ -34,6 +34,18 @@ internal static unsafe partial class LuaNative
     private static string? _error;
     private static string? _version;
 
+    /// <summary>True once anything asked to load the native library (success or not). Stays false while scripting is off.</summary>
+    internal static bool LoadAttempted
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return _available.HasValue || _resolverSet;
+            }
+        }
+    }
+
     /// <summary>The Lua release the shim was built from, once <see cref="TryLoad"/> succeeded.</summary>
     public static string? LuaVersion => _version;
 

@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: x=1
+# reason: query only
+request\0query

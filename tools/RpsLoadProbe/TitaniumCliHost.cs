@@ -93,8 +93,38 @@ internal sealed class TitaniumCliHost : IDisposable
         ClusterClient,
         StatusRetry,
         ConnCap,
-        ExtAuth
+        ExtAuth,
+
+        /// <summary>Route middleware: a Lua plugin whose request-headers phase does nothing (the call cost alone).</summary>
+        ScriptLuaNoop,
+
+        /// <summary>Route middleware: a Lua plugin that sets one request header.</summary>
+        ScriptLuaHeader,
+
+        /// <summary>Route middleware: a proxy-wasm module that continues every request.</summary>
+        ScriptWasmNoop,
+
+        /// <summary>Baseline for <see cref="ScriptLuaSlowUpstream"/>: the slow origin, no script.</summary>
+        SlowUpstream,
+
+        /// <summary>A no-op Lua plugin in front of the slow origin; latency must stay flat (N6).</summary>
+        ScriptLuaSlowUpstream,
+
+        /// <summary>One route of fifty carries a Lua plugin; the load hits a plugin-free route (B3 cliff).</summary>
+        ScriptOneInFifty
     }
+
+    /// <summary>Per-request delay of the slow origin used by the slow-upstream arms.</summary>
+    public const int SlowUpstreamDelayMs = 20;
+
+    /// <summary>Routes in the <see cref="CliArmKind.ScriptOneInFifty"/> table.</summary>
+    internal const int OneInFiftyRouteCount = 50;
+
+    public static bool IsScriptArm(CliArmKind kind) => kind is
+        CliArmKind.ScriptLuaNoop or CliArmKind.ScriptLuaHeader or CliArmKind.ScriptWasmNoop
+        or CliArmKind.ScriptLuaSlowUpstream or CliArmKind.ScriptOneInFifty;
+
+    public static bool UsesSlowOrigin(CliArmKind kind) => kind is CliArmKind.SlowUpstream or CliArmKind.ScriptLuaSlowUpstream;
 
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
         CliArmKind.PlusBase or CliArmKind.PlusCache or CliArmKind.PlusWaf or CliArmKind.PlusCidr
@@ -108,7 +138,9 @@ internal sealed class TitaniumCliHost : IDisposable
         CliArmKind.SingleRoute or CliArmKind.InterceptTransform or CliArmKind.PlusResilience
         or CliArmKind.PlusDiscoveryFile or CliArmKind.LbLeastTime
         or CliArmKind.Policies or CliArmKind.Mirror or CliArmKind.ClusterClient
-        or CliArmKind.StatusRetry or CliArmKind.ConnCap or CliArmKind.ExtAuth;
+        or CliArmKind.StatusRetry or CliArmKind.ConnCap or CliArmKind.ExtAuth
+        or CliArmKind.ScriptLuaNoop or CliArmKind.ScriptLuaHeader or CliArmKind.ScriptWasmNoop
+        or CliArmKind.SlowUpstream or CliArmKind.ScriptLuaSlowUpstream or CliArmKind.ScriptOneInFifty;
 
     public static async Task<TitaniumCliHost> StartAsync(int originHttpPort, CliArmKind kind,
         CancellationToken cancellationToken = default)
@@ -170,6 +202,25 @@ internal sealed class TitaniumCliHost : IDisposable
             secondOriginPort = origin2.HttpPort;
         }
 
+        // The slow arms front their own origin so the shared origin stays fast for every other arm.
+        var upstreamPort = originHttpPort;
+        if (UsesSlowOrigin(kind))
+        {
+            var slow = await OriginServer.StartAsync(new OriginListenOptions
+            {
+                EnableHttp = true,
+                EnableHttps = false,
+                ResponseBytes = WorkloadOptions.TinyJsonBytes,
+                ResponseDelayMs = SlowUpstreamDelayMs
+            }, cancellationToken);
+            secondOrigin = slow;
+            upstreamPort = slow.HttpPort;
+        }
+
+        string? scriptPath = null;
+        if (IsScriptArm(kind))
+            scriptPath = await WriteScriptFileAsync(workDir, kind, cancellationToken);
+
         if (kind == CliArmKind.PlusDiscoveryFile)
         {
             discoveryFile = Path.Combine(workDir, "discovery-clusters.json");
@@ -188,8 +239,8 @@ internal sealed class TitaniumCliHost : IDisposable
         {
             configPath = Path.Combine(workDir, "twp.json");
             await File.WriteAllTextAsync(configPath,
-                BuildJson(kind, port, originHttpPort, controlPlanePort, secondOriginPort, discoveryFile,
-                    dashboardPort),
+                BuildJson(kind, port, upstreamPort, controlPlanePort, secondOriginPort, discoveryFile,
+                    dashboardPort, scriptPath),
                 Encoding.UTF8, cancellationToken);
         }
         else
@@ -401,12 +452,86 @@ internal sealed class TitaniumCliHost : IDisposable
         }
     }
 
+    /// <summary>Lua source of the script arms. A function that returns nothing lets the request through.</summary>
+    internal const string LuaNoopSource = "function on_request_headers(ctx) end\n";
+
+    internal const string LuaHeaderSource =
+        "function on_request_headers(ctx)\n  ctx.set_header(\"x-twp-rps-script\", \"1\")\nend\n";
+
+    /// <summary>
+    /// proxy-wasm 0.2.1 module with no imports that continues every request: the cost of entering a Wasmtime VM and
+    /// leaving it, with no host call in between.
+    /// </summary>
+    internal const string WasmNoopSource = """
+        (module
+          (memory (export "memory") 2)
+          (global $heap (mut i32) (i32.const 8192))
+          (func (export "proxy_abi_version_0_2_1"))
+          (func (export "proxy_on_memory_allocate") (param $size i32) (result i32)
+            (local $p i32)
+            (local.set $p (global.get $heap))
+            (global.set $heap (i32.and (i32.add (i32.add (global.get $heap) (local.get $size)) (i32.const 7)) (i32.const -8)))
+            (local.get $p))
+          (func (export "proxy_on_context_create") (param i32 i32))
+          (func (export "proxy_on_vm_start") (param i32 i32) (result i32) (i32.const 1))
+          (func (export "proxy_on_configure") (param i32 i32) (result i32) (i32.const 1))
+          (func (export "proxy_on_request_headers") (param i32 i32 i32) (result i32) (i32.const 0))
+          (func (export "proxy_on_done") (param i32) (result i32) (i32.const 1))
+          (func (export "proxy_on_delete") (param i32))
+        )
+        """;
+
+    private static async Task<string> WriteScriptFileAsync(string workDir, CliArmKind kind,
+        CancellationToken cancellationToken)
+    {
+        var (name, source) = kind switch
+        {
+            CliArmKind.ScriptLuaHeader => ("script.lua", LuaHeaderSource),
+            CliArmKind.ScriptWasmNoop => ("script.wat", WasmNoopSource),
+            _ => ("script.lua", LuaNoopSource)
+        };
+        var path = Path.Combine(workDir, name);
+        // No BOM: Lua and the WAT parser both reject a leading U+FEFF.
+        await File.WriteAllTextAsync(path, source, new UTF8Encoding(false), cancellationToken);
+        return path;
+    }
+
+    private static string PluginsJson(CliArmKind kind, string? scriptPath)
+    {
+        if (!IsScriptArm(kind) || scriptPath is null)
+            return "";
+        var engine = kind == CliArmKind.ScriptWasmNoop ? "wasm" : "lua";
+        var file = scriptPath.Replace("\\", "/", StringComparison.Ordinal);
+        return ", \"plugins\": [ { \"name\": \"script\", \"kind\": \"" + engine + "\", \"file\": \"" + file +
+               "\", \"failMode\": \"closed\", \"timeoutMs\": 1000 } ]";
+    }
+
+    /// <summary>
+    /// Route table of the one-in-fifty arm: route 1 carries the plugin on <c>/n/1</c>, routes 2..49 are plain prefixes,
+    /// and the last route is the catch-all the load hits, so the plugin route is never the one that serves traffic.
+    /// </summary>
+    private static string OneInFiftyRoutes()
+    {
+        var sb = new StringBuilder();
+        for (var i = 1; i < OneInFiftyRouteCount; i++)
+        {
+            if (sb.Length > 0) sb.Append(",\n");
+            sb.Append($"{{ \"id\": \"n{i}\", \"clusterId\": \"c1\", \"order\": {i}, ");
+            if (i == 1) sb.Append("\"middleware\": [ \"script\" ], ");
+            sb.Append($"\"match\": {{ \"path\": \"/n/{i}\", \"pathKind\": \"Prefix\" }} }}");
+        }
+
+        sb.Append(",\n{ \"id\": \"r1\", \"clusterId\": \"c1\", \"order\": ").Append(OneInFiftyRouteCount)
+            .Append(", \"match\": { \"path\": \"/\", \"pathKind\": \"Prefix\" } }");
+        return sb.ToString();
+    }
+
     internal static string BuildSiteFile(int listenPort, int originPort) =>
         // forward before listen so SiteFileReader applies pending ForwardHost on listen create.
         $"forward 127.0.0.1:{originPort}\nlisten 127.0.0.1:{listenPort}\n";
 
     internal static string BuildJson(CliArmKind kind, int listenPort, int originPort, int controlPlanePort = 0,
-        int? secondOriginPort = null, string? discoveryFile = null, int dashboardPort = 0)
+        int? secondOriginPort = null, string? discoveryFile = null, int dashboardPort = 0, string? scriptPath = null)
     {
         var algorithm = kind == CliArmKind.LbLeastTime ? "LeastTime" : "RoundRobin";
         var destinations = kind == CliArmKind.LbLeastTime && secondOriginPort is int p2
@@ -426,6 +551,8 @@ internal sealed class TitaniumCliHost : IDisposable
             CliArmKind.ExtAuth => "\"policies\": [ \"auth\" ],",
             CliArmKind.Mirror => "\"mirror\": { \"clusterId\": \"mirror\", \"samplePercent\": 100 },",
             CliArmKind.StatusRetry => "\"retry\": { \"attempts\": 1 },",
+            CliArmKind.ScriptLuaNoop or CliArmKind.ScriptLuaHeader or CliArmKind.ScriptWasmNoop
+                or CliArmKind.ScriptLuaSlowUpstream => "\"middleware\": [ \"script\" ],",
             _ => "",
         };
         var routeBody =
@@ -434,6 +561,8 @@ internal sealed class TitaniumCliHost : IDisposable
             "\"order\": 1,\n" +
             (routeExtras.Length == 0 ? "" : routeExtras + "\n") +
             "\"match\": { \"path\": \"/\", \"pathKind\": \"Prefix\" }";
+        var routesJson = kind == CliArmKind.ScriptOneInFifty ? OneInFiftyRoutes() : "{\n" + routeBody + "\n}";
+        var pluginsBlockJson = PluginsJson(kind, scriptPath);
         var httpClient = kind switch
         {
             CliArmKind.ClusterClient =>
@@ -503,9 +632,7 @@ internal sealed class TitaniumCliHost : IDisposable
                 }
               ],
               "routes": [
-                {
-            {{routeBody}}
-                }
+            {{routesJson}}
               ],
               "clusters": [
                 {
@@ -518,6 +645,7 @@ internal sealed class TitaniumCliHost : IDisposable
             {{mirrorCluster}}
               ]
             {{policiesBlock}}
+            {{pluginsBlockJson}}
             {{plusBlock}}
             }
             """;
@@ -637,6 +765,12 @@ internal sealed class TitaniumCliHost : IDisposable
             case CliArmKind.PlusDiscoveryFile:
             case CliArmKind.LbLeastTime:
             case CliArmKind.DialectTwp:
+            case CliArmKind.ScriptLuaNoop:
+            case CliArmKind.ScriptLuaHeader:
+            case CliArmKind.ScriptWasmNoop:
+            case CliArmKind.SlowUpstream:
+            case CliArmKind.ScriptLuaSlowUpstream:
+            case CliArmKind.ScriptOneInFifty:
                 throw new InvalidOperationException($"{kind} must use BuildJson / BuildSiteFile, not BuildYaml.");
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);

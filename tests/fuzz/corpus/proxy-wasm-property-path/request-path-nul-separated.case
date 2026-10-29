@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: /foo?x=1
+# reason: the SDK sends NUL-separated segments; they must land on the same attribute
+request\0path

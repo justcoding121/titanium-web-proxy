@@ -798,6 +798,24 @@ internal static class Cli
             case "twp-cli-extauth-http1":
                 mode = ProbeMode.TwpCliExtAuthHttp1;
                 return true;
+            case "twp-cli-script-lua-noop-http1":
+                mode = ProbeMode.TwpCliScriptLuaNoopHttp1;
+                return true;
+            case "twp-cli-script-lua-header-http1":
+                mode = ProbeMode.TwpCliScriptLuaHeaderHttp1;
+                return true;
+            case "twp-cli-script-wasm-noop-http1":
+                mode = ProbeMode.TwpCliScriptWasmNoopHttp1;
+                return true;
+            case "twp-cli-slow-upstream-http1":
+                mode = ProbeMode.TwpCliSlowUpstreamHttp1;
+                return true;
+            case "twp-cli-script-lua-slow-upstream-http1":
+                mode = ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1;
+                return true;
+            case "twp-cli-script-1in50-http1":
+                mode = ProbeMode.TwpCliScript1In50Http1;
+                return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
                 return true;

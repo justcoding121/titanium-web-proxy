@@ -78,6 +78,29 @@ files) and calls `Fuzzer.OutOfProcess.Run(ParserFuzzTarget.Http1Request)` under 
 directory after expanding the `.case` seeds to raw bytes (`FuzzCorpus.Load` does this). Run that locally or in a
 nightly job; the deterministic runner is the gate.
 
+## proxy-wasm host-call corpus
+
+A second pair of corpus folders covers the bytes a WebAssembly guest hands the host, which is the one place a plugin
+author's bug (or a hostile module) reaches Titanium code with a length it chose:
+
+| Folder | Entry point | What it checks |
+|---|---|---|
+| `corpus/proxy-wasm-header-map` (`.hex`) | `WasmHostCallFuzzTarget.HeaderMap` | The serialized header map behind `proxy_set_header_map_pairs`, `proxy_send_local_response` and `proxy_http_call`: malformed input decodes to "no map" (the host answers `ParseFailure`), never throws, and a decoded map serializes back to the same pairs and reports no edits until the guest changes it. |
+| `corpus/proxy-wasm-property-path` (`.case`) | `WasmHostCallFuzzTarget.PropertyPath` | The path behind `proxy_get_property` and `proxy_set_property`: NUL-separated or dotted, never throws, a normalized path has no NUL and no trailing dot, and an unknown or malformed path is `NotFound`. |
+
+Header-map seeds use `# expect: parsed:N | malformed | any`; path seeds use `# expect: notfound | any` and optionally
+`# expect-http: <text>` for the value the HTTP property table must return. Seed prefixes for the header map are
+`valid-`, `short-`, `count-`, `length-`, `truncated-` and `utf8-`; the runner fails if one has no seed.
+
+```powershell
+dotnet test tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj -c Release --filter "FullyQualifiedName~WasmHostCallCorpusTests"
+```
+
+No Wasmtime or Lua native is needed: the decoder and the property table are plain managed code. The mutation pass is the
+same shape as above (every prefix, then fixed-seed edits favoring NUL, 0xFF, 0x7F and length-field bytes). To fuzz it
+with SharpFuzz, link `WasmHostCallFuzzTarget.cs` into a console project that references the scripting assembly and
+call `Fuzzer.OutOfProcess.Run(WasmHostCallFuzzTarget.HeaderMap)` (or `.PropertyPath`) under `afl-fuzz`.
+
 ## Adding a seed
 
 1. Write the `.case` file with the right prefix and a `reason:`.

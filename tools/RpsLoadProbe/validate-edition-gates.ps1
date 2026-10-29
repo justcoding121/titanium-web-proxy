@@ -24,6 +24,12 @@ param(
     [double] $LoggingGate = 0.50,
     [double] $LbLeastTimeGate = 0.50,
     [double] $DialectTwpGate = 0.50,
+    # Scripting arms (S9). Never below 0.50.
+    [double] $ScriptLuaNoopGate = 0.50,
+    [double] $ScriptLuaHeaderGate = 0.50,
+    [double] $ScriptWasmNoopGate = 0.50,
+    [double] $ScriptSlowUpstreamGate = 0.50,
+    [double] $ScriptOneInFiftyGate = 0.50,
     [switch] $AllowPartial
 )
 
@@ -152,8 +158,18 @@ $pairs = @(
     @{ Label = 'CLI dialect .twp ÷ CLI'; Num = 'twp-cli-dialect-twp-http1'; Den = 'twp-cli-reverse-http1'; Gate = $DialectTwpGate },
     @{ Label = 'CLI+Plus-cors ÷ CLI'; Num = 'twp-cli-plus-cors-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
     @{ Label = 'CLI+Plus-circuit ÷ CLI'; Num = 'twp-cli-plus-circuit-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
-    @{ Label = 'CLI+Plus-retry ÷ CLI'; Num = 'twp-cli-plus-retry-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 }
+    @{ Label = 'CLI+Plus-retry ÷ CLI'; Num = 'twp-cli-plus-retry-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
+    @{ Label = 'CLI script lua-noop ÷ CLI route'; Num = 'twp-cli-script-lua-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptLuaNoopGate },
+    @{ Label = 'CLI script lua-header ÷ CLI route'; Num = 'twp-cli-script-lua-header-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptLuaHeaderGate },
+    @{ Label = 'CLI script wasm-noop ÷ CLI route'; Num = 'twp-cli-script-wasm-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptWasmNoopGate },
+    @{ Label = 'CLI script lua slow-upstream ÷ CLI slow-upstream'; Num = 'twp-cli-script-lua-slow-upstream-http1'; Den = 'twp-cli-slow-upstream-http1'; Gate = $ScriptSlowUpstreamGate },
+    @{ Label = 'CLI script 1-in-50 ÷ CLI route'; Num = 'twp-cli-script-1in50-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptOneInFiftyGate }
 )
+
+# A floor below 0.50 is a mistake, not a tuning knob.
+foreach ($p in $pairs) {
+    if ([double]$p.Gate -lt 0.50) { throw ("gate for '{0}' is {1}; edition floors are never below 0.50" -f $p.Label, $p.Gate) }
+}
 
 $failed = $false
 Write-Host "Edition gates @ c=64 ($([IO.Path]::GetFileName($CsvPath)))" -ForegroundColor Cyan

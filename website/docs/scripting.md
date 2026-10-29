@@ -90,6 +90,22 @@ Wasmtime compiles a module to machine code, and the cache keeps that code on dis
 
 The directory is `TITANIUM_WASM_CACHE_DIR`, or `titanium/wasm-cache` under the user's local application data. `TITANIUM_WASM_CACHE_DIR=off` turns the cache off. An entry is keyed by the module's SHA-256 and the engine's fingerprint, so a module compiled under other settings is never reused.
 
+### Native libraries are trusted code
+
+The sandbox protects the proxy from a script. It does not protect the proxy from the native library that runs the script: `lua54` and `wasmtime` execute inside the `titanium` process with its privileges, so a replaced library is a replaced proxy.
+
+- **Where they load from.** The Lua shim is searched for in `TITANIUM_SCRIPTING_NATIVE_DIR` first, then beside the binary, then the default library path. Wasmtime uses the default probing. Treat a writable `TITANIUM_SCRIPTING_NATIVE_DIR`, or a writable application directory, like a writable `titanium` binary.
+- **What is checked.** `tools/packaging/scripting-native.lock.json` pins a SHA-256 for every download, and the bundle script verifies it. The proxy does not re-hash a library when it loads it, and the Lua shim is checked only for its exported ABI version. A plain Lua build is refused; a malicious one built to the same ABI is not.
+- **What stays off.** With no `kind: lua` or `kind: wasm` plugin in the configuration, no library is loaded or even requested, and the engines are never constructed. Tests assert this on a default reverse configuration.
+- **What a hostile guest can reach.** Everything a script hands the host (header maps, property paths, callout targets) is untrusted input. A malformed header map or path is answered with an error code and never throws; the proxy-wasm host-call corpus in `tests/fuzz` replays truncations and mutations of both on every test run.
+
+Review checklist before enabling scripting on a shared host:
+
+1. `failMode` is `closed` (the default) unless a failed script must not take the route down.
+2. `calloutHosts` lists exact hosts, not `*`-wide domains you do not control.
+3. `limits` and `timeoutMs` are set for the slowest legitimate call, not raised to hide a slow one.
+4. The script files, the Wasm modules, the native directory, and `TITANIUM_WASM_CACHE_DIR` are writable only by the account that runs the proxy.
+
 ## Lua plugins
 
 ```yaml
@@ -257,7 +273,7 @@ The engine also publishes `twp.scripting.lua.call.duration`, `twp.scripting.lua.
 
 ### L4 phases
 
-A Lua plugin is also an `IStreamScriptFilter`. In a .NET host, add it to a transparent endpoint's `StreamFilters` to see raw TCP connections. The CLI configuration file does not wire this; it is for code that embeds the engine.
+A Lua plugin is also an `IStreamScriptFilter`. Name it in `listeners[].streamFilters` on a passthrough (transparent or QUIC) listener, or set `StreamFilters` from a .NET host, to see raw TCP connections.
 
 | Function | When |
 | --- | --- |
