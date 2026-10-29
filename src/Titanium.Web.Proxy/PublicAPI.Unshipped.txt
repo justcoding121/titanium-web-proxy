@@ -161,12 +161,10 @@ Titanium.Web.Proxy.Clusters.LoadBalancer.RecordDestination(string! destinationId
 Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
 Titanium.Web.Proxy.Clusters.LoadBalancer.Select(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot! snapshot, Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext context) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig?
 Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
-Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache! cache, System.TimeSpan? defaultTtl = null, bool allowAuthenticated = false) -> void
 Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext! context, Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs! session) -> void
 Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
 Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count.get -> int
-Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MemoryHttpResponseCache() -> void
 Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(string? pathPrefix = null) -> int
 Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(string! cacheKey, Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse! response, System.TimeSpan ttl) -> void
 Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(string! cacheKey, out Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse? response) -> bool
@@ -443,3 +441,33 @@ Titanium.Web.Proxy.ProxyServer.OcspStapling.get -> bool
 Titanium.Web.Proxy.ProxyServer.OcspStapling.set -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent -> System.Action<Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent!>?
 Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent! healthEvent) -> void
+const Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxBytes = 67108864 -> long
+const Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxEntryBytes = 1048576 -> int
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache! cache, System.TimeSpan? defaultTtl = null, bool allowAuthenticated = false, Titanium.Web.Proxy.Caching.ResponseCacheOptions? options = null) -> void
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes.get -> long
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions.get -> long
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes.get -> long
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes.get -> int
+Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MemoryHttpResponseCache(long maxBytes = 67108864, int maxEntryBytes = 1048576) -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated.get -> bool
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse.get -> bool
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights.get -> int
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters.get -> int
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl.get -> System.TimeSpan?
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders.get -> bool
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness.get -> bool
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes.get -> int
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes.init -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.ResponseCacheOptions() -> void
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention.get -> System.TimeSpan
+Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention.init -> void

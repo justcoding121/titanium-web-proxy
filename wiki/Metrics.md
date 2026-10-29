@@ -47,6 +47,9 @@ Generated from the instruments the core meter declares. A unit test fails when t
 | `twp.auth.rounds` | Counter | `{round}` | not exposed | Authentication challenge rounds completed, tagged by scheme. |
 | `twp.body.buffered_bytes` | Histogram | `By` | not exposed | Cumulative bytes buffered for a single whole-body read, tagged by direction. |
 | `twp.body.decompressed_bytes` | Histogram | `By` | not exposed | Cumulative decompressed bytes produced draining a Content-Encoding chain, tagged by direction. |
+| `twp.cache.bytes` | ObservableGauge | `By` | `twp_cache_bytes` (gauge) | Bytes charged to the in-memory response cache (bodies, headers and keys), summed across live caches. |
+| `twp.cache.entries` | ObservableGauge | `{entry}` | `twp_cache_entries` (gauge) | Entries held by the in-memory response cache, summed across live caches. |
+| `twp.cache.requests` | Counter | `{request}` | `twp_cache_requests_total` (counter) | Response cache outcomes by result: hit, miss, stale, bypass, revalidated. |
 | `twp.certificates.cached` | ObservableGauge | `{certificate}` | `twp_certificates_cached` (gauge) | Leaf certificates currently held in the in-memory certificate cache, summed across every live CertificateManager in this process. Operators can use this to confirm ResourceLimits.MaxCertificateCacheEntries is holding the cache bounded rather than inferring it indirectly from process working set. |
 | `twp.connections.active` | UpDownCounter | `{connection}` | `twp_connections_active` (gauge) | Client connections currently admitted and being handled. |
 | `twp.connections.rejected` | Counter | `{connection}` | `twp_connections_rejected_total` (counter) | Client connections rejected before a handler task started, by reason. |

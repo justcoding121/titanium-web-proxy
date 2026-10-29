@@ -383,6 +383,41 @@ plus:
 
 Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`, `grpc.transcode.*`). Enabling `grpc.transcode.enabled` forces the HTTP session interception path — see [gRPC-JSON transcoding](/docs/grpc-json-transcoding). Engine settings belong in `server:`, not `plus.options`.
 
+### Response cache
+
+`cache.enable: "true"` adds an in-memory shared HTTP cache (an RFC 9111 subset) to the reverse-proxy middleware chain. It adds no `BeforeResponse` or `AfterResponse` subscription, so a route stays on terminate-lite, and a cache hit never reaches the origin. With `cache.enable` unset, the cache costs nothing per request.
+
+| Key (`plus.options`) | Default | Meaning |
+| --- | --- | --- |
+| `cache.maxBytes` | 64 MiB | Total budget for all entries, headers included. The least recently used entries are evicted first. |
+| `cache.maxEntryBytes` | 1 MiB | Largest body stored for one response. A larger body, or a chunked body that grows past it, streams through uncached. |
+| `cache.defaultTtlSeconds` | 0 (off) | Freshness for a cacheable response that carries no freshness information of its own. |
+| `cache.heuristicFreshness` | false | For a response with `Last-Modified` and no explicit freshness, treat 10 percent of its age as fresh, capped at 24 hours. |
+| `cache.exposeHeaders` | false | Add `X-Cache` (`HIT`, `STALE`, `REVALIDATED`) and `Age` to answers the cache took part in. |
+| `cache.collapse` | true | Concurrent misses for one key wait behind one origin fetch. |
+| `cache.collapse.maxWaiters` | 256 | Requests that may wait behind one fetch. The rest fetch on their own. |
+| `cache.collapse.timeoutMs` | 5000 | How long a waiter waits before it fetches on its own. |
+| `cache.staleRetentionSeconds` | 300 | How long an expired entry with a validator (`ETag` or `Last-Modified`) is kept for conditional revalidation. |
+
+A value that is out of range or not a number is reported once at startup and replaced by its default. Purge by exact key or by prefix through the control plane (`/v1/cache/purge`).
+
+| Behavior | What happens |
+| --- | --- |
+| Freshness | `s-maxage`, then `max-age`, then `Expires` minus `Date`. `Age` from the origin counts against the lifetime. Heuristic freshness only when enabled and only with `Last-Modified`. |
+| Stored statuses | 200, 203, 204, 300, 301, 308, 404, 405, 410, 414, 501 to a `GET`. |
+| Never stored | Responses with `Set-Cookie`, `Cache-Control: private`, `no-store` or `no-cache`, `Vary: *`, a `Vary` naming more than 8 headers, partial content, or no freshness at all. |
+| Requests that skip the cache | Any method other than `GET` and `HEAD`; a request with `Range`, `If-Range`, `If-Match`, `If-Unmodified-Since`, `Authorization`, `Cookie` or `Cache-Control: no-store`; and a request whose host, path, `Accept-Encoding` or named `Vary` value holds control characters or (for the last two) is longer than 256 characters. |
+| Client `Cache-Control` | `no-cache` and `max-age=0` send the request to the origin (conditionally when the entry has a validator). A `max-age` or `min-fresh` the entry cannot meet does the same. |
+| Vary | The key adds a normalized `Accept-Encoding` and each named `Vary` header. A client cannot change the key in any other way. |
+| `HEAD` | Answered from a stored `GET`. A `HEAD` response is never stored. |
+| Compressed bodies | Stored as the origin sent them (with `Content-Encoding`) and served as stored, never compressed again. |
+| Revalidation | A stale entry with a validator is revalidated with `If-None-Match` or `If-Modified-Since`. A 304 refreshes the entry and its stored headers. |
+| `stale-while-revalidate` | The first request after expiry revalidates inline. Requests that arrive while it runs get the stale copy. No background fetch is started. |
+| `stale-if-error` | An origin 5xx answer is replaced by the stale copy while the window allows it. A connection failure is not covered. |
+| Scheme and host | `http` and `https` entries are separate, and so are hosts. |
+
+Metrics: `twp.cache.requests` (label `result`: `hit`, `miss`, `stale`, `bypass`, `revalidated`), `twp.cache.bytes` and `twp.cache.entries`. Enabling the cache registers the bytes and entries gauges.
+
 ## Validate
 
 ```shell

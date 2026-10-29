@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Caching\rfc9111-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>
 

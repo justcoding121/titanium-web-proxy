@@ -40,12 +40,13 @@ internal sealed class MetricsListener : IDisposable
         "twp.connections.",
         "twp.pool.",
         "twp.certificates.",
+        "twp.cache.",
     ];
 
     /// <summary>The only tag keys that become labels. Any other tag is dropped, so client IP, path, and Host can never leak in.</summary>
     public static readonly string[] LabelNames =
     [
-        "route", "cluster", "status_class", "protocol", "error", "direction", "reason", "outcome",
+        "route", "cluster", "status_class", "protocol", "error", "direction", "reason", "outcome", "result",
     ];
 
     private readonly string _meterName;

@@ -50,13 +50,41 @@ public interface IHttpResponseCache
     int Count { get; }
 }
 
-/// <summary>Cached HTTP response payload.</summary>
+/// <summary>
+/// Cached HTTP response payload. The body is shared by every reader and must be treated as read-only.
+/// A variant marker (status 0, <see cref="VaryNames"/> set, empty body) records which request headers
+/// select a variant of a resource.
+/// </summary>
 public sealed class CachedHttpResponse
 {
     public required int StatusCode { get; init; }
     public required byte[] Body { get; init; }
     public required IReadOnlyList<KeyValuePair<string, string>> Headers { get; init; }
+
+    /// <summary>End of the freshness window. Unset (<see cref="DateTimeOffset.MinValue"/>) means "use the store ttl".</summary>
     public DateTimeOffset ExpiresUtc { get; init; }
+
+    /// <summary>When the response was received (RFC 9111 response_time). Unset means "not age-tracked".</summary>
+    public DateTimeOffset StoredUtc { get; init; }
+
+    /// <summary>Corrected initial age in seconds at <see cref="StoredUtc"/> (RFC 9111 section 4.2.3).</summary>
+    public long InitialAgeSeconds { get; init; }
+
+    /// <summary>
+    /// Last moment the entry may be returned by a store at all (stale entries are kept for revalidation,
+    /// stale-while-revalidate and stale-if-error). Unset or not after <see cref="ExpiresUtc"/> means "drop when stale".
+    /// </summary>
+    public DateTimeOffset RetainUntilUtc { get; init; }
+
+    public int StaleWhileRevalidateSeconds { get; init; }
+
+    public int StaleIfErrorSeconds { get; init; }
+
+    /// <summary>must-revalidate, proxy-revalidate or s-maxage: a stale entry must never be served without validation.</summary>
+    public bool MustRevalidate { get; init; }
+
+    /// <summary>Lower-case request header names named by <c>Vary</c>. Only set on a variant marker.</summary>
+    public IReadOnlyList<string>? VaryNames { get; init; }
 }
 
 /// <summary>Plus plugin entry (ALC). Inspector must never call Apply.</summary>

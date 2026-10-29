@@ -286,6 +286,59 @@ internal static class ProxyMetrics
         }
     }
 
+    private static readonly Counter<long> CacheRequests =
+        Meter.CreateCounter<long>("twp.cache.requests", RequestUnit,
+            "Response cache outcomes by result: hit, miss, stale, bypass, revalidated.");
+
+    /// <summary>
+    ///     Live response caches, held weakly like <see cref="LiveCertificateManagers" />, so the gauges below sum
+    ///     whatever is alive in this process without keeping a cache (and its bodies) reachable.
+    /// </summary>
+    private static readonly ConditionalWeakTable<Caching.MemoryHttpResponseCache, object?> LiveResponseCaches = new();
+
+    private static readonly ObservableGauge<long> CacheBytes = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
+        Meter.CreateObservableGauge("twp.cache.bytes", ObserveCacheBytes, "By",
+            "Bytes charged to the in-memory response cache (bodies, headers and keys), summed across live caches.");
+
+    private static readonly ObservableGauge<long> CacheEntries = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
+        Meter.CreateObservableGauge("twp.cache.entries", ObserveCacheEntries, "{entry}",
+            "Entries held by the in-memory response cache, summed across live caches.");
+
+    private static IEnumerable<Measurement<long>> ObserveCacheBytes()
+    {
+        long total = 0;
+        foreach (var pair in LiveResponseCaches)
+        {
+            total += pair.Key.Bytes;
+        }
+
+        yield return new Measurement<long>(total);
+    }
+
+    private static IEnumerable<Measurement<long>> ObserveCacheEntries()
+    {
+        long total = 0;
+        foreach (var pair in LiveResponseCaches)
+        {
+            total += pair.Key.Count;
+        }
+
+        yield return new Measurement<long>(total);
+    }
+
+    /// <summary>Called once by each <see cref="Caching.MemoryHttpResponseCache" /> constructor.</summary>
+    internal static void RegisterResponseCache(Caching.MemoryHttpResponseCache cache) =>
+        LiveResponseCaches.AddOrUpdate(cache, null);
+
+    /// <param name="result"><c>hit</c>, <c>miss</c>, <c>stale</c>, <c>bypass</c> or <c>revalidated</c>.</param>
+    public static void RecordCacheRequest(string result)
+    {
+        if (CacheRequests.Enabled)
+        {
+            CacheRequests.Add(1, new KeyValuePair<string, object?>("result", result));
+        }
+    }
+
     private static readonly Counter<long> PassthroughConnections =
         Meter.CreateCounter<long>("twp.passthrough.connections", "{connection}",
             "Finished TCP passthrough connections by route (a configured server name pattern, default, or forward) and result.");

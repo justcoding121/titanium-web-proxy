@@ -174,6 +174,7 @@ public partial class ProxyServer
         // it may changed in the user event
         response = args.HttpClient.Response;
         await TryFillHttpResponseCacheAsync(args, cancellationToken);
+        response = args.HttpClient.Response; // the cache may have replaced it with a cached answer
         ApplyResponseHeaderContributor(response);
 
         var clientStream = args.ClientStream;
@@ -280,6 +281,7 @@ public partial class ProxyServer
                     {
                         await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
                             false, args, idleDeadline.Token);
+                        args.ResponseCache?.FinishStore();
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -530,11 +532,90 @@ public partial class ProxyServer
         Compression.ResponseCompressionPolicy.Apply(response, algorithm, compressed);
     }
 
+    private Caching.HttpResponseCacheMiddleware? FindResponseCache()
+    {
+        var middleware = ReverseProxy?.Middleware;
+        if (middleware == null)
+            return null;
+
+        for (var i = 0; i < middleware.Count; i++)
+        {
+            if (middleware[i] is Caching.HttpResponseCacheMiddleware cache)
+                return cache;
+        }
+
+        return null;
+    }
+
     /// <summary>
-    /// Buffer a small known-length 200 and store it when a cache filler is set.
-    /// No-op when cache is off, so the hot path does not read the body.
+    /// Response-side half of the response cache for a session. A no-op (two null checks) when the cache is off or
+    /// declined the request. Otherwise it lets the cache answer a 304 revalidation or a stale-if-error, and arms the
+    /// body tee so a storable body is collected while it is relayed (see <c>FinishStore</c> after the body copy).
     /// </summary>
     private async Task TryFillHttpResponseCacheAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        var slot = args.ResponseCache;
+        if (slot?.State is not { } state)
+        {
+            if (HttpResponseCacheFiller != null && FindResponseCache() == null)
+                await FillLegacyHttpResponseCacheAsync(args, cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
+        var response = args.HttpClient.Response;
+        if (args.ReRequest)
+        {
+            args.ResponseCache = null;
+            slot.Dispose();
+            return;
+        }
+
+        if (response.IsSynthetic || response.StreamBodyWriter != null || HasOnResponseBodyWriteSubscribers)
+        {
+            state.Abandon();
+            return;
+        }
+
+        var decision = state.Owner.OnOriginResponse(state, response.StatusCode,
+            Caching.HttpResponseCacheMiddleware.Snapshot(response.Headers), response.HasBody, response.ContentLength,
+            response.IsChunked);
+        switch (decision.Action)
+        {
+            case Caching.HttpResponseCacheMiddleware.OriginAction.Serve:
+                // The origin's own body (if any) is drained by the same syphon that serves a user-replaced response.
+                Caching.HttpResponseCacheMiddleware.RespondFromCache(args, decision.Serve!,
+                    closeServerConnection: response.HasBody && !response.IsBodyRead);
+                break;
+
+            case Caching.HttpResponseCacheMiddleware.OriginAction.StoreBuffered
+                or Caching.HttpResponseCacheMiddleware.OriginAction.StoreStreamed:
+                if (response.IsBodyRead)
+                {
+                    // BeforeResponse already buffered it. Only bytes that match Content-Encoding on the wire are kept.
+                    if (response.ContentEncoding == null || response.BodyIsWireEncoded)
+                        state.Owner.CompleteStore(state, decision.Plan!, response.Body, -1);
+                    else
+                        state.Abandon();
+                }
+                else if (!response.HasBody)
+                {
+                    state.Owner.CompleteStore(state, decision.Plan!, [], 0);
+                }
+                else
+                {
+                    slot.BeginTee(state, decision.Plan!, decision.ContentLength);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Buffer a small known-length 200 and store it when a cache filler is set without a cache middleware.
+    /// No-op when cache is off, so the hot path does not read the body.
+    /// </summary>
+    private async Task FillLegacyHttpResponseCacheAsync(SessionEventArgs args, CancellationToken cancellationToken)
     {
         var fill = HttpResponseCacheFiller;
         if (fill == null)

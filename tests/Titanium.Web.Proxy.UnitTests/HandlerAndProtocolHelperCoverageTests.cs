@@ -704,7 +704,7 @@ public class HandlerAndProtocolHelperCoverageTests
             var buf = new byte[2048];
             try { accepted.Receive(buf); } catch { /* ignore */ }
         });
-        await (Task)writeMw.Invoke(proxy, [clientStream, req, ctx, CancellationToken.None])!;
+        await (Task)writeMw.Invoke(proxy, [clientStream, req, ctx, CancellationToken.None, null])!;
         await drain;
         Assert.AreEqual(403, ctx.HandledStatusCode);
         Assert.IsTrue(ctx.IsHandled);

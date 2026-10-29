@@ -330,6 +330,10 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         {
             CustomUpStreamProxyUsed = null;
 
+            // Releases requests waiting behind this fetch and returns any staging buffer, on every exit path.
+            ResponseCache?.Dispose();
+            ResponseCache = null;
+
             HttpClient.FinishSession();
 
             DataSent = null;
@@ -375,8 +379,16 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         }
     }
 
+    /// <summary>
+    ///     Response-cache state for this session. Null whenever the response cache is not in play, so a session
+    ///     pays one reference and no work. While a streamed response is being cached, its body pieces are appended here.
+    /// </summary>
+    internal Caching.CacheSessionSlot? ResponseCache { get; set; }
+
     internal void OnDataReceived(byte[] buffer, int offset, int count)
     {
+        ResponseCache?.Tee?.Append(buffer, offset, count);
+
         var handler = DataReceived;
         if (handler == null) return;
 

@@ -17,6 +17,9 @@ public sealed class MiddlewareRequestView
     public long ContentLength { get; init; }
     public string? Authorization { get; init; }
 
+    /// <summary>True when the client request arrived over TLS (the scheme is part of a cache key).</summary>
+    public bool IsHttps { get; init; }
+
     /// <summary>Returns header values for a header name, or null when absent.</summary>
     public Func<string, IReadOnlyList<string>?>? GetHeaderValues { get; init; }
 }
@@ -49,6 +52,13 @@ public sealed class ProxyMiddlewareContext
     /// bytes instead of encoding <see cref="HandledBody"/>.
     /// </summary>
     public byte[]? HandledBodyBytes { get; set; }
+
+    /// <summary>
+    /// Reply writers read this to know the handled response is a cached one: <see cref="HandledBodyBytes"/>
+    /// is wire-encoded and <see cref="HandledHeaders"/> carries the exact framing headers (a HEAD hit keeps the
+    /// representation's Content-Length with an empty body).
+    /// </summary>
+    public bool HandledIsCacheHit { get; set; }
 
     public List<KeyValuePair<string, string>>? HandledHeaders { get; set; }
 }

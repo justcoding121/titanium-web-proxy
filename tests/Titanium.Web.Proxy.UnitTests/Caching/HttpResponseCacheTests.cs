@@ -168,7 +168,7 @@ public class HttpResponseCacheMiddlewareTests
             ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5),
         }, TimeSpan.FromMinutes(5));
 
-        var mw = new HttpResponseCacheMiddleware(cache);
+        var mw = new HttpResponseCacheMiddleware(cache, options: new ResponseCacheOptions { ExposeHeaders = true });
         var nextCalled = false;
         var ctx = new ProxyMiddlewareContext
         {
@@ -245,11 +245,14 @@ public class HttpResponseCacheMiddlewareTests
     public void TryStore_SkipsNon200AndOversized()
     {
         var cache = new MemoryHttpResponseCache();
-        var mw = new HttpResponseCacheMiddleware(cache);
-        mw.TryStore("GET", "example.com", "/no", 404, [], [1]);
-        mw.TryStore("POST", "example.com", "/no", 200, [], [1]);
-        mw.TryStore("GET", "example.com", "/big", 200, [], new byte[HttpResponseCacheMiddleware.MaxCachedBodyBytes + 1]);
+        var mw = new HttpResponseCacheMiddleware(cache, options: new ResponseCacheOptions { MaxEntryBytes = 1024 });
+        HttpHeader[] fresh = [new HttpHeader("Cache-Control", "max-age=60")];
+        mw.TryStore("GET", "example.com", "/no", 500, fresh, [1]);
+        mw.TryStore("POST", "example.com", "/no", 200, fresh, [1]);
+        mw.TryStore("GET", "example.com", "/big", 200, fresh, new byte[1025]);
         Assert.AreEqual(0, cache.Count);
+        mw.TryStore("GET", "example.com", "/ok", 200, fresh, new byte[1024]);
+        Assert.AreEqual(1, cache.Count);
     }
 
     [TestMethod]

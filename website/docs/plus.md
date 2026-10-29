@@ -18,7 +18,7 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`) |
 | Resilience | Active HTTP/TCP health probes, circuit outlier ejection, bounded idempotent connection retries |
 | CORS | Opt-in preflight + `Access-Control-*` response headers |
-| Cache | In-memory HTTP response cache (`cache.enable`) |
+| Cache | In-memory RFC 9111 response cache with Vary, revalidation, size limits and request collapsing (`cache.enable`; see [Configuration](/docs/configuration#response-cache)) |
 | gRPC-JSON transcoding | REST/JSON ↔ gRPC (unary + multi-frame streaming; optional gzip) via FileDescriptorSet + `google.api.http` ([guide](/docs/grpc-json-transcoding)) |
 
 File-based route/cluster reload (`titanium reload` / SIGHUP / `run --watch`) does **not** require Plus — use the control plane when you want programmatic snapshot updates or discovery watches.
@@ -196,7 +196,7 @@ String values under `plus.options` (examples):
 | `resilience.circuit.enabled` | Outlier ejection on consecutive 5xx → Unhealthy |
 | `resilience.circuit.failureThreshold` / `resilience.circuit.cooldownMs` | Circuit knobs |
 | `resilience.retry.idempotentAttempts` | Raise connection retries for safe methods (1–5) |
-| `cache.enable` | In-memory response cache |
+| `cache.enable` | In-memory response cache. Tuning keys (`cache.maxBytes`, `cache.maxEntryBytes`, `cache.exposeHeaders`, and others) are listed under [Response cache](/docs/configuration#response-cache) |
 | `grpc.transcode.enabled` | Enable gRPC-JSON transcoding |
 | `grpc.transcode.descriptorSet` | Path to FileDescriptorSet (`.pb`) |
 | `grpc.transcode.services` | Comma-separated fully-qualified service names |

@@ -284,7 +284,7 @@ public class CliPlusControlPlaneE2ETests
             origin.Port,
             control,
             secret,
-            new Dictionary<string, string> { ["cache.enable"] = "true" },
+            new Dictionary<string, string> { ["cache.enable"] = "true", ["cache.exposeHeaders"] = "true" },
             useRoutes: true);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
