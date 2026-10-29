@@ -298,6 +298,19 @@ internal static class ProxyLog
             cliKey, value, instead);
     }
 
+    /// <summary>
+    ///     Warns once per <c>Start()</c> that terminate-lite is off for the listener, and which features turned it off.
+    /// </summary>
+    internal static void TerminateLiteDisabled(ILogger logger, string features)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning(
+            "H1 terminate-lite is disabled for this proxy: {Features}. Requests take the full session path, which is " +
+            "slower than terminate-lite. Put routes that need these features on a separate listener to keep the other " +
+            "routes on terminate-lite. The twp.lite.eligible gauge reports 0 while this holds.",
+            features);
+    }
+
     private static string FormatHostSuffix(string? host) =>
         string.IsNullOrEmpty(host) ? string.Empty : " host " + host;
 

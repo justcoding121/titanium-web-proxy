@@ -53,12 +53,13 @@ Generated from the instruments the core meter declares. A unit test fails when t
 | `twp.certificates.cached` | ObservableGauge | `{certificate}` | `twp_certificates_cached` (gauge) | Leaf certificates currently held in the in-memory certificate cache, summed across every live CertificateManager in this process. Operators can use this to confirm ResourceLimits.MaxCertificateCacheEntries is holding the cache bounded rather than inferring it indirectly from process working set. |
 | `twp.connections.active` | UpDownCounter | `{connection}` | `twp_connections_active` (gauge) | Client connections currently admitted and being handled. |
 | `twp.connections.rejected` | Counter | `{connection}` | `twp_connections_rejected_total` (counter) | Client connections rejected before a handler task started, by reason. |
-| `twp.extauth.requests` | Counter | `{request}` | not exposed | External authorization decisions by result: allow, deny, error_open, error_closed, cache_hit. |
+| `twp.extauth.requests` | Counter | `{request}` | not exposed | External authorization decisions by result: allow, deny, error_open, error_closed, cache_hit, coalesced, and saturated_* or cooldown_* (open or closed) when the service was not called. |
 | `twp.http2.capability_lookups` | Counter | `{lookup}` | not exposed | HTTP/2 origin capability cache lookups, tagged by hit or miss. |
 | `twp.http2.capability_mismatches` | Counter | `{mismatch}` | not exposed | Stale HTTP/2 capability cache positives detected after client ALPN was already committed. |
 | `twp.http2.frame_writer.high_water_crossings` | Counter | `{crossing}` | not exposed | Times an HTTP/2 frame-writer pending depth crossed a watermark threshold. |
 | `twp.http2.frame_writer.pending_frames` | Histogram | `{frame}` | not exposed | Frames queued on an HTTP/2 frame writer when a sample is recorded (enqueue high-water crossings). |
 | `twp.http2.probe_duration_ms` | Histogram | `ms` | not exposed | Live HTTP/2 origin capability probe duration in milliseconds. |
+| `twp.lite.eligible` | ObservableGauge | `{state}` | not exposed | 1 when H1 terminate-lite can serve requests on a running proxy that has a fixed ForwardHost listener, 0 when a configured feature (route plugins, extAuth/oidc, grpcWeb, connectionLimit, compression, session-only middleware) forces the slower full session path. One measurement per such server; reports nothing otherwise. |
 | `twp.logger.drops` | Counter | `{entry}` | not exposed | Log entries dropped because a channel was saturated, tagged by channel. |
 | `twp.parser.errors` | Counter | `{error}` | not exposed | Rejected malformed input, tagged by parser (framing, chunk, header, websocket, http2, http3, qpack). |
 | `twp.passthrough.bytes` | Counter | `By` | not exposed | Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client). |

@@ -112,6 +112,8 @@ public partial class ProxyServer : IDisposable
                 "The enforced whole-body budget is maxBufferedBodyBytes.");
         }
 
+        ReportLiteEligibilityAtStartup();
+
         _ = CertificateManager.ClearIdleCertificates();
 
         var startedTcpEndPoints = new List<ProxyEndPoint>();

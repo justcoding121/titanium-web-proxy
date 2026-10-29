@@ -83,6 +83,14 @@ The full sample, with a README, is in `examples/Titanium.Web.Proxy.Examples.Rout
 | Keep-alive | A keep-alive client connection does not carry plugin state. Each request gets its own context. |
 | Terminate-lite | A config in which a route names a plugin takes the full session path, like `extAuth`. A config in which no route names a plugin keeps terminate-lite, even when plugins are loaded. |
 
+## Keep scripted routes off the fast listener
+
+Terminate-lite, the fastest HTTP/1.1 path, serves a listener only while none of its routes needs the full session. It is a cliff, not a slope: one route that names a plugin, lists an `extAuth` or `oidc` policy, sets `grpcWeb`, or lists a `connectionLimit` policy moves **every** request on that listener to the slower session path. So do response compression, request decompression, and a session-only middleware such as the WAF.
+
+- Put scripted, `extAuth`, `oidc`, and `grpcWeb` routes on a **separate listener** from the routes that should stay fast. Each listener decides on its own.
+- At startup the proxy logs one warning that names every feature that turned terminate-lite off (never hosts, URLs, or secrets). It only warns for a listener with a fixed `ForwardHost`, the only kind that can use terminate-lite.
+- The `twp.lite.eligible` gauge is `1` while such a proxy can use terminate-lite and `0` while a feature blocks it. It is read live, so a reload that adds or removes the feature shows on the next collection. Alert on `0` where you expect the fast path.
+
 ## A plugin that never yields
 
 The timeout is cooperative. A .NET plugin runs on the request's own thread, and the host starts timing it only when `InvokeAsync` hands back a task. A plugin that spins in a loop, waits on a lock, or makes a blocking call before its first real `await` never hands that task back. It holds the request thread until it finishes, `timeoutMs` never fires, and `failMode` (including `open`) does not apply.
@@ -99,6 +107,7 @@ The host does not move plugin calls to the thread pool to work around this. The 
 |------------|------|---------|
 | `twp.plugin.duration` | `plugin` | Seconds one call took, counted for every call. |
 | `twp.plugin.errors` | `plugin`, `kind` | Failed calls. `kind` is `exception`, `timeout`, or `unloaded`. |
+| `twp.lite.eligible` | none | `1` when terminate-lite can serve the proxy, `0` when a configured feature (such as a plugin route) forces the full session path. |
 
 The CLI exposes the same meter as the other `twp.*` instruments; see the Metrics page in the wiki.
 

@@ -316,6 +316,33 @@ internal static class ProxyMetrics
         }
     }
 
+    /// <summary>
+    ///     Running proxy servers, held weakly like <see cref="LiveCertificateManagers" />. <c>twp.lite.eligible</c> reads each one live,
+    ///     so a reload that adds or removes a lite blocker shows on the next collection.
+    /// </summary>
+    private static readonly ConditionalWeakTable<ProxyServer, object?> LiveProxyServers = new();
+
+    private static readonly ObservableGauge<int> LiteEligible = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
+        Meter.CreateObservableGauge("twp.lite.eligible", ObserveLiteEligible, "{state}",
+            "1 when H1 terminate-lite can serve requests on a running proxy that has a fixed ForwardHost listener, 0 when a " +
+            "configured feature (route plugins, extAuth/oidc, grpcWeb, connectionLimit, compression, session-only middleware) " +
+            "forces the slower full session path. One measurement per such server; reports nothing otherwise.");
+
+    private static IEnumerable<Measurement<int>> ObserveLiteEligible()
+    {
+        foreach (var pair in LiveProxyServers)
+        {
+            if (pair.Key.LiteEligibleValue() is { } value)
+            {
+                yield return new Measurement<int>(value);
+            }
+        }
+    }
+
+    /// <summary>Called once per <c>ProxyServer.Start()</c>.</summary>
+    internal static void RegisterProxyServer(ProxyServer server) =>
+        LiveProxyServers.AddOrUpdate(server, null);
+
     private static readonly Counter<long> CacheRequests =
         Meter.CreateCounter<long>("twp.cache.requests", RequestUnit,
             "Response cache outcomes by result: hit, miss, stale, bypass, revalidated.");

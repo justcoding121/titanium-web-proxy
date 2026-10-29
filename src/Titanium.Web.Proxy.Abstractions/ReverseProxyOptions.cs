@@ -69,6 +69,7 @@ public sealed class ReverseProxyOptions
     }
 
     private int asyncPolicyState;
+    private int servicePolicyState;
     private int handledPolicyState;
     private int grpcWebState;
     private int sessionOnlyMiddlewareState;
@@ -128,6 +129,25 @@ public sealed class ReverseProxyOptions
             {
                 state = AnyReferencedPolicy(handledOnly: false) || HasRoutePlugins ? 2 : 1;
                 Volatile.Write(ref asyncPolicyState, state);
+            }
+
+            return state == 2;
+        }
+    }
+
+    /// <summary>
+    /// True when a route lists an <c>extAuth</c> or a plugin-handled (<c>oidc</c>) policy, not counting per-route plugins.
+    /// Lets the startup warning say which feature moved the listener off terminate-lite. Computed once per options instance.
+    /// </summary>
+    internal bool HasServicePolicies
+    {
+        get
+        {
+            var state = Volatile.Read(ref servicePolicyState);
+            if (state == 0)
+            {
+                state = AnyReferencedPolicy(handledOnly: false) ? 2 : 1;
+                Volatile.Write(ref servicePolicyState, state);
             }
 
             return state == 2;
