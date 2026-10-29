@@ -99,7 +99,7 @@ The timeout is cooperative. A .NET plugin runs on the request's own thread, and 
 - Keep CPU-bound work short, or move it behind `await Task.Run(..., ct)` inside the plugin.
 - Treat a plugin that cannot do this as an operator risk: plugins are trusted, in-process code, and a stuck one stalls the requests it holds until it returns.
 
-The host does not move plugin calls to the thread pool to work around this. The call would time out, but the spinning thread would keep running, so the cost would only move. Engines that enforce limits themselves, such as a future Lua or WASM host, will not share this limit.
+The host does not move plugin calls to the thread pool to work around this. The call would time out, but the spinning thread would keep running, so the cost would only move. The Lua and WebAssembly engines enforce their limits themselves (see [Scripting engines](#scripting-engines)), so they do not share this limit.
 
 ## Metrics
 
@@ -115,6 +115,36 @@ The CLI exposes the same meter as the other `twp.*` instruments; see the Metrics
 
 Every plugin class may carry `[ProxyPlugin(version)]`. The host supports the versions from `ProxyPluginContract.MinimumSupportedVersion` to `ProxyPluginContract.CurrentVersion` (both 1 today) and refuses a plugin built for a newer one, naming the plugin in the error. A class without the attribute is treated as version 1. A change to `IProxyMiddleware`, `ProxyMiddlewareDelegate`, or the members of `ProxyMiddlewareContext` that plugins use raises the version, and a unit test pins that surface so it cannot change by accident.
 
-## What is not here, and why
+## Scripting engines
 
-Titanium does not embed a scripting language or a WebAssembly runtime for extensions. A script or module engine adds a second runtime, its own sandbox rules, and a new class of version problems. A .NET plugin has the full type system, the same debugger, and a contract that is checked at load time. Together with the `extAuth` policy (an HTTP service decides) and route transforms (declared rewrites), plugins cover the extension points the proxy needs. If a case is not covered by those three, open an issue describing it.
+Titanium is adding two script engines next to .NET plugins: **Lua 5.4** (reference PUC-Rio build) and **WebAssembly through Wasmtime** (C API). A route reaches either one the same way it reaches a .NET plugin, by naming it in `middleware:`, with `kind: lua` or `kind: wasm` on the `plugins:` entry. The `extAuth` policy and route transforms stay as they are. This section records the decision and the budgets the work is held to. The configuration and the script surface are on [Scripting](/docs/scripting), which fills in over the next releases.
+
+### Decision
+
+| Option | Decision | Why |
+|--------|----------|-----|
+| Lua 5.4 (PUC) | Adding | Small, embeddable, and a stable C API. Scripts are plain text, so an operator can edit a rule without a build. |
+| Wasmtime via the C API | Adding | Runs modules compiled from Rust, Go, C, and other languages under a memory limit and a fuel or epoch deadline. |
+| LuaJIT | Rejected | Lua 5.1 only, so scripts could not use the 5.4 integers, `goto`, or `<close>`. It is also awkward to package for macOS arm64, musl, and Windows. |
+| Managed interpreters (a Lua or JavaScript engine written in .NET) | Rejected | Too slow for a per-request filter, and they allocate on the hot path. |
+
+### Cost budgets
+
+A script or module that does nothing must not slow the proxy down. These are the targets each engine is measured against, and a change that misses one does not ship:
+
+| Case | Budget |
+|------|--------|
+| No-op filter | At most 5 µs per call, with no allocation in steady state beyond pooled buffers. |
+| Header edit | At most 25 µs per call. |
+
+### Safety rules
+
+- **Wasmtime traps.** Wasmtime must run with signal-based traps turned off, or be proven compatible with the .NET runtime's own signal handlers on glibc, musl, and macOS. Until that is shown for a platform, the engine does not load there (work item N4).
+- **Lua errors.** A Lua error unwinds with `longjmp`, and that must never cross a managed frame. The Lua engine therefore uses a snapshot-in, command-out shim: the host copies the request state into the VM, the script runs entirely in native code, and the script's edits come back as a list of commands that the host applies afterwards (work item N3).
+- **Limits.** Each engine enforces its own memory, instruction or fuel, and deadline limits, because it can stop a script that never yields (see [A plugin that never yields](#a-plugin-that-never-yields)).
+
+### Native libraries
+
+The Lua and Wasmtime natives ship per runtime identifier (RID), the way the HTTP/3 (QUIC) natives do. A lock file, `scripting-native.lock.json`, pins the version and hash of each one. A computer without a native for its RID keeps running; only a route that names a script plugin fails to load.
+
+If a case is not covered by a .NET plugin, a script engine, the `extAuth` policy, or route transforms, open an issue describing it.

@@ -69,6 +69,7 @@ export default defineConfig({
             { text: 'Streaming bodies', link: '/docs/streaming-bodies' },
             { text: 'gRPC-JSON transcoding', link: '/docs/grpc-json-transcoding' },
             { text: 'Per-route plugins', link: '/docs/plugins' },
+            { text: 'Scripting', link: '/docs/scripting' },
             { text: 'Kubernetes', link: '/docs/kubernetes' },
             { text: 'Gateway API', link: '/docs/gateway-api' },
             { text: 'Ingress', link: '/docs/ingress' },

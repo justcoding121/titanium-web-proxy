@@ -709,7 +709,7 @@ rows:
     status: 'not supported'
     keys: []
     schema: 'n/a'
-    docs: '/docs/plugins#what-is-not-here-and-why'
+    docs: '/docs/plugins#scripting-engines'
     docsLabel: 'Plugins'
     note: 'No embedded script engine. Use a .NET plugin, the extAuth policy, or route transforms.'
   - area: 'Extensibility'
@@ -717,6 +717,6 @@ rows:
     status: 'not supported'
     keys: []
     schema: 'n/a'
-    docs: '/docs/plugins#what-is-not-here-and-why'
+    docs: '/docs/plugins#scripting-engines'
     docsLabel: 'Plugins'
     note: 'No WebAssembly runtime. Use a .NET plugin, the extAuth policy, or route transforms.'

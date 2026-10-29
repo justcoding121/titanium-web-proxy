@@ -167,7 +167,7 @@
 | Embedding the engine in .NET | supported | `ProxyServer events` | The same engine with event handlers, synthetic responses, and stream hooks. | [Library](https://titaniumproxy.com/docs/library) |
 | Programmatic route and cluster swap | supported | `PUT /v1/snapshot` | Plus control-plane call. File reload needs no Plus. | [Graceful reload](https://titaniumproxy.com/docs/configuration#graceful-reload) |
 | xDS control plane | not supported | — | Configuration comes from the file, titanium reload, the Plus snapshot call, or the Kubernetes controllers. There is no xDS client. | [Graceful reload](https://titaniumproxy.com/docs/configuration#graceful-reload) |
-| Lua scripting | not supported | — | No embedded script engine. Use a .NET plugin, the extAuth policy, or route transforms. | [Plugins](https://titaniumproxy.com/docs/plugins#what-is-not-here-and-why) |
-| WASM modules | not supported | — | No WebAssembly runtime. Use a .NET plugin, the extAuth policy, or route transforms. | [Plugins](https://titaniumproxy.com/docs/plugins#what-is-not-here-and-why) |
+| Lua scripting | not supported | — | No embedded script engine. Use a .NET plugin, the extAuth policy, or route transforms. | [Plugins](https://titaniumproxy.com/docs/plugins#scripting-engines) |
+| WASM modules | not supported | — | No WebAssembly runtime. Use a .NET plugin, the extAuth policy, or route transforms. | [Plugins](https://titaniumproxy.com/docs/plugins#scripting-engines) |
 
 This table is written from `website/docs/.capabilities.yml`. A unit test checks that each config key exists in `twp.schema.json`, that each link target exists, and that this page carries every row.
