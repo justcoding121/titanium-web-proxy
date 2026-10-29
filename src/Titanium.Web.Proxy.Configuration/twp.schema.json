@@ -608,12 +608,75 @@
           "assembly": {
             "type": "string"
           },
+          "bodyMode": {
+            "type": "string"
+          },
+          "calloutHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "failMode": {
             "type": "string",
             "enum": [
               "closed",
               "open"
             ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dotnet",
+              "lua",
+              "wasm"
+            ],
+            "default": "dotnet"
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bufferedBodyBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "calloutConcurrency": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "epochDeadlineMs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "fuel": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxInstructions": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "memoryMb": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "poolSize": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "queueBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sharedDataBytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
           },
           "name": {
             "type": "string",
@@ -632,6 +695,10 @@
           },
           "typeName": {
             "type": "string"
+          },
+          "vmId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
           }
         }
       }

@@ -907,3 +907,51 @@ Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.RoutePlugins.get -> System.C
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.RoutePlugins.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Middleware.get -> System.Collections.Generic.IReadOnlyList<string!>?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Middleware.init -> void
+const Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds.DotNet = "dotnet" -> string!
+const Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds.Lua = "lua" -> string!
+const Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds.Wasm = "wasm" -> string!
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginEngines.IsRegistered(string! kind) -> bool
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginEngines.Register(string! kind, System.Func<Titanium.Web.Proxy.Abstractions.Plugins.IPluginEngine!>! factory) -> void
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginEngines.Register(Titanium.Web.Proxy.Abstractions.Plugins.IPluginEngine! engine) -> void
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginEngines.TryGet(string! kind, out Titanium.Web.Proxy.Abstractions.Plugins.IPluginEngine? engine) -> bool
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginEngines.Unregister(string! kind) -> bool
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds.IsKnown(string? kind) -> bool
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds.IsScript(string? kind) -> bool
+static Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds.Normalize(string? kind) -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.IPluginEngine
+Titanium.Web.Proxy.Abstractions.Plugins.IPluginEngine.Kind.get -> string!
+Titanium.Web.Proxy.Abstractions.Plugins.IPluginEngine.TryCreate(Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig! config, Microsoft.Extensions.Logging.ILogger? logger, out Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware? middleware, out string? error) -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.BodyMode.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.BodyMode.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.CalloutHosts.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.CalloutHosts.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.File.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.File.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Kind.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Limits.get -> Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.Limits.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.VmId.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig.VmId.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginEngines
+Titanium.Web.Proxy.Abstractions.Plugins.PluginKinds
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.BufferedBodyBytes.get -> long?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.BufferedBodyBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.CalloutConcurrency.get -> int?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.CalloutConcurrency.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.EpochDeadlineMs.get -> int?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.EpochDeadlineMs.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.Fuel.get -> long?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.Fuel.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.MaxInstructions.get -> long?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.MaxInstructions.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.MemoryMb.get -> int?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.MemoryMb.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.PluginLimitsConfig() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.PoolSize.get -> int?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.PoolSize.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.QueueBytes.get -> long?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.QueueBytes.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.SharedDataBytes.get -> long?
+Titanium.Web.Proxy.Abstractions.Plugins.PluginLimitsConfig.SharedDataBytes.init -> void

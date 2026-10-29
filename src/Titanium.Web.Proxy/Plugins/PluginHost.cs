@@ -40,7 +40,8 @@ public sealed class PluginHost : IDisposable
     public bool IsDisposed => Volatile.Read(ref _state) == Disposed;
 
     /// <summary>Weak handles to the load contexts, so a test or an operator can confirm the runtime reclaimed them.</summary>
-    public IReadOnlyList<WeakReference> LoadContexts => _loaded.Select(p => new WeakReference(p.Context)).ToArray();
+    public IReadOnlyList<WeakReference> LoadContexts =>
+        _loaded.Where(p => p.Context is not null).Select(p => new WeakReference(p.Context)).ToArray();
 
     /// <summary>
     /// Loads every plugin. Nothing is kept when one fails: the contexts loaded so far are unloaded and the exception names
@@ -142,6 +143,58 @@ public sealed class PluginHost : IDisposable
             throw new InvalidOperationException($"Plugin '{name}' is defined twice.");
         }
 
+        var kind = PluginKinds.Normalize(config.Kind);
+        if (kind == PluginKinds.DotNet)
+        {
+            return LoadDotNet(config, name, host);
+        }
+
+        if (PluginKinds.IsScript(kind))
+        {
+            return LoadWithEngine(config, name, kind, host);
+        }
+
+        throw new InvalidOperationException(
+            $"Plugin '{name}': kind '{config.Kind}' is not '{PluginKinds.DotNet}', '{PluginKinds.Lua}', or '{PluginKinds.Wasm}'.");
+    }
+
+    private static LoadedPlugin LoadWithEngine(PluginConfig config, string name, string kind, PluginHost host)
+    {
+        if (!PluginEngines.TryGet(kind, out var engine) || engine is null)
+        {
+            throw new InvalidOperationException(
+                $"Plugin '{name}': kind '{kind}' needs a {kind} plugin engine, and none is registered. " +
+                "Use a build that includes the scripting engines, or change the plugin to kind 'dotnet'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(config.File))
+        {
+            throw new InvalidOperationException($"Plugin '{name}': kind '{kind}' needs a file.");
+        }
+
+        var failOpen = ParseFailMode(name, config.FailMode);
+        var timeout = ParseTimeout(name, config.TimeoutMs);
+
+        IProxyMiddleware? instance;
+        string? error;
+        try
+        {
+            if (!engine.TryCreate(config, host._logger, out instance, out error) || instance is null)
+            {
+                throw new InvalidOperationException($"Plugin '{name}': the {kind} engine could not load '{config.File}': {error ?? "no reason given"}.");
+            }
+        }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new InvalidOperationException($"Plugin '{name}': the {kind} engine failed to load '{config.File}': {ex.Message}", ex);
+        }
+
+        var wrapper = new RoutePluginMiddleware(name, instance, failOpen, timeout, host, host._logger);
+        return new LoadedPlugin(name, null, instance, wrapper);
+    }
+
+    private static LoadedPlugin LoadDotNet(PluginConfig config, string name, PluginHost host)
+    {
         if (string.IsNullOrWhiteSpace(config.Assembly))
         {
             throw new InvalidOperationException($"Plugin '{name}' has no assembly.");
@@ -242,9 +295,9 @@ public sealed class PluginHost : IDisposable
         }
 
         plugin.Wrapper.Detach();
-        plugin.Context.Unload();
+        plugin.Context?.Unload();
     }
 
     private sealed record LoadedPlugin(
-        string Name, PluginLoadContext Context, IProxyMiddleware Instance, RoutePluginMiddleware Wrapper);
+        string Name, PluginLoadContext? Context, IProxyMiddleware Instance, RoutePluginMiddleware Wrapper);
 }

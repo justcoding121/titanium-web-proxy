@@ -1093,7 +1093,7 @@ public static class TwpConfigValidator
             var label = string.IsNullOrWhiteSpace(plugin.Name) ? "(unnamed)" : plugin.Name;
             ValidatePluginName(plugin, names, errors);
             ValidatePluginLimits(plugin, label, errors);
-            ValidatePluginAssembly(plugin, label, errors);
+            ValidatePluginKind(plugin, label, errors);
         }
 
         return names;
@@ -1135,6 +1135,101 @@ public static class TwpConfigValidator
         if (plugin.Settings is { } settings && settings.Keys.Any(string.IsNullOrWhiteSpace))
         {
             errors.Add($"Plugin '{label}': settings has an empty key.");
+        }
+    }
+
+    /// <summary>
+    ///     Picks the checks by <c>kind</c>: <c>dotnet</c> (default) probes the assembly; <c>lua</c> and <c>wasm</c> need a
+    ///     <c>file</c> that exists and must not set <c>assembly</c> or <c>typeName</c>. The script engine itself is not asked
+    ///     here, so a configuration validates on a build that has no engine; the load step reports the missing engine.
+    /// </summary>
+    private static void ValidatePluginKind(PluginConfig plugin, string label, List<string> errors)
+    {
+        if (!PluginKinds.IsKnown(plugin.Kind))
+        {
+            errors.Add($"Plugin '{label}': kind '{plugin.Kind}' must be 'dotnet', 'lua', or 'wasm'.");
+            return;
+        }
+
+        if (!PluginKinds.IsScript(plugin.Kind))
+        {
+            ValidateDotNetPlugin(plugin, label, errors);
+            return;
+        }
+
+        ValidateScriptPlugin(plugin, label, errors);
+    }
+
+    private static void ValidateDotNetPlugin(PluginConfig plugin, string label, List<string> errors)
+    {
+        var scriptOnly = new List<string>();
+        if (!string.IsNullOrWhiteSpace(plugin.File)) scriptOnly.Add("file");
+        if (!string.IsNullOrWhiteSpace(plugin.VmId)) scriptOnly.Add("vmId");
+        if (!string.IsNullOrWhiteSpace(plugin.BodyMode)) scriptOnly.Add("bodyMode");
+        if (plugin.CalloutHosts is { Count: > 0 }) scriptOnly.Add("calloutHosts");
+        if (plugin.Limits is not null) scriptOnly.Add("limits");
+        if (scriptOnly.Count > 0)
+        {
+            errors.Add($"Plugin '{label}': {string.Join(", ", scriptOnly)} only apply to kind 'lua' or 'wasm', not 'dotnet'.");
+        }
+
+        ValidatePluginAssembly(plugin, label, errors);
+    }
+
+    private static void ValidateScriptPlugin(PluginConfig plugin, string label, List<string> errors)
+    {
+        var kind = PluginKinds.Normalize(plugin.Kind);
+        if (!string.IsNullOrWhiteSpace(plugin.Assembly) || !string.IsNullOrWhiteSpace(plugin.TypeName))
+        {
+            errors.Add($"Plugin '{label}': assembly and typeName only apply to kind 'dotnet', not '{kind}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(plugin.File))
+        {
+            errors.Add($"Plugin '{label}' is missing file (kind '{kind}').");
+        }
+        else if (!File.Exists(Path.GetFullPath(plugin.File)))
+        {
+            errors.Add($"Plugin '{label}': file '{plugin.File}' does not exist.");
+        }
+
+        if (!string.IsNullOrEmpty(plugin.VmId) &&
+            (plugin.VmId.Length > 64 || !plugin.VmId.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-')))
+        {
+            errors.Add($"Plugin '{label}': vmId must be 1 to 64 letters, digits, '.', '_' or '-'.");
+        }
+
+        if (plugin.CalloutHosts is { } hosts && hosts.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add($"Plugin '{label}': calloutHosts has an empty entry.");
+        }
+
+        if (plugin.Limits is { } limits)
+        {
+            ValidatePluginScriptLimits(limits, label, errors);
+        }
+    }
+
+    private static void ValidatePluginScriptLimits(PluginLimitsConfig limits, string label, List<string> errors)
+    {
+        (string Name, long? Value)[] values =
+        [
+            ("memoryMb", limits.MemoryMb),
+            ("maxInstructions", limits.MaxInstructions),
+            ("fuel", limits.Fuel),
+            ("poolSize", limits.PoolSize),
+            ("calloutConcurrency", limits.CalloutConcurrency),
+            ("bufferedBodyBytes", limits.BufferedBodyBytes),
+            ("sharedDataBytes", limits.SharedDataBytes),
+            ("queueBytes", limits.QueueBytes),
+            ("epochDeadlineMs", limits.EpochDeadlineMs),
+        ];
+        foreach (var (name, value) in values)
+        {
+            if (value is < 1)
+            {
+                errors.Add($"Plugin '{label}': limits.{name} must be 1 or more.");
+            }
         }
     }
 

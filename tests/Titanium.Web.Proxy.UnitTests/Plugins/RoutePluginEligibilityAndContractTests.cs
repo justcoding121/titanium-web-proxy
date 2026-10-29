@@ -133,7 +133,12 @@ public class RoutePluginEligibilityAndContractTests
 
         var config = typeof(PluginConfig).GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray();
         CollectionAssert.AreEqual(
-            new[] { "Assembly", "FailMode", "Name", "Settings", "TimeoutMs", "TypeName" }, config);
+            new[]
+            {
+                "Assembly", "BodyMode", "CalloutHosts", "FailMode", "File", "Kind", "Limits", "Name", "Settings", "TimeoutMs",
+                "TypeName", "VmId",
+            },
+            config);
 
         var attribute = typeof(ProxyPluginAttribute);
         Assert.IsNotNull(attribute.GetConstructor([typeof(int)]));

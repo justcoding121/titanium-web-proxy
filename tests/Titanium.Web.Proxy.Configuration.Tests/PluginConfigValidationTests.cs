@@ -200,6 +200,140 @@ public class PluginConfigValidationTests
     }
 
     [TestMethod]
+    public void ADotNetPlugin_ValidatesWithoutAKind_AndWithKindDotNet()
+    {
+        Assert.AreEqual(string.Empty, Errors(new PluginConfig { Name = "gate", Assembly = SamplePlugin }, "gate"));
+        Assert.AreEqual(string.Empty, Errors(new PluginConfig { Name = "gate", Kind = "dotnet", Assembly = SamplePlugin }, "gate"));
+        Assert.AreEqual(string.Empty, Errors(new PluginConfig { Name = "gate", Kind = "", Assembly = SamplePlugin }, "gate"));
+        Assert.AreEqual(string.Empty, Errors(new PluginConfig { Name = "gate", Kind = "DotNet", Assembly = SamplePlugin }, "gate"));
+    }
+
+    [TestMethod]
+    public void AnUnknownKind_IsRejected()
+    {
+        var errors = Errors(new PluginConfig { Name = "gate", Kind = "python", Assembly = SamplePlugin });
+        StringAssert.Contains(errors, "Plugin 'gate'");
+        StringAssert.Contains(errors, "kind 'python'");
+        StringAssert.Contains(errors, "'dotnet', 'lua', or 'wasm'");
+    }
+
+    [TestMethod]
+    public void AScriptPlugin_NeedsAnExistingFile_AndNoAssembly()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "twp-script-" + Guid.NewGuid().ToString("N") + ".lua");
+        File.WriteAllText(file, "-- no-op");
+        try
+        {
+            var good = new PluginConfig
+            {
+                Name = "filter",
+                Kind = "lua",
+                File = file,
+                VmId = "shared-1",
+                BodyMode = "buffered",
+                CalloutHosts = ["auth.internal"],
+                Limits = new PluginLimitsConfig { MemoryMb = 16, MaxInstructions = 1_000_000, PoolSize = 4, EpochDeadlineMs = 50 },
+            };
+            Assert.AreEqual(string.Empty, Errors(good, "filter"), "validation does not need a registered engine");
+            Assert.AreEqual(string.Empty, Errors(new PluginConfig { Name = "filter", Kind = "wasm", File = file }, "filter"));
+
+            StringAssert.Contains(Errors(new PluginConfig { Name = "filter", Kind = "lua" }), "missing file");
+            StringAssert.Contains(
+                Errors(new PluginConfig { Name = "filter", Kind = "lua", File = file + ".nope" }), "does not exist");
+            StringAssert.Contains(
+                Errors(new PluginConfig { Name = "filter", Kind = "lua", File = file, Assembly = SamplePlugin }),
+                "assembly and typeName only apply to kind 'dotnet'");
+            StringAssert.Contains(
+                Errors(new PluginConfig { Name = "filter", Kind = "lua", File = file, VmId = "bad id!" }), "vmId");
+            StringAssert.Contains(
+                Errors(new PluginConfig { Name = "filter", Kind = "lua", File = file, CalloutHosts = [" "] }), "calloutHosts");
+            StringAssert.Contains(
+                Errors(new PluginConfig { Name = "filter", Kind = "lua", File = file, Limits = new PluginLimitsConfig { Fuel = 0 } }),
+                "limits.fuel must be 1 or more");
+            StringAssert.Contains(
+                Errors(new PluginConfig { Name = "filter", Kind = "lua", File = file, FailMode = "maybe" }), "failMode");
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [TestMethod]
+    public void ScriptOnlyFields_OnADotNetPlugin_AreRejected()
+    {
+        var errors = Errors(new PluginConfig
+        {
+            Name = "gate",
+            Assembly = SamplePlugin,
+            File = "x.lua",
+            Limits = new PluginLimitsConfig { PoolSize = 2 },
+        });
+        StringAssert.Contains(errors, "file, limits only apply to kind 'lua' or 'wasm'");
+    }
+
+    [TestMethod]
+    public void YamlAndJson_BindKindFileAndLimits_AndTheSchemaDescribesThem()
+    {
+        var yaml = """
+            plugins:
+              - name: filter
+                kind: lua
+                file: filter.lua
+                vmId: edge
+                bodyMode: buffered
+                calloutHosts: [auth.internal, geo.internal]
+                limits:
+                  memoryMb: 16
+                  maxInstructions: 5000000
+                  fuel: 100000
+                  poolSize: 4
+                  calloutConcurrency: 8
+                  bufferedBodyBytes: 65536
+                  sharedDataBytes: 4096
+                  queueBytes: 8192
+                  epochDeadlineMs: 20
+            clusters:
+              - id: c
+                destinations:
+                  - id: d
+                    address: 127.0.0.1
+                    port: 9
+            routes:
+              - id: r
+                clusterId: c
+                match: { path: /, pathKind: Prefix }
+                middleware: [filter]
+            """;
+        var plugin = TwpConfigLoader.LoadYaml(yaml).Plugins!.Single();
+        Assert.AreEqual("lua", plugin.Kind);
+        Assert.AreEqual("filter.lua", plugin.File);
+        Assert.AreEqual("edge", plugin.VmId);
+        Assert.AreEqual("buffered", plugin.BodyMode);
+        CollectionAssert.AreEqual(new[] { "auth.internal", "geo.internal" }, plugin.CalloutHosts!.ToArray());
+        Assert.AreEqual(16, plugin.Limits!.MemoryMb);
+        Assert.AreEqual(5_000_000L, plugin.Limits.MaxInstructions);
+        Assert.AreEqual(100_000L, plugin.Limits.Fuel);
+        Assert.AreEqual(4, plugin.Limits.PoolSize);
+        Assert.AreEqual(8, plugin.Limits.CalloutConcurrency);
+        Assert.AreEqual(65_536L, plugin.Limits.BufferedBodyBytes);
+        Assert.AreEqual(4096L, plugin.Limits.SharedDataBytes);
+        Assert.AreEqual(8192L, plugin.Limits.QueueBytes);
+        Assert.AreEqual(20, plugin.Limits.EpochDeadlineMs);
+        Assert.AreEqual(0, UnknownConfigKeyScanner.Scan(yaml, yaml: true).Count);
+
+        var again = TwpConfigLoader.LoadJson(TwpConfigLoader.ToJson(TwpConfigLoader.LoadYaml(yaml))).Plugins!.Single();
+        Assert.AreEqual("lua", again.Kind);
+        Assert.AreEqual(20, again.Limits!.EpochDeadlineMs);
+
+        var schema = TwpConfigSchema.Generate();
+        StringAssert.Contains(schema, "\"kind\"");
+        StringAssert.Contains(schema, "\"calloutHosts\"");
+        StringAssert.Contains(schema, "\"epochDeadlineMs\"");
+        StringAssert.Contains(schema, "\"lua\"");
+    }
+
+    [TestMethod]
     public void TheContractVersion_IsWithinTheSupportedRange()
     {
         Assert.IsTrue(ProxyPluginContract.MinimumSupportedVersion <= ProxyPluginContract.CurrentVersion);

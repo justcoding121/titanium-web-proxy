@@ -173,6 +173,24 @@ public static class TwpConfigSchema
             case "PluginConfig.Name":
                 schema["pattern"] = "^[A-Za-z0-9._-]{1,64}$";
                 break;
+            case "PluginConfig.Kind":
+                schema["enum"] = new JsonArray { "dotnet", "lua", "wasm" };
+                schema["default"] = "dotnet";
+                break;
+            case "PluginConfig.VmId":
+                schema["pattern"] = "^[A-Za-z0-9._-]{1,64}$";
+                break;
+            case "PluginLimitsConfig.MemoryMb":
+            case "PluginLimitsConfig.MaxInstructions":
+            case "PluginLimitsConfig.Fuel":
+            case "PluginLimitsConfig.PoolSize":
+            case "PluginLimitsConfig.CalloutConcurrency":
+            case "PluginLimitsConfig.BufferedBodyBytes":
+            case "PluginLimitsConfig.SharedDataBytes":
+            case "PluginLimitsConfig.QueueBytes":
+            case "PluginLimitsConfig.EpochDeadlineMs":
+                schema[MinimumKey] = 1;
+                break;
             case "RoutePolicyConfig.Algorithm":
                 schema["enum"] = new JsonArray { "fixedWindow", "tokenBucket" };
                 break;

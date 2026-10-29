@@ -41,14 +41,39 @@ public sealed class ProxyPluginAttribute : Attribute
     public int ContractVersion { get; }
 }
 
-/// <summary>One entry of <c>plugins</c> in the configuration: an assembly, the plugin class in it, and its settings.</summary>
+/// <summary>
+/// One entry of <c>plugins</c> in the configuration. <see cref="Kind"/> picks the loader: <c>dotnet</c> (the default) uses
+/// <see cref="Assembly"/> and <see cref="TypeName"/>; <c>lua</c> and <c>wasm</c> use <see cref="File"/> and are built by a
+/// registered <see cref="IPluginEngine"/>.
+/// </summary>
 public sealed class PluginConfig
 {
     /// <summary>Unique name that <c>routes[].middleware</c> and the plugin metrics use. Letters, digits, <c>.</c>, <c>_</c> and <c>-</c>.</summary>
     public string? Name { get; init; }
 
-    /// <summary>Path of the plugin assembly. Relative paths resolve against the configuration directory.</summary>
+    /// <summary>
+    /// How the plugin is loaded: <c>dotnet</c>, <c>lua</c>, or <c>wasm</c> (see <see cref="PluginKinds"/>). Null or empty means
+    /// <c>dotnet</c>, so a configuration written before script engines existed keeps working.
+    /// </summary>
+    public string? Kind { get; init; }
+
+    /// <summary>Path of the plugin assembly (<c>kind: dotnet</c>). Relative paths resolve against the configuration directory.</summary>
     public string? Assembly { get; init; }
+
+    /// <summary>Path of the script (<c>kind: lua</c>) or module (<c>kind: wasm</c>). Not used by <c>kind: dotnet</c>.</summary>
+    public string? File { get; init; }
+
+    /// <summary>Optional name of a VM shared by plugins of the same engine. Letters, digits, <c>.</c>, <c>_</c> and <c>-</c>. Script kinds only.</summary>
+    public string? VmId { get; init; }
+
+    /// <summary>How the script sees request and response bodies. The engine defines the accepted values. Script kinds only.</summary>
+    public string? BodyMode { get; init; }
+
+    /// <summary>Hosts the script may call out to over HTTP. Script kinds only.</summary>
+    public IReadOnlyList<string>? CalloutHosts { get; init; }
+
+    /// <summary>Resource limits the engine enforces on the script. Script kinds only.</summary>
+    public PluginLimitsConfig? Limits { get; init; }
 
     /// <summary>
     /// Full name of the plugin class. Optional when the assembly has exactly one public class that implements
@@ -64,4 +89,38 @@ public sealed class PluginConfig
 
     /// <summary>Longest one call may run, in milliseconds (1 to 60000). Default 1000.</summary>
     public int? TimeoutMs { get; init; }
+}
+
+/// <summary>
+/// Resource limits for a script plugin (<c>plugins[].limits</c>). A property left null takes the engine's default. Each engine
+/// reads the ones that apply to it and ignores the rest.
+/// </summary>
+public sealed class PluginLimitsConfig
+{
+    /// <summary>Memory ceiling of one VM, in MiB.</summary>
+    public int? MemoryMb { get; init; }
+
+    /// <summary>Most VM instructions one call may run (Lua).</summary>
+    public long? MaxInstructions { get; init; }
+
+    /// <summary>Most fuel one call may burn (WebAssembly).</summary>
+    public long? Fuel { get; init; }
+
+    /// <summary>How many VM instances serve calls at once.</summary>
+    public int? PoolSize { get; init; }
+
+    /// <summary>How many HTTP callouts one plugin may have in flight.</summary>
+    public int? CalloutConcurrency { get; init; }
+
+    /// <summary>Largest body, in bytes, the engine buffers for a script.</summary>
+    public long? BufferedBodyBytes { get; init; }
+
+    /// <summary>Size, in bytes, of the data area shared between the host and a VM.</summary>
+    public long? SharedDataBytes { get; init; }
+
+    /// <summary>Size, in bytes, of the queue of commands a script may return from one call.</summary>
+    public long? QueueBytes { get; init; }
+
+    /// <summary>Epoch deadline of one call, in milliseconds (WebAssembly).</summary>
+    public int? EpochDeadlineMs { get; init; }
 }
