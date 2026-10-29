@@ -190,35 +190,30 @@ public class TcpPassthroughRelayTests
     }
 
     [TestMethod]
-    public async Task PlainForwardRelay_ClosesBothSocketsOnTheFirstEof_WithoutTimerBackedState()
+    public async Task PlainForwardRelay_HalfClosesWithoutTimerBackedState_AndDeliversTheOriginReply()
     {
         using var rig = await Rig.StartAsync();
         var enhancedBefore = TcpPassthrough.EnhancedRelayCount;
 
-        // The simple overload is the legacy forward-host path.
+        // The simple overload is the zero-cost forward-host path (no idle/grace CTS).
         var relay = TcpPassthrough.RelayAsync(rig.Inbound, "127.0.0.1", rig.OriginPort, rig.Cts.Token);
         rig.OriginSide = await rig.Origin.AcceptSocketAsync(rig.Cts.Token);
 
         await rig.Client.SendAsync(Encoding.ASCII.GetBytes("request"), rig.Cts.Token);
-        var seen = new byte[7];
-        var got = 0;
-        while (got < seen.Length)
-        {
-            got += await rig.OriginSide.ReceiveAsync(seen.AsMemory(got), rig.Cts.Token);
-        }
-
-        Assert.AreEqual("request", Encoding.ASCII.GetString(seen));
         rig.Client.Shutdown(SocketShutdown.Send);
 
-        // The origin never closes its half and never answers, so only close-on-first-EOF can end the relay.
-        await relay.WaitAsync(TimeSpan.FromSeconds(10));
+        // Plain zero-grace still forwards EOF as a send shutdown so the origin can answer.
+        Assert.AreEqual("request", await ReadToEndAsync(rig.OriginSide, rig.Cts.Token));
+        await rig.OriginSide.SendAsync(Encoding.ASCII.GetBytes("response"), rig.Cts.Token);
+        rig.OriginSide.Shutdown(SocketShutdown.Send);
 
-        await AssertClosedAsync(rig.OriginSide, rig.Cts.Token, "the upstream socket is closed");
-        await AssertClosedAsync(rig.Client, rig.Cts.Token, "the client side is closed too");
+        Assert.AreEqual("response", await ReadToEndAsync(rig.Client, rig.Cts.Token));
+        await relay.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.AreEqual(enhancedBefore, TcpPassthrough.EnhancedRelayCount, "the plain path must not create idle/grace/linked sources");
     }
+
     [TestMethod]
-    public async Task PlainRelayOverASocketPair_ClosesOnFirstEof_AndCountsPerDirection()
+    public async Task PlainRelayOverASocketPair_HalfClosesAndCountsPerDirection()
     {
         using var rig = await Rig.StartAsync();
         var enhancedBefore = TcpPassthrough.EnhancedRelayCount;
@@ -242,6 +237,8 @@ public class TcpPassthroughRelayTests
         }
 
         rig.Client.Shutdown(SocketShutdown.Send);
+        Assert.AreEqual(0, await rig.OriginSide.ReceiveAsync(new byte[1], rig.Cts.Token));
+        rig.OriginSide.Shutdown(SocketShutdown.Send);
         var result = await relay.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.AreEqual(PassthroughOutcome.Completed, result.Outcome);

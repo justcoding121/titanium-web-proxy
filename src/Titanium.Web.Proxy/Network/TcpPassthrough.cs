@@ -57,8 +57,9 @@ internal sealed class TcpPassthroughOptions
     public TimeSpan IdleTimeout { get; set; }
 
     /// <summary>
-    ///     After one side sends EOF, how long the other direction may keep flowing. Zero closes both sockets on the
-    ///     first EOF. With no idle timeout and no preamble that is the cheap legacy relay.
+    ///     After one side sends EOF, how long the other direction may keep flowing. Zero means no grace timer: the
+    ///     other direction still half-closes (send shutdown) and may finish answering, but nothing bounds a peer
+    ///     that never closes. With no idle timeout and no preamble that is the cheap plain relay (no CTS).
     /// </summary>
     public TimeSpan HalfCloseGrace { get; set; } = TimeSpan.FromSeconds(30);
 
@@ -70,7 +71,7 @@ internal sealed class TcpPassthroughOptions
 
     /// <summary>
     ///     True when the relay needs idle or grace timers, or a PROXY preamble. Otherwise the plain relay runs: no
-    ///     cancellation sources, and both sockets close on the first EOF.
+    ///     cancellation sources; an EOF is a send shutdown and the other direction may still drain.
     /// </summary>
     internal bool NeedsEnhancedRelay =>
         IdleTimeout > TimeSpan.Zero || HalfCloseGrace > TimeSpan.Zero || !Preamble.IsEmpty;
@@ -100,8 +101,8 @@ internal static class TcpPassthrough
     internal static long FilteredRelayCount => Interlocked.Read(ref filteredRelayCount);
 
     /// <summary>
-    ///     Connects to <paramref name="host" />:<paramref name="port" /> and relays until the first side ends, then
-    ///     closes both sockets.
+    ///     Connects to <paramref name="host" />:<paramref name="port" /> and relays with the zero-cost plain path
+    ///     (no idle or grace timers). An EOF half-closes that direction; the other may still finish.
     /// </summary>
     public static Task RelayAsync(Socket client, string host, int port, CancellationToken cancellationToken) =>
         RelayAsync(
@@ -170,9 +171,9 @@ internal static class TcpPassthrough
     }
 
     /// <summary>
-    ///     Copies both directions. With no idle timeout, no preamble and no half-close grace, the first EOF closes
-    ///     both sockets and nothing else is allocated. Otherwise an EOF is passed on as a send shutdown and the other
-    ///     direction keeps flowing for <see cref="TcpPassthroughOptions.HalfCloseGrace" />.
+    ///     Copies both directions. With no idle timeout, no preamble and no half-close grace, an EOF is a send
+    ///     shutdown and the other direction may still drain — no timers are allocated. A positive
+    ///     <see cref="TcpPassthroughOptions.HalfCloseGrace" /> bounds how long that drain may last.
     /// </summary>
     public static Task<PassthroughRelayResult> RelayAsync(
         Socket client, Socket upstream, TcpPassthroughOptions options, CancellationToken cancellationToken) =>
@@ -180,7 +181,10 @@ internal static class TcpPassthrough
             ? RelayPlainAsync(client, upstream, cancellationToken)
             : RelayEnhancedAsync(client, upstream, options, cancellationToken);
 
-    /// <summary>Closes both sockets on the first EOF or failure. No timers, no linked tokens, no shared counters.</summary>
+    /// <summary>
+    ///     Half-closes on EOF and waits for the other direction. No timers, no linked tokens, no shared counters.
+    ///     A failed pump closes both sockets so a stuck peer cannot hang the relay.
+    /// </summary>
     private static async Task<PassthroughRelayResult> RelayPlainAsync(
         Socket client, Socket upstream, CancellationToken cancellationToken)
     {
@@ -188,23 +192,22 @@ internal static class TcpPassthrough
         var back = PlainPumpAsync(upstream, client, cancellationToken);
         var first = await Task.WhenAny(forward, back).ConfigureAwait(false);
         var firstResult = await first.ConfigureAwait(false);
-        try
+        if (firstResult.Error is not null)
         {
-            client.Close();
-            upstream.Close();
-        }
-        catch (ObjectDisposedException)
-        {
-            // The peer already closed its side when the first direction finished.
+            // A reset or abort: tear down so the other copy is not left waiting on a dead peer.
+            TryCloseBoth(client, upstream);
         }
 
-        // Closing the sockets unblocks the other copy. Its failure is the close, not a new failure.
         var forwardResult = await forward.ConfigureAwait(false);
         var backResult = await back.ConfigureAwait(false);
+        TryCloseBoth(client, upstream);
 
-        var outcome = cancellationToken.IsCancellationRequested || firstResult.Error is OperationCanceledException
+        var outcome = cancellationToken.IsCancellationRequested
+            || firstResult.Error is OperationCanceledException
+            || forwardResult.Error is OperationCanceledException
+            || backResult.Error is OperationCanceledException
             ? PassthroughOutcome.Cancelled
-            : firstResult.Error is not null
+            : firstResult.Error is not null || forwardResult.Error is not null || backResult.Error is not null
                 ? PassthroughOutcome.Error
                 : PassthroughOutcome.Completed;
         return new PassthroughRelayResult(forwardResult.Bytes, backResult.Bytes, outcome);
@@ -224,6 +227,7 @@ internal static class TcpPassthrough
                     .ConfigureAwait(false);
                 if (read == 0)
                 {
+                    TryShutdownSend(to);
                     return new PlainPumpResult(total, null);
                 }
 
@@ -239,6 +243,19 @@ internal static class TcpPassthrough
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static void TryCloseBoth(Socket client, Socket upstream)
+    {
+        try
+        {
+            client.Close();
+            upstream.Close();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already torn down by a peer or by the other pump's failure path.
         }
     }
 
@@ -276,14 +293,11 @@ internal static class TcpPassthrough
         var first = await Task.WhenAny(forward, back).ConfigureAwait(false);
         if (first.IsCompletedSuccessfully)
         {
-            // Half-close: the other direction may still be draining a response.
+            // Half-close: the other direction may still be draining a response. Zero grace means no
+            // deadline — wait for the peer (idle timeout still applies when set).
             if (graceCts is not null)
             {
                 graceCts.CancelAfter(options.HalfCloseGrace);
-            }
-            else
-            {
-                state.Stop(PassthroughOutcome.GraceExpired);
             }
         }
         else

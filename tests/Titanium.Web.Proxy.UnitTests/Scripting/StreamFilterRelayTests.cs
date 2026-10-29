@@ -107,6 +107,9 @@ public class StreamFilterRelayTests
         await rig.Client.SendAsync(Encoding.ASCII.GetBytes("ping"), rig.Cts.Token);
         Assert.AreEqual("ping", await ReceiveAsync(rig.OriginSide, 4, rig.Cts.Token));
         rig.Client.Shutdown(SocketShutdown.Send);
+        // Zero-grace plain half-closes; drain the forwarded EOF then finish the origin half.
+        Assert.AreEqual(0, await rig.OriginSide.ReceiveAsync(new byte[1], rig.Cts.Token));
+        rig.OriginSide.Shutdown(SocketShutdown.Send);
         await relay;
 
         Assert.AreEqual(enhancedBefore, TcpPassthrough.EnhancedRelayCount);
@@ -134,6 +137,8 @@ public class StreamFilterRelayTests
         await rig.OriginSide.SendAsync(Encoding.ASCII.GetBytes("wxyz"), rig.Cts.Token);
         Assert.AreEqual("UP", await ReceiveAsync(rig.Client, 2, rig.Cts.Token));
         rig.Client.Shutdown(SocketShutdown.Send);
+        Assert.AreEqual(0, await rig.OriginSide.ReceiveAsync(new byte[1], rig.Cts.Token));
+        rig.OriginSide.Shutdown(SocketShutdown.Send);
         await relay;
 
         Assert.AreEqual(filteredBefore + 1, TcpPassthrough.FilteredRelayCount);
