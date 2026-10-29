@@ -45,6 +45,12 @@ public sealed class ReverseProxyOptions
     public IReadOnlyDictionary<string, IProxyMiddleware>? RoutePlugins { get; init; }
 
     /// <summary>
+    /// Optional fleet-wide rate-limit store (Plus Redis). Null (default) keeps <c>scope: node</c> unchanged and makes
+    /// <c>scope: fleet</c> apply <c>fleetFailMode</c> without touching Redis. Core never references StackExchange.Redis.
+    /// </summary>
+    public Routing.IFleetRateStore? FleetRateStore { get; init; }
+
+    /// <summary>
     /// Listener-wide script hook set (Lua or WASM host). Null (default) costs one null check per seam. When set, requests
     /// leave H1 terminate-lite and take the full session path, because the host may edit headers and bodies.
     /// </summary>

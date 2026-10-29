@@ -4,6 +4,7 @@ using System.Text;
 using System.Web;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus.Security.Oidc;
+using Titanium.TestKit;
 
 namespace Titanium.Plus.Tests;
 

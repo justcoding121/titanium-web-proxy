@@ -16,6 +16,7 @@ param(
     [double] $PlusCidrGate = 0.50,
     [double] $PlusJwtGate = 0.50,
     [double] $PlusRateLimitGate = 0.50,
+    [double] $PlusFleetRateLimitGate = 0.50,
     [double] $PlusResilienceGate = 0.50,
     [double] $PlusDiscoveryGate = 0.50,
     [double] $PlusMetricsScrapeGate = 0.50,
@@ -147,6 +148,7 @@ $pairs = @(
     @{ Label = 'CLI+Plus-cidr ÷ CLI'; Num = 'twp-cli-plus-cidr-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusCidrGate },
     @{ Label = 'CLI+Plus-jwt ÷ CLI'; Num = 'twp-cli-plus-jwt-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusJwtGate },
     @{ Label = 'CLI+Plus-ratelimit ÷ CLI'; Num = 'twp-cli-plus-ratelimit-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusRateLimitGate },
+    @{ Label = 'CLI+Plus-fleet-ratelimit ÷ CLI'; Num = 'twp-cli-plus-fleet-ratelimit-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusFleetRateLimitGate },
     @{ Label = 'CLI+Plus-resilience ÷ CLI'; Num = 'twp-cli-plus-resilience-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusResilienceGate },
     @{ Label = 'CLI+Plus-discovery-file ÷ CLI'; Num = 'twp-cli-plus-discovery-file-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusDiscoveryGate },
     # Metrics-scrape vs CLI (not Plus-base): sequential-arm heat makes Plus-base÷scrape ratios noisy.

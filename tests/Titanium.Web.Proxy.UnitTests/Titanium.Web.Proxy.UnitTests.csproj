@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+    <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
   </ItemGroup>
 
   <!-- Plugin assemblies the tests load into their own contexts. They are unsigned, so they are built and copied beside the

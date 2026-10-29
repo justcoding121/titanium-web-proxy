@@ -51,6 +51,12 @@ public sealed class PlusActivationContext
     /// (for example <c>waf</c>) from here. Null when the host has none.
     /// </summary>
     public IReadOnlyList<RoutePolicyConfig>? Policies { get; init; }
+
+    /// <summary>
+    /// Set by Plus when a fleet rate-limit store starts; the host copies it onto
+    /// <c>ReverseProxyOptions.FleetRateStore</c> during refresh. Null when unused.
+    /// </summary>
+    public IFleetRateStore? FleetRateStore { get; set; }
 }
 
 /// <summary>

@@ -77,6 +77,7 @@ internal sealed class TitaniumCliHost : IDisposable
         PlusCidr,
         PlusJwt,
         PlusRateLimit,
+        PlusFleetRateLimit,
         PlusResilience,
         PlusDiscoveryFile,
         PlusMetricsScrape,
@@ -128,7 +129,8 @@ internal sealed class TitaniumCliHost : IDisposable
 
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
         CliArmKind.PlusBase or CliArmKind.PlusCache or CliArmKind.PlusWaf or CliArmKind.PlusCidr
-        or CliArmKind.PlusJwt or CliArmKind.PlusRateLimit or CliArmKind.PlusResilience
+        or CliArmKind.PlusJwt or CliArmKind.PlusRateLimit or CliArmKind.PlusFleetRateLimit
+        or CliArmKind.PlusResilience
         or CliArmKind.PlusDiscoveryFile or CliArmKind.PlusMetricsScrape or CliArmKind.PlusCacheHit
         or CliArmKind.PlusCors or CliArmKind.PlusCircuit or CliArmKind.PlusRetry;
 
@@ -137,7 +139,7 @@ internal sealed class TitaniumCliHost : IDisposable
     public static bool NeedsJsonConfig(CliArmKind kind) => kind is
         CliArmKind.SingleRoute or CliArmKind.InterceptTransform or CliArmKind.PlusResilience
         or CliArmKind.PlusDiscoveryFile or CliArmKind.LbLeastTime
-        or CliArmKind.Policies or CliArmKind.Mirror or CliArmKind.ClusterClient
+        or CliArmKind.Policies or CliArmKind.PlusFleetRateLimit or CliArmKind.Mirror or CliArmKind.ClusterClient
         or CliArmKind.StatusRetry or CliArmKind.ConnCap or CliArmKind.ExtAuth
         or CliArmKind.ScriptLuaNoop or CliArmKind.ScriptLuaHeader or CliArmKind.ScriptWasmNoop
         or CliArmKind.SlowUpstream or CliArmKind.ScriptLuaSlowUpstream or CliArmKind.ScriptOneInFifty;
@@ -547,7 +549,7 @@ internal sealed class TitaniumCliHost : IDisposable
         {
             CliArmKind.InterceptTransform =>
                 "\"transforms\": [ { \"kind\": \"RequestHeaderSet\", \"parameters\": { \"name\": \"x-twp-rps-probe\", \"value\": \"1\" } } ],",
-            CliArmKind.Policies => "\"policies\": [ \"limit\" ],",
+            CliArmKind.Policies or CliArmKind.PlusFleetRateLimit => "\"policies\": [ \"limit\" ],",
             CliArmKind.ExtAuth => "\"policies\": [ \"auth\" ],",
             CliArmKind.Mirror => "\"mirror\": { \"clusterId\": \"mirror\", \"samplePercent\": 100 },",
             CliArmKind.StatusRetry => "\"retry\": { \"attempts\": 1 },",
@@ -579,25 +581,35 @@ internal sealed class TitaniumCliHost : IDisposable
         {
             CliArmKind.Policies =>
                 ", \"policies\": [ { \"name\": \"limit\", \"kind\": \"rateLimit\", \"limit\": 10000000, \"windowSeconds\": 60 } ]",
+            // Fleet path with no Redis: fleetFailMode local measures lease-path overhead without a store.
+            CliArmKind.PlusFleetRateLimit =>
+                ", \"policies\": [ { \"name\": \"limit\", \"kind\": \"rateLimit\", \"limit\": 10000000, \"windowSeconds\": 60, \"scope\": \"fleet\", \"fleetFailMode\": \"local\", \"algorithm\": \"tokenBucket\", \"burst\": 10000000 } ]",
             CliArmKind.ExtAuth =>
                 ", \"policies\": [ { \"name\": \"auth\", \"kind\": \"extAuth\", \"url\": \"http://127.0.0.1:" + originPort + "/auth\" } ]",
             _ => "",
         };
 
         var plusBlock = "";
-        if (kind is CliArmKind.PlusResilience or CliArmKind.PlusDiscoveryFile)
+        if (kind is CliArmKind.PlusResilience or CliArmKind.PlusDiscoveryFile or CliArmKind.PlusFleetRateLimit)
         {
-            var options = kind == CliArmKind.PlusResilience
-                ? """
+            var options = kind switch
+            {
+                CliArmKind.PlusResilience => """
                       "resilience.activeHealth": "true",
                       "resilience.intervalMs": "500",
                       "resilience.path": "/",
                       "resilience.unhealthyThreshold": "10"
-                    """
-                : $$"""
+                    """,
+                CliArmKind.PlusDiscoveryFile => $$"""
                       "discovery.mode": "file",
                       "discovery.file": "{{(discoveryFile ?? "").Replace("\\", "/", StringComparison.Ordinal)}}"
-                    """;
+                    """,
+                // No state.redis: fleet store stays off; Core applies local fail-mode at the high ceiling.
+                _ => """
+                      "state.mode": "memory",
+                      "state.rateLimitPerMinute": "10000000"
+                    """,
+            };
             var dashJson = dashboardPort > 0
                 ? $",\n                  \"dashboardPort\": {dashboardPort}"
                 : "";

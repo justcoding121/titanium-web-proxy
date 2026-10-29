@@ -1075,3 +1075,31 @@ static readonly Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult.Cont
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult.Pause -> Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult.Continue -> Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult.Deny -> Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!
+Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore
+Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore.LeaseAsync(string! key, int want, Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec spec, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult>
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.Burst.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.Burst.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.FleetRateSpec() -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.Limit.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.Limit.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.TokenBucket.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.TokenBucket.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.WindowSeconds.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec.WindowSeconds.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult
+Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.FleetLeaseResult() -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.Granted.get -> int
+Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.Granted.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.StoreAvailable.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.StoreAvailable.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.FleetRateStore.get -> Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.FleetRateStore.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scope.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scope.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.FleetFailMode.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.FleetFailMode.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.LocalShare.get -> double?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.LocalShare.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.FleetRateStore.get -> Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.FleetRateStore.set -> void

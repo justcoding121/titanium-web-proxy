@@ -218,6 +218,18 @@ public sealed class RoutePolicyConfig
     /// <summary><c>rateLimit</c>: add RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset to a 429. Default: false.</summary>
     public bool? EmitHeaders { get; init; }
 
+    /// <summary><c>rateLimit</c>: <c>node</c> (default) or <c>fleet</c>.</summary>
+    public string? Scope { get; init; }
+
+    /// <summary><c>rateLimit</c> fleet: <c>local</c> | <c>open</c> | <c>closed</c>. Default <c>local</c>.</summary>
+    public string? FleetFailMode { get; init; }
+
+    /// <summary>
+    /// <c>rateLimit</c> fleet: fraction of <c>limit</c> used as the per-node fallback when the store is down.
+    /// Default null → 0.25.
+    /// </summary>
+    public double? LocalShare { get; init; }
+
     /// <summary><c>oidc</c> (Plus): issuer URL. Must match the <c>issuer</c> of its discovery document exactly.</summary>
     public string? Issuer { get; init; }
 

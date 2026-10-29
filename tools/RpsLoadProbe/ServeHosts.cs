@@ -205,6 +205,7 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliPlusCidrHttp1:
             case ProbeMode.TwpCliPlusJwtHttp1:
             case ProbeMode.TwpCliPlusRateLimitHttp1:
+            case ProbeMode.TwpCliPlusFleetRateLimitHttp1:
             case ProbeMode.TwpCliPlusResilienceHttp1:
             case ProbeMode.TwpCliPlusDiscoveryFileHttp1:
             case ProbeMode.TwpCliPlusMetricsScrapeHttp1:
@@ -241,6 +242,7 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliPlusCidrHttp1 => TitaniumCliHost.CliArmKind.PlusCidr,
                     ProbeMode.TwpCliPlusJwtHttp1 => TitaniumCliHost.CliArmKind.PlusJwt,
                     ProbeMode.TwpCliPlusRateLimitHttp1 => TitaniumCliHost.CliArmKind.PlusRateLimit,
+                    ProbeMode.TwpCliPlusFleetRateLimitHttp1 => TitaniumCliHost.CliArmKind.PlusFleetRateLimit,
                     ProbeMode.TwpCliPlusResilienceHttp1 => TitaniumCliHost.CliArmKind.PlusResilience,
                     ProbeMode.TwpCliPlusDiscoveryFileHttp1 => TitaniumCliHost.CliArmKind.PlusDiscoveryFile,
                     ProbeMode.TwpCliPlusMetricsScrapeHttp1 => TitaniumCliHost.CliArmKind.PlusMetricsScrape,
@@ -1281,6 +1283,7 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliPlusCidrHttp1 => "twp-cli-plus-cidr-http1",
         ProbeMode.TwpCliPlusJwtHttp1 => "twp-cli-plus-jwt-http1",
         ProbeMode.TwpCliPlusRateLimitHttp1 => "twp-cli-plus-ratelimit-http1",
+        ProbeMode.TwpCliPlusFleetRateLimitHttp1 => "twp-cli-plus-fleet-ratelimit-http1",
         ProbeMode.TwpCliPlusResilienceHttp1 => "twp-cli-plus-resilience-http1",
         ProbeMode.TwpCliPlusDiscoveryFileHttp1 => "twp-cli-plus-discovery-file-http1",
         ProbeMode.TwpCliPlusMetricsScrapeHttp1 => "twp-cli-plus-metrics-scrape-http1",

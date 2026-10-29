@@ -60,7 +60,7 @@ param(
         'twp-cli-reverse-http1', 'twp-cli-reverse-http1-tls', 'twp-cli-reverse-http1-route',
         'twp-cli-plus-base-http1', 'twp-cli-plus-cache-http1', 'twp-cli-intercept-http1',
         'twp-cli-plus-waf-http1', 'twp-cli-plus-cidr-http1', 'twp-cli-plus-jwt-http1',
-        'twp-cli-plus-ratelimit-http1', 'twp-cli-plus-resilience-http1',
+        'twp-cli-plus-ratelimit-http1', 'twp-cli-plus-fleet-ratelimit-http1', 'twp-cli-plus-resilience-http1',
         'twp-cli-plus-discovery-file-http1', 'twp-cli-plus-metrics-scrape-http1',
         'twp-cli-plus-cache-hit-http1', 'twp-cli-static-http1', 'twp-cli-logging-http1',
         'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1',

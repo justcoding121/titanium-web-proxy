@@ -223,6 +223,7 @@ internal static class ComparisonGroup
         ("edition-plus-cidr", ["twp-cli-plus-cidr-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-jwt", ["twp-cli-plus-jwt-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-ratelimit", ["twp-cli-plus-ratelimit-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-fleet-ratelimit", ["twp-cli-plus-fleet-ratelimit-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-resilience", ["twp-cli-plus-resilience-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-discovery", ["twp-cli-plus-discovery-file-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-metrics", ["twp-cli-plus-metrics-scrape-http1", "twp-cli-reverse-http1"]),

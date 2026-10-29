@@ -268,6 +268,8 @@ internal enum ProbeMode
     TwpCliPlusJwtHttp1,
     /// <summary>CLI + Plus in-memory rate limit with a very high ceiling.</summary>
     TwpCliPlusRateLimitHttp1,
+    /// <summary>CLI + fleet rateLimit (scope:fleet, local fail-mode, no Redis) with a very high ceiling.</summary>
+    TwpCliPlusFleetRateLimitHttp1,
     /// <summary>CLI + Plus active health against ForwardHost+cluster destinations.</summary>
     TwpCliPlusResilienceHttp1,
     /// <summary>CLI + Plus file discovery with mid-ramp rewrite.</summary>
@@ -1394,6 +1396,8 @@ internal static class RampOrchestrator
                 [new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null)],
             ProbeMode.TwpCliPlusRateLimitHttp1 =>
                 [new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null)],
+            ProbeMode.TwpCliPlusFleetRateLimitHttp1 =>
+                [new("twp-cli-plus-fleet-ratelimit-http1", ProbeMode.TwpCliPlusFleetRateLimitHttp1, null)],
             ProbeMode.TwpCliPlusResilienceHttp1 =>
                 [new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null)],
             ProbeMode.TwpCliPlusDiscoveryFileHttp1 =>
@@ -1801,6 +1805,7 @@ internal static class RampOrchestrator
         new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null),
         new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null),
         new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null),
+        new("twp-cli-plus-fleet-ratelimit-http1", ProbeMode.TwpCliPlusFleetRateLimitHttp1, null),
         new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null),
         new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
             RewriteDiscoveryMidRamp: true),
