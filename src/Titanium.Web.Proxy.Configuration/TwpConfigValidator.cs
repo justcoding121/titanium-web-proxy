@@ -37,13 +37,13 @@ public static class TwpConfigValidator
     {
         ArgumentNullException.ThrowIfNull(config);
         var errors = new List<string>();
-        var clusterIds = ValidateClusters(config.Clusters, errors);
+        var clusterIds = ValidateClusters(config.Clusters ?? [], errors);
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateOidcNeedsPlus(config, errors);
         ValidateWafNeedsPlus(config, errors);
         var pluginNames = ValidatePlugins(config.Plugins, errors);
-        ValidateRoutes(config.Routes, clusterIds, policyNames, pluginNames, errors);
-        ValidateListeners(config.Listeners, clusterIds, errors);
+        ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
+        ValidateListeners(config.Listeners ?? [], clusterIds, errors);
         ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
         ValidatePlusSecrets(config.Plus, errors);
@@ -66,9 +66,9 @@ public static class TwpConfigValidator
         }
 
         ValidateScriptNames(config.ScriptPipeline, "scriptPipeline", kinds, errors);
-        foreach (var listener in config.Listeners)
+        foreach (var listener in config.Listeners ?? [])
         {
-            if (listener.StreamFilters is not { Count: > 0 } names)
+            if (listener?.StreamFilters is not { Count: > 0 } names)
             {
                 continue;
             }
@@ -2611,19 +2611,20 @@ public static class TwpConfigValidator
             return;
         }
 
+        var routes = config.Routes ?? [];
         var used = new HashSet<string>(
-            config.Routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
+            routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
             StringComparer.Ordinal);
         used.UnionWith(config.ScriptPipeline ?? []);
-        foreach (var listener in config.Listeners)
+        foreach (var listener in config.Listeners ?? [])
         {
-            used.UnionWith(listener.StreamFilters ?? []);
+            used.UnionWith(listener?.StreamFilters ?? []);
         }
 
         // A script in the pipeline already runs its request-headers phase on every request, so a route that lists it again
         // runs that phase twice.
         var routeNames = new HashSet<string>(
-            config.Routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
+            routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
             StringComparer.Ordinal);
         foreach (var name in (config.ScriptPipeline ?? []).Where(routeNames.Contains).Distinct(StringComparer.Ordinal))
         {
@@ -2684,7 +2685,7 @@ public static class TwpConfigValidator
 
         CollectPluginWarnings(config, warnings);
 
-        if (config.Routes.Any(route => route.GrpcWeb))
+        if ((config.Routes ?? []).Any(route => route.GrpcWeb))
         {
             warnings.Add(
                 "routes[].grpcWeb translates binary application/grpc-web and application/grpc-web+proto POSTs (unary and " +
@@ -2692,7 +2693,7 @@ public static class TwpConfigValidator
                 "application/grpc-web-text is passed through untranslated, and an HTTP/1.1 origin is not translated.");
         }
 
-        foreach (var listener in config.Listeners)
+        foreach (var listener in config.Listeners ?? [])
         {
             if (listener.AcceptProxyProtocol && listener.TrustedProxyProtocolSources is not { Count: > 0 })
             {
@@ -2728,7 +2729,7 @@ public static class TwpConfigValidator
     private static void CollectClusterProxyProtocolWarnings(TwpConfig config, List<string> warnings)
     {
         var passthroughClusters = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var listener in config.Listeners.Where(l => l.Passthrough))
+        foreach (var listener in (config.Listeners ?? []).Where(l => l.Passthrough))
         {
             if (!string.IsNullOrEmpty(listener.SniDefaultClusterId))
             {
@@ -2744,7 +2745,7 @@ public static class TwpConfigValidator
             }
         }
 
-        foreach (var cluster in config.Clusters)
+        foreach (var cluster in config.Clusters ?? [])
         {
             if (cluster.SendProxyProtocol is { } mode
                 && mode.Equals("v2", StringComparison.OrdinalIgnoreCase)
