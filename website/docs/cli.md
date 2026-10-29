@@ -36,6 +36,7 @@ titanium service install|uninstall|start|stop|restart|status
 titanium version [--check] [--plus] [--channel beta]
 titanium update [--plus] [--remove-plus] [--channel beta]
 titanium http3-deps status|install
+titanium scripting-deps status|install
 ```
 
 Nested help: `titanium <command> --help` (and `titanium service install --help`, etc.).
@@ -50,6 +51,7 @@ Nested help: `titanium <command> --help` (and `titanium service install --help`,
 | `version` | Print local version; `--check` compares to the update feed |
 | `update` | Self-update the CLI (download, verify SHA256, replace install); `--plus` installs/updates Plus; `--remove-plus` deletes it |
 | `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
+| `scripting-deps` | Report whether the Lua and Wasmtime scripting natives load; `install` prints per-OS fixes |
 
 ### `run`
 
@@ -169,6 +171,14 @@ titanium http3-deps status|install
 ```
 
 Reports Quic support and optionally installs system MsQuic. Prefer the matching download zip, which already bundles natives — see [HTTP/3](/docs/http3).
+
+### `scripting-deps`
+
+```text
+titanium scripting-deps status|install
+```
+
+`status` reports whether the Lua (Titanium shim) and Wasmtime natives load (`Lua:` / `Wasmtime:` lines) and prints per-OS fixes; it exits 0 either way. `install` exits 0 when both load, otherwise prints the supported routes (matching RID zip, or `tools/packaging/bundle-scripting-native.ps1`) and exits 1 because nothing is installed through a system package manager.
 
 ## Plus sidecar
 

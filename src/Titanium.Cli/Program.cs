@@ -1,6 +1,7 @@
 using Titanium.Cli.Admin;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
+using Titanium.Cli.Scripting;
 using Titanium.Cli.Service;
 using Titanium.Cli.Updates;
 using Titanium.Web.Proxy.Http3;
@@ -37,6 +38,7 @@ internal static class Program
                     "version" => await VersionCommand.ExecuteAsync(args),
                     "update" => await UpdateCommand.ExecuteAsync(args),
                     "http3-deps" => await Http3DepsCommand.ExecuteAsync(args),
+                    "scripting-deps" => await ScriptingDepsCommand.ExecuteAsync(args),
                     "service" => await ServiceCommand.ExecuteAsync(args),
                     "help" or "-h" or "--help" => PrintHelp(),
                     _ => await UnknownAsync(command),
@@ -67,6 +69,7 @@ internal static class Program
               titanium version [--check] [--plus] [--channel beta]
               titanium update [--plus] [--remove-plus] [--channel beta]
               titanium http3-deps status|install
+              titanium scripting-deps status|install
               titanium service install|uninstall|start|stop|restart|status
 
             Nested help: titanium <command> --help
