@@ -516,7 +516,15 @@ Titanium.Web.Proxy.Udp.UdpRelayOptions.UdpRelayOptions() -> void
 Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute() -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?
 static Titanium.Web.Proxy.Plugins.PluginHost.Load(System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig!>? configs, Microsoft.Extensions.Logging.ILogger? logger = null) -> Titanium.Web.Proxy.Plugins.PluginHost!
 Titanium.Web.Proxy.Plugins.PluginHost
+Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams(string! name) -> bool
 Titanium.Web.Proxy.Plugins.PluginHost.Dispose() -> void
+Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost(string! name) -> Titanium.Web.Proxy.Abstractions.Scripting.IScriptPhaseHost?
+Titanium.Web.Proxy.Plugins.ReloadableStreamFilter
+Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext! context) -> System.Threading.Tasks.ValueTask
+Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext! context, System.ReadOnlyMemory<byte> data, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!>
+Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!>
+Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext! context, System.ReadOnlyMemory<byte> data, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!>
+Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.ReloadableStreamFilter(string! name, System.Func<Titanium.Web.Proxy.Plugins.PluginHost?>! current) -> void
 Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed.get -> bool
 Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts.get -> System.Collections.Generic.IReadOnlyList<System.WeakReference!>!
 Titanium.Web.Proxy.Plugins.PluginHost.Plugins.get -> System.Collections.Generic.IReadOnlyDictionary<string!, Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware!>!

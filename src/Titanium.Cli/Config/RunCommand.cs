@@ -13,6 +13,7 @@ using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Abstractions.Scripting;
 using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
@@ -20,6 +21,7 @@ using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Plugins;
 using Titanium.Web.Proxy.Routing;
+using Titanium.Web.Proxy.Scripting;
 using Titanium.Web.Proxy.Transforms;
 using Titanium.Web.Proxy.Udp;
 
@@ -144,6 +146,30 @@ internal static class RunCommand
             await clusterManager.ApplyAsync(loaded.Config.Clusters.ToList(), stoppingToken).ConfigureAwait(false);
         }
 
+        // One collectible load context per plugin. A reload builds a new host, swaps it in, and retires this one. The
+        // plugins load before the listeners are built, because a passthrough listener's stream filters are plugins.
+        PluginHost pluginHost;
+        try
+        {
+            pluginHost = PluginHost.Load(loaded.Config.Plugins, new LateBoundProxyLogger(proxy));
+        }
+        catch (InvalidOperationException ex)
+        {
+            AsyncConsole.WriteError(ex.Message);
+            return 1;
+        }
+
+        try
+        {
+            ValidateScriptWiring(loaded.Config, pluginHost);
+        }
+        catch (InvalidOperationException ex)
+        {
+            pluginHost.Dispose();
+            AsyncConsole.WriteError(ex.Message);
+            return 1;
+        }
+
         // A udp listener is a datagram relay that never touches the HTTP server, so it is started on its own below.
         var udpListeners = new List<ListenerConfig>();
         foreach (var listener in loaded.Config.Listeners)
@@ -154,7 +180,7 @@ internal static class RunCommand
                 continue;
             }
 
-            AddListener(proxy, listener);
+            AddListener(proxy, listener, () => pluginHost);
         }
 
         ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(proxy, loaded.Config.Server);
@@ -187,23 +213,14 @@ internal static class RunCommand
 
         clusterManager.AttachHealthTracker(loadBalancer.Health);
 
-        // One collectible load context per plugin. A reload builds a new host, swaps it in, and retires this one.
-        PluginHost pluginHost;
-        try
-        {
-            pluginHost = PluginHost.Load(loaded.Config.Plugins, proxy.Logger);
-        }
-        catch (InvalidOperationException ex)
-        {
-            AsyncConsole.WriteError(ex.Message);
-            return 1;
-        }
+        // Names of the scripts that run on every request. A reload swaps the list with the routes.
+        var scriptPipeline = new List<string>(loaded.Config.ScriptPipeline ?? []);
 
         void RefreshReverseProxy()
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
                 routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers,
-                pluginHost.Plugins);
+                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline));
         }
 
         // No meter listener is attached until server.metrics is on or /metrics is first served.
@@ -300,7 +317,8 @@ internal static class RunCommand
                                     hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
                                 },
                                 getPlugins: () => pluginHost,
-                                setPlugins: next => pluginHost = next).ConfigureAwait(false);
+                                setPlugins: next => pluginHost = next,
+                                scriptPipeline: scriptPipeline).ConfigureAwait(false);
                             configHash = AdminHost.ComputeConfigHash(configPath);
                             AsyncConsole.WriteLine("Config reloaded.");
                             await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -419,7 +437,8 @@ internal static class RunCommand
         CancellationToken stoppingToken = default,
         Action<TwpConfig>? onApplied = null,
         Func<PluginHost?>? getPlugins = null,
-        Action<PluginHost>? setPlugins = null)
+        Action<PluginHost>? setPlugins = null,
+        List<string>? scriptPipeline = null)
     {
         // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
         // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
@@ -452,11 +471,19 @@ internal static class RunCommand
 
         // Plugins load before anything is swapped, so a plugin that fails to load fails the reload and the running
         // config (and its plugins) stays in force.
-        var nextPlugins = setPlugins is null ? null : PluginHost.Load(loaded.Config.Plugins, proxy.Logger);
+        var nextPlugins = setPlugins is null ? null : PluginHost.Load(loaded.Config.Plugins, new LateBoundProxyLogger(proxy));
         PluginHost? previousPlugins = null;
+        List<string>? previousPipeline = null;
         var swapped = false;
         try
         {
+            // Scripts named by scriptPipeline or a listener's streamFilters must exist in the new plugin set, so the
+            // swap below never builds a pipeline around a plugin that is gone.
+            if (nextPlugins is not null)
+            {
+                ValidateScriptWiring(loaded.Config, nextPlugins);
+            }
+
             await host.ApplyAsync(snapshot, clusterManager, options =>
             {
                 // Swap policies together with routes. A failed apply leaves both as they were, and no request
@@ -481,6 +508,13 @@ internal static class RunCommand
                     swapped = true;
                 }
 
+                if (scriptPipeline is not null)
+                {
+                    previousPipeline = scriptPipeline.ToList();
+                    scriptPipeline.Clear();
+                    scriptPipeline.AddRange(loaded.Config.ScriptPipeline ?? []);
+                }
+
                 ReplaceRoutes(routes, options.Routes ?? []);
                 refreshReverseProxy();
             }, stoppingToken).ConfigureAwait(false);
@@ -490,6 +524,12 @@ internal static class RunCommand
             if (swapped && previousPlugins is not null)
             {
                 setPlugins!(previousPlugins);
+            }
+
+            if (previousPipeline is not null && scriptPipeline is not null)
+            {
+                scriptPipeline.Clear();
+                scriptPipeline.AddRange(previousPipeline);
             }
 
             nextPlugins?.Dispose();
@@ -522,7 +562,8 @@ internal static class RunCommand
         IGrpcJsonTranscoder? grpcJsonTranscoder,
         IReadOnlyCollection<RoutePolicyConfig>? policies = null,
         IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null,
-        IReadOnlyDictionary<string, IProxyMiddleware>? routePlugins = null)
+        IReadOnlyDictionary<string, IProxyMiddleware>? routePlugins = null,
+        IScriptPhaseHost? scriptPipeline = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
@@ -539,7 +580,50 @@ internal static class RunCommand
             GrpcJsonTranscoder = grpcJsonTranscoder,
             PolicyHandlers = policyHandlers is { Count: > 0 } ? policyHandlers.ToArray() : null,
             RoutePlugins = routePlugins is { Count: > 0 } ? routePlugins : null,
+            ScriptPipeline = scriptPipeline,
         };
+    }
+
+    /// <summary>
+    /// The listener-wide script pipeline for the plugins <paramref name="names"/> lists, in order: null for none, the
+    /// plugin itself for one, and a <see cref="ScriptPhaseHostChain"/> for several. The plugins stay in
+    /// <c>RoutePlugins</c> too, so a route can still list one in <c>middleware</c>.
+    /// </summary>
+    internal static IScriptPhaseHost? BuildScriptPipeline(PluginHost plugins, IReadOnlyCollection<string>? names)
+    {
+        if (names is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var hosts = new List<IScriptPhaseHost>(names.Count);
+        foreach (var name in names)
+        {
+            hosts.Add(plugins.GetScriptHost(name) ??
+                      throw new InvalidOperationException($"scriptPipeline: plugin '{name}' is not a loaded script plugin."));
+        }
+
+        return hosts.Count == 1 ? hosts[0] : new ScriptPhaseHostChain(hosts);
+    }
+
+    /// <summary>
+    /// Checks that every plugin <c>scriptPipeline</c> and every listener's <c>streamFilters</c> names is a loaded script
+    /// plugin that can run there. Throws <see cref="InvalidOperationException"/> naming the first one that cannot.
+    /// </summary>
+    internal static void ValidateScriptWiring(TwpConfig config, PluginHost plugins)
+    {
+        _ = BuildScriptPipeline(plugins, config.ScriptPipeline?.ToList());
+        foreach (var listener in config.Listeners)
+        {
+            foreach (var name in listener.StreamFilters ?? [])
+            {
+                if (!plugins.CanFilterStreams(name))
+                {
+                    throw new InvalidOperationException(
+                        $"Listener port {listener.Port}: streamFilters plugin '{name}' is not a loaded script plugin.");
+                }
+            }
+        }
     }
 
     /// <summary>In-place route list swap used by SIGHUP reload (and unit tests).</summary>
@@ -1169,7 +1253,7 @@ internal static class RunCommand
         return options;
     }
 
-    private static void AddListener(ProxyServer proxy, ListenerConfig listener)
+    private static void AddListener(ProxyServer proxy, ListenerConfig listener, Func<PluginHost?>? currentPlugins = null)
     {
         var host = listener.Host ?? "0.0.0.0";
         var ip = host is "0.0.0.0" or "*"
@@ -1188,6 +1272,7 @@ internal static class RunCommand
         };
 
         ApplyListenerOverrides(endPoint, listener);
+        ApplyStreamFilters(endPoint, listener, currentPlugins);
         proxy.AddEndPoint(endPoint);
 
         if (endPoint is TransparentProxyEndPoint { ForwardHost: not null } transparent)
@@ -1474,6 +1559,26 @@ internal static class RunCommand
         }
     }
 
+    /// <summary>
+    /// Sets the L4 script filters of a passthrough listener. Each filter asks the plugin set in force for its script, so a
+    /// reload swaps the scripts under a running listener; the list of names itself needs a restart.
+    /// </summary>
+    internal static void ApplyStreamFilters(ProxyEndPoint endPoint, ListenerConfig listener, Func<PluginHost?>? currentPlugins)
+    {
+        if (listener.StreamFilters is not { Count: > 0 } names || currentPlugins is null)
+        {
+            return;
+        }
+
+        if (endPoint is not TransparentBaseProxyEndPoint transparent)
+        {
+            throw new InvalidOperationException(
+                $"Listener port {listener.Port}: streamFilters needs a passthrough (transparent or quic) listener.");
+        }
+
+        transparent.StreamFilters = names.Select(name => (IStreamScriptFilter)new ReloadableStreamFilter(name, currentPlugins)).ToArray();
+    }
+
     private static void ApplyListenerOverrides(ProxyEndPoint endPoint, ListenerConfig listener)
     {
         if (listener.MaxCachedConnections is int maxCached)
@@ -1606,6 +1711,12 @@ internal static class RunCommand
 
         // A per-route plugin reads the session, which terminate-lite does not have.
         if (config.Routes.Any(r => r.Middleware is { Count: > 0 }))
+        {
+            return true;
+        }
+
+        // The script pipeline edits headers and bodies of every request.
+        if (config.ScriptPipeline is { Count: > 0 })
         {
             return true;
         }

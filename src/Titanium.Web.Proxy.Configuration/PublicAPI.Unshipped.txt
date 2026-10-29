@@ -553,6 +553,8 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniReadTimeoutSeconds.get
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniReadTimeoutSeconds.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniRoutes.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Configuration.Models.SniRouteConfig!>!
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SniRoutes.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.StreamFilters.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.StreamFilters.set -> void
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ClusterId.get -> string?
 Titanium.Web.Proxy.Configuration.Models.SniRouteConfig.ClusterId.set -> void
@@ -636,3 +638,5 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SessionAffinity.get -> st
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.SessionAffinity.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plugins.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig!>?
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plugins.set -> void
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.ScriptPipeline.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.ScriptPipeline.set -> void

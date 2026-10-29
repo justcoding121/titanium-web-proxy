@@ -44,9 +44,73 @@ public static class TwpConfigValidator
         var pluginNames = ValidatePlugins(config.Plugins, errors);
         ValidateRoutes(config.Routes, clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners, clusterIds, errors);
+        ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
         ValidatePlusSecrets(config.Plus, errors);
         return errors;
+    }
+
+    /// <summary>
+    ///     Checks <c>scriptPipeline</c> and <c>listeners[].streamFilters</c>: every name is a loaded <c>lua</c> or <c>wasm</c>
+    ///     plugin, listed once, and stream filters sit on a passthrough listener.
+    /// </summary>
+    private static void ValidateScriptWiring(TwpConfig config, List<string> errors)
+    {
+        var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var plugin in config.Plugins ?? [])
+        {
+            if (plugin?.Name is { Length: > 0 } name)
+            {
+                kinds.TryAdd(name, PluginKinds.Normalize(plugin.Kind));
+            }
+        }
+
+        ValidateScriptNames(config.ScriptPipeline, "scriptPipeline", kinds, errors);
+        foreach (var listener in config.Listeners)
+        {
+            if (listener.StreamFilters is not { Count: > 0 } names)
+            {
+                continue;
+            }
+
+            var label = $"Listener port {listener.Port}: streamFilters";
+            if (!listener.Passthrough || listener.DecryptSsl)
+            {
+                errors.Add($"{label} needs passthrough: true and decryptSsl: false.");
+            }
+
+            ValidateScriptNames(names, label, kinds, errors);
+        }
+    }
+
+    private static void ValidateScriptNames(
+        IList<string>? names, string label, Dictionary<string, string> kinds, List<string> errors)
+    {
+        if (names is null)
+        {
+            return;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errors.Add($"{label} has an entry without a name.");
+            }
+            else if (!kinds.TryGetValue(name, out var kind))
+            {
+                errors.Add($"{label} references unknown plugin '{name}'.");
+            }
+            else if (!PluginKinds.IsScript(kind))
+            {
+                errors.Add($"{label} names plugin '{name}', which is kind '{kind}'; only 'lua' and 'wasm' plugins run there.");
+            }
+            else if (!seen.Add(name))
+            {
+                errors.Add($"{label} lists plugin '{name}' more than once.");
+            }
+        }
     }
 
     private static void ValidatePlusSecrets(PlusConfig? plus, List<string> errors)
@@ -2493,9 +2557,25 @@ public static class TwpConfigValidator
         var used = new HashSet<string>(
             config.Routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
             StringComparer.Ordinal);
+        used.UnionWith(config.ScriptPipeline ?? []);
+        foreach (var listener in config.Listeners)
+        {
+            used.UnionWith(listener.StreamFilters ?? []);
+        }
+
+        // A script in the pipeline already runs its request-headers phase on every request, so a route that lists it again
+        // runs that phase twice.
+        var routeNames = new HashSet<string>(
+            config.Routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
+            StringComparer.Ordinal);
+        foreach (var name in (config.ScriptPipeline ?? []).Where(routeNames.Contains).Distinct(StringComparer.Ordinal))
+        {
+            warnings.Add($"Plugin '{name}' is in scriptPipeline and in a route's middleware, so its request-headers phase runs twice on that route.");
+        }
+
         foreach (var plugin in plugins.Where(plugin => plugin is { Name: not null } && !used.Contains(plugin.Name)))
         {
-            warnings.Add($"Plugin '{plugin.Name}' is loaded but no route lists it in middleware, so it never runs.");
+            warnings.Add($"Plugin '{plugin.Name}' is loaded but no route lists it in middleware and neither scriptPipeline nor a listener's streamFilters names it, so it never runs.");
         }
     }
 

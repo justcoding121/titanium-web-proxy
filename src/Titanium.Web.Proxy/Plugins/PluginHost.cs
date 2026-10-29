@@ -7,6 +7,7 @@ using System.Threading;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Abstractions.Scripting;
 
 namespace Titanium.Web.Proxy.Plugins;
 
@@ -23,6 +24,7 @@ public sealed class PluginHost : IDisposable
 
     private readonly List<LoadedPlugin> _loaded;
     private readonly ILogger? _logger;
+    private IReadOnlyDictionary<string, LoadedPlugin> _scripts = new Dictionary<string, LoadedPlugin>(0, StringComparer.Ordinal);
     private int _inFlight;
     private int _state;
 
@@ -70,8 +72,28 @@ public sealed class PluginHost : IDisposable
         }
 
         host.Plugins = host.BuildMap();
+        host._scripts = loaded.Where(p => p.Instance is IScriptPhaseHost or IStreamScriptFilter)
+            .ToDictionary(p => p.Name, StringComparer.Ordinal);
         return host;
     }
+
+    /// <summary>
+    /// The script plugin <paramref name="name"/> as a listener-wide script host, for <c>ReverseProxyOptions.ScriptPipeline</c>
+    /// (alone, or with others in a chain). Every call is counted against this host, so a reload retires it only after the
+    /// calls in flight finish. Returns null when no loaded plugin of that name runs HTTP phases.
+    /// </summary>
+    public IScriptPhaseHost? GetScriptHost(string name) =>
+        _scripts.TryGetValue(name, out var plugin) && plugin.Instance is IScriptPhaseHost inner
+            ? new LeasedScriptHost(this, inner, plugin.FailOpen)
+            : null;
+
+    internal IStreamScriptFilter? OpenStreamFilter(string name) =>
+        _scripts.TryGetValue(name, out var plugin) && plugin.Instance is IStreamScriptFilter inner
+            ? new LeasedStreamFilter(this, inner, plugin.FailOpen)
+            : null;
+
+    /// <summary>True when the loaded script plugin <paramref name="name"/> can run as an L4 stream filter.</summary>
+    public bool CanFilterStreams(string name) => _scripts.TryGetValue(name, out var plugin) && plugin.Instance is IStreamScriptFilter;
 
     /// <summary>Stops new work from being counted against this host and disposes it once the calls in flight finish.</summary>
     public void Retire()
@@ -91,6 +113,7 @@ public sealed class PluginHost : IDisposable
             return;
         }
 
+        _scripts = new Dictionary<string, LoadedPlugin>(0, StringComparer.Ordinal);
         foreach (var plugin in _loaded)
         {
             DisposePlugin(plugin);
@@ -190,7 +213,7 @@ public sealed class PluginHost : IDisposable
         }
 
         var wrapper = new RoutePluginMiddleware(name, instance, failOpen, timeout, host, host._logger);
-        return new LoadedPlugin(name, null, instance, wrapper);
+        return new LoadedPlugin(name, null, instance, wrapper, failOpen);
     }
 
     private static LoadedPlugin LoadDotNet(PluginConfig config, string name, PluginHost host)
@@ -239,7 +262,7 @@ public sealed class PluginHost : IDisposable
             }
 
             var wrapper = new RoutePluginMiddleware(name, instance, failOpen, timeout, host, host._logger);
-            return new LoadedPlugin(name, context, instance, wrapper);
+            return new LoadedPlugin(name, context, instance, wrapper, failOpen);
         }
         catch
         {
@@ -299,5 +322,5 @@ public sealed class PluginHost : IDisposable
     }
 
     private sealed record LoadedPlugin(
-        string Name, PluginLoadContext? Context, IProxyMiddleware Instance, RoutePluginMiddleware Wrapper);
+        string Name, PluginLoadContext? Context, IProxyMiddleware Instance, RoutePluginMiddleware Wrapper, bool FailOpen);
 }

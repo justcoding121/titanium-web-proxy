@@ -303,7 +303,12 @@ public class RunCommandListenerCoverageTests
         {
             try
             {
-                return method.Invoke(null, args);
+                // Reflection does not fill in optional parameters on its own.
+                var parameters = method.GetParameters();
+                var full = args.Length < parameters.Length && parameters.Skip(args.Length).All(static p => p.IsOptional)
+                    ? [.. args, .. parameters.Skip(args.Length).Select(static p => p.DefaultValue)]
+                    : args;
+                return method.Invoke(null, full);
             }
             catch (TargetParameterCountException)
             {

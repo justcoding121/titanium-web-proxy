@@ -24,6 +24,14 @@ public sealed class TwpConfig
     /// </summary>
     public IList<PluginConfig>? Plugins { get; set; }
 
+    /// <summary>
+    ///     Names of <c>lua</c> or <c>wasm</c> entries of <see cref="Plugins"/> that run on every request of every route, in
+    ///     list order, through every HTTP phase the script defines (the listener-wide script pipeline). Each script sees the
+    ///     edits of the ones before it, and the first deny wins. Unset or empty adds no pipeline. A plugin may also be
+    ///     listed in <see cref="RouteConfig.Middleware"/>, where it runs the request-headers phase for that route only.
+    /// </summary>
+    public IList<string>? ScriptPipeline { get; set; }
+
     public StaticFilesConfig? StaticFiles { get; set; }
 
     public PlusConfig? Plus { get; set; }
@@ -127,6 +135,13 @@ public sealed class ListenerConfig
     /// Requires <see cref="Passthrough"/> true and <see cref="DecryptSsl"/> false.
     /// </summary>
     public IList<SniRouteConfig> SniRoutes { get; set; } = new List<SniRouteConfig>();
+
+    /// <summary>
+    ///     Passthrough only. Names of <c>lua</c> or <c>wasm</c> entries of <c>plugins</c> that see each raw TCP connection
+    ///     (<c>on_connect</c>, <c>on_data</c>, <c>on_close</c>), in list order. The first deny closes the connection. Needs a
+    ///     restart to change the list; the scripts themselves reload with the configuration.
+    /// </summary>
+    public IList<string>? StreamFilters { get; set; }
 
     /// <summary>Passthrough only. Cluster for connections with no matching or no server name.</summary>
     public string? SniDefaultClusterId { get; set; }
