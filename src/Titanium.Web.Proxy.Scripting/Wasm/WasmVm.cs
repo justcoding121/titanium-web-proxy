@@ -116,8 +116,16 @@ internal sealed unsafe class WasmVm : IDisposable
 
     public IEnumerable<WasmContext> Contexts => _contexts.Values;
 
+    /// <summary>The callout response whose callback is running, or null outside one.</summary>
+    public WasmCalloutResult? Callout { get; set; }
+
     /// <summary>The header maps of the callout response being delivered, for the <c>HttpCall*</c> and gRPC map types.</summary>
-    public WasmHeaderMap? GetCalloutMap(ProxyMapType type) => null;
+    public WasmHeaderMap? GetCalloutMap(ProxyMapType type) => type switch
+    {
+        ProxyMapType.HttpCallResponseHeaders or ProxyMapType.GrpcReceiveInitialMetadata => Callout?.Headers,
+        ProxyMapType.HttpCallResponseTrailers or ProxyMapType.GrpcReceiveTrailingMetadata => Callout?.Trailers,
+        _ => null,
+    };
 
     /// <summary>
     /// Calls an export with <see cref="Gate"/> held. A missing export returns <paramref name="missing"/>. A trap or an

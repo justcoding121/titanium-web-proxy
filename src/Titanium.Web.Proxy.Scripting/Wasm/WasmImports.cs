@@ -224,37 +224,167 @@ internal static unsafe partial class WasmImports
         });
         Env("proxy_get_status", "iii", (vm, a) =>
         {
-            vm.WriteI32(a[0].I32, 0);
-            vm.ReturnBytes([], a[1].I32, a[2].I32);
+            var callout = vm.Callout;
+            vm.WriteI32(a[0].I32, callout?.GrpcStatus ?? 0);
+            vm.ReturnBytes(Encoding.UTF8.GetBytes(callout?.Message ?? string.Empty), a[1].I32, a[2].I32);
             return WasmResult.Ok;
         });
 
-        // Callouts, shared state, metrics, and foreign functions.
-        foreach (var (name, signature) in new[]
-                 {
-                     ("proxy_http_call", "iiiiiiiiii"),
-                     ("proxy_grpc_call", "iiiiiiiiiiii"),
-                     ("proxy_grpc_stream", "iiiiiiiii"),
-                     ("proxy_grpc_send", "iiii"),
-                     ("proxy_grpc_cancel", "i"),
-                     ("proxy_grpc_close", "i"),
-                     ("proxy_get_shared_data", "iiiii"),
-                     ("proxy_set_shared_data", "iiiii"),
-                     ("proxy_register_shared_queue", "iii"),
-                     ("proxy_resolve_shared_queue", "iiiii"),
-                     ("proxy_dequeue_shared_queue", "iii"),
-                     ("proxy_enqueue_shared_queue", "iii"),
-                     ("proxy_call_foreign_function", "iiiiii"),
-                     ("proxy_define_metric", "iiii"),
-                     ("proxy_increment_metric", "iI"),
-                     ("proxy_record_metric", "iI"),
-                     ("proxy_get_metric", "ii"),
-                 })
+        // Callouts.
+        Env("proxy_http_call", "iiiiiiiiii", (vm, a) =>
         {
-            Env(name, signature, static (_, _) => WasmResult.Unimplemented);
+            vm.Memory(a[9].I32, 4);
+            var headers = WasmHeaderMap.Deserialize(vm.Memory(a[2].I32, a[3].I32));
+            if (headers is null || WasmHeaderMap.Deserialize(vm.Memory(a[6].I32, a[7].I32)) is null)
+            {
+                return WasmResult.ParseFailure;
+            }
+
+            var result = vm.Pool.Callouts.HttpCall(vm, vm.ReadString(a[0].I32, a[1].I32), headers, vm.ReadBytes(a[4].I32, a[5].I32), a[8].I32, out var token);
+            return Token(vm, result, token, a[9].I32);
+        });
+        Env("proxy_grpc_call", "iiiiiiiiiiii", (vm, a) =>
+        {
+            vm.Memory(a[11].I32, 4);
+            var metadata = WasmHeaderMap.Deserialize(vm.Memory(a[6].I32, a[7].I32));
+            if (metadata is null)
+            {
+                return WasmResult.ParseFailure;
+            }
+
+            var result = vm.Pool.Callouts.GrpcCall(vm, vm.ReadString(a[0].I32, a[1].I32), vm.ReadString(a[2].I32, a[3].I32),
+                vm.ReadString(a[4].I32, a[5].I32), metadata, vm.ReadBytes(a[8].I32, a[9].I32), a[10].I32, out var token);
+            return Token(vm, result, token, a[11].I32);
+        });
+        Env("proxy_grpc_stream", "iiiiiiiii", (vm, a) =>
+        {
+            vm.Memory(a[8].I32, 4);
+            var metadata = WasmHeaderMap.Deserialize(vm.Memory(a[6].I32, a[7].I32));
+            if (metadata is null)
+            {
+                return WasmResult.ParseFailure;
+            }
+
+            var result = vm.Pool.Callouts.GrpcStream(vm, vm.ReadString(a[0].I32, a[1].I32), vm.ReadString(a[2].I32, a[3].I32),
+                vm.ReadString(a[4].I32, a[5].I32), metadata, out var token);
+            return Token(vm, result, token, a[8].I32);
+        });
+        Env("proxy_grpc_send", "iiii", (vm, a) => vm.Pool.Callouts.GrpcSend(a[0].I32, vm.ReadBytes(a[1].I32, a[2].I32), a[3].I32 != 0));
+        Env("proxy_grpc_cancel", "i", (vm, a) => vm.Pool.Callouts.GrpcCancel(a[0].I32));
+        Env("proxy_grpc_close", "i", (vm, a) => vm.Pool.Callouts.GrpcClose(a[0].I32));
+
+        // Shared data and queues, scoped by vm_id.
+        Env("proxy_get_shared_data", "iiiii", (vm, a) =>
+        {
+            vm.Memory(a[4].I32, 4);
+            var result = vm.Pool.Shared.Get(vm.ReadString(a[0].I32, a[1].I32), out var value, out var cas);
+            if (result != WasmResult.Ok)
+            {
+                return result;
+            }
+
+            vm.ReturnBytes(value, a[2].I32, a[3].I32);
+            vm.WriteU32(a[4].I32, cas);
+            return WasmResult.Ok;
+        });
+        Env("proxy_set_shared_data", "iiiii", (vm, a) =>
+            vm.Pool.Shared.Set(vm.ReadString(a[0].I32, a[1].I32), vm.ReadBytes(a[2].I32, a[3].I32), (uint)a[4].I32));
+        Env("proxy_register_shared_queue", "iii", (vm, a) =>
+        {
+            if (vm.Effective is not { } context)
+            {
+                return WasmResult.BadArgument;
+            }
+
+            vm.Memory(a[2].I32, 4);
+            var token = vm.Pool.Shared.RegisterQueue(vm.ReadString(a[0].I32, a[1].I32), vm, context.RootId);
+            vm.WriteI32(a[2].I32, token);
+            return WasmResult.Ok;
+        });
+        Env("proxy_resolve_shared_queue", "iiiii", (vm, a) =>
+        {
+            vm.Memory(a[4].I32, 4);
+            if (!WasmSharedState.TryResolveQueue(vm.ReadString(a[0].I32, a[1].I32), vm.ReadString(a[2].I32, a[3].I32), out var token))
+            {
+                return WasmResult.NotFound;
+            }
+
+            vm.WriteI32(a[4].I32, token);
+            return WasmResult.Ok;
+        });
+        Env("proxy_dequeue_shared_queue", "iii", (vm, a) =>
+        {
+            vm.Memory(a[1].I32, 4);
+            vm.Memory(a[2].I32, 4);
+            if (WasmSharedState.FindQueue(a[0].I32) is not { } queue)
+            {
+                return WasmResult.NotFound;
+            }
+
+            var result = queue.Dequeue(out var item);
+            if (result == WasmResult.Ok)
+            {
+                vm.ReturnBytes(item, a[1].I32, a[2].I32);
+            }
+
+            return result;
+        });
+        Env("proxy_enqueue_shared_queue", "iii", (vm, a) =>
+            WasmSharedState.FindQueue(a[0].I32) is { } queue ? queue.Enqueue(vm.ReadBytes(a[1].I32, a[2].I32)) : WasmResult.NotFound);
+
+        // Metrics.
+        Env("proxy_define_metric", "iiii", (vm, a) =>
+        {
+            vm.Memory(a[3].I32, 4);
+            var result = WasmGuestMetrics.Define(vm.Pool.Shared.VmId, a[0].I32, vm.ReadString(a[1].I32, a[2].I32), out var id);
+            if (result == WasmResult.Ok)
+            {
+                vm.WriteI32(a[3].I32, id);
+            }
+
+            return result;
+        });
+        Env("proxy_increment_metric", "iI", (_, a) => WasmGuestMetrics.Increment(a[0].I32, a[1].I64));
+        Env("proxy_record_metric", "iI", (_, a) => WasmGuestMetrics.Record(a[0].I32, (ulong)a[1].I64));
+        Env("proxy_get_metric", "ii", (vm, a) =>
+        {
+            vm.Memory(a[1].I32, 8);
+            var result = WasmGuestMetrics.Get(a[0].I32, out var value);
+            if (result == WasmResult.Ok)
+            {
+                vm.WriteU64(a[1].I32, value);
+            }
+
+            return result;
+        });
+
+        // Foreign functions.
+        Env("proxy_call_foreign_function", "iiiiii", (vm, a) =>
+        {
+            vm.Memory(a[4].I32, 4);
+            vm.Memory(a[5].I32, 4);
+            if (!WasmForeignFunctions.TryGet(vm.ReadString(a[0].I32, a[1].I32), out var function))
+            {
+                return WasmResult.NotFound;
+            }
+
+            var output = function(vm.ReadBytes(a[2].I32, a[3].I32));
+            vm.ReturnBytes(output ?? [], a[4].I32, a[5].I32);
+            return WasmResult.Ok;
+        });
+
+        WasmWasi.AddTo(list);
+        return list;
+    }
+
+    private static int Token(WasmVm vm, int result, int token, int slot)
+    {
+        if (result == WasmResult.Ok)
+        {
+            vm.WriteI32(slot, token);
         }
 
-        return list;
+        return result;
     }
 
     private static int GetBufferBytes(WasmVm vm, WasmValRaw* a)

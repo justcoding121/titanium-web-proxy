@@ -24,6 +24,16 @@ public sealed class WasmPluginEngine : IPluginEngine
     public const string ConfigurationSetting = "configuration";
     public const string VmConfigurationSetting = "vmConfiguration";
 
+    private readonly WasmModuleCache? _cache;
+
+    /// <summary>An engine that uses the compiled-module cache from <c>TITANIUM_WASM_CACHE_DIR</c> (or the user default).</summary>
+    public WasmPluginEngine()
+        : this(WasmModuleCache.Default)
+    {
+    }
+
+    internal WasmPluginEngine(WasmModuleCache? cache) => _cache = cache;
+
     public string Kind => PluginKinds.Wasm;
 
     public bool TryCreate(PluginConfig config, ILogger? logger, out IProxyMiddleware? middleware, out string? error)
@@ -70,13 +80,27 @@ public sealed class WasmPluginEngine : IPluginEngine
                 bytes = WasmRuntime.WatToWasm(Encoding.UTF8.GetString(bytes));
             }
 
-            var module = WasmModule.Load(runtime, bytes);
-            pool = new WasmVmPool(name, module, limits, logger);
-            var plugin = new WasmPlugin(name, config.VmId, pool, limits, bodyMode,
-                string.Equals(config.FailMode, ProxyPluginContract.FailOpen, StringComparison.OrdinalIgnoreCase),
-                PluginConfiguration(config.Settings), VmConfiguration(config.Settings), logger);
+            var failOpen = string.Equals(config.FailMode, ProxyPluginContract.FailOpen, StringComparison.OrdinalIgnoreCase);
+            WasmPlugin NewPlugin(WasmVmPool owner) => new(name, config.VmId, owner, limits, bodyMode, failOpen,
+                PluginConfiguration(config.Settings), VmConfiguration(config.Settings), logger, config.CalloutHosts);
+
+            var vmId = string.IsNullOrEmpty(config.VmId) ? null : config.VmId;
+            var sharingKey = vmId is null ? null : WasmVmPools.Key(vmId, WasmModule.HashOf(bytes), runtime, limits);
+            if (sharingKey is not null && TryJoin(sharingKey, NewPlugin, out middleware, out error, out var joined))
+            {
+                return joined;
+            }
+
+            var module = WasmModule.Load(runtime, bytes, _cache, warning => logger?.LogWarning("WASM plugin '{Plugin}': {Warning}", name, warning));
+            pool = new WasmVmPool(vmId ?? name, module, limits, logger, vmId, sharingKey);
+            var plugin = NewPlugin(pool);
             pool.Attach(plugin);
             pool.Start();
+            if (sharingKey is not null)
+            {
+                WasmVmPools.Add(sharingKey, pool);
+            }
+
             middleware = plugin;
             error = null;
             return true;
@@ -86,6 +110,46 @@ public sealed class WasmPluginEngine : IPluginEngine
             pool?.Dispose();
             error = ex.Message;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Adds the plugin to the running pool of its <c>vm_id</c>, if there is one. Returns false when there is none (or it
+    /// is shutting down) so the caller builds a new pool; otherwise <paramref name="joined"/> says whether the plugin's
+    /// root context started in every VM.
+    /// </summary>
+    private static bool TryJoin(string sharingKey, Func<WasmVmPool, WasmPlugin> create, out IProxyMiddleware? middleware,
+        out string? error, out bool joined)
+    {
+        middleware = null;
+        error = null;
+        joined = false;
+        if (WasmVmPools.Find(sharingKey) is not { } shared)
+        {
+            return false;
+        }
+
+        var plugin = create(shared);
+        try
+        {
+            shared.Attach(plugin);
+            middleware = plugin;
+            joined = true;
+            return true;
+        }
+        catch (WasmPoolClosedException)
+        {
+            return false;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or WasmVmFaultException)
+        {
+            if (shared.Detach(plugin))
+            {
+                shared.Dispose();
+            }
+
+            error = ex.Message;
+            return true;
         }
     }
 

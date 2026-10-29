@@ -1,7 +1,13 @@
 #nullable enable
 const Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.ConfigurationSetting = "configuration" -> string!
 const Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.VmConfigurationSetting = "vmConfiguration" -> string!
+const Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunctions.MaxUncompressedBytes = 16777216 -> int
 static Titanium.Web.Proxy.Scripting.ScriptingBootstrap.Register() -> void
+static Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunctions.Register(string! name, Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction! function) -> void
+static Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunctions.Unregister(string! name) -> bool
+Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction
+Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunctions
+virtual Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction.Invoke(System.ReadOnlySpan<byte> arguments) -> byte[]!
 Titanium.Web.Proxy.Scripting.ScriptingBootstrap
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.Kind.get -> string!

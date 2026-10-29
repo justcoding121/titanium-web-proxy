@@ -9,6 +9,10 @@ namespace Titanium.Web.Proxy.Scripting.Tests.Wasm;
 
 internal static class WasmTestSupport
 {
+    /// <summary>Tests that go through the public engine constructor must not write to the user's module cache.</summary>
+    [System.Runtime.CompilerServices.ModuleInitializer]
+    internal static void DisableDefaultModuleCache() => Environment.SetEnvironmentVariable(WasmModuleCache.DirectoryVariable, "off");
+
     public static string Sample(string name) => Path.Combine(AppContext.BaseDirectory, "Wasm", "Samples", name);
 
     /// <summary>Skips the calling test when the Wasmtime native is not beside the test assembly.</summary>
@@ -35,10 +39,11 @@ internal static class WasmTestSupport
         Limits = limits ?? new PluginLimitsConfig { PoolSize = poolSize },
     };
 
-    public static WasmPlugin Create(PluginConfig config, ILogger? logger = null)
+    /// <summary>Builds a plugin with no module cache (or <paramref name="cache"/>), so tests never touch the user's cache.</summary>
+    public static WasmPlugin Create(PluginConfig config, ILogger? logger = null, WasmModuleCache? cache = null)
     {
         RequireNative();
-        var engine = new WasmPluginEngine();
+        var engine = new WasmPluginEngine(cache);
         Assert.IsTrue(engine.TryCreate(config, logger, out var middleware, out var error), error);
         return (WasmPlugin)middleware!;
     }
@@ -46,7 +51,7 @@ internal static class WasmTestSupport
     public static string? CreateError(PluginConfig config)
     {
         RequireNative();
-        var engine = new WasmPluginEngine();
+        var engine = new WasmPluginEngine(null);
         Assert.IsFalse(engine.TryCreate(config, null, out var middleware, out var error));
         Assert.IsNull(middleware);
         return error;

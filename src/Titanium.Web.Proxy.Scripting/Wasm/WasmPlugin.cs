@@ -22,10 +22,11 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IRequires
     private int _disposed;
 
     internal WasmPlugin(string name, string? vmId, WasmVmPool pool, WasmLimits limits, ScriptBodyMode bodyMode, bool failOpen,
-        byte[] configuration, byte[] vmConfiguration, ILogger? logger)
+        byte[] configuration, byte[] vmConfiguration, ILogger? logger, IReadOnlyList<string>? calloutHosts = null)
     {
         Name = name;
         VmId = vmId;
+        CalloutHosts = calloutHosts ?? [];
         Pool = pool;
         Limits = limits;
         BodyMode = bodyMode;
@@ -40,6 +41,9 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IRequires
     public string Name { get; }
 
     public string? VmId { get; }
+
+    /// <summary>Hosts this plugin's callouts may reach (<c>calloutHosts</c>). Empty allows none.</summary>
+    public IReadOnlyList<string> CalloutHosts { get; }
 
     public WasmVmPool Pool { get; }
 
@@ -62,11 +66,6 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IRequires
     public ScriptPhases Phases { get; }
 
     public ScriptBodyMode BodyMode { get; }
-
-    /// <summary>Hook for work a root context needs once its VM started it (timers).</summary>
-    public void OnRootStarted(WasmRootContext root)
-    {
-    }
 
     // IScriptPhaseHost.
 

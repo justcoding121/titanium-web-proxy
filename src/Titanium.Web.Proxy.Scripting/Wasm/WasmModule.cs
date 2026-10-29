@@ -44,12 +44,44 @@ internal sealed class WasmModule : IDisposable
 
     public bool HasExport(string name) => Exports.ContainsKey(name);
 
-    /// <summary>Compiles and validates <paramref name="bytes"/>.</summary>
-    public static unsafe WasmModule Load(WasmRuntime runtime, byte[] bytes)
+    public static string HashOf(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    /// <summary>
+    /// Compiles and validates <paramref name="bytes"/>. With a <paramref name="cache"/>, machine code compiled before for the
+    /// same bytes and engine is loaded instead, and a fresh compile is written back. Cache problems never fail the load;
+    /// they are reported through <paramref name="warn"/>.
+    /// </summary>
+    public static unsafe WasmModule Load(WasmRuntime runtime, byte[] bytes, WasmModuleCache? cache = null, Action<string>? warn = null)
     {
-        var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
+        var hash = HashOf(bytes);
         WasmModuleHandle? module = null;
         var fromCache = false;
+        string? readWarning = null;
+        if (cache is not null && cache.TryRead(hash, runtime.Fingerprint, out readWarning) is { } compiled)
+        {
+            IntPtr raw;
+            IntPtr error;
+            fixed (byte* p = compiled)
+            {
+                error = Wasmtime.wasmtime_module_deserialize(runtime.Engine.DangerousGetHandle(), p, (nuint)compiled.Length, &raw);
+            }
+
+            if (error == IntPtr.Zero)
+            {
+                module = new WasmModuleHandle(raw);
+                fromCache = true;
+            }
+            else
+            {
+                warn?.Invoke("ignored a cached module Wasmtime refused: " + Wasmtime.TakeError(error));
+                cache.Discard(hash, runtime.Fingerprint);
+            }
+        }
+        else if (readWarning is not null)
+        {
+            warn?.Invoke(readWarning);
+        }
+
         if (module is null)
         {
             IntPtr raw;
@@ -84,6 +116,11 @@ internal sealed class WasmModule : IDisposable
                 throw new InvalidOperationException("the module does not link: " + Wasmtime.TakeError(linkError));
             }
 
+            if (cache is not null && !fromCache)
+            {
+                Store(cache, runtime, module, hash, warn);
+            }
+
             return new WasmModule(runtime, module, new InstancePreHandle(pre), hash, abi!, exports, fromCache);
         }
         catch
@@ -97,6 +134,31 @@ internal sealed class WasmModule : IDisposable
     {
         InstancePre.Dispose();
         Handle.Dispose();
+    }
+
+    /// <summary>Writes a validated module's machine code to the cache. Only modules that passed every check are cached.</summary>
+    private static unsafe void Store(WasmModuleCache cache, WasmRuntime runtime, WasmModuleHandle module, string hash, Action<string>? warn)
+    {
+        WasmByteVec serialized = default;
+        var error = Wasmtime.wasmtime_module_serialize(module.DangerousGetHandle(), &serialized);
+        if (error != IntPtr.Zero)
+        {
+            warn?.Invoke("could not serialize the module for the cache: " + Wasmtime.TakeError(error));
+            return;
+        }
+
+        try
+        {
+            if (!cache.TryWrite(hash, runtime.Fingerprint, new ReadOnlySpan<byte>(serialized.Data, checked((int)serialized.Size)), out var writeWarning) &&
+                writeWarning is not null)
+            {
+                warn?.Invoke(writeWarning);
+            }
+        }
+        finally
+        {
+            Wasmtime.wasm_byte_vec_delete(&serialized);
+        }
     }
 
     private static unsafe Dictionary<string, WasmExportShape> ReadExports(WasmModuleHandle module)

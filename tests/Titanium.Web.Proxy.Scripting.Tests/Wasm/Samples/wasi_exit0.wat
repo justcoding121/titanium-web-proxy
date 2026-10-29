@@ -1,0 +1,16 @@
+;; A WASI command module (older wasi_unstable names) whose _start exits 0: it must still load as a plugin.
+(module
+  (import "wasi_unstable" "proc_exit" (func $exit (param i32)))
+  (import "wasi_unstable" "sched_yield" (func $yield (result i32)))
+  (import "wasi_unstable" "environ_sizes_get" (func $environ_sizes (param i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (func (export "proxy_abi_version_0_2_0"))
+  (func (export "malloc") (param i32) (result i32) (i32.const 4096))
+  (func (export "_start")
+    (drop (call $yield))
+    (drop (call $environ_sizes (i32.const 0) (i32.const 4)))
+    (call $exit (i32.const 0)))
+  (func (export "proxy_on_context_create") (param i32 i32))
+  (func (export "proxy_on_vm_start") (param i32 i32) (result i32) (i32.const 1))
+  (func (export "proxy_on_configure") (param i32 i32) (result i32) (i32.const 1))
+)

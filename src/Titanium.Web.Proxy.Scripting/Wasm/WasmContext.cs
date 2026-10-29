@@ -24,13 +24,14 @@ internal abstract class WasmContext(WasmVm vm, int id, int rootId, WasmPlugin pl
     {
         ProxyBufferType.VmConfiguration => Plugin.VmConfiguration,
         ProxyBufferType.PluginConfiguration => Plugin.Configuration,
+        ProxyBufferType.HttpCallResponseBody or ProxyBufferType.GrpcReceiveBuffer => Vm.Callout?.Body,
         _ => null,
     };
 
     /// <summary>Replaces <paramref name="size"/> bytes at <paramref name="start"/> of a buffer the context owns.</summary>
     public virtual int SetBuffer(ProxyBufferType type, int start, int size, byte[] data) => WasmResult.NotFound;
 
-    public virtual WasmHeaderMap? GetMap(ProxyMapType type) => null;
+    public virtual WasmHeaderMap? GetMap(ProxyMapType type) => Vm.GetCalloutMap(type);
 
     public virtual int SendLocalResponse(int status, string details, byte[] body, List<KeyValuePair<string, string>> headers, int grpcStatus) =>
         WasmResult.BadArgument;
@@ -69,6 +70,9 @@ internal sealed class WasmRootContext(WasmVm vm, int id, WasmPlugin plugin) : Wa
     public int TickPeriodMs { get; set; }
 
     public Timer? Ticker { get; set; }
+
+    /// <summary>Set while a tick runs, so a slow <c>on_tick</c> is skipped rather than queued behind itself.</summary>
+    public int Ticking;
 
     public override void OnVmDisposed()
     {

@@ -17,18 +17,34 @@ internal sealed class WasmVmPool : IDisposable
     private int _next;
     private int _nextContextId;
     private bool _disposed;
+    private bool _closing;
 
-    public WasmVmPool(string name, WasmModule module, WasmLimits limits, ILogger? logger)
+    public WasmVmPool(string name, WasmModule module, WasmLimits limits, ILogger? logger, string? vmId = null, string? sharingKey = null)
     {
         Name = name;
         Module = module;
         Limits = limits;
         Logger = logger;
+        VmId = vmId;
+        SharingKey = sharingKey;
         _slots = new WasmVm?[limits.PoolSize];
         _rebuilding = new bool[limits.PoolSize];
+        Shared = WasmSharedState.Acquire(vmId ?? string.Empty, limits);
+        Callouts = new WasmCallouts(this);
     }
 
     public string Name { get; }
+
+    /// <summary>The <c>vm_id</c> plugins share this pool by, or null for a pool of its own.</summary>
+    public string? VmId { get; }
+
+    /// <summary>Key in <see cref="WasmVmPools"/> when the pool is shared by <c>vm_id</c>.</summary>
+    public string? SharingKey { get; }
+
+    /// <summary>Shared data and queues of this pool's <c>vm_id</c>.</summary>
+    public WasmSharedState Shared { get; }
+
+    public WasmCallouts Callouts { get; }
 
     public WasmModule Module { get; }
 
@@ -67,12 +83,20 @@ internal sealed class WasmVmPool : IDisposable
         }
     }
 
-    /// <summary>Adds a plugin, giving it a root context id. VMs that already exist start its root context now.</summary>
+    /// <summary>
+    /// Adds a plugin, giving it a root context id. VMs that already exist start its root context now. Throws
+    /// <see cref="WasmPoolClosedException"/> when the pool's last plugin already left, so the caller builds a new pool.
+    /// </summary>
     public void Attach(WasmPlugin plugin)
     {
         WasmVm?[] existing;
         lock (_gate)
         {
+            if (_closing || _disposed)
+            {
+                throw new WasmPoolClosedException();
+            }
+
             plugin.RootId = NextContextId();
             _plugins.Add(plugin);
             existing = _slots.ToArray();
@@ -139,7 +163,45 @@ internal sealed class WasmVmPool : IDisposable
 
         lock (_gate)
         {
-            return _plugins.Count == 0;
+            if (_plugins.Count == 0)
+            {
+                _closing = true;
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="action"/> in <paramref name="vm"/> with context <paramref name="contextId"/> effective, for
+    /// work that arrives off the request path (callout responses, ticks, queue notifications). Does nothing when the VM
+    /// faulted or went away, or the context ended. A trap in the callback discards the VM as any trap does.
+    /// </summary>
+    public bool Deliver(WasmVm vm, int contextId, Action<WasmContext> action)
+    {
+        lock (vm.Gate)
+        {
+            if (vm.Faulted || vm.IsDisposed || !vm.TryGetContext(contextId, out var context))
+            {
+                return false;
+            }
+
+            vm.Effective = context;
+            try
+            {
+                action(context);
+                return true;
+            }
+            catch (WasmVmFaultException ex)
+            {
+                Log(ProxyLogLevel.Warn, $"callback for context {contextId} failed: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                vm.Effective = null;
+            }
         }
     }
 
@@ -185,16 +247,45 @@ internal sealed class WasmVmPool : IDisposable
     public void Log(ProxyLogLevel level, string message) =>
         Logger?.Log(WasmImports.ToLogLevel(level), "[wasm {Plugin}] {Message}", Name, message);
 
-    /// <summary>S6a records the period; the tick timer arrives with the callout work.</summary>
+    /// <summary>
+    /// <c>proxy_set_tick_period_milliseconds</c> from a root context: (re)starts that root's timer in this VM, or stops it
+    /// for zero. Each tick calls <c>proxy_on_tick</c> with the VM's gate held; a tick that finds the previous one still
+    /// running is skipped.
+    /// </summary>
     public int SetTickPeriod(WasmVm vm, int milliseconds)
     {
-        if (vm.Effective is not WasmRootContext root)
+        if (vm.Effective is not { } effective || !vm.TryGetContext(effective.RootId, out var context) || context is not WasmRootContext root)
         {
             return WasmResult.BadArgument;
         }
 
         root.TickPeriodMs = Math.Max(0, milliseconds);
+        root.Ticker?.Dispose();
+        root.Ticker = null;
+        if (root.TickPeriodMs > 0)
+        {
+            var period = TimeSpan.FromMilliseconds(root.TickPeriodMs);
+            root.Ticker = new Timer(static state => Tick((WasmRootContext)state!), root, period, period);
+        }
+
         return WasmResult.Ok;
+    }
+
+    private static void Tick(WasmRootContext root)
+    {
+        if (Interlocked.Exchange(ref root.Ticking, 1) == 1)
+        {
+            return;
+        }
+
+        try
+        {
+            root.Vm.Pool.Deliver(root.Vm, root.Id, _ => root.Vm.Call("proxy_on_tick", [root.Id]));
+        }
+        finally
+        {
+            Volatile.Write(ref root.Ticking, 0);
+        }
     }
 
     public void Dispose()
@@ -214,6 +305,13 @@ internal sealed class WasmVmPool : IDisposable
             rebuilds = _rebuilds.ToArray();
         }
 
+        if (SharingKey is not null)
+        {
+            WasmVmPools.Remove(SharingKey, this);
+        }
+
+        Callouts.Dispose();
+
         // A rebuild instantiates from the module, so the module must outlive it.
         Task.WaitAll(rebuilds);
 
@@ -230,7 +328,20 @@ internal sealed class WasmVmPool : IDisposable
             }
         }
 
+        Shared.Release();
         Module.Dispose();
+    }
+
+    /// <summary>True when the pool can take another plugin (it still has one and is not shutting down).</summary>
+    public bool IsOpen
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return !_closing && !_disposed;
+            }
+        }
     }
 
     private WasmVm Build(int slot)
@@ -282,8 +393,6 @@ internal sealed class WasmVmPool : IDisposable
         {
             throw new InvalidOperationException("proxy_on_configure rejected the plugin configuration");
         }
-
-        plugin.OnRootStarted(root);
     }
 
     private void Rebuild(WasmVm faulted)
@@ -331,6 +440,49 @@ internal sealed class WasmVmPool : IDisposable
             if (ReferenceEquals(_slots[faulted.Slot], faulted))
             {
                 _slots[faulted.Slot] = fresh;
+            }
+        }
+    }
+}
+
+/// <summary>The pool's last plugin left while another tried to join it.</summary>
+internal sealed class WasmPoolClosedException() : Exception("the shared WASM VM pool is shutting down");
+
+/// <summary>
+/// Pools shared by <c>vm_id</c>. Plugins with the same <c>vm_id</c>, module bytes, engine and limits run in the same VMs,
+/// each with its own root context, as Envoy shares a VM between filters. Anything else gets a pool of its own.
+/// </summary>
+internal static class WasmVmPools
+{
+    private static readonly object Gate = new();
+    private static readonly Dictionary<string, WasmVmPool> Pools = new(StringComparer.Ordinal);
+
+    public static string Key(string vmId, string moduleHash, WasmRuntime runtime, WasmLimits limits) =>
+        string.Join('\n', vmId, moduleHash, runtime.Fingerprint, limits.ToString());
+
+    public static WasmVmPool? Find(string key)
+    {
+        lock (Gate)
+        {
+            return Pools.TryGetValue(key, out var pool) && pool.IsOpen ? pool : null;
+        }
+    }
+
+    public static void Add(string key, WasmVmPool pool)
+    {
+        lock (Gate)
+        {
+            Pools[key] = pool;
+        }
+    }
+
+    public static void Remove(string key, WasmVmPool pool)
+    {
+        lock (Gate)
+        {
+            if (Pools.TryGetValue(key, out var current) && ReferenceEquals(current, pool))
+            {
+                Pools.Remove(key);
             }
         }
     }
