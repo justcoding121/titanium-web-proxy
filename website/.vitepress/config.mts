@@ -45,6 +45,7 @@ export default defineConfig({
           items: [
             { text: 'Getting started', link: '/docs/getting-started' },
             { text: 'Features', link: '/docs/features' },
+            { text: 'Capability coverage', link: '/docs/capabilities' },
             { text: 'Install', link: '/docs/install' },
             { text: 'Editions & licenses', link: '/docs/editions' },
           ],
