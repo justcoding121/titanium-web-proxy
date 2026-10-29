@@ -172,11 +172,8 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             // Already torn down.
         }
 
-        foreach (var session in sessions.Values)
-        {
-            CloseSession(session);
-        }
-
+        // Wait for the receive loop to finish before closing sessions. Closing first races a
+        // datagram already past the disposed check that can OpenSession after the sweep.
         if (receiveLoop is not null)
         {
             try
@@ -188,6 +185,19 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
                 // The loop is already unwinding because the socket is gone.
             }
         }
+
+        // Snapshot may miss a session that raced into the map as the loop exited; sweep twice,
+        // then clear. After the receive loop has stopped, nothing else opens sessions.
+        for (var pass = 0; pass < 2; pass++)
+        {
+            foreach (var session in sessions.Values)
+            {
+                CloseSession(session);
+            }
+        }
+
+        sessions.Clear();
+        Interlocked.Exchange(ref sessionCount, 0);
 
         stopping.Dispose();
     }
@@ -313,6 +323,11 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
     private async ValueTask HandleDatagramAsync(
         Socket listening, SocketAddress from, byte[] buffer, int length, CancellationToken cancellationToken)
     {
+        if (Volatile.Read(ref disposed) != 0)
+        {
+            return;
+        }
+
         if (length == 0)
         {
             Drop(UdpDropReason.Empty);
@@ -348,6 +363,11 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
     private async ValueTask<UdpSession?> OpenSessionAsync(
         Socket listening, SocketAddress from, long nowMs, CancellationToken cancellationToken)
     {
+        if (Volatile.Read(ref disposed) != 0)
+        {
+            return null;
+        }
+
         IPEndPoint endpoint;
         try
         {
@@ -367,7 +387,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             return null;
         }
 
-        if (IsDraining)
+        if (IsDraining || Volatile.Read(ref disposed) != 0)
         {
             Drop(UdpDropReason.Draining);
             return null;
@@ -400,6 +420,12 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
                 return null;
             }
 
+            if (Volatile.Read(ref disposed) != 0)
+            {
+                ReleaseClient(client);
+                return null;
+            }
+
             try
             {
                 upstream = new Socket(picked.EndPoint!.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -417,6 +443,14 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             if (picked.Destination is { } destination && loadBalancer is not null)
             {
                 lease = loadBalancer.Health.TrackRequest(destination.Id);
+            }
+
+            if (Volatile.Read(ref disposed) != 0)
+            {
+                lease?.Dispose();
+                upstream.Dispose();
+                ReleaseClient(client);
+                return null;
             }
 
             var session = new UdpSession(CloneAddress(from), endpoint, client, upstream, picked.Destination, lease, nowMs);
