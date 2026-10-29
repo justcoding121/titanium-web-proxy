@@ -525,7 +525,7 @@ public sealed class DashboardHost : IDisposable
             {
                 Security.Throttle.RecordFailure(remote ?? "unknown");
                 Audit.Record($"{ControlPlaneSecurity.DashboardSurface}:oidc", remote, AuditActions.LoginFailed,
-                    "/login/oidc/callback", response.Status == 403 ? AuditResults.Denied : AuditResults.Denied);
+                    "/login/oidc/callback", AuditResults.Denied);
             }
 
             return response;

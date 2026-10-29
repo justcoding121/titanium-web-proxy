@@ -130,7 +130,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         wheel = new UdpSessionWheel(options.IdleTimeout, nowMs);
         var tick = TimeSpan.FromMilliseconds(wheel.TickMilliseconds);
         sweepTimer = time.CreateTimer(static state => ((UdpRelayListener)state!).Sweep(), this, tick, tick);
-        receiveLoop = Task.Run(() => ReceiveLoopAsync(created, stopping.Token));
+        receiveLoop = Task.Run(() => ReceiveLoopAsync(created, stopping.Token), stopping.Token);
     }
 
     /// <summary>Stops opening sessions. Datagrams on open sessions keep flowing until they go idle.</summary>
@@ -146,7 +146,14 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         while (ActiveSessions > 0 && System.Diagnostics.Stopwatch.GetElapsedTime(started) < timeout)
         {
-            await Task.Delay(20).ConfigureAwait(false);
+            try
+            {
+                await Task.Delay(20, stopping.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
 
         return ActiveSessions == 0;
@@ -178,7 +185,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         {
             try
             {
-                await receiveLoop.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await receiveLoop.WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is TimeoutException or OperationCanceledException or SocketException or ObjectDisposedException)
             {

@@ -18,7 +18,8 @@ public sealed class HealthServer : IDisposable
     {
         _ready = ready;
         _log = log;
-        _listener.Prefixes.Add($"http://+:{port}/");
+        // Controller health binds cleartext; kube probes expect http:// on the health port.
+        _listener.Prefixes.Add($"http://+:{port}/"); // NOSONAR S5332 -- health endpoint is intentionally cleartext.
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)

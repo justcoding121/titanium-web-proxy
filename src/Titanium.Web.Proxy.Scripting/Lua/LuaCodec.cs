@@ -314,7 +314,7 @@ internal ref struct LuaReader
                         case long k when k >= 1 && k <= 65_536:
                             indexed[k] = value;
                             break;
-                        case double k when k >= 1 && k <= 65_536 && k == Math.Floor(k):
+                        case double k when k >= 1 && k <= 65_536 && IsIntegralDouble(k):
                             indexed[(long)k] = value;
                             break;
                     }
@@ -402,8 +402,15 @@ internal ref struct LuaReader
     public static long? AsInt(object? value) => value switch
     {
         long l => l,
-        double d when d == Math.Floor(d) && d >= long.MinValue && d <= long.MaxValue => (long)d,
+        double d when IsIntegralDouble(d) && d >= long.MinValue && d <= long.MaxValue => (long)d,
         byte[] b when long.TryParse(Encoding.UTF8.GetString(b), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) => parsed,
         _ => null,
     };
+
+    /// <summary>True when <paramref name="value"/> is within an ulp of an integer (avoids exact float equality).</summary>
+    private static bool IsIntegralDouble(double value)
+    {
+        var nearest = Math.Round(value);
+        return Math.Abs(value - nearest) <= Math.Max(1e-9, Math.Abs(nearest) * 1e-12);
+    }
 }

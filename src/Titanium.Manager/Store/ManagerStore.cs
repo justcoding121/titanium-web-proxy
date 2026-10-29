@@ -133,20 +133,29 @@ internal sealed class ManagerStore : IDisposable
 
     private void EnsureColumn(string table, string column, string typedef)
     {
-        using var info = _db.CreateCommand();
-        info.CommandText = $"PRAGMA table_info({table});";
-        using var reader = info.ExecuteReader();
-        while (reader.Read())
+        // ALTER TABLE cannot bind identifiers; keep migration DDL as compile-time constants.
+        var alterSql = (table, column, typedef) switch
         {
-            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
+            ("rollouts", "previous_revision_id", "INTEGER NULL") =>
+                "ALTER TABLE rollouts ADD COLUMN previous_revision_id INTEGER NULL;",
+            ("rollouts", "updated_at", "TEXT NULL") =>
+                "ALTER TABLE rollouts ADD COLUMN updated_at TEXT NULL;",
+            ("rollouts", "pause_reason", "TEXT NULL") =>
+                "ALTER TABLE rollouts ADD COLUMN pause_reason TEXT NULL;",
+            _ => throw new ArgumentException($"unsupported schema migration: {table}.{column} {typedef}"),
+        };
+
+        using var info = _db.CreateCommand();
+        info.CommandText = "SELECT 1 FROM pragma_table_info($table) WHERE name = $column LIMIT 1;";
+        info.Parameters.AddWithValue("$table", table);
+        info.Parameters.AddWithValue("$column", column);
+        if (info.ExecuteScalar() is not null)
+        {
+            return;
         }
 
-        reader.Close();
         using var alter = _db.CreateCommand();
-        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {typedef};";
+        alter.CommandText = alterSql;
         alter.ExecuteNonQuery();
     }
 

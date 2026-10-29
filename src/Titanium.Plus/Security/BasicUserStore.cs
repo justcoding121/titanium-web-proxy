@@ -247,7 +247,8 @@ public sealed partial class BasicUserStore
     {
         try
         {
-            _ = BCrypt.Net.BCrypt.Verify("x", "$2b$04$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW");
+            // Well-known bcrypt test vector — probes that BCrypt.Net-Next.dll loaded; not a real credential.
+            _ = BCrypt.Net.BCrypt.Verify("x", "$2b$04$CCCCCCCCCCCCCCCCCCCCC.E5YPO9kmyuRGyh0XouQYb4YMJKvyOeW"); // NOSONAR S8215 -- bcrypt load probe, not a live password hash.
         }
         catch (Exception ex) when (ex is FileNotFoundException or FileLoadException)
         {

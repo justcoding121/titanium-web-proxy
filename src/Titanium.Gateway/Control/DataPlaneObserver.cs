@@ -49,7 +49,8 @@ public sealed class HttpDataPlaneObserver : IDataPlaneObserver
     private async Task<string?> ProbeAsync(string address, CancellationToken cancellationToken)
     {
         var host = address.Contains(':', StringComparison.Ordinal) ? $"[{address}]" : address;
-        var baseUri = $"http://{host}:{_adminPort}";
+        // In-cluster admin probes are loopback/pod-network HTTP by design (no TLS on the admin port).
+        var baseUri = $"http://{host}:{_adminPort}"; // NOSONAR S5332 -- gateway admin port is cleartext by contract.
         try
         {
             using var ready = await _http.GetAsync(baseUri + "/readyz", cancellationToken).ConfigureAwait(false);

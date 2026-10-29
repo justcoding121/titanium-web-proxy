@@ -46,8 +46,8 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     public void Start()
     {
         _listener.Start();
-        _loop = Task.Run(AcceptLoopAsync);
-        _ticker = Task.Run(RolloutTickLoopAsync);
+        _loop = Task.Run(AcceptLoopAsync, _stop.Token);
+        _ticker = Task.Run(RolloutTickLoopAsync, _stop.Token);
     }
 
     private async Task RolloutTickLoopAsync()
@@ -92,7 +92,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
                 return;
             }
 
-            _ = Task.Run(() => HandleAsync(context));
+            _ = Task.Run(() => HandleAsync(context), _stop.Token);
         }
     }
 
@@ -1094,7 +1094,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         {
             try
             {
-                await _loop.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                await _loop.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false);
             }
             catch
             {
@@ -1106,7 +1106,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         {
             try
             {
-                await _ticker.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                await _ticker.WaitAsync(TimeSpan.FromSeconds(2), CancellationToken.None).ConfigureAwait(false);
             }
             catch
             {

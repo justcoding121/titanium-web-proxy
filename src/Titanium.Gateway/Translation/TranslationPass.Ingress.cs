@@ -554,7 +554,8 @@ internal sealed partial class TranslationPass
         }
 
         owner.Policies = names;
-        return names.Count == 0 ? null : names;
+        // names is filled from optional Ingress annotations; empty means "no policies".
+        return names.Count == 0 ? null : names; // NOSONAR S2583 -- annotation-driven Adds are not visible to the analyzer.
     }
 
     private static RouteDraft MakeIngressDraft(

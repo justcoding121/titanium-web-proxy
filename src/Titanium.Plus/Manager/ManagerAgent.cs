@@ -133,8 +133,9 @@ public sealed class ManagerAgent : IDisposable
         };
         if (insecure)
         {
+            // Explicit operator opt-in: manager.tls.insecure disables upstream cert validation (lab/dev only).
             handler.SslOptions.RemoteCertificateValidationCallback =
-                static (_, _, _, _) => true;
+                static (_, _, _, _) => true; // NOSONAR S4830 -- manager.tls.insecure is an explicit opt-in.
         }
 
         var http = new HttpClient(handler, disposeHandler: true)
@@ -155,7 +156,7 @@ public sealed class ManagerAgent : IDisposable
         context.HostStatus?.SetManagedState(true, drifted: false);
         PlusLog.Info(context,
             $"Plus ManagerAgent: url={baseUrl} fleet={fleet} mode={(managed ? "managed" : "advisory")} state={stateDir}");
-        agent._loop = Task.Run(agent.RunLoopAsync);
+        agent._loop = Task.Run(agent.RunLoopAsync, agent._cts.Token);
         return agent;
     }
 
@@ -605,7 +606,7 @@ public sealed class ManagerAgent : IDisposable
 
         try
         {
-            _loop?.Wait(TimeSpan.FromSeconds(3));
+            _loop?.Wait(TimeSpan.FromSeconds(3), CancellationToken.None);
         }
         catch
         {

@@ -176,7 +176,7 @@ internal sealed class ControlHttpServer : IDisposable
                 continue;
             }
 
-            if (!_slots.Wait(0))
+            if (!_slots.Wait(0, cancellationToken))
             {
                 client.Dispose();
                 continue;

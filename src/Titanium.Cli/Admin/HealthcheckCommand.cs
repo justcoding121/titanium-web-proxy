@@ -111,7 +111,8 @@ internal static class HealthcheckCommand
 
         var authority = address.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{address}]" : address.ToString();
         skipReason = null;
-        return $"http://{authority}:{admin.Port}/healthz";
+        // Local admin healthcheck uses cleartext HTTP to the process's own admin port.
+        return $"http://{authority}:{admin.Port}/healthz"; // NOSONAR S5332 -- local admin probe is intentionally cleartext.
     }
 
     private static async Task<int> ProbeAsync(string url, TimeSpan timeout)

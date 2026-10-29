@@ -66,7 +66,7 @@ internal sealed class AdminServer : IDisposable
     public void Start()
     {
         _listener.Start();
-        _loop = Task.Run(AcceptLoopAsync);
+        _loop = Task.Run(AcceptLoopAsync, _stop.Token);
     }
 
     public void Dispose()
@@ -80,7 +80,7 @@ internal sealed class AdminServer : IDisposable
         _listener.Stop();
         try
         {
-            _loop?.Wait(TimeSpan.FromSeconds(2));
+            _loop?.Wait(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
         catch (AggregateException)
         {
@@ -117,7 +117,7 @@ internal sealed class AdminServer : IDisposable
                 continue;
             }
 
-            _ = Task.Run(() => ServeAsync(client));
+            _ = Task.Run(() => ServeAsync(client), _stop.Token);
         }
     }
 

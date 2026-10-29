@@ -63,7 +63,8 @@ EXPOSE 7700
 STOPSIGNAL SIGTERM
 
 # Exec form only: the image has no shell. healthcheck GETs /v1/healthz on the loopback listener.
+# Cleartext HTTP is intentional: probe stays on 127.0.0.1 inside the chiseled image (no TLS sidecar).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-    CMD ["titanium-manager", "healthcheck", "--url", "http://127.0.0.1:7700/v1/healthz"]
+    CMD ["titanium-manager", "healthcheck", "--url", "http://127.0.0.1:7700/v1/healthz"] # NOSONAR docker:S5332 -- loopback-only healthcheck in chiseled image
 
 ENTRYPOINT ["titanium-manager", "--listen", "http://+:7700/", "--db", "/var/lib/titanium-manager/manager.db"]

@@ -433,5 +433,6 @@ internal sealed partial class LuaRuntime : IDisposable
         _disposed.Cancel();
         _pool?.Dispose();
         _callouts.Dispose();
+        _disposed.Dispose();
     }
 }

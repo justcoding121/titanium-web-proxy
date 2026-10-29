@@ -184,6 +184,37 @@ public class ManagerAgentTests
         Assert.AreEqual(0, ManagerAgent.LiveLoops);
     }
 
+    [TestMethod]
+    public void TryStart_WithTlsInsecure_StartsAndDisposes()
+    {
+        var stateDir = NewTempDir();
+        try
+        {
+            var tokenFile = Path.Combine(stateDir, "token");
+            File.WriteAllText(tokenFile, "test-token");
+            var before = ManagerAgent.LiveLoops;
+            using var agent = ManagerAgent.TryStart(
+                new PlusActivationContext { ProxyServer = new object() },
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["manager.url"] = "https://127.0.0.1:9/",
+                    ["manager.tokenFile"] = tokenFile,
+                    ["manager.fleet"] = "1",
+                    ["manager.mode"] = "advisory",
+                    ["manager.stateDir"] = stateDir,
+                    ["manager.nodeId"] = "tls-insecure-node",
+                    ["manager.tls.insecure"] = "true",
+                });
+            Assert.IsNotNull(agent);
+            Assert.IsTrue(ManagerAgent.LiveLoops > before);
+        }
+        finally
+        {
+            TryDelete(stateDir);
+            Assert.AreEqual(0, ManagerAgent.LiveLoops);
+        }
+    }
+
     private static ManagerAgent? StartAgent(
         ManagerHarness harness,
         string stateDir,

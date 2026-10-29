@@ -62,6 +62,55 @@ public class ManagerStoreAndApiTests
     }
 
     [TestMethod]
+    public void Store_MigratesLegacyRolloutsTable_WithParameterizedEnsureColumn()
+    {
+        var path = TempDb();
+        using (var raw = new Microsoft.Data.Sqlite.SqliteConnection(new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate,
+        }.ToString()))
+        {
+            raw.Open();
+            using var cmd = raw.CreateCommand();
+            // Pre-staged-rollout shape: missing previous_revision_id / updated_at / pause_reason.
+            cmd.CommandText =
+                """
+                CREATE TABLE fleets (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT NOT NULL UNIQUE,
+                  labels_json TEXT NOT NULL DEFAULT '{}',
+                  created_at TEXT NOT NULL
+                );
+                CREATE TABLE revisions (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  fleet_id INTEGER NOT NULL,
+                  content_hash TEXT NOT NULL,
+                  yaml_text TEXT NOT NULL,
+                  author TEXT NOT NULL,
+                  parent_id INTEGER NULL,
+                  created_at TEXT NOT NULL
+                );
+                CREATE TABLE rollouts (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  fleet_id INTEGER NOT NULL,
+                  revision_id INTEGER NOT NULL,
+                  state TEXT NOT NULL,
+                  created_at TEXT NOT NULL
+                );
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        using var store = new ManagerStore(path);
+        var fleet = store.CreateFleet("legacy");
+        var rev = store.CreateRevision(fleet.Id, ValidYaml, "migrator");
+        var rollout = store.Publish(fleet.Id, rev.Id);
+        Assert.AreEqual("succeeded", rollout.State);
+        Assert.IsNull(rollout.PreviousRevisionId);
+    }
+
+    [TestMethod]
     public async Task Api_AdminTokenRequired_AndCreatesFleetRevisionPublish()
     {
         await using var host = await ManagerTestHost.StartAsync();

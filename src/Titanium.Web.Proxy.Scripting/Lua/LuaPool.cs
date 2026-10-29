@@ -144,7 +144,7 @@ internal sealed class LuaPool : IDisposable
                 }
 
                 fallback ??= instance;
-                if (instance.Gate.Wait(0))
+                if (instance.Gate.Wait(0, cancellationToken))
                 {
                     if (instance.TryEnter())
                     {
@@ -182,7 +182,7 @@ internal sealed class LuaPool : IDisposable
                 instance.Retire();
                 Interlocked.Increment(ref _rebuilding);
                 var slot = i;
-                _ = Task.Run(() => RebuildAsync(slot));
+                _ = Task.Run(() => RebuildAsync(slot), _disposed.Token);
                 return;
             }
         }
@@ -238,5 +238,7 @@ internal sealed class LuaPool : IDisposable
         {
             Interlocked.Exchange(ref _slots[i], null)?.Retire();
         }
+
+        _disposed.Dispose();
     }
 }

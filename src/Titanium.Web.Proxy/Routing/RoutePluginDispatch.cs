@@ -75,7 +75,8 @@ internal static class RoutePluginDispatch
             return default;
         })(context, session.CancellationToken).ConfigureAwait(false);
 
-        if (reachedEnd && !context.IsHandled)
+        // Plugins may call next() without staging; only then is the request forwarded (return false).
+        if (reachedEnd && !context.IsHandled) // NOSONAR S2583 -- reachedEnd is set by the pipeline terminal callback.
         {
             return false;
         }

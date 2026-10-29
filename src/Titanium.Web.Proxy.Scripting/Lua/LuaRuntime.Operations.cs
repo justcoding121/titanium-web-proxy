@@ -84,6 +84,6 @@ internal sealed partial class LuaRuntime
             {
                 Interlocked.Decrement(ref _timers);
             }
-        });
+        }, Stopping);
     }
 }

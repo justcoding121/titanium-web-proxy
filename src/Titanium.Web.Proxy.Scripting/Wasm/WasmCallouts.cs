@@ -99,7 +99,7 @@ internal sealed class WasmCallouts : IDisposable
         }
 
         var callToken = token;
-        _ = Task.Run(() => RunHttpCallAsync(vm, contextId, callToken, request, timeoutMs));
+        _ = Task.Run(() => RunHttpCallAsync(vm, contextId, callToken, request, timeoutMs), _shutdown.Token);
         return WasmResult.Ok;
     }
 
@@ -123,7 +123,7 @@ internal sealed class WasmCallouts : IDisposable
         }
 
         var callToken = token;
-        _ = Task.Run(() => RunGrpcCallAsync(vm, contextId, callToken, request, timeoutMs));
+        _ = Task.Run(() => RunGrpcCallAsync(vm, contextId, callToken, request, timeoutMs), _shutdown.Token);
         return WasmResult.Ok;
     }
 
@@ -147,7 +147,7 @@ internal sealed class WasmCallouts : IDisposable
 
         _streams[token] = state;
         var callToken = token;
-        _ = Task.Run(() => RunGrpcStreamAsync(vm, contextId, callToken, request, state));
+        _ = Task.Run(() => RunGrpcStreamAsync(vm, contextId, callToken, request, state), _shutdown.Token);
         return WasmResult.Ok;
     }
 
@@ -205,6 +205,7 @@ internal sealed class WasmCallouts : IDisposable
         }
 
         _streams.Clear();
+        _shutdown.Dispose();
     }
 
     private bool TryResolve(WasmVm vm, string target, string defaultScheme, out Uri origin)
@@ -571,6 +572,7 @@ internal sealed class WasmCallouts : IDisposable
         private readonly CancellationTokenSource _cancel;
         private readonly long _limit;
         private long _pending;
+        private int _closed;
 
         public GrpcStreamState(CancellationToken shutdown, long limit)
         {
@@ -605,7 +607,19 @@ internal sealed class WasmCallouts : IDisposable
         public void Cancel()
         {
             Outgoing.Writer.TryComplete();
-            _cancel.Cancel();
+            if (Interlocked.Exchange(ref _closed, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _cancel.Cancel();
+            }
+            finally
+            {
+                _cancel.Dispose();
+            }
         }
     }
 
