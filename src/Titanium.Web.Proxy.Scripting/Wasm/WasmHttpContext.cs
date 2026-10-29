@@ -41,9 +41,6 @@ internal sealed class WasmHttpContext(WasmVm vm, int id, int rootId, WasmPlugin 
     /// <summary>True between a callback that answered Pause and the guest resuming (or answering) it.</summary>
     public bool Paused { get; private set; }
 
-    /// <summary>Work the guest started that can still resume a paused request (callouts in flight).</summary>
-    public int PendingWork { get; set; }
-
     public long RequestBodyBytes { get; private set; }
 
     public long ResponseBodyBytes { get; private set; }

@@ -128,6 +128,44 @@ internal static class WasmProperties
         return null;
     }
 
+    /// <summary>Attributes of a passthrough connection: its addresses, SNI, cluster and byte counts.</summary>
+    public static byte[]? ForStream(WasmStreamContext context, string path)
+    {
+        var connection = context.Connection;
+        switch (path)
+        {
+            case "source.address":
+                return connection.ClientEndPoint is { } client ? Utf8(client.ToString()) : null;
+            case "source.port":
+                return connection.ClientEndPoint is { } clientPort ? Int64(clientPort.Port) : null;
+            case "destination.address":
+                return connection.LocalEndPoint is { } local ? Utf8(local.ToString()) : null;
+            case "destination.port":
+                return connection.LocalEndPoint is { } localPort ? Int64(localPort.Port) : null;
+            case "connection.requested_server_name":
+                return Utf8(connection.ServerName ?? string.Empty);
+            case "connection.id":
+                return Int64(context.Id);
+            case "connection.mtls":
+                return [0];
+            case "connection.tls_version":
+                return Utf8(string.Empty);
+            case "connection.time":
+                return Int64(context.StartTime.ToUnixTimeMilliseconds() * 1_000_000);
+            case "connection.duration":
+                return Int64((DateTimeOffset.UtcNow - context.StartTime).Ticks * 100);
+            case "connection.received_bytes":
+                return Int64(context.DownstreamBytes);
+            case "connection.sent_bytes":
+                return Int64(context.UpstreamBytes);
+            case "cluster_name":
+            case "xds.cluster_name":
+                return Utf8(context.ChosenCluster ?? connection.ClusterId ?? string.Empty);
+        }
+
+        return null;
+    }
+
     public static byte[] Int64(long value)
     {
         var bytes = new byte[8];

@@ -72,6 +72,18 @@ internal sealed class WasmVmPool : IDisposable
         }
     }
 
+    /// <summary>The VMs in their slots right now; an empty slot (a rebuild in progress) is null.</summary>
+    public WasmVm?[] Vms
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _slots.ToArray();
+            }
+        }
+    }
+
     public int NextContextId() => Interlocked.Increment(ref _nextContextId);
 
     /// <summary>Builds every VM and starts the root context of each attached plugin in it. Throws, keeping nothing, on failure.</summary>

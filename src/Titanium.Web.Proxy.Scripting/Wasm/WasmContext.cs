@@ -17,6 +17,9 @@ internal abstract class WasmContext(WasmVm vm, int id, int rootId, WasmPlugin pl
 
     public WasmPlugin Plugin { get; } = plugin;
 
+    /// <summary>Work the guest started that can still resume a paused stream (callouts in flight).</summary>
+    public int PendingWork { get; set; }
+
     /// <summary>Values the guest stored with <c>proxy_set_property</c>, by NUL-joined path.</summary>
     public Dictionary<string, byte[]> Properties { get; } = new(StringComparer.Ordinal);
 

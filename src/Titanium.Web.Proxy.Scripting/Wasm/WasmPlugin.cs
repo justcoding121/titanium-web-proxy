@@ -8,10 +8,11 @@ namespace Titanium.Web.Proxy.Scripting.Wasm;
 
 /// <summary>
 /// One configured <c>kind: wasm</c> plugin. As a route plugin (<see cref="IProxyMiddleware"/>) it runs the request-headers
-/// phase; set as <c>ReverseProxyOptions.ScriptPipeline</c> (<see cref="IScriptPhaseHost"/>) it runs every HTTP phase.
-/// Each request gets its own proxy-wasm HTTP context in one VM for its whole life.
+/// phase; set as <c>ReverseProxyOptions.ScriptPipeline</c> (<see cref="IScriptPhaseHost"/>) it runs every HTTP phase; set
+/// on a passthrough listener's <c>StreamFilters</c> (<see cref="IStreamScriptFilter"/>) it runs as a proxy-wasm network
+/// filter. Each request or connection gets its own context in one VM for its whole life.
 /// </summary>
-internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IRequiresSessionPathMiddleware, IDisposable
+internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamScriptFilter, IRequiresSessionPathMiddleware, IDisposable
 {
     /// <summary>How often (in new contexts) a VM is swept for contexts whose request never reached the log phase.</summary>
     private const int SweepEvery = 1024;
@@ -119,6 +120,169 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IRequires
         }
 
         return default;
+    }
+
+    // IStreamScriptFilter: proxy-wasm stream contexts on passthrough connections.
+
+    public async ValueTask<StreamFilterResult> OnNewConnectionAsync(StreamConnectionContext context, CancellationToken cancellationToken)
+    {
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            var vm = Pool.Acquire();
+            var stream = new WasmStreamContext(vm, Pool.NextContextId(), RootId, this, context);
+            StreamFilterResult? result;
+            lock (vm.Gate)
+            {
+                vm.Register(stream);
+                vm.Effective = stream;
+                vm.Call("proxy_on_context_create", [stream.Id, RootId]);
+                context.Items[_itemKey] = stream;
+                result = stream.Finish(vm.Call("proxy_on_new_connection", [stream.Id], ProxyAction.Continue), isData: false);
+            }
+
+            return result ?? await ResumeStreamAsync(stream, isData: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch (WasmVmFaultException ex)
+        {
+            ForgetStream(context);
+            return FailStream(ex.Message, ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ForgetStream(context);
+            return FailStream("host failure", ex);
+        }
+        finally
+        {
+            WasmPluginMetrics.RecordCall(Name, "NewConnection", Stopwatch.GetElapsedTime(started).TotalSeconds);
+        }
+    }
+
+    public ValueTask<StreamFilterResult> OnDownstreamDataAsync(StreamConnectionContext context, ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken) => StreamDataAsync(context, data, ProxyBufferType.DownstreamData, "proxy_on_downstream_data", cancellationToken);
+
+    public ValueTask<StreamFilterResult> OnUpstreamDataAsync(StreamConnectionContext context, ReadOnlyMemory<byte> data,
+        CancellationToken cancellationToken) => StreamDataAsync(context, data, ProxyBufferType.UpstreamData, "proxy_on_upstream_data", cancellationToken);
+
+    /// <summary>Ends the stream context: both connection-close callbacks, then <c>on_log</c>, <c>on_done</c> and <c>on_delete</c>.</summary>
+    public ValueTask OnCloseAsync(StreamConnectionContext context)
+    {
+        if (FindStream(context) is not { } stream)
+        {
+            return default;
+        }
+
+        ForgetStream(context);
+        var vm = stream.Vm;
+        lock (vm.Gate)
+        {
+            try
+            {
+                if (vm.Faulted || vm.IsDisposed)
+                {
+                    return default;
+                }
+
+                vm.Effective = stream;
+                vm.Call("proxy_on_downstream_connection_close", [stream.Id, 0]);
+                vm.Call("proxy_on_upstream_connection_close", [stream.Id, 0]);
+                vm.Call("proxy_on_log", [stream.Id]);
+                vm.Call("proxy_on_done", [stream.Id], 1);
+                vm.Call("proxy_on_delete", [stream.Id]);
+            }
+            catch (WasmVmFaultException ex)
+            {
+                Logger?.LogDebug("WASM plugin '{Plugin}' failed while it closed a connection: {Reason}", Name, ex.Message);
+            }
+            finally
+            {
+                vm.Unregister(stream.Id);
+                vm.Effective = null;
+            }
+        }
+
+        return default;
+    }
+
+    private async ValueTask<StreamFilterResult> StreamDataAsync(StreamConnectionContext context, ReadOnlyMemory<byte> data,
+        ProxyBufferType direction, string export, CancellationToken cancellationToken)
+    {
+        if (FindStream(context) is not { } stream)
+        {
+            // The connection's context was dropped after a fault, which already answered by failMode.
+            return FailOpen ? StreamFilterResult.Continue : StreamFilterResult.Deny;
+        }
+
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            var vm = stream.Vm;
+            StreamFilterResult? result;
+            lock (vm.Gate)
+            {
+                vm.Effective = stream;
+                if (!stream.BeginData(direction, data))
+                {
+                    Logger?.LogWarning("WASM plugin '{Plugin}' closed a connection that held more than {Limit} bytes.", Name, Limits.BufferedBodyBytes);
+                    return StreamFilterResult.Deny;
+                }
+
+                result = stream.Finish(vm.Call(export, [stream.Id, stream.DataLength, 0]), isData: true);
+                if (result is not null)
+                {
+                    stream.EndData();
+                }
+            }
+
+            return result ?? await ResumeStreamAsync(stream, isData: true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (WasmVmFaultException ex)
+        {
+            ForgetStream(context);
+            return FailStream(ex.Message, ex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ForgetStream(context);
+            return FailStream("host failure", ex);
+        }
+        finally
+        {
+            WasmPluginMetrics.RecordCall(Name, "StreamData", Stopwatch.GetElapsedTime(started).TotalSeconds);
+        }
+    }
+
+    /// <summary>Waits, with no lock held, for a paused stream to be continued or closed, then answers.</summary>
+    private async ValueTask<StreamFilterResult> ResumeStreamAsync(WasmStreamContext stream, bool isData, CancellationToken cancellationToken)
+    {
+        var resumed = await stream.WaitForResumeAsync(TimeSpan.FromMilliseconds(Limits.PauseTimeoutMs), cancellationToken).ConfigureAwait(false);
+        var vm = stream.Vm;
+        lock (vm.Gate)
+        {
+            if (vm.Faulted || vm.IsDisposed)
+            {
+                ForgetStream(stream.Connection);
+                return FailStream(vm.FaultReason ?? "the VM was discarded", null);
+            }
+
+            var result = stream.Resolve(resumed, isData);
+            stream.EndData();
+            return result;
+        }
+    }
+
+    private WasmStreamContext? FindStream(StreamConnectionContext context) =>
+        context.Items.TryGetValue(_itemKey, out var value) ? value as WasmStreamContext : null;
+
+    private void ForgetStream(StreamConnectionContext context) => context.Items.Remove(_itemKey);
+
+    private StreamFilterResult FailStream(string reason, Exception? ex)
+    {
+        WasmPluginMetrics.RecordError(Name, "fault");
+        Logger?.LogWarning(ex is WasmVmFaultException ? null : ex,
+            "WASM plugin '{Plugin}' failed on a connection: {Reason}; failMode is {FailMode}.", Name, reason, FailOpen ? "open" : "closed");
+        return FailOpen ? StreamFilterResult.Continue : StreamFilterResult.Deny;
     }
 
     // IProxyMiddleware: the request-headers phase only, applied straight to the session.

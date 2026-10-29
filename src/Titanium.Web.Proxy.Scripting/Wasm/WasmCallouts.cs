@@ -259,10 +259,7 @@ internal sealed class WasmCallouts : IDisposable
         }
 
         token = Interlocked.Increment(ref _nextToken) & int.MaxValue;
-        if (vm.Effective is WasmHttpContext http)
-        {
-            http.PendingWork++;
-        }
+        vm.Effective.PendingWork++;
 
         return true;
     }
@@ -280,9 +277,9 @@ internal sealed class WasmCallouts : IDisposable
             finally
             {
                 vm.Callout = null;
-                if (last && context is WasmHttpContext http)
+                if (last)
                 {
-                    http.PendingWork = Math.Max(0, http.PendingWork - 1);
+                    context.PendingWork = Math.Max(0, context.PendingWork - 1);
                 }
             }
         });
@@ -416,13 +413,7 @@ internal sealed class WasmCallouts : IDisposable
         }
         else if (!_shutdown.IsCancellationRequested)
         {
-            _pool.Deliver(vm, contextId, context =>
-            {
-                if (context is WasmHttpContext http)
-                {
-                    http.PendingWork = Math.Max(0, http.PendingWork - 1);
-                }
-            });
+            _pool.Deliver(vm, contextId, context => context.PendingWork = Math.Max(0, context.PendingWork - 1));
         }
     }
 

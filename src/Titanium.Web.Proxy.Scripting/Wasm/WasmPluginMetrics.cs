@@ -16,8 +16,11 @@ internal static class WasmPluginMetrics
     private static readonly Counter<long> Errors = Meter.CreateCounter<long>(
         "twp.scripting.wasm.errors", "{error}", "WASM plugin calls that failed (trap, exhausted budget, unloaded).");
 
-    public static void RecordCall(string plugin, ScriptPhases phase, double seconds) =>
-        CallDuration.Record(seconds, new KeyValuePair<string, object?>("plugin", plugin), new KeyValuePair<string, object?>("phase", phase.ToString()));
+    public static void RecordCall(string plugin, ScriptPhases phase, double seconds) => RecordCall(plugin, phase.ToString(), seconds);
+
+    /// <summary>Records a callback by phase name; stream filters use <c>NewConnection</c> and <c>StreamData</c>.</summary>
+    public static void RecordCall(string plugin, string phase, double seconds) =>
+        CallDuration.Record(seconds, new KeyValuePair<string, object?>("plugin", plugin), new KeyValuePair<string, object?>("phase", phase));
 
     public static void RecordError(string plugin, string reason) =>
         Errors.Add(1, new KeyValuePair<string, object?>("plugin", plugin), new KeyValuePair<string, object?>("reason", reason));
