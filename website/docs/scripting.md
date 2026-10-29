@@ -406,22 +406,22 @@ Other gateways script their request path in different ways. This table lists wha
 | Traefik | Go plugins run by Yaegi, and WebAssembly middleware through http-wasm. | Lua and proxy-wasm. The http-wasm ABI is not supported, and Go plugins are replaced by [.NET plugins](/docs/plugins). |
 | APISIX | Lua plugins, external plugin runners, and a proxy-wasm plugin. | Lua and proxy-wasm in-process. There is no external plugin runner; use `extAuth` or a callout. |
 
-Checklist of what the engines cover, with the part of the surface that is not yet reachable from `twp.yaml`:
+Checklist of what the engines cover:
 
 | Capability | Lua | Wasm | Reachable from `twp.yaml` |
 | --- | --- | --- | --- |
-| Read and edit request and response headers | Yes | Yes | Request headers (route `middleware:`) |
-| Read and replace bodies, streaming or buffered | Yes | Yes | Request body with `bodyMode` |
+| Read and edit request and response headers | Yes | Yes | Request headers (route `middleware:`); all HTTP phases via `scriptPipeline` |
+| Read and replace bodies, streaming or buffered | Yes | Yes | `bodyMode` and `scriptPipeline` |
 | Answer locally (deny or respond) | Yes | Yes | Yes |
-| Choose the upstream cluster | Yes | Yes | No (.NET host, script pipeline) |
+| Choose the upstream cluster | Yes | Yes | Yes (`scriptPipeline`) |
 | Outbound HTTP, allow-listed | Yes (`http.call`) | Yes (`proxy_http_call`) | Yes (`calloutHosts`) |
 | Outbound gRPC | No | Yes | Yes (`calloutHosts`) |
 | State shared across requests and states | Yes (`shared.dict`) | Yes (shared data and queues) | Yes |
 | JWT verification | Yes (`jwt.verify`) | Guest code | Yes |
 | Timers | Yes (`timer`) | Yes (ticks) | Yes |
 | User metrics on the OTLP and Prometheus meter | Yes | Yes | Yes |
-| Raw TCP (L4) filters | Yes | Yes | No (.NET host, `StreamFilters`) |
-| Several scripts on one pipeline | Yes (`ScriptPhaseHostChain`) | Yes | No (.NET host) |
+| Raw TCP (L4) filters | Yes | Yes | Yes (`listeners[].streamFilters`) |
+| Several scripts on one pipeline | Yes (`ScriptPhaseHostChain`) | Yes | Yes (`scriptPipeline`) |
 | Per-script memory, CPU, and wall-time limits inside the engine | Yes | Yes | Yes |
 | A failed reload keeps the running script | Yes | Yes | Yes |
 
