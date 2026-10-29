@@ -12,6 +12,9 @@ namespace Titanium.Manager.Api;
 
 internal sealed class ManagerHttpServer : IAsyncDisposable
 {
+    /// <summary>Matches Plus <c>ControlHttpServer.MaxBodyBytes</c> — admin and agent request bodies.</summary>
+    internal const int MaxBodyBytes = ManagerRequestBody.MaxBodyBytes;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -128,6 +131,21 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             catch (UnauthorizedAccessException)
             {
                 await WriteTextAsync(context, 403, "forbidden").ConfigureAwait(false);
+            }
+            catch (RequestTooLargeException)
+            {
+                await WriteTextAsync(context, 413, "request too large").ConfigureAwait(false);
+            }
+        }
+        catch (RequestTooLargeException)
+        {
+            try
+            {
+                await WriteTextAsync(context, 413, "request too large").ConfigureAwait(false);
+            }
+            catch
+            {
+                /* ignore */
             }
         }
         catch (Exception)
@@ -663,8 +681,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         if (segments.Length == 2 && method == "POST")
         {
             Require(role, AdminRole.Editor);
-            using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-            var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+            var body = await ManagerRequestBody.ReadUtf8Async(context).ConfigureAwait(false);
             var author = actor;
             var yaml = body;
             if (IsJsonRequest(context.Request))
@@ -790,8 +807,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     private static async Task<(IReadOnlyList<PublishWaveSpec>? Waves, int? BakeSeconds)> ReadPublishBodyAsync(
         HttpListenerContext context)
     {
-        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-        var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+        var body = await ManagerRequestBody.ReadUtf8Async(context).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(body))
         {
             return (null, null);
@@ -990,8 +1006,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
 
     private static async Task<string> ReadYamlBodyAsync(HttpListenerContext context)
     {
-        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-        var body = await reader.ReadToEndAsync().ConfigureAwait(false);
+        var body = await ManagerRequestBody.ReadUtf8Async(context).ConfigureAwait(false);
         if (!IsJsonRequest(context.Request))
         {
             return body;
@@ -1013,19 +1028,11 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         return body;
     }
 
-    private static async Task<byte[]> ReadBodyBytesAsync(HttpListenerContext context)
-    {
-        await using var ms = new MemoryStream();
-        await context.Request.InputStream.CopyToAsync(ms).ConfigureAwait(false);
-        return ms.ToArray();
-    }
+    private static Task<byte[]> ReadBodyBytesAsync(HttpListenerContext context) =>
+        ManagerRequestBody.ReadBytesAsync(context);
 
-    private static async Task<JsonDocument> ReadJsonAsync(HttpListenerContext context)
-    {
-        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-        var json = await reader.ReadToEndAsync().ConfigureAwait(false);
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
-    }
+    private static Task<JsonDocument> ReadJsonAsync(HttpListenerContext context) =>
+        ManagerRequestBody.ReadJsonAsync(context);
 
     private static async Task WriteConfigAsync(HttpListenerContext context, PublishedConfig published)
     {

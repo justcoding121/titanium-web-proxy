@@ -115,7 +115,15 @@ internal sealed class ManagerUiHost
                 return true;
             }
 
-            await HandleUiApiAsync(context, method, path, session).ConfigureAwait(false);
+            try
+            {
+                await HandleUiApiAsync(context, method, path, session).ConfigureAwait(false);
+            }
+            catch (RequestTooLargeException)
+            {
+                await WriteTextAsync(context, 413, "request too large").ConfigureAwait(false);
+            }
+
             return true;
         }
 
@@ -601,10 +609,6 @@ internal sealed class ManagerUiHost
         context.Response.Headers["X-Frame-Options"] = "DENY";
     }
 
-    private static async Task<JsonDocument> ReadJsonAsync(HttpListenerContext context)
-    {
-        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
-        var json = await reader.ReadToEndAsync().ConfigureAwait(false);
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
-    }
+    private static Task<JsonDocument> ReadJsonAsync(HttpListenerContext context) =>
+        ManagerRequestBody.ReadJsonAsync(context);
 }

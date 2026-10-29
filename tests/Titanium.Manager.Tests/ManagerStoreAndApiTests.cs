@@ -1,7 +1,9 @@
 using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Manager.Api;
 using Titanium.Manager.Store;
 using Titanium.Manager.Validation;
 
@@ -128,6 +130,33 @@ public class ManagerStoreAndApiTests
         var actions = auditDoc.RootElement.EnumerateArray().Select(e => e.GetProperty("action").GetString()).ToHashSet();
         Assert.IsTrue(actions.Contains("revision.publish"));
         Assert.IsTrue(actions.Contains("agent-token.create"));
+    }
+
+    [TestMethod]
+    public async Task Api_OversizedBody_Returns413()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fleetDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "cap" })));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        var oversized = new byte[ManagerHttpServer.MaxBodyBytes + 1];
+        Array.Fill(oversized, (byte)'a');
+        using var content = new ByteArrayContent(oversized);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-yaml");
+        var rev = await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", content);
+        Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, rev.StatusCode);
+        StringAssert.Contains(await rev.Content.ReadAsStringAsync(), "request too large");
+
+        using var tokenDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/agent-tokens", ManagerTestHost.Json(new { fleetId, name = "big" })));
+        var agentToken = tokenDoc.RootElement.GetProperty("token").GetString()!;
+        using var agent = host.CreateAgentClient(agentToken);
+        using var ackContent = new ByteArrayContent(oversized);
+        ackContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        var ack = await agent.PostAsync("/v1/agent/ack", ackContent);
+        Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, ack.StatusCode);
     }
 
     [TestMethod]
