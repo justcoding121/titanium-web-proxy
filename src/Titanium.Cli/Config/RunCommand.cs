@@ -39,6 +39,9 @@ internal static class RunCommand
         "audit.path",
         "controlPlane.tls.certificatePath",
         "controlPlane.tls.keyPath",
+        "manager.tokenFile",
+        "manager.stateDir",
+        "manager.stateDirectory",
     ];
 
     public static async Task<int> ExecuteAsync(string[] args)
@@ -273,6 +276,20 @@ internal static class RunCommand
             }
         }
 
+        // Manager agent (Plus): when manager.url is set, the CLI supplies an applier that writes YAML to
+        // the active config path and reloads. Last-known-good lives under StateDirectory; if the manager
+        // is unreachable on first poll, ManagerAgent applies LKG in managed mode
+        // (ManagerAgent.TryReadLastKnownGood / state/last-known-good.yaml).
+        var managerUrl = plusOptions.GetValueOrDefault("manager.url");
+        var managerStateDir = plusOptions.GetValueOrDefault("manager.stateDir")
+                              ?? plusOptions.GetValueOrDefault("manager.stateDirectory")
+                              ?? (string.IsNullOrEmpty(configDir)
+                                  ? Path.Combine(Environment.CurrentDirectory, "state")
+                                  : Path.Combine(configDir, "state"));
+        IConfigApplier? configApplier = !string.IsNullOrWhiteSpace(managerUrl)
+            ? new CliManagedConfigApplier(configPath, PerformReloadAsync)
+            : null;
+
         plusContext = new PlusActivationContext
         {
             HostStatus = hostStatus,
@@ -289,6 +306,8 @@ internal static class RunCommand
             ResponseCache = responseCache,
             LatencyRecorder = loadBalancer,
             Logger = proxy.Logger,
+            ConfigApplier = configApplier,
+            StateDirectory = managerStateDir,
         };
         var plusActive = await TryActivatePlusAsync(loaded.Config, plusContext).ConfigureAwait(false);
         grpcJsonTranscoder = plusContext.GrpcJsonTranscoder;

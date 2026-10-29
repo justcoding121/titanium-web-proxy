@@ -3,6 +3,7 @@ using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
 using Titanium.Plus.Discovery;
 using Titanium.Plus.Grpc;
+using Titanium.Plus.Manager;
 using Titanium.Plus.Observability;
 using Titanium.Plus.Operations;
 using Titanium.Plus.Resilience;
@@ -115,6 +116,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         _ = IdempotentRetryGuard.TryStart(context, options);
         _ = GrpcTranscodeGuard.TryStart(context, options);
         _ = OidcLogin.TryStart(context);
+        _ = ManagerAgent.TryStart(context, options);
     }
 
     /// <summary>

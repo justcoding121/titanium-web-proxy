@@ -65,6 +65,14 @@ public interface IPlusHostStatus
     PlusConfigStatus GetConfigStatus();
 
     IReadOnlyList<PlusCertificateInfo> GetCertificates();
+
+    /// <summary>
+    /// Updates manager enrollment and drift flags shown on the dashboard Config page.
+    /// Default no-op for hosts that do not track manager state.
+    /// </summary>
+    void SetManagedState(bool managed, bool drifted)
+    {
+    }
 }
 
 /// <summary>A destination ejection, recovery, or failed probe. Holds ids and short reasons, never a credential.</summary>

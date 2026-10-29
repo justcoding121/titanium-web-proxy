@@ -44,6 +44,12 @@ public class FleetFeaturesNothingLoadedTests
         var managerType = typeof(TitaniumPlusModule).Assembly.GetType("Titanium.Plus.Manager.ManagerAgent");
         if (managerType is not null)
         {
+            var tryStart = managerType.GetMethod("TryStart", BindingFlags.Public | BindingFlags.Static);
+            if (tryStart is not null)
+            {
+                Assert.IsNull(tryStart.Invoke(null, [context, options]));
+            }
+
             var live = managerType.GetProperty("LiveLoops", BindingFlags.Public | BindingFlags.Static)
                        ?? managerType.GetProperty("LiveLoops", BindingFlags.NonPublic | BindingFlags.Static);
             if (live is not null)

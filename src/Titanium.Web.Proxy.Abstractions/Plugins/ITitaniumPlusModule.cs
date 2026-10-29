@@ -63,6 +63,18 @@ public sealed class PlusActivationContext
     /// <c>ReverseProxyOptions.FleetRateStore</c> during refresh. Null when unused.
     /// </summary>
     public IFleetRateStore? FleetRateStore { get; set; }
+
+    /// <summary>
+    /// Host seam for applying manager-pushed YAML (write + reload). Null when the host cannot apply
+    /// (tests without a CLI host, or advisory-only enrollment).
+    /// </summary>
+    public IConfigApplier? ConfigApplier { get; init; }
+
+    /// <summary>
+    /// Directory for manager agent state (last-known-good yaml/hash). Null uses <c>./state</c> under the process cwd
+    /// when the agent starts, or <c>manager.stateDir</c> from options.
+    /// </summary>
+    public string? StateDirectory { get; init; }
 }
 
 /// <summary>

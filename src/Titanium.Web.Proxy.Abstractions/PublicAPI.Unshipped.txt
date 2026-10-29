@@ -1117,3 +1117,18 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.LocalShare.get -> doub
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.LocalShare.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.FleetRateStore.get -> Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.FleetRateStore.set -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.ConfigApplyResult() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.Ok.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.Ok.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.Error.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.Error.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.AppliedHash.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult.AppliedHash.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigApplier
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigApplier.ApplyAsync(string! yaml, string! configHash, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Titanium.Web.Proxy.Abstractions.Plugins.ConfigApplyResult!>!
+Titanium.Web.Proxy.Abstractions.Plugins.IPlusHostStatus.SetManagedState(bool managed, bool drifted) -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigApplier.get -> Titanium.Web.Proxy.Abstractions.Plugins.IConfigApplier?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigApplier.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.StateDirectory.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.StateDirectory.init -> void
