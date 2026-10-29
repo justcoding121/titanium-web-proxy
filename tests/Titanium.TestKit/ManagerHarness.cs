@@ -108,10 +108,25 @@ public sealed class ManagerHarness : IAsyncDisposable
                 return;
             }
 
+            // Agent-shaped aliases matching titanium-manager (/v1/agent/config, /v1/agent/ack).
+            if (string.Equals(path, "/v1/agent/config", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(context.Request.HttpMethod, "GET", StringComparison.OrdinalIgnoreCase))
+            {
+                await LongPollAgentConfigAsync(context).ConfigureAwait(false);
+                return;
+            }
+
             if (string.Equals(path, "/v1/ack", StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
             {
                 await ReadAckAsync(context).ConfigureAwait(false);
+                return;
+            }
+
+            if (string.Equals(path, "/v1/agent/ack", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(context.Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
+            {
+                await ReadAgentAckAsync(context).ConfigureAwait(false);
                 return;
             }
 
@@ -162,6 +177,57 @@ public sealed class ManagerHarness : IAsyncDisposable
         context.Response.Close();
     }
 
+    private async Task LongPollAgentConfigAsync(HttpListenerContext context)
+    {
+        // Map have=<hash> to since=version: empty/missing have means "give current"; matching hash waits.
+        var have = context.Request.QueryString["have"] ?? "";
+        var waitRaw = context.Request.QueryString["wait"];
+        var waitSec = 2;
+        if (int.TryParse(waitRaw, out var w))
+        {
+            waitSec = Math.Clamp(w, 0, 30);
+        }
+
+        var deadline = DateTime.UtcNow.AddSeconds(waitSec);
+        while (DateTime.UtcNow < deadline && !_stop.IsCancellationRequested)
+        {
+            string body;
+            long version;
+            lock (_configGate)
+            {
+                version = _configVersion;
+                body = _configJson;
+            }
+
+            var hash = version.ToString();
+            if (string.IsNullOrEmpty(have) || !string.Equals(have, hash, StringComparison.Ordinal))
+            {
+                // Shape close to titanium-manager agent response.
+                var payload = JsonSerializer.Serialize(new Dictionary<string, object?>
+                {
+                    ["revisionId"] = version,
+                    ["hash"] = hash,
+                    ["configHash"] = hash,
+                    ["yaml"] = body,
+                    ["version"] = version,
+                    ["config"] = JsonSerializer.Deserialize<JsonElement>(body),
+                });
+                var bytes = Encoding.UTF8.GetBytes(payload);
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "application/json";
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+                context.Response.Close();
+                return;
+            }
+
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+
+        context.Response.StatusCode = 204;
+        context.Response.Close();
+    }
+
     private async Task ReadAckAsync(HttpListenerContext context)
     {
         using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
@@ -172,6 +238,31 @@ public sealed class ManagerHarness : IAsyncDisposable
         var version = root.TryGetProperty("version", out var v) && v.TryGetInt64(out var ver) ? ver : 0;
         var accepted = !root.TryGetProperty("accepted", out var a) || a.ValueKind != JsonValueKind.False;
         var reason = root.TryGetProperty("reason", out var r) ? r.GetString() : null;
+        _acks.Enqueue(new AckRecord(nodeId, version, accepted, reason));
+        context.Response.StatusCode = 204;
+        context.Response.Close();
+    }
+
+    private async Task ReadAgentAckAsync(HttpListenerContext context)
+    {
+        using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
+        var json = await reader.ReadToEndAsync().ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+        var root = doc.RootElement;
+        var nodeId = root.TryGetProperty("node_id", out var n) ? n.GetString() ?? ""
+            : root.TryGetProperty("nodeId", out var n2) ? n2.GetString() ?? "" : "";
+        var version = 0L;
+        if (root.TryGetProperty("config_hash", out var h) && long.TryParse(h.GetString(), out var fromHash))
+        {
+            version = fromHash;
+        }
+        else if (root.TryGetProperty("version", out var v) && v.TryGetInt64(out var ver))
+        {
+            version = ver;
+        }
+
+        var accepted = !root.TryGetProperty("ok", out var o) || o.ValueKind != JsonValueKind.False;
+        var reason = root.TryGetProperty("error", out var e) ? e.GetString() : null;
         _acks.Enqueue(new AckRecord(nodeId, version, accepted, reason));
         context.Response.StatusCode = 204;
         context.Response.Close();
