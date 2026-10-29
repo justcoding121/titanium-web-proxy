@@ -25,6 +25,7 @@
     <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
     <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
+    <ProjectReference Include="..\Titanium.Web.Proxy.Scripting\Titanium.Web.Proxy.Scripting.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="LICENSE" Pack="true" PackagePath="" />

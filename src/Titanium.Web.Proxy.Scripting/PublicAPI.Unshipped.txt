@@ -9,6 +9,10 @@ Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction
 Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunctions
 virtual Titanium.Web.Proxy.Scripting.Wasm.WasmForeignFunction.Invoke(System.ReadOnlySpan<byte> arguments) -> byte[]!
 Titanium.Web.Proxy.Scripting.ScriptingBootstrap
+Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine
+Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine.Kind.get -> string!
+Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine.LuaPluginEngine() -> void
+Titanium.Web.Proxy.Scripting.Lua.LuaPluginEngine.TryCreate(Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig! config, Microsoft.Extensions.Logging.ILogger? logger, out Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware? middleware, out string? error) -> bool
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.Kind.get -> string!
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.TryCreate(Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig! config, Microsoft.Extensions.Logging.ILogger? logger, out Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware? middleware, out string? error) -> bool

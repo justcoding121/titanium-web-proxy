@@ -1,4 +1,5 @@
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Scripting.Lua;
 using Titanium.Web.Proxy.Scripting.Wasm;
 
 namespace Titanium.Web.Proxy.Scripting;
@@ -12,6 +13,7 @@ public static class ScriptingBootstrap
     /// <summary>Registers every engine this package provides. Safe to call more than once.</summary>
     public static void Register()
     {
+        PluginEngines.Register(PluginKinds.Lua, static () => new LuaPluginEngine());
         PluginEngines.Register(PluginKinds.Wasm, static () => new WasmPluginEngine());
     }
 }

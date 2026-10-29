@@ -30,4 +30,17 @@
           CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ScriptingNativeDir)')" />
   </ItemGroup>
 
+  <!-- Builds the Lua shim into ScriptingNativeDir (skipped when it is up to date) and copies it beside the tests. A host with no
+       C compiler fetches the pinned Zig toolchain on Windows; if the build still fails, Lua tests are inconclusive.
+       Set SkipLuaShimBuild=true to only copy an existing build. -->
+  <Target Name="BuildLuaShim" AfterTargets="Build">
+    <Exec Condition="'$(SkipLuaShimBuild)' != 'true'"
+          Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\tools\scripting\build-lua-shim.ps1&quot; -OutDir &quot;$(ScriptingNativeDir.TrimEnd('\').TrimEnd('/'))&quot; -FetchZig"
+          ContinueOnError="WarnAndContinue" IgnoreExitCode="false" StandardOutputImportance="low" />
+    <ItemGroup>
+      <_LuaShimNative Include="$(ScriptingNativeDir)lua54*.dll;$(ScriptingNativeDir)liblua54*.so;$(ScriptingNativeDir)liblua54*.dylib" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LuaShimNative)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

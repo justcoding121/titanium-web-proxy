@@ -26,6 +26,33 @@ dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r win-x64 --self
   add `-Strict` to fail instead, or `-SkipLua` to skip on purpose.
 - Downloads are cached under `tools/packaging/.cache/scripting-natives/` (git-ignored; never commit binaries).
 
+## Build the Lua shim for development
+
+```powershell
+./tools/scripting/build-lua-shim.ps1 -OutDir src/Titanium.Cli/bin/Debug/net10.0
+```
+
+The script downloads and verifies the pinned Lua tarball, then compiles it with the shim into one library in `-OutDir`.
+It skips the build when the output is newer than every shim source (`-Force` rebuilds). On Windows it uses `cl` from
+`PATH`, then Visual Studio C++ tools found with `vswhere`, then MinGW `gcc`, then Zig. A machine with none of them can
+pass `-FetchZig` to download the pinned Zig toolchain (SHA-256 verified) into `tools/packaging/.cache/toolchains/`.
+
+`tests/Titanium.Web.Proxy.Scripting.Tests` runs the script after every build (output in
+`artifacts/scripting-natives/<rid>/`, copied beside the tests). Lua tests are inconclusive when it cannot build.
+Set `TITANIUM_SCRIPTING_NATIVE_DIR` to load `lua54` from another folder.
+
+## Shim layout
+
+| File | Contents |
+| --- | --- |
+| `twp_state.c` | State lifecycle, capped allocator, instruction/deadline hook, sandbox, `ctx`, start/resume/cancel. |
+| `twp_codec.c` | Tagged binary format shared with `LuaCodec.cs` (snapshots in, command buffers out). |
+| `twp_strlib.c` | Step-bounded Lua pattern matcher; `string.rep` / `string.format` caps; no `string.dump`. |
+| `twp_platform.c` | Clocks, OS random bytes, locks. |
+
+Exported functions never let a Lua error leave the library: each runs the state through `lua_pcall` or
+`lua_resume`, and the panic handler jumps back to the exported function as a last resort and marks the state broken.
+
 ## Build the Lua shim by hand
 
 Compile the Lua core (everything in `src/` except `lua.c` and `luac.c`) together with the shim sources.

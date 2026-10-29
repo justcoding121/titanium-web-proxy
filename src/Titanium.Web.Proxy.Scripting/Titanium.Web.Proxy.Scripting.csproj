@@ -10,7 +10,7 @@
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
     <VersionPrefix>7.0.27</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
-    <Description>Embedded scripting engines for Titanium Web Proxy plugins: proxy-wasm modules on the Wasmtime C API.</Description>
+    <Description>Embedded scripting engines for Titanium Web Proxy plugins: sandboxed Lua 5.4 scripts and proxy-wasm modules on the Wasmtime C API.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
