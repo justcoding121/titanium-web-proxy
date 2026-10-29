@@ -162,6 +162,22 @@ public static class TwpConfigValidator
                     {
                         errors.Add("plus.controlPlane.dashboardOidc needs cookieSecret, cookieSecretEnv, or cookieSecretFile.");
                     }
+
+                    if (string.IsNullOrWhiteSpace(oidc.RedirectUri))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc needs redirectUri.");
+                    }
+                    else if (!Uri.TryCreate(oidc.RedirectUri.Trim(), UriKind.Absolute, out var redirect) ||
+                             (redirect.Scheme != Uri.UriSchemeHttp && redirect.Scheme != Uri.UriSchemeHttps))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc.redirectUri must be an absolute http(s) URI.");
+                    }
+
+                    if (!HasDashboardOidcAllowlist(oidc))
+                    {
+                        errors.Add(
+                            "plus.controlPlane.dashboardOidc needs at least one of allowedEmails, allowedEmailDomains, operatorGroups, or viewerGroups.");
+                    }
                 }
             }
 
@@ -183,6 +199,15 @@ public static class TwpConfigValidator
                 errors);
         }
     }
+
+    private static bool HasDashboardOidcAllowlist(DashboardOidcConfig oidc) =>
+        HasNonEmptyList(oidc.AllowedEmails) ||
+        HasNonEmptyList(oidc.AllowedEmailDomains) ||
+        HasNonEmptyList(oidc.OperatorGroups) ||
+        HasNonEmptyList(oidc.ViewerGroups);
+
+    private static bool HasNonEmptyList(IEnumerable<string>? values) =>
+        values is not null && values.Any(static v => !string.IsNullOrWhiteSpace(v));
 
     /// <summary>
     ///     The control plane carries a shared secret and can rewrite routing, so a listener that is reachable from the

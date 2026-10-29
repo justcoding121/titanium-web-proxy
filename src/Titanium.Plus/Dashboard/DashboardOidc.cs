@@ -20,8 +20,8 @@ public sealed class DashboardOidcOptions
     /// <summary>32-byte cookie key as base64 or 64 hex digits (comma-separated rotation keys allowed).</summary>
     public required string CookieSecret { get; init; }
 
-    /// <summary>Absolute redirect URI registered with the IdP. When null, the dashboard derives it from the request host.</summary>
-    public string? RedirectUri { get; init; }
+    /// <summary>Absolute redirect URI registered with the IdP. Required when SSO is enabled.</summary>
+    public required string RedirectUri { get; init; }
 
     public IReadOnlyList<string>? OperatorGroups { get; init; }
 
@@ -73,7 +73,7 @@ internal sealed class DashboardOidc : IDisposable
     private readonly TimeProvider _time;
     private readonly HashSet<string> _operatorGroups;
     private readonly HashSet<string> _viewerGroups;
-    private readonly string? _fixedRedirectUri;
+    private readonly string _redirectUri;
     private readonly HttpClient _http;
     private bool _disposed;
 
@@ -85,7 +85,7 @@ internal sealed class DashboardOidc : IDisposable
         TimeProvider time,
         HashSet<string> operatorGroups,
         HashSet<string> viewerGroups,
-        string? fixedRedirectUri,
+        string redirectUri,
         HttpClient http)
     {
         _settings = settings;
@@ -95,7 +95,7 @@ internal sealed class DashboardOidc : IDisposable
         _time = time;
         _operatorGroups = operatorGroups;
         _viewerGroups = viewerGroups;
-        _fixedRedirectUri = fixedRedirectUri;
+        _redirectUri = redirectUri;
         _http = http;
     }
 
@@ -110,6 +110,24 @@ internal sealed class DashboardOidc : IDisposable
         if (string.IsNullOrWhiteSpace(options.Issuer) || string.IsNullOrWhiteSpace(options.ClientId))
         {
             throw new OidcConfigException("dashboard OIDC needs issuer and clientId.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.RedirectUri) ||
+            !Uri.TryCreate(options.RedirectUri.Trim(), UriKind.Absolute, out var redirect) ||
+            (redirect.Scheme != Uri.UriSchemeHttp && redirect.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new OidcConfigException("dashboard OIDC needs an absolute http(s) redirectUri.");
+        }
+
+        var operatorGroups = ToSet(options.OperatorGroups);
+        var viewerGroups = ToSet(options.ViewerGroups);
+        var allowedEmails = ToSet(options.AllowedEmails);
+        var allowedDomains = ToSet(options.AllowedEmailDomains);
+        if (operatorGroups.Count == 0 && viewerGroups.Count == 0 &&
+            allowedEmails.Count == 0 && allowedDomains.Count == 0)
+        {
+            throw new OidcConfigException(
+                "dashboard OIDC needs at least one of allowedEmails, allowedEmailDomains, operatorGroups, or viewerGroups.");
         }
 
         OidcCookieCrypto crypto;
@@ -151,9 +169,9 @@ internal sealed class DashboardOidc : IDisposable
             new OidcGuards(time),
             crypto,
             time,
-            ToSet(options.OperatorGroups),
-            ToSet(options.ViewerGroups),
-            string.IsNullOrWhiteSpace(options.RedirectUri) ? null : options.RedirectUri.Trim(),
+            operatorGroups,
+            viewerGroups,
+            options.RedirectUri.Trim(),
             http);
     }
 
@@ -173,12 +191,7 @@ internal sealed class DashboardOidc : IDisposable
                 new KeyValuePair<string, string>("Retry-After", "5"));
         }
 
-        var redirectUri = ResolveRedirectUri(request, secure);
-        if (redirectUri is null)
-        {
-            return ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request");
-        }
-
+        var redirectUri = _redirectUri;
         var state = RandomText(32);
         var verifier = RandomText(32);
         var flow = new DashboardOidcFlow
@@ -319,30 +332,6 @@ internal sealed class DashboardOidc : IDisposable
 
         role = DashboardRole.Viewer;
         return false;
-    }
-
-    private string? ResolveRedirectUri(ControlHttpRequest request, bool secure)
-    {
-        if (_fixedRedirectUri is not null)
-        {
-            return _fixedRedirectUri;
-        }
-
-        var host = request.Header("Host");
-        if (string.IsNullOrEmpty(host) || host.Length > 255)
-        {
-            return null;
-        }
-
-        foreach (var c in host)
-        {
-            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or ':' or '[' or ']' or '_'))
-            {
-                return null;
-            }
-        }
-
-        return (secure ? "https://" : "http://") + host + "/login/oidc/callback";
     }
 
     private DashboardOidcFlow? OpenFlow(ControlHttpRequest request, string cookieName)

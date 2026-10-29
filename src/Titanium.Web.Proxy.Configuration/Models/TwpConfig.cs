@@ -355,7 +355,7 @@ public sealed class DashboardOidcConfig
 
     public string? CookieSecretFile { get; set; }
 
-    /// <summary>Absolute redirect URI registered with the IdP. Default: derived from the dashboard Host header.</summary>
+    /// <summary>Absolute redirect URI registered with the IdP. Required when dashboard SSO is enabled.</summary>
     public string? RedirectUri { get; set; }
 
     public List<string>? OperatorGroups { get; set; }

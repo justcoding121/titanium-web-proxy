@@ -176,18 +176,38 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
                 "controlPlane.dashboardOidc needs cookieSecret (or cookieSecretEnv / cookieSecretFile resolved by the host).");
         }
 
+        var redirectUri = First(options, "controlPlane.dashboardOidc.redirectUri", "dashboard.oidc.redirectUri");
+        if (string.IsNullOrWhiteSpace(redirectUri))
+        {
+            throw new InvalidOperationException("controlPlane.dashboardOidc needs redirectUri.");
+        }
+
+        var operatorGroups = SplitList(First(options, "controlPlane.dashboardOidc.operatorGroups", "dashboard.oidc.operatorGroups"));
+        var viewerGroups = SplitList(First(options, "controlPlane.dashboardOidc.viewerGroups", "dashboard.oidc.viewerGroups"));
+        var allowedEmails = SplitList(First(options, "controlPlane.dashboardOidc.allowedEmails", "dashboard.oidc.allowedEmails"));
+        var allowedEmailDomains = SplitList(
+            First(options, "controlPlane.dashboardOidc.allowedEmailDomains", "dashboard.oidc.allowedEmailDomains"));
+        if ((operatorGroups is null || operatorGroups.Count == 0) &&
+            (viewerGroups is null || viewerGroups.Count == 0) &&
+            (allowedEmails is null || allowedEmails.Count == 0) &&
+            (allowedEmailDomains is null || allowedEmailDomains.Count == 0))
+        {
+            throw new InvalidOperationException(
+                "controlPlane.dashboardOidc needs at least one of allowedEmails, allowedEmailDomains, operatorGroups, or viewerGroups.");
+        }
+
         return new DashboardOidcOptions
         {
             Issuer = issuer,
             ClientId = clientId,
             ClientSecret = First(options, "controlPlane.dashboardOidc.clientSecret", "dashboard.oidc.clientSecret"),
             CookieSecret = cookieSecret,
-            RedirectUri = First(options, "controlPlane.dashboardOidc.redirectUri", "dashboard.oidc.redirectUri"),
+            RedirectUri = redirectUri,
             GroupsClaim = First(options, "controlPlane.dashboardOidc.groupsClaim", "dashboard.oidc.groupsClaim"),
-            OperatorGroups = SplitList(First(options, "controlPlane.dashboardOidc.operatorGroups", "dashboard.oidc.operatorGroups")),
-            ViewerGroups = SplitList(First(options, "controlPlane.dashboardOidc.viewerGroups", "dashboard.oidc.viewerGroups")),
-            AllowedEmails = SplitList(First(options, "controlPlane.dashboardOidc.allowedEmails", "dashboard.oidc.allowedEmails")),
-            AllowedEmailDomains = SplitList(First(options, "controlPlane.dashboardOidc.allowedEmailDomains", "dashboard.oidc.allowedEmailDomains")),
+            OperatorGroups = operatorGroups,
+            ViewerGroups = viewerGroups,
+            AllowedEmails = allowedEmails,
+            AllowedEmailDomains = allowedEmailDomains,
         };
     }
 

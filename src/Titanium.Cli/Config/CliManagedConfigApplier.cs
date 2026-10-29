@@ -1,12 +1,14 @@
 using System.Text;
+using Titanium.Cli.Parsers;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Configuration;
 
 namespace Titanium.Cli.Config;
 
 /// <summary>
-/// Writes manager-pushed YAML to the active config path, then runs the same atomic reload as SIGHUP /
-/// dashboard reload. Safe under the reload gate: a failed reload leaves the prior in-memory config
-/// (and the previous file is not restored — operators recover via last-known-good / re-publish).
+/// Writes manager-pushed YAML to a temp sibling, validates it, then atomically replaces the live config path
+/// and runs the same reload as SIGHUP / dashboard reload. On reload failure the previous file is restored from
+/// <c>.bak</c>.
 /// </summary>
 internal sealed class CliManagedConfigApplier : IConfigApplier
 {
@@ -26,22 +28,73 @@ internal sealed class CliManagedConfigApplier : IConfigApplier
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        string? tmp = null;
         try
         {
-            var dir = Path.GetDirectoryName(Path.GetFullPath(_configPath));
+            var fullPath = Path.GetFullPath(_configPath);
+            var dir = Path.GetDirectoryName(fullPath);
             if (!string.IsNullOrEmpty(dir))
             {
                 Directory.CreateDirectory(dir);
             }
 
-            var tmp = _configPath + "." + Environment.ProcessId + ".mgr.tmp";
-            await File.WriteAllTextAsync(tmp, yaml, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken)
-                .ConfigureAwait(false);
-            File.Move(tmp, _configPath, overwrite: true);
+            var ext = Path.GetExtension(fullPath);
+            if (string.IsNullOrEmpty(ext))
+            {
+                ext = ".yaml";
+            }
+
+            var bak = fullPath + ".bak";
+            tmp = Path.Combine(
+                dir ?? ".",
+                Path.GetFileNameWithoutExtension(fullPath) + ".mgr-" + Environment.ProcessId + ext);
+            var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+            await File.WriteAllTextAsync(tmp, yaml, encoding, cancellationToken).ConfigureAwait(false);
+
+            LoadedConfig loaded;
+            try
+            {
+                loaded = ConfigLoader.Load(tmp);
+            }
+            catch (Exception ex)
+            {
+                return new ConfigApplyResult { Ok = false, Error = "invalid config: " + ex.Message };
+            }
+
+            var errors = TwpConfigValidator.Validate(loaded.Config);
+            if (errors.Count > 0)
+            {
+                return new ConfigApplyResult { Ok = false, Error = string.Join("; ", errors) };
+            }
+
+            if (File.Exists(fullPath))
+            {
+                File.Copy(fullPath, bak, overwrite: true);
+            }
+
+            File.Move(tmp, fullPath, overwrite: true);
+            tmp = null;
 
             var result = await _reload(cancellationToken).ConfigureAwait(false);
             if (!result.Ok)
             {
+                if (File.Exists(bak))
+                {
+                    try
+                    {
+                        File.Copy(bak, fullPath, overwrite: true);
+                    }
+                    catch (Exception restoreEx) when (restoreEx is IOException or UnauthorizedAccessException)
+                    {
+                        return new ConfigApplyResult
+                        {
+                            Ok = false,
+                            Error = (result.Error ?? "reload failed") + "; restore failed: " + restoreEx.Message,
+                        };
+                    }
+                }
+
                 return new ConfigApplyResult
                 {
                     Ok = false,
@@ -61,6 +114,18 @@ internal sealed class CliManagedConfigApplier : IConfigApplier
         }
         finally
         {
+            if (tmp is not null)
+            {
+                try
+                {
+                    File.Delete(tmp);
+                }
+                catch
+                {
+                    /* ignore */
+                }
+            }
+
             _gate.Release();
         }
     }

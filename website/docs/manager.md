@@ -50,7 +50,7 @@ plus:
     manager.labels: '{"wave":"1","region":"us-east"}'
 ```
 
-In `managed` mode the agent applies published YAML through the same path as a file reload. `advisory` reports status without applying. `managed` conflicts with Gateway API / Ingress controller options and falls back to advisory with a warning.
+In `managed` mode the agent writes published YAML to a temp sibling of the active config, validates it with the same loader/validator as a file reload, then atomically replaces the live path and reloads. If reload fails, the previous file is restored from a `.bak` sibling. `advisory` reports status without applying. `managed` conflicts with Gateway API / Ingress controller options and falls back to advisory with a warning.
 
 ## Last-known-good
 

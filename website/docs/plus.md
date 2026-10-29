@@ -118,7 +118,7 @@ Relative paths resolve against the config directory. Unset leaves username/passw
 
 #### Dashboard SSO (OpenID Connect) {#dashboard-sso-openid-connect}
 
-`plus.controlPlane.dashboardOidc` (also exposed as `plus.options` keys `controlPlane.dashboardOidc.*`) turns on authorization-code login with PKCE for the dashboard itself — separate from the route `oidc` policy. Required: `issuer`, `clientId`, and `cookieSecret` (or `cookieSecretEnv` / `cookieSecretFile`). Optional: `clientSecret`, `redirectUri`, `groupsClaim`, `operatorGroups`, `viewerGroups`, `allowedEmails`, `allowedEmailDomains`.
+`plus.controlPlane.dashboardOidc` (also exposed as `plus.options` keys `controlPlane.dashboardOidc.*`) turns on authorization-code login with PKCE for the dashboard itself — separate from the route `oidc` policy. Required: `issuer`, `clientId`, `cookieSecret` (or `cookieSecretEnv` / `cookieSecretFile`), `redirectUri` (absolute http(s) URI registered with the IdP), and at least one allow-list among `allowedEmails`, `allowedEmailDomains`, `operatorGroups`, or `viewerGroups`. Optional: `clientSecret`, `groupsClaim`. Without an allow-list the config is rejected — SSO must not admit every IdP user as a viewer.
 
 ```yaml twp
 plus:
@@ -131,6 +131,7 @@ plus:
       clientId: titanium-dashboard
       clientSecretEnv: DASHBOARD_OIDC_CLIENT_SECRET
       cookieSecretEnv: DASHBOARD_OIDC_COOKIE_KEY
+      redirectUri: https://proxy.example/login/oidc/callback
       operatorGroups: [titanium-ops]
       viewerGroups: [titanium-view]
 ```
