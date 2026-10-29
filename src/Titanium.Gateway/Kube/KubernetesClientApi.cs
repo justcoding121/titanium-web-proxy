@@ -31,6 +31,8 @@ public sealed class KubernetesClientApi : IKubeApi, IDisposable
             request.Content = new StringContent(body, Encoding.UTF8, contentType ?? "application/json");
         }
 
+        await AuthenticateAsync(request, cancellationToken).ConfigureAwait(false);
+
         using var response = await _client.HttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
         var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         return new KubeResponse(response.StatusCode, text);
@@ -42,6 +44,7 @@ public sealed class KubernetesClientApi : IKubeApi, IDisposable
         HttpResponseMessage? response = null;
         try
         {
+            await AuthenticateAsync(request, cancellationToken).ConfigureAwait(false);
             response = await _client.HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
@@ -61,6 +64,13 @@ public sealed class KubernetesClientApi : IKubeApi, IDisposable
     }
 
     public void Dispose() => _client.Dispose();
+
+    /// <summary>
+    ///     The client's own <see cref="HttpClient"/> carries TLS trust but not the bearer token: the credentials object
+    ///     (which re-reads the projected service account token file as it rotates) stamps each request.
+    /// </summary>
+    private Task AuthenticateAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+        _client.Credentials is { } credentials ? credentials.ProcessHttpRequestAsync(request, cancellationToken) : Task.CompletedTask;
 
     /// <summary>Keeps the request and response alive for as long as the caller reads the stream.</summary>
     private sealed class OwnedStream : Stream

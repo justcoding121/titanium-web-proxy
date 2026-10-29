@@ -68,6 +68,9 @@ internal static class RunCommand
         CancellationToken stoppingToken,
         bool watch = false)
     {
+        // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
+        // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
+        var configHash = AdminHost.ComputeConfigHash(configPath);
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
@@ -104,8 +107,6 @@ internal static class RunCommand
         }
 
         var adminSetup = AdminHost.TryPrepare(loaded.Config.Server?.Admin);
-
-        var configHash = AdminHost.ComputeConfigHash(configPath);
 
         var requiresSessionPath = ConfigNeedsSessionPath(loaded.Config);
         // CLI is non-interactive: do not install the MITM root into the user trust store
@@ -271,7 +272,8 @@ internal static class RunCommand
                         }
                     },
                     onStopRequested: () => readiness.BeginDrain(),
-                    extraWatchPaths: secretFiles).ConfigureAwait(false);
+                    extraWatchPaths: secretFiles,
+                    loadedConfigHash: configHash).ConfigureAwait(false);
             }
             finally
             {
@@ -362,6 +364,9 @@ internal static class RunCommand
         CancellationToken stoppingToken = default,
         Action<TwpConfig>? onApplied = null)
     {
+        // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
+        // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
+        var configHash = AdminHost.ComputeConfigHash(configPath);
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
@@ -594,7 +599,8 @@ internal static class RunCommand
         bool watch,
         Func<Task>? onReload,
         Action? onStopRequested = null,
-        IReadOnlyList<string>? extraWatchPaths = null)
+        IReadOnlyList<string>? extraWatchPaths = null,
+        string? loadedConfigHash = null)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -700,6 +706,25 @@ internal static class RunCommand
                     onError: ex => AsyncConsole.WriteError("Config reload failed: " + ex.Message));
                 Console.WriteLine("config-watch-enabled");
                 await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+
+                // The watcher takes its baseline when it starts. A change between the load and now would never
+                // differ from that baseline, so the running config would stay stale until the next change.
+                if (!string.IsNullOrEmpty(loadedConfigHash) &&
+                    AdminHost.ComputeConfigHash(configPath) is { Length: > 0 } currentHash &&
+                    !string.Equals(currentHash, loadedConfigHash, StringComparison.Ordinal))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await onReload().ConfigureAwait(false);
+                        }
+                        catch
+                        {
+                            // Reload errors are logged by caller.
+                        }
+                    }, stoppingToken);
+                }
             }
 
             await tcs.Task.ConfigureAwait(false);

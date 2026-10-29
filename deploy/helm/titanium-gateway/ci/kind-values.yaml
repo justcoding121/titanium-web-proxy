@@ -1,4 +1,4 @@
-# Used by the Gateway API conformance workflow: images built and loaded into kind, no LoadBalancer.
+# Used by the Gateway API conformance workflow: images built and loaded into kind, a LoadBalancer address from MetalLB.
 controller:
   replicaCount: 2
   image:
@@ -16,7 +16,7 @@ dataPlane:
     tag: ci
     pullPolicy: Never
   service:
-    type: ClusterIP
+    type: LoadBalancer
   resources:
     requests:
       cpu: 50m

@@ -27,7 +27,27 @@ public class GatewayTranslatorRouteTests
 
     private static string? Winner(RenderResult result, string path, string host = "app.example.com", string method = "GET",
         Dictionary<string, string>? headers = null, Dictionary<string, string>? query = null) =>
-        new RouteMatcher().Match(new RouteMatchContext(host, path, method, headers, query), result.Config.Routes.ToList())?.Id;
+        new RouteMatcher().Match(new RouteMatchContext(host, path, method, headers, query), result.Config.UserRoutes().ToList())?.Id;
+
+    [TestMethod]
+    public void UnmatchedRequests_GetA404_NeverAForwardToTheHostTheClientNamed()
+    {
+        var b = Basic();
+        var result = RenderRoute(b, Route("r", "default", ["app.example.com"], Rule("web", 8080, PathPrefix("/api"))));
+        var routes = result.Config.Routes.ToList();
+
+        var matcher = new RouteMatcher();
+        Assert.AreEqual("default/r/r0m0", matcher.Match(new RouteMatchContext("app.example.com", "/api/x", "GET", null, null), routes)?.Id);
+        foreach (var (host, path) in new[] { ("app.example.com", "/other"), ("other.example.com", "/api"), ("172.19.255.200", "/") })
+        {
+            var hit = matcher.Match(new RouteMatchContext(host, path, "GET", null, null), routes);
+            Assert.AreEqual(GatewayTranslator.NoMatchRouteId, hit?.Id, $"{host}{path}");
+            Assert.AreEqual(404, hit!.DirectResponse?.Status);
+        }
+
+        Assert.AreEqual(GatewayTranslator.NoMatchRouteId, routes[^1].Id);
+        Assert.IsTrue(routes[^1].Order > routes.Take(routes.Count - 1).Max(r => r.Order));
+    }
 
     [TestMethod]
     public void Route_AttachesAndReportsAcceptedAndResolvedRefs()
@@ -42,7 +62,7 @@ public class GatewayTranslatorRouteTests
         var gateway = result.StatusPatches.Single(p => p.Kind == StatusKind.Gateway);
         Assert.AreEqual(1, gateway.Listeners!.Single().AttachedRoutes);
 
-        var route = result.Config.Routes.Single();
+        var route = result.Config.UserRoutes().Single();
         Assert.AreEqual("default/r/r0m0", route.Id);
         Assert.AreEqual("default/web:8080", route.ClusterId);
         Assert.IsNull(route.Match.Path);
@@ -61,7 +81,40 @@ public class GatewayTranslatorRouteTests
         var result = RenderRoute(b, route);
 
         Assert.IsFalse(result.StatusPatches.Any(p => p.Kind == StatusKind.HttpRoute));
-        Assert.AreEqual(0, result.Config.Routes.Count);
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public void ParentRefWithoutSectionName_IsAcceptedWhenAnyListenerIntersects_WhicheverComesLast(bool matchingFirst)
+    {
+        var b = Basic();
+        var match = Http("match", 80, "a.example.com");
+        var other = Http("other", 80, "b.example.com");
+        b.Gateways[0].Spec.Listeners = matchingFirst ? [match, other] : [other, match];
+        var result = RenderRoute(b, Route("r", "default", ["a.example.com"], Rule("web")));
+
+        var parent = Parent(result);
+        Assert.AreEqual("True", Cond(parent.Conditions, "Accepted").Status);
+        Assert.AreEqual("Accepted", Cond(parent.Conditions, "Accepted").Reason);
+        var gateway = result.StatusPatches.Single(p => p.Kind == StatusKind.Gateway).Listeners!;
+        Assert.AreEqual(1, gateway.Single(l => l.Name == "match").AttachedRoutes);
+        Assert.AreEqual(0, gateway.Single(l => l.Name == "other").AttachedRoutes);
+    }
+
+    [TestMethod]
+    public void ListenerWithAnUnresolvedCertificate_StillCountsItsAttachedRoutes()
+    {
+        var b = Basic();
+        b.Gateways[0].Spec.Listeners = [Https("https", 443, null, "missing-cert")];
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web")));
+
+        var listener = result.StatusPatches.Single(p => p.Kind == StatusKind.Gateway).Listeners!.Single();
+        Assert.AreEqual("False", Cond(listener.Conditions, "ResolvedRefs").Status);
+        Assert.AreEqual(1, listener.AttachedRoutes);
+        Assert.AreEqual("Accepted", Cond(Parent(result).Conditions, "Accepted").Reason);
+        Assert.AreEqual(0, result.Config.Listeners.Count, "the listener serves nothing until its certificate resolves");
     }
 
     [TestMethod]
@@ -75,7 +128,7 @@ public class GatewayTranslatorRouteTests
         var parent = Parent(result);
         Assert.AreEqual("False", Cond(parent.Conditions, "Accepted").Status);
         Assert.AreEqual("NoMatchingParent", Cond(parent.Conditions, "Accepted").Reason);
-        Assert.AreEqual(0, result.Config.Routes.Count);
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
     }
 
     [TestMethod]
@@ -87,7 +140,7 @@ public class GatewayTranslatorRouteTests
         var result = RenderRoute(b, Route("r", "apps", null, Rule("web")));
 
         Assert.AreEqual("NotAllowedByListeners", Cond(Parent(result).Conditions, "Accepted").Reason);
-        Assert.AreEqual(0, result.Config.Routes.Count);
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
     }
 
     [TestMethod]
@@ -97,7 +150,7 @@ public class GatewayTranslatorRouteTests
         all.Namespaces.Add(new NamespaceInfo("apps", Labels("apps")));
         all.AddService("apps", "web", 8080, "10.1.0.1");
         all.Gateways[0].Spec.Listeners[0].AllowedRoutes = new AllowedRoutes { Namespaces = new RouteNamespaces { From = "All" } };
-        Assert.AreEqual(1, RenderRoute(all, Route("r", "apps", null, Rule("web"))).Config.Routes.Count);
+        Assert.AreEqual(1, RenderRoute(all, Route("r", "apps", null, Rule("web"))).Config.UserRoutes().Count);
 
         var selected = Basic();
         selected.Namespaces.Add(new NamespaceInfo("apps", new Dictionary<string, string> { ["team"] = "blue" }));
@@ -110,11 +163,11 @@ public class GatewayTranslatorRouteTests
                 Selector = new LabelSelector { MatchLabels = new Dictionary<string, string> { ["team"] = "blue" } },
             },
         };
-        Assert.AreEqual(1, RenderRoute(selected, Route("r", "apps", null, Rule("web"))).Config.Routes.Count);
+        Assert.AreEqual(1, RenderRoute(selected, Route("r", "apps", null, Rule("web"))).Config.UserRoutes().Count);
 
         selected.Namespaces[1] = new NamespaceInfo("apps", new Dictionary<string, string> { ["team"] = "red" });
         selected.Routes.Clear();
-        Assert.AreEqual(0, RenderRoute(selected, Route("r", "apps", null, Rule("web"))).Config.Routes.Count);
+        Assert.AreEqual(0, RenderRoute(selected, Route("r", "apps", null, Rule("web"))).Config.UserRoutes().Count);
     }
 
     [TestMethod]
@@ -136,7 +189,7 @@ public class GatewayTranslatorRouteTests
         b.Gateways[0].Spec.Listeners[0].Hostname = "*.example.com";
         var result = RenderRoute(b, Route("r", "default", ["app.example.com", "other.org"], Rule("web")));
 
-        CollectionAssert.AreEqual(new[] { "app.example.com" }, result.Config.Routes.Single().Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(new[] { "app.example.com" }, result.Config.UserRoutes().Single().Match.Hosts!.ToArray());
     }
 
     [TestMethod]
@@ -156,7 +209,7 @@ public class GatewayTranslatorRouteTests
         b.Gateways[0].Spec.Listeners[0].Hostname = "only.example.com";
         var result = RenderRoute(b, Route("r", "default", null, Rule("web")));
 
-        CollectionAssert.AreEqual(new[] { "only.example.com" }, result.Config.Routes.Single().Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(new[] { "only.example.com" }, result.Config.UserRoutes().Single().Match.Hosts!.ToArray());
     }
 
     [TestMethod]
@@ -170,7 +223,7 @@ public class GatewayTranslatorRouteTests
             PathPrefix("/api/"),
             PathPrefix("/"),
             new HttpRouteMatch { Path = new HttpPathMatch { Type = "RegularExpression", Value = "/v[0-9]+/.*" } });
-        var routes = RenderRoute(b, Route("r", "default", null, rule)).Config.Routes.OrderBy(r => r.Id).ToList();
+        var routes = RenderRoute(b, Route("r", "default", null, rule)).Config.UserRoutes().OrderBy(r => r.Id).ToList();
 
         Assert.AreEqual((PathMatchKind.Exact, "/exact"), (routes[0].Match.PathKind, routes[0].Match.Path));
         Assert.AreEqual((PathMatchKind.SegmentPrefix, "/api"), (routes[1].Match.PathKind, routes[1].Match.Path));
@@ -192,7 +245,7 @@ public class GatewayTranslatorRouteTests
                 new HttpQueryParamMatch { Name = "v", Value = "[0-9]+", Type = "RegularExpression" },
             ],
         };
-        var route = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match))).Config.Routes.Single();
+        var route = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match))).Config.UserRoutes().Single();
 
         Assert.AreEqual("POST", route.Match.Method);
         Assert.AreEqual("lab", route.Match.Headers!["x-env"]);
@@ -207,7 +260,7 @@ public class GatewayTranslatorRouteTests
         var match = new HttpRouteMatch { Headers = [new HttpHeaderMatch { Name = "x", Value = ".*", Type = "RegularExpression" }] };
         var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
 
-        Assert.AreEqual(500, result.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
         Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
         Assert.IsTrue(result.Notes.Any(n => n.Contains("header match", StringComparison.Ordinal)));
     }
@@ -219,7 +272,7 @@ public class GatewayTranslatorRouteTests
         var match = new HttpRouteMatch { Path = new HttpPathMatch { Type = "RegularExpression", Value = "(?=x)" } };
         var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
 
-        Assert.AreEqual(500, result.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
     }
 
     [TestMethod]
@@ -257,7 +310,7 @@ public class GatewayTranslatorRouteTests
         Assert.AreEqual("default/method/r1m0", Winner(result, "/m", method: "GET"));
         Assert.AreEqual("default/headers/r0m0", Winner(result, "/h", headers: new() { ["a"] = "1" }));
         Assert.AreEqual("default/headers/r1m0", Winner(result, "/h", headers: new() { ["a"] = "1", ["b"] = "2" }));
-        var orders = result.Config.Routes.Select(r => r.Order).ToList();
+        var orders = result.Config.UserRoutes().Select(r => r.Order).ToList();
         CollectionAssert.AllItemsAreUnique(orders);
     }
 

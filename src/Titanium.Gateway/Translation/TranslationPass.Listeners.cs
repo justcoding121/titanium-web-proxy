@@ -49,6 +49,12 @@ internal sealed class ListenerOutcome
     public bool Programmable =>
         Accepted && !Conflicted && KindsValid && (!IsHttps || Certificates.Count > 0);
 
+    /// <summary>
+    ///     True when the listener is valid except for an HTTPS certificate that did not resolve: routes still attach
+    ///     (and are counted) so a certificate fix does not change the route status.
+    /// </summary>
+    public bool CanAttachRoutes => Accepted && !Conflicted && KindsValid && IsHttps && Certificates.Count == 0;
+
     public string? InvalidReason { get; set; }
 }
 
@@ -110,6 +116,9 @@ internal sealed partial class TranslationPass
         }
     }
 
+    private static bool IsHttpRoute(RouteGroupKind kind) =>
+        kind.Kind == HttpRouteGroupKind && (string.IsNullOrEmpty(kind.Group) || kind.Group == GatewayApiNames.Group);
+
     private static void EvaluateAllowedKinds(ListenerOutcome item)
     {
         var kinds = item.Listener.AllowedRoutes?.Kinds;
@@ -118,8 +127,16 @@ internal sealed partial class TranslationPass
             return;
         }
 
-        var supported = kinds.Any(k =>
-            k.Kind == HttpRouteGroupKind && (string.IsNullOrEmpty(k.Group) || k.Group == GatewayApiNames.Group));
+        var supported = kinds.Any(k => IsHttpRoute(k));
+        if (supported && !kinds.All(IsHttpRoute))
+        {
+            // The listener still serves the kinds it supports; ResolvedRefs reports the rest.
+            item.RefsResolved = false;
+            item.RefsReason = "InvalidRouteKinds";
+            item.RefsMessage = "allowedRoutes.kinds also lists kinds this controller does not support; only HTTPRoute is served.";
+            return;
+        }
+
         if (!supported)
         {
             item.KindsValid = false;
@@ -219,8 +236,10 @@ internal sealed partial class TranslationPass
     }
 
     /// <summary>
-    ///     Two listeners on one port conflict when their protocols differ or they share a hostname. The older
-    ///     Gateway (then the earlier name) wins, as the API specifies.
+    ///     Two listeners on one port conflict when their protocols differ (a data-plane port never mixes HTTP and
+    ///     HTTPS), or when they share a hostname within one Gateway. Gateways of this class share one data plane, so
+    ///     listeners of different Gateways on the same port and hostname merge into one data-plane listener. The older
+    ///     Gateway (then the earlier name) wins a protocol clash, as the API specifies.
     /// </summary>
     private void DetectConflicts()
     {
@@ -234,10 +253,11 @@ internal sealed partial class TranslationPass
             {
                 var clash = kept.FirstOrDefault(k =>
                     k.Listener.Protocol != candidate.Listener.Protocol ||
-                    string.Equals(
-                        Hostnames.Normalize(k.Listener.Hostname),
-                        Hostnames.Normalize(candidate.Listener.Hostname),
-                        StringComparison.Ordinal));
+                    (ReferenceEquals(k.Owner, candidate.Owner) &&
+                     string.Equals(
+                         Hostnames.Normalize(k.Listener.Hostname),
+                         Hostnames.Normalize(candidate.Listener.Hostname),
+                         StringComparison.Ordinal)));
                 if (clash is null)
                 {
                     kept.Add(candidate);

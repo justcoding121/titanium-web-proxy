@@ -56,12 +56,20 @@ public sealed class GatewayOptionsAndObserverTests
     }
 
     [TestMethod]
-    public void Options_RejectUnknownFlagsAndEnvironmentNames()
+    public void Options_RejectUnknownFlags_AndReportUnknownEnvironmentNames()
     {
         var flag = Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse(["--bogus", "x"], NoEnvironment));
         StringAssert.Contains(flag.Message, "bogus");
-        var env = new Dictionary<string, string?> { ["TITANIUM_GATEWAY_DATA_PLANE_SERVCE"] = "typo" };
-        Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse([], env));
+        // Service-link variables Kubernetes injects for a Service named titanium-gateway-data share the prefix.
+        var env = new Dictionary<string, string?>
+        {
+            ["TITANIUM_GATEWAY_DATA_PORT"] = "tcp://10.96.0.1:80",
+            ["TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS"] = "443",
+            ["TITANIUM_GATEWAY_DATA_PLANE_SERVICE"] = "titanium",
+        };
+        var options = GatewayOptions.Parse(["--no-leader-election", "--data-plane-namespace", "x"], env);
+        Assert.AreEqual("titanium", options.DataPlaneService);
+        CollectionAssert.AreEqual(new[] { "TITANIUM_GATEWAY_DATA_PORT", "TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS" }, options.IgnoredEnvironment.ToArray());
     }
 
     [TestMethod]

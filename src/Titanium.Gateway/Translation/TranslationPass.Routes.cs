@@ -122,7 +122,9 @@ internal sealed partial class TranslationPass
         parent.Message = "No programmable listener matches the parentRef.";
         foreach (var candidate in candidates)
         {
-            if (!candidate.Programmable)
+            // A listener whose only fault is an unresolved certificate still counts its routes (attachedRoutes), as
+            // the API defines; it serves nothing until the reference resolves.
+            if (!candidate.Programmable && !candidate.CanAttachRoutes)
             {
                 continue;
             }
@@ -130,7 +132,7 @@ internal sealed partial class TranslationPass
             furthest = Math.Max(furthest, 1);
             if (!NamespaceAllowed(candidate, route))
             {
-                if (furthest <= 1)
+                if (furthest <= 1 && !parent.Accepted)
                 {
                     parent.Reason = "NotAllowedByListeners";
                     parent.Message = "The listener's allowedRoutes does not admit this route's namespace.";
@@ -143,7 +145,7 @@ internal sealed partial class TranslationPass
             var hosts = EffectiveHostnames(route, candidate.Listener.Hostname);
             if (hosts.Count == 0)
             {
-                if (furthest <= 2)
+                if (furthest <= 2 && !parent.Accepted)
                 {
                     parent.Reason = "NoMatchingListenerHostname";
                     parent.Message = "No route hostname intersects the listener hostname.";

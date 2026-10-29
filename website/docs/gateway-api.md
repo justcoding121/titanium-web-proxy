@@ -84,7 +84,7 @@ kubectl -n apps get httproute shop -o jsonpath='{.status.parents[0].conditions[*
 1. **Informers** keep an in-memory view of `GatewayClass`, `Gateway`, `HTTPRoute`, `ReferenceGrant`, `Namespace`, `Service`, `EndpointSlice`, and the `kubernetes.io/tls` Secrets. Nothing is written to disk.
 2. **A coalesced reconcile** runs at most once every 500 ms, however many changes arrive. It renders the whole cluster state through a pure function: the same state always gives the same config.
 3. **Only the leader writes.** Replicas elect a leader with a `Lease`. The leader writes the data-plane ConfigMap (`twp.yaml`), the Secret with converted certificates, and resource status. A follower keeps its caches warm and takes over within the lease duration (15 s) if the leader stops.
-4. **The data plane reloads in place.** The pods mount the ConfigMap and the Secret in one directory and run with `--watch`, so routes, clusters, and certificates reload without a restart.
+4. **The data plane reloads in place.** The pods mount the ConfigMap and the Secret in one directory and run with `--watch`, so routes, clusters, and certificates reload without a restart. The kubelet refreshes a mounted ConfigMap only on its next periodic sync, up to about a minute later, so after each write the controller annotates the data-plane pods (`gateway.titaniumproxy.com/config-poke`), which makes the kubelet refresh the volume at once. A change reaches the pods in a few seconds.
 5. **Listeners roll the pods.** Listeners are bound at start. When the set of listeners changes (a new port, or a port that starts to decrypt TLS), the controller stamps the data-plane pod template and Kubernetes rolls the Deployment with no unavailable pod.
 6. **Programmed is confirmed, not assumed.** The controller reads `/readyz` and `/version` from every ready data-plane pod and compares the `config_hash` with the SHA-256 of the config it wrote. Until they match, `Programmed` is `False` with reason `Pending`, and the controller polls again every 5 s.
 
@@ -130,11 +130,28 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 
 These follow from how the data plane works. They are deliberate and listed so nothing surprises you.
 
+- **Gateways of one class share one data plane.** Listeners of different Gateways on the same port merge into one data-plane listener, and routes are not scoped to a Gateway. Two listeners with the same hostname conflict only inside one Gateway. A request no route matches answers `404`; it is never forwarded to the host the client named.
+- **`RequestHeaderModifier` `add` replaces a header the client already sent**, where the specification appends to it. The data plane's header transforms start from an empty header set, so they cannot see the client's value. A header the client did not send is added as the specification says.
 - **Routes are global across listeners.** The data plane matches routes by host, path, header, query, and method, not by listener port. Two Gateway listeners that would serve different routes on different ports serve the same routes.
 - **A mix of valid and invalid backends answers `503` for the invalid share**, where the specification says `500`. When no backend of a rule is usable, the rule answers `500`.
 - **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive.
 - **`ResponseHeaderModifier` add acts as set.** The data plane keeps one value per response header.
+- **A listener with a mix of supported and unsupported `allowedRoutes.kinds`** serves the supported ones (`supportedKinds` lists `HTTPRoute`) and reports `ResolvedRefs` `False`, reason `InvalidRouteKinds`.
 - **Privileged ports are mapped.** The data plane runs as non-root, so Gateway port `80` is bound as `8080` and `443` as `8443` (`dataPlane.ports`). The Service maps them back.
+
+## Conformance
+
+The repository runs the upstream Gateway API conformance suite (v1.2.1, profile `GATEWAY-HTTP`) against this controller:
+
+- `tools/gateway-conformance/run.sh` builds both images, creates a `kind` cluster, installs MetalLB (so the data-plane Service gets an address), installs the chart with `deploy/helm/titanium-gateway/ci/kind-values.yaml`, runs the suite in a `golang` container on the `kind` network, and writes the report to `artifacts/gateway-conformance-report.yaml`.
+- `.github/workflows/gateway-conformance.yml` runs it on Linux for pull requests that touch the controller, the chart, or the images, and weekly. It uploads the report. **The first runs report only**: a failing suite does not fail the workflow until the repository variable `GATEWAY_CONFORMANCE_ENFORCE` is `true`.
+- **It needs Linux, Docker, `kind`, `kubectl`, and Helm. It does not run on a Windows host**, because the suite reaches the Gateway address over the container network; use WSL 2 or a Linux machine.
+- Only features this controller implements are claimed (`--supported-features`). Not claimed: response header `add` (the data plane keeps one value per header), redirects without a hostname, the request and backend timeout features (not yet verified against the suite), `GRPCRoute`, `TLSRoute`, and port-based listener features. The report lists what passed, failed, and was skipped.
+
+**Status.** The suite was run on a `kind` cluster (Linux containers on Docker Desktop) before release: 31 of the 33 core tests pass, and 2 of the 5 extended tests. The failures have two causes, both in the data plane rather than the controller:
+
+- `HTTPRouteRequestHeaderModifier`, `HTTPRouteRewriteHost`, `HTTPRouteRewritePath`, and `HTTPRouteRequestMirror` each include a rule that adds a header the request already carries, and the data plane replaces it instead of appending.
+- `HTTPRouteHTTPSListener`: the data plane closes the TLS handshake of a transparent decrypting listener on this runtime, so an `HTTPS` Gateway listener is accepted and programmed but does not yet serve traffic.
 
 ## Configuration
 
@@ -157,7 +174,7 @@ The controller reads flags or the matching `TITANIUM_GATEWAY_*` environment vari
 
 ## Security
 
-- **RBAC is least privilege.** Reads cover the watched kinds. Writes are status on `gatewayclasses`, `gateways`, and `httproutes`, plus `update` and `patch` on exactly the data-plane ConfigMap, the certificate Secret, the data-plane Deployment, and the Lease, all by name, in the release namespace.
+- **RBAC is least privilege.** Reads cover the watched kinds. Writes are status on `gatewayclasses`, `gateways`, and `httproutes`, plus `update` and `patch` on exactly the data-plane ConfigMap, the certificate Secret, the data-plane Deployment, and the Lease, all by name, in the release namespace. The one write that cannot be limited by name is `patch` on `pods` in the release namespace, used only to set the `config-poke` annotation described in [How it works](#how-it-works); pod names are not known ahead of time.
 - **Secret read access is the broad part.** By default the controller can read TLS Secrets in every namespace, because a Gateway may reference any of them. Set `controller.secretNamespaces` to limit both the watch and the RBAC to listed namespaces; the chart then creates a `Role` in each instead of a cluster-wide rule.
 - **The admin token** protects `/metrics` and `/version` on the data plane. The chart creates one and shares it with the controller, which needs `/version` to confirm `Programmed`.
 - **Both images run as non-root** (UID `1654`) with a read-only root file system and no capabilities.

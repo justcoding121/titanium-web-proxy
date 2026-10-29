@@ -149,6 +149,41 @@ public sealed class OutputWriter
         }
     }
 
+    /// <summary>The pod annotation the controller bumps to make the kubelet refresh the mounted ConfigMap and Secret.</summary>
+    public const string PokeAnnotation = "gateway.titaniumproxy.com/config-poke";
+
+    /// <summary>
+    ///     Asks the kubelet to refresh the config volumes now. A mounted ConfigMap otherwise reaches a pod after the
+    ///     kubelet's next periodic sync, up to about a minute; a pod update triggers that sync at once. Best effort:
+    ///     returns the number of pods that could not be annotated (a pod that is gone is not a failure).
+    /// </summary>
+    public async Task<int> PokePodsAsync(IEnumerable<string> podNames, string token, CancellationToken cancellationToken)
+    {
+        var patch = new JsonObject
+        {
+            ["metadata"] = new JsonObject { ["annotations"] = new JsonObject { [PokeAnnotation] = token } },
+        }.ToJsonString();
+        var failed = 0;
+        foreach (var name in podNames.Distinct(StringComparer.Ordinal))
+        {
+            var path = $"/api/v1/namespaces/{Uri.EscapeDataString(_options.Namespace)}/pods/{Uri.EscapeDataString(name)}";
+            try
+            {
+                var response = await _api.SendAsync(HttpMethod.Patch, path, patch, "application/merge-patch+json", cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccess && !response.IsNotFound)
+                {
+                    failed++;
+                }
+            }
+            catch (HttpRequestException)
+            {
+                failed++;
+            }
+        }
+
+        return failed;
+    }
+
     /// <summary>A short, stable fingerprint of the listeners that need a process restart to change.</summary>
     public static string SignatureOf(IEnumerable<Titanium.Web.Proxy.Configuration.Models.ListenerConfig> listeners)
     {

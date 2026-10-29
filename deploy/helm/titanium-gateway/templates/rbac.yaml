@@ -89,6 +89,11 @@ rules:
     resources: ["secrets"]
     resourceNames: [{{ include "titanium-gateway.tlsSecretName" . | quote }}]
     verbs: ["get", "update", "patch"]
+  # A mounted ConfigMap reaches a pod after the next kubelet sync, up to a minute. The controller annotates the
+  # data-plane pods after a write so the kubelet refreshes the volume at once. Pod names are not known ahead.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["patch"]
   # Listeners bind at start, so a change of listener set rolls the data plane.
   - apiGroups: ["apps"]
     resources: ["deployments"]

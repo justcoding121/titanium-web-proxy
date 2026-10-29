@@ -99,7 +99,8 @@ internal static class ResourceParsers
         var endpoints = element.GetArray("endpoints")
             .Select(e => new EndpointInfo(
                 e.GetArray("addresses").Select(a => a.GetString() ?? string.Empty).Where(a => a.Length > 0).ToList(),
-                e.GetBool("conditions", "ready")))
+                e.GetBool("conditions", "ready"),
+                e.GetString("targetRef", "kind") == "Pod" ? e.GetString("targetRef", "name") : null))
             .ToList();
         return new EndpointSliceInfo(ns, name, service, element.GetString("addressType"), ports, endpoints);
     }

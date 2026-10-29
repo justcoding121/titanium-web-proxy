@@ -1,4 +1,5 @@
 using Titanium.Gateway.Model;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
 namespace Titanium.Gateway.Translation;
@@ -10,6 +11,9 @@ namespace Titanium.Gateway.Translation;
 /// </summary>
 public sealed class GatewayTranslator
 {
+    /// <summary>Id of the lowest-precedence route that answers 404 for a request nothing else matched.</summary>
+    public const string NoMatchRouteId = "titanium-gateway-no-match";
+
     private readonly GatewayTranslatorOptions _options;
 
     public GatewayTranslator(GatewayTranslatorOptions? options = null) => _options = options ?? new GatewayTranslatorOptions();
@@ -103,6 +107,17 @@ internal sealed partial class TranslationPass
             config.Routes.Add(sortedDrafts[i].Build(i + 1));
         }
 
+        // A request no route matches must get 404. Without this route the data plane would forward it to the host
+        // the client named, which for a Gateway address is the data plane itself.
+        config.Routes.Add(new RouteConfig
+        {
+            Id = GatewayTranslator.NoMatchRouteId,
+            ClusterId = "titanium-gateway-none",
+            Order = sortedDrafts.Count + 1,
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            DirectResponse = new DirectResponseConfig { Status = 404 },
+        });
+
         foreach (var cluster in clusters.Build())
         {
             config.Clusters.Add(cluster);
@@ -115,11 +130,16 @@ internal sealed partial class TranslationPass
             foreach (var file in listener.Certificates)
             {
                 files[file.FileName] = file;
-                items.Add(new CertificateFileConfig
+                var path = _options.TlsMountPath.TrimEnd('/') + "/" + file.FileName;
+                var host = Hostnames.Normalize(listener.Listener.Hostname) ?? "*";
+
+                // Listeners of different Gateways can merge onto one host and share a Secret.
+                if (items.Any(i => i.Path == path && i.Hosts is [var existing] && existing == host))
                 {
-                    Path = _options.TlsMountPath.TrimEnd('/') + "/" + file.FileName,
-                    Hosts = [Hostnames.Normalize(listener.Listener.Hostname) ?? "*"],
-                });
+                    continue;
+                }
+
+                items.Add(new CertificateFileConfig { Path = path, Hosts = [host] });
             }
         }
 

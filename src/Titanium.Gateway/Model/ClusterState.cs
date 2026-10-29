@@ -25,7 +25,8 @@ public sealed record ServiceAddress(string Value, bool IsHostname);
 
 /// <summary>One endpoint of an EndpointSlice.</summary>
 /// <param name="Ready">The <c>conditions.ready</c> value. Null means ready, as the API defines it.</param>
-public sealed record EndpointInfo(IReadOnlyList<string> Addresses, bool? Ready);
+/// <param name="PodName">The <c>targetRef</c> Pod name, when the endpoint is a pod.</param>
+public sealed record EndpointInfo(IReadOnlyList<string> Addresses, bool? Ready, string? PodName = null);
 
 /// <summary>One named port of an EndpointSlice.</summary>
 public sealed record EndpointPortInfo(string? Name, int Port, string? Protocol);

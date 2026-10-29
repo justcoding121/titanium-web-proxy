@@ -200,7 +200,7 @@ public sealed class ClusterFixture : IAsyncDisposable
             { "metadata": { "name": "{{DataService}}-xyz", "namespace": "{{DataNamespace}}", "labels": { "kubernetes.io/service-name": "{{DataService}}" } },
               "addressType": "IPv4",
               "ports": [ { "name": "http", "port": 8080, "protocol": "TCP" } ],
-              "endpoints": [ { "addresses": [ "10.1.0.1" ], "conditions": { "ready": true } }, { "addresses": [ "10.1.0.2" ], "conditions": { "ready": true } } ] }
+              "endpoints": [ { "addresses": [ "10.1.0.1" ], "conditions": { "ready": true }, "targetRef": { "kind": "Pod", "name": "data-0" } }, { "addresses": [ "10.1.0.2" ], "conditions": { "ready": true }, "targetRef": { "kind": "Pod", "name": "data-1" } } ] }
             """));
     }
 }

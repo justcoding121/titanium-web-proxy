@@ -203,15 +203,29 @@ public class GatewayTranslatorListenerTests
     }
 
     [TestMethod]
-    public void SamePortSameHostname_IsAHostnameConflict()
+    public void SamePortSameHostnameInOneGateway_IsAHostnameConflict()
+    {
+        var b = StateBuilder.Basic();
+        b.Gateways[0].Spec.Listeners = [StateBuilder.Http("first", 80), StateBuilder.Http("second", 80)];
+        var result = b.Render();
+
+        var listeners = GatewayPatch(result).Listeners!;
+        Assert.AreEqual("NoConflicts", Cond(listeners.Single(l => l.Name == "first").Conditions, "Conflicted").Reason);
+        Assert.AreEqual("HostnameConflict", Cond(listeners.Single(l => l.Name == "second").Conditions, "Conflicted").Reason);
+        Assert.AreEqual(1, result.Config.Listeners.Count);
+    }
+
+    [TestMethod]
+    public void SamePortSameHostnameInDifferentGateways_MergeOntoOneDataPlaneListener()
     {
         var b = StateBuilder.Basic();
         b.Gateways.Add(StateBuilder.Gateway("newer", "default", [StateBuilder.Http("http", 80)], created: StateBuilder.T0.AddDays(1)));
         var result = b.Render();
 
-        Assert.AreEqual(
-            "HostnameConflict",
-            Cond(GatewayPatch(result, "newer").Listeners!.Single().Conditions, "Conflicted").Reason);
+        var newer = GatewayPatch(result, "newer");
+        Assert.AreEqual("NoConflicts", Cond(newer.Listeners!.Single().Conditions, "Conflicted").Reason);
+        Assert.AreEqual("True", Cond(newer.Conditions, "Accepted").Status);
+        Assert.AreEqual(1, result.Config.Listeners.Count);
     }
 
     [TestMethod]

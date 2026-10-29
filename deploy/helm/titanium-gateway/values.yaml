@@ -114,9 +114,9 @@ dataPlane:
       existingSecret: ""
       key: admin-token
 
-  # The config the pods start with, before the controller has published anything: no listeners, admin only. The
+  # The config the pods start with, before the controller has published anything: no listeners, a 404 for everything, admin only. The
   # controller replaces it. Keep it equal to what the controller renders for an empty cluster (a test checks this).
-  bootstrapConfig: '{"schemaVersion":"7.1","listeners":[],"routes":[],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5}}}'
+  bootstrapConfig: '{"schemaVersion":"7.1","listeners":[],"routes":[{"id":"titanium-gateway-no-match","clusterId":"titanium-gateway-none","match":{"path":"/","pathKind":"prefix","pathCaseSensitive":true},"order":1,"directResponse":{"status":404},"grpcWeb":false}],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5}}}'
 
   podAnnotations: {}
   podLabels: {}

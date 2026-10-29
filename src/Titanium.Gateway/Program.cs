@@ -26,6 +26,11 @@ using var loggers = LoggerFactory.Create(builder => builder
         c.TimestampFormat = "HH:mm:ss ";
     }));
 var log = loggers.CreateLogger("titanium-gateway");
+if (options.IgnoredEnvironment.Count > 0)
+{
+    log.LogWarning("Ignoring environment variables that name no option (Kubernetes service links?): {Names}",
+        string.Join(", ", options.IgnoredEnvironment));
+}
 
 using var stop = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>

@@ -41,6 +41,7 @@ spec:
       {{- end }}
       serviceAccountName: {{ $data }}
       automountServiceAccountToken: false
+      enableServiceLinks: false
       {{- with .Values.dataPlane.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}

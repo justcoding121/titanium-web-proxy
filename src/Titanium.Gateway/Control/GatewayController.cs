@@ -59,6 +59,10 @@ public sealed class GatewayController
     private readonly Channel<bool> _signals = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });
     private DateTimeOffset _lastOutputInvalidation;
     private bool _wasLeader;
+    private int _pokeAttempt;
+
+    /// <summary>A pod that still runs an old config is poked this many times (once per confirm poll) before the kubelet's own sync is left to do it.</summary>
+    private const int MaxPokes = 24;
 
     public GatewayController(
         ClusterCache cache,
@@ -205,29 +209,67 @@ public sealed class GatewayController
                 hash[..12], render.Config.Routes.Count, render.Config.Clusters.Count, render.Config.Listeners.Count);
         }
 
-        var observation = await ObserveAsync(state, cancellationToken).ConfigureAwait(false);
+        var (observation, pods) = await ObserveAsync(state, cancellationToken).ConfigureAwait(false);
         var confirmed = observation.Confirms(hash);
+        await PokeAsync(wrote, hash, observation, pods, cancellationToken).ConfigureAwait(false);
         var (written, failed) = await _status.ApplyAsync(render.Finalize(observation, hash), state, cancellationToken).ConfigureAwait(false);
         return new ReconcileOutcome(true, hash, wrote, written, failed, confirmed, hasListeners);
     }
 
-    private async Task<DataPlaneObservation> ObserveAsync(ClusterState state, CancellationToken cancellationToken)
+    /// <summary>
+    ///     A mounted ConfigMap reaches a pod when the kubelet next syncs it, up to about a minute later. Touching the
+    ///     pod makes the kubelet sync at once, so a route change takes effect in seconds. Pods that still run an old
+    ///     config are touched again on each confirm poll.
+    /// </summary>
+    private async Task PokeAsync(bool wrote, string hash, DataPlaneObservation observation, IReadOnlyList<string?> pods, CancellationToken cancellationToken)
+    {
+        IEnumerable<string> targets;
+        string token;
+        if (wrote)
+        {
+            _pokeAttempt = 0;
+            targets = pods.OfType<string>();
+            token = hash[..16];
+        }
+        else if (!observation.Confirms(hash) && _pokeAttempt < MaxPokes)
+        {
+            targets = pods
+                .Select((name, i) => (name, stale: i >= observation.PodHashes.Count || observation.PodHashes[i] != hash))
+                .Where(p => p.name is not null && p.stale)
+                .Select(p => p.name!)
+                .ToList();
+            token = $"{hash[..16]}.{++_pokeAttempt}";
+        }
+        else
+        {
+            return;
+        }
+
+        var list = targets.ToList();
+        if (list.Count > 0 && await _output.PokePodsAsync(list, token, cancellationToken).ConfigureAwait(false) is var failed and > 0)
+        {
+            _log.LogDebug("Could not ask {Count} data-plane pods to refresh their config volume.", failed);
+        }
+    }
+
+    private async Task<(DataPlaneObservation Observation, IReadOnlyList<string?> Pods)> ObserveAsync(ClusterState state, CancellationToken cancellationToken)
     {
         var service = _options.Translator.DataPlaneServiceName;
         var ns = _options.Translator.DataPlaneServiceNamespace;
         if (service is null || ns is null)
         {
-            return DataPlaneObservation.None;
+            return (DataPlaneObservation.None, []);
         }
 
-        var addresses = state.EndpointSlices
+        var endpoints = state.EndpointSlices
             .Where(s => s.Namespace == ns && s.ServiceName == service)
             .SelectMany(s => s.Endpoints)
             .Where(e => e.Ready != false)
-            .SelectMany(e => e.Addresses)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(a => a, StringComparer.Ordinal)
+            .SelectMany(e => e.Addresses.Select(a => (Address: a, e.PodName)))
+            .DistinctBy(e => e.Address, StringComparer.Ordinal)
+            .OrderBy(e => e.Address, StringComparer.Ordinal)
             .ToList();
-        return await _observer.ObserveAsync(addresses, cancellationToken).ConfigureAwait(false);
+        var observation = await _observer.ObserveAsync(endpoints.Select(e => e.Address).ToList(), cancellationToken).ConfigureAwait(false);
+        return (observation, endpoints.Select(e => e.PodName).ToList());
     }
 }

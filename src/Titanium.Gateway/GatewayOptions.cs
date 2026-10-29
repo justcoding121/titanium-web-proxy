@@ -51,6 +51,13 @@ public sealed class GatewayOptions
 
     public bool Verbose { get; private set; }
 
+    /// <summary>
+    ///     Environment variables with the <c>TITANIUM_GATEWAY_</c> prefix that name no option. Kubernetes injects
+    ///     service-link variables (for a Service called <c>titanium-gateway-data</c>: <c>TITANIUM_GATEWAY_DATA_PORT</c> and
+    ///     friends) that share the prefix, so these are reported, not fatal. Unknown flags stay fatal.
+    /// </summary>
+    public IReadOnlyList<string> IgnoredEnvironment { get; private set; } = [];
+
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
     {
         "controller-name", "data-plane-namespace", "data-plane-service", "data-plane-deployment", "config-map", "tls-secret",
@@ -63,12 +70,21 @@ public sealed class GatewayOptions
     public static GatewayOptions Parse(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> environment)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var ignoredEnvironment = new List<string>();
         foreach (var pair in environment)
         {
             const string prefix = "TITANIUM_GATEWAY_";
             if (pair.Key.StartsWith(prefix, StringComparison.Ordinal) && !string.IsNullOrEmpty(pair.Value))
             {
-                values[pair.Key[prefix.Length..].ToLowerInvariant().Replace('_', '-')] = pair.Value;
+                var name = pair.Key[prefix.Length..].ToLowerInvariant().Replace('_', '-');
+                if (Known.Contains(name))
+                {
+                    values[name] = pair.Value;
+                }
+                else
+                {
+                    ignoredEnvironment.Add(pair.Key);
+                }
             }
         }
 
@@ -111,7 +127,7 @@ public sealed class GatewayOptions
         string? Get(string name) => values.TryGetValue(name, out var value) ? value : null;
         string Fallback(string name, string key) => Get(name) ?? environment.GetValueOrDefault(key) ?? string.Empty;
 
-        var options = new GatewayOptions();
+        var options = new GatewayOptions { IgnoredEnvironment = ignoredEnvironment.Order(StringComparer.Ordinal).ToList() };
         var podNamespace = Fallback("pod-namespace", "POD_NAMESPACE");
         options.ControllerName = Get("controller-name") ?? options.ControllerName;
         options.DataPlaneService = Get("data-plane-service") ?? string.Empty;

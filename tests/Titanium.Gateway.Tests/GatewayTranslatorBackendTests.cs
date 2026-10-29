@@ -36,7 +36,7 @@ public class GatewayTranslatorBackendTests
             new HttpBackendRef { Name = "web", Port = 8080, Weight = 90 },
             new HttpBackendRef { Name = "canary", Port = 8080, Weight = 10 }));
 
-        var route = result.Config.Routes.Single();
+        var route = result.Config.UserRoutes().Single();
         Assert.AreEqual("default/web:8080", route.ClusterId);
         CollectionAssert.AreEqual(
             new[] { ("default/web:8080", 90), ("default/canary:8080", 10) },
@@ -53,7 +53,7 @@ public class GatewayTranslatorBackendTests
             new HttpBackendRef { Name = "web", Port = 8080 },
             new HttpBackendRef { Name = "off", Port = 8080, Weight = 0 }));
 
-        Assert.IsNull(result.Config.Routes.Single().Clusters);
+        Assert.IsNull(result.Config.UserRoutes().Single().Clusters);
         Assert.AreEqual(1, result.Config.Clusters.Count);
     }
 
@@ -100,7 +100,7 @@ public class GatewayTranslatorBackendTests
         b.Slices[0] = b.Slices[0] with { Endpoints = [new EndpointInfo(["10.0.0.1"], false)] };
         var result = Render(b, WithBackends(new HttpBackendRef { Name = "web", Port = 8080 }));
 
-        Assert.AreEqual(500, result.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
         Assert.AreEqual(0, result.Config.Clusters.Count);
         Assert.AreEqual("True", Cond(Parent(result).Conditions, "ResolvedRefs").Status);
     }
@@ -114,7 +114,7 @@ public class GatewayTranslatorBackendTests
             new HttpBackendRef { Name = "web", Port = 8080, Weight = 3 },
             new HttpBackendRef { Name = "down", Port = 8080, Weight = 1 }));
 
-        var route = result.Config.Routes.Single();
+        var route = result.Config.UserRoutes().Single();
         Assert.IsNull(route.DirectResponse);
         Assert.AreEqual(2, route.Clusters!.Count);
         Assert.AreEqual(1, route.Clusters[1].Weight);
@@ -127,7 +127,7 @@ public class GatewayTranslatorBackendTests
         var b = Basic();
         var result = Render(b, WithBackends(new HttpBackendRef { Name = "ghost", Port = 8080 }));
 
-        Assert.AreEqual(500, result.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
         var refs = Cond(Parent(result).Conditions, "ResolvedRefs");
         Assert.AreEqual("False", refs.Status);
         Assert.AreEqual("BackendNotFound", refs.Reason);
@@ -153,7 +153,7 @@ public class GatewayTranslatorBackendTests
         b.AddService("data", "db", 8080, "10.9.0.1");
         var denied = Render(b, WithBackends(new HttpBackendRef { Name = "db", Port = 8080, Namespace = "data" }));
         Assert.AreEqual("RefNotPermitted", Cond(Parent(denied).Conditions, "ResolvedRefs").Reason);
-        Assert.AreEqual(500, denied.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, denied.Config.UserRoutes().Single().DirectResponse?.Status);
 
         b.Routes.Clear();
         b.Grants.Add(new ReferenceGrant
@@ -166,7 +166,7 @@ public class GatewayTranslatorBackendTests
             },
         });
         var allowed = Render(b, WithBackends(new HttpBackendRef { Name = "db", Port = 8080, Namespace = "data" }));
-        Assert.AreEqual("data/db:8080", allowed.Config.Routes.Single().ClusterId);
+        Assert.AreEqual("data/db:8080", allowed.Config.UserRoutes().Single().ClusterId);
         Assert.AreEqual("True", Cond(Parent(allowed).Conditions, "ResolvedRefs").Status);
     }
 
@@ -195,7 +195,7 @@ public class GatewayTranslatorBackendTests
         var b = Basic();
         var result = Render(b, Route("r", "default", null, new HttpRouteRule()));
 
-        Assert.AreEqual(500, result.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
     }
 
     [TestMethod]
@@ -225,7 +225,7 @@ public class GatewayTranslatorBackendTests
                 },
             },
         ];
-        var kinds = Render(b, Route("r", "default", null, rule)).Config.Routes.Single().Transforms!.Select(t => t.Kind).ToArray();
+        var kinds = Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().Transforms!.Select(t => t.Kind).ToArray();
 
         CollectionAssert.AreEqual(
             new[]
@@ -256,7 +256,7 @@ public class GatewayTranslatorBackendTests
                 },
             },
         ];
-        var transforms = Render(b, Route("r", "default", null, rule)).Config.Routes.Single().Transforms!;
+        var transforms = Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().Transforms!;
 
         Assert.AreEqual("Host", transforms[0].Parameters!["name"]);
         Assert.AreEqual("internal.test", transforms[0].Parameters!["value"]);
@@ -285,7 +285,7 @@ public class GatewayTranslatorBackendTests
                 UrlRewrite = new HttpUrlRewrite { Path = new HttpPathModifier { Type = "ReplacePrefixMatch", ReplacePrefixMatch = "/xyz" } },
             },
         ];
-        var transforms = Render(b, Route("r", "default", null, rule)).Config.Routes.Single().Transforms!;
+        var transforms = Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().Transforms!;
 
         var ctx = new TransformRequestContext { Path = input };
         new Titanium.Web.Proxy.Transforms.TransformEngine().ApplyRequestTransforms(transforms, ctx);
@@ -305,7 +305,7 @@ public class GatewayTranslatorBackendTests
                 UrlRewrite = new HttpUrlRewrite { Path = new HttpPathModifier { Type = "ReplacePrefixMatch", ReplacePrefixMatch = "/" } },
             },
         ];
-        var transforms = Render(b, Route("r", "default", null, rule)).Config.Routes.Single().Transforms!;
+        var transforms = Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().Transforms!;
 
         foreach (var (input, expected) in new[] { ("/abc/def", "/def"), ("/abc", "/"), ("/abc?q=1", "/?q=1") })
         {
@@ -337,7 +337,7 @@ public class GatewayTranslatorBackendTests
                 },
             ],
         };
-        var route = Render(b, Route("r", "default", null, rule)).Config.Routes.Single();
+        var route = Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single();
 
         Assert.AreEqual(301, route.Redirect!.Status);
         Assert.AreEqual("https", route.Redirect.Scheme);
@@ -355,7 +355,7 @@ public class GatewayTranslatorBackendTests
         {
             Filters = [new HttpRouteFilter { Type = "RequestRedirect", RequestRedirect = new HttpRequestRedirect { Scheme = "https" } }],
         };
-        var routes = Render(b, Route("r", "default", ["a.example.com", "b.example.com"], rule)).Config.Routes;
+        var routes = Render(b, Route("r", "default", ["a.example.com", "b.example.com"], rule)).Config.UserRoutes();
 
         Assert.AreEqual(2, routes.Count);
         CollectionAssert.AreEquivalent(new[] { "a.example.com", "b.example.com" }, routes.Select(r => r.Redirect!.Host).ToArray());
@@ -372,7 +372,7 @@ public class GatewayTranslatorBackendTests
         };
         var result = Render(b, Route("r", "default", null, rule));
 
-        Assert.AreEqual(500, result.Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
         Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
     }
 
@@ -396,7 +396,7 @@ public class GatewayTranslatorBackendTests
             ],
         };
 
-        Assert.AreEqual(500, Render(b, Route("r", "default", null, rule)).Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().DirectResponse?.Status);
     }
 
     [TestMethod]
@@ -419,7 +419,7 @@ public class GatewayTranslatorBackendTests
         ];
         var result = Render(b, Route("r", "default", null, rule));
 
-        var mirror = result.Config.Routes.Single().Mirror!;
+        var mirror = result.Config.UserRoutes().Single().Mirror!;
         Assert.AreEqual("default/shadow:8080", mirror.ClusterId);
         Assert.AreEqual(25, mirror.SamplePercent);
         Assert.AreEqual(2, result.Config.Clusters.Count);
@@ -440,7 +440,7 @@ public class GatewayTranslatorBackendTests
         ];
         var result = Render(b, Route("r", "default", null, rule));
 
-        Assert.IsNull(result.Config.Routes.Single().Mirror);
+        Assert.IsNull(result.Config.UserRoutes().Single().Mirror);
         Assert.AreEqual("False", Cond(Parent(result).Conditions, "ResolvedRefs").Status);
     }
 
@@ -451,7 +451,7 @@ public class GatewayTranslatorBackendTests
         var rule = Rule("web");
         rule.Filters = [new HttpRouteFilter { Type = "ExtensionRef" }];
 
-        Assert.AreEqual(500, Render(b, Route("r", "default", null, rule)).Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().DirectResponse?.Status);
     }
 
     [TestMethod]
@@ -462,7 +462,7 @@ public class GatewayTranslatorBackendTests
         rule.Timeouts = new HttpRouteTimeouts { Request = "2500ms", BackendRequest = "1s" };
         var result = Render(b, Route("r", "default", null, rule));
 
-        var route = result.Config.Routes.Single();
+        var route = result.Config.UserRoutes().Single();
         Assert.AreEqual(3, route.Limits!.RequestTimeoutSeconds);
         Assert.AreEqual(TimeSpan.FromSeconds(1), result.Config.Clusters.Single().HttpClient!.RequestTimeout);
         Assert.IsTrue(route.ClusterId.Contains('@', StringComparison.Ordinal));
@@ -474,12 +474,12 @@ public class GatewayTranslatorBackendTests
         var b = Basic();
         var rule = Rule("web");
         rule.Timeouts = new HttpRouteTimeouts { Request = "0s" };
-        Assert.IsNull(Render(b, Route("r", "default", null, rule)).Config.Routes.Single().Limits);
+        Assert.IsNull(Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().Limits);
 
         var b2 = Basic();
         var bad = Rule("web");
         bad.Timeouts = new HttpRouteTimeouts { Request = "soon" };
-        Assert.AreEqual(500, Render(b2, Route("r", "default", null, bad)).Config.Routes.Single().DirectResponse?.Status);
+        Assert.AreEqual(500, Render(b2, Route("r", "default", null, bad)).Config.UserRoutes().Single().DirectResponse?.Status);
     }
 
     [TestMethod]
@@ -507,7 +507,7 @@ public class GatewayTranslatorBackendTests
         Assert.AreEqual(result.Config.Routes.Count, loaded.Routes.Count);
         Assert.AreEqual(result.Config.Clusters.Count, loaded.Clusters.Count);
         Assert.AreEqual(0, TwpConfigValidator.Validate(loaded).Count, string.Join("; ", TwpConfigValidator.Validate(loaded)));
-        Assert.AreEqual(result.Config.Routes.Select(r => r.Match.PathKind).First(), loaded.Routes.Select(r => r.Match.PathKind).First());
+        Assert.AreEqual(result.Config.UserRoutes().Select(r => r.Match.PathKind).First(), loaded.Routes.Select(r => r.Match.PathKind).First());
         Assert.IsNotNull(loaded.Routes.First(r => r.Match.QueryParameters is not null).Match.QueryParameters);
         Assert.AreEqual(TimeSpan.FromSeconds(5), loaded.Clusters.First(c => c.HttpClient is not null).HttpClient!.RequestTimeout);
         Assert.AreEqual("TITANIUM_ADMIN_TOKEN", loaded.Server!.Admin!.AuthTokenEnv);

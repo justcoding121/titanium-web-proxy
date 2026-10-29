@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Gateway.Control;
 using Titanium.Gateway.Tests.Support;
+using Titanium.Gateway.Translation;
 using Titanium.Web.Proxy.Configuration;
 
 namespace Titanium.Gateway.Tests;
@@ -32,8 +33,10 @@ public sealed class GatewayControllerTests
         Assert.IsNotNull(text);
         var config = TwpConfigLoader.LoadYaml(text);
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
-        Assert.AreEqual(1, config.Routes.Count);
-        CollectionAssert.AreEqual(new[] { "app.test" }, config.Routes[0].Match.Hosts!.ToArray());
+        Assert.AreEqual(1, config.UserRoutes().Count);
+        Assert.AreEqual(GatewayTranslator.NoMatchRouteId, config.Routes[^1].Id, "a request no route matches gets 404, never a forward to the named host");
+        Assert.AreEqual(404, config.Routes[^1].DirectResponse?.Status);
+        CollectionAssert.AreEqual(new[] { "app.test" }, config.UserRoutes()[0].Match.Hosts!.ToArray());
         var destination = config.Clusters.Single().Destinations.Single();
         Assert.AreEqual("10.0.0.1", destination.Address);
         Assert.AreEqual(8080, destination.Port);
@@ -83,8 +86,35 @@ public sealed class GatewayControllerTests
 
         Assert.IsTrue(outcome.WroteOutput);
         var config = TwpConfigLoader.LoadYaml(f.ConfigText()!);
-        Assert.AreEqual(2, config.Routes.Count);
+        Assert.AreEqual(2, config.UserRoutes().Count);
         Assert.AreEqual(2, Status(f, "gateways", "default", "gw")["listeners"]![0]!["attachedRoutes"]!.GetValue<int>());
+    }
+
+    [TestMethod]
+    public async Task Reconcile_AsksDataPlanePodsToRefreshTheirConfigVolume_AndRepeatsForAPodThatLags()
+    {
+        await using var f = new ClusterFixture();
+        await f.StartCacheAsync();
+        await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
+
+        string Token(string pod) => f.Api.WritesTo("/pods/" + pod)
+            .Select(w => JsonNode.Parse(w.Body!)!["metadata"]!["annotations"]![OutputWriter.PokeAnnotation]!.GetValue<string>())
+            .Last();
+        var first = Token("data-0");
+        Assert.AreEqual(16, first.Length, "the first poke carries the config hash");
+        Assert.AreEqual(first, Token("data-1"));
+        Assert.AreEqual("application/merge-patch+json", f.Api.WritesTo("/pods/data-0").First().ContentType);
+
+        // Nothing changed and every pod runs the config: no further poke.
+        var writes = f.Api.WritesTo("/pods/").Count;
+        await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
+        Assert.AreEqual(writes, f.Api.WritesTo("/pods/").Count);
+
+        // One pod still runs an old config: only that pod is poked again, with a new value so the pod really changes.
+        f.Observer.Stale.Add("10.1.0.2");
+        await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
+        Assert.AreEqual(first, Token("data-0"));
+        Assert.AreEqual(first + ".1", Token("data-1"));
     }
 
     [TestMethod]
@@ -105,7 +135,7 @@ public sealed class GatewayControllerTests
         await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
         var config = TwpConfigLoader.LoadYaml(f.ConfigText()!);
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
-        Assert.IsNotNull(config.Routes.Single().DirectResponse, "a route with no ready endpoint answers 500");
+        Assert.IsNotNull(config.UserRoutes().Single().DirectResponse, "a route with no ready endpoint answers 500");
     }
 
     [TestMethod]
@@ -274,7 +304,7 @@ public sealed class GatewayControllerTests
             f.AddRoute("burst" + i, $"b{i}.test");
         }
 
-        await ClusterFixture.WaitForAsync(() => f.ConfigText() is { } text && TwpConfigLoader.LoadYaml(text).Routes.Count == 31, 15000);
+        await ClusterFixture.WaitForAsync(() => f.ConfigText() is { } text && TwpConfigLoader.LoadYaml(text).Routes.Count == 32, 15000);
         await Task.Delay(800);
 
         var writes = f.Api.WritesTo("/configmaps/").Count - configWrites;

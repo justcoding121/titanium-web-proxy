@@ -46,8 +46,8 @@ public class GatewayTranslatorPropertyTests
 
             AssertEveryRouteHasAStatus(state, result);
             AssertRoutesReferenceDefinedClusters(result);
-            routed += result.Config.Routes.Count(r => r.DirectResponse is null);
-            answered500 += result.Config.Routes.Count(r => r.DirectResponse is not null);
+            routed += result.Config.UserRoutes().Count(r => r.DirectResponse is null);
+            answered500 += result.Config.UserRoutes().Count(r => r.DirectResponse is not null);
             listeners += result.Config.Listeners.Count;
         }
 
@@ -69,7 +69,7 @@ public class GatewayTranslatorPropertyTests
     private static void AssertRoutesReferenceDefinedClusters(RenderResult result)
     {
         var ids = result.Config.Clusters.Select(c => c.Id).ToHashSet();
-        foreach (var route in result.Config.Routes.Where(r => r.Redirect is null && r.DirectResponse is null))
+        foreach (var route in result.Config.UserRoutes().Where(r => r.Redirect is null && r.DirectResponse is null))
         {
             Assert.IsTrue(ids.Contains(route.ClusterId), $"route {route.Id} points at {route.ClusterId}");
         }
