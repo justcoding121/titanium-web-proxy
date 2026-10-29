@@ -241,6 +241,11 @@ public class ExtAuthRouteTests
         using var otherPath = await client.SendAsync(NewRequest(proxy, ClientKind.H1Cleartext, "/q", ("Authorization", Good)));
         Assert.AreEqual(HttpStatusCode.OK, otherPath.StatusCode);
         Assert.AreEqual(4, service.Requests.Count, "the decision is keyed by path as well as credentials");
+
+        using var otherQuery = await client.SendAsync(
+            NewRequest(proxy, ClientKind.H1Cleartext, "/q?token=other", ("Authorization", Good)));
+        Assert.AreEqual(HttpStatusCode.OK, otherQuery.StatusCode);
+        Assert.AreEqual(5, service.Requests.Count, "the decision is keyed by query as well as path");
     }
 
     [TestMethod]

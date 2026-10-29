@@ -187,10 +187,11 @@ public sealed class CidrAccessMiddleware : IProxyMiddleware
         {
             if (Interlocked.Exchange(ref _skipLogged, 1) == 0)
             {
-                _logger?.LogWarning("Plus Security: could not resolve client IP from Session — CIDR check skipped.");
+                _logger?.LogWarning(
+                    "Plus Security: could not resolve client IP from Session — CIDR check denied the request.");
             }
 
-            await next(context, cancellationToken);
+            Deny(context, HttpStatusCode.Forbidden, "forbidden");
             return;
         }
 

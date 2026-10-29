@@ -374,16 +374,15 @@ internal static class ExternalAuthorization
 
         /// <summary>
         /// SHA-256 over what the decision can depend on: the sent header values, the method, the host, and the
-        /// path. Lengths and presence markers keep one field from running into the next.
+        /// path plus query. The auth service sees the query in <c>X-Original-Uri</c>, so two queries on the
+        /// same path must not share an allow. Lengths and presence markers keep one field from running into the next.
         /// </summary>
         private string BuildCacheKey(Request request)
         {
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             Append(hash, request.Method ?? "GET");
             Append(hash, OriginalHost(request));
-            var target = OriginalTarget(request);
-            var query = target.IndexOf('?', StringComparison.Ordinal);
-            Append(hash, query >= 0 ? target[..query] : target);
+            Append(hash, OriginalTarget(request));
             foreach (var name in sendHeaders)
             {
                 if (request.Headers.GetHeaders(name) is not { } values)
