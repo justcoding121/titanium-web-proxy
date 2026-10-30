@@ -11,6 +11,8 @@ HTTP/3 natives are bundled into every Linux/macOS publish via [`bundle-http3-nat
 
 Website [download](../../website/download.md) prefers MSI/DMG/AppImage/deb/rpm and hides redundant zips when those exist.
 
+Container images (CLI, gateway, manager) live under [`docker/`](docker/); build from the repository root with `-f tools/packaging/docker/Dockerfile` (and the `.gateway` / `.manager` variants). Helm charts stay under `deploy/helm/`.
+
 ## Publish (local)
 
 ```powershell

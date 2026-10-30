@@ -3,8 +3,8 @@
 # Titanium Web Proxy CLI image (linux/amd64 and linux/arm64).
 #
 # Build from the repository root:
-#   docker buildx build -f packaging/docker/Dockerfile -t titanium-web-proxy:dev .
-#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile .
+#   docker buildx build -f tools/packaging/docker/Dockerfile -t titanium-web-proxy:dev .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f tools/packaging/docker/Dockerfile .
 #
 # Run with a config mounted at /etc/titanium/twp.yaml (a directory mount, so Kubernetes ConfigMap updates are seen):
 #   docker run --rm -p 8080:8080 -v ./conf:/etc/titanium:ro --read-only --tmpfs /tmp titanium-web-proxy:dev

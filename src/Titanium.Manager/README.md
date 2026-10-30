@@ -22,7 +22,7 @@ Or set `TITANIUM_MANAGER_ADMIN_TOKEN` instead of `--admin-token`.
 Build from the repository root (multi-arch publish mirrors the CLI/gateway images):
 
 ```bash
-docker buildx build -f packaging/docker/Dockerfile.manager -t titanium-manager:dev .
+docker buildx build -f tools/packaging/docker/Dockerfile.manager -t titanium-manager:dev .
 ```
 
 Run with a volume for SQLite and an admin bootstrap token:

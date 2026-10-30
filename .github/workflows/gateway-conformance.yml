@@ -16,7 +16,7 @@ on:
       - 'src/Titanium.Gateway/**'
       - 'src/Titanium.Web.Proxy.Configuration/**'
       - 'deploy/helm/titanium-gateway/**'
-      - 'packaging/docker/**'
+      - 'tools/packaging/docker/**'
       - 'tests/gateway-conformance/**'
       - 'tools/gateway-conformance/**'
       - '.github/workflows/gateway-conformance.yml'

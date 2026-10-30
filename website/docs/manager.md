@@ -16,7 +16,7 @@ titanium-manager --listen http://127.0.0.1:7700/ --db ./manager.db --admin-token
 | `--db` | SQLite path (default `./titanium-manager.db`) |
 | `--admin-token` / `TITANIUM_MANAGER_ADMIN_TOKEN` | Bootstrap admin bearer token (hashed into SQLite as role `admin`) |
 
-`GET /v1/healthz` is unauthenticated (container HEALTHCHECK). Admin REST (`/v1/fleets`, revisions, tokens, audit, rollouts) and agent endpoints require a bearer token. Docker and Helm packaging live under `packaging/docker/Dockerfile.manager` and `deploy/helm/titanium-manager`.
+`GET /v1/healthz` is unauthenticated (container HEALTHCHECK). Admin REST (`/v1/fleets`, revisions, tokens, audit, rollouts) and agent endpoints require a bearer token. Docker and Helm packaging live under `tools/packaging/docker/Dockerfile.manager` and `deploy/helm/titanium-manager`.
 
 ## Single-instance SQLite
 

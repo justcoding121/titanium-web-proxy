@@ -4,8 +4,8 @@
 # Single-instance only — do not run multiple replicas against one database.
 #
 # Build from the repository root:
-#   docker buildx build -f packaging/docker/Dockerfile.manager -t titanium-manager:dev .
-#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile.manager .
+#   docker buildx build -f tools/packaging/docker/Dockerfile.manager -t titanium-manager:dev .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f tools/packaging/docker/Dockerfile.manager .
 #
 # Run with a volume for the SQLite database and an admin bootstrap token:
 #   docker run --rm -p 7700:7700 \

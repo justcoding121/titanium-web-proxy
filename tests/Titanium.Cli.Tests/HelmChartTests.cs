@@ -32,7 +32,7 @@ public class HelmChartTests
     [TestMethod]
     public void Dockerfile_KeepsItsHardeningAndContract()
     {
-        var text = File.ReadAllText(Path.Combine(RepoRoot, "packaging", "docker", "Dockerfile"));
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "packaging", "docker", "Dockerfile"));
 
         StringAssert.Contains(text, "STOPSIGNAL SIGTERM");
         StringAssert.Contains(text, "HEALTHCHECK");

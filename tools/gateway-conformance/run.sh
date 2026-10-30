@@ -38,9 +38,9 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
-  docker build -f "$ROOT/packaging/docker/Dockerfile" -t titanium-web-proxy:ci \
+  docker build -f "$ROOT/tools/packaging/docker/Dockerfile" -t titanium-web-proxy:ci \
     --build-arg VERSION=0.0.0-ci --build-arg COMMIT=local "$ROOT"
-  docker build -f "$ROOT/packaging/docker/Dockerfile.gateway" -t titanium-gateway:ci \
+  docker build -f "$ROOT/tools/packaging/docker/Dockerfile.gateway" -t titanium-gateway:ci \
     --build-arg VERSION=0.0.0-ci --build-arg COMMIT=local "$ROOT"
 fi
 
