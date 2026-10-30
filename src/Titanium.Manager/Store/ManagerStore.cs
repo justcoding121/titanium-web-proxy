@@ -582,7 +582,6 @@ internal sealed class ManagerStore : IDisposable
     {
         lock (_gate)
         {
-            var changed = new HashSet<long>();
             using var cmd = _db.CreateCommand();
             cmd.CommandText =
                 """
@@ -598,8 +597,7 @@ internal sealed class ManagerStore : IDisposable
 
             reader.Close();
 
-            changed.AddRange(running.Where(AdvanceRolloutUnlocked).Select(r => r.FleetId));
-            return changed.ToList();
+            return running.Where(AdvanceRolloutUnlocked).Select(r => r.FleetId).Distinct().ToList();
         }
     }
 
