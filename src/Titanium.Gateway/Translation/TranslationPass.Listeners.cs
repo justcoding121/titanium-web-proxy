@@ -60,6 +60,8 @@ internal sealed class ListenerOutcome
 
 internal sealed partial class TranslationPass
 {
+    private const string InvalidCertificateRefReason = "InvalidCertificateRef";
+
     private void EvaluateGateways(HashSet<string> ownedClassNames)
     {
         foreach (var gateway in _state.Gateways
@@ -164,9 +166,9 @@ internal sealed partial class TranslationPass
         if (refs is not { Count: > 0 })
         {
             item.RefsResolved = false;
-            item.RefsReason = "InvalidCertificateRef";
+            item.RefsReason = InvalidCertificateRefReason;
             item.RefsMessage = "An HTTPS listener needs at least one tls.certificateRefs entry.";
-            item.InvalidReason = "InvalidCertificateRef";
+            item.InvalidReason = InvalidCertificateRefReason;
             return;
         }
 
@@ -187,7 +189,7 @@ internal sealed partial class TranslationPass
         var group = reference.Group ?? string.Empty;
         if (kind != GatewayApiNames.SecretKind || group.Length != 0)
         {
-            Reject(item, "InvalidCertificateRef", $"certificateRef {group}/{kind} '{reference.Name}' is not a core Secret.");
+            Reject(item, InvalidCertificateRefReason, $"certificateRef {group}/{kind} '{reference.Name}' is not a core Secret.");
             return;
         }
 
@@ -209,13 +211,13 @@ internal sealed partial class TranslationPass
         var secret = _state.Secrets.FirstOrDefault(s => s.Namespace == ns && s.Name == reference.Name);
         if (secret is null)
         {
-            Reject(item, "InvalidCertificateRef", $"Secret {ns}/{reference.Name} was not found.");
+            Reject(item, InvalidCertificateRefReason, $"Secret {ns}/{reference.Name} was not found.");
             return;
         }
 
         if (secret.Type != "kubernetes.io/tls" || !secret.HasCertificate || !secret.HasPrivateKey)
         {
-            Reject(item, "InvalidCertificateRef", $"Secret {ns}/{reference.Name} is not a kubernetes.io/tls Secret with tls.crt and tls.key.");
+            Reject(item, InvalidCertificateRefReason, $"Secret {ns}/{reference.Name} is not a kubernetes.io/tls Secret with tls.crt and tls.key.");
             return;
         }
 

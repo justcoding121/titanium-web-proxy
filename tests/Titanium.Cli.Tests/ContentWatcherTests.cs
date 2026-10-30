@@ -13,6 +13,8 @@ namespace Titanium.Cli.Tests;
 public class ContentWatcherTests
 {
     private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(100);
+    private static readonly string[] V2Only = ["v2"];
+    private static readonly string[] V2ThenV3 = ["v2", "v3"];
 
     private string _dir = null!;
 
@@ -219,12 +221,12 @@ public class ContentWatcherTests
 
         await calls.WaitForAsync(1);
         await calls.StaysAtAsync(1);
-        CollectionAssert.AreEqual(new[] { "v2" }, seen.ToArray());
+        CollectionAssert.AreEqual(V2Only, seen.ToArray());
 
         SwapKubernetesData(mount, "v3");
         await calls.WaitForAsync(2);
         await calls.StaysAtAsync(2);
-        CollectionAssert.AreEqual(new[] { "v2", "v3" }, seen.ToArray());
+        CollectionAssert.AreEqual(V2ThenV3, seen.ToArray());
     }
 
     [TestMethod]

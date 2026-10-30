@@ -172,7 +172,6 @@ public partial class ProxyServer
         if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args, mayCompress: true);
 
         // it may changed in the user event
-        response = args.HttpClient.Response;
         await TryFillHttpResponseCacheAsync(args, cancellationToken);
         response = args.HttpClient.Response; // the cache may have replaced it with a cached answer
         ApplyResponseHeaderContributor(response);
@@ -611,35 +610,57 @@ public partial class ProxyServer
         var decision = state.Owner.OnOriginResponse(state, response.StatusCode,
             Caching.HttpResponseCacheMiddleware.Snapshot(response.Headers), response.HasBody, response.ContentLength,
             response.IsChunked);
+        ApplyOriginCacheDecision(args, slot, state, response, decision);
+    }
+
+    private static void ApplyOriginCacheDecision(
+        SessionEventArgs args,
+        Caching.CacheSessionSlot slot,
+        Caching.CacheRequestState state,
+        Response response,
+        Caching.HttpResponseCacheMiddleware.OriginDecision decision)
+    {
         switch (decision.Action)
         {
             case Caching.HttpResponseCacheMiddleware.OriginAction.Serve:
-                // The origin's own body (if any) is drained by the same syphon that serves a user-replaced response.
                 Caching.HttpResponseCacheMiddleware.RespondFromCache(args, decision.Serve!,
                     closeServerConnection: response.HasBody && !response.IsBodyRead);
                 break;
 
             case Caching.HttpResponseCacheMiddleware.OriginAction.StoreBuffered
                 or Caching.HttpResponseCacheMiddleware.OriginAction.StoreStreamed:
-                if (response.IsBodyRead)
-                {
-                    // BeforeResponse already buffered it. Only bytes that match Content-Encoding on the wire are kept.
-                    if (response.ContentEncoding == null || response.BodyIsWireEncoded)
-                        state.Owner.CompleteStore(state, decision.Plan!, response.Body, -1);
-                    else
-                        state.Abandon();
-                }
-                else if (!response.HasBody)
-                {
-                    state.Owner.CompleteStore(state, decision.Plan!, [], 0);
-                }
-                else
-                {
-                    slot.BeginTee(state, decision.Plan!, decision.ContentLength);
-                }
-
+                ApplyStoreOriginCacheDecision(slot, state, response, decision);
                 break;
         }
+    }
+
+    private static void ApplyStoreOriginCacheDecision(
+        Caching.CacheSessionSlot slot,
+        Caching.CacheRequestState state,
+        Response response,
+        Caching.HttpResponseCacheMiddleware.OriginDecision decision)
+    {
+        if (response.IsBodyRead)
+        {
+            if (response.ContentEncoding == null || response.BodyIsWireEncoded)
+            {
+                state.Owner.CompleteStore(state, decision.Plan!, response.Body, -1);
+            }
+            else
+            {
+                state.Abandon();
+            }
+
+            return;
+        }
+
+        if (!response.HasBody)
+        {
+            state.Owner.CompleteStore(state, decision.Plan!, [], 0);
+            return;
+        }
+
+        slot.BeginTee(state, decision.Plan!, decision.ContentLength);
     }
 
     /// <summary>

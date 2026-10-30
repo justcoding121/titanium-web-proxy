@@ -83,14 +83,12 @@ internal static class ProxyWasmAbi
     public static bool TryDetect(IEnumerable<string> exports, out string? version, out string? error)
     {
         var markers = exports.Where(e => e.StartsWith(MarkerPrefix, StringComparison.Ordinal)).ToArray();
-        foreach (var candidate in Supported)
+        var matched = Supported.FirstOrDefault(candidate => markers.Contains(candidate, StringComparer.Ordinal));
+        if (matched is not null)
         {
-            if (markers.Contains(candidate, StringComparer.Ordinal))
-            {
-                version = candidate;
-                error = null;
-                return true;
-            }
+            version = matched;
+            error = null;
+            return true;
         }
 
         version = null;

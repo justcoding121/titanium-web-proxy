@@ -65,7 +65,7 @@ public sealed class GatewayController
     /// <summary>A pod that still runs an old config is poked this many times (once per confirm poll) before the kubelet's own sync is left to do it.</summary>
     private const int MaxPokes = 24;
 
-    public GatewayController(
+    public GatewayController( // NOSONAR S107 -- Controller wiring keeps dependencies explicit for tests and host composition.
         ClusterCache cache,
         OutputWriter output,
         StatusWriter status,
@@ -152,13 +152,14 @@ public sealed class GatewayController
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _log.LogError("Reconcile failed: {Message}", ex.Message);
+                    _log.LogError(ex, "Reconcile failed: {Message}", ex.Message);
                     ScheduleSignal(_options.RetryInterval, cancellationToken);
                 }
             }
         }
         catch (OperationCanceledException)
         {
+            // RunAsync was cancelled.
         }
     }
 
@@ -206,7 +207,7 @@ public sealed class GatewayController
         }
 
         var wrote = await _output.ApplyAsync(bytes, files, OutputWriter.SignatureOf(render.Config.Listeners), cancellationToken).ConfigureAwait(false);
-        if (wrote)
+        if (wrote && _log.IsEnabled(LogLevel.Information))
         {
             _log.LogInformation("Published data-plane config {Hash} ({Routes} routes, {Clusters} clusters, {Listeners} listeners).",
                 hash[..12], render.Config.Routes.Count, render.Config.Clusters.Count, render.Config.Listeners.Count);
@@ -254,7 +255,8 @@ public sealed class GatewayController
         }
 
         var list = targets.ToList();
-        if (list.Count > 0 && await _output.PokePodsAsync(list, token, cancellationToken).ConfigureAwait(false) is var failed and > 0)
+        if (list.Count > 0 && await _output.PokePodsAsync(list, token, cancellationToken).ConfigureAwait(false) is var failed and > 0
+            && _log.IsEnabled(LogLevel.Debug))
         {
             _log.LogDebug("Could not ask {Count} data-plane pods to refresh their config volume.", failed);
         }

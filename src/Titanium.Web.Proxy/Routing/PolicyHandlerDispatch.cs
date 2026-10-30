@@ -21,7 +21,7 @@ internal static class PolicyHandlerDispatch
     /// Runs every plugin-handled policy of the route in order. Returns true when a response is staged and the
     /// request must not be forwarded.
     /// </summary>
-    internal static async ValueTask<bool> DeniedAsync(
+    internal static async ValueTask<bool> DeniedAsync( // NOSONAR S3776 -- Policy handlers run in route order with shared session staging.
         ReverseProxyOptions options, RouteConfig route, SessionEventArgs session)
     {
         if (route.Policies is not { Count: > 0 } names || options.Policies is not { Count: > 0 } policies)

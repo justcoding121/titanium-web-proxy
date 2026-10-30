@@ -14,6 +14,10 @@ public class OidcCookieCryptoTests
 {
     private static readonly string KeyA = new('a', 64);
     private static readonly string KeyB = new('b', 64);
+    private static readonly string[] InvalidKeySamples =
+    [
+        string.Empty, "  ", "short", new string('a', 62), Convert.ToBase64String(new byte[16]), Convert.ToBase64String(new byte[33]),
+    ];
 
     private static OidcCookieCrypto Crypto(params string[] keys) =>
         new(OidcCookieCrypto.ParseKeys(string.Join(',', keys)));
@@ -87,12 +91,12 @@ public class OidcCookieCryptoTests
         CollectionAssert.AreEqual(bytes, OidcCookieCrypto.ParseKeys(url)[0]);
         Assert.AreEqual(2, OidcCookieCrypto.ParseKeys(KeyA + "\n" + KeyB + "\n").Count);
 
-        foreach (var bad in new[] { string.Empty, "  ", "short", new string('a', 62), Convert.ToBase64String(new byte[16]), Convert.ToBase64String(new byte[33]) })
+        foreach (var bad in InvalidKeySamples)
         {
-            Assert.ThrowsException<OidcConfigException>(() => OidcCookieCrypto.ParseKeys(bad), bad);
+            Assert.ThrowsExactly<OidcConfigException>(() => OidcCookieCrypto.ParseKeys(bad), bad);
         }
 
-        Assert.ThrowsException<OidcConfigException>(() => OidcCookieCrypto.ParseKeys(string.Join(',', Enumerable.Repeat(KeyA, 5))));
+        Assert.ThrowsExactly<OidcConfigException>(() => OidcCookieCrypto.ParseKeys(string.Join(',', Enumerable.Repeat(KeyA, 5))));
     }
 
     [TestMethod]
@@ -100,7 +104,7 @@ public class OidcCookieCryptoTests
     {
         var secret = "not-a-valid-key-but-it-is-secret";
 
-        var ex = Assert.ThrowsException<OidcConfigException>(() => OidcCookieCrypto.ParseKeys(secret));
+        var ex = Assert.ThrowsExactly<OidcConfigException>(() => OidcCookieCrypto.ParseKeys(secret));
 
         Assert.IsFalse(ex.Message.Contains(secret, StringComparison.Ordinal));
     }
@@ -291,6 +295,10 @@ public class OidcGuardTests
 [TestClass]
 public class OidcSettingsTests
 {
+    private static readonly string[] DefaultScopes = ["openid", "email", "profile"];
+    private static readonly string[] RefreshScopes = ["openid", "email", "profile", "offline_access"];
+    private static readonly string[] EmailOnlyScopes = ["openid", "email"];
+
     private static RoutePolicyConfig Policy(Func<RoutePolicyConfig, RoutePolicyConfig>? shape = null)
     {
         var policy = new RoutePolicyConfig
@@ -315,7 +323,7 @@ public class OidcSettingsTests
         Assert.AreEqual("titanium_oidc", settings.CookieName);
         Assert.AreEqual("groups", settings.GroupsClaim);
         Assert.AreEqual(TimeSpan.FromHours(8), settings.SessionTtl);
-        CollectionAssert.AreEqual(new[] { "openid", "email", "profile" }, settings.Scopes);
+        CollectionAssert.AreEqual(DefaultScopes, settings.Scopes);
         Assert.IsNull(settings.ClientSecret, "a public client has no secret");
     }
 
@@ -331,8 +339,8 @@ public class OidcSettingsTests
             Name = p.Name, Kind = p.Kind, Issuer = p.Issuer, ClientId = p.ClientId, CookieSecretEnv = p.CookieSecretEnv, Scopes = ["email"],
         }), Env);
 
-        CollectionAssert.AreEqual(new[] { "openid", "email", "profile", "offline_access" }, refresh.Scopes);
-        CollectionAssert.AreEqual(new[] { "openid", "email" }, custom.Scopes);
+        CollectionAssert.AreEqual(RefreshScopes, refresh.Scopes);
+        CollectionAssert.AreEqual(EmailOnlyScopes, custom.Scopes);
     }
 
     [TestMethod]
@@ -363,15 +371,15 @@ public class OidcSettingsTests
     [TestMethod]
     public void Create_ThrowsForAMissingSecret_WithoutEchoingAnyValue()
     {
-        var unset = Assert.ThrowsException<OidcConfigException>(() => OidcSettings.Create(Policy(static p => new RoutePolicyConfig
+        var unset = Assert.ThrowsExactly<OidcConfigException>(() => OidcSettings.Create(Policy(static p => new RoutePolicyConfig
         {
             Name = p.Name, Kind = p.Kind, Issuer = p.Issuer, ClientId = p.ClientId, CookieSecretEnv = "NOT_SET",
         }), Env));
-        var none = Assert.ThrowsException<OidcConfigException>(() => OidcSettings.Create(new RoutePolicyConfig
+        var none = Assert.ThrowsExactly<OidcConfigException>(() => OidcSettings.Create(new RoutePolicyConfig
         {
             Name = "login", Kind = "oidc", Issuer = "https://idp.example.test", ClientId = "client",
         }, Env));
-        var missingFile = Assert.ThrowsException<OidcConfigException>(() => OidcSettings.Create(new RoutePolicyConfig
+        var missingFile = Assert.ThrowsExactly<OidcConfigException>(() => OidcSettings.Create(new RoutePolicyConfig
         {
             Name = "login", Kind = "oidc", Issuer = "https://idp.example.test", ClientId = "client",
             CookieSecretFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")),
@@ -415,11 +423,13 @@ public class OidcSettingsTests
 [TestClass]
 public class OidcIdTokenValidationTests
 {
+    private static readonly string[] UsersGroup = ["users"];
+
     private static async Task<(OidcHarness Harness, OidcProvider Provider)> StartAsync()
     {
         var harness = await OidcHarness.StartAsync();
         using var browser = harness.NewBrowser();
-        await harness.StartLoginAsync(browser);
+        await OidcHarness.StartLoginAsync(browser);
         return (harness, harness.Handler!.ProviderOf(harness.Policy)!);
     }
 
@@ -432,12 +442,12 @@ public class OidcIdTokenValidationTests
         var token = h.Idp.IdToken("nonce-1");
 
         var identity = await provider.ValidateIdTokenAsync(token, "nonce-1", default);
-        await Assert.ThrowsExceptionAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(token, "nonce-2", default));
-        await Assert.ThrowsExceptionAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(h.Idp.IdToken(null), "nonce-1", default));
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(token, "nonce-2", default));
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(h.Idp.IdToken(null), "nonce-1", default));
 
         Assert.AreEqual("user-1", identity.Subject);
         Assert.AreEqual("alice@example.test", identity.Email);
-        CollectionAssert.AreEqual(new[] { "users" }, identity.Groups);
+        CollectionAssert.AreEqual(UsersGroup, identity.Groups);
     }
 
     [TestMethod]
@@ -450,7 +460,7 @@ public class OidcIdTokenValidationTests
         var payload = Base64UrlEncoder.Encode(
             $"{{\"iss\":\"{h.Idp.Issuer}\",\"aud\":\"{FakeIdp.ClientId}\",\"sub\":\"root\",\"exp\":{DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds()}}}");
 
-        await Assert.ThrowsExceptionAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync($"{header}.{payload}.", null, default));
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync($"{header}.{payload}.", null, default));
     }
 
     [TestMethod]
@@ -470,7 +480,7 @@ public class OidcIdTokenValidationTests
         };
         var token = new JsonWebTokenHandler().CreateToken(descriptor);
 
-        await Assert.ThrowsExceptionAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(token, null, default));
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(token, null, default));
     }
 
     [TestMethod]
@@ -483,7 +493,7 @@ public class OidcIdTokenValidationTests
         var payload = Encoding.UTF8.GetString(Base64UrlEncoder.DecodeBytes(parts[1])).Replace("user-1", "root", StringComparison.Ordinal);
         var changed = $"{parts[0]}.{Base64UrlEncoder.Encode(payload)}.{parts[2]}";
 
-        await Assert.ThrowsExceptionAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(changed, "n", default));
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(changed, "n", default));
     }
 
     [TestMethod]
@@ -495,7 +505,7 @@ public class OidcIdTokenValidationTests
 
         foreach (var garbage in new[] { string.Empty, "x", "a.b.c", "....", new string('A', 100_000) })
         {
-            await Assert.ThrowsExceptionAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(garbage, null, default), garbage.Length.ToString());
+            await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(garbage, null, default), garbage.Length.ToString());
         }
     }
 }

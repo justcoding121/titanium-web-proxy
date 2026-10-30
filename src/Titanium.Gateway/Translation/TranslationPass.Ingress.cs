@@ -66,6 +66,7 @@ internal sealed record IngressBackendResult(string? ClusterId, string? Reason, s
 internal sealed partial class TranslationPass
 {
     private const string OwnClusterMarker = "@ing:";
+    private const string InvalidTlsReason = "InvalidTLS";
 
     private readonly List<IngressEvent> _ingressEvents = [];
     private readonly HashSet<string> _ingressEventKeys = new(StringComparer.Ordinal);
@@ -225,20 +226,20 @@ internal sealed partial class TranslationPass
     }
 
     /// <summary>Resolves the <c>tls</c> entries of one Ingress. Returns how many Secrets became certificate bindings.</summary>
-    private int EvaluateIngressTls(IngressOutcome ingress, bool httpsAvailable)
+    private int EvaluateIngressTls(IngressOutcome ingress, bool httpsAvailable) // NOSONAR S3776 -- TLS evaluation walks secrets, bindings, and listener availability in one pass.
     {
         var resolved = 0;
         foreach (var tls in ingress.Ingress.Spec.Tls ?? [])
         {
             if (string.IsNullOrEmpty(tls.SecretName))
             {
-                Warn(ingress, "InvalidTLS", "A tls entry without secretName is not supported; the data plane serves a certificate from a named Secret only.");
+                Warn(ingress, InvalidTlsReason, "A tls entry without secretName is not supported; the data plane serves a certificate from a named Secret only.");
                 continue;
             }
 
             if (!httpsAvailable)
             {
-                Warn(ingress, "InvalidTLS", $"TLS for Secret {tls.SecretName} is not served: port {_options.IngressHttpsPort} is not available (not in the port map, or a Gateway listener uses it for HTTP).");
+                Warn(ingress, InvalidTlsReason, $"TLS for Secret {tls.SecretName} is not served: port {_options.IngressHttpsPort} is not available (not in the port map, or a Gateway listener uses it for HTTP).");
                 continue;
             }
 
@@ -246,13 +247,13 @@ internal sealed partial class TranslationPass
             var secret = _state.Secrets.FirstOrDefault(s => s.Namespace == ns && s.Name == tls.SecretName);
             if (secret is null)
             {
-                Warn(ingress, "InvalidTLS", $"Secret {ns}/{tls.SecretName} was not found, or the controller is not allowed to read Secrets in {ns}.");
+                Warn(ingress, InvalidTlsReason, $"Secret {ns}/{tls.SecretName} was not found, or the controller is not allowed to read Secrets in {ns}.");
                 continue;
             }
 
             if (secret.Type != "kubernetes.io/tls" || !secret.HasCertificate || !secret.HasPrivateKey)
             {
-                Warn(ingress, "InvalidTLS", $"Secret {ns}/{tls.SecretName} is not a kubernetes.io/tls Secret with a matching tls.crt and tls.key.");
+                Warn(ingress, InvalidTlsReason, $"Secret {ns}/{tls.SecretName} is not a kubernetes.io/tls Secret with a matching tls.crt and tls.key.");
                 continue;
             }
 
@@ -410,7 +411,7 @@ internal sealed partial class TranslationPass
         return ordered;
     }
 
-    private void EmitEntry(IngressEntry entry, ClusterRegistry clusters, List<RouteDraft> drafts)
+    private void EmitEntry(IngressEntry entry, ClusterRegistry clusters, List<RouteDraft> drafts) // NOSONAR S3776 -- Ingress emission walks primary/canary backends and policy wiring in one pass.
     {
         var owner = entry.Owner;
         var settings = owner.Settings;
@@ -487,7 +488,7 @@ internal sealed partial class TranslationPass
         drafts.Add(MakeIngressDraft(entry, entry.Id, null, baseCluster, weighted, transforms, policies, null));
     }
 
-    private List<TransformConfig>? BuildIngressTransforms(IngressEntry entry)
+    private static List<TransformConfig>? BuildIngressTransforms(IngressEntry entry)
     {
         var target = entry.Owner.Settings.RewriteTarget;
         if (target is null)
@@ -558,7 +559,7 @@ internal sealed partial class TranslationPass
         return names.Count == 0 ? null : names; // NOSONAR S2583 -- annotation-driven Adds are not visible to the analyzer.
     }
 
-    private static RouteDraft MakeIngressDraft(
+    private static RouteDraft MakeIngressDraft( // NOSONAR S107 -- Draft factory keeps ingress match fields explicit for stable ordering.
         IngressEntry entry,
         string id,
         Dictionary<string, string>? headers,
@@ -605,7 +606,7 @@ internal sealed partial class TranslationPass
         };
     }
 
-    private IngressBackendResult ResolveIngressBackend(IngressOutcome owner, IngressBackend backend, ClusterRegistry clusters)
+    private IngressBackendResult ResolveIngressBackend(IngressOutcome owner, IngressBackend backend, ClusterRegistry clusters) // NOSONAR S3776 -- Backend resolution validates ports, TLS secrets, and cluster materialization together.
     {
         if (backend.Resource is { } resource)
         {
@@ -648,12 +649,10 @@ internal sealed partial class TranslationPass
 
         var settings = owner.Settings;
         UpstreamTlsPlan? upstream = null;
-        if (settings.UpstreamTlsSecret is { } secretName)
+        if (settings.UpstreamTlsSecret is { } secretName &&
+            !ResolveUpstreamTls(owner, secretName, out upstream, out var problem))
         {
-            if (!ResolveUpstreamTls(owner, secretName, out upstream, out var problem))
-            {
-                return Failed("InvalidAnnotation", problem);
-            }
+            return Failed("InvalidAnnotation", problem);
         }
 
         var endpoints = clusters.Endpoints.ReadyEndpoints(found, port);
@@ -670,6 +669,21 @@ internal sealed partial class TranslationPass
 
         if (!clusters.Contains(id))
         {
+            ClusterHttpClientConfig? httpClient = null;
+            if (settings.ReadTimeoutSeconds is not null || upstream is not null)
+            {
+                TimeSpan? requestTimeout = settings.ReadTimeoutSeconds is { } seconds
+                    ? TimeSpan.FromSeconds(seconds)
+                    : null;
+                httpClient = new ClusterHttpClientConfig
+                {
+                    RequestTimeout = requestTimeout,
+                    ClientCertificatePath = upstream?.CertificatePath,
+                    ClientCertificateKeyPath = upstream?.KeyPath,
+                    CaBundlePath = upstream?.CaPath,
+                };
+            }
+
             clusters.Add(new ClusterConfig
             {
                 Id = id,
@@ -677,15 +691,7 @@ internal sealed partial class TranslationPass
                 SessionAffinity = settings.AffinityCookie
                     ? new SessionAffinityConfig { Mode = AffinityMode.Cookie, CookieName = "titanium-affinity" }
                     : null,
-                HttpClient = settings.ReadTimeoutSeconds is not null || upstream is not null
-                    ? new ClusterHttpClientConfig
-                    {
-                        RequestTimeout = settings.ReadTimeoutSeconds is { } seconds ? TimeSpan.FromSeconds(seconds) : null,
-                        ClientCertificatePath = upstream?.CertificatePath,
-                        ClientCertificateKeyPath = upstream?.KeyPath,
-                        CaBundlePath = upstream?.CaPath,
-                    }
-                    : null,
+                HttpClient = httpClient,
                 Destinations = endpoints
                     .Select(e => new DestinationConfig
                     {
@@ -744,10 +750,10 @@ internal sealed partial class TranslationPass
         {
             var ca = new TlsFile($"{ns}.{secretName}.upstream-ca.crt", ns, secretName, TlsFileKind.CaPem);
             _upstreamFiles.Add(ca);
-            caPath = mount + "/" + ca.FileName;
+            caPath = JoinTlsMountPath(mount, ca.FileName);
         }
 
-        plan = new UpstreamTlsPlan(mount + "/" + cert.FileName, mount + "/" + key.FileName, caPath);
+        plan = new UpstreamTlsPlan(JoinTlsMountPath(mount, cert.FileName), JoinTlsMountPath(mount, key.FileName), caPath);
         owner.Upstream = plan;
         return true;
     }
@@ -761,7 +767,10 @@ internal sealed partial class TranslationPass
         }
     }
 
-    private StatusPatch BuildIngressPatch(IngressOutcome ingress, List<GatewayStatusAddress> addresses) =>
+    private static string JoinTlsMountPath(string mount, string fileName) =>
+        string.Concat(mount.TrimEnd('/'), "/", fileName); // NOSONAR S1075 -- Kubernetes TLS volume mount uses a POSIX path delimiter.
+
+    private static StatusPatch BuildIngressPatch(IngressOutcome ingress, List<GatewayStatusAddress> addresses) =>
         new(
             StatusKind.Ingress,
             ingress.Namespace,

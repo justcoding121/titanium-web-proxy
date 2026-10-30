@@ -13,7 +13,7 @@ namespace Titanium.Gateway.Tests;
 ///     <c>helm</c> checks run when helm is installed (CI installs it).
 /// </summary>
 [TestClass]
-public sealed class GatewayChartTests
+public sealed partial class GatewayChartTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string ChartDir = Path.Combine(RepoRoot, "deploy", "helm", "titanium-gateway");
@@ -65,7 +65,7 @@ public sealed class GatewayChartTests
     public void ChartEnvironment_OnlyUsesOptionsTheControllerKnows()
     {
         var template = Read("templates", "controller-deployment.yaml");
-        var names = Regex.Matches(template, @"name: (TITANIUM_GATEWAY_[A-Z_]+)").Select(m => m.Groups[1].Value).ToList();
+        var names = TitaniumGatewayEnvNameRegex().Matches(template).Select(m => m.Groups[1].Value).ToList();
         Assert.IsTrue(names.Count >= 8);
 
         var environment = names.ToDictionary(n => n, _ => (string?)"x");
@@ -90,9 +90,9 @@ public sealed class GatewayChartTests
             StringAssert.Contains(crds, $"name: {kind}.gateway.networking.k8s.io");
         }
 
-        Assert.AreEqual(5, Regex.Matches(crds, @"^kind: CustomResourceDefinition", RegexOptions.Multiline).Count);
-        Assert.AreEqual(5, Regex.Matches(crds, @"gateway\.networking\.k8s\.io/channel: standard").Count);
-        Assert.AreEqual(5, Regex.Matches(crds, @"gateway\.networking\.k8s\.io/bundle-version: v1\.2\.1").Count);
+        Assert.AreEqual(5, CrdKindRegex().Count(crds));
+        Assert.AreEqual(5, GatewayStandardChannelRegex().Count(crds));
+        Assert.AreEqual(5, GatewayBundleVersionRegex().Count(crds));
         foreach (var experimental in new[] { "tcproutes", "udproutes", "tlsroutes", "backendtlspolicies" })
         {
             Assert.IsFalse(crds.Contains(experimental + ".gateway", StringComparison.Ordinal), experimental);
@@ -107,14 +107,14 @@ public sealed class GatewayChartTests
         var rbac = Read("templates", "rbac.yaml");
 
         Assert.IsFalse(rbac.Contains("\"*\"", StringComparison.Ordinal), "no wildcard resources, verbs, or groups");
-        Assert.IsFalse(Regex.IsMatch(rbac, @"verbs:.*\b(delete|deletecollection|escalate|bind|impersonate)\b"), "no destructive verbs");
+        Assert.IsFalse(DestructiveRbacVerbRegex().IsMatch(rbac), "no destructive verbs");
 
         // Writes to ConfigMaps, Secrets and the Deployment are limited to the objects the chart creates.
         foreach (var resource in new[] { "configmaps", "secrets", "deployments" })
         {
             var rule = Regex.Match(rbac, $@"resources: \[""{resource}""\]\s+resourceNames: \[[^\]]+\]\s+verbs: \[([^\]]+)\]");
             Assert.IsTrue(rule.Success, $"{resource} writes must be limited by resourceNames");
-            StringAssert.DoesNotMatch(rule.Groups[1].Value, new Regex("create|list|watch"));
+            StringAssert.DoesNotMatch(rule.Groups[1].Value, ForbiddenResourceWriteVerbsRegex());
         }
 
         // Reading Secrets is the only cluster-wide Secret access, and it can be narrowed to listed namespaces.
@@ -147,10 +147,10 @@ public sealed class GatewayChartTests
     {
         var rbac = Read("templates", "rbac.yaml");
 
-        StringAssert.Matches(rbac, new Regex(@"apiGroups: \[""networking\.k8s\.io""\]\s+resources: \[""ingresses"", ""ingressclasses""\]\s+verbs: \[""get"", ""list"", ""watch""\]"));
-        StringAssert.Matches(rbac, new Regex(@"apiGroups: \[""networking\.k8s\.io""\]\s+resources: \[""ingresses/status""\]\s+verbs: \[""get"", ""patch"", ""update""\]"));
-        StringAssert.Matches(rbac, new Regex(@"apiGroups: \[""""\]\s+resources: \[""events""\]\s+verbs: \[""create"", ""patch""\]"));
-        Assert.IsFalse(Regex.IsMatch(rbac, @"resources: \[""ingresses""[^\]]*\]\s+verbs: \[[^\]]*(update|patch|create)"), "the Ingress spec is read-only");
+        StringAssert.Matches(rbac, IngressReadRuleRegex());
+        StringAssert.Matches(rbac, IngressStatusRuleRegex());
+        StringAssert.Matches(rbac, EventsRuleRegex());
+        Assert.IsFalse(IngressWriteVerbRegex().IsMatch(rbac), "the Ingress spec is read-only");
     }
 
     [TestMethod]
@@ -160,7 +160,7 @@ public sealed class GatewayChartTests
         Assert.AreEqual(IngressApiNames.DefaultControllerName, ((YamlScalarNode)Path_(values, "controller", "ingressControllerName")).Value);
         Assert.AreEqual("false", ((YamlScalarNode)Path_(values, "controller", "watchLegacyAnnotation")).Value);
         Assert.AreEqual(IngressApiNames.DefaultClassName, ((YamlScalarNode)Path_(values, "ingressClass", "name")).Value);
-        Assert.AreEqual(new GatewayTranslatorOptions().IngressControllerName, IngressApiNames.DefaultControllerName);
+        Assert.AreEqual(IngressApiNames.DefaultControllerName, new GatewayTranslatorOptions().IngressControllerName);
 
         var template = Read("templates", "ingressclass.yaml");
         StringAssert.Contains(template, "kind: IngressClass");
@@ -224,9 +224,9 @@ public sealed class GatewayChartTests
 
         var (scopedExit, scoped) = Run(helm, $"template rel \"{ChartDir}\" --namespace gw --set controller.secretNamespaces={{a,b}}");
         Assert.AreEqual(0, scopedExit, scoped);
-        Assert.AreEqual(2, Regex.Matches(scoped, @"kind: Role\r?\nmetadata:\r?\n  name: rel-titanium-gateway-controller-secrets\r?\n  namespace: (a|b)").Count);
+        Assert.AreEqual(2, ScopedSecretRoleRegex().Count(scoped));
         StringAssert.Contains(scoped, "TITANIUM_GATEWAY_SECRET_NAMESPACES");
-        Assert.IsFalse(Regex.IsMatch(scoped, @"resources: \[""secrets""\]\s+verbs: \[""get"", ""list"", ""watch""\]\s+---\s+apiVersion: rbac.authorization.k8s.io/v1\s+kind: ClusterRoleBinding"),
+        Assert.IsFalse(ClusterSecretRuleBeforeBindingRegex().IsMatch(scoped),
             "with secretNamespaces the ClusterRole carries no Secret rule");
 
         var (graceExit, grace) = Run(helm, $"template rel \"{ChartDir}\" --set dataPlane.terminationGracePeriodSeconds=3");
@@ -288,4 +288,40 @@ public sealed class GatewayChartTests
 
         throw new InvalidOperationException("Repository root (deploy/helm/titanium-gateway) not found.");
     }
+
+    [GeneratedRegex(@"name: (TITANIUM_GATEWAY_[A-Z_]+)")]
+    private static partial Regex TitaniumGatewayEnvNameRegex();
+
+    [GeneratedRegex(@"^kind: CustomResourceDefinition", RegexOptions.Multiline)]
+    private static partial Regex CrdKindRegex();
+
+    [GeneratedRegex(@"gateway\.networking\.k8s\.io/channel: standard")]
+    private static partial Regex GatewayStandardChannelRegex();
+
+    [GeneratedRegex(@"gateway\.networking\.k8s\.io/bundle-version: v1\.2\.1")]
+    private static partial Regex GatewayBundleVersionRegex();
+
+    [GeneratedRegex(@"verbs:.*\b(delete|deletecollection|escalate|bind|impersonate)\b")]
+    private static partial Regex DestructiveRbacVerbRegex();
+
+    [GeneratedRegex(@"apiGroups: \[""networking\.k8s\.io""\]\s+resources: \[""ingresses"", ""ingressclasses""\]\s+verbs: \[""get"", ""list"", ""watch""\]")]
+    private static partial Regex IngressReadRuleRegex();
+
+    [GeneratedRegex(@"apiGroups: \[""networking\.k8s\.io""\]\s+resources: \[""ingresses/status""\]\s+verbs: \[""get"", ""patch"", ""update""\]")]
+    private static partial Regex IngressStatusRuleRegex();
+
+    [GeneratedRegex(@"apiGroups: \[""""\]\s+resources: \[""events""\]\s+verbs: \[""create"", ""patch""\]")]
+    private static partial Regex EventsRuleRegex();
+
+    [GeneratedRegex(@"resources: \[""ingresses""[^\]]*\]\s+verbs: \[[^\]]*(update|patch|create)")]
+    private static partial Regex IngressWriteVerbRegex();
+
+    [GeneratedRegex(@"kind: Role\r?\nmetadata:\r?\n  name: rel-titanium-gateway-controller-secrets\r?\n  namespace: (a|b)")]
+    private static partial Regex ScopedSecretRoleRegex();
+
+    [GeneratedRegex(@"resources: \[""secrets""\]\s+verbs: \[""get"", ""list"", ""watch""\]\s+---\s+apiVersion: rbac.authorization.k8s.io/v1\s+kind: ClusterRoleBinding")]
+    private static partial Regex ClusterSecretRuleBeforeBindingRegex();
+
+    [GeneratedRegex("create|list|watch")]
+    private static partial Regex ForbiddenResourceWriteVerbsRegex();
 }

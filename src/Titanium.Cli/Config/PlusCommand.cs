@@ -35,14 +35,15 @@ internal static class PlusCommand
         return Task.FromResult(1);
     }
 
-    private static int HashPassword(string[] args)
+    private static int HashPassword(string[] args) // NOSONAR S3776 -- CLI option parsing keeps flag handling explicit for help text and validation.
     {
         string? user = null;
         var role = "operator";
         string? password = null;
         var iterations = DefaultIterations;
 
-        for (var i = 0; i < args.Length; i++)
+        var i = 0;
+        while (i < args.Length)
         {
             var arg = args[i];
             if (arg is "-h" or "--help")
@@ -60,13 +61,14 @@ internal static class PlusCommand
 
             if (arg is "--user" && i + 1 < args.Length)
             {
-                user = args[++i];
+                user = args[i + 1];
+                i += 2;
                 continue;
             }
 
             if (arg is "--role" && i + 1 < args.Length)
             {
-                var text = args[++i];
+                var text = args[i + 1];
                 if (text.Equals("operator", StringComparison.OrdinalIgnoreCase))
                 {
                     role = "operator";
@@ -81,17 +83,19 @@ internal static class PlusCommand
                     return 1;
                 }
 
+                i += 2;
                 continue;
             }
 
             if (arg is "--iterations" && i + 1 < args.Length)
             {
-                if (!int.TryParse(args[++i], out iterations) || iterations < 10_000)
+                if (!int.TryParse(args[i + 1], out iterations) || iterations < 10_000)
                 {
                     AsyncConsole.WriteError("--iterations must be an integer >= 10000.");
                     return 1;
                 }
 
+                i += 2;
                 continue;
             }
 
@@ -102,6 +106,7 @@ internal static class PlusCommand
             }
 
             password = arg;
+            i++;
         }
 
         user ??= "user";

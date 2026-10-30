@@ -76,6 +76,8 @@ public sealed class DashboardHost : IDisposable
     private const int MaxBindAttempts = 8;
     private const int AuditRowsOnPage = 50;
     private const int MaxLoginBodyBytes = 4096;
+    private const string PlainTextUtf8 = "text/plain; charset=utf-8";
+    private const string LoginPath = "/login";
 
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -201,7 +203,7 @@ public sealed class DashboardHost : IDisposable
         return Harden(await RouteAsync(request, cancellationToken).ConfigureAwait(false));
     }
 
-    private async Task<ControlHttpResponse> RouteAsync(ControlHttpRequest request, CancellationToken cancellationToken)
+    private async Task<ControlHttpResponse> RouteAsync(ControlHttpRequest request, CancellationToken cancellationToken) // NOSONAR S3776 -- Dashboard routing keeps auth, OIDC, and static assets in one dispatch table.
     {
         var path = request.Path.Length > 1 ? request.Path.TrimEnd('/') : request.Path;
         var isGet = request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase);
@@ -233,9 +235,14 @@ public sealed class DashboardHost : IDisposable
             return await CompleteOidcAsync(request, cancellationToken).ConfigureAwait(false);
         }
 
-        if (path.Equals("/login", StringComparison.Ordinal))
+        if (path.Equals(LoginPath, StringComparison.Ordinal))
         {
-            return isPost ? SignIn(request) : isGet ? LoginPage(request) : MethodNotAllowed();
+            if (isPost)
+            {
+                return SignIn(request);
+            }
+
+            return isGet ? LoginPage(request) : MethodNotAllowed();
         }
 
         var isPoll = request.Header(PollHeader) is not null;
@@ -274,11 +281,11 @@ public sealed class DashboardHost : IDisposable
         var isPage = isGet && !path.StartsWith("/api/", StringComparison.Ordinal) && !path.Equals("/metrics", StringComparison.Ordinal);
         if (isPage)
         {
-            return Redirect("/login");
+            return Redirect(LoginPath);
         }
 
         return ReadCookie(request, SessionCookie) is not null
-            ? ControlHttpResponse.Text(401, "text/plain; charset=utf-8", "unauthorized")
+            ? ControlHttpResponse.Text(401, PlainTextUtf8, "unauthorized")
             : Security.RejectCredentials(request, ControlPlaneSecurity.DashboardSurface);
     }
 
@@ -297,7 +304,7 @@ public sealed class DashboardHost : IDisposable
         var page = Array.Find(DashboardViews.Navigation, n => n.Path == path);
         if (page.Path is null)
         {
-            return ControlHttpResponse.Text(404, "text/plain; charset=utf-8", "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
         }
 
         // A script that opens a page with the secret header is a login; a cookie session was audited at sign-in.
@@ -348,7 +355,7 @@ public sealed class DashboardHost : IDisposable
             e.Result,
         }).ToList()),
         "snapshot" => SnapshotResponse(),
-        _ => ControlHttpResponse.Text(404, "text/plain; charset=utf-8", "not found"),
+        _ => ControlHttpResponse.Text(404, PlainTextUtf8, "not found"),
     };
 
     private DashboardOverview Overview() => _options.Metrics?.GetOverview() ?? new DashboardOverview
@@ -405,7 +412,7 @@ public sealed class DashboardHost : IDisposable
         });
     }
 
-    private async Task<ControlHttpResponse> PostAsync(ControlHttpRequest request, string path, Caller caller, string? remote)
+    private async Task<ControlHttpResponse> PostAsync(ControlHttpRequest request, string path, Caller caller, string? remote) // NOSONAR S3776 -- POST actions share CSRF, role checks, and audit in one path.
     {
         // A trailing slash was trimmed from the path, so "/drain/" arrives as "/drain": a blank id, answered 400.
         var isDrain = path.StartsWith("/drain/", StringComparison.Ordinal) || path.Equals("/drain", StringComparison.Ordinal);
@@ -414,36 +421,64 @@ public sealed class DashboardHost : IDisposable
         var isLogout = path.Equals("/logout", StringComparison.Ordinal);
         if (!isDrain && !isHealthy && !isReload && !isLogout)
         {
-            return ControlHttpResponse.Text(404, "text/plain; charset=utf-8", "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
         }
 
-        var action = isLogout ? AuditActions.Logout
-            : isReload ? AuditActions.Reload
-            : isDrain ? AuditActions.Drain
-            : AuditActions.Healthy;
-        var prefixLength = isDrain ? "/drain/".Length : isHealthy ? "/healthy/".Length : "/reload/".Length;
-        var target = isLogout || isReload
-            ? "-"
-            : path.Length > prefixLength ? Uri.UnescapeDataString(path[prefixLength..]) : "";
+        string action;
+        int prefixLength;
+        if (isLogout)
+        {
+            action = AuditActions.Logout;
+            prefixLength = 0;
+        }
+        else if (isReload)
+        {
+            action = AuditActions.Reload;
+            prefixLength = "/reload/".Length;
+        }
+        else if (isDrain)
+        {
+            action = AuditActions.Drain;
+            prefixLength = "/drain/".Length;
+        }
+        else
+        {
+            action = AuditActions.Healthy;
+            prefixLength = "/healthy/".Length;
+        }
+
+        string target;
+        if (isLogout || isReload)
+        {
+            target = "-";
+        }
+        else if (path.Length > prefixLength)
+        {
+            target = Uri.UnescapeDataString(path[prefixLength..]);
+        }
+        else
+        {
+            target = "";
+        }
 
         // A cookie rides along on a forged cross-site request; a header secret does not, so only sessions need the token.
         if (caller.Session is { } session && !DashboardSessionStore.CsrfMatches(session, request.Header(CsrfHeader)))
         {
             Audit.Record(caller.Actor, remote, action, target, AuditResults.Denied);
-            return ControlHttpResponse.Text(403, "text/plain; charset=utf-8", "csrf token missing or wrong");
+            return ControlHttpResponse.Text(403, PlainTextUtf8, "csrf token missing or wrong");
         }
 
         if (isLogout)
         {
             Sessions.Remove(ReadCookie(request, SessionCookie));
             Audit.Record(caller.Actor, remote, AuditActions.Logout, "-", AuditResults.Ok);
-            return ControlHttpResponse.Text(200, "text/plain; charset=utf-8", "ok", ClearCookie());
+            return ControlHttpResponse.Text(200, PlainTextUtf8, "ok", ClearCookie());
         }
 
         if (caller.Role != DashboardRole.Operator)
         {
             Audit.Record(caller.Actor, remote, action, target, AuditResults.Denied);
-            return ControlHttpResponse.Text(403, "text/plain; charset=utf-8", "operator role required");
+            return ControlHttpResponse.Text(403, PlainTextUtf8, "operator role required");
         }
 
         if (isReload)
@@ -465,11 +500,11 @@ public sealed class DashboardHost : IDisposable
         catch (ArgumentException)
         {
             Audit.Record(caller.Actor, remote, action, target, AuditResults.Rejected);
-            return ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request");
+            return ControlHttpResponse.Text(400, PlainTextUtf8, "bad request");
         }
 
         Audit.Record(caller.Actor, remote, action, target, AuditResults.Ok);
-        return ControlHttpResponse.Text(200, "text/plain; charset=utf-8", "ok");
+        return ControlHttpResponse.Text(200, PlainTextUtf8, "ok");
     }
 
     private async Task<ControlHttpResponse> ReloadAsync(Caller caller, string? remote)
@@ -477,7 +512,7 @@ public sealed class DashboardHost : IDisposable
         if (_options.RequestReload is null)
         {
             Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Unavailable);
-            return ControlHttpResponse.Text(503, "text/plain; charset=utf-8", "reload is not available");
+            return ControlHttpResponse.Text(503, PlainTextUtf8, "reload is not available");
         }
 
         PlusReloadResult result;
@@ -488,18 +523,18 @@ public sealed class DashboardHost : IDisposable
         catch (Exception)
         {
             Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Error);
-            return ControlHttpResponse.Text(500, "text/plain; charset=utf-8", "reload failed");
+            return ControlHttpResponse.Text(500, PlainTextUtf8, "reload failed");
         }
 
         if (!result.Ok)
         {
             Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Error);
-            return ControlHttpResponse.Text(500, "text/plain; charset=utf-8",
+            return ControlHttpResponse.Text(500, PlainTextUtf8,
                 string.IsNullOrEmpty(result.Error) ? "reload failed" : result.Error);
         }
 
         Audit.Record(caller.Actor, remote, AuditActions.Reload, "-", AuditResults.Ok);
-        return ControlHttpResponse.Text(200, "text/plain; charset=utf-8",
+        return ControlHttpResponse.Text(200, PlainTextUtf8,
             string.IsNullOrEmpty(result.ConfigHash) ? "ok" : "ok " + result.ConfigHash);
     }
 
@@ -536,7 +571,7 @@ public sealed class DashboardHost : IDisposable
         var id = Sessions.Create(role, actor, DashboardAuthSource.Oidc, out _);
         Audit.Record(actor, remote, AuditActions.Login, "/login/oidc/callback", AuditResults.Ok);
         var headers = new List<KeyValuePair<string, string>>(response.Headers) { SessionCookieHeader(id), new("Location", "/") };
-        return ControlHttpResponse.Text(303, "text/plain; charset=utf-8", "", headers.ToArray());
+        return ControlHttpResponse.Text(303, PlainTextUtf8, "", headers.ToArray());
     }
 
     private ControlHttpResponse SignIn(ControlHttpRequest request)
@@ -544,7 +579,7 @@ public sealed class DashboardHost : IDisposable
         var remote = request.RemoteAddress?.ToString() ?? "unknown";
         if (request.Body.Length > MaxLoginBodyBytes)
         {
-            return ControlHttpResponse.Text(413, "text/plain; charset=utf-8", "request too large");
+            return ControlHttpResponse.Text(413, PlainTextUtf8, "request too large");
         }
 
         var body = request.BodyText();
@@ -573,10 +608,10 @@ public sealed class DashboardHost : IDisposable
             if (firstUser)
             {
                 Audit.Record($"{ControlPlaneSecurity.DashboardSurface}:local:{user}", remote, AuditActions.LoginFailed,
-                    "/login", AuditResults.Throttled);
+                    LoginPath, AuditResults.Throttled);
             }
 
-            return ControlHttpResponse.Text(429, "text/plain; charset=utf-8", "too many failed attempts",
+            return ControlHttpResponse.Text(429, PlainTextUtf8, "too many failed attempts",
                 new KeyValuePair<string, string>("Retry-After", retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
 
@@ -584,7 +619,7 @@ public sealed class DashboardHost : IDisposable
         {
             var actor = $"{ControlPlaneSecurity.DashboardSurface}:local:{record.User}:{RoleName(record.Role)}";
             var id = Sessions.Create(record.Role, actor, DashboardAuthSource.Local, out _);
-            Audit.Record(actor, remote, AuditActions.Login, "/login", AuditResults.Ok);
+            Audit.Record(actor, remote, AuditActions.Login, LoginPath, AuditResults.Ok);
             return Redirect("/", SessionCookieHeader(id));
         }
 
@@ -616,7 +651,7 @@ public sealed class DashboardHost : IDisposable
 
         var actor = $"{ControlPlaneSecurity.DashboardSurface}:break-glass:{RoleName(granted)}";
         var id = Sessions.Create(granted, actor, DashboardAuthSource.Secret, out _);
-        Audit.Record(actor, remote, AuditActions.Login, "/login", AuditResults.Ok);
+        Audit.Record(actor, remote, AuditActions.Login, LoginPath, AuditResults.Ok);
         return Redirect("/", SessionCookieHeader(id));
     }
 
@@ -724,22 +759,20 @@ public sealed class DashboardHost : IDisposable
         ControlHttpResponse.Text(200, "application/json", JsonSerializer.Serialize(value, Json));
 
     private static ControlHttpResponse Redirect(string location, params KeyValuePair<string, string>[] extra) =>
-        ControlHttpResponse.Text(303, "text/plain; charset=utf-8", "", [new("Location", location), .. extra]);
+        ControlHttpResponse.Text(303, PlainTextUtf8, "", [new("Location", location), .. extra]);
 
     private static ControlHttpResponse MethodNotAllowed() =>
-        ControlHttpResponse.Text(405, "text/plain; charset=utf-8", "method not allowed");
+        ControlHttpResponse.Text(405, PlainTextUtf8, "method not allowed");
 
     /// <summary>Adds the response headers every dashboard answer carries, including errors and redirects.</summary>
     private static ControlHttpResponse Harden(ControlHttpResponse response)
     {
         var headers = new List<KeyValuePair<string, string>>(response.Headers.Count + SecurityHeaders.Length);
         headers.AddRange(response.Headers);
-        foreach (var header in SecurityHeaders)
+        foreach (var header in SecurityHeaders.Where(h => !headers.Exists(existing =>
+                     existing.Key.Equals(h.Key, StringComparison.OrdinalIgnoreCase))))
         {
-            if (!headers.Exists(h => h.Key.Equals(header.Key, StringComparison.OrdinalIgnoreCase)))
-            {
-                headers.Add(header);
-            }
+            headers.Add(header);
         }
 
         return new ControlHttpResponse

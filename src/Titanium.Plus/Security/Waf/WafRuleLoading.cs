@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using YamlDotNet.Serialization;
 
 namespace Titanium.Plus.Security.Waf;
@@ -11,6 +12,7 @@ public static class WafRulePack
     public const string Version = "waf-pack-1";
 
     private const string ResourceName = "Titanium.Plus.Security.Waf.waf-pack-1.json";
+    private static readonly JsonSerializerOptions PackJsonOptions = new() { PropertyNameCaseInsensitive = true };
     private static readonly Lazy<IReadOnlyList<WafRule>> Loaded = new(LoadEmbedded);
 
     /// <summary>Every rule of the pack, compiled once per process.</summary>
@@ -30,14 +32,14 @@ public static class WafRulePack
         PackFile? file;
         try
         {
-            file = JsonSerializer.Deserialize<PackFile>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            file = JsonSerializer.Deserialize<PackFile>(json, PackJsonOptions);
         }
         catch (JsonException ex)
         {
             throw new WafRuleException("The rule pack is not valid JSON: " + ex.Message);
         }
 
-        if (file?.Rules is not { Count: > 0 } entries)
+        if (file?.RuleEntries is not { Count: > 0 } entries)
         {
             throw new WafRuleException("The rule pack has no rules.");
         }
@@ -79,24 +81,25 @@ public static class WafRulePack
 
     private sealed class PackFile
     {
-        public string? Pack { get; set; }
-        public List<PackRule>? Rules { get; set; }
+        public string? Pack { get; init; }
+        [JsonPropertyName("rules")]
+        public List<PackRule>? RuleEntries { get; init; }
     }
 
     private sealed class PackRule
     {
-        public string? Id { get; set; }
-        public string? Category { get; set; }
-        public string? Severity { get; set; }
-        public int? Paranoia { get; set; }
-        public List<string>? Targets { get; set; }
-        public List<string>? Headers { get; set; }
-        public string? Pattern { get; set; }
-        public List<string>? Contains { get; set; }
-        public List<string>? Prefilter { get; set; }
-        public string? Check { get; set; }
-        public string? Description { get; set; }
-        public bool? IgnoreCase { get; set; }
+        public string? Id { get; init; }
+        public string? Category { get; init; }
+        public string? Severity { get; init; }
+        public int? Paranoia { get; init; }
+        public List<string>? Targets { get; init; }
+        public List<string>? Headers { get; init; }
+        public string? Pattern { get; init; }
+        public List<string>? Contains { get; init; }
+        public List<string>? Prefilter { get; init; }
+        public string? Check { get; init; }
+        public string? Description { get; init; }
+        public bool? IgnoreCase { get; init; }
     }
 }
 
@@ -232,23 +235,23 @@ public static class WafCustomRules
 
     private sealed class RulesFile
     {
-        public List<RuleEntry>? Rules { get; set; }
+        public List<RuleEntry>? Rules { get; init; }
     }
 
     private sealed class RuleEntry
     {
-        public string? Id { get; set; }
-        public string? Description { get; set; }
-        public string? Category { get; set; }
-        public string? Severity { get; set; }
-        public int? Paranoia { get; set; }
-        public List<string>? Targets { get; set; }
-        public string? Regex { get; set; }
-        public List<string>? Contains { get; set; }
-        public List<string>? Transformations { get; set; }
-        public string? Action { get; set; }
-        public int? Score { get; set; }
-        public bool? IgnoreCase { get; set; }
+        public string? Id { get; init; }
+        public string? Description { get; init; }
+        public string? Category { get; init; }
+        public string? Severity { get; init; }
+        public int? Paranoia { get; init; }
+        public List<string>? Targets { get; init; }
+        public string? Regex { get; init; }
+        public List<string>? Contains { get; init; }
+        public List<string>? Transformations { get; init; }
+        public string? Action { get; init; }
+        public int? Score { get; init; }
+        public bool? IgnoreCase { get; init; }
     }
 }
 

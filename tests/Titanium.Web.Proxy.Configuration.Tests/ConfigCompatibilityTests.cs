@@ -10,6 +10,8 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class ConfigCompatibilityTests
 {
+    private static readonly int[] PassiveFailureStatusCodes = [502, 503];
+
     private static string CompatDirectory => Path.Combine(AppContext.BaseDirectory, "Compat");
 
     private static IEnumerable<string> GoldenFiles() =>
@@ -94,8 +96,8 @@ public class ConfigCompatibilityTests
         Assert.AreEqual("Warning", config.Logging?.MinimumLevel);
         Assert.IsNotNull(config.Server);
         Assert.AreEqual("transparent", config.Listeners.Single().Type);
-        Assert.AreEqual(true, config.Listeners.Single().EnableHttp2);
-        CollectionAssert.AreEqual(new[] { 502, 503 },
+        Assert.IsTrue(config.Listeners.Single().EnableHttp2);
+        CollectionAssert.AreEqual(PassiveFailureStatusCodes,
             config.Clusters.Single().HealthCheck!.Passive!.FailureStatusCodes!.ToArray());
     }
 

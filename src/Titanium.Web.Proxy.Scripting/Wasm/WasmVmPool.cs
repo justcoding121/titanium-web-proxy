@@ -52,13 +52,38 @@ internal sealed class WasmVmPool : IDisposable
 
     public ILogger? Logger { get; }
 
-    public ProxyLogLevel LogLevel =>
-        Logger is null ? ProxyLogLevel.Critical
-        : Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Trace) ? ProxyLogLevel.Trace
-        : Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug) ? ProxyLogLevel.Debug
-        : Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Information) ? ProxyLogLevel.Info
-        : Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Warning) ? ProxyLogLevel.Warn
-        : ProxyLogLevel.Error;
+    public ProxyLogLevel LogLevel
+    {
+        get
+        {
+            if (Logger is null)
+            {
+                return ProxyLogLevel.Critical;
+            }
+
+            if (Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Trace))
+            {
+                return ProxyLogLevel.Trace;
+            }
+
+            if (Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug))
+            {
+                return ProxyLogLevel.Debug;
+            }
+
+            if (Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Information))
+            {
+                return ProxyLogLevel.Info;
+            }
+
+            if (Logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Warning))
+            {
+                return ProxyLogLevel.Warn;
+            }
+
+            return ProxyLogLevel.Error;
+        }
+    }
 
     /// <summary>Number of slots holding a healthy VM.</summary>
     public int HealthyCount
@@ -73,16 +98,16 @@ internal sealed class WasmVmPool : IDisposable
     }
 
     /// <summary>The VMs in their slots right now; an empty slot (a rebuild in progress) is null.</summary>
-    public WasmVm?[] Vms
+    public WasmVm?[] CopyVms()
     {
-        get
+        lock (_gate)
         {
-            lock (_gate)
-            {
-                return _slots.ToArray();
-            }
+            return _slots.ToArray();
         }
     }
+
+    /// <summary>Compatibility alias for <see cref="CopyVms"/>.</summary>
+    public WasmVm?[] Vms => CopyVms(); // NOSONAR S2365 -- Tests and diagnostics expect a snapshot property; CopyVms holds the implementation.
 
     public int NextContextId() => Interlocked.Increment(ref _nextContextId);
 
@@ -256,15 +281,22 @@ internal sealed class WasmVmPool : IDisposable
         }
     }
 
-    public void Log(ProxyLogLevel level, string message) =>
-        Logger?.Log(WasmImports.ToLogLevel(level), "[wasm {Plugin}] {Message}", Name, message);
+    public void Log(ProxyLogLevel level, string message)
+    {
+        if (Logger is not { } logger || !logger.IsEnabled(WasmImports.ToLogLevel(level)))
+        {
+            return;
+        }
+
+        logger.Log(WasmImports.ToLogLevel(level), "[wasm {Plugin}] {Message}", Name, message);
+    }
 
     /// <summary>
     /// <c>proxy_set_tick_period_milliseconds</c> from a root context: (re)starts that root's timer in this VM, or stops it
     /// for zero. Each tick calls <c>proxy_on_tick</c> with the VM's gate held; a tick that finds the previous one still
     /// running is skipped.
     /// </summary>
-    public int SetTickPeriod(WasmVm vm, int milliseconds)
+    public int SetTickPeriod(WasmVm vm, int milliseconds) // NOSONAR S2325 -- WASM import dispatch calls through the pool instance; static would not match the host callback shape.
     {
         if (vm.Effective is not { } effective || !vm.TryGetContext(effective.RootId, out var context) || context is not WasmRootContext root)
         {
@@ -458,7 +490,7 @@ internal sealed class WasmVmPool : IDisposable
 }
 
 /// <summary>The pool's last plugin left while another tried to join it.</summary>
-internal sealed class WasmPoolClosedException() : Exception("the shared WASM VM pool is shutting down");
+public sealed class WasmPoolClosedException() : Exception("the shared WASM VM pool is shutting down");
 
 /// <summary>
 /// Pools shared by <c>vm_id</c>. Plugins with the same <c>vm_id</c>, module bytes, engine and limits run in the same VMs,

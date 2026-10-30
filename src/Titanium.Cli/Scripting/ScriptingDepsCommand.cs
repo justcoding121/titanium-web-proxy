@@ -9,6 +9,7 @@ namespace Titanium.Cli.Scripting;
 /// </summary>
 internal static class ScriptingDepsCommand
 {
+    private const string WasmtimeLabel = "Wasmtime";
     private const string InstallSubcommand = "install";
 
     private sealed record NativeProbe(string Label, string[] FileNames);
@@ -118,7 +119,7 @@ internal static class ScriptingDepsCommand
 
     private static void WriteOsFixes(List<NativeProbe> missing)
     {
-        var wantsWasmtime = missing.Any(m => m.Label == "Wasmtime");
+        var wantsWasmtime = missing.Any(m => m.Label == WasmtimeLabel);
         var wantsLua = missing.Any(m => m.Label == "Lua");
 
         if (OperatingSystem.IsWindows())
@@ -168,17 +169,17 @@ internal static class ScriptingDepsCommand
         if (OperatingSystem.IsWindows())
         {
             yield return new NativeProbe("Lua", ["lua54.dll"]);
-            yield return new NativeProbe("Wasmtime", ["wasmtime.dll"]);
+            yield return new NativeProbe(WasmtimeLabel, ["wasmtime.dll"]);
         }
         else if (OperatingSystem.IsMacOS())
         {
             yield return new NativeProbe("Lua", ["liblua54.dylib"]);
-            yield return new NativeProbe("Wasmtime", ["libwasmtime.dylib"]);
+            yield return new NativeProbe(WasmtimeLabel, ["libwasmtime.dylib"]);
         }
         else
         {
             yield return new NativeProbe("Lua", ["liblua54.so"]);
-            yield return new NativeProbe("Wasmtime", ["libwasmtime.so"]);
+            yield return new NativeProbe(WasmtimeLabel, ["libwasmtime.so"]);
         }
     }
     /// <summary>Loads (and immediately frees) the first candidate that resolves; returns a display path or null.</summary>

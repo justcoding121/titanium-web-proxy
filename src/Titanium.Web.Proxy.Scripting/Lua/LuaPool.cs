@@ -128,7 +128,7 @@ internal sealed class LuaPool : IDisposable
     }
 
     /// <summary>Takes a state's gate and registers a call on it. The caller releases the gate and calls <see cref="LuaInstance.Exit"/>.</summary>
-    public async ValueTask<LuaInstance> AcquireAsync(CancellationToken cancellationToken)
+    public async ValueTask<LuaInstance> AcquireAsync(CancellationToken cancellationToken) // NOSONAR S3776 -- Round-robin slot scan and fallback wait share one gate lifecycle; splitting would obscure acquire ordering.
     {
         while (true)
         {
@@ -144,7 +144,7 @@ internal sealed class LuaPool : IDisposable
                 }
 
                 fallback ??= instance;
-                if (instance.Gate.Wait(0, cancellationToken))
+                if (await instance.Gate.WaitAsync(0, cancellationToken).ConfigureAwait(false))
                 {
                     if (instance.TryEnter())
                     {
@@ -210,7 +210,7 @@ internal sealed class LuaPool : IDisposable
                 }
                 catch (Exception ex) when (ex is LuaScriptException or InvalidOperationException)
                 {
-                    _logger?.LogWarning("Lua plugin '{Plugin}' could not rebuild a state: {Error}", _name, ex.Message);
+                    _logger?.LogWarning(ex, "Lua plugin '{Plugin}' could not rebuild a state: {Error}", _name, ex.Message);
                 }
 
                 await Task.Delay(delay, _disposed.Token).ConfigureAwait(false);
@@ -219,6 +219,7 @@ internal sealed class LuaPool : IDisposable
         }
         catch (OperationCanceledException)
         {
+            /* pool disposed while rebuilding */
         }
         finally
         {

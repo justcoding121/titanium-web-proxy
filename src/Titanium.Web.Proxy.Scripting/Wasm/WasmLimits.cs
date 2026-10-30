@@ -32,7 +32,7 @@ internal sealed record WasmLimits
     /// <summary>Longest a paused request waits for the guest to resume it.</summary>
     public int PauseTimeoutMs { get; init; } = ProxyPluginContract.MaxTimeoutMilliseconds;
 
-    public static bool TryParse(PluginConfig config, out WasmLimits limits, out string? error)
+    public static bool TryParse(PluginConfig config, out WasmLimits limits, out string? error) // NOSONAR S3776 -- Limit validation and defaults stay in one config parse path.
     {
         var raw = config.Limits;
         limits = new WasmLimits();

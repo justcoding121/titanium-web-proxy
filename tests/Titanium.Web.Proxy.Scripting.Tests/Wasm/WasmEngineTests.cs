@@ -12,6 +12,7 @@ namespace Titanium.Web.Proxy.Scripting.Tests.Wasm;
 [DoNotParallelize]
 public class WasmEngineTests
 {
+    private static readonly string[] ExpectedRemovedHeaderNames = ["x-remove-me"];
     [TestMethod]
     public async Task RequestHeaders_EditsBecomeSetAndRemoveLists_AndPropertiesResolve()
     {
@@ -24,7 +25,7 @@ public class WasmEngineTests
         Assert.AreEqual(ScriptAction.Continue, result.Action);
         Assert.AreEqual("1", result.SetHeaders!["x-wasm-seen"]);
         Assert.AreEqual("/foo?x=1", result.SetHeaders["x-path"]);
-        CollectionAssert.AreEqual(new[] { "x-remove-me" }, result.RemoveHeaders!.ToArray());
+        CollectionAssert.AreEqual(ExpectedRemovedHeaderNames, result.RemoveHeaders!.ToArray());
         Assert.IsFalse(result.SetHeaders.ContainsKey("host"), "an unchanged :authority is not echoed back as Host");
     }
 

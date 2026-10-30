@@ -63,50 +63,17 @@ internal static class AgentAckPayload
                 return false;
             }
 
-            long? fleet = null;
-            if (root.TryGetProperty("fleet", out var f))
+            if (!TryParseFleet(root, out var fleet, out error))
             {
-                if (f.ValueKind == JsonValueKind.Number && f.TryGetInt64(out var n))
-                {
-                    fleet = n;
-                }
-                else if (f.ValueKind == JsonValueKind.String &&
-                         long.TryParse(TryGetString(f), out var p))
-                {
-                    fleet = p;
-                }
-                else if (f.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined)
-                {
-                    error = "fleet must be number or string";
-                    return false;
-                }
+                return false;
             }
 
             var nodeId = ReadString(root, "node_id", "nodeId");
             var configHash = ReadString(root, "config_hash", "configHash");
             var ok = !root.TryGetProperty("ok", out var o) || o.ValueKind != JsonValueKind.False;
             var err = ReadString(root, "error");
-
-            string? healthJson = null;
-            if (root.TryGetProperty("health", out var health))
-            {
-                healthJson = health.ValueKind is JsonValueKind.String
-                    ? TryGetString(health)
-                    : health.GetRawText();
-            }
-
-            string? labelsJson = null;
-            if (root.TryGetProperty("labels", out var labels))
-            {
-                labelsJson = labels.ValueKind is JsonValueKind.String
-                    ? TryGetString(labels)
-                    : labels.GetRawText();
-            }
-            else if (root.TryGetProperty("labelsJson", out var labelsJsonEl) &&
-                     labelsJsonEl.ValueKind == JsonValueKind.String)
-            {
-                labelsJson = TryGetString(labelsJsonEl);
-            }
+            var healthJson = ReadJsonOrStringProperty(root, "health");
+            var labelsJson = ReadLabelsJson(root);
 
             parsed = new Parsed(fleet, nodeId, configHash, ok, err, healthJson, labelsJson);
             return true;
@@ -116,6 +83,62 @@ internal static class AgentAckPayload
             error = "json: " + ex.Message;
             return false;
         }
+    }
+
+    private static bool TryParseFleet(JsonElement root, out long? fleet, out string? error)
+    {
+        fleet = null;
+        error = null;
+        if (!root.TryGetProperty("fleet", out var f))
+        {
+            return true;
+        }
+
+        if (f.ValueKind == JsonValueKind.Number && f.TryGetInt64(out var n))
+        {
+            fleet = n;
+            return true;
+        }
+
+        if (f.ValueKind == JsonValueKind.String && long.TryParse(TryGetString(f), out var p))
+        {
+            fleet = p;
+            return true;
+        }
+
+        if (f.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+
+        error = "fleet must be number or string";
+        return false;
+    }
+
+    private static string? ReadJsonOrStringProperty(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var el))
+        {
+            return null;
+        }
+
+        return el.ValueKind is JsonValueKind.String ? TryGetString(el) : el.GetRawText();
+    }
+
+    private static string? ReadLabelsJson(JsonElement root)
+    {
+        if (root.TryGetProperty("labels", out var labels))
+        {
+            return labels.ValueKind is JsonValueKind.String ? TryGetString(labels) : labels.GetRawText();
+        }
+
+        if (root.TryGetProperty("labelsJson", out var labelsJsonEl) &&
+            labelsJsonEl.ValueKind == JsonValueKind.String)
+        {
+            return TryGetString(labelsJsonEl);
+        }
+
+        return null;
     }
 
     private static string? ReadString(JsonElement root, params string[] names)
@@ -145,7 +168,7 @@ internal static class AgentAckPayload
     }
 }
 
-internal sealed class AgentAckFuzzInvariantException(string message) : Exception(message);
+public sealed class AgentAckFuzzInvariantException(string message) : Exception(message);
 
 /// <summary>Fuzz entry for revision YAML accepted by the manager store.</summary>
 internal static class RevisionYamlFuzzTarget

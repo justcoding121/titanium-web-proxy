@@ -460,7 +460,7 @@ public partial class ProxyServer
         return sessionArgs.ResponseHeaderTimeout;
     }
 
-    private Func<int, HeaderCollection, CancellationToken, Task>? CreateH2DispatchInterimRelay(
+    private static Func<int, HeaderCollection, CancellationToken, Task>? CreateH2DispatchInterimRelay(
         int streamId, Http2ConnectionState connectionState, Stream clientStream, Version clientHttpVersion,
         bool isFastPath)
     {

@@ -72,7 +72,7 @@ public class TcpPassthroughRelayTests
     }
 
     /// <summary>The peer closing a socket with a read pending can arrive as EOF or as a reset. Either means closed.</summary>
-    private static async Task AssertClosedAsync(Socket socket, CancellationToken token, string message)
+    private static async Task AssertClosedAsync(Socket socket, string message, CancellationToken token)
     {
         var buffer = new byte[16];
         try

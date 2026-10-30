@@ -70,7 +70,7 @@ internal sealed class ClusterEndpoints
         _state.Services.FirstOrDefault(s => s.Namespace == ns && s.Name == name);
 
     /// <summary>Ready addresses for one Service port, taken from every slice of the Service.</summary>
-    public List<(string Address, int Port)> ReadyEndpoints(ServiceInfo service, ServicePortInfo port)
+    public List<(string Address, int Port)> ReadyEndpoints(ServiceInfo service, ServicePortInfo port) // NOSONAR S3776 -- Endpoint slice merge deduplicates addresses in one pass.
     {
         var found = new List<(string, int)>();
         var seen = new HashSet<(string, int)>();

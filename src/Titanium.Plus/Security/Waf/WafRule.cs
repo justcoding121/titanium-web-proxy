@@ -25,7 +25,7 @@ public sealed class WafRule
     private readonly SearchValues<string>? _prefilter;
     private readonly WafTransform[] _transforms;
 
-    private WafRule(
+    private WafRule( // NOSONAR S107 -- Immutable rule record; a builder would duplicate load-time validation in Build(Spec).
         string id, string category, WafSeverity severity, WafTargets targets, int paranoia, WafAction action,
         int? score, string? description, string[]? headerNames, WafCheck check, WafTransform[] transforms, bool isCustom,
         Regex? regex, string[]? contains, string[]? prefilter, bool ignoreCase, string? pattern)
@@ -200,13 +200,31 @@ public sealed class WafRule
     /// <summary>Validates a spec and compiles its pattern. Throws <see cref="WafRuleException"/> naming the rule.</summary>
     internal static WafRule Build(Spec spec)
     {
+        var id = ValidateSpecIdentity(spec);
+        ValidateSpecFields(spec, id);
+        var hasRegex = !string.IsNullOrEmpty(spec.Regex);
+        var regex = hasRegex ? CompileSpecRegex(spec, id) : null;
+
+        var category = string.IsNullOrWhiteSpace(spec.Category) ? "custom" : spec.Category.Trim();
+        return new WafRule(
+            id, category, spec.Severity, spec.Targets, spec.Paranoia, spec.Action, spec.Score, spec.Description,
+            spec.HeaderNames, spec.Check, spec.Transforms, spec.IsCustom, regex, spec.Contains, spec.Prefilter,
+            spec.IgnoreCase, spec.Regex);
+    }
+
+    private static string ValidateSpecIdentity(Spec spec)
+    {
         var id = spec.Id?.Trim();
         if (string.IsNullOrEmpty(id))
         {
             throw new WafRuleException("A WAF rule has no id.");
         }
 
-        var category = string.IsNullOrWhiteSpace(spec.Category) ? "custom" : spec.Category.Trim();
+        return id;
+    }
+
+    private static void ValidateSpecFields(Spec spec, string id)
+    {
         if (spec.Targets == WafTargets.None)
         {
             throw new WafRuleException($"WAF rule '{id}' lists no targets.");
@@ -239,24 +257,19 @@ public sealed class WafRule
         {
             throw new WafRuleException($"WAF rule '{id}' has an empty contains entry.");
         }
+    }
 
-        Regex? regex = null;
-        if (hasRegex)
+    private static Regex CompileSpecRegex(Spec spec, string id)
+    {
+        var problems = WafPatternLinter.Lint(spec.Regex!, spec.IgnoreCase);
+        if (problems.Count > 0)
         {
-            var problems = WafPatternLinter.Lint(spec.Regex!, spec.IgnoreCase);
-            if (problems.Count > 0)
-            {
-                throw new WafRuleException($"WAF rule '{id}' pattern rejected: {string.Join("; ", problems)}.");
-            }
-
-            regex = WafPatternLinter.Compile(spec.Regex!, spec.IgnoreCase);
-            WafPatternLinter.WarmUp(regex);
+            throw new WafRuleException($"WAF rule '{id}' pattern rejected: {string.Join("; ", problems)}.");
         }
 
-        return new WafRule(
-            id, category, spec.Severity, spec.Targets, spec.Paranoia, spec.Action, spec.Score, spec.Description,
-            spec.HeaderNames, spec.Check, spec.Transforms, spec.IsCustom, regex, spec.Contains, spec.Prefilter,
-            spec.IgnoreCase, spec.Regex);
+        var regex = WafPatternLinter.Compile(spec.Regex!, spec.IgnoreCase);
+        WafPatternLinter.WarmUp(regex);
+        return regex;
     }
 }
 
@@ -357,7 +370,7 @@ public static class WafPatternLinter
     /// Finds a group that is repeated without a bound and itself holds an unbounded repeat, such as <c>(a+)+</c> or
     /// <c>(x*y)*</c>.
     /// </summary>
-    internal static bool HasNestedUnboundedRepeat(string pattern)
+    internal static bool HasNestedUnboundedRepeat(string pattern) // NOSONAR S3776 -- Regex surface syntax scanner; splitting cases would obscure repeat nesting detection.
     {
         var stack = new Stack<bool>();
         var current = false;

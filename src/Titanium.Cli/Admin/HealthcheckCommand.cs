@@ -30,13 +30,15 @@ internal static class HealthcheckCommand
                 switch (args[i])
                 {
                     case "--url" when i + 1 < args.Length:
-                        url = args[++i];
+                        url = args[i + 1];
+                        i++;
                         break;
                     case "-c" or "--config" when i + 1 < args.Length:
-                        configPath = args[++i];
+                        configPath = args[i + 1];
+                        i++;
                         break;
                     case "--timeout" when i + 1 < args.Length:
-                        if (!double.TryParse(args[++i], System.Globalization.NumberStyles.Float,
+                        if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float,
                                 System.Globalization.CultureInfo.InvariantCulture, out var seconds) ||
                             seconds <= 0 || seconds > 300)
                         {
@@ -44,6 +46,7 @@ internal static class HealthcheckCommand
                         }
 
                         timeout = TimeSpan.FromSeconds(seconds);
+                        i++;
                         break;
                 }
             }

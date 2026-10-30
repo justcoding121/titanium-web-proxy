@@ -27,7 +27,7 @@ internal static class ScriptPhaseDispatch
     /// Request headers, then (buffered mode) the whole request body and request trailers. A deny stages the response and
     /// returns <c>Denied</c>. A cluster id asks the caller to bind the request to that cluster.
     /// </summary>
-    internal static async ValueTask<RequestOutcome> RunRequestAsync(
+    internal static async ValueTask<RequestOutcome> RunRequestAsync( // NOSONAR S3776 -- Script phase dispatch shares session state across phases.
         ReverseProxyOptions options, RouteConfig? route, SessionEventArgs args)
     {
         var host = options.ScriptPipeline;
@@ -262,7 +262,7 @@ internal static class ScriptPhaseDispatch
             _ => new ValueTask<ScriptPhaseResult>(ScriptPhaseResult.Continue),
         };
 
-    private static ScriptPhaseContext Build(
+    private static ScriptPhaseContext Build( // NOSONAR S107 -- Phase context keeps header snapshot and route fields explicit on hot paths.
         SessionEventArgsBase session,
         ScriptPhases phase,
         RouteConfig? route,
@@ -297,7 +297,7 @@ internal static class ScriptPhaseDispatch
         };
     }
 
-    private static IReadOnlyList<KeyValuePair<string, string>> Snapshot(HeaderCollection headers)
+    private static KeyValuePair<string, string>[] Snapshot(HeaderCollection headers)
     {
         var all = headers.GetAllHeaders();
         if (all.Count == 0)
@@ -345,7 +345,7 @@ internal static class ScriptPhaseDispatch
         if (!string.IsNullOrEmpty(local?.ContentType))
         {
             headers ??= new List<KeyValuePair<string, string>>(1);
-            headers.Add(new KeyValuePair<string, string>("Content-Type", local!.ContentType!));
+            headers.Add(new KeyValuePair<string, string>("Content-Type", local.ContentType));
         }
 
         RoutePluginDispatch.Stage(args, local?.Status ?? 403, string.Empty, local?.Body, headers);

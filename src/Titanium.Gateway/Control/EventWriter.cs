@@ -69,7 +69,7 @@ public sealed class EventWriter
             }
             catch (Exception ex) when (ex is HttpRequestException or KubeApiException or IOException)
             {
-                _log.LogWarning("Could not post an event for Ingress {Namespace}/{Name}: {Message}", item.Namespace, item.Name, ex.Message);
+                _log.LogWarning(ex, "Could not post an event for Ingress {Namespace}/{Name}: {Message}", item.Namespace, item.Name, ex.Message);
             }
         }
 

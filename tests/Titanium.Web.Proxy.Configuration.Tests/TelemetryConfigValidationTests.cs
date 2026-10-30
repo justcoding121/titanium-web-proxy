@@ -7,6 +7,8 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class TelemetryConfigValidationTests
 {
+    private static readonly string[] XRequestIdHeader = ["x-request-id"];
+
     private static string Errors(TelemetryConfig? telemetry) =>
         string.Join("\n", TwpConfigValidator.Validate(new TwpConfig { Server = new ServerConfig { Telemetry = telemetry } }));
 
@@ -117,7 +119,7 @@ public class TelemetryConfigValidationTests
         Assert.IsTrue(telemetry.Otlp.Insecure);
         Assert.IsTrue(telemetry.Traces!.Enabled);
         Assert.AreEqual(0.5, telemetry.Traces.Ratio);
-        CollectionAssert.AreEqual(new[] { "x-request-id" }, telemetry.Traces.HeaderAllowList!.ToArray());
+        CollectionAssert.AreEqual(XRequestIdHeader, telemetry.Traces.HeaderAllowList!.ToArray());
         Assert.AreEqual(10000, telemetry.Metrics!.IntervalMs);
     }
 

@@ -132,7 +132,7 @@ internal static class PrometheusTextWriter
         }
         else
         {
-            sb.Append(FormatDouble(state.ReadDouble(cell)));
+            sb.Append(FormatDouble(MetricsListener.InstrumentState.ReadDouble(cell)));
         }
 
         sb.Append('\n');
@@ -152,7 +152,7 @@ internal static class PrometheusTextWriter
         }
 
         var suffix = labels.Length > 0 ? "{" + labels + "}" : string.Empty;
-        sb.Append(name).Append("_sum").Append(suffix).Append(' ').Append(FormatDouble(state.ReadDouble(cell))).Append('\n');
+        sb.Append(name).Append("_sum").Append(suffix).Append(' ').Append(FormatDouble(MetricsListener.InstrumentState.ReadDouble(cell))).Append('\n');
         sb.Append(name).Append("_count").Append(suffix).Append(' ').Append(cumulative.ToString(CultureInfo.InvariantCulture)).Append('\n');
     }
 

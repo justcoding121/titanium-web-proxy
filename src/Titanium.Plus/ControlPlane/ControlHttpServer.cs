@@ -176,7 +176,7 @@ internal sealed class ControlHttpServer : IDisposable
                 continue;
             }
 
-            if (!_slots.Wait(0, cancellationToken))
+            if (!await _slots.WaitAsync(0, cancellationToken).ConfigureAwait(false))
             {
                 client.Dispose();
                 continue;
@@ -406,6 +406,7 @@ internal sealed class ControlHttpServer : IDisposable
                 // Trailers (if any) end with an empty line.
                 while ((await reader.ReadLineAsync(token).ConfigureAwait(false)).Length > 0)
                 {
+                    // Trailer lines end with a blank line; discard until then.
                 }
 
                 return body.ToArray();
@@ -418,7 +419,7 @@ internal sealed class ControlHttpServer : IDisposable
 
             var chunk = new byte[size];
             await reader.ReadExactlyAsync(chunk, token).ConfigureAwait(false);
-            body.Write(chunk);
+            await body.WriteAsync(chunk, token).ConfigureAwait(false);
             if ((await reader.ReadLineAsync(token).ConfigureAwait(false)).Length != 0)
             {
                 throw new MalformedRequestException();
@@ -490,9 +491,9 @@ internal sealed class ControlHttpServer : IDisposable
     private static string Reason(int status) =>
         Enum.IsDefined(typeof(HttpStatusCode), status) ? ((HttpStatusCode)status).ToString() : "Status";
 
-    private sealed class RequestTooLargeException : Exception;
+    public sealed class RequestTooLargeException : Exception;
 
-    private sealed class MalformedRequestException : Exception;
+    public sealed class MalformedRequestException : Exception;
 
     /// <summary>Reads lines and exact byte counts from bytes already buffered, then from the stream.</summary>
     private sealed class PrefixedReader(Stream stream, ReadOnlyMemory<byte> prefix)

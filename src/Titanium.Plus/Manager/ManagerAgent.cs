@@ -29,8 +29,6 @@ public sealed class ManagerAgent : IDisposable
     };
 
     private readonly PlusActivationContext _context;
-    private readonly string _baseUrl;
-    private readonly string _token;
     private readonly string _fleet;
     private readonly string _nodeId;
     private readonly string? _labelsJson;
@@ -50,10 +48,8 @@ public sealed class ManagerAgent : IDisposable
     private PendingRevision? _pending;
     private bool _disposed;
 
-    private ManagerAgent(
+    private ManagerAgent( // NOSONAR S107 -- Agent wiring keeps enrollment options explicit without a context bag.
         PlusActivationContext context,
-        string baseUrl,
-        string token,
         string fleet,
         string nodeId,
         string? labelsJson,
@@ -63,8 +59,6 @@ public sealed class ManagerAgent : IDisposable
         HttpClient http)
     {
         _context = context;
-        _baseUrl = baseUrl;
-        _token = token;
         _fleet = fleet;
         _nodeId = nodeId;
         _labelsJson = labelsJson;
@@ -124,7 +118,7 @@ public sealed class ManagerAgent : IDisposable
             debounce = TimeSpan.FromSeconds(sec);
         }
 
-        var baseUrl = url!.Trim().TrimEnd('/') + "/";
+        var baseUrl = url.Trim().TrimEnd('/') + new string('/', 1);
         var insecure = IsTrue(First(options, "manager.tls.insecure", "manager.tls"));
         var handler = new SocketsHttpHandler
         {
@@ -142,14 +136,14 @@ public sealed class ManagerAgent : IDisposable
             Timeout = Timeout.InfiniteTimeSpan,
             BaseAddress = new Uri(baseUrl),
         };
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token!);
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var agent = new ManagerAgent(
-            context, baseUrl, token!, fleet, nodeId, labelsJson, managed, stateDir, debounce, http);
+            context, fleet, nodeId, labelsJson, managed, stateDir, debounce, http);
         var localHash = context.HostStatus?.GetConfigStatus().ConfigHash;
         if (!string.IsNullOrWhiteSpace(localHash))
         {
-            agent._haveHash = localHash!;
+            agent._haveHash = localHash;
         }
 
         context.HostStatus?.SetManagedState(true, drifted: false);
@@ -201,20 +195,8 @@ public sealed class ManagerAgent : IDisposable
         {
             try
             {
-                var wait = first ? 0 : 30;
+                await PollOnceAsync(first, ct).ConfigureAwait(false);
                 first = false;
-                var revision = await LongPollAsync(wait, ct).ConfigureAwait(false);
-                if (revision is null)
-                {
-                    if (_haveHash.Length == 0)
-                    {
-                        await TryApplyLastKnownGoodAsync(ct).ConfigureAwait(false);
-                    }
-
-                    continue;
-                }
-
-                await HandleRevisionAsync(revision, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -228,15 +210,41 @@ public sealed class ManagerAgent : IDisposable
                     await TryApplyLastKnownGoodAsync(ct).ConfigureAwait(false);
                 }
 
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                if (!await DelayAfterPollFailureAsync(ct).ConfigureAwait(false))
                 {
                     return;
                 }
             }
+        }
+    }
+
+    private async Task PollOnceAsync(bool firstPoll, CancellationToken ct)
+    {
+        var wait = firstPoll ? 0 : 30;
+        var revision = await LongPollAsync(wait, ct).ConfigureAwait(false);
+        if (revision is null)
+        {
+            if (_haveHash.Length == 0)
+            {
+                await TryApplyLastKnownGoodAsync(ct).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await HandleRevisionAsync(revision, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<bool> DelayAfterPollFailureAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return false;
         }
     }
 
@@ -503,16 +511,9 @@ public sealed class ManagerAgent : IDisposable
             return true;
         }
 
-        foreach (var key in options.Keys)
-        {
-            if (key.StartsWith("gateway.", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(options[key]))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return options.Keys.Any(key =>
+            key.StartsWith("gateway.", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(options[key]));
     }
 
     private static string? ReadToken(IReadOnlyDictionary<string, string> options)

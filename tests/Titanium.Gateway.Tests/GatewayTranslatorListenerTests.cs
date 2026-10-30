@@ -9,6 +9,8 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public class GatewayTranslatorListenerTests
 {
+    private static readonly string[] AppExampleHosts = ["app.example.com"];
+    private static readonly string[] WildcardHosts = ["*"];
     private static Condition Cond(IReadOnlyList<Condition> list, string type) => list.Single(c => c.Type == type);
 
     private static StatusPatch GatewayPatch(RenderResult result, string name = "gw") =>
@@ -105,7 +107,7 @@ public class GatewayTranslatorListenerTests
         Assert.IsTrue(listener.DecryptSsl);
         var item = result.Config.Certificates!.Items.Single();
         Assert.AreEqual("/etc/titanium-tls/default.cert.pfx", item.Path);
-        CollectionAssert.AreEqual(new[] { "app.example.com" }, item.Hosts.ToArray());
+        CollectionAssert.AreEqual(AppExampleHosts, item.Hosts.ToArray());
         var file = result.TlsFiles.Single();
         Assert.AreEqual("default.cert.pfx", file.FileName);
         Assert.AreEqual("cert", file.SecretName);
@@ -119,7 +121,7 @@ public class GatewayTranslatorListenerTests
         b.Gateways[0].Spec.Listeners = [StateBuilder.Https("https", 443, null, "cert")];
         b.Secrets.Add(new SecretInfo("default", "cert", "kubernetes.io/tls", true, true));
 
-        CollectionAssert.AreEqual(new[] { "*" }, b.Render().Config.Certificates!.Items.Single().Hosts.ToArray());
+        CollectionAssert.AreEqual(WildcardHosts, b.Render().Config.Certificates!.Items.Single().Hosts.ToArray());
     }
 
     [TestMethod]

@@ -8,7 +8,6 @@ namespace Titanium.Web.Proxy;
 
 public partial class ProxyServer
 {
-    private SslProtocols listenerMinimumSslProtocol;
     private IReadOnlyList<TlsCipherSuite>? listenerCipherSuites;
     private CipherSuitesPolicy? listenerCipherSuitesPolicy;
     private bool listenerCipherSuitesRejected;
@@ -20,11 +19,7 @@ public partial class ProxyServer
     ///     Default <see cref="SslProtocols.None" /> leaves <see cref="SupportedSslProtocols" /> as the only limit.
     ///     When the minimum excludes every supported protocol, listeners accept the minimum and above.
     /// </summary>
-    public SslProtocols ListenerMinimumSslProtocol
-    {
-        get => listenerMinimumSslProtocol;
-        set => listenerMinimumSslProtocol = value;
-    }
+    public SslProtocols ListenerMinimumSslProtocol { get; set; }
 
     /// <summary>
     ///     Cipher suites a client-facing handshake may negotiate. Null (the default) keeps the OS defaults.
@@ -54,7 +49,7 @@ public partial class ProxyServer
 
     /// <summary>The protocols a client-facing handshake enables.</summary>
     internal SslProtocols ListenerSslProtocols =>
-        ApplyMinimumProtocol(SupportedSslProtocols, listenerMinimumSslProtocol);
+        ApplyMinimumProtocol(SupportedSslProtocols, ListenerMinimumSslProtocol);
 
     /// <summary>
     ///     Keeps the protocols at or above <paramref name="minimum" />. <see cref="SslProtocols.None" /> means

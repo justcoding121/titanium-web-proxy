@@ -26,6 +26,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [DoNotParallelize]
 public class StreamingResponseCompressionTests
 {
+    private static readonly string[] GzipContentEncoding = ["gzip"];
+
     [ClassInitialize]
     public static void WarmUpChainBuilding(TestContext _)
     {
@@ -200,7 +202,7 @@ public class StreamingResponseCompressionTests
         using var response = await SendAsync(proxy, kind, "/", [("Accept-Encoding", "gzip")]);
         var wire = await response.Content.ReadAsByteArrayAsync();
 
-        CollectionAssert.AreEqual(new[] { "gzip" }, response.Content.Headers.ContentEncoding.ToArray());
+        CollectionAssert.AreEqual(GzipContentEncoding, response.Content.Headers.ContentEncoding.ToArray());
         Assert.IsFalse(response.Content.Headers.NonValidated.Contains("Content-Length"));
         CollectionAssert.AreEqual(plain, Decode("gzip", wire));
     }
@@ -227,7 +229,7 @@ public class StreamingResponseCompressionTests
 
         if (streaming)
         {
-            CollectionAssert.AreEqual(new[] { "gzip" }, response.Content.Headers.ContentEncoding.ToArray());
+            CollectionAssert.AreEqual(GzipContentEncoding, response.Content.Headers.ContentEncoding.ToArray());
             Assert.IsTrue(wire.Length < plain.Length / 2);
             CollectionAssert.AreEqual(plain, Decode("gzip", wire));
         }
@@ -696,7 +698,7 @@ public class StreamingResponseCompressionTests
 
         using var response = await SendAsync(proxy, ClientKind.H2Tls, "/", [("Accept-Encoding", "gzip")]);
 
-        CollectionAssert.AreEqual(new[] { "gzip" }, response.Content.Headers.ContentEncoding.ToArray());
+        CollectionAssert.AreEqual(GzipContentEncoding, response.Content.Headers.ContentEncoding.ToArray());
         CollectionAssert.AreEqual(plain, Decode("gzip", await response.Content.ReadAsByteArrayAsync()));
     }
 

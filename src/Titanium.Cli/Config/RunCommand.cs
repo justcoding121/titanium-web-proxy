@@ -29,6 +29,8 @@ namespace Titanium.Cli.Config;
 
 internal static class RunCommand
 {
+    private const string DefaultBindHost = "0.0.0.0";
+
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ClusterManager, ProxyConfigHost> ConfigHosts = new();
 
     private static readonly string[] PlusRelativePathKeys =
@@ -231,7 +233,7 @@ internal static class RunCommand
         }
 
         AdminServer? adminServer = null;
-        async Task<PlusReloadResult> PerformReloadAsync(CancellationToken ct)
+        async Task<PlusReloadResult> PerformReloadAsync(CancellationToken ct) // NOSONAR S3776 -- Reload callback keeps proxy wiring in one closure.
         {
             try
             {
@@ -385,7 +387,7 @@ internal static class RunCommand
         {
             foreach (var relay in udpRelays)
             {
-                relay.Dispose();
+                await relay.DisposeAsync().ConfigureAwait(false);
             }
 
             adminServer?.Dispose();
@@ -446,7 +448,7 @@ internal static class RunCommand
     /// Reloads routes/clusters (and server settings) from <paramref name="configPath"/>.
     /// Validation failures throw before mutating <paramref name="routes"/> or the cluster manager.
     /// </summary>
-    internal static async Task ReloadConfigAsync( // NOSONAR S107 -- Reload keeps established config wiring without a context bag.
+    internal static async Task ReloadConfigAsync( // NOSONAR S107, CA1068 -- Reload keeps established config wiring; optional callbacks follow the run token.
         string configPath,
         ProxyServer proxy,
         ClusterManager clusterManager,
@@ -465,9 +467,6 @@ internal static class RunCommand
         Action<PluginHost>? setPlugins = null,
         List<string>? scriptPipeline = null)
     {
-        // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
-        // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
-        var configHash = AdminHost.ComputeConfigHash(configPath);
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
@@ -579,7 +578,7 @@ internal static class RunCommand
         return drainSeconds < 0 ? 0 : drainSeconds;
     }
 
-    internal static ReverseProxyOptions BuildReverseProxyOptions(
+    internal static ReverseProxyOptions BuildReverseProxyOptions( // NOSONAR S107 -- Reverse-proxy wiring keeps dependencies explicit without an options bag.
         IReadOnlyCollection<RouteConfig> routes,
         IClusterManager clusterManager,
         LoadBalancer loadBalancer,
@@ -642,13 +641,10 @@ internal static class RunCommand
         _ = BuildScriptPipeline(plugins, config.ScriptPipeline?.ToList());
         foreach (var listener in config.Listeners)
         {
-            foreach (var name in listener.StreamFilters ?? [])
+            foreach (var name in (listener.StreamFilters ?? []).Where(n => !plugins.CanFilterStreams(n)))
             {
-                if (!plugins.CanFilterStreams(name))
-                {
-                    throw new InvalidOperationException(
-                        $"Listener port {listener.Port}: streamFilters plugin '{name}' is not a loaded script plugin.");
-                }
+                throw new InvalidOperationException(
+                    $"Listener port {listener.Port}: streamFilters plugin '{name}' is not a loaded script plugin.");
             }
         }
     }
@@ -1013,7 +1009,7 @@ internal static class RunCommand
     /// Reads the <c>cache.*</c> keys of <c>plus.options</c>. A value that is not a valid number (or is out of range)
     /// is reported and replaced by its default, so a typo never disables or unbounds the cache.
     /// </summary>
-    internal static ParsedResponseCacheOptions ParseResponseCacheOptions(
+    internal static ParsedResponseCacheOptions ParseResponseCacheOptions( // NOSONAR S3776 -- Option parsing keeps defaults and warnings colocated per key.
         IReadOnlyDictionary<string, string> options,
         Action<string> warn)
     {
@@ -1243,10 +1239,10 @@ internal static class RunCommand
 
     internal static UdpRelayOptions BuildUdpOptions(ListenerConfig listener)
     {
-        var host = listener.Host ?? "0.0.0.0";
+        var host = listener.Host ?? DefaultBindHost;
         var options = new UdpRelayOptions
         {
-            BindAddress = host is "0.0.0.0" or "*" ? IPAddress.Any : IPAddress.Parse(host),
+            BindAddress = host is DefaultBindHost or "*" ? IPAddress.Any : IPAddress.Parse(host),
             Port = listener.Port,
             ClusterId = listener.ClusterId,
             ForwardHost = listener.ForwardHost,
@@ -1282,8 +1278,8 @@ internal static class RunCommand
 
     private static void AddListener(ProxyServer proxy, ListenerConfig listener, Func<PluginHost?>? currentPlugins = null)
     {
-        var host = listener.Host ?? "0.0.0.0";
-        var ip = host is "0.0.0.0" or "*"
+        var host = listener.Host ?? DefaultBindHost;
+        var ip = host is DefaultBindHost or "*"
             ? IPAddress.Any
             : IPAddress.Parse(host);
 
@@ -1639,7 +1635,7 @@ internal static class RunCommand
          value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
          value.Equals("yes", StringComparison.OrdinalIgnoreCase));
 
-    internal static Dictionary<string, string> BuildPlusOptions(PlusConfig plus)
+    internal static Dictionary<string, string> BuildPlusOptions(PlusConfig plus) // NOSONAR S3776 -- Plus option flattening mirrors config surface area.
     {
         var options = plus.Options is null
             ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -1726,7 +1722,7 @@ internal static class RunCommand
         }
     }
 
-    internal static bool ConfigNeedsSessionPath(TwpConfig config)
+    internal static bool ConfigNeedsSessionPath(TwpConfig config) // NOSONAR S3776 -- Session-path triggers are independent feature gates.
     {
         if (config.StaticFiles is not null && !string.IsNullOrEmpty(config.StaticFiles.Root))
         {

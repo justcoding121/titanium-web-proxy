@@ -20,7 +20,7 @@ namespace Titanium.Plus.Tests;
 
 /// <summary>Dashboard v2 handlers: login, sessions, roles, CSRF, headers, views, and the data behind them.</summary>
 [TestClass]
-public class DashboardV2Tests
+public partial class DashboardV2Tests
 {
     private const string Secret = "operator-secret-value";
     private const string ViewerSecret = "viewer-secret-value";
@@ -319,7 +319,7 @@ public class DashboardV2Tests
 
         var routes = await rig.SendAsync("GET", "/routes", cookie: cookie);
         StringAssert.Contains(routes.Text, "data-role=\"viewer\"");
-        Assert.IsTrue(Regex.IsMatch(routes.Text, "data-testid=\"btn-drain-d1\" disabled"), "buttons are disabled for a viewer");
+        Assert.IsTrue(ViewerDrainDisabledPattern().IsMatch(routes.Text), "buttons are disabled for a viewer");
 
         var drain = await rig.SendAsync("POST", "/drain/d1", cookie: cookie, csrf: csrf);
         var healthy = await rig.SendAsync("POST", "/healthy/d1", cookie: cookie, csrf: csrf);
@@ -397,9 +397,9 @@ public class DashboardV2Tests
         foreach (var path in new[] { "/", "/routes", "/health", "/config", "/certificates", "/audit", "/login" })
         {
             var html = (await rig.SendAsync("GET", path, cookie: path == "/login" ? null : cookie)).Text;
-            Assert.IsFalse(Regex.IsMatch(html, "<script(?![^>]*\\bsrc=)", RegexOptions.IgnoreCase), $"inline script on {path}");
-            Assert.IsFalse(Regex.IsMatch(html, "<style", RegexOptions.IgnoreCase), $"style element on {path}");
-            Assert.IsFalse(Regex.IsMatch(html, "\\s(on[a-z]+|style)=", RegexOptions.IgnoreCase), $"inline handler or style on {path}");
+            Assert.IsFalse(InlineScriptPattern().IsMatch(html), $"inline script on {path}");
+            Assert.IsFalse(InlineStyleElementPattern().IsMatch(html), $"style element on {path}");
+            Assert.IsFalse(InlineHandlerOrStylePattern().IsMatch(html), $"inline handler or style on {path}");
         }
 
         var js = await rig.SendAsync("GET", "/assets/dashboard.js");
@@ -453,7 +453,7 @@ public class DashboardV2Tests
         watch.Stop();
 
         Assert.AreEqual(200, page.Status);
-        Assert.AreEqual(2000, Regex.Matches(page.Text, "data-testid=\"dest-row-").Count);
+        Assert.AreEqual(2000, DestRowTestIdPattern().Count(page.Text));
         Assert.IsTrue(watch.ElapsedMilliseconds < 500, $"rendering 2000 destinations took {watch.ElapsedMilliseconds} ms");
 
         watch.Restart();
@@ -893,7 +893,7 @@ public class DashboardV2Tests
         pageReq.Headers.Add("Cookie", cookie);
         var page = await http.SendAsync(pageReq);
         Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
-        var csrf = Regex.Match(await page.Content.ReadAsStringAsync(), "data-csrf=\"([^\"]+)\"").Groups[1].Value;
+        var csrf = CsrfTokenPattern().Match(await page.Content.ReadAsStringAsync()).Groups[1].Value;
         Assert.IsTrue(csrf.Length > 0);
 
         using var drain = new HttpRequestMessage(HttpMethod.Post, rig.Host.Prefix + "drain/d1");
@@ -1069,7 +1069,7 @@ public class DashboardV2Tests
         public async Task<string> CsrfAsync(string cookie)
         {
             var page = await SendAsync("GET", "/", cookie: cookie);
-            return Regex.Match(page.Text, "data-csrf=\"([^\"]+)\"").Groups[1].Value;
+            return CsrfTokenPattern().Match(page.Text).Groups[1].Value;
         }
 
         public ValueTask DisposeAsync()
@@ -1079,4 +1079,22 @@ public class DashboardV2Tests
             return ValueTask.CompletedTask;
         }
     }
+
+    [GeneratedRegex("data-testid=\"btn-drain-d1\" disabled")]
+    private static partial Regex ViewerDrainDisabledPattern();
+
+    [GeneratedRegex("<script(?![^>]*\\bsrc=)", RegexOptions.IgnoreCase)]
+    private static partial Regex InlineScriptPattern();
+
+    [GeneratedRegex("<style", RegexOptions.IgnoreCase)]
+    private static partial Regex InlineStyleElementPattern();
+
+    [GeneratedRegex("\\s(on[a-z]+|style)=", RegexOptions.IgnoreCase)]
+    private static partial Regex InlineHandlerOrStylePattern();
+
+    [GeneratedRegex("data-testid=\"dest-row-")]
+    private static partial Regex DestRowTestIdPattern();
+
+    [GeneratedRegex("data-csrf=\"([^\"]+)\"")]
+    private static partial Regex CsrfTokenPattern();
 }

@@ -104,7 +104,7 @@ internal sealed class WasmCallouts : IDisposable
     }
 
     /// <summary><c>proxy_grpc_call</c>: one unary call. Success arrives in <c>proxy_on_grpc_receive</c>, failure in <c>proxy_on_grpc_close</c>.</summary>
-    public int GrpcCall(WasmVm vm, string service, string serviceName, string method, List<KeyValuePair<string, string>> metadata,
+    public int GrpcCall(WasmVm vm, string service, string serviceName, string method, List<KeyValuePair<string, string>> metadata, // NOSONAR S107 -- gRPC callout mirrors the guest ABI; parameters stay explicit.
         byte[] message, int timeoutMs, out int token)
     {
         token = 0;
@@ -137,7 +137,7 @@ internal sealed class WasmCallouts : IDisposable
         }
 
         var request = GrpcRequest(origin, serviceName, method, metadata, 0);
-        var state = new GrpcStreamState(_shutdown.Token, _pool.Limits.BufferedBodyBytes);
+        var state = new GrpcStreamState(_pool.Limits.BufferedBodyBytes, _shutdown.Token);
         request.Content = new GrpcStreamContent(state);
         if (!TryBegin(vm, out token, out var contextId))
         {
@@ -420,7 +420,7 @@ internal sealed class WasmCallouts : IDisposable
 
     private static HttpRequestMessage GrpcRequest(Uri origin, string serviceName, string method, List<KeyValuePair<string, string>> metadata, int timeoutMs)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(origin, "/" + serviceName + "/" + method))
+        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(origin, "/" + serviceName + "/" + method)) // NOSONAR S1075 -- gRPC path delimiter, not a filesystem path.
         {
             Version = HttpVersion.Version20,
             VersionPolicy = HttpVersionPolicy.RequestVersionExact,
@@ -521,7 +521,7 @@ internal sealed class WasmCallouts : IDisposable
                 throw new InvalidDataException($"callout response exceeds the {limit}-byte buffered-body limit");
             }
 
-            buffer.Write(chunk, 0, read);
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
 
         return buffer.ToArray();
@@ -574,10 +574,10 @@ internal sealed class WasmCallouts : IDisposable
         private long _pending;
         private int _closed;
 
-        public GrpcStreamState(CancellationToken shutdown, long limit)
+        public GrpcStreamState(long limit, CancellationToken shutdown)
         {
-            _cancel = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
             _limit = limit;
+            _cancel = CancellationTokenSource.CreateLinkedTokenSource(shutdown);
         }
 
         public Channel<byte[]> Outgoing { get; } = Channel.CreateUnbounded<byte[]>(new UnboundedChannelOptions { SingleReader = true });

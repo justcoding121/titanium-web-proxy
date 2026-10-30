@@ -73,7 +73,7 @@ internal sealed class CalloutOrigin : IAsyncDisposable
                     break;
                 }
                 default:
-                    context.Response.Headers["grpc-status"] = "12";
+                    context.Response.Headers.GrpcStatus = "12";
                     break;
             }
         });

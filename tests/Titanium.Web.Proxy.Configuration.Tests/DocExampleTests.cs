@@ -139,9 +139,9 @@ public partial class DocExampleTests
     }
 
     /// <summary>Finds every fenced <c>yaml</c> block, with the tag it carries.</summary>
-    private static IEnumerable<Example> Extract(string file, IReadOnlyList<string> lines)
+    private static IEnumerable<Example> Extract(string file, string[] lines)
     {
-        for (var i = 0; i < lines.Count; i++)
+        for (var i = 0; i < lines.Length; i++)
         {
             var open = OpenFenceRegex().Match(lines[i]);
             if (!open.Success)
@@ -155,7 +155,7 @@ public partial class DocExampleTests
             var info = open.Groups[4].Value.Trim();
             var body = new List<string>();
             var j = i + 1;
-            for (; j < lines.Count; j++)
+            for (; j < lines.Length; j++)
             {
                 if (lines[j].TrimStart().StartsWith(fence, StringComparison.Ordinal) && lines[j].Trim().Trim(fence[0]).Length == 0)
                 {

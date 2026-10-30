@@ -108,4 +108,4 @@ internal static class AgentConfigPayload
     }
 }
 
-internal sealed class AgentConfigFuzzInvariantException(string message) : Exception(message);
+public sealed class AgentConfigFuzzInvariantException(string message) : Exception(message);

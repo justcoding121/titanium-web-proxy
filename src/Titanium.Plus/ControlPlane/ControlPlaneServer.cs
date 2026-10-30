@@ -46,7 +46,7 @@ public sealed class ControlPlaneServer : IDisposable
     {
     }
 
-    public ControlPlaneServer(
+    public ControlPlaneServer( // NOSONAR S107 -- Control plane wiring keeps dependencies explicit for host composition.
         IClusterManager? clusters,
         string host,
         int port,

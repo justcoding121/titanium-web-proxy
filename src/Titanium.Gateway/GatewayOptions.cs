@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using Titanium.Gateway.Control;
 using Titanium.Gateway.Kube;
 using Titanium.Gateway.Model;
@@ -75,7 +76,7 @@ public sealed class GatewayOptions
 
     private static string KnownList => string.Join(", ", Known.Order(StringComparer.Ordinal));
 
-    public static GatewayOptions Parse(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> environment)
+    public static GatewayOptions Parse(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> environment) // NOSONAR S3776 -- CLI/env merge keeps validation and defaults in one pass.
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         var ignoredEnvironment = new List<string>();
@@ -116,7 +117,8 @@ public sealed class GatewayOptions
             }
             else if (i + 1 < args.Count)
             {
-                values[name] = args[++i];
+                values[name] = args[i + 1];
+                i++;
             }
             else
             {
@@ -124,12 +126,9 @@ public sealed class GatewayOptions
             }
         }
 
-        foreach (var name in values.Keys)
+        foreach (var name in values.Keys.Where(n => !Known.Contains(n)))
         {
-            if (!Known.Contains(name))
-            {
-                throw new ArgumentException($"Unknown option '{name}'. Known options: {KnownList}.");
-            }
+            throw new ArgumentException($"Unknown option '{name}'. Known options: {KnownList}.");
         }
 
         string? Get(string name) => values.TryGetValue(name, out var value) ? value : null;

@@ -174,7 +174,7 @@ internal static class RoutePolicies
         return Apply(args, decision);
     }
 
-    public static bool TryHandleLite(
+    public static bool TryHandleLite( // NOSONAR S107 -- Lite path keeps policy inputs and rejection outputs explicit for hot terminate paths.
         ReverseProxyOptions options,
         TransparentBaseProxyEndPoint endPoint,
         Request request,
@@ -298,7 +298,7 @@ internal static class RoutePolicies
     }
 
     /// <summary>Null means keep evaluating. A decision means stop and give back any held connection slots.</summary>
-    private static PolicyDecision? ApplyKind(
+    private static PolicyDecision? ApplyKind( // NOSONAR S107 -- Policy kind dispatch shares mutable held-slot state; a bag type would obscure ref semantics.
         Runtime runtime,
         RoutePolicyConfig policy,
         RouteConfig route,

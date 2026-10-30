@@ -312,7 +312,7 @@ public class PassthroughSniRoutingTests
                 got += n;
             }
 
-            ProxyProtocolReader.TryParse(buffer.AsSpan(0, Math.Min(got, 28)), out var client, out _);
+            Assert.IsTrue(ProxyProtocolReader.TryParse(buffer.AsSpan(0, Math.Min(got, 28)), out var client, out _));
             header.TrySetResult((client, Encoding.ASCII.GetString(buffer, 28, got - 28)));
         });
         await using var rig = await Rig.StartForwardAsync(

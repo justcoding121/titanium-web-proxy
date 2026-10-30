@@ -11,6 +11,8 @@ namespace Titanium.Gateway.Kube;
 /// </summary>
 public sealed class Informer<T> where T : class
 {
+    private const string MetadataKey = "metadata";
+
     private readonly IKubeApi _api;
     private readonly string _path;
     private readonly string? _fieldSelector;
@@ -67,7 +69,7 @@ public sealed class Informer<T> where T : class
             }
             catch (Exception ex)
             {
-                _log.LogWarning("Informer {Path} failed: {Message}. Retrying in {Seconds}s.", _path, ex.Message, (int)backoff.TotalSeconds);
+                _log.LogWarning(ex, "Informer {Path} failed: {Message}. Retrying in {Seconds}s.", _path, ex.Message, (int)backoff.TotalSeconds);
                 try
                 {
                     await Task.Delay(backoff, _time, cancellationToken).ConfigureAwait(false);
@@ -109,8 +111,8 @@ public sealed class Informer<T> where T : class
                 Store(fresh, item.Clone());
             }
 
-            resourceVersion = root.GetString("metadata", "resourceVersion") ?? string.Empty;
-            var next = root.GetString("metadata", "continue");
+            resourceVersion = root.GetString(MetadataKey, "resourceVersion") ?? string.Empty;
+            var next = root.GetString(MetadataKey, "continue");
             continueToken = string.IsNullOrEmpty(next) ? null : next;
         }
         while (continueToken is not null);
@@ -146,7 +148,7 @@ public sealed class Informer<T> where T : class
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
-            _log.LogWarning("Ignoring {Key} in {Path}: {Message}", key, _path, ex.Message);
+            _log.LogWarning(ex, "Ignoring {Key} in {Path}: {Message}", key, _path, ex.Message);
             target.Remove(key);
             return;
         }
@@ -161,7 +163,7 @@ public sealed class Informer<T> where T : class
         }
     }
 
-    private async Task WatchAsync(string resourceVersion, CancellationToken cancellationToken)
+    private async Task WatchAsync(string resourceVersion, CancellationToken cancellationToken) // NOSONAR S3776 -- Watch event types share resourceVersion bookkeeping; splitting would duplicate lock boundaries.
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -194,7 +196,7 @@ public sealed class Informer<T> where T : class
                             _snapshot = null;
                         }
 
-                        resourceVersion = obj.Value.GetString("metadata", "resourceVersion") ?? resourceVersion;
+                        resourceVersion = obj.Value.GetString(MetadataKey, "resourceVersion") ?? resourceVersion;
                         Changed?.Invoke();
                         break;
                     case "DELETED":
@@ -209,11 +211,11 @@ public sealed class Informer<T> where T : class
                             _snapshot = null;
                         }
 
-                        resourceVersion = obj.Value.GetString("metadata", "resourceVersion") ?? resourceVersion;
+                        resourceVersion = obj.Value.GetString(MetadataKey, "resourceVersion") ?? resourceVersion;
                         Changed?.Invoke();
                         break;
                     case "BOOKMARK":
-                        resourceVersion = obj.Value.GetString("metadata", "resourceVersion") ?? resourceVersion;
+                        resourceVersion = obj.Value.GetString(MetadataKey, "resourceVersion") ?? resourceVersion;
                         break;
                     case "ERROR":
                         var code = obj.Value.GetInt("code") ?? 500;
@@ -232,13 +234,13 @@ public sealed class Informer<T> where T : class
 
     private static string? KeyOf(JsonElement element)
     {
-        var name = element.GetString("metadata", "name");
+        var name = element.GetString(MetadataKey, "name");
         if (name is null)
         {
             return null;
         }
 
-        var ns = element.GetString("metadata", "namespace");
+        var ns = element.GetString(MetadataKey, "namespace");
         return ns is null ? name : ns + "/" + name;
     }
 }

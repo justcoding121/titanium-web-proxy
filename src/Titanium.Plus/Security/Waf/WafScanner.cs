@@ -226,7 +226,7 @@ internal sealed class WafScanner
 
     // ---- one value --------------------------------------------------------------------------------------------
 
-    private void ScanValue(ReadOnlySpan<char> raw, WafTargets target, ReadOnlySpan<char> name, bool formEncoded)
+    private void ScanValue(ReadOnlySpan<char> raw, WafTargets target, ReadOnlySpan<char> name, bool formEncoded) // NOSONAR S3776 -- Decode passes share pooled buffers and rule targets.
     {
         if (raw.IsEmpty)
         {
@@ -241,6 +241,7 @@ internal sealed class WafScanner
 
         char[]? rentedA = null;
         char[]? rentedB = null;
+        // Ternary keeps stackalloc in one expression (required by definite-assignment / escape rules).
         Span<char> a = raw.Length <= StackChars ? stackalloc char[StackChars] : (rentedA = ArrayPool<char>.Shared.Rent(raw.Length));
         Span<char> b = raw.Length <= StackChars ? stackalloc char[StackChars] : (rentedB = ArrayPool<char>.Shared.Rent(raw.Length));
         try
@@ -466,7 +467,7 @@ internal sealed class WafScanner
         }
     }
 
-    private void ScanMultipart(ReadOnlySpan<byte> body, string contentType)
+    private void ScanMultipart(ReadOnlySpan<byte> body, string contentType) // NOSONAR S3776 -- Multipart scanning walks boundaries and part headers in one pass.
     {
         var boundary = WafBodyPolicy.MultipartBoundary(contentType);
         if (boundary is null || boundary.Length > 200)

@@ -343,6 +343,8 @@ public class RoutePluginTests
         }
     }
 
+    private static readonly string[] ExpectedMarkerLines = ["invoke", "disposed"];
+
     [TestMethod]
     public void Reload_DisposesThePlugins_AndUnloadsTheirContexts()
     {
@@ -351,7 +353,7 @@ public class RoutePluginTests
         {
             var handles = LoadUseAndRetire(marker, out var stillAlive);
             Assert.IsTrue(stillAlive.Length > 0);
-            CollectionAssert.AreEqual(new[] { "invoke", "disposed" }, ReadMarker(marker));
+            CollectionAssert.AreEqual(ExpectedMarkerLines, ReadMarker(marker));
             Assert.IsTrue(CollectedWithin(handles), "every plugin load context was reclaimed after the host retired");
         }
         finally

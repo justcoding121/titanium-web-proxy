@@ -33,7 +33,7 @@ internal static class ManagerRequestBody
                 throw new RequestTooLargeException();
             }
 
-            ms.Write(buffer, 0, read);
+            await ms.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
         }
 
         return ms.ToArray();
@@ -49,4 +49,4 @@ internal static class ManagerRequestBody
     }
 }
 
-internal sealed class RequestTooLargeException : Exception;
+public sealed class RequestTooLargeException : Exception;

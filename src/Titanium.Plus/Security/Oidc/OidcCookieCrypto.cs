@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
@@ -75,18 +76,7 @@ internal sealed class OidcCookieCrypto
         throw new OidcConfigException("cookie secret must be 32 bytes as base64 or 64 hex digits.");
     }
 
-    private static bool IsHex(string text)
-    {
-        foreach (var c in text)
-        {
-            if (!char.IsAsciiHexDigit(c))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private static bool IsHex(string text) => text.All(char.IsAsciiHexDigit);
 
     /// <summary>Encrypts <paramref name="plaintext"/> with the first key. The result is base64url text.</summary>
     public string Seal(string purpose, string cookieName, ReadOnlySpan<byte> plaintext)
@@ -152,4 +142,4 @@ internal sealed class OidcCookieCrypto
 }
 
 /// <summary>A policy that cannot run as written. The message names the setting and never a secret.</summary>
-internal sealed class OidcConfigException(string message) : Exception(message);
+public sealed class OidcConfigException(string message) : Exception(message);

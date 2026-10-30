@@ -26,6 +26,11 @@ internal enum DashboardView
 /// </summary>
 internal static class DashboardViews
 {
+    private const string TableRowCellOpen = "\"><td>";
+    private const string TableCellCloseOpen = "</td><td>";
+    private const string TableRowClose = "</td></tr>";
+    private const string TableBodyClose = "</tbody></table>";
+
     internal static readonly (DashboardView View, string Path, string Slug, string Title)[] Navigation =
     [
         (DashboardView.Overview, "/", "overview", "Overview"),
@@ -164,15 +169,15 @@ internal static class DashboardViews
 
         foreach (var r in data.Routes)
         {
-            sb.Append("<tr data-testid=\"route-row-").Append(Enc(r.Id)).Append("\"><td>").Append(Enc(r.Id))
-                .Append("</td><td>").Append(Enc(r.Match)).Append("</td><td>").Append(Enc(r.Action))
-                .Append("</td><td>").Append(Enc(r.ClusterId)).Append("</td><td>").Append(Enc(string.Join("; ", r.Transforms)))
-                .Append("</td><td>").Append(r.Requests).Append("</td><td>").Append(r.Errors)
-                .Append("</td><td>").Append(Seconds(r.P50Seconds)).Append("</td><td>").Append(Seconds(r.P95Seconds))
-                .Append("</td><td>").Append(Seconds(r.P99Seconds)).Append("</td></tr>");
+            sb.Append("<tr data-testid=\"route-row-").Append(Enc(r.Id)).Append(TableRowCellOpen).Append(Enc(r.Id))
+                .Append(TableCellCloseOpen).Append(Enc(r.Match)).Append(TableCellCloseOpen).Append(Enc(r.Action))
+                .Append(TableCellCloseOpen).Append(Enc(r.ClusterId)).Append(TableCellCloseOpen).Append(Enc(string.Join("; ", r.Transforms)))
+                .Append(TableCellCloseOpen).Append(r.Requests).Append(TableCellCloseOpen).Append(r.Errors)
+                .Append(TableCellCloseOpen).Append(Seconds(r.P50Seconds)).Append(TableCellCloseOpen).Append(Seconds(r.P95Seconds))
+                .Append(TableCellCloseOpen).Append(Seconds(r.P99Seconds)).Append(TableRowClose);
         }
 
-        sb.Append("</tbody></table><h2>Clusters</h2><table data-testid=\"clusters-table\"><thead><tr><th>Cluster</th>")
+        sb.Append(TableBodyClose).Append("<h2>Clusters</h2><table data-testid=\"clusters-table\"><thead><tr><th>Cluster</th>")
             .Append("<th>Balancing</th><th>Healthy</th><th>Active probe</th><th>Passive health</th><th>Upstream TLS</th></tr></thead>")
             .Append("<tbody id=\"clusters-body\">");
         if (data.Clusters.Count == 0)
@@ -182,14 +187,14 @@ internal static class DashboardViews
 
         foreach (var c in data.Clusters)
         {
-            sb.Append("<tr data-testid=\"cluster-row-").Append(Enc(c.Id)).Append("\"><td>").Append(Enc(c.Id))
-                .Append("</td><td>").Append(Enc(c.Algorithm)).Append("</td><td>")
+            sb.Append("<tr data-testid=\"cluster-row-").Append(Enc(c.Id)).Append(TableRowCellOpen).Append(Enc(c.Id))
+                .Append(TableCellCloseOpen).Append(Enc(c.Algorithm)).Append(TableCellCloseOpen)
                 .Append(c.Healthy).Append(" / ").Append(c.Destinations)
-                .Append("</td><td>").Append(YesNo(c.ActiveHealth)).Append("</td><td>").Append(YesNo(c.PassiveHealth))
-                .Append("</td><td>").Append(Enc(TlsSummary(c))).Append("</td></tr>");
+                .Append(TableCellCloseOpen).Append(YesNo(c.ActiveHealth)).Append(TableCellCloseOpen).Append(YesNo(c.PassiveHealth))
+                .Append(TableCellCloseOpen).Append(Enc(TlsSummary(c))).Append(TableRowClose);
         }
 
-        sb.Append("</tbody></table><h2>Destinations</h2>")
+        sb.Append(TableBodyClose).Append("<h2>Destinations</h2>")
             .Append("<table data-testid=\"destinations-table\"><thead><tr><th>Destination</th><th>Cluster</th><th>Address</th>")
             .Append("<th>State</th><th>Actions</th></tr></thead><tbody id=\"destinations-body\">");
         if (data.Destinations.Count == 0)
@@ -200,9 +205,9 @@ internal static class DashboardViews
         foreach (var d in data.Destinations)
         {
             var id = Enc(d.Id);
-            sb.Append("<tr data-testid=\"dest-row-").Append(id).Append("\"><td>").Append(id)
-                .Append("</td><td>").Append(Enc(d.ClusterId)).Append("</td><td>").Append(Enc(AddressOf(d)))
-                .Append("</td><td data-testid=\"dest-state-").Append(id).Append("\">").Append(Enc(d.State))
+            sb.Append("<tr data-testid=\"dest-row-").Append(id).Append(TableRowCellOpen).Append(id)
+                .Append(TableCellCloseOpen).Append(Enc(d.ClusterId)).Append(TableCellCloseOpen).Append(Enc(AddressOf(d)))
+                .Append(TableCellCloseOpen).Append("<td data-testid=\"dest-state-").Append(id).Append("\">").Append(Enc(d.State))
                 .Append("</td><td><button type=\"button\" data-act=\"drain\" data-id=\"").Append(id)
                 .Append("\" data-testid=\"btn-drain-").Append(id).Append('"').Append(canOperate ? "" : " disabled")
                 .Append(">Drain</button> <button type=\"button\" data-act=\"healthy\" data-id=\"").Append(id)
@@ -210,7 +215,7 @@ internal static class DashboardViews
                 .Append(">Healthy</button></td></tr>");
         }
 
-        return sb.Append("</tbody></table>").ToString();
+        return sb.Append(TableBodyClose).ToString();
     }
 
     public static string Health(IReadOnlyList<HealthEventView> events)
@@ -225,12 +230,12 @@ internal static class DashboardViews
 
         foreach (var e in events)
         {
-            sb.Append("<tr><td>").Append(Enc(e.Time)).Append("</td><td>").Append(Enc(e.Destination))
-                .Append("</td><td>").Append(Enc(e.Kind)).Append("</td><td>").Append(Enc(e.Source))
-                .Append("</td><td>").Append(Enc(e.Detail)).Append("</td></tr>");
+            sb.Append("<tr><td>").Append(Enc(e.Time)).Append(TableCellCloseOpen).Append(Enc(e.Destination))
+                .Append(TableCellCloseOpen).Append(Enc(e.Kind)).Append(TableCellCloseOpen).Append(Enc(e.Source))
+                .Append(TableCellCloseOpen).Append(Enc(e.Detail)).Append(TableRowClose);
         }
 
-        return sb.Append("</tbody></table>").ToString();
+        return sb.Append(TableBodyClose).ToString();
     }
 
     public static string Config(ConfigPageData c, bool canOperate = false)
@@ -322,8 +327,16 @@ internal static class DashboardViews
 
     private static string YesNo(bool value) => value ? "yes" : "no";
 
-    private static string AddressOf(DestinationView d) =>
-        d.Address.Length == 0 ? "-" : $"{(d.Https ? "https" : "http")}://{d.Address}:{d.Port.ToString(CultureInfo.InvariantCulture)}";
+    private static string AddressOf(DestinationView d)
+    {
+        if (d.Address.Length == 0)
+        {
+            return "-";
+        }
+
+        var scheme = d.Https ? "https" : "http";
+        return $"{scheme}://{d.Address}:{d.Port.ToString(CultureInfo.InvariantCulture)}";
+    }
 
     private static string TlsSummary(ClusterView c)
     {

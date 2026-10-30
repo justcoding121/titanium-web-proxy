@@ -77,9 +77,14 @@ internal sealed class StreamFilterChain
             StreamFilterResult result;
             try
             {
-                result = await (fromClient
-                    ? filters[i].OnDownstreamDataAsync(context, current, cancellationToken)
-                    : filters[i].OnUpstreamDataAsync(context, current, cancellationToken)).ConfigureAwait(false);
+                if (fromClient)
+                {
+                    result = await filters[i].OnDownstreamDataAsync(context, current, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    result = await filters[i].OnUpstreamDataAsync(context, current, cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

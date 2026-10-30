@@ -10,6 +10,8 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class ListenerTlsPolicyConfigTests
 {
+    private static readonly string[] Tls13CipherSuites = ["TLS_AES_256_GCM_SHA384"];
+
     private static TwpConfig WithTls(TlsConfig tls) => new() { Server = new ServerConfig { Tls = tls } };
 
     private static string Errors(TwpConfig config) => string.Join("\n", TwpConfigValidator.Validate(config));
@@ -142,8 +144,8 @@ public class ListenerTlsPolicyConfigTests
             """);
 
         Assert.AreEqual("Tls13", yaml.Server!.Tls!.MinVersion);
-        CollectionAssert.AreEqual(new[] { "TLS_AES_256_GCM_SHA384" }, yaml.Server.Tls.CipherSuites!.ToArray());
-        Assert.AreEqual(true, yaml.Server.Tls.OcspStapling);
+        CollectionAssert.AreEqual(Tls13CipherSuites, yaml.Server.Tls.CipherSuites!.ToArray());
+        Assert.IsTrue(yaml.Server.Tls.OcspStapling);
         Assert.AreEqual(string.Empty, Errors(yaml));
         Assert.AreEqual("v2", json.Clusters[0].SendProxyProtocol);
         Assert.AreEqual(string.Empty, Errors(json));

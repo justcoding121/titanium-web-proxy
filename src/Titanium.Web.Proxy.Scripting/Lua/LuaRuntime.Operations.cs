@@ -72,13 +72,14 @@ internal sealed partial class LuaRuntime
                     }
                     catch (LuaScriptException ex)
                     {
-                        Logger?.LogWarning("Lua plugin '{Plugin}' timer {Function} failed: {Error}", Name, function, ex.Message);
+                        Logger?.LogWarning(ex, "Lua plugin '{Plugin}' timer {Function} failed: {Error}", Name, function, ex.Message);
                     }
                 }
                 while (every);
             }
             catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
             {
+                _ = ex;
             }
             finally
             {

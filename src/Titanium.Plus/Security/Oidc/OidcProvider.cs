@@ -9,14 +9,14 @@ using Microsoft.IdentityModel.Tokens;
 namespace Titanium.Plus.Security.Oidc;
 
 /// <summary>The provider could not be reached or answered something unusable. Retrying later may work.</summary>
-internal sealed class OidcProviderUnavailableException(string message, Exception? inner = null)
+public sealed class OidcProviderUnavailableException(string message, Exception? inner = null)
     : Exception(message, inner);
 
 /// <summary>The token endpoint refused the request (a spent or wrong code, a revoked refresh token).</summary>
-internal sealed class OidcTokenRejectedException(string message) : Exception(message);
+public sealed class OidcTokenRejectedException(string message) : Exception(message);
 
 /// <summary>An ID token failed validation. The message names the check, never the token.</summary>
-internal sealed class OidcTokenInvalidException(string reason) : Exception(reason);
+public sealed class OidcTokenInvalidException(string reason) : Exception(reason);
 
 internal sealed record OidcDiscovery(
     string Issuer, string AuthorizationEndpoint, string TokenEndpoint, string JwksUri, bool TokenAuthPost);
@@ -125,8 +125,8 @@ internal sealed class OidcProvider
             {
                 _discoveryFailures++;
                 _discoveryRetryAt = now + Backoff(_discoveryFailures);
-                _logger?.LogWarning("Plus OIDC: policy {Policy}: discovery failed ({Kind}); retrying later.",
-                    _settings.PolicyName, ex.GetType().Name);
+                _logger?.LogWarning(ex, "Plus OIDC: policy {Policy}: discovery failed; retrying later.",
+                    _settings.PolicyName);
                 return _discovery ?? throw new OidcProviderUnavailableException("discovery failed");
             }
         }
@@ -172,7 +172,7 @@ internal sealed class OidcProvider
             throw new OidcProviderUnavailableException("endpoint is missing or not on the issuer scheme");
         }
 
-        return value!;
+        return uri.ToString();
     }
 
     /// <summary>
@@ -241,11 +241,11 @@ internal sealed class OidcProvider
         }
 
         var claims = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var pair in _settings.PassClaims)
+        foreach (var key in _settings.PassClaims.Select(static pair => pair.Key))
         {
-            if (OidcClaimReader.Find(root, pair.Key) is { } claim && OidcClaimReader.Flatten(claim) is { Length: > 0 } text)
+            if (OidcClaimReader.Find(root, key) is { } claim && OidcClaimReader.Flatten(claim) is { Length: > 0 } text)
             {
-                claims[pair.Key] = text;
+                claims[key] = text;
             }
         }
 
@@ -348,8 +348,8 @@ internal sealed class OidcProvider
             {
                 _keysFailures++;
                 _keysRetryAt = now + Backoff(_keysFailures);
-                _logger?.LogWarning("Plus OIDC: policy {Policy}: signing keys unavailable ({Kind}); retrying later.",
-                    _settings.PolicyName, ex.GetType().Name);
+                _logger?.LogWarning(ex, "Plus OIDC: policy {Policy}: signing keys unavailable; retrying later.",
+                    _settings.PolicyName);
                 // Fail closed: never return the previous key set after a refresh failure.
                 throw new OidcProviderUnavailableException("keys unavailable", ex);
             }
@@ -360,18 +360,8 @@ internal sealed class OidcProvider
         }
     }
 
-    private static bool Has(JsonWebKeySet set, string kid)
-    {
-        foreach (var key in set.Keys)
-        {
-            if (string.Equals(key.Kid, kid, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool Has(JsonWebKeySet set, string kid) =>
+        set.Keys.Any(key => string.Equals(key.Kid, kid, StringComparison.Ordinal));
 
     /// <summary>Exchanges an authorization code. The PKCE verifier proves this is the client that started the login.</summary>
     public async Task<OidcTokens> ExchangeCodeAsync(string code, string verifier, string redirectUri, CancellationToken cancellationToken)
@@ -396,7 +386,7 @@ internal sealed class OidcProvider
         return await PostTokenAsync(form, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<OidcTokens> PostTokenAsync(List<KeyValuePair<string, string>> form, CancellationToken cancellationToken)
+    private async Task<OidcTokens> PostTokenAsync(List<KeyValuePair<string, string>> form, CancellationToken cancellationToken) // NOSONAR S3776 -- Token exchange keeps grant-type branches and auth modes in one place.
     {
         var discovery = await GetDiscoveryAsync(cancellationToken).ConfigureAwait(false);
         using var request = new HttpRequestMessage(HttpMethod.Post, discovery.TokenEndpoint);
@@ -499,7 +489,7 @@ internal sealed class OidcProvider
             int read;
             while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
             {
-                buffer.Write(chunk, 0, read);
+                await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
                 if (buffer.Length > MaxResponseBytes)
                 {
                     throw new InvalidOperationException("response too large");

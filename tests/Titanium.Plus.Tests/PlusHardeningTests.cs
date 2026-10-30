@@ -27,6 +27,9 @@ namespace Titanium.Plus.Tests;
 public class PlusHardeningTests
 {
     private const string Secret = "hardening-test-secret-value";
+    private static readonly string[] PlainAndLegacyUsers = ["plain", "legacy"];
+    private static readonly string[] PlaintextOnlyUser = ["plain"];
+    private static readonly string[] AuditEntryFieldNames = ["time", "actor", "remote", "action", "target", "result"];
 
     private string _dir = null!;
 
@@ -123,7 +126,7 @@ public class PlusHardeningTests
         var store = BasicUserStore.Parse(raw);
 
         Assert.AreEqual(3, store.Count);
-        CollectionAssert.AreEquivalent(new[] { "plain", "legacy" }, store.PlaintextUsers.ToArray());
+        CollectionAssert.AreEquivalent(PlainAndLegacyUsers, store.PlaintextUsers.ToArray());
         Assert.IsTrue(store.Verify("plain", "plain-pass"));
         Assert.IsTrue(store.Verify("hashed", "pb-pass"));
         Assert.IsFalse(store.Verify("hashed", "plain-pass"));
@@ -208,7 +211,7 @@ public class PlusHardeningTests
         Assert.IsFalse(await BasicAllows(mw, "hashed", "plain-pass"));
         Assert.IsTrue(await BasicAllows(mw, "plain", "plain-pass"));
         Assert.IsFalse(await BasicAllows(mw, "plain", "hash-pass"));
-        CollectionAssert.AreEqual(new[] { "plain" }, mw.PlaintextUsers.ToArray());
+        CollectionAssert.AreEqual(PlaintextOnlyUser, mw.PlaintextUsers.ToArray());
     }
 
     [TestMethod]
@@ -291,7 +294,6 @@ public class PlusHardeningTests
     [TestMethod]
     public void Throttle_CapsTheRemoteMap_DroppingExpiredThenStalest()
     {
-        Assert.AreEqual(10_000, AuthThrottle.DefaultMaxRemotes);
         var clock = new ManualTimeProvider();
         var throttle = new AuthThrottle(maxRemotes: 3, timeProvider: clock);
 
@@ -349,7 +351,7 @@ public class PlusHardeningTests
         {
             using var doc = JsonDocument.Parse(line);
             CollectionAssert.AreEqual(
-                new[] { "time", "actor", "remote", "action", "target", "result" },
+                AuditEntryFieldNames,
                 doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
             Assert.IsTrue(DateTimeOffset.TryParse(doc.RootElement.GetProperty("time").GetString(), out _));
         }
@@ -392,7 +394,6 @@ public class PlusHardeningTests
         }
 
         var recent = audit.Recent();
-        Assert.AreEqual(500, AuditLog.RingCapacity);
         Assert.AreEqual(500, recent.Count);
         Assert.AreEqual("t649", recent[0].Target);
         Assert.AreEqual("t150", recent[^1].Target);

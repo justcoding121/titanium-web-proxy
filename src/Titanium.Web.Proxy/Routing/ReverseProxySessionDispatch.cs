@@ -86,7 +86,7 @@ internal static class ReverseProxySessionDispatch
     /// <see cref="Apply"/> stays the default path.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static async ValueTask<RouteDispatchResult> ApplyWithExtAuthAsync(
+    public static async ValueTask<RouteDispatchResult> ApplyWithExtAuthAsync( // NOSONAR S3776 -- Auth, scripts, and plugins run in a fixed order on one dispatch path.
         ProxyServer server, SessionEventArgsBase session)
     {
         var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
@@ -101,24 +101,19 @@ internal static class ReverseProxySessionDispatch
         string? scriptCluster = null;
         if (session is SessionEventArgs args)
         {
-            if (route is not null)
+            // A login comes first, so a service that decides on identity headers sees the ones it set.
+            if (route is not null &&
+                (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
+                 await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false)))
             {
-                // A login comes first, so a service that decides on identity headers sees the ones it set.
-                if (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
-                    await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
-                {
-                    return RouteDispatchResult.Handled;
-                }
+                return RouteDispatchResult.Handled;
             }
 
-            if (options is { HasScriptHooks: true })
+            // Listener-wide scripts run after authentication and before any per-route plugin.
+            if (options is { HasScriptHooks: true, GlobalMiddleware.Count: > 0 } &&
+                await RoutePluginDispatch.GlobalDeniedAsync(options, args).ConfigureAwait(false))
             {
-                // Listener-wide scripts run after authentication and before any per-route plugin.
-                if (options.GlobalMiddleware is { Count: > 0 } &&
-                    await RoutePluginDispatch.GlobalDeniedAsync(options, args).ConfigureAwait(false))
-                {
-                    return RouteDispatchResult.Handled;
-                }
+                return RouteDispatchResult.Handled;
             }
 
             // Plugins come last, so a request that failed authentication never reaches plugin code.
@@ -628,7 +623,7 @@ internal static class ReverseProxySessionDispatch
     /// buffered within <see cref="RetryConfig.MaxBufferedBodyBytes" />. HTTP/1 origins replay headers only.
     /// </param>
     /// <param name="timedOut">True when the per-try response-header deadline fired. Counts as a 504.</param>
-    internal static bool TryStageGatewayRetry(
+    internal static bool TryStageGatewayRetry( // NOSONAR S3776 -- Gateway retry staging keeps eligibility, budget, and destination selection together.
         ProxyServer server,
         SessionEventArgsBase session,
         int? status = null,

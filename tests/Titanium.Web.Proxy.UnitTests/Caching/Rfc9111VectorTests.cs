@@ -216,16 +216,20 @@ public class Rfc9111VectorTests
         Assert.AreEqual(plain, noisy);
     }
 
+    private static readonly string[] QuotedCacheControlHeader =
+        ["max-age=\"60\", no-transform, foo=bar,,  ,stale-while-revalidate=5"];
+
+    private static readonly string[] InvalidMaxAgeHeader = ["max-age=-5"];
+
     [TestMethod]
     public void ParseCacheControl_HandlesQuotedValuesAndJunk()
     {
-        var d = HttpCachePolicy.ParseCacheControl(
-            new[] { "max-age=\"60\", no-transform, foo=bar,,  ,stale-while-revalidate=5" });
+        var d = HttpCachePolicy.ParseCacheControl(QuotedCacheControlHeader);
         Assert.AreEqual(60, d.MaxAge);
         Assert.AreEqual(5, d.StaleWhileRevalidate);
         Assert.IsFalse(d.NoStore);
 
-        var bad = HttpCachePolicy.ParseCacheControl(new[] { "max-age=-5" });
+        var bad = HttpCachePolicy.ParseCacheControl(InvalidMaxAgeHeader);
         Assert.IsTrue(bad.MalformedFreshness);
     }
 

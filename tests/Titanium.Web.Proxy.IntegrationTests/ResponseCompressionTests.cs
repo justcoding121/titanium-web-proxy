@@ -23,6 +23,9 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [DoNotParallelize]
 public class ResponseCompressionIntegrationTests
 {
+    private static readonly string[] BrEncoding = ["br"];
+    private static readonly string[] GzipEncoding = ["gzip"];
+
     [ClassInitialize]
     public static void WarmUpChainBuilding(TestContext _)
     {
@@ -82,7 +85,7 @@ public class ResponseCompressionIntegrationTests
         var wire = await response.Content.ReadAsByteArrayAsync();
 
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        CollectionAssert.AreEqual(new[] { "br" }, response.Content.Headers.ContentEncoding.ToArray());
+        CollectionAssert.AreEqual(BrEncoding, response.Content.Headers.ContentEncoding.ToArray());
         Assert.IsTrue(wire.Length < Html.Length);
         CollectionAssert.AreEqual(Html, Decode("br", wire));
         if (response.Content.Headers.ContentLength is { } length)
@@ -110,7 +113,7 @@ public class ResponseCompressionIntegrationTests
         using var response = await SendAsync(proxy, kind, "/", Accept("gzip"));
         var wire = await response.Content.ReadAsByteArrayAsync();
 
-        CollectionAssert.AreEqual(new[] { "gzip" }, response.Content.Headers.ContentEncoding.ToArray());
+        CollectionAssert.AreEqual(GzipEncoding, response.Content.Headers.ContentEncoding.ToArray());
         CollectionAssert.AreEqual(Html, Decode("gzip", wire));
     }
 
@@ -193,7 +196,7 @@ public class ResponseCompressionIntegrationTests
         encoded.Server.ResponseCompression = On();
         using (var response = await SendAsync(encoded, kind, "/", Accept("br, gzip")))
         {
-            CollectionAssert.AreEqual(new[] { "gzip" }, response.Content.Headers.ContentEncoding.ToArray());
+            CollectionAssert.AreEqual(GzipEncoding, response.Content.Headers.ContentEncoding.ToArray());
             CollectionAssert.AreEqual(Html, await response.Content.ReadAsByteArrayAsync(),
                 "an origin-encoded body is relayed byte for byte");
         }

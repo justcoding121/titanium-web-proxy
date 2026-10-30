@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 using Titanium.Gateway.Model;
 
@@ -66,8 +67,15 @@ internal static class Hostnames
     }
 
     /// <summary>0 for an exact name, 1 for a wildcard, 2 for no hostname. Lower is more specific.</summary>
-    public static int Rank(string? hostname) =>
-        string.IsNullOrEmpty(hostname) ? 2 : hostname.StartsWith("*.", StringComparison.Ordinal) ? 1 : 0;
+    public static int Rank(string? hostname)
+    {
+        if (string.IsNullOrEmpty(hostname))
+        {
+            return 2;
+        }
+
+        return hostname.StartsWith("*.", StringComparison.Ordinal) ? 1 : 0;
+    }
 
     public static string? Normalize(string? hostname) =>
         string.IsNullOrEmpty(hostname) || hostname == "*" ? null : hostname.ToLowerInvariant();
@@ -90,10 +98,10 @@ internal static partial class DurationParser
             return false;
         }
 
-        foreach (Match m in Part().Matches(text))
+        foreach (var groups in Part().Matches(text).Select(m => m.Groups))
         {
-            var n = int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
-            value += m.Groups[2].Value switch
+            var n = int.Parse(groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+            value += groups[2].Value switch
             {
                 "h" => TimeSpan.FromHours(n),
                 "m" => TimeSpan.FromMinutes(n),

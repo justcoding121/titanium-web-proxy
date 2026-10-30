@@ -77,7 +77,7 @@ public sealed class HttpDataPlaneObserver : IDataPlaneObserver
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            _log.LogDebug("Data-plane pod {Address} did not answer: {Message}", address, ex.Message);
+            _log.LogDebug(ex, "Data-plane pod {Address} did not answer: {Message}", address, ex.Message);
             return null;
         }
     }

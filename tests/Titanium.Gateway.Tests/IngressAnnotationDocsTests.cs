@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Gateway.Translation;
 
@@ -8,8 +9,10 @@ namespace Titanium.Gateway.Tests;
 ///     Set <c>TITANIUM_UPDATE_DOCS=1</c> and run these tests to rewrite the block after changing the table.
 /// </summary>
 [TestClass]
-public class IngressAnnotationDocsTests
+public partial class IngressAnnotationDocsTests
 {
+    [GeneratedRegex("\"((?:Unknown|Invalid|Unsupported|Backend|Route|Canary|Port)[A-Za-z]*)\"")]
+    private static partial Regex EventReasonPattern();
     private const string Start = "<!-- annotations:start -->";
     private const string End = "<!-- annotations:end -->";
 
@@ -110,7 +113,7 @@ public class IngressAnnotationDocsTests
         var text = File.ReadAllText(DocsPath());
         var source = File.ReadAllText(Path.Combine(Path.GetDirectoryName(DocsPath())!, "..", "..", "src", "Titanium.Gateway", "Translation", "TranslationPass.Ingress.cs"));
 
-        var reasons = System.Text.RegularExpressions.Regex.Matches(source, "\"((?:Unknown|Invalid|Unsupported|Backend|Route|Canary|Port)[A-Za-z]*)\"")
+        var reasons = EventReasonPattern().Matches(source)
             .Select(m => m.Groups[1].Value)
             .Distinct()
             .Where(r => r is "UnknownAnnotation" or "InvalidAnnotation" or "PortUnavailable" or "InvalidTLS" or "InvalidPath" or "RouteConflict"

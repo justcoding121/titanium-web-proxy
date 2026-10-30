@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Security.Authentication;
 using System.Security.Cryptography;
@@ -32,6 +33,10 @@ public static class TwpConfigValidator
     {
         "Http", "Socks4", "Socks5",
     };
+
+    private const string LocalhostHostName = "localhost";
+    private const string LoopbackIPv4 = "127.0.0.1";
+    private const string LoopbackIPv6 = "::1";
 
     public static IReadOnlyList<string> Validate(TwpConfig config)
     {
@@ -113,7 +118,7 @@ public static class TwpConfigValidator
         }
     }
 
-    private static void ValidatePlusSecrets(PlusConfig? plus, List<string> errors)
+    private static void ValidatePlusSecrets(PlusConfig? plus, List<string> errors) // NOSONAR S3776 -- Plus secret validation walks control plane, OIDC, and option references together.
     {
         if (plus is null)
         {
@@ -216,12 +221,10 @@ public static class TwpConfigValidator
     private static void ValidateControlPlaneTransport(bool plusEnabled, ControlPlaneConfig controlPlane, List<string> errors)
     {
         var tls = controlPlane.Tls;
-        if (tls is not null)
+        if (tls is not null &&
+            (string.IsNullOrWhiteSpace(tls.CertificatePath) || string.IsNullOrWhiteSpace(tls.KeyPath)))
         {
-            if (string.IsNullOrWhiteSpace(tls.CertificatePath) || string.IsNullOrWhiteSpace(tls.KeyPath))
-            {
-                errors.Add("plus.controlPlane.tls needs both certificatePath and keyPath.");
-            }
+            errors.Add("plus.controlPlane.tls needs both certificatePath and keyPath.");
         }
 
         if (!plusEnabled || tls is not null || controlPlane.AllowInsecureNonLoopback)
@@ -245,7 +248,7 @@ public static class TwpConfigValidator
         }
 
         var trimmed = host.Trim().Trim('[', ']');
-        return trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+        return trimmed.Equals(LocalhostHostName, StringComparison.OrdinalIgnoreCase) ||
                (IPAddress.TryParse(trimmed, out var address) && IPAddress.IsLoopback(address));
     }
 
@@ -386,12 +389,9 @@ public static class TwpConfigValidator
                 errors.Add($"{path}.statusCodes must list at least one status (or be omitted for 502, 503, 504).");
             }
 
-            foreach (var code in codes)
+            foreach (var code in codes.Where(static code => code is not (429 or (>= 500 and <= 599))))
             {
-                if (code is not (429 or (>= 500 and <= 599)))
-                {
-                    errors.Add($"{path}.statusCodes: {code} is not retryable (use 429 or 500-599).");
-                }
+                errors.Add($"{path}.statusCodes: {code} is not retryable (use 429 or 500-599).");
             }
         }
     }
@@ -674,7 +674,7 @@ public static class TwpConfigValidator
         }
     }
 
-    private static void ValidateWaf(RoutePolicyConfig policy, List<string> errors)
+    private static void ValidateWaf(RoutePolicyConfig policy, List<string> errors) // NOSONAR S3776 -- WAF policy validation checks mode, thresholds, and exclusions together.
     {
         var name = policy.Name;
         if (policy.Mode is not null && !WafModes.Contains(policy.Mode))
@@ -682,24 +682,21 @@ public static class TwpConfigValidator
             errors.Add($"Policy '{name}' (waf) mode must be off, detect, or block.");
         }
 
-        if (policy.ParanoiaLevel is not null and (< 1 or > 3))
+        if (policy.ParanoiaLevel is < 1 or > 3)
         {
             errors.Add($"Policy '{name}' (waf) paranoiaLevel must be 1-3.");
         }
 
-        if (policy.BlockThreshold is not null and (< 1 or > 1000))
+        if (policy.BlockThreshold is < 1 or > 1000)
         {
             errors.Add($"Policy '{name}' (waf) blockThreshold must be 1-1000.");
         }
 
         if (policy.DisabledRules is { } disabled)
         {
-            foreach (var rule in disabled)
+            foreach (var rule in disabled.Where(string.IsNullOrWhiteSpace))
             {
-                if (string.IsNullOrWhiteSpace(rule))
-                {
-                    errors.Add($"Policy '{name}' (waf) disabledRules has an empty entry.");
-                }
+                errors.Add($"Policy '{name}' (waf) disabledRules has an empty entry.");
             }
         }
 
@@ -708,12 +705,9 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var exclusion in exclusions)
+        foreach (var exclusion in exclusions.Where(static exclusion => !IsWafExclusion(exclusion)))
         {
-            if (!IsWafExclusion(exclusion))
-            {
-                errors.Add($"Policy '{name}' (waf) exclusion '{exclusion}' must be rule[@target] with a target of path, query[:name], header[:Name], cookie[:name], or body[:field].");
-            }
+            errors.Add($"Policy '{name}' (waf) exclusion '{exclusion}' must be rule[@target] with a target of path, query[:name], header[:Name], cookie[:name], or body[:field].");
         }
     }
 
@@ -757,12 +751,9 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var policy in policies)
+        foreach (var policy in policies.Where(static policy => string.Equals(policy.Kind, "waf", StringComparison.Ordinal)))
         {
-            if (string.Equals(policy.Kind, "waf", StringComparison.Ordinal))
-            {
-                errors.Add($"Policy '{policy.Name}' (waf) needs plus.enabled: true and plus.options waf.enabled: \"true\". The WAF is enforced by Titanium Plus.");
-            }
+            errors.Add($"Policy '{policy.Name}' (waf) needs plus.enabled: true and plus.options waf.enabled: \"true\". The WAF is enforced by Titanium Plus.");
         }
     }
 
@@ -781,16 +772,13 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var policy in policies)
+        foreach (var policy in policies.Where(static policy => string.Equals(policy.Kind, "oidc", StringComparison.Ordinal)))
         {
-            if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
-            {
-                errors.Add($"Policy '{policy.Name}' (oidc) needs plus.enabled: true. The login is enforced by Titanium Plus.");
-            }
+            errors.Add($"Policy '{policy.Name}' (oidc) needs plus.enabled: true. The login is enforced by Titanium Plus.");
         }
     }
 
-    private static void ValidateOidc(RoutePolicyConfig policy, List<string> errors)
+    private static void ValidateOidc(RoutePolicyConfig policy, List<string> errors) // NOSONAR S3776 -- OIDC policy validation checks issuer, secrets, and claim wiring together.
     {
         var name = policy.Name;
         if (!IsOidcIssuer(policy.Issuer))
@@ -891,18 +879,8 @@ public static class TwpConfigValidator
         string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
         (uri.AbsolutePath.Length == 0 || uri.AbsolutePath == "/");
 
-    private static bool HasWhitespace(string value)
-    {
-        foreach (var c in value)
-        {
-            if (char.IsWhiteSpace(c) || char.IsControl(c))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasWhitespace(string value) =>
+        value.Any(static c => char.IsWhiteSpace(c) || char.IsControl(c));
 
     private static void ValidateOidcPath(string policyName, string field, string? path, List<string> errors)
     {
@@ -927,15 +905,12 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var value in values)
+        foreach (var value in values.Where(value => string.IsNullOrWhiteSpace(value) || !accepts(value.Trim())))
         {
-            if (string.IsNullOrWhiteSpace(value) || !accepts(value.Trim()))
-            {
-                errors.Add($"Policy '{policyName}' (oidc) {field} entry '{value}' must be {expected}.");
-            }
+            errors.Add($"Policy '{policyName}' (oidc) {field} entry '{value}' must be {expected}.");
         }
     }
-    private static void ValidateRateLimit(RoutePolicyConfig policy, List<string> errors)
+    private static void ValidateRateLimit(RoutePolicyConfig policy, List<string> errors) // NOSONAR S3776 -- Rate-limit policy validation checks algorithm, scope, and fleet options together.
     {
         var name = policy.Name;
         if (policy.Key is not null && !IsRateLimitKey(policy.Key))
@@ -1483,7 +1458,7 @@ public static class TwpConfigValidator
     private static bool IsUdpListener(ListenerConfig listener) =>
         string.Equals(listener.Type, "udp", StringComparison.OrdinalIgnoreCase);
 
-    private static void ValidateUdpListener(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors)
+    private static void ValidateUdpListener(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors) // NOSONAR S3776 -- UDP listener validation checks relay targets, limits, and stray HTTP fields together.
     {
         var prefix = $"Listener port {listener.Port}:";
         if (!IsUdpListener(listener))
@@ -1580,9 +1555,9 @@ public static class TwpConfigValidator
     private static bool IsSelfAddress(string forwardHost, string? listenerHost)
     {
         var bound = string.IsNullOrWhiteSpace(listenerHost) || listenerHost is "*" ? "0.0.0.0" : listenerHost;
-        var loopback = forwardHost is "127.0.0.1" or "::1" or "localhost";
+        var loopback = forwardHost is LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName;
         return string.Equals(forwardHost, bound, StringComparison.OrdinalIgnoreCase)
-               || (loopback && bound is "0.0.0.0" or "::" or "127.0.0.1" or "::1" or "localhost");
+               || (loopback && bound is "0.0.0.0" or "::" or LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName);
     }
 
     private static void ValidateListenerBounds(ListenerConfig listener, List<string> errors)
@@ -1628,7 +1603,7 @@ public static class TwpConfigValidator
         }
     }
 
-    private static void ValidatePassthrough(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors)
+    private static void ValidatePassthrough(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors) // NOSONAR S3776 -- Passthrough validation walks SNI routes, PROXY protocol, and cluster references together.
     {
         var prefix = $"Listener port {listener.Port}:";
         var routes = listener.SniRoutes ?? [];
@@ -1984,7 +1959,7 @@ public static class TwpConfigValidator
     private static readonly string[] OtlpProtocolNames = ["grpc", "http"];
     private static readonly string[] TraceSamplerNames = ["always", "ratio", "parentbased"];
 
-    private static void ValidateTelemetry(TelemetryConfig? telemetry, List<string> errors)
+    private static void ValidateTelemetry(TelemetryConfig? telemetry, List<string> errors) // NOSONAR S3776 -- Telemetry validation checks OTLP, traces, and metrics options together.
     {
         if (telemetry is null)
         {
@@ -2101,13 +2076,11 @@ public static class TwpConfigValidator
                        !string.IsNullOrWhiteSpace(admin.AuthTokenFile);
 
         System.Net.IPAddress? address = System.Net.IPAddress.Loopback;
-        if (admin.Host is { } host)
+        if (admin.Host is { } host &&
+            (string.IsNullOrWhiteSpace(host) || !System.Net.IPAddress.TryParse(host.Trim(), out address)))
         {
-            if (string.IsNullOrWhiteSpace(host) || !System.Net.IPAddress.TryParse(host.Trim(), out address))
-            {
-                errors.Add($"server.admin.host '{host}' is not an IP address.");
-                return;
-            }
+            errors.Add($"server.admin.host '{host}' is not an IP address.");
+            return;
         }
 
         if (!System.Net.IPAddress.IsLoopback(address) && !hasToken)
@@ -2138,7 +2111,7 @@ public static class TwpConfigValidator
 
     private static readonly string[] CompressionAlgorithmNames = ["br", "gzip"];
 
-    private static void ValidateResponseCompression(ResponseCompressionConfig? compression, List<string> errors)
+    private static void ValidateResponseCompression(ResponseCompressionConfig? compression, List<string> errors) // NOSONAR S3776 -- Response compression validation checks algorithms, sizes, and modes together.
     {
         if (compression is null)
         {
@@ -2673,7 +2646,7 @@ public static class TwpConfigValidator
     ///     Same as <see cref="CollectWarnings(TwpConfig)" /> for an explicit platform, so a Windows-only warning
     ///     can be checked from any host.
     /// </summary>
-    public static IReadOnlyList<string> CollectWarnings(TwpConfig config, bool isWindows)
+    public static IReadOnlyList<string> CollectWarnings(TwpConfig config, bool isWindows) // NOSONAR S3776 -- Warning collection walks listeners, plugins, and reserved limits together.
     {
         var warnings = new List<string>();
         CollectTlsWarnings(config.Server?.Tls, isWindows, warnings);
@@ -2734,13 +2707,13 @@ public static class TwpConfigValidator
 
             if (string.Equals(listener.Type, "masque", StringComparison.OrdinalIgnoreCase)
                 && listener.Masque?.RequireAuth == false
-                && listener.Host is not ("127.0.0.1" or "::1" or "localhost"))
+                && listener.Host is not (LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName))
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: masque authentication is off on a non-loopback address.");
             }
 
-            if (IsUdpListener(listener) && listener.Host is not ("127.0.0.1" or "::1" or "localhost"))
+            if (IsUdpListener(listener) && listener.Host is not (LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName))
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: a udp listener has no authentication. Any host that can reach it is relayed " +
@@ -2761,12 +2734,9 @@ public static class TwpConfigValidator
                 passthroughClusters.Add(listener.SniDefaultClusterId);
             }
 
-            foreach (var route in listener.SniRoutes ?? [])
+            foreach (var route in (listener.SniRoutes ?? []).Where(static route => !string.IsNullOrEmpty(route.ClusterId)))
             {
-                if (!string.IsNullOrEmpty(route.ClusterId))
-                {
-                    passthroughClusters.Add(route.ClusterId);
-                }
+                passthroughClusters.Add(route.ClusterId!);
             }
         }
 

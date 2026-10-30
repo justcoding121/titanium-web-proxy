@@ -10,6 +10,8 @@ namespace Titanium.Cli.Tests;
 [TestClass]
 public class RunCommandTests
 {
+    private static readonly string[] CompressionAlgorithms = ["gzip", "br"];
+    private static readonly string[] CompressionMimeTypes = ["text/*", "application/wasm"];
     [TestMethod]
     public void ConfigNeedsSessionPath_True_ForStaticFiles()
     {
@@ -137,11 +139,11 @@ public class RunCommandTests
             var loaded = Titanium.Cli.Parsers.ConfigLoader.Load(path);
             var compression = loaded.Config.Server!.ResponseCompression!;
             Assert.IsTrue(compression.Enabled);
-            CollectionAssert.AreEqual(new[] { "gzip", "br" }, compression.Algorithms!.ToArray());
+            CollectionAssert.AreEqual(CompressionAlgorithms, compression.Algorithms!.ToArray());
             Assert.AreEqual(2048, compression.MinBytes);
             Assert.AreEqual(524288, compression.MaxBytes);
             Assert.AreEqual("optimal", compression.Level);
-            CollectionAssert.AreEqual(new[] { "text/*", "application/wasm" }, compression.MimeTypes!.ToArray());
+            CollectionAssert.AreEqual(CompressionMimeTypes, compression.MimeTypes!.ToArray());
             
             Assert.AreEqual(0, Titanium.Web.Proxy.Configuration.TwpConfigValidator.Validate(loaded.Config).Count);
             Assert.AreEqual(0, loaded.UnknownKeys.Count);

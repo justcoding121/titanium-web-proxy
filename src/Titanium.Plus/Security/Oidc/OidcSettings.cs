@@ -14,6 +14,8 @@ internal sealed class OidcSettings
     /// <summary>The longest <c>name=value</c> pair a browser will keep, with room left for the attributes.</summary>
     internal const int MaxCookieBytes = 4096 - 160;
 
+    private const string OpenIdScope = "openid";
+
     private OidcSettings()
     {
     }
@@ -69,7 +71,7 @@ internal sealed class OidcSettings
             RedirectPath = "/login/oidc/callback",
             LogoutPath = null,
             PublicBase = null,
-            Scopes = ["openid", "email", "profile"],
+            Scopes = [OpenIdScope, "email", "profile"],
             CookieName = "titanium_plus_oidc",
             Crypto = crypto,
             SessionTtl = TimeSpan.FromSeconds(DefaultSessionTtlSeconds),
@@ -191,16 +193,16 @@ internal sealed class OidcSettings
         }
         else
         {
-            scopes.AddRange(["openid", "email", "profile"]);
+            scopes.AddRange([OpenIdScope, "email", "profile"]);
             if (refresh)
             {
                 scopes.Add("offline_access");
             }
         }
 
-        if (!scopes.Contains("openid", StringComparer.Ordinal))
+        if (!scopes.Contains(OpenIdScope, StringComparer.Ordinal))
         {
-            scopes.Insert(0, "openid");
+            scopes.Insert(0, OpenIdScope);
         }
 
         return scopes.Distinct(StringComparer.Ordinal).ToArray();
@@ -214,13 +216,10 @@ internal sealed class OidcSettings
             return set;
         }
 
-        foreach (var value in values)
+        foreach (var value in values.Where(static v => !string.IsNullOrWhiteSpace(v)))
         {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                var trimmed = value.Trim();
-                set.Add(lower ? trimmed.ToLowerInvariant() : trimmed);
-            }
+            var trimmed = value.Trim();
+            set.Add(lower ? trimmed.ToLowerInvariant() : trimmed);
         }
 
         return set;

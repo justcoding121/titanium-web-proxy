@@ -9,6 +9,11 @@ namespace Titanium.Gateway.Tests;
 public sealed class GatewayOptionsAndObserverTests
 {
     private static readonly Dictionary<string, string?> NoEnvironment = [];
+    private static readonly string[] SecretNamespacesAb = ["a", "b"];
+    private static readonly string[] IgnoredKubernetesServiceEnv =
+    [
+        "TITANIUM_GATEWAY_DATA_PORT", "TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS",
+    ];
 
     [TestMethod]
     public void Options_ReadFlagsAndFallBackToThePodEnvironment()
@@ -42,7 +47,7 @@ public sealed class GatewayOptionsAndObserverTests
         var options = GatewayOptions.Parse([], environment);
 
         Assert.AreEqual("data", options.DataPlaneNamespace);
-        CollectionAssert.AreEqual(new[] { "a", "b" }, options.SecretNamespaces.ToArray());
+        CollectionAssert.AreEqual(SecretNamespacesAb, options.SecretNamespaces.ToArray());
         Assert.IsFalse(options.LeaderElection);
     }
 
@@ -69,7 +74,7 @@ public sealed class GatewayOptionsAndObserverTests
         };
         var options = GatewayOptions.Parse(["--no-leader-election", "--data-plane-namespace", "x"], env);
         Assert.AreEqual("titanium", options.DataPlaneService);
-        CollectionAssert.AreEqual(new[] { "TITANIUM_GATEWAY_DATA_PORT", "TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS" }, options.IgnoredEnvironment.ToArray());
+        CollectionAssert.AreEqual(IgnoredKubernetesServiceEnv, options.IgnoredEnvironment.ToArray());
     }
 
     [TestMethod]

@@ -24,7 +24,8 @@ public sealed class PluginHost : IDisposable
 
     private readonly List<LoadedPlugin> _loaded;
     private readonly ILogger? _logger;
-    private IReadOnlyDictionary<string, LoadedPlugin> _scripts = new Dictionary<string, LoadedPlugin>(0, StringComparer.Ordinal);
+    private Dictionary<string, LoadedPlugin> _scripts = new(0, StringComparer.Ordinal);
+    private WeakReference[] _loadContextHandles = Array.Empty<WeakReference>();
     private int _inFlight;
     private int _state;
 
@@ -42,8 +43,7 @@ public sealed class PluginHost : IDisposable
     public bool IsDisposed => Volatile.Read(ref _state) == Disposed;
 
     /// <summary>Weak handles to the load contexts, so a test or an operator can confirm the runtime reclaimed them.</summary>
-    public IReadOnlyList<WeakReference> LoadContexts =>
-        _loaded.Where(p => p.Context is not null).Select(p => new WeakReference(p.Context)).ToArray();
+    public IReadOnlyList<WeakReference> LoadContexts => _loadContextHandles;
 
     /// <summary>
     /// Loads every plugin. Nothing is kept when one fails: the contexts loaded so far are unloaded and the exception names
@@ -74,6 +74,7 @@ public sealed class PluginHost : IDisposable
         host.Plugins = host.BuildMap();
         host._scripts = loaded.Where(p => p.Instance is IScriptPhaseHost or IStreamScriptFilter)
             .ToDictionary(p => p.Name, StringComparer.Ordinal);
+        host.RefreshLoadContextHandles();
         return host;
     }
 
@@ -114,6 +115,7 @@ public sealed class PluginHost : IDisposable
         }
 
         _scripts = new Dictionary<string, LoadedPlugin>(0, StringComparer.Ordinal);
+        _loadContextHandles = Array.Empty<WeakReference>();
         foreach (var plugin in _loaded)
         {
             DisposePlugin(plugin);
@@ -142,7 +144,7 @@ public sealed class PluginHost : IDisposable
         }
     }
 
-    private IReadOnlyDictionary<string, IProxyMiddleware> BuildMap()
+    private Dictionary<string, IProxyMiddleware> BuildMap()
     {
         var map = new Dictionary<string, IProxyMiddleware>(_loaded.Count, StringComparer.Ordinal);
         foreach (var plugin in _loaded)
@@ -151,6 +153,13 @@ public sealed class PluginHost : IDisposable
         }
 
         return map;
+    }
+
+    private void RefreshLoadContextHandles()
+    {
+        _loadContextHandles = _loaded.Where(p => p.Context is not null)
+            .Select(p => new WeakReference(p.Context))
+            .ToArray();
     }
 
     private static LoadedPlugin LoadOne(PluginConfig config, PluginHost host)

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
 using Titanium.Web.Proxy.Configuration.Models;
@@ -6,8 +7,13 @@ namespace Titanium.Cli.Tests;
 
 /// <summary><c>*Env</c> and <c>*File</c> references resolve once, name the setting on failure, and never echo a value.</summary>
 [TestClass]
-public class SecretResolverTests
+public partial class SecretResolverTests
 {
+    [GeneratedRegex("idp-client-secret")]
+    private static partial Regex IdpClientSecretPattern();
+
+    [GeneratedRegex("0123456789abcdef0123456789abcdef")]
+    private static partial Regex HexKeyPattern();
     private string _dir = null!;
 
     [TestInitialize]
@@ -221,10 +227,10 @@ public class SecretResolverTests
 
         Assert.AreEqual(0, errors.Count, string.Join("\n", errors));
         Assert.AreEqual("masked", SecretRedactor.Redact("masked"));
-        StringAssert.DoesNotMatch(SecretRedactor.Redact("the secret is idp-client-secret"), new System.Text.RegularExpressions.Regex("idp-client-secret"));
+        StringAssert.DoesNotMatch(SecretRedactor.Redact("the secret is idp-client-secret"), IdpClientSecretPattern());
         StringAssert.DoesNotMatch(
             SecretRedactor.Redact("key 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
-            new System.Text.RegularExpressions.Regex("0123456789abcdef0123456789abcdef"));
+            HexKeyPattern());
         CollectionAssert.Contains(SecretResolver.SecretFiles(config).ToArray(), keyFile);
 
         var broken = new TwpConfig

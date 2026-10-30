@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Diagnostics;
@@ -201,12 +202,9 @@ public sealed class MemoryHttpResponseCache : IHttpResponseCache
                 }
 
                 List<Node>? doomed = null;
-                foreach (var node in shard.Map.Values)
+                foreach (var node in shard.Map.Values.Where(node => KeyMatchesPrefix(node.Key, pathPrefix)))
                 {
-                    if (KeyMatchesPrefix(node.Key, pathPrefix))
-                    {
-                        (doomed ??= []).Add(node);
-                    }
+                    (doomed ??= []).Add(node);
                 }
 
                 if (doomed is null)
@@ -234,12 +232,9 @@ public sealed class MemoryHttpResponseCache : IHttpResponseCache
             lock (shard.Gate)
             {
                 List<Node>? doomed = null;
-                foreach (var node in shard.Map.Values)
+                foreach (var node in shard.Map.Values.Where(node => node.Key.StartsWith(keyPrefix, StringComparison.Ordinal)))
                 {
-                    if (node.Key.StartsWith(keyPrefix, StringComparison.Ordinal))
-                    {
-                        (doomed ??= []).Add(node);
-                    }
+                    (doomed ??= []).Add(node);
                 }
 
                 if (doomed is null)

@@ -15,6 +15,8 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     /// <summary>Matches Plus <c>ControlHttpServer.MaxBodyBytes</c> — admin and agent request bodies.</summary>
     internal const int MaxBodyBytes = ManagerRequestBody.MaxBodyBytes;
 
+    private const string NotFoundText = "not found";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -184,7 +186,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             return;
         }
 
-        await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+        await WriteTextAsync(context, 404, NotFoundText).ConfigureAwait(false);
     }
 
     private async Task LongPollConfigAsync(HttpListenerContext context, AgentTokenRow agent)
@@ -287,7 +289,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         }).ConfigureAwait(false);
     }
 
-    private async Task HandleAdminAsync(HttpListenerContext context, string method, string path)
+    private async Task HandleAdminAsync(HttpListenerContext context, string method, string path) // NOSONAR S3776 -- Admin route dispatch shares listener context; splitting would scatter auth checks.
     {
         if (!TryAuthenticateAdmin(context, method, out var role, out var actor))
         {
@@ -319,9 +321,21 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
                 return;
             }
 
-            var labels = doc.RootElement.TryGetProperty("labelsJson", out var l) ? l.GetString()
-                : doc.RootElement.TryGetProperty("labels", out var l2) ? l2.GetRawText() : "{}";
-            var fleet = _store.CreateFleet(name!, labels ?? "{}");
+            string labelsJson;
+            if (doc.RootElement.TryGetProperty("labelsJson", out var labelsProp))
+            {
+                labelsJson = labelsProp.GetString() ?? "{}";
+            }
+            else if (doc.RootElement.TryGetProperty("labels", out var labelsAlt))
+            {
+                labelsJson = labelsAlt.GetRawText();
+            }
+            else
+            {
+                labelsJson = "{}";
+            }
+
+            var fleet = _store.CreateFleet(name, labelsJson);
             _store.Audit(actor, "fleet.create", $"fleet:{fleet.Id}", "ok", fleet.Name);
             await WriteJsonAsync(context, 201, new
             {
@@ -407,10 +421,10 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             return;
         }
 
-        await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+        await WriteTextAsync(context, 404, NotFoundText).ConfigureAwait(false);
     }
 
-    private async Task HandleFleetRoutesAsync(
+    private async Task HandleFleetRoutesAsync( // NOSONAR S3776 -- Fleet route dispatch shares listener context; splitting would scatter auth checks.
         HttpListenerContext context,
         string method,
         string rest,
@@ -532,10 +546,10 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             return;
         }
 
-        await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+        await WriteTextAsync(context, 404, NotFoundText).ConfigureAwait(false);
     }
 
-    private async Task HandleRolloutsAsync(
+    private async Task HandleRolloutsAsync( // NOSONAR S3776 -- Rollout route dispatch shares listener context; splitting would scatter auth checks.
         HttpListenerContext context,
         string method,
         long fleetId,
@@ -651,10 +665,10 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             }
         }
 
-        await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+        await WriteTextAsync(context, 404, NotFoundText).ConfigureAwait(false);
     }
 
-    private async Task HandleRevisionsAsync(
+    private async Task HandleRevisionsAsync( // NOSONAR S3776 -- Revision route dispatch shares listener context; splitting would scatter auth checks.
         HttpListenerContext context,
         string method,
         long fleetId,
@@ -801,10 +815,10 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             }
         }
 
-        await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
+        await WriteTextAsync(context, 404, NotFoundText).ConfigureAwait(false);
     }
 
-    private static async Task<(IReadOnlyList<PublishWaveSpec>? Waves, int? BakeSeconds)> ReadPublishBodyAsync(
+    private static async Task<(IReadOnlyList<PublishWaveSpec>? Waves, int? BakeSeconds)> ReadPublishBodyAsync( // NOSONAR S3776 -- Publish body parsing keeps wave validation in one place.
         HttpListenerContext context)
     {
         var body = await ManagerRequestBody.ReadUtf8Async(context).ConfigureAwait(false);

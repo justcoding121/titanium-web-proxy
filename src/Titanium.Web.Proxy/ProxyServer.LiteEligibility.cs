@@ -20,12 +20,9 @@ public partial class ProxyServer
         {
             try
             {
-                foreach (var endPoint in ProxyEndPoints)
+                if (ProxyEndPoints.Any(static endPoint => endPoint is TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 }))
                 {
-                    if (endPoint is TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 })
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
             catch (InvalidOperationException)

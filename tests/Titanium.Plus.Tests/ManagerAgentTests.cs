@@ -41,8 +41,8 @@ public class ManagerAgentTests
             Assert.IsNotNull(agent);
             Assert.IsTrue(ManagerAgent.LiveLoops >= 1);
 
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Count >= 1, TimeSpan.FromSeconds(8));
-            Assert.AreEqual(1, applier.SuccessfulApplies.Count);
+            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            Assert.AreEqual(1, applier.SuccessfulApplies.Length);
             Assert.AreEqual(expectedHash, applier.SuccessfulApplies[0].Hash);
 
             await WaitUntilAsync(() => harness.Acks.Any(a => a.Accepted), TimeSpan.FromSeconds(5));
@@ -77,7 +77,7 @@ public class ManagerAgentTests
         {
             using var agent = StartAgent(harness, stateDir, tokenFile, applier, status, mode: "managed", debounceMs: 50);
             await WaitUntilAsync(() => harness.Acks.Any(a => !a.Accepted), TimeSpan.FromSeconds(8));
-            Assert.AreEqual(0, applier.SuccessfulApplies.Count);
+            Assert.AreEqual(0, applier.SuccessfulApplies.Length);
             Assert.AreEqual(1, applier.Attempts);
             Assert.IsTrue(harness.Acks.Any(a => !a.Accepted && a.Reason is not null));
             Assert.IsFalse(ManagerAgent.TryReadLastKnownGood(stateDir, out _, out _));
@@ -85,8 +85,8 @@ public class ManagerAgentTests
             // A later successful apply should be the first success (prior state kept).
             applier.FailNext = false;
             harness.PublishConfig(new { v = 2 });
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Count >= 1, TimeSpan.FromSeconds(8));
-            Assert.AreEqual(1, applier.SuccessfulApplies.Count);
+            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            Assert.AreEqual(1, applier.SuccessfulApplies.Length);
             Assert.AreEqual(harness.ConfigVersion.ToString(), applier.SuccessfulApplies[0].Hash);
         }
         finally
@@ -109,8 +109,8 @@ public class ManagerAgentTests
         try
         {
             using var agent = StartAgent(harness, stateDir, tokenFile, applier, status, mode: "managed", debounceMs: 400);
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Count >= 1, TimeSpan.FromSeconds(8));
-            var afterFirst = applier.SuccessfulApplies.Count;
+            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            var afterFirst = applier.SuccessfulApplies.Length;
 
             for (var i = 1; i <= 5; i++)
             {
@@ -120,9 +120,9 @@ public class ManagerAgentTests
 
             await Task.Delay(900);
             // First apply + coalesced follow-up(s); must be well below the number of publishes (1 + 5).
-            Assert.IsTrue(applier.SuccessfulApplies.Count < afterFirst + 5,
-                $"applies={applier.SuccessfulApplies.Count} afterFirst={afterFirst}");
-            Assert.IsTrue(applier.SuccessfulApplies.Count >= afterFirst + 1);
+            Assert.IsTrue(applier.SuccessfulApplies.Length < afterFirst + 5,
+                $"applies={applier.SuccessfulApplies.Length} afterFirst={afterFirst}");
+            Assert.IsTrue(applier.SuccessfulApplies.Length >= afterFirst + 1);
             Assert.AreEqual(harness.ConfigVersion.ToString(), applier.SuccessfulApplies[^1].Hash);
         }
         finally
@@ -290,7 +290,7 @@ public class ManagerAgentTests
         public bool FailNext { get; set; }
         public TimeSpan ApplyDelay { get; set; }
         public int Attempts { get; private set; }
-        public IReadOnlyList<(string Yaml, string Hash)> SuccessfulApplies => _ok.ToArray();
+        public (string Yaml, string Hash)[] SuccessfulApplies => _ok.ToArray();
 
         public async Task<ConfigApplyResult> ApplyAsync(string yaml, string configHash, CancellationToken cancellationToken = default)
         {

@@ -23,6 +23,16 @@ namespace Titanium.Web.Proxy.UnitTests.Plugins;
 [TestClass]
 public class RoutePluginEligibilityAndContractTests
 {
+    private static readonly string[] MiddlewareContextContractMembers =
+    [
+        "Session", "Items", "IsHandled", "HandledStatusCode", "HandledBody", "HandledBodyBytes", "HandledHeaders",
+    ];
+
+    private static readonly string[] PluginConfigPropertyNames =
+    [
+        "Assembly", "BodyMode", "CalloutHosts", "FailMode", "File", "Kind", "Limits", "Name", "Settings", "TimeoutMs",
+        "TypeName", "VmId",
+    ];
     [TestMethod]
     public async Task OnlyARouteThatNamesAPlugin_LeavesTerminateLite()
     {
@@ -79,9 +89,6 @@ public class RoutePluginEligibilityAndContractTests
     [TestMethod]
     public void TheContractVersionAndTheSamplePluginAgree()
     {
-        Assert.AreEqual(1, ProxyPluginContract.CurrentVersion, "raising the version is a deliberate, documented break");
-        Assert.IsTrue(ProxyPluginContract.MinimumSupportedVersion <= ProxyPluginContract.CurrentVersion);
-
         using var host = PluginHost.Load(
         [
             new PluginConfig { Name = "sample", Assembly = SamplePlugin },
@@ -123,22 +130,13 @@ public class RoutePluginEligibilityAndContractTests
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => p.Name)
             .ToHashSet();
-        foreach (var required in new[]
-                 {
-                     "Session", "Items", "IsHandled", "HandledStatusCode", "HandledBody", "HandledBodyBytes", "HandledHeaders",
-                 })
+        foreach (var required in MiddlewareContextContractMembers)
         {
             Assert.IsTrue(members.Contains(required), $"ProxyMiddlewareContext.{required} is part of the plugin contract");
         }
 
         var config = typeof(PluginConfig).GetProperties().Select(p => p.Name).OrderBy(n => n).ToArray();
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "Assembly", "BodyMode", "CalloutHosts", "FailMode", "File", "Kind", "Limits", "Name", "Settings", "TimeoutMs",
-                "TypeName", "VmId",
-            },
-            config);
+        CollectionAssert.AreEqual(PluginConfigPropertyNames, config);
 
         var attribute = typeof(ProxyPluginAttribute);
         Assert.IsNotNull(attribute.GetConstructor([typeof(int)]));

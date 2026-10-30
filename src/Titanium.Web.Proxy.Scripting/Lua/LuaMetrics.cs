@@ -36,7 +36,7 @@ internal static class LuaMetrics
     private static readonly ConcurrentDictionary<string, Instrument> UserInstruments = new(StringComparer.Ordinal);
 
     /// <summary>Records a script metric. Returns false when the kind is unknown or the instrument cap is reached.</summary>
-    public static bool RecordUser(string plugin, string kind, string name, double value, LuaTable? labels)
+    public static bool RecordUser(string plugin, string kind, string name, double value, LuaTable? labels) // NOSONAR S3776 -- User instrument registration and recording share one hot path.
     {
         if (kind is not ("counter" or "gauge" or "histogram"))
         {
@@ -50,12 +50,12 @@ internal static class LuaMetrics
                 return false;
             }
 
-            instrument = UserInstruments.GetOrAdd(name, _ => kind switch
+            instrument = UserInstruments.GetOrAdd(name, static (instrumentName, instrumentKind) => instrumentKind switch
             {
-                "counter" => Meter.CreateCounter<double>(UserPrefix + name),
-                "gauge" => Meter.CreateGauge<double>(UserPrefix + name),
-                _ => Meter.CreateHistogram<double>(UserPrefix + name),
-            });
+                "counter" => Meter.CreateCounter<double>(UserPrefix + instrumentName),
+                "gauge" => Meter.CreateGauge<double>(UserPrefix + instrumentName),
+                _ => Meter.CreateHistogram<double>(UserPrefix + instrumentName),
+            }, kind);
         }
 
         var tags = new TagList { { "plugin", plugin } };

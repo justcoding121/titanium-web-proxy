@@ -149,4 +149,6 @@ public sealed class FaultyConstructorPlugin : IProxyMiddleware
 /// <summary>Not a plugin: it does not implement the contract.</summary>
 public sealed class NotAPlugin
 {
+    /// <summary>Marker so the type is loadable but not a <see cref="IProxyMiddleware"/>.</summary>
+    public bool ImplementsMiddlewareContract => false;
 }

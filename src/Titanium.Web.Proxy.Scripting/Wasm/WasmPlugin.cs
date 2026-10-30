@@ -22,7 +22,8 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
     private readonly string _itemKey;
     private int _disposed;
 
-    internal WasmPlugin(string name, string? vmId, WasmVmPool pool, WasmLimits limits, ScriptBodyMode bodyMode, bool failOpen,
+    internal WasmPlugin( // NOSONAR S107 -- Plugin wiring keeps VM limits and config explicit without a context bag.
+        string name, string? vmId, WasmVmPool pool, WasmLimits limits, ScriptBodyMode bodyMode, bool failOpen,
         byte[] configuration, byte[] vmConfiguration, ILogger? logger, IReadOnlyList<string>? calloutHosts = null)
     {
         Name = name;
@@ -193,7 +194,7 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
             }
             catch (WasmVmFaultException ex)
             {
-                Logger?.LogDebug("WASM plugin '{Plugin}' failed while it closed a connection: {Reason}", Name, ex.Message);
+                Logger?.LogDebug(ex, "WASM plugin '{Plugin}' failed while it closed a connection: {Reason}", Name, ex.Message);
             }
             finally
             {
@@ -321,16 +322,15 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
         try
         {
             result = await OnRequestHeadersAsync(phase, cancellationToken).ConfigureAwait(false);
-            for (var resumes = 1; result.Action == ScriptAction.Pause; resumes++)
+            for (var resumes = 0; resumes < 64 && result.Action == ScriptAction.Pause; resumes++)
             {
-                if (resumes > 64)
-                {
-                    result = ScriptPhaseResult.Deny(504, "WASM plugin did not finish.");
-                    break;
-                }
-
-                phase.ResumeCount = resumes;
+                phase.ResumeCount = resumes + 1;
                 result = await OnResumeAsync(phase, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (result.Action == ScriptAction.Pause)
+            {
+                result = ScriptPhaseResult.Deny(504, "WASM plugin did not finish.");
             }
         }
         finally
@@ -516,7 +516,7 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
             }
             catch (WasmVmFaultException ex)
             {
-                Logger?.LogDebug("WASM plugin '{Plugin}' failed while it closed a request: {Reason}", Name, ex.Message);
+                Logger?.LogDebug(ex, "WASM plugin '{Plugin}' failed while it closed a request: {Reason}", Name, ex.Message);
             }
             finally
             {
@@ -530,7 +530,7 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
     }
 
     /// <summary>Ends contexts whose request never reached the log phase (an aborted connection), so a VM does not leak them.</summary>
-    private void Sweep(WasmVm vm)
+    private static void Sweep(WasmVm vm)
     {
         var cutoff = Environment.TickCount64 - (long)StaleAfter.TotalMilliseconds;
         foreach (var stale in vm.Contexts.OfType<WasmHttpContext>().Where(c => c.CreatedTicks < cutoff && !c.Paused).ToArray())
@@ -557,13 +557,7 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
             new(":authority", context.Host),
             new(":scheme", context.IsHttps ? "https" : "http"),
         };
-        foreach (var header in context.Headers)
-        {
-            if (!string.Equals(header.Key, "host", StringComparison.OrdinalIgnoreCase))
-            {
-                pairs.Add(header);
-            }
-        }
+        pairs.AddRange(context.Headers.Where(h => !string.Equals(h.Key, "host", StringComparison.OrdinalIgnoreCase)));
 
         return new WasmHeaderMap(pairs);
     }

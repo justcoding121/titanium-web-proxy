@@ -16,6 +16,10 @@ namespace Titanium.Gateway.Tests;
 public class IngressTranslatorTests
 {
     private const string Host = "app.test";
+    private static readonly string[] ExactHostA = ["a.test"];
+    private static readonly string[] TlsHostsAppAndWww = ["app.test", "www.app.test"];
+    private static readonly string[] WildcardHosts = ["*"];
+    private static readonly string[] PolicyOrderKinds = ["ipAllowDeny", "cors", "rateLimit", "extAuth", "maxRequestBodySize"];
 
     private static RenderResult Render(StateBuilder b, bool validate = true, GatewayTranslatorOptions? options = null)
     {
@@ -201,7 +205,7 @@ public class IngressTranslatorTests
         Assert.AreEqual("default/exact:8080", Cluster("a.test"));
         Assert.AreEqual("default/wild:8080", Cluster("x.b.test"));
         Assert.AreEqual("default/any:8080", Cluster("c.test"));
-        CollectionAssert.AreEqual(new[] { "a.test" }, result.Config.UserRoutes().Single(r => r.ClusterId == "default/exact:8080").Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(ExactHostA, result.Config.UserRoutes().Single(r => r.ClusterId == "default/exact:8080").Match.Hosts!.ToArray());
         Assert.IsNull(result.Config.UserRoutes().Single(r => r.ClusterId == "default/any:8080").Match.Hosts);
     }
 
@@ -301,7 +305,7 @@ public class IngressTranslatorTests
 
         var item = result.Config.Certificates!.Items.Single();
         Assert.AreEqual("/etc/titanium-tls/default.cert.pfx", item.Path);
-        CollectionAssert.AreEqual(new[] { "app.test", "www.app.test" }, item.Hosts.ToArray());
+        CollectionAssert.AreEqual(TlsHostsAppAndWww, item.Hosts.ToArray());
         Assert.AreEqual(new TlsFile("default.cert.pfx", "default", "cert"), result.TlsFiles.Single());
         Assert.AreEqual(0, result.Events.Count);
 
@@ -322,7 +326,7 @@ public class IngressTranslatorTests
 
         var item = Render(b).Config.Certificates!.Items.Single();
 
-        CollectionAssert.AreEqual(new[] { "*" }, item.Hosts.ToArray());
+        CollectionAssert.AreEqual(WildcardHosts, item.Hosts.ToArray());
     }
 
     [TestMethod]
@@ -858,7 +862,7 @@ public class IngressTranslatorTests
         Assert.AreEqual("extAuth", policy.Kind);
         Assert.AreEqual("https://auth.example.com/check", policy.Url);
         Assert.AreEqual("GET", policy.Method);
-        Assert.AreEqual(false, policy.FailOpen);
+        Assert.IsFalse(policy.FailOpen);
         CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
     }
 
@@ -880,7 +884,7 @@ public class IngressTranslatorTests
             (A("whitelist-source-range"), "10.0.0.0/8"));
 
         var kinds = route.Policies!.Select(n => result.Config.Policies.Single(p => p.Name == n).Kind).ToArray();
-        CollectionAssert.AreEqual(new[] { "ipAllowDeny", "cors", "rateLimit", "extAuth", "maxRequestBodySize" }, kinds);
+        CollectionAssert.AreEqual(PolicyOrderKinds, kinds);
         Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
     }
 

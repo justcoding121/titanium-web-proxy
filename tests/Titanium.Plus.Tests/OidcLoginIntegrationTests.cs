@@ -21,6 +21,8 @@ public class OidcLoginIntegrationTests
 
     private static (string Name, string Value) Html => ("Accept", "text/html");
 
+    private static readonly string[] GateCookieNames = ["gate"];
+
     // ------------------------------------------------------------------ the happy path
 
     [TestMethod]
@@ -30,7 +32,7 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
 
-        var authorize = await h.StartLoginAsync(browser, "/app?x=1");
+        var authorize = await OidcHarness.StartLoginAsync(browser, "/app?x=1");
         var uri = new Uri(authorize);
         Assert.AreEqual(h.Idp.Issuer, uri.GetLeftPart(UriPartial.Authority));
         Assert.AreEqual("/authorize", uri.AbsolutePath);
@@ -51,7 +53,7 @@ public class OidcLoginIntegrationTests
         Assert.IsFalse(flow.Contains(query["state"]!, StringComparison.Ordinal), "the flow cookie is encrypted, not just signed");
         Assert.IsFalse(flow.Contains(query["nonce"]!, StringComparison.Ordinal));
 
-        var callback = await h.VisitProviderAsync(browser, authorize);
+        var callback = await OidcHarness.VisitProviderAsync(browser, authorize);
         using var done = await browser.GetAsync(callback, Html);
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
         Assert.AreEqual("/app?x=1", done.Headers.Location!.OriginalString);
@@ -121,7 +123,7 @@ public class OidcLoginIntegrationTests
         using var done = await h.SignInAsync(browser);
 
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
-        CollectionAssert.AreEquivalent(new[] { "gate" }, browser.Cookies.Keys.ToArray());
+        CollectionAssert.AreEquivalent(GateCookieNames, browser.Cookies.Keys.ToArray());
         using var page = await browser.GetAsync("http://matrix.test/app", Html);
         Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
     }
@@ -134,11 +136,11 @@ public class OidcLoginIntegrationTests
         h.Idp.RegisteredRedirectUri = "https://app.example.test" + Callback;
         using var browser = h.NewBrowser();
 
-        var authorize = await h.StartLoginAsync(browser);
+        var authorize = await OidcHarness.StartLoginAsync(browser);
 
         var query = HttpUtility.ParseQueryString(new Uri(authorize).Query);
         Assert.AreEqual("https://app.example.test" + Callback, query["redirect_uri"]);
-        var next = await h.VisitProviderAsync(browser, authorize);
+        var next = await OidcHarness.VisitProviderAsync(browser, authorize);
         StringAssert.StartsWith(next, "https://app.example.test" + Callback);
     }
 
@@ -548,8 +550,8 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var victim = h.NewBrowser();
-        var authorize = await h.StartLoginAsync(victim);
-        var callback = await h.VisitProviderAsync(victim, authorize);
+        var authorize = await OidcHarness.StartLoginAsync(victim);
+        var callback = await OidcHarness.VisitProviderAsync(victim, authorize);
 
         using var attacker = h.NewBrowser();
         using var response = await attacker.GetAsync(callback, Html);
@@ -565,9 +567,9 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        var first = await h.StartLoginAsync(browser, "/one");
-        var second = await h.StartLoginAsync(browser, "/two");
-        var callback = await h.VisitProviderAsync(browser, first);
+        var first = await OidcHarness.StartLoginAsync(browser, "/one");
+        var second = await OidcHarness.StartLoginAsync(browser, "/two");
+        var callback = await OidcHarness.VisitProviderAsync(browser, first);
         var otherState = HttpUtility.ParseQueryString(new Uri(second).Query)["state"]!;
         var mixed = callback[..callback.IndexOf("state=", StringComparison.Ordinal)] + "state=" + Uri.EscapeDataString(otherState);
 
@@ -583,7 +585,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        await h.StartLoginAsync(browser);
+        await OidcHarness.StartLoginAsync(browser);
 
         using var response = await browser.GetAsync($"http://matrix.test{Callback}?code=abc&state=forged", Html);
 
@@ -597,8 +599,8 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        var authorize = await h.StartLoginAsync(browser);
-        var callback = await h.VisitProviderAsync(browser, authorize);
+        var authorize = await OidcHarness.StartLoginAsync(browser);
+        var callback = await OidcHarness.VisitProviderAsync(browser, authorize);
         var flowCookies = browser.Cookies.ToDictionary(static c => c.Key, static c => c.Value);
         using (var first = await browser.GetAsync(callback, Html))
         {
@@ -667,9 +669,9 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync(o => o.Refresh = true);
         h.Idp.IdTokenLifetime = TimeSpan.FromMinutes(10);
         using var browser = h.NewBrowser();
-        var authorize = await h.StartLoginAsync(browser);
+        var authorize = await OidcHarness.StartLoginAsync(browser);
         StringAssert.Contains(HttpUtility.ParseQueryString(new Uri(authorize).Query)["scope"]!, "offline_access");
-        var callback = await h.VisitProviderAsync(browser, authorize);
+        var callback = await OidcHarness.VisitProviderAsync(browser, authorize);
         using (await browser.GetAsync(callback, Html))
         {
         }
@@ -949,14 +951,14 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var one = h.NewBrowser();
-        await h.StartLoginAsync(one);
+        await OidcHarness.StartLoginAsync(one);
         using var two = h.NewBrowser();
-        await h.StartLoginAsync(two);
+        await OidcHarness.StartLoginAsync(two);
         Assert.AreEqual(1, h.Idp.DiscoveryHits, "the second login uses the cached document");
 
         h.Clock.Advance(TimeSpan.FromMinutes(61));
         using var three = h.NewBrowser();
-        await h.StartLoginAsync(three);
+        await OidcHarness.StartLoginAsync(three);
         Assert.AreEqual(2, h.Idp.DiscoveryHits);
 
         h.Idp.Down = true;

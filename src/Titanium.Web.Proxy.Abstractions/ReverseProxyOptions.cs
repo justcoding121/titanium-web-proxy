@@ -217,7 +217,7 @@ public sealed class ReverseProxyOptions
         }
     }
 
-    private bool AnyReferencedPolicy(bool handledOnly)
+    private bool AnyReferencedPolicy(bool handledOnly) // NOSONAR S3776 -- Policy reference scan walks routes and policies in one pass.
     {
         if (Policies is not { Count: > 0 } policies || Routes is not { Count: > 0 } routes)
         {

@@ -120,7 +120,7 @@ internal sealed partial class LuaPlugin : IStreamScriptFilter
         }
         catch (LuaScriptException ex)
         {
-            Logger?.LogWarning("Lua plugin '{Plugin}' {Function} failed ({Reason}): {Error}", Name, function,
+            Logger?.LogWarning(ex, "Lua plugin '{Plugin}' {Function} failed ({Reason}): {Error}", Name, function,
                 LuaScriptException.Reason(ex.Failure), ex.Message);
             return null;
         }

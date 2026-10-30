@@ -4,25 +4,22 @@ namespace Titanium.Gateway.Translation;
 
 internal sealed partial class TranslationPass
 {
-    private IReadOnlyList<StatusPatch> BuildPatches(bool dataPlaneConfirmed)
+    private List<StatusPatch> BuildPatches(bool dataPlaneConfirmed)
     {
         var patches = new List<StatusPatch>();
-        foreach (var gatewayClass in _classes)
-        {
-            patches.Add(new StatusPatch(
-                StatusKind.GatewayClass,
-                null,
-                gatewayClass.Metadata.Name,
-                gatewayClass.Metadata.Generation,
-                [
-                    Conditions.Make(
-                        Conditions.Accepted,
-                        true,
-                        "Accepted",
-                        $"Handled by {_options.ControllerName}",
-                        gatewayClass.Metadata.Generation),
-                ]));
-        }
+        patches.AddRange(_classes.Select(gatewayClass => new StatusPatch(
+            StatusKind.GatewayClass,
+            null,
+            gatewayClass.Metadata.Name,
+            gatewayClass.Metadata.Generation,
+            [
+                Conditions.Make(
+                    Conditions.Accepted,
+                    true,
+                    "Accepted",
+                    $"Handled by {_options.ControllerName}",
+                    gatewayClass.Metadata.Generation),
+            ])));
 
         var addresses = GatewayAddresses();
         foreach (var gateway in _gateways)

@@ -46,12 +46,9 @@ internal static class SecretRedactor
             return text;
         }
 
-        foreach (var secret in secrets)
+        foreach (var secret in secrets.Where(s => text.Contains(s, StringComparison.Ordinal)))
         {
-            if (text.Contains(secret, StringComparison.Ordinal))
-            {
-                text = text.Replace(secret, Mask, StringComparison.Ordinal);
-            }
+            text = text.Replace(secret, Mask, StringComparison.Ordinal);
         }
 
         return text;

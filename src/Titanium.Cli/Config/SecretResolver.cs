@@ -83,12 +83,9 @@ internal static class SecretResolver
 
         if (config.Policies is { Count: > 0 } policies)
         {
-            foreach (var policy in policies)
+            foreach (var policy in policies.Where(p => string.Equals(p.Kind, "oidc", StringComparison.Ordinal)))
             {
-                if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
-                {
-                    CheckOidcSecrets(policy, readEnv, errors);
-                }
+                CheckOidcSecrets(policy, readEnv, errors);
             }
         }
 
@@ -135,13 +132,10 @@ internal static class SecretResolver
         Add(files, config.Server?.Admin?.AuthTokenFile);
         if (config.Policies is { Count: > 0 } policies)
         {
-            foreach (var policy in policies)
+            foreach (var policy in policies.Where(p => string.Equals(p.Kind, "oidc", StringComparison.Ordinal)))
             {
-                if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
-                {
-                    Add(files, policy.ClientSecretFile);
-                    Add(files, policy.CookieSecretFile);
-                }
+                Add(files, policy.ClientSecretFile);
+                Add(files, policy.CookieSecretFile);
             }
         }
 

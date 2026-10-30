@@ -21,18 +21,8 @@ internal sealed class WasmHeaderMap
 
     public int Count => Pairs.Count;
 
-    public string? Get(string name)
-    {
-        foreach (var pair in Pairs)
-        {
-            if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return pair.Value;
-            }
-        }
-
-        return null;
-    }
+    public string? Get(string name) =>
+        Pairs.FirstOrDefault(pair => string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
 
     public void Add(string name, string value) => Pairs.Add(new(name.ToLowerInvariant(), value));
 
@@ -75,12 +65,9 @@ internal sealed class WasmHeaderMap
             }
         }
 
-        foreach (var name in before.Keys)
+        foreach (var name in before.Keys.Where(key => !after.ContainsKey(key)))
         {
-            if (!after.ContainsKey(name))
-            {
-                (remove ??= []).Add(name);
-            }
+            (remove ??= []).Add(name);
         }
 
         return (set, remove);

@@ -71,10 +71,7 @@ public sealed class UdpRelayOptions
     internal void Validate()
     {
         ArgumentNullException.ThrowIfNull(BindAddress);
-        if (Port is < 0 or > 65535)
-        {
-            throw new ArgumentOutOfRangeException(nameof(Port), "Port must be between 0 and 65535.");
-        }
+        ValidatePort(Port);
 
         var hasCluster = !string.IsNullOrWhiteSpace(ClusterId);
         var hasForward = !string.IsNullOrWhiteSpace(ForwardHost);
@@ -83,36 +80,58 @@ public sealed class UdpRelayOptions
             throw new InvalidOperationException("A UDP listener needs exactly one of ClusterId or ForwardHost.");
         }
 
-        if (hasForward && ForwardPort is < 1 or > 65535)
+        if (hasForward)
         {
-            throw new ArgumentOutOfRangeException(nameof(ForwardPort), "ForwardPort must be between 1 and 65535.");
+            ValidateForwardPort(ForwardPort);
         }
 
-        if (IdleTimeout < TimeSpan.FromSeconds(1) || IdleTimeout > TimeSpan.FromDays(1))
-        {
-            throw new ArgumentOutOfRangeException(nameof(IdleTimeout), "IdleTimeout must be between 1 second and 1 day.");
-        }
+        ValidateIdleTimeout(IdleTimeout);
+        ValidatePositive(MaxSessions, nameof(MaxSessions), "MaxSessions must be positive.");
+        ValidatePositive(MaxSessionsPerClient, nameof(MaxSessionsPerClient), "MaxSessionsPerClient must be positive.");
+        ValidateMaxDatagramBytes(MaxDatagramBytes);
+        ValidatePositive(
+            MaxDatagramsPerSecondPerClient, nameof(MaxDatagramsPerSecondPerClient),
+            "MaxDatagramsPerSecondPerClient must be positive.");
+    }
 
-        if (MaxSessions < 1)
+    private static void ValidatePort(int port)
+    {
+        if (port is < 0 or > 65535)
         {
-            throw new ArgumentOutOfRangeException(nameof(MaxSessions), "MaxSessions must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(port), port, "Port must be between 0 and 65535.");
         }
+    }
 
-        if (MaxSessionsPerClient < 1)
+    private static void ValidateForwardPort(int forwardPort)
+    {
+        if (forwardPort is < 1 or > 65535)
         {
-            throw new ArgumentOutOfRangeException(nameof(MaxSessionsPerClient), "MaxSessionsPerClient must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(forwardPort), forwardPort, "ForwardPort must be between 1 and 65535.");
         }
+    }
 
-        if (MaxDatagramBytes is < 1 or > MaxAllowedDatagramBytes)
+    private static void ValidateIdleTimeout(TimeSpan idleTimeout)
+    {
+        if (idleTimeout < TimeSpan.FromSeconds(1) || idleTimeout > TimeSpan.FromDays(1))
+        {
+            throw new ArgumentOutOfRangeException(nameof(idleTimeout), idleTimeout, "IdleTimeout must be between 1 second and 1 day.");
+        }
+    }
+
+    private static void ValidatePositive(int value, string name, string message)
+    {
+        if (value < 1)
+        {
+            throw new ArgumentOutOfRangeException(name, value, message);
+        }
+    }
+
+    private static void ValidateMaxDatagramBytes(int maxDatagramBytes)
+    {
+        if (maxDatagramBytes is < 1 or > MaxAllowedDatagramBytes)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(MaxDatagramBytes), $"MaxDatagramBytes must be between 1 and {MaxAllowedDatagramBytes}.");
-        }
-
-        if (MaxDatagramsPerSecondPerClient < 1)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(MaxDatagramsPerSecondPerClient), "MaxDatagramsPerSecondPerClient must be positive.");
+                nameof(maxDatagramBytes), maxDatagramBytes, $"MaxDatagramBytes must be between 1 and {MaxAllowedDatagramBytes}.");
         }
     }
 }

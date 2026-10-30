@@ -246,8 +246,10 @@ public class ClientHelloSniParserTests
     {
         var random = new Random(12345);
         var buffer = new byte[2048];
+        var rounds = 0;
         for (var round = 0; round < 2000; round++)
         {
+            rounds++;
             random.NextBytes(buffer);
             buffer[0] = 0x16;
             buffer[1] = 0x03;
@@ -258,6 +260,8 @@ public class ClientHelloSniParserTests
             buffer[5] = 0x01;
             ClientHelloSniParser.TryGetServerName(buffer.AsSpan(0, random.Next(0, buffer.Length)), out _, out _);
         }
+
+        Assert.AreEqual(2000, rounds);
     }
 
     private static byte[] Hello(byte[]? extensions)

@@ -9,18 +9,20 @@ internal sealed record SecretData(string Namespace, string Name, string? Type, s
 /// <summary>Turns watched JSON into the records the translator reads.</summary>
 internal static class ResourceParsers
 {
+    private const string MetadataKey = "metadata";
+
     public static T? Typed<T>(JsonElement element) where T : class => element.Deserialize<T>(GatewayJson.Options);
 
     public static NamespaceInfo? Namespace(JsonElement element)
     {
-        var name = element.GetString("metadata", "name");
+        var name = element.GetString(MetadataKey, "name");
         if (name is null)
         {
             return null;
         }
 
         var labels = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (element.Get("metadata", "labels") is { ValueKind: JsonValueKind.Object } json)
+        if (element.Get(MetadataKey, "labels") is { ValueKind: JsonValueKind.Object } json)
         {
             foreach (var property in json.EnumerateObject())
             {
@@ -33,60 +35,70 @@ internal static class ResourceParsers
 
     public static ServiceInfo? Service(JsonElement element)
     {
-        var name = element.GetString("metadata", "name");
-        var ns = element.GetString("metadata", "namespace");
+        var name = element.GetString(MetadataKey, "name");
+        var ns = element.GetString(MetadataKey, "namespace");
         if (name is null || ns is null)
         {
             return null;
         }
 
-        var ports = new List<ServicePortInfo>();
-        foreach (var port in element.GetArray("spec", "ports"))
-        {
-            var number = port.GetInt("port");
-            if (number is null)
-            {
-                continue;
-            }
-
-            int? targetNumber = null;
-            string? targetName = null;
-            if (port.Get("targetPort") is { } target)
-            {
-                if (target.ValueKind == JsonValueKind.Number && target.TryGetInt32(out var value))
-                {
-                    targetNumber = value;
-                }
-                else if (target.ValueKind == JsonValueKind.String)
-                {
-                    targetName = target.GetString();
-                }
-            }
-
-            ports.Add(new ServicePortInfo(port.GetString("name"), number.Value, targetNumber, targetName));
-        }
-
-        var addresses = new List<ServiceAddress>();
-        foreach (var ingress in element.GetArray("status", "loadBalancer", "ingress"))
-        {
-            if (ingress.GetString("ip") is { Length: > 0 } ip)
-            {
-                addresses.Add(new ServiceAddress(ip, false));
-            }
-            else if (ingress.GetString("hostname") is { Length: > 0 } host)
-            {
-                addresses.Add(new ServiceAddress(host, true));
-            }
-        }
+        var ports = element.GetArray("spec", "ports")
+            .Select(ParseServicePort)
+            .OfType<ServicePortInfo>()
+            .ToList();
+        var addresses = element.GetArray("status", "loadBalancer", "ingress")
+            .Select(ParseLoadBalancerIngress)
+            .OfType<ServiceAddress>()
+            .ToList();
 
         return new ServiceInfo(ns, name, element.GetString("spec", "type"), element.GetString("spec", "clusterIP"), ports, addresses);
     }
 
+    private static ServicePortInfo? ParseServicePort(JsonElement port)
+    {
+        var number = port.GetInt("port");
+        if (number is null)
+        {
+            return null;
+        }
+
+        int? targetNumber = null;
+        string? targetName = null;
+        if (port.Get("targetPort") is { } target)
+        {
+            if (target.ValueKind == JsonValueKind.Number && target.TryGetInt32(out var value))
+            {
+                targetNumber = value;
+            }
+            else if (target.ValueKind == JsonValueKind.String)
+            {
+                targetName = target.GetString();
+            }
+        }
+
+        return new ServicePortInfo(port.GetString("name"), number.Value, targetNumber, targetName);
+    }
+
+    private static ServiceAddress? ParseLoadBalancerIngress(JsonElement ingress)
+    {
+        if (ingress.GetString("ip") is { Length: > 0 } ip)
+        {
+            return new ServiceAddress(ip, false);
+        }
+
+        if (ingress.GetString("hostname") is { Length: > 0 } host)
+        {
+            return new ServiceAddress(host, true);
+        }
+
+        return null;
+    }
+
     public static EndpointSliceInfo? EndpointSlice(JsonElement element)
     {
-        var name = element.GetString("metadata", "name");
-        var ns = element.GetString("metadata", "namespace");
-        var service = element.GetString("metadata", "labels", "kubernetes.io/service-name");
+        var name = element.GetString(MetadataKey, "name");
+        var ns = element.GetString(MetadataKey, "namespace");
+        var service = element.GetString(MetadataKey, "labels", "kubernetes.io/service-name");
         if (name is null || ns is null || service is null)
         {
             return null;
@@ -107,8 +119,8 @@ internal static class ResourceParsers
 
     public static SecretData? Secret(JsonElement element)
     {
-        var name = element.GetString("metadata", "name");
-        var ns = element.GetString("metadata", "namespace");
+        var name = element.GetString(MetadataKey, "name");
+        var ns = element.GetString(MetadataKey, "namespace");
         if (name is null || ns is null)
         {
             return null;
@@ -118,7 +130,7 @@ internal static class ResourceParsers
             ns,
             name,
             element.GetString("type"),
-            element.GetString("metadata", "resourceVersion") ?? string.Empty,
+            element.GetString(MetadataKey, "resourceVersion") ?? string.Empty,
             Decode(element.GetString("data", "tls.crt")),
             Decode(element.GetString("data", "tls.key")),
             Decode(element.GetString("data", "ca.crt")));

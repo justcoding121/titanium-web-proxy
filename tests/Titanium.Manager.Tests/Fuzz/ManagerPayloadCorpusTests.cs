@@ -122,10 +122,15 @@ public class ManagerPayloadCorpusTests
     [TestMethod]
     public void FuzzEntryPoints_AcceptEmptyAndHostile()
     {
+        Assert.AreEqual(0, RevisionYamlFuzzTarget.Check([]).Count);
+        Assert.AreEqual(0, RevisionYamlFuzzTarget.Check(Encoding.UTF8.GetBytes("listeners: []\n")).Count);
         RevisionYamlFuzzTarget.Yaml([]);
         RevisionYamlFuzzTarget.Yaml(Encoding.UTF8.GetBytes("listeners: []\n"));
+        Assert.AreEqual(0, AgentAckPayload.Check([]).Count);
+        Assert.AreEqual(0, AgentAckPayload.Check(Encoding.UTF8.GetBytes("{\"ok\":true,\"node_id\":\"n\",\"config_hash\":\"h\"}")).Count);
         AgentAckPayload.Fuzz([]);
         AgentAckPayload.Fuzz(Encoding.UTF8.GetBytes("{\"ok\":true,\"node_id\":\"n\",\"config_hash\":\"h\"}"));
+        Assert.AreEqual(0, AgentAckPayload.Check([0xff, 0xfe, (byte)'{']).Count);
         AgentAckPayload.Fuzz([0xff, 0xfe, (byte)'{']);
     }
 

@@ -91,7 +91,7 @@ internal sealed class RoutePluginMiddleware : IProxyMiddleware
             {
                 failure = "timeout";
                 gate.Close();
-                linked.Cancel();
+                await linked.CancelAsync().ConfigureAwait(false);
                 // The abandoned call may still fail later; observe it so it never surfaces as an unobserved exception.
                 _ = run.ContinueWith(
                     static t => { _ = t.Exception; },
@@ -200,7 +200,7 @@ internal sealed class RoutePluginMiddleware : IProxyMiddleware
 
         public void Close() => Volatile.Write(ref _closed, 1);
 
-        public ValueTask Invoke(ProxyMiddlewareContext context, CancellationToken cancellationToken)
+        public ValueTask Invoke(ProxyMiddlewareContext _, CancellationToken __)
         {
             if (Volatile.Read(ref _closed) == 0)
             {

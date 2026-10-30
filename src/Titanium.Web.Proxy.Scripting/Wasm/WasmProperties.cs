@@ -52,7 +52,7 @@ internal static class WasmProperties
         return EmptyAttributes.Contains(path) ? [] : null;
     }
 
-    public static byte[]? ForHttp(WasmHttpContext context, string path)
+    public static byte[]? ForHttp(WasmHttpContext context, string path) // NOSONAR S3776 -- Property dispatch mirrors the proxy-wasm attribute catalog in one switch.
     {
         var phase = context.Last;
         var request = context.RequestHeaders;

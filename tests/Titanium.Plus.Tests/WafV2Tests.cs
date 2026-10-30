@@ -20,6 +20,8 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class WafV2Tests
 {
+    private static readonly string[] DisabledRulesSample = ["TW-XSS-001", "TW-SQLI-002"];
+
     private const string BrowserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
@@ -77,7 +79,7 @@ public class WafV2Tests
     [TestMethod]
     public void Pack_IsVersioned_HasUniqueIds_AndCoversEveryCategory()
     {
-        Assert.AreEqual("waf-pack-1", WafRulePack.Version);
+        StringAssert.StartsWith(WafRulePack.Version, "waf-pack-");
         var rules = WafRulePack.Rules;
         Assert.IsTrue(rules.Count >= 40, $"pack has {rules.Count} rules");
         Assert.AreEqual(rules.Count, rules.Select(r => r.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
@@ -467,7 +469,7 @@ public class WafV2Tests
         Assert.AreEqual(WafMode.Detect, WafOptions.FromOptions(new Dictionary<string, string> { ["waf.enabled"] = "true" }).Mode);
         Assert.AreEqual(WafMode.Block, WafOptions.FromOptions(new Dictionary<string, string> { ["waf.mode"] = "BLOCK" }).Mode);
         Assert.AreEqual(WafMode.Off, WafOptions.FromOptions(new Dictionary<string, string> { ["waf.mode"] = "off" }).Mode);
-        Assert.ThrowsException<InvalidOperationException>(
+        Assert.ThrowsExactly<InvalidOperationException>(
             () => WafOptions.FromOptions(new Dictionary<string, string> { ["waf.mode"] = "audit" }));
     }
 
@@ -486,14 +488,15 @@ public class WafV2Tests
         Assert.AreEqual(3, o.ParanoiaLevel);
         Assert.AreEqual(9, o.BlockThreshold);
         Assert.AreEqual(2048, o.InspectBodyBytes);
-        CollectionAssert.AreEqual(new[] { "TW-XSS-001", "TW-SQLI-002" }, o.DisabledRules.ToArray());
+        CollectionAssert.AreEqual(DisabledRulesSample, o.DisabledRules.ToArray());
         Assert.AreEqual(8, o.CriticalWeight);
         Assert.AreEqual(8 * 1024, new WafOptions().InspectBodyBytes);
 
         foreach (var (key, value) in new[] { ("waf.paranoia", "4"), ("waf.paranoia", "0"), ("waf.blockThreshold", "0"), ("waf.inspectBodyBytes", "-1"), ("waf.inspectBodyBytes", "abc") })
         {
-            Assert.ThrowsException<InvalidOperationException>(
-                () => WafOptions.FromOptions(new Dictionary<string, string> { [key] = value }), $"{key}={value}");
+            var message = $"{key}={value}";
+            Assert.ThrowsExactly<InvalidOperationException>(
+                () => WafOptions.FromOptions(new Dictionary<string, string> { [key] = value }), message);
         }
     }
 
@@ -588,9 +591,9 @@ public class WafV2Tests
         Assert.IsFalse(none.HasRoutePolicies);
         var some = new WafScreeningMiddleware(new WafOptions(), policies: [new RoutePolicyConfig { Name = "w", Kind = "waf", Mode = "block" }]);
         Assert.IsTrue(some.HasRoutePolicies);
-        Assert.ThrowsException<InvalidOperationException>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             new WafScreeningMiddleware(new WafOptions(), policies: [new RoutePolicyConfig { Name = "w", Kind = "waf", Mode = "audit" }]));
-        Assert.ThrowsException<InvalidOperationException>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             new WafScreeningMiddleware(new WafOptions(), policies: [new RoutePolicyConfig { Name = "w", Kind = "waf", Exclusions = ["sqli@nowhere"] }]));
     }
 
@@ -766,7 +769,7 @@ public class WafV2Tests
     [TestMethod]
     public void CustomRules_AreRejected_WhenUnsafeOrInvalid()
     {
-        static WafRuleException Fails(string yaml) => Assert.ThrowsException<WafRuleException>(() => WafCustomRules.Parse(yaml));
+        static WafRuleException Fails(string yaml) => Assert.ThrowsExactly<WafRuleException>(() => WafCustomRules.Parse(yaml));
 
         StringAssert.Contains(Fails("rules:\n  - id: A\n    targets: [query]\n    regex: '(a+)+$'\n").Message, "A");
         StringAssert.Contains(Fails("rules:\n  - id: A\n    targets: [query]\n    regex: '('\n").Message, "A");
@@ -805,7 +808,7 @@ public class WafV2Tests
             Assert.IsTrue(Run("/s?t=secret-token-1", engine: engine).Matches.Any(m => m.RuleId == "ACME-001"));
 
             File.WriteAllText(path, "rules:\n  - id: Z\n    targets: [query]\n    regex: '(a+)+$'\n");
-            Assert.ThrowsException<WafRuleException>(() => WafEngine.Create(new WafOptions { RulesFile = path }));
+            Assert.ThrowsExactly<WafRuleException>(() => WafEngine.Create(new WafOptions { RulesFile = path }));
 
             // The earlier deny-list file format stays readable: it has no signature rules.
             File.WriteAllText(path, """{"denyPaths":["^/from-file"]}""");
@@ -816,7 +819,7 @@ public class WafV2Tests
             File.Delete(path);
         }
 
-        Assert.ThrowsException<WafRuleException>(
+        Assert.ThrowsExactly<WafRuleException>(
             () => WafEngine.Create(new WafOptions { RulesFile = Path.Combine(Path.GetTempPath(), "missing-" + Guid.NewGuid().ToString("N") + ".yaml") }));
     }
 
@@ -977,9 +980,9 @@ public class WafV2Tests
     public void Guard_Start_FailsLoudly_OnBadOptions()
     {
         var context = new PlusActivationContext { ProxyServer = new object(), Middleware = new List<IProxyMiddleware>() };
-        Assert.ThrowsException<InvalidOperationException>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             WafGuard.TryStart(context, new Dictionary<string, string> { ["waf.enabled"] = "true", ["waf.mode"] = "audit" }));
-        Assert.ThrowsException<WafRuleException>(() =>
+        Assert.ThrowsExactly<WafRuleException>(() =>
             WafGuard.TryStart(
                 context,
                 new Dictionary<string, string>

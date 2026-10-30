@@ -25,6 +25,9 @@ namespace Titanium.Cli.Tests;
 [DoNotParallelize]
 public class ScriptWiringTests
 {
+    private static readonly string[] PipelineBa = ["b", "a"];
+    private static readonly string[] PipelineA = ["a"];
+
     private static readonly string ScriptFile = Path.Combine(Path.GetTempPath(), "twp-cli-wiring-" + Guid.NewGuid().ToString("N") + ".lua");
 
     [TestInitialize]
@@ -162,8 +165,8 @@ public class ScriptWiringTests
 
             File.WriteAllText(path, ConfigJson(pipelineNames: "[\"b\", \"a\"]"));
             await Reload();
-            CollectionAssert.AreEqual(new[] { "b", "a" }, pipeline);
-            CollectionAssert.AreEqual(new[] { "b", "a" }, refreshed.Single());
+            CollectionAssert.AreEqual(PipelineBa, pipeline);
+            CollectionAssert.AreEqual(PipelineBa, refreshed.Single());
             Assert.IsNotNull(RunCommand.BuildScriptPipeline(plugins, pipeline));
 
             // The fake engine now builds a plugin that runs no HTTP phases, so the pipeline cannot be built.
@@ -171,7 +174,7 @@ public class ScriptWiringTests
             var before = plugins;
             File.WriteAllText(path, ConfigJson(pipelineNames: "[\"a\"]"));
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(Reload);
-            CollectionAssert.AreEqual(new[] { "b", "a" }, pipeline, "a failed reload keeps the pipeline in force");
+            CollectionAssert.AreEqual(PipelineBa, pipeline, "a failed reload keeps the pipeline in force");
             Assert.AreSame(before, plugins, "and the plugins");
             Assert.AreEqual(1, refreshed.Count);
             plugins.Dispose();

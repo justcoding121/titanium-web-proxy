@@ -74,7 +74,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
     /// <summary>Origin fetches currently in flight (collapsing leaders). For tests and diagnostics.</summary>
     internal int InFlightFetches => _collapser?.InFlight ?? 0;
 
-    public async ValueTask InvokeAsync(
+    public async ValueTask InvokeAsync( // NOSONAR S3776 -- Cache hit, stale-while-revalidate, and collapse paths share one request state; splitting would duplicate attach/abandon rules.
         ProxyMiddlewareContext context,
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
@@ -203,7 +203,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
 
     // ------------------------------------------------------------------------------------------------ request side
 
-    private bool TryCreateState(ProxyMiddlewareContext context, out CacheRequestState st)
+    private bool TryCreateState(ProxyMiddlewareContext context, out CacheRequestState st) // NOSONAR S3776 -- Session and lite terminate paths populate the same cache state shape.
     {
         st = null!;
         string method;
@@ -386,8 +386,20 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         return string.IsNullOrEmpty(authorization) && string.IsNullOrEmpty(cookie);
     }
 
-    private static string? JoinedValue(IReadOnlyList<string>? values) =>
-        values is null || values.Count == 0 ? null : values.Count == 1 ? values[0] : string.Join(", ", values);
+    private static string? JoinedValue(IReadOnlyList<string>? values)
+    {
+        if (values is null || values.Count == 0)
+        {
+            return null;
+        }
+
+        if (values.Count == 1)
+        {
+            return values[0];
+        }
+
+        return string.Join(", ", values);
+    }
 
     private static bool IsCacheableMethod(string method) =>
         method.Equals("GET", StringComparison.OrdinalIgnoreCase) ||
@@ -559,7 +571,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         context.Items.TryGetValue(StateItemKey, out var value) ? value as CacheRequestState : null;
 
     /// <summary>Adds If-None-Match / If-Modified-Since from the stale entry to the request headed for the origin.</summary>
-    internal void ApplyConditionalHeaders(CacheRequestState st, HeaderCollection headers)
+    internal void ApplyConditionalHeaders(CacheRequestState st, HeaderCollection headers) // NOSONAR S2325 -- Terminate-lite forwards through the middleware instance registered on the pipeline.
     {
         if (st.Stale is not { } stale || !st.Conditional)
         {
@@ -823,7 +835,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
     /// Store a response whose body is already in memory (terminate-lite coalesce or a buffered session response).
     /// Only GET responses are stored (HEAD is answered from them). The same safety rules as the streaming path apply.
     /// </summary>
-    internal void TryStore(
+    internal void TryStore( // NOSONAR S107 -- Direct store mirrors streaming store inputs; grouping would not reduce call-site risk on tests.
         string method,
         string host,
         string path,
@@ -970,7 +982,6 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
 internal sealed class CacheRequestState
 {
     private readonly HttpResponseCacheMiddleware _owner;
-    private RequestCollapser.Flight? _flight;
     private int _abandoned;
 
     public CacheRequestState(HttpResponseCacheMiddleware owner) => _owner = owner;
@@ -994,11 +1005,7 @@ internal sealed class CacheRequestState
     public bool Conditional { get; set; }
     public bool HasClientValidators { get; set; }
 
-    public RequestCollapser.Flight? Flight
-    {
-        get => _flight;
-        set => _flight = value;
-    }
+    public RequestCollapser.Flight? Flight { get; set; }
 
     /// <summary>Releases requests waiting behind this fetch. Idempotent; safe from any exit path.</summary>
     public void Abandon()
@@ -1008,7 +1015,7 @@ internal sealed class CacheRequestState
             return;
         }
 
-        if (_flight is { } flight)
+        if (Flight is { } flight)
         {
             _owner.ReleaseFlight(flight);
         }

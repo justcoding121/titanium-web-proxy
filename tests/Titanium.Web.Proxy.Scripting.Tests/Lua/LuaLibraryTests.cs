@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Scripting.Lua;
 using Titanium.Web.Proxy.Scripting.Lua.Native;
@@ -8,7 +9,7 @@ using static Titanium.Web.Proxy.Scripting.Tests.Lua.LuaTestSupport;
 namespace Titanium.Web.Proxy.Scripting.Tests.Lua;
 
 [TestClass]
-public class LuaLibraryTests
+public partial class LuaLibraryTests
 {
     private static LuaPlugin _plugin = null!;
 
@@ -58,7 +59,7 @@ public class LuaLibraryTests
             """);
     }
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static void Cleanup() => _plugin?.Dispose();
 
     private static async Task<object?> Run(string fn, object? arg = null, object? arg2 = null, object? arg3 = null)
@@ -136,10 +137,10 @@ public class LuaLibraryTests
     [TestMethod]
     public async Task Constant_time_equals_compares_bytes_and_lengths()
     {
-        Assert.AreEqual(true, await Run("equals", "secret", "secret"));
-        Assert.AreEqual(false, await Run("equals", "secret", "secreT"));
-        Assert.AreEqual(false, await Run("equals", "secret", "secret1"));
-        Assert.AreEqual(true, await Run("equals", "", ""));
+        Assert.IsTrue((bool)(await Run("equals", "secret", "secret"))!);
+        Assert.IsFalse((bool)(await Run("equals", "secret", "secreT"))!);
+        Assert.IsFalse((bool)(await Run("equals", "secret", "secret1"))!);
+        Assert.IsTrue((bool)(await Run("equals", "", ""))!);
     }
 
     [TestMethod]
@@ -199,35 +200,35 @@ public class LuaLibraryTests
     {
         Assert.AreEqual("2026|10|29", await RunString("rx_match", @"(\d{4})-(\d\d)-(\d\d)", "on 2026-10-29 at"));
         Assert.AreEqual("4-13", await RunString("rx_find", @"\d{4}-\d\d-\d\d", "on 2026-10-29 at"));
-        Assert.AreEqual(true, await Run("rx_test", "^hello$", "HELLO", "i"));
-        Assert.AreEqual(false, await Run("rx_test", "^hello$", "HELLO"));
-        Assert.AreEqual(true, await Run("rx_test", "^(a|b)+c?$", "abab"));
-        Assert.AreEqual(false, await Run("rx_test", "^[^0-9]+$", "ab1"));
+        Assert.IsTrue((bool)(await Run("rx_test", "^hello$", "HELLO", "i"))!);
+        Assert.IsFalse((bool)(await Run("rx_test", "^hello$", "HELLO"))!);
+        Assert.IsTrue((bool)(await Run("rx_test", "^(a|b)+c?$", "abab"))!);
+        Assert.IsFalse((bool)(await Run("rx_test", "^[^0-9]+$", "ab1"))!);
 
         // A Pike VM: no catastrophic backtracking on the classic pathological pattern.
-        Assert.AreEqual(false, await Run("rx_test", "^(a+)+$", new string('a', 5000) + "b"));
+        Assert.IsFalse((bool)(await Run("rx_test", "^(a+)+$", new string('a', 5000) + "b"))!);
         StringAssert.Contains(await RunString("rx_error", new string('a', 2000), "a"), "1024");
         StringAssert.Contains(await RunString("rx_error", "a", new string('b', 1024 * 1024 + 1)), "input is longer than 1 MiB");
-        Assert.AreEqual(true, await Run("rx_test", "b$", new string('b', 1024 * 1024)));
+        Assert.IsTrue((bool)(await Run("rx_test", "b$", new string('b', 1024 * 1024)))!);
         StringAssert.Contains(await RunString("rx_error", "(", "a"), "regex");
     }
 
     [TestMethod]
     public async Task Cidr_matches_v4_v6_and_mapped_addresses()
     {
-        Assert.AreEqual(true, await Run("cidr_match", "10.1.2.3", "10.0.0.0/8"));
-        Assert.AreEqual(false, await Run("cidr_match", "11.1.2.3", "10.0.0.0/8"));
-        Assert.AreEqual(true, await Run("cidr_match", "192.168.1.77", "192.168.1.64/26"));
-        Assert.AreEqual(false, await Run("cidr_match", "192.168.1.128", "192.168.1.64/26"));
-        Assert.AreEqual(true, await Run("cidr_match", "::ffff:10.0.0.1", "10.0.0.0/8"));
-        Assert.AreEqual(true, await Run("cidr_match", "2001:db8::1", "2001:db8::/32"));
-        Assert.AreEqual(false, await Run("cidr_match", "2001:db9::1", "2001:db8::/32"));
-        Assert.AreEqual(true, await Run("cidr_match", "::1", "::1"));
-        Assert.AreEqual(true, await Run("cidr_list", "2001:db8:ffff::5"));
-        Assert.AreEqual(false, await Run("cidr_list", "172.16.0.1"));
-        Assert.AreEqual(true, await Run("cidr_valid", "fe80::1:2"));
-        Assert.AreEqual(false, await Run("cidr_valid", "300.1.1.1"));
-        Assert.AreEqual(false, await Run("cidr_valid", "1:2:3:4:5:6:7:8:9"));
+        Assert.IsTrue((bool)(await Run("cidr_match", "10.1.2.3", "10.0.0.0/8"))!);
+        Assert.IsFalse((bool)(await Run("cidr_match", "11.1.2.3", "10.0.0.0/8"))!);
+        Assert.IsTrue((bool)(await Run("cidr_match", "192.168.1.77", "192.168.1.64/26"))!);
+        Assert.IsFalse((bool)(await Run("cidr_match", "192.168.1.128", "192.168.1.64/26"))!);
+        Assert.IsTrue((bool)(await Run("cidr_match", "::ffff:10.0.0.1", "10.0.0.0/8"))!);
+        Assert.IsTrue((bool)(await Run("cidr_match", "2001:db8::1", "2001:db8::/32"))!);
+        Assert.IsFalse((bool)(await Run("cidr_match", "2001:db9::1", "2001:db8::/32"))!);
+        Assert.IsTrue((bool)(await Run("cidr_match", "::1", "::1"))!);
+        Assert.IsTrue((bool)(await Run("cidr_list", "2001:db8:ffff::5"))!);
+        Assert.IsFalse((bool)(await Run("cidr_list", "172.16.0.1"))!);
+        Assert.IsTrue((bool)(await Run("cidr_valid", "fe80::1:2"))!);
+        Assert.IsFalse((bool)(await Run("cidr_valid", "300.1.1.1"))!);
+        Assert.IsFalse((bool)(await Run("cidr_valid", "1:2:3:4:5:6:7:8:9"))!);
     }
 
     [TestMethod]
@@ -237,13 +238,19 @@ public class LuaLibraryTests
         for (var i = 0; i < 50; i++)
         {
             var id = await RunString("uuid4");
-            StringAssert.Matches(id, new System.Text.RegularExpressions.Regex("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"));
+            StringAssert.Matches(id, Uuid4Pattern());
             Assert.IsTrue(ids.Add(id!));
         }
 
-        StringAssert.Matches(await RunString("rand"), new System.Text.RegularExpressions.Regex("^32:[5-7]$"));
+        StringAssert.Matches(await RunString("rand"), RandPattern());
         Assert.AreEqual("float:true:true", await RunString("times"));
     }
 
     private static string Hex(byte[] bytes) => Convert.ToHexString(bytes).ToLowerInvariant();
+
+    [GeneratedRegex("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")]
+    private static partial Regex Uuid4Pattern();
+
+    [GeneratedRegex("^32:[5-7]$")]
+    private static partial Regex RandPattern();
 }

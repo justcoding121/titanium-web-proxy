@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.AccessLog;
 using Titanium.Cli.Telemetry;
@@ -16,7 +17,7 @@ namespace Titanium.Cli.Tests.Telemetry;
 ///     that decodes what arrives.
 /// </summary>
 [TestClass]
-public class OtlpTraceTests
+public partial class OtlpTraceTests
 {
     private const string IncomingTraceId = "0af7651916cd43dd8448eb211c80319c";
     private const string IncomingSpanId = "b7ad6b7169203331";
@@ -75,7 +76,7 @@ public class OtlpTraceTests
         {
             foreach (var value in span.Attributes.Values.Concat(span.ResourceAttributes.Values).Select(v => v.ToString()))
             {
-                StringAssert.DoesNotMatch(value ?? "", new System.Text.RegularExpressions.Regex("SECRET|token="));
+                StringAssert.DoesNotMatch(value ?? "", SensitiveExportRegex());
             }
 
             Assert.IsFalse(span.Attributes.Keys.Any(k => k.Contains("cookie", StringComparison.OrdinalIgnoreCase)
@@ -160,8 +161,7 @@ public class OtlpTraceTests
         Assert.AreEqual(0, receiver.Spans.Count);
         foreach (var seen in origin.Requests)
         {
-            StringAssert.Matches(seen.Header("traceparent"),
-                new System.Text.RegularExpressions.Regex("^00-[0-9a-f]{32}-[0-9a-f]{16}-00$"));
+            StringAssert.Matches(seen.Header("traceparent"), UnsampledTraceParentRegex());
         }
     }
 
@@ -552,4 +552,10 @@ public class OtlpTraceTests
 
         Assert.AreEqual($"00-{IncomingTraceId}-{IncomingSpanId}-01", origin.Requests.Single().Header("traceparent"));
     }
+
+    [GeneratedRegex("SECRET|token=")]
+    private static partial Regex SensitiveExportRegex();
+
+    [GeneratedRegex("^00-[0-9a-f]{32}-[0-9a-f]{16}-00$")]
+    private static partial Regex UnsampledTraceParentRegex();
 }

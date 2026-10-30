@@ -47,7 +47,7 @@ internal sealed class LuaCallouts : IDisposable
     /// Runs one callout and returns the encoded resume values: <c>{status, headers, body}</c> or <c>nil, err</c>.
     /// Throws <see cref="OperationCanceledException"/> only when <paramref name="token"/> is cancelled.
     /// </summary>
-    public async ValueTask<byte[]> CallAsync(LuaTable op, CancellationToken token)
+    public async ValueTask<byte[]> CallAsync(LuaTable op, CancellationToken token) // NOSONAR S3776 -- Lua callout path validates URL, headers, and response limits together.
     {
         var url = op.Str("url");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length > 0)
@@ -152,7 +152,7 @@ internal sealed class LuaCallouts : IDisposable
                 return null;
             }
 
-            buffer.Write(chunk, 0, read);
+            await buffer.WriteAsync(chunk.AsMemory(0, read), token).ConfigureAwait(false);
         }
 
         return buffer.ToArray();
