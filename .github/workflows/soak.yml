@@ -69,12 +69,21 @@ jobs:
           dotnet build -c Release src/Titanium.Cli/Titanium.Cli.csproj --warnaserror
           if ($LASTEXITCODE -ne 0) { throw 'Titanium.Cli build failed' }
 
-          # The sampler runs as a background job: once a minute, RSS (KiB) and open fds of the `titanium` process.
+          # The sampler runs as a background job: once a minute, RSS (KiB) and open fds of the CLI process.
+          # Prefer process name `titanium` (apphost); else match `dotnet` whose cmdline hosts titanium.dll.
           $sampler = Start-Job -ArgumentList (Join-Path $PWD 'artifacts/soak/proxy-samples.csv') -ScriptBlock {
             param($path)
             'epoch,rss_kib,fds' | Set-Content $path
             while ($true) {
               $p = Get-Process -Name titanium -ErrorAction SilentlyContinue | Select-Object -First 1
+              if (-not $p) {
+                foreach ($candidate in @(Get-Process -Name dotnet -ErrorAction SilentlyContinue)) {
+                  try {
+                    $cmd = [System.IO.File]::ReadAllText("/proc/$($candidate.Id)/cmdline")
+                    if ($cmd -like '*titanium.dll*') { $p = $candidate; break }
+                  } catch { }
+                }
+              }
               if ($p) {
                 $rss = (Select-String -Path "/proc/$($p.Id)/status" -Pattern '^VmRSS:\s+(\d+)').Matches[0].Groups[1].Value
                 $fds = (Get-ChildItem "/proc/$($p.Id)/fd" -ErrorAction SilentlyContinue | Measure-Object).Count

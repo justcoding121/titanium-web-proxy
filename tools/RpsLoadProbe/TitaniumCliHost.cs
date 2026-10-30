@@ -294,9 +294,12 @@ internal sealed class TitaniumCliHost : IDisposable
         var controlPlaneUrl = controlPlanePort > 0 ? $"http://127.0.0.1:{controlPlanePort}/" : null;
         var dashboardUrl = dashboardPort > 0 ? $"http://127.0.0.1:{dashboardPort}/" : null;
 
+        // Prefer the apphost so the process name is `titanium` (soak RSS/FD sampler and operators
+        // look for that). Fall back to `dotnet titanium.dll` when the apphost is missing.
+        var apphost = Path.Combine(cliDir, OperatingSystem.IsWindows() ? "titanium.exe" : "titanium");
         var psi = new ProcessStartInfo
         {
-            FileName = "dotnet",
+            FileName = File.Exists(apphost) ? apphost : "dotnet",
             WorkingDirectory = cliDir,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -304,7 +307,8 @@ internal sealed class TitaniumCliHost : IDisposable
             RedirectStandardInput = true,
             CreateNoWindow = true
         };
-        psi.ArgumentList.Add(cliDll);
+        if (!File.Exists(apphost))
+            psi.ArgumentList.Add(cliDll);
         psi.ArgumentList.Add("run");
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add(configPath);
