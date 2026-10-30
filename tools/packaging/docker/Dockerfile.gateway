@@ -4,8 +4,8 @@
 # It renders Gateway, HTTPRoute and ReferenceGrant resources into the data-plane config (see deploy/helm/titanium-gateway).
 #
 # Build from the repository root:
-#   docker buildx build -f packaging/docker/Dockerfile.gateway -t titanium-gateway:dev .
-#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile.gateway .
+#   docker buildx build -f tools/packaging/docker/Dockerfile.gateway -t titanium-gateway:dev .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f tools/packaging/docker/Dockerfile.gateway .
 #
 # The runtime stage is the same chiseled base as the proxy image: no shell, no package manager, non-root user (UID 1654).
 # The controller only talks to the Kubernetes API (service account token) and to the data-plane pods' admin port.

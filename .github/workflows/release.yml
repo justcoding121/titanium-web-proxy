@@ -859,7 +859,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile
+          file: tools/packaging/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -922,7 +922,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile.gateway
+          file: tools/packaging/docker/Dockerfile.gateway
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
@@ -985,7 +985,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile.manager
+          file: tools/packaging/docker/Dockerfile.manager
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}

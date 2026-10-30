@@ -192,7 +192,7 @@ public sealed partial class GatewayChartTests
     [TestMethod]
     public void Dockerfile_KeepsItsHardeningAndContract()
     {
-        var text = File.ReadAllText(Path.Combine(RepoRoot, "packaging", "docker", "Dockerfile.gateway"));
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "packaging", "docker", "Dockerfile.gateway"));
 
         StringAssert.Contains(text, "USER 1654:1654");
         StringAssert.Contains(text, "ENTRYPOINT [\"/app/titanium-gateway\"]");

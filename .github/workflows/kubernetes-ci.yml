@@ -9,7 +9,7 @@ on:
       - beta
       - stable
     paths:
-      - 'packaging/docker/**'
+      - 'tools/packaging/docker/**'
       - '.dockerignore'
       - 'deploy/helm/**'
       - 'src/Titanium.Cli/**'
@@ -25,7 +25,7 @@ on:
       - beta
       - stable
     paths:
-      - 'packaging/docker/**'
+      - 'tools/packaging/docker/**'
       - '.dockerignore'
       - 'deploy/helm/**'
       - 'src/Titanium.Manager/**'
@@ -58,7 +58,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile
+          file: tools/packaging/docker/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
           cache-from: type=gha
@@ -69,7 +69,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile.gateway
+          file: tools/packaging/docker/Dockerfile.gateway
           platforms: linux/amd64,linux/arm64
           push: false
           cache-from: type=gha
@@ -80,7 +80,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile.manager
+          file: tools/packaging/docker/Dockerfile.manager
           platforms: linux/amd64,linux/arm64
           push: false
           cache-from: type=gha
@@ -90,7 +90,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile
+          file: tools/packaging/docker/Dockerfile
           platforms: linux/amd64
           load: true
           push: false
