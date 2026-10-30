@@ -339,7 +339,8 @@ public class PluginConfigValidationTests
     [TestMethod]
     public void TheContractVersion_IsWithinTheSupportedRange()
     {
+        // Pin the shipping contract number; MinimumSupportedVersion is allowed to lag behind CurrentVersion.
         Assert.AreEqual(1, ProxyPluginContract.CurrentVersion);
-        Assert.IsTrue(ProxyPluginContract.MinimumSupportedVersion <= ProxyPluginContract.CurrentVersion);
+        Assert.AreEqual(1, ProxyPluginContract.MinimumSupportedVersion);
     }
 }

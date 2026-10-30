@@ -189,7 +189,7 @@ internal sealed partial class LuaRuntime : IDisposable
             while (segment.Code == LuaNative.Yield)
             {
                 instance.Gate.Release();
-                suspendedOnOperation = true;
+                suspendedOnOperation = true; // NOSONAR S1854 -- finally reads this if await throws/cancels.
 
                 var values = await RunOperationAsync(segment.Output, token).ConfigureAwait(false);
 

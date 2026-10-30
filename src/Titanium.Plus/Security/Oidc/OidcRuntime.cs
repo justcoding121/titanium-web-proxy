@@ -239,7 +239,7 @@ internal sealed class OidcRuntime
         return await _refresher.RunAsync(refreshToken, () => RedeemRefreshTokenAsync(current, refreshToken)).ConfigureAwait(false);
     }
 
-    private async Task<OidcRefresher.Outcome> RedeemRefreshTokenAsync(OidcSession old, string refreshToken)
+    private async Task<OidcRefresher.Outcome> RedeemRefreshTokenAsync(OidcSession old, string refreshToken) // NOSONAR S3776 -- Refresh redeem maps provider errors onto session outcome.
     {
         try
         {

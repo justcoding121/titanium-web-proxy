@@ -236,7 +236,7 @@ internal sealed class OidcHarness : IAsyncDisposable
     }
 
     /// <summary>The whole sign-in. Returns the callback response (a redirect back to the page when it works).</summary>
-    public async Task<HttpResponseMessage> SignInAsync(Browser browser, string path = "/app?x=1") // NOSONAR CA1822 -- Test harness keeps sign-in on the fixture instance for readable call sites.
+    public static async Task<HttpResponseMessage> SignInAsync(Browser browser, string path = "/app?x=1")
     {
         var authorize = await StartLoginAsync(browser, path);
         var callback = await VisitProviderAsync(browser, authorize);

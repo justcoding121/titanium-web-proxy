@@ -598,14 +598,7 @@ internal sealed class ManagerStore : IDisposable
 
             reader.Close();
 
-            foreach (var rollout in running)
-            {
-                if (AdvanceRolloutUnlocked(rollout))
-                {
-                    changed.Add(rollout.FleetId);
-                }
-            }
-
+            changed.AddRange(running.Where(AdvanceRolloutUnlocked).Select(r => r.FleetId));
             return changed.ToList();
         }
     }

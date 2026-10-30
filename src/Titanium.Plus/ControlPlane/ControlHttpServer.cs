@@ -491,10 +491,6 @@ internal sealed class ControlHttpServer : IDisposable
     private static string Reason(int status) =>
         Enum.IsDefined(typeof(HttpStatusCode), status) ? ((HttpStatusCode)status).ToString() : "Status";
 
-    public sealed class RequestTooLargeException : Exception;
-
-    public sealed class MalformedRequestException : Exception;
-
     /// <summary>Reads lines and exact byte counts from bytes already buffered, then from the stream.</summary>
     private sealed class PrefixedReader(Stream stream, ReadOnlyMemory<byte> prefix)
     {
@@ -558,3 +554,9 @@ internal sealed class ControlHttpServer : IDisposable
         }
     }
 }
+
+/// <summary>Control-plane request body exceeded the configured byte cap.</summary>
+public sealed class RequestTooLargeException : Exception;
+
+/// <summary>Control-plane request could not be parsed as HTTP.</summary>
+public sealed class MalformedRequestException : Exception;

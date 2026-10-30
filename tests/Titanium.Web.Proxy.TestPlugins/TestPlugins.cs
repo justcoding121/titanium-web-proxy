@@ -147,7 +147,7 @@ public sealed class FaultyConstructorPlugin : IProxyMiddleware
 }
 
 /// <summary>Not a plugin: it does not implement the contract.</summary>
-public sealed class NotAPlugin
+public sealed class NotAPlugin // NOSONAR S1118 -- Activator needs a public parameterless ctor for plugin-load negative tests.
 {
     /// <summary>Marker so the type is loadable but not a <see cref="IProxyMiddleware"/>.</summary>
     public static bool ImplementsMiddlewareContract => false;

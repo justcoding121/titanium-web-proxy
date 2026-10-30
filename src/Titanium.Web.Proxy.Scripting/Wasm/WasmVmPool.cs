@@ -296,7 +296,8 @@ internal sealed class WasmVmPool : IDisposable
     /// for zero. Each tick calls <c>proxy_on_tick</c> with the VM's gate held; a tick that finds the previous one still
     /// running is skipped.
     /// </summary>
-    public int SetTickPeriod(WasmVm vm, int milliseconds) // NOSONAR S2325, CA1822 -- WASM import dispatch calls through the pool instance; static would not match the host callback shape.
+#pragma warning disable CA1822 // WASM import dispatch calls through the pool instance; static would not match the host callback shape.
+    public int SetTickPeriod(WasmVm vm, int milliseconds) // NOSONAR S2325 -- WASM import dispatch calls through the pool instance.
     {
         if (vm.Effective is not { } effective || !vm.TryGetContext(effective.RootId, out var context) || context is not WasmRootContext root)
         {
@@ -314,6 +315,7 @@ internal sealed class WasmVmPool : IDisposable
 
         return WasmResult.Ok;
     }
+#pragma warning restore CA1822
 
     private static void Tick(WasmRootContext root)
     {

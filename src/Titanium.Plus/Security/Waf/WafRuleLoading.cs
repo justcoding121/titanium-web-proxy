@@ -79,27 +79,28 @@ public static class WafRulePack
         return rules;
     }
 
+    // JSON DTOs: public setters are for System.Text.Json (no code writes them).
     private sealed class PackFile
     {
-        public string? Pack { get; init; }
+        public string? Pack { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
         [JsonPropertyName("rules")]
-        public List<PackRule>? RuleEntries { get; init; }
+        public List<PackRule>? RuleEntries { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
     }
 
     private sealed class PackRule
     {
-        public string? Id { get; init; }
-        public string? Category { get; init; }
-        public string? Severity { get; init; }
-        public int? Paranoia { get; init; }
-        public List<string>? Targets { get; init; }
-        public List<string>? Headers { get; init; }
-        public string? Pattern { get; init; }
-        public List<string>? Contains { get; init; }
-        public List<string>? Prefilter { get; init; }
-        public string? Check { get; init; }
-        public string? Description { get; init; }
-        public bool? IgnoreCase { get; init; }
+        public string? Id { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public string? Category { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public string? Severity { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public int? Paranoia { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public List<string>? Targets { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public List<string>? Headers { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public string? Pattern { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public List<string>? Contains { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public List<string>? Prefilter { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public string? Check { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public string? Description { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
+        public bool? IgnoreCase { get; set; } // NOSONAR S1144 -- System.Text.Json binder.
     }
 }
 
@@ -233,25 +234,26 @@ public static class WafCustomRules
         });
     }
 
+    // YAML/JSON DTOs: public setters are for the binder (no code writes them).
     private sealed class RulesFile
     {
-        public List<RuleEntry>? Rules { get; init; }
+        public List<RuleEntry>? Rules { get; set; } // NOSONAR S1144 -- binder-populated DTO.
     }
 
     private sealed class RuleEntry
     {
-        public string? Id { get; init; }
-        public string? Description { get; init; }
-        public string? Category { get; init; }
-        public string? Severity { get; init; }
-        public int? Paranoia { get; init; }
-        public List<string>? Targets { get; init; }
-        public string? Regex { get; init; }
-        public List<string>? Contains { get; init; }
-        public List<string>? Transformations { get; init; }
-        public string? Action { get; init; }
-        public int? Score { get; init; }
-        public bool? IgnoreCase { get; init; }
+        public string? Id { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public string? Description { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public string? Category { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public string? Severity { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public int? Paranoia { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public List<string>? Targets { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public string? Regex { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public List<string>? Contains { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public List<string>? Transformations { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public string? Action { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public int? Score { get; set; } // NOSONAR S1144 -- binder-populated DTO.
+        public bool? IgnoreCase { get; set; } // NOSONAR S1144 -- binder-populated DTO.
     }
 }
 
