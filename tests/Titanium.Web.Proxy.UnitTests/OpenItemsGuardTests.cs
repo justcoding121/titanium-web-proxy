@@ -45,7 +45,7 @@ public class OpenItemsGuardTests
         using var cts = new CancellationTokenSource();
         var stream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
         var session = new SessionEventArgs(proxy, endPoint, stream, null, cts);
-        session.Extras = new RoutingFeatureState { StatusRetried = true };
+        session.Extras = new RoutingFeatureState { StatusRetries = 1 };
         session.UpstreamPinnedAddress = IPAddress.Loopback;
         session.UpstreamHttpClient = new ClusterHttpClientConfig { MaxConnectionsPerServer = 2 };
         session.UpstreamConnectHost = "origin.example";

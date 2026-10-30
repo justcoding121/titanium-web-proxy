@@ -1,0 +1,3 @@
+# expect: reject
+# reason: truncated
+{"yaml":"a","configHash":

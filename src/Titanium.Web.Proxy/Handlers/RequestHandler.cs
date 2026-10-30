@@ -390,7 +390,9 @@ public partial class ProxyServer
                         // Mitm COW baseline is still armed so append-only sets stay on terminate-lite.
                         // Taking the baseline before TryApply made MutationCount diverge and forced
                         // the full, slower session path.
-                        var routeDispatch = Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        var routeDispatch = ReverseProxy is { HasAsyncPolicies: true }
+                            ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, args)
+                            : Routing.ReverseProxySessionDispatch.Apply(this, args);
                         if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
                         {
                             closeServerConnection = true;
@@ -485,6 +487,23 @@ public partial class ProxyServer
                                     args.IsClientResponseCommitted = true;
                                     return;
                                 }
+
+                            // Bounded request-body decompression (server.requestDecompression). Null when off.
+                            // Same position as the WinAuth buffering above: before Locked, before the origin
+                            // sees a byte, so a breach can still be answered with a normal 4xx.
+                            if (RequestDecompressionPolicy is { } requestDecompressionPolicy && request.HasBody)
+                            {
+                                var decompression = await args.DecompressRequestBodyAsync(
+                                    requestDecompressionPolicy, requestToken);
+                                if (decompression is { } decompressionOutcome
+                                    && decompressionOutcome != Compression.RequestDecompressionOutcome.Decompressed)
+                                {
+                                    await RejectRequestDecompressionAsync(args, decompressionOutcome, clientStream,
+                                        requestToken);
+                                    closeServerConnection = true;
+                                    return;
+                                }
+                            }
 
                             // Must run before Request.Locked is set (a few lines below, inside the
                             // Locked = true overload) - GetRequestBody() throws once Locked, exactly like
@@ -613,7 +632,7 @@ public partial class ProxyServer
                             var newConnection = result.LatestConnection;
 
                             // A status retry swapped the origin socket inside the request. Track the new one.
-                            if (args.Extras is { StatusRetried: true } && args.HttpClient.HasConnection)
+                            if (args.Extras is { StatusRetries: > 0 } && args.HttpClient.HasConnection)
                                 newConnection = args.HttpClient.Connection;
 
                             if (connection != newConnection && connection != null)
@@ -1020,6 +1039,47 @@ public partial class ProxyServer
         }, generator, serverConnection);
     }
 
+    /// <summary>
+    ///     Replays the request onto the destination <see cref="Routing.ReverseProxySessionDispatch.TryStageGatewayRetry" />
+    ///     already staged, and keeps going while the answer is retryable and attempts remain. Call only after
+    ///     a retry was staged. Returns false when the last try ran out of time and the 504 has been written.
+    /// </summary>
+    private async Task<bool> ReplayStagedGatewayRetriesAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        ProxyTimeoutException? timeout;
+        bool staged;
+        do
+        {
+            try
+            {
+                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                timeout = null;
+            }
+            catch (ProxyTimeoutException ex)
+            {
+                timeout = ex;
+            }
+            finally
+            {
+                Routing.ReverseProxySessionDispatch.EndGatewayRetry(args);
+            }
+
+            staged = timeout is null
+                ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args)
+                : timeout.Kind == ProxyTimeoutKind.ResponseHeader
+                  && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504, timedOut: true);
+        }
+        while (staged);
+
+        if (timeout is null)
+        {
+            return true;
+        }
+
+        await HandleProxyTimeoutAsync(args, timeout, cancellationToken);
+        return false;
+    }
+
     private async Task ReplayGatewayStatusAsync(SessionEventArgs args, CancellationToken cancellationToken)
     {
         // The first origin answered with an unread body, so that socket is finished. Close it now. The
@@ -1028,6 +1088,10 @@ public partial class ProxyServer
         {
             await TcpConnectionFactory.Release(args.HttpClient.Connection, true);
         }
+
+        // Backoff runs after the old socket is gone, so a waiting retry does not hold pool capacity.
+        await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(this, args, cancellationToken)
+            .ConfigureAwait(false);
 
         var connection = await TcpConnectionFactory.GetServerConnection(
             this, args, false, SslApplicationProtocol.Http11, true, cancellationToken);
@@ -1075,6 +1139,7 @@ public partial class ProxyServer
             // The fast path used to skip the response-header deadline entirely, so a stalled origin hung
             // the client forever even with ResponseHeaderTimeoutSeconds set. Only pay for the deadline when
             // one is configured (server-wide or per-session) so the default RPS path is unchanged.
+            ProxyTimeoutException? firstTimeout = null;
             if (ResponseHeaderTimeoutSeconds > 0 || args.ResponseHeaderTimeout.HasValue)
             {
                 try
@@ -1083,8 +1148,7 @@ public partial class ProxyServer
                 }
                 catch (ProxyTimeoutException ex)
                 {
-                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
-                    return;
+                    firstTimeout = ex;
                 }
             }
             else
@@ -1092,19 +1156,22 @@ public partial class ProxyServer
                 await args.HttpClient.ReceiveResponse(cancellationToken);
             }
 
-            if (Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            // Async only after a retry is staged, so an unset policy does not allocate a state machine.
+            var stagedRetry = firstTimeout is null
+                ? args.Extras is not null && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args)
+                : firstTimeout.Kind == ProxyTimeoutKind.ResponseHeader
+                  && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504, timedOut: true);
+            if (stagedRetry)
             {
-                // Async only after a retry is staged, so an unset policy does not allocate a state machine.
-                try
+                if (!await ReplayStagedGatewayRetriesAsync(args, cancellationToken).ConfigureAwait(false))
                 {
-                    ProxyMetrics.RecordStatusRetry();
-                    await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
-                }
-                catch (ProxyTimeoutException ex)
-                {
-                    await HandleProxyTimeoutAsync(args, ex, cancellationToken);
                     return;
                 }
+            }
+            else if (firstTimeout is not null)
+            {
+                await HandleProxyTimeoutAsync(args, firstTimeout, cancellationToken);
+                return;
             }
 
             var fastResponse = args.HttpClient.Response;
@@ -1327,6 +1394,24 @@ public partial class ProxyServer
                && request.HttpVersion.Major == 1;
     }
 
+    /// <summary>True when the <c>;</c>-separated parameters of an Accept-Encoding entry carry <c>q=0</c>.</summary>
+    private static bool IsZeroWeight(ReadOnlySpan<char> parameters)
+    {
+        foreach (var range in parameters.Split(';'))
+        {
+            var parameter = parameters[range].Trim();
+            if (parameter.Length > 2 && (parameter[0] is 'q' or 'Q') && parameter[1] == '='
+                && double.TryParse(parameter.Slice(2), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var weight)
+                && weight <= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     ///     Prepare the request headers so that we can avoid encodings not parseable by this proxy
     /// </summary>
@@ -1348,9 +1433,16 @@ public partial class ProxyServer
                     // parameter list, so we do not collapse Accept-Encoding to identity.
                     var coding = token;
                     var semicolon = coding.IndexOf(';');
+                    var refused = false;
                     if (semicolon >= 0)
+                    {
+                        // A zero weight forbids the coding (RFC 9110 section 12.5.3); keep it out of the list so
+                        // response compression, which reads this header, cannot pick it.
+                        refused = IsZeroWeight(coding.Slice(semicolon + 1));
                         coding = coding.Slice(0, semicolon).Trim();
-                    if (coding.Length > 0)
+                    }
+
+                    if (coding.Length > 0 && !refused)
                     {
                         var s = coding.ToString();
                         if (ProxyConstants.ProxySupportedCompressions.Contains(s))
@@ -1442,14 +1534,34 @@ public partial class ProxyServer
 
     internal bool ShouldCallBeforeRequestBodyWrite()
     {
-        return OnRequestBodyWrite != null;
+        return OnRequestBodyWrite != null || ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, true);
     }
 
     internal Task OnBeforeRequestBodyWrite(BeforeBodyWriteEventArgs args)
     {
+        if (ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, true))
+            return ScriptedBodyWriteAsync(script, args, isRequest: true);
+
         return OnRequestBodyWrite != null
             ? OnRequestBodyWrite.InvokeAsync(this, args, logger)
             : Task.CompletedTask;
+    }
+
+    /// <summary>True when the script host wants body pieces as they stream (not one buffered body).</summary>
+    private static bool StreamsBody(Abstractions.Scripting.IScriptPhaseHost script, bool isRequest) =>
+        script.BodyMode == Abstractions.Scripting.ScriptBodyMode.Streaming &&
+        (script.Phases & (isRequest
+            ? Abstractions.Scripting.ScriptPhases.RequestBody | Abstractions.Scripting.ScriptPhases.RequestTrailers
+            : Abstractions.Scripting.ScriptPhases.ResponseBody | Abstractions.Scripting.ScriptPhases.ResponseTrailers)) != 0;
+
+    /// <summary>Script phase first, then the application handler on whatever bytes the script left.</summary>
+    private async Task ScriptedBodyWriteAsync(
+        Abstractions.Scripting.IScriptPhaseHost script, BeforeBodyWriteEventArgs args, bool isRequest)
+    {
+        await Routing.ScriptPhaseDispatch.RunBodyChunkAsync(script, args, isRequest).ConfigureAwait(false);
+        var handler = isRequest ? OnRequestBodyWrite : OnResponseBodyWrite;
+        if (handler != null)
+            await handler.InvokeAsync(this, args, logger).ConfigureAwait(false);
     }
 
     /// <summary>

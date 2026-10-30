@@ -1,0 +1,13 @@
+# expect: normalize
+# reason: TE.CL - same message with the fields in the other order must normalize identically
+# assert-no-header: Content-Length
+# assert-header: Transfer-Encoding=chunked
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+Content-Length: 4\r\n
+\r\n
+1\r\nZ\r\n
+0\r\n
+\r\n

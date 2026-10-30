@@ -228,6 +228,18 @@
               "acceptAnyServerCertificate": {
                 "type": "boolean"
               },
+              "caBundlePath": {
+                "type": "string"
+              },
+              "clientCertificateKeyPath": {
+                "type": "string"
+              },
+              "clientCertificatePasswordEnv": {
+                "type": "string"
+              },
+              "clientCertificatePath": {
+                "type": "string"
+              },
               "connectTimeout": {
                 "type": "string"
               },
@@ -241,8 +253,14 @@
               "requestTimeout": {
                 "type": "string"
               },
+              "serverName": {
+                "type": "string"
+              },
               "sslProtocols": {
                 "type": "string"
+              },
+              "verifyHostname": {
+                "type": "boolean"
               }
             }
           },
@@ -271,13 +289,47 @@
               "attempts": {
                 "type": "integer"
               },
+              "backoffMilliseconds": {
+                "type": "integer"
+              },
+              "budgetMinConcurrent": {
+                "type": "integer"
+              },
+              "budgetPercent": {
+                "type": "integer"
+              },
+              "honorRetryAfter": {
+                "type": "boolean"
+              },
+              "jitterPercent": {
+                "type": "integer"
+              },
+              "maxBackoffMilliseconds": {
+                "type": "integer"
+              },
               "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "perTryTimeoutMilliseconds": {
                 "type": "integer"
               },
               "retryNonIdempotent": {
                 "type": "boolean"
+              },
+              "statusCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
               }
             }
+          },
+          "sendProxyProtocol": {
+            "type": "string",
+            "enum": [
+              "none",
+              "v2"
+            ]
           },
           "sessionAffinity": {
             "type": "object",
@@ -337,6 +389,9 @@
               "allow",
               "require"
             ]
+          },
+          "clusterId": {
+            "type": "string"
           },
           "decryptSsl": {
             "type": "boolean"
@@ -432,17 +487,78 @@
           "maxConcurrentClients": {
             "type": "integer"
           },
+          "maxDatagramBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65507
+          },
+          "maxDatagramsPerSecondPerClient": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000000
+          },
           "maxInboundBidirectionalStreams": {
             "type": "integer"
           },
           "maxInboundUnidirectionalStreams": {
             "type": "integer"
           },
+          "maxSessions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "maxSessionsPerClient": {
+            "type": "integer",
+            "minimum": 1
+          },
           "passthrough": {
             "type": "boolean"
           },
           "port": {
             "type": "integer"
+          },
+          "sendProxyProtocol": {
+            "type": "string",
+            "enum": [
+              "none",
+              "v2"
+            ]
+          },
+          "sessionAffinity": {
+            "type": "string",
+            "enum": [
+              "clientEndpoint"
+            ]
+          },
+          "sniDefaultClusterId": {
+            "type": "string"
+          },
+          "sniReadTimeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "sniRoutes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "clusterId": {
+                  "type": "string"
+                },
+                "serverName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "streamFilters": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "trustedProxyProtocolSources": {
             "type": "array",
@@ -489,6 +605,110 @@
         }
       }
     },
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "type": "string"
+          },
+          "bodyMode": {
+            "type": "string"
+          },
+          "calloutHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "failMode": {
+            "type": "string",
+            "enum": [
+              "closed",
+              "open"
+            ]
+          },
+          "file": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dotnet",
+              "lua",
+              "wasm"
+            ],
+            "default": "dotnet"
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "bufferedBodyBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "calloutConcurrency": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "epochDeadlineMs": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "fuel": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "maxInstructions": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "memoryMb": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "poolSize": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "queueBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sharedDataBytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60000
+          },
+          "typeName": {
+            "type": "string"
+          },
+          "vmId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          }
+        }
+      }
+    },
     "plus": {
       "type": "object",
       "additionalProperties": false,
@@ -497,8 +717,86 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "allowInsecureNonLoopback": {
+              "type": "boolean"
+            },
+            "dashboardBreakGlass": {
+              "type": "boolean"
+            },
+            "dashboardOidc": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "allowedEmailDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowedEmails": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "clientId": {
+                  "type": "string"
+                },
+                "clientSecret": {
+                  "type": "string"
+                },
+                "clientSecretEnv": {
+                  "type": "string"
+                },
+                "clientSecretFile": {
+                  "type": "string"
+                },
+                "cookieSecret": {
+                  "type": "string"
+                },
+                "cookieSecretEnv": {
+                  "type": "string"
+                },
+                "cookieSecretFile": {
+                  "type": "string"
+                },
+                "groupsClaim": {
+                  "type": "string"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "operatorGroups": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "redirectUri": {
+                  "type": "string"
+                },
+                "viewerGroups": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
             "dashboardPort": {
               "type": "integer"
+            },
+            "dashboardUsersFile": {
+              "type": "string"
+            },
+            "dashboardViewerSecret": {
+              "type": "string"
+            },
+            "dashboardViewerSecretEnv": {
+              "type": "string"
+            },
+            "dashboardViewerSecretFile": {
+              "type": "string"
             },
             "host": {
               "type": "string"
@@ -508,6 +806,24 @@
             },
             "sharedSecret": {
               "type": "string"
+            },
+            "sharedSecretEnv": {
+              "type": "string"
+            },
+            "sharedSecretFile": {
+              "type": "string"
+            },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "certificatePath": {
+                  "type": "string"
+                },
+                "keyPath": {
+                  "type": "string"
+                }
+              }
             }
           }
         },
@@ -528,10 +844,102 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "fixedWindow",
+              "tokenBucket"
+            ]
+          },
           "allow": {
             "type": "string"
           },
+          "allowedEmailDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedEmails": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedGroups": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blockThreshold": {
+            "type": "integer"
+          },
+          "burst": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cacheMaxEntries": {
+            "type": "integer"
+          },
+          "cacheSeconds": {
+            "type": "integer"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecretEnv": {
+            "type": "string"
+          },
+          "clientSecretFile": {
+            "type": "string"
+          },
+          "cookieName": {
+            "type": "string"
+          },
+          "cookieSecretEnv": {
+            "type": "string"
+          },
+          "cookieSecretFile": {
+            "type": "string"
+          },
+          "copyResponseHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "deny": {
+            "type": "string"
+          },
+          "denyResponseHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "disabledRules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "emitHeaders": {
+            "type": "boolean"
+          },
+          "exclusions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "failOpen": {
+            "type": "boolean"
+          },
+          "fleetFailMode": {
+            "type": "string"
+          },
+          "groupsClaim": {
             "type": "string"
           },
           "headerName": {
@@ -540,16 +948,40 @@
           "headerValue": {
             "type": "string"
           },
+          "issuer": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^(client|forwardedClient|route|header:[!#$%\u0026\u0027*\u002B.^_\u0060|~0-9A-Za-z-]\u002B|cookie:[!#$%\u0026\u0027*\u002B.^_\u0060|~0-9A-Za-z-]\u002B)$"
+          },
           "kind": {
             "type": "string"
           },
           "limit": {
             "type": "integer"
           },
+          "localShare": {
+            "type": "number"
+          },
+          "logoutPath": {
+            "type": "string"
+          },
+          "maxKeys": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 10000000
+          },
           "maxRequestBodyBytes": {
             "type": "integer"
           },
+          "method": {
+            "type": "string"
+          },
           "methods": {
+            "type": "string"
+          },
+          "mode": {
             "type": "string"
           },
           "name": {
@@ -558,8 +990,56 @@
           "origins": {
             "type": "string"
           },
+          "paranoiaLevel": {
+            "type": "integer"
+          },
+          "passClaims": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "postLoginRedirectAllowlist": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "publicBaseUrl": {
+            "type": "string"
+          },
+          "redirectPath": {
+            "type": "string"
+          },
+          "refreshTokens": {
+            "type": "boolean"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sendHeaders": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sessionTtlSeconds": {
+            "type": "integer"
+          },
+          "timeoutMilliseconds": {
+            "type": "integer"
+          },
           "timeoutSeconds": {
             "type": "integer"
+          },
+          "url": {
+            "type": "string"
           },
           "windowSeconds": {
             "type": "integer"
@@ -590,6 +1070,12 @@
                 }
               }
             }
+          },
+          "compression": {
+            "type": "string",
+            "enum": [
+              "off"
+            ]
           },
           "directResponse": {
             "type": "object",
@@ -629,6 +1115,9 @@
                 }
               }
             }
+          },
+          "grpcWeb": {
+            "type": "boolean"
           },
           "id": {
             "type": "string"
@@ -693,7 +1182,31 @@
                 "additionalProperties": {
                   "type": "string"
                 }
+              },
+              "queryParameters": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
+            }
+          },
+          "middleware": {
+            "type": "array",
+            "items": {
+              "type": "string"
             }
           },
           "mirror": {
@@ -759,11 +1272,38 @@
               "attempts": {
                 "type": "integer"
               },
+              "backoffMilliseconds": {
+                "type": "integer"
+              },
+              "budgetMinConcurrent": {
+                "type": "integer"
+              },
+              "budgetPercent": {
+                "type": "integer"
+              },
+              "honorRetryAfter": {
+                "type": "boolean"
+              },
+              "jitterPercent": {
+                "type": "integer"
+              },
+              "maxBackoffMilliseconds": {
+                "type": "integer"
+              },
               "maxBufferedBodyBytes": {
+                "type": "integer"
+              },
+              "perTryTimeoutMilliseconds": {
                 "type": "integer"
               },
               "retryNonIdempotent": {
                 "type": "boolean"
+              },
+              "statusCodes": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
               }
             }
           },
@@ -797,6 +1337,12 @@
     "schemaVersion": {
       "type": "string"
     },
+    "scriptPipeline": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "server": {
       "type": "object",
       "additionalProperties": false,
@@ -810,6 +1356,42 @@
             },
             "sampleRate": {
               "type": "number"
+            }
+          }
+        },
+        "admin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "authToken": {
+              "type": "string"
+            },
+            "authTokenEnv": {
+              "type": "string"
+            },
+            "authTokenFile": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            },
+            "preStopDelaySeconds": {
+              "type": "integer"
+            },
+            "readiness": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "requireHealthyClusters": {
+                  "type": "boolean"
+                }
+              }
             }
           }
         },
@@ -1035,6 +1617,21 @@
             }
           }
         },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "host": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer"
+            }
+          }
+        },
         "originHttpVersionPolicy": {
           "type": "string"
         },
@@ -1122,6 +1719,25 @@
         "proxyLoopback": {
           "type": "boolean"
         },
+        "requestDecompression": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "maxDecompressedBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864
+            },
+            "maxRatio": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            }
+          }
+        },
         "requestId": {
           "type": "object",
           "additionalProperties": false,
@@ -1134,10 +1750,124 @@
             }
           }
         },
+        "responseCompression": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "algorithms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "fastest",
+                "optimal",
+                "smallestSize"
+              ]
+            },
+            "maxBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1048576
+            },
+            "mimeTypes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minBytes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "buffered",
+                "streaming"
+              ]
+            }
+          }
+        },
         "systemProxyBypassHosts": {
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "telemetry": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "metrics": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "intervalMs": {
+                  "type": "integer"
+                }
+              }
+            },
+            "otlp": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "endpoint": {
+                  "type": "string"
+                },
+                "headersEnv": {
+                  "type": "string"
+                },
+                "insecure": {
+                  "type": "boolean"
+                },
+                "protocol": {
+                  "type": "string"
+                },
+                "timeoutMs": {
+                  "type": "integer"
+                }
+              }
+            },
+            "resourceAttributes": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "serviceName": {
+              "type": "string"
+            },
+            "traces": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "headerAllowList": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "ratio": {
+                  "type": "number"
+                },
+                "sampler": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "timeouts": {
@@ -1174,6 +1904,18 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "cipherSuites": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "minVersion": {
+              "type": "string"
+            },
+            "ocspStapling": {
+              "type": "boolean"
+            },
             "supportedServerSslProtocols": {
               "type": "array",
               "items": {

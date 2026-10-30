@@ -1,0 +1,8 @@
+# Reverse listener in front of a stock nginx container (the real-peer origin). conformance.yml maps nginx to 9201.
+schemaVersion: "7.1"
+listeners:
+  - host: "127.0.0.1"
+    port: 9202
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 9201

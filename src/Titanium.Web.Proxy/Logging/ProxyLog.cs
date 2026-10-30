@@ -92,6 +92,17 @@ internal static class ProxyLog
             host, port, FormatProtocol(negotiated));
     }
 
+    /// <summary>
+    ///     A cluster's upstream client certificate or CA file could not be read or parsed. Logged once per
+    ///     config instance; every request to that cluster then fails with 502 until the file is fixed and the
+    ///     configuration is reloaded.
+    /// </summary>
+    internal static void UpstreamTlsMaterialFaulted(ILogger logger, string detail)
+    {
+        if (!logger.IsEnabled(LogLevel.Error)) return;
+        logger.LogError("[proxy<->origin] upstream TLS material unusable; failing closed with 502: {Detail}", detail);
+    }
+
     internal static void OriginConnectionFailed(ILogger logger, string host, int port, Exception ex)
     {
         // Covers the whole connection setup to the origin (DNS/TCP connect, optional upstream-proxy
@@ -285,6 +296,19 @@ internal static class ProxyLog
         logger.LogWarning(
             "{CliKey}={Value} is reserved and not enforced. {Instead}",
             cliKey, value, instead);
+    }
+
+    /// <summary>
+    ///     Warns once per <c>Start()</c> that terminate-lite is off for the listener, and which features turned it off.
+    /// </summary>
+    internal static void TerminateLiteDisabled(ILogger logger, string features)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning)) return;
+        logger.LogWarning(
+            "H1 terminate-lite is disabled for this proxy: {Features}. Requests take the full session path, which is " +
+            "slower than terminate-lite. Put routes that need these features on a separate listener to keep the other " +
+            "routes on terminate-lite. The twp.lite.eligible gauge reports 0 while this holds.",
+            features);
     }
 
     private static string FormatHostSuffix(string? host) =>

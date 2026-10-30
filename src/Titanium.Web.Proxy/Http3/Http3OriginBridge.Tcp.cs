@@ -359,6 +359,29 @@ internal static partial class Http3OriginBridge
         _ = logger;
     }
 
+    /// <summary>
+    ///     Reads the origin's status and headers. This bridge has no response-header deadline of its own, so
+    ///     only the per-try deadline from a retry policy applies here.
+    /// </summary>
+    private static async Task ReceiveOriginHeadersAsync(SessionEventArgs sessionArgs, CancellationToken cancellationToken)
+    {
+        if (sessionArgs.Extras is not { PerTryTimeoutActive: true } || sessionArgs.ResponseHeaderTimeout is not { } perTry)
+        {
+            await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+            return;
+        }
+
+        using var deadline = sessionArgs.Deadlines.Start(cancellationToken, perTry, ProxyTimeoutKind.ResponseHeader);
+        try
+        {
+            await sessionArgs.HttpClient.ReceiveResponse(deadline.Token);
+        }
+        catch (OperationCanceledException ex)
+        {
+            deadline.ThrowIfTimedOut(ex);
+        }
+    }
+
     private static async Task<bool> ForwardOverTcpAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
@@ -579,9 +602,10 @@ internal static partial class Http3OriginBridge
                 }
             }
 
+            ProxyTimeoutException? perTryTimeout = null;
             try
             {
-                await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+                await ReceiveOriginHeadersAsync(sessionArgs, cancellationToken);
 
                 while (sessionArgs.HttpClient.Response.StatusCode is >= 100 and < 200)
                 {
@@ -589,8 +613,13 @@ internal static partial class Http3OriginBridge
                         await onInterimResponse(sessionArgs.HttpClient.Response, cancellationToken);
 
                     await sessionArgs.ClearResponse(cancellationToken);
-                    await sessionArgs.HttpClient.ReceiveResponse(cancellationToken);
+                    await ReceiveOriginHeadersAsync(sessionArgs, cancellationToken);
                 }
+            }
+            catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                   && sessionArgs.Extras is { PerTryTimeoutActive: true })
+            {
+                perTryTimeout = ex;
             }
             catch
             {
@@ -604,11 +633,18 @@ internal static partial class Http3OriginBridge
             }
 
             if (allowStatusRetry && sessionArgs.Extras is not null
-                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(server, sessionArgs))
+                && (perTryTimeout is null
+                    ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(server, sessionArgs)
+                    : Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(server, sessionArgs, 504,
+                        timedOut: true)))
             {
                 closeConnection = true;
                 return true;
             }
+
+            // No retry left: the per-try deadline surfaces like any other origin failure.
+            if (perTryTimeout is not null)
+                throw perTryTimeout;
 
             var response = sessionArgs.HttpClient.Response;
             // Stream the response unless a handler already buffered it. H3 client emit path

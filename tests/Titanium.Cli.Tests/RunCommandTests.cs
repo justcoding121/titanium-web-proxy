@@ -21,6 +21,154 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenResponseCompressionIsEnabled()
+    {
+        var listeners = new List<ListenerConfig>
+        {
+            new() { Port = 8080, ForwardHost = "127.0.0.1", ForwardPort = 80 },
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Listeners = listeners,
+            Server = new ServerConfig { ResponseCompression = new ResponseCompressionConfig { Enabled = true } },
+        }));
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Listeners = listeners,
+            Server = new ServerConfig { ResponseCompression = new ResponseCompressionConfig { Enabled = false } },
+        }));
+    }
+
+    [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenARouteSetsGrpcWeb()
+    {
+        TwpConfig Config(bool grpcWeb) => new()
+        {
+            Listeners = [new ListenerConfig { Port = 8080 }],
+            Clusters = [new Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig
+                {
+                    Id = "d", Address = "127.0.0.1", Port = 9000,
+                }],
+            }],
+            Routes =
+            [
+                new Titanium.Web.Proxy.Abstractions.Routing.RouteConfig
+                {
+                    Id = "r",
+                    ClusterId = "c",
+                    Match = new Titanium.Web.Proxy.Abstractions.Routing.RouteMatch { Path = "/" },
+                    GrpcWeb = grpcWeb,
+                },
+            ],
+        };
+
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(Config(true)));
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(Config(false)));
+    }
+
+    [TestMethod]
+    public void Load_GrpcWebYaml_BindsTheRouteFlag()
+    {
+        var dir = Directory.CreateTempSubdirectory("twp-grpcweb-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "twp.yaml");
+            File.WriteAllText(path, """
+                listeners:
+                  - port: 8080
+                    host: 127.0.0.1
+                routes:
+                  - id: g
+                    clusterId: c
+                    grpcWeb: true
+                    match:
+                      path: /pkg.Svc/
+                """);
+
+            var loaded = Titanium.Cli.Parsers.ConfigLoader.Load(path);
+            Assert.IsTrue(loaded.Config.Routes.Single().GrpcWeb);
+            Assert.AreEqual(0, loaded.UnknownKeys.Count);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void ServerConfigApplier_AppliesResponseCompression_OnlyWhenEnabled()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            ResponseCompression = new ResponseCompressionConfig { Enabled = false },
+        });
+        Assert.IsNull(proxy.ResponseCompression);
+
+        var enabled = new ResponseCompressionConfig { Enabled = true, MinBytes = 2048 };
+        ServerConfigApplier.Apply(proxy, new ServerConfig { ResponseCompression = enabled });
+        Assert.AreSame(enabled, proxy.ResponseCompression);
+    }
+
+    [TestMethod]
+    public void Load_ResponseCompressionYaml_BindsServerAndRouteSettings()
+    {
+        var dir = Directory.CreateTempSubdirectory("twp-compress-").FullName;
+        try
+        {
+            var path = Path.Combine(dir, "twp.yaml");
+            File.WriteAllText(path, """
+                listeners:
+                  - port: 8080
+                    host: 127.0.0.1
+                server:
+                  responseCompression:
+                    enabled: true
+                    algorithms: [gzip, br]
+                    minBytes: 2048
+                    maxBytes: 524288
+                    level: optimal
+                    mimeTypes: [text/*, application/wasm]
+                """);
+
+            var loaded = Titanium.Cli.Parsers.ConfigLoader.Load(path);
+            var compression = loaded.Config.Server!.ResponseCompression!;
+            Assert.IsTrue(compression.Enabled);
+            CollectionAssert.AreEqual(new[] { "gzip", "br" }, compression.Algorithms!.ToArray());
+            Assert.AreEqual(2048, compression.MinBytes);
+            Assert.AreEqual(524288, compression.MaxBytes);
+            Assert.AreEqual("optimal", compression.Level);
+            CollectionAssert.AreEqual(new[] { "text/*", "application/wasm" }, compression.MimeTypes!.ToArray());
+            
+            Assert.AreEqual(0, Titanium.Web.Proxy.Configuration.TwpConfigValidator.Validate(loaded.Config).Count);
+            Assert.AreEqual(0, loaded.UnknownKeys.Count);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void Load_RouteCompressionJson_BindsTheOverride()
+    {
+        var config = Titanium.Web.Proxy.Configuration.TwpConfigLoader.LoadJson("""
+            {
+              "clusters": [ { "id": "c", "destinations": [ { "id": "d", "address": "127.0.0.1", "port": 9000 } ] } ],
+              "routes": [ { "id": "r", "clusterId": "c", "compression": "off", "match": { "path": "/" } } ],
+              "server": { "responseCompression": { "enabled": true, "algorithms": ["br"] } }
+            }
+            """);
+
+        Assert.AreEqual("off", config.Routes.Single().Compression);
+        Assert.IsTrue(config.Server!.ResponseCompression!.Enabled);
+        Assert.AreEqual(0, Titanium.Web.Proxy.Configuration.TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
     public void ConfigNeedsSessionPath_False_ForPlainForwardHost()
     {
         var cfg = new TwpConfig
@@ -31,6 +179,79 @@ public class RunCommandTests
             ],
         };
         Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(cfg));
+    }
+
+    [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenARouteListsAnExtAuthPolicy()
+    {
+        var route = new RouteConfig
+        {
+            Id = "r",
+            ClusterId = "c",
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+            Policies = ["gate"],
+        };
+        var cfg = new TwpConfig
+        {
+            Routes = [route],
+            Policies = [new RoutePolicyConfig { Name = "gate", Kind = "rateLimit", Limit = 5 }],
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(cfg));
+
+        cfg = new TwpConfig
+        {
+            Routes = [route],
+            Policies = [new RoutePolicyConfig { Name = "gate", Kind = "extAuth", Url = "http://127.0.0.1:9/auth" }],
+        };
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(cfg));
+
+        cfg = new TwpConfig
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = route.Match }],
+            Policies = [new RoutePolicyConfig { Name = "gate", Kind = "extAuth", Url = "http://127.0.0.1:9/auth" }],
+        };
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(cfg), "an unused extAuth policy changes nothing");
+    }
+
+    [TestMethod]
+    public void ConfigNeedsSessionPath_True_OnlyWhenARouteListsAnOidcPolicy()
+    {
+        var oidc = new RoutePolicyConfig { Name = "login", Kind = "oidc", Issuer = "https://idp.test", ClientId = "c" };
+        var match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix };
+
+        Assert.IsTrue(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match, Policies = ["login"] }],
+            Policies = [oidc],
+        }), "terminate-lite cannot hold a request for a login or add the claim headers");
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(new TwpConfig
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match }],
+            Policies = [oidc],
+        }), "an unused oidc policy changes nothing");
+    }
+
+    [TestMethod]
+    public void BuildReverseProxyOptions_CarriesThePolicyHandlers_OnlyWhenThereAreSome()
+    {
+        var manager = new Titanium.Web.Proxy.Clusters.ClusterManager();
+        var balancer = new Titanium.Web.Proxy.Clusters.LoadBalancer();
+        var handler = new FakeHandler();
+
+        var without = RunCommand.BuildReverseProxyOptions([], manager, balancer, [], null, null, []);
+        var with = RunCommand.BuildReverseProxyOptions([], manager, balancer, [], null, null, [handler]);
+
+        Assert.IsNull(without.PolicyHandlers);
+        CollectionAssert.AreEqual(new[] { handler }, with.PolicyHandlers!.ToArray());
+    }
+
+    private sealed class FakeHandler : Titanium.Web.Proxy.Abstractions.Plugins.IRoutePolicyHandler
+    {
+        public string Kind => "oidc";
+
+        public ValueTask<Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict> EvaluateAsync(
+            object session, RouteConfig route, RoutePolicyConfig policy, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Titanium.Web.Proxy.Abstractions.Plugins.RoutePolicyVerdict.Continue);
     }
 
     [TestMethod]
@@ -202,6 +423,24 @@ public class RunCommandTests
         Assert.AreEqual("9099", opts["controlPlane.port"]);
         Assert.AreEqual("s3cret", opts["controlPlane.sharedSecret"]);
         Assert.AreEqual("1", opts["extra"]);
+    }
+
+    [TestMethod]
+    public void BuildPlusOptions_CarriesTheDashboardViewerSecret_OnlyWhenSet()
+    {
+        var with = RunCommand.BuildPlusOptions(new PlusConfig
+        {
+            Enabled = true,
+            ControlPlane = new ControlPlaneConfig { SharedSecret = "s3cret", DashboardViewerSecret = "viewer-secret" },
+        });
+        Assert.AreEqual("viewer-secret", with["controlPlane.dashboardViewerSecret"]);
+
+        var without = RunCommand.BuildPlusOptions(new PlusConfig
+        {
+            Enabled = true,
+            ControlPlane = new ControlPlaneConfig { SharedSecret = "s3cret" },
+        });
+        Assert.IsFalse(without.ContainsKey("controlPlane.dashboardViewerSecret"));
     }
 
     [TestMethod]

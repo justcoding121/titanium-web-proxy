@@ -168,10 +168,18 @@ internal static partial class Http3OriginBridge
             }
         }
 
-        if (await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse))
+        // Each pass that stages a replay is followed by another, bounded by the retry policy's attempts.
+        try
         {
-            await sessionArgs.ClearResponse(cancellationToken);
-            await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse, allowStatusRetry: false);
+            while (await ForwardOverTcpAsync(sessionArgs, server, cancellationToken, onInterimResponse))
+            {
+                await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(server, sessionArgs, cancellationToken);
+                await sessionArgs.ClearResponse(cancellationToken);
+            }
+        }
+        finally
+        {
+            Routing.ReverseProxySessionDispatch.EndGatewayRetry(sessionArgs);
         }
     }
 

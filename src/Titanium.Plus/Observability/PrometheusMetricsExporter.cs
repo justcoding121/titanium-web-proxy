@@ -20,8 +20,18 @@ public sealed class PrometheusMetricsExporter
 
     public string Render()
     {
-        Interlocked.Increment(ref _scrapes);
         var sb = new StringBuilder();
+        AppendTo(sb);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Appends the Plus series (scrape counter, destination state, destination latency) to <paramref name="sb" />.
+    ///     The host calls this to add them to the core meter exposition on its own <c>/metrics</c>.
+    /// </summary>
+    public void AppendTo(StringBuilder sb)
+    {
+        Interlocked.Increment(ref _scrapes);
         sb.AppendLine("# HELP titanium_plus_scrapes_total Control-plane metric scrapes.");
         sb.AppendLine("# TYPE titanium_plus_scrapes_total counter");
         sb.Append("titanium_plus_scrapes_total ").Append(Volatile.Read(ref _scrapes)).AppendLine();
@@ -51,8 +61,6 @@ public sealed class PrometheusMetricsExporter
                     .Append(latency.Value.TotalSeconds.ToString("0.######")).AppendLine();
             }
         }
-
-        return sb.ToString();
     }
 
     private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");

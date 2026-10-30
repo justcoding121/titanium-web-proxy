@@ -137,6 +137,33 @@ public sealed class CertificateManager : IDisposable
 
     private int sslCertificateContextFailureLogged;
 
+    private volatile bool ocspStapling;
+
+    /// <summary>
+    ///     When <see langword="true" />, server certificate contexts are created with <c>offline: false</c> so .NET
+    ///     may fetch an OCSP response and staple it to the handshake. Default <see langword="false" /> keeps the
+    ///     offline chain build, which never touches the network and never staples.
+    ///     <para>
+    ///         Only a leaf with an OCSP responder in its authority information access extension can be
+    ///         stapled; certificates this manager mints per host have none. Set it before the first handshake:
+    ///         changing it drops the cached contexts.
+    ///     </para>
+    /// </summary>
+    public bool OcspStapling
+    {
+        get => ocspStapling;
+        set
+        {
+            if (ocspStapling == value)
+            {
+                return;
+            }
+
+            ocspStapling = value;
+            sslCertificateContexts.Clear();
+        }
+    }
+
     /// <summary>
     ///     Certificates removed from <see cref="cachedCertificates" /> by <see cref="EnforceCertificateCacheBound" />
     ///     or the idle sweep in <see cref="ClearIdleCertificates" />, awaiting disposal. Not disposed at
@@ -1157,7 +1184,7 @@ public sealed class CertificateManager : IDisposable
     ///         are appended after it.
     ///     </para>
     ///     <para>
-    ///         Uses <c>offline: true</c> so chain building does not consult the Windows certificate stores or the
+    ///         Uses <c>offline: true</c> (unless <see cref="OcspStapling" /> is on) so chain building does not consult the Windows certificate stores or the
     ///         network. Without that, Schannel can latch onto a different root that happens to share the same
     ///         subject DN — for example the product default <c>Titanium Root Certificate Authority</c> that the
     ///         Basic/WPF examples trust into CurrentUser\Root on <c>ProxyServer.Start()</c> — and then present a
@@ -1254,15 +1281,17 @@ public sealed class CertificateManager : IDisposable
             foreach (X509Certificate2 cert in IntermediateCertificates)
                 extras.Add(cert);
 
+        // offline: false lets .NET fetch and staple an OCSP response; the default stays offline.
+        var offline = !ocspStapling;
         try
         {
             return System.Net.Security.SslStreamCertificateContext.Create(
-                leaf, extras.Count > 0 ? extras : null, offline: true, trust);
+                leaf, extras.Count > 0 ? extras : null, offline, trust);
         }
         catch (CryptographicException) when (trust != null)
         {
             return System.Net.Security.SslStreamCertificateContext.Create(
-                leaf, null, offline: true, trust);
+                leaf, null, offline, trust);
         }
     }
 

@@ -122,13 +122,14 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
         string? sniHost = null,
         bool failFastHandshake = true,
         string? capabilityKey = null,
-        string? precomputedCacheKey = null)
+        string? precomputedCacheKey = null,
+        UpstreamTlsMaterial? tlsMaterial = null)
     {
         if (_draining) throw new InvalidOperationException("QuicConnectionPool is draining.");
 
         var effectiveSniHost = sniHost ?? connectHost;
         var cacheKey = precomputedCacheKey ?? QuicConnectionFactory.GetCacheKey(connectHost, port, effectiveSniHost,
-            upStreamProxy, upStreamEndPoint);
+            upStreamProxy, upStreamEndPoint, tlsMaterial?.Fingerprint);
         var entry = _pool.GetOrAdd(cacheKey, static _ => new OriginEntry());
 
         // Pin the dictionary entry for this whole acquire so ClearIdleConnectionsAsync cannot
@@ -161,7 +162,7 @@ internal sealed class QuicConnectionPool : IAsyncDisposable
                     created = await _factory.CreateAsync(
                         connectHost, effectiveSniHost, port, upStreamEndPoint, upStreamProxy,
                         cacheKey, remoteCertificateValidationCallback, cancellationToken,
-                        failFastHandshake);
+                        failFastHandshake, tlsMaterial);
                 }
                 catch (Exception ex) when (capabilityKey != null
                                            && ex is not (OperationCanceledException or ObjectDisposedException

@@ -1,0 +1,84 @@
+name: gateway-conformance
+
+# Runs the upstream Gateway API conformance suite (GATEWAY-HTTP profile) against Titanium Gateway in a kind cluster.
+# The suite needs Linux with Docker; it cannot run on Windows or macOS hosts. See website/docs/gateway-api.md.
+#
+# The first runs report only: a failing suite does not fail the workflow until the repository variable
+# GATEWAY_CONFORMANCE_ENFORCE is set to 'true'. The report is uploaded either way.
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - beta
+      - stable
+    paths:
+      - 'src/Titanium.Gateway/**'
+      - 'src/Titanium.Web.Proxy.Configuration/**'
+      - 'deploy/helm/titanium-gateway/**'
+      - 'packaging/docker/**'
+      - 'tests/gateway-conformance/**'
+      - 'tools/gateway-conformance/**'
+      - '.github/workflows/gateway-conformance.yml'
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gateway-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KIND_VERSION: v0.27.0
+  HELM_VERSION: v3.17.3
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install kind and Helm
+        run: |
+          curl -fsSLo "$RUNNER_TEMP/kind" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          install -m 0755 "$RUNNER_TEMP/kind" /usr/local/bin/kind
+          curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          install -m 0755 "$RUNNER_TEMP/linux-amd64/helm" /usr/local/bin/helm
+
+      - name: Run the HTTP conformance profile
+        id: suite
+        continue-on-error: true
+        env:
+          REPORT: ${{ github.workspace }}/artifacts/gateway-conformance-report.yaml
+        run: tools/gateway-conformance/run.sh
+
+      - name: Upload the conformance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gateway-conformance-report
+          path: artifacts/gateway-conformance-report.yaml
+          if-no-files-found: warn
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "### Gateway API conformance"
+            echo
+            echo "Outcome: \`${{ steps.suite.outcome }}\`"
+            if [ -f artifacts/gateway-conformance-report.yaml ]; then
+              echo
+              echo '```yaml'
+              sed -n '1,80p' artifacts/gateway-conformance-report.yaml
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Enforce
+        if: steps.suite.outcome == 'failure' && vars.GATEWAY_CONFORMANCE_ENFORCE == 'true'
+        run: exit 1

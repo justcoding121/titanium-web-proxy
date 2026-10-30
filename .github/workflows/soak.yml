@@ -1,0 +1,152 @@
+name: soak
+
+# 60-minute soak of the shipped CLI as a reverse proxy at constant load, using the existing RpsLoadProbe.
+# Heavy by design: nightly and workflow_dispatch only, never on pull requests. It is not run locally.
+#
+# What the job asserts (any failure fails the run; the numbers are in the step summary and the artifact):
+#   1. Errors:   error_rate_pct of the measured window is below SOAK_MAX_ERROR_PCT (default 0.01) and the probe's own
+#                SLO verdict (meets_slo: error rate and p99 latency) is 1. A wedged or crashed proxy fails here.
+#   2. Memory:   the proxy's median resident set over the last third of the window is at most SOAK_MAX_RSS_GROWTH
+#                (default 1.25) times the median over the first third, sampled once a minute after a 10-minute
+#                settle period. A leak shows as growth; a steady working set does not.
+#   3. Handles:  the proxy's open file descriptor count at its last-third maximum is at most SOAK_MAX_FD_GROWTH
+#                (default 200) above its first-third maximum. A leaked socket per request would add thousands.
+#   4. Liveness: the probe produced a CSV row, and the proxy process was still running at the end of the window.
+# Throughput is recorded but not gated: runner speed varies too much between nights. Compare it with the wiki
+# Performance page when it changes by more than the usual noise.
+#
+# The re-measure rule for published numbers still applies: nothing from this job is pasted into the wiki.
+
+on:
+  schedule:
+    - cron: '41 2 * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Measure window in minutes (the nightly run uses 60)'
+        required: false
+        default: '60'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soak
+  cancel-in-progress: false
+
+env:
+  SOAK_MINUTES: ${{ github.event.inputs.minutes || '60' }}
+  SOAK_MAX_ERROR_PCT: '0.01'
+  SOAK_MAX_RSS_GROWTH: '1.25'
+  SOAK_MAX_FD_GROWTH: '200'
+
+jobs:
+  soak:
+    # A scheduled run on a fork would only burn the fork owner's minutes.
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'justcoding121/titanium-web-proxy'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Run the soak and sample the proxy
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force artifacts/soak | Out-Null
+          $minutes = [int] $env:SOAK_MINUTES
+          if ($minutes -lt 15) { throw "SOAK_MINUTES must be at least 15 (10 settle + 5 measured), got $minutes" }
+
+          # Build first, so the sampler never races a compile and the timed window is only the load.
+          dotnet build -c Release tools/RpsLoadProbe/RpsLoadProbe.csproj --warnaserror
+          if ($LASTEXITCODE -ne 0) { throw 'RpsLoadProbe build failed' }
+          dotnet build -c Release src/Titanium.Cli/Titanium.Cli.csproj --warnaserror
+          if ($LASTEXITCODE -ne 0) { throw 'Titanium.Cli build failed' }
+
+          # The sampler runs as a background job: once a minute, RSS (KiB) and open fds of the `titanium` process.
+          $sampler = Start-Job -ArgumentList (Join-Path $PWD 'artifacts/soak/proxy-samples.csv') -ScriptBlock {
+            param($path)
+            'epoch,rss_kib,fds' | Set-Content $path
+            while ($true) {
+              $p = Get-Process -Name titanium -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($p) {
+                $rss = (Select-String -Path "/proc/$($p.Id)/status" -Pattern '^VmRSS:\s+(\d+)').Matches[0].Groups[1].Value
+                $fds = (Get-ChildItem "/proc/$($p.Id)/fd" -ErrorAction SilentlyContinue | Measure-Object).Count
+                "$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()),$rss,$fds" | Add-Content $path
+              }
+              Start-Sleep -Seconds 60
+            }
+          }
+
+          try {
+            # One concurrency step, one repeat: warmup 60 s, then the whole window as a single measured step.
+            # -ArmTimeoutMin lifts the probe's default 25-minute per-arm cap above the window.
+            pwsh tools/RpsLoadProbe/run-rps.ps1 -Mode twp-cli-reverse-http1 -SkipBuild `
+              -Concurrency 64 -WarmupSec 60 -DurationSec ($minutes * 60) -Repeats 1 `
+              -ArmTimeoutMin ($minutes + 20) -ResultsDir artifacts/soak/results
+            if ($LASTEXITCODE -ne 0) { throw "soak run exited with $LASTEXITCODE" }
+          }
+          finally {
+            Stop-Job $sampler -ErrorAction SilentlyContinue
+            Remove-Job $sampler -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Assert the soak invariants
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $csv = Get-ChildItem artifacts/soak/results -Filter 'rps-ramp-*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $csv) { throw 'No ramp CSV: the probe produced nothing (liveness)' }
+          $rows = @(Import-Csv $csv.FullName)
+          if ($rows.Count -lt 1) { throw 'The ramp CSV has no rows (liveness)' }
+          $row = $rows | Select-Object -Last 1
+
+          $failures = @()
+          $maxErr = [double] $env:SOAK_MAX_ERROR_PCT
+          if ([double] $row.error_rate_pct -ge $maxErr) { $failures += "error_rate_pct $($row.error_rate_pct) >= $maxErr ($($row.errors) errors of $([int]$row.ok + [int]$row.errors))" }
+          if ($row.meets_slo -ne '1') { $failures += "meets_slo=$($row.meets_slo) (p99 $($row.p99_ms) ms, error rate $($row.error_rate_pct)%)" }
+
+          $samples = @(Import-Csv artifacts/soak/proxy-samples.csv)
+          # Drop the 10-minute settle period, then compare the first and last thirds of what is left.
+          $start = [long] $samples[0].epoch + 600
+          $steady = @($samples | Where-Object { [long] $_.epoch -ge $start })
+          $summary = @("| metric | value |", "|---|---|", "| rps | $($row.rps) |", "| p99 ms | $($row.p99_ms) |", "| errors | $($row.errors) |")
+          if ($steady.Count -lt 6) {
+            $failures += "only $($steady.Count) steady-state samples (need 6): the proxy process was not alive for the window (liveness)"
+          }
+          else {
+            $third = [math]::Floor($steady.Count / 3)
+            $first = @($steady | Select-Object -First $third)
+            $last = @($steady | Select-Object -Last $third)
+            $median = { param($v) $s = @($v | Sort-Object); $s[[math]::Floor(($s.Count - 1) / 2)] }
+            $rssFirst = & $median ($first | ForEach-Object { [double] $_.rss_kib })
+            $rssLast = & $median ($last | ForEach-Object { [double] $_.rss_kib })
+            $growth = $rssLast / $rssFirst
+            $fdFirst = ($first | ForEach-Object { [int] $_.fds } | Measure-Object -Maximum).Maximum
+            $fdLast = ($last | ForEach-Object { [int] $_.fds } | Measure-Object -Maximum).Maximum
+            $summary += "| rss first-third median KiB | $rssFirst |", "| rss last-third median KiB | $rssLast |", "| rss growth | $([math]::Round($growth, 3)) |"
+            $summary += "| fds first-third max | $fdFirst |", "| fds last-third max | $fdLast |"
+            if ($growth -gt [double] $env:SOAK_MAX_RSS_GROWTH) { $failures += "RSS grew $([math]::Round($growth, 3))x (limit $($env:SOAK_MAX_RSS_GROWTH))" }
+            if (($fdLast - $fdFirst) -gt [int] $env:SOAK_MAX_FD_GROWTH) { $failures += "open fds grew by $($fdLast - $fdFirst) (limit $($env:SOAK_MAX_FD_GROWTH))" }
+          }
+
+          $summary | Add-Content $env:GITHUB_STEP_SUMMARY
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
+          Write-Host 'Soak invariants hold.'
+
+      - name: Upload the soak data
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: soak
+          path: artifacts/soak
+          if-no-files-found: ignore

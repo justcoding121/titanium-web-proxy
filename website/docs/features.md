@@ -2,7 +2,7 @@
 
 What Titanium offers across the four products. Each item links to the how-to guide — this page is a catalog, not a tutorial.
 
-**Start here:** [Getting started](/docs/getting-started) · [Download](/download) · [Editions & licenses](/docs/editions)
+**Start here:** [Getting started](/docs/getting-started) · [Download](/download) · [Editions & licenses](/docs/editions) · [Capability coverage](/docs/capabilities)
 
 ## Inspector
 
@@ -34,14 +34,32 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 |------------|--------------|
 | YAML config | Schema 7.1 listeners, routes, clusters, transforms, static files |
 | Load balancing | RoundRobin, Random, LeastRequests, LeastTime; sticky cookie/header |
+| Upstream mTLS | Per-cluster client certificate, CA bundle, SNI override, and hostname policy (`clusters[].httpClient`) |
 | ACME | Optional Let's Encrypt certificates |
 | Protocols | HTTP/2 by default; HTTP/3 when QUIC is available; protocol bridging |
-| Listeners | Explicit, transparent, SOCKS, QUIC |
+| Listeners | Explicit, transparent, SOCKS, QUIC, UDP relay (sessions per client endpoint, cluster load balancing, caps, metrics) |
 | OS service | Windows SCM / systemd / launchd via `titanium service` |
 | Config dialects | `.yaml` / `.json`, compact `.twp`, nginx-like `.conf` |
 | Live reload | `titanium reload` / SIGHUP / `run --watch` — routes and clusters without dropping listeners |
 | Self-update | `titanium update` with SHA256 verification |
 | Access logs | Opt-in NDJSON (`server.accessLog`) |
+| Response compression | Opt-in brotli/gzip for HTTP/1.1 and HTTP/2-to-HTTP/1.1 (`server.responseCompression`): buffered (default) or `mode: streaming`, which compresses while relaying with a flush per upstream chunk, bounded memory and no size cap |
+| Request decompression | Opt-in gzip/brotli request bodies decompressed before the origin with a size cap and a zip-bomb ratio limit (`server.requestDecompression`) |
+| gRPC-Web | Opt-in per route (`grpcWeb: true`): browser gRPC-Web to a native gRPC HTTP/2 origin, binary unary and server-streaming ([guide](/docs/configuration#grpc-web-route-grpcweb)) |
+| Clusters | Passive health, optional active probes, retry, concurrency, priority, backup, hash, and opaque session affinity |
+| Routing | Order plus specificity, segment prefix, regex, redirects, direct responses, error pages, traffic split, and mirroring |
+| Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |
+| TCP passthrough with SNI | A passthrough listener reads the ClientHello and picks a cluster by server name (exact, then longest `*.suffix`, then a default cluster or `forwardHost`) without decrypting. Balancing, connect failover, half-close, an idle timeout, and an optional PROXY protocol v2 header to the upstream |
+| Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
+| Rate limit policy | `rateLimit` counts per client, forwarded client, header, cookie, or route, with a fixed window or token bucket, a bounded key table, and `Retry-After` (plus optional `RateLimit-*`) on a 429. Default `scope: node` is in-process; `scope: fleet` (Plus + Redis) shares a leased token bucket across instances ([Configuration](/docs/configuration#fleet-rate-limit)). Terminate-lite eligible |
+| External authorization | `extAuth` policy asks an HTTP service to allow or deny each request. Deny status and chosen headers are relayed, redirects are not followed, `failOpen` and a short positive cache are optional. Leaves terminate-lite |
+| Per-route .NET plugins | `plugins` loads an `IProxyMiddleware` DLL into its own collectible load context; `routes[].middleware` runs it for that route only. Per-plugin `failMode` (open or closed) and `timeoutMs`, `twp.plugin.duration` and `twp.plugin.errors` metrics, unloaded on reload. Script engines are a separate row. A config in which a route names a plugin leaves terminate-lite ([guide](/docs/plugins)) |
+| Lua and WebAssembly scripting | `kind: lua` (Lua 5.4) and `kind: wasm` (proxy-wasm 0.1.0 to 0.2.1 on Wasmtime) plugins, named in `routes[].middleware`. Sandboxed, with memory, instruction or fuel, and CPU-time limits inside the engine, `failMode` and `timeoutMs`, allow-listed HTTP callouts (`calloutHosts`), shared state, and metrics. Natives ship per RID; `titanium scripting-deps status` reports whether they load ([guide](/docs/scripting)) |
+| OpenID Connect login | `oidc` policy (Plus) signs people in with the authorization-code flow and PKCE, keeps an AES-256-GCM encrypted session cookie, renews it quietly, and passes chosen claims as headers. Scripts get `401` instead of a redirect. Leaves terminate-lite |
+| Admin listener | `server.admin` serves `/healthz`, `/readyz`, `/metrics`, and `/version` on a port of its own, and `titanium healthcheck` probes it ([reference](/docs/configuration#admin-listener-server-admin)) |
+| Metrics and traces | Opt-in Prometheus text (`server.metrics`) and OTLP traces and metrics with W3C trace context (`server.telemetry`) ([reference](/docs/configuration#traces-and-metrics-export-server-telemetry)) |
+| Kubernetes | Hardened container image, Helm chart, probes, graceful rollout, and ConfigMap and Secret reload ([guide](/docs/kubernetes)) |
+| Gateway API and Ingress | `titanium-gateway` turns `Gateway`, `HTTPRoute`, and `Ingress` resources into a data-plane config ([Gateway API](/docs/gateway-api), [Ingress](/docs/ingress)) |
 
 ## Plus
 
@@ -49,15 +67,16 @@ Optional ops sidecar for the CLI (and Inspector panels). [Plus guide](/docs/plus
 
 | Capability | What it does |
 |------------|--------------|
-| Dashboard | HTML admin on the control-plane port |
+| Dashboard | HTML admin on the control-plane port; local users, optional OIDC SSO, break-glass secrets, reload, and managed-config drift |
 | Observability | Prometheus-style metrics |
-| Auth | CIDR allow-list, JWT/OIDC, API key, Basic |
-| Thin WAF | Deny-list for paths, methods, headers, body size |
+| Auth | CIDR allow-list, JWT (JWKS), API key, Basic, the `oidc` login policy, and dashboard OIDC SSO |
+| WAF | Signature-based request screening with detect mode and anomaly scoring (built-in rule pack, custom YAML rules, per-route `waf` policy), plus an operator deny-list; see [Plus](/docs/plus#web-application-firewall-waf) |
 | Control plane | Loopback HTTP API; snapshot get/put; cache purge |
+| Managed fleet | Agent long-polls [titanium-manager](/docs/manager) (`manager.url`); staged rollouts and last-known-good |
 | Resilience | Health probes, circuit ejection, bounded retries |
 | Discovery | File, DNS; Consul / Kubernetes best-effort |
-| Rate limit | Per-IP window (memory or Redis) |
-| Cache | In-memory HTTP response cache |
+| Rate limit | Per-IP window (memory or Redis); fleet `rateLimit` leases over Redis |
+| Cache | In-memory shared response cache (an RFC 9111 subset): never stores `Set-Cookie`, `private`, or `no-store` responses, keys on `Vary`, revalidates, and collapses concurrent misses ([reference](/docs/configuration#response-cache)) |
 | gRPC-JSON | REST/JSON ↔ gRPC transcoding ([guide](/docs/grpc-json-transcoding)) |
 
 Same Noncommercial license as Inspector — see [Editions](/docs/editions).
@@ -76,16 +95,16 @@ Embed the same engine in .NET 10. MIT. [Library guide](/docs/library) · [API](/
 | System proxy + CA | Win / macOS / Linux helpers matching Inspector trust |
 | Synthetic responses | Html / Json / File / Stream / Redirect without an origin |
 | Fast path | Skip interception work when your handlers do not need the body |
-| Metrics and tracing | Core `Meter` and `ActivitySource` named `Titanium.Web.Proxy` (`AddMeter("Titanium.Web.Proxy")` / `AddSource("Titanium.Web.Proxy")`). Request counters stay quiet until a listener is attached |
-| Clusters | Passive health, optional active probes, retry, concurrency, priority, backup, hash, and opaque session affinity |
-| Routing | Order plus specificity, segment prefix, regex, redirects, direct responses, error pages, traffic split, and mirroring |
-| Listeners | SNI certificate selection, optional client certificates, PROXY protocol, TCP passthrough, and drain |
-| Policies | Optional per-route header, body-size, CORS, rate, connection, and address checks. An empty policy list leaves terminate-lite eligible |
+| Metrics and tracing | Core `Meter` and `ActivitySource` named `Titanium.Web.Proxy` (`AddMeter("Titanium.Web.Proxy")` / `AddSource("Titanium.Web.Proxy")`). Request counters stay quiet until a listener is attached. Opt-in Prometheus text via `server.metrics` |
+
+Routes, clusters, policies, and the other reverse-proxy rows under [CLI](#cli) come from the same engine; the CLI sets them from `twp.yaml`.
 
 Deeper API notes: [GitHub wiki](https://github.com/justcoding121/titanium-web-proxy/wiki).
 
 ## Also see
 
+- [Capability coverage](/docs/capabilities) — what is supported, partial, and not supported, by config key
+- [Kubernetes](/docs/kubernetes) · [Gateway API](/docs/gateway-api) · [Ingress](/docs/ingress)
 - [Performance](/docs/performance) — throughput charts and methodology
 - [Protocol support](/docs/protocol-support) — HTTP/1 · HTTP/2 · HTTP/3 matrix
 - [HTTP/3](/docs/http3) — QUIC default and packaging

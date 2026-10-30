@@ -205,6 +205,8 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliPlusCidrHttp1:
             case ProbeMode.TwpCliPlusJwtHttp1:
             case ProbeMode.TwpCliPlusRateLimitHttp1:
+            case ProbeMode.TwpCliPlusFleetRateLimitHttp1:
+            case ProbeMode.TwpCliPlusManagerAgentHttp1:
             case ProbeMode.TwpCliPlusResilienceHttp1:
             case ProbeMode.TwpCliPlusDiscoveryFileHttp1:
             case ProbeMode.TwpCliPlusMetricsScrapeHttp1:
@@ -221,6 +223,13 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliClusterClientHttp1:
             case ProbeMode.TwpCliRetryHttp1:
             case ProbeMode.TwpCliConnCapHttp1:
+            case ProbeMode.TwpCliExtAuthHttp1:
+            case ProbeMode.TwpCliScriptLuaNoopHttp1:
+            case ProbeMode.TwpCliScriptLuaHeaderHttp1:
+            case ProbeMode.TwpCliScriptWasmNoopHttp1:
+            case ProbeMode.TwpCliSlowUpstreamHttp1:
+            case ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1:
+            case ProbeMode.TwpCliScript1In50Http1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var kind = mode switch
@@ -234,6 +243,8 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliPlusCidrHttp1 => TitaniumCliHost.CliArmKind.PlusCidr,
                     ProbeMode.TwpCliPlusJwtHttp1 => TitaniumCliHost.CliArmKind.PlusJwt,
                     ProbeMode.TwpCliPlusRateLimitHttp1 => TitaniumCliHost.CliArmKind.PlusRateLimit,
+                    ProbeMode.TwpCliPlusFleetRateLimitHttp1 => TitaniumCliHost.CliArmKind.PlusFleetRateLimit,
+                    ProbeMode.TwpCliPlusManagerAgentHttp1 => TitaniumCliHost.CliArmKind.PlusManagerAgent,
                     ProbeMode.TwpCliPlusResilienceHttp1 => TitaniumCliHost.CliArmKind.PlusResilience,
                     ProbeMode.TwpCliPlusDiscoveryFileHttp1 => TitaniumCliHost.CliArmKind.PlusDiscoveryFile,
                     ProbeMode.TwpCliPlusMetricsScrapeHttp1 => TitaniumCliHost.CliArmKind.PlusMetricsScrape,
@@ -250,6 +261,13 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliClusterClientHttp1 => TitaniumCliHost.CliArmKind.ClusterClient,
                     ProbeMode.TwpCliRetryHttp1 => TitaniumCliHost.CliArmKind.StatusRetry,
                     ProbeMode.TwpCliConnCapHttp1 => TitaniumCliHost.CliArmKind.ConnCap,
+                    ProbeMode.TwpCliExtAuthHttp1 => TitaniumCliHost.CliArmKind.ExtAuth,
+                    ProbeMode.TwpCliScriptLuaNoopHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaNoop,
+                    ProbeMode.TwpCliScriptLuaHeaderHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaHeader,
+                    ProbeMode.TwpCliScriptWasmNoopHttp1 => TitaniumCliHost.CliArmKind.ScriptWasmNoop,
+                    ProbeMode.TwpCliSlowUpstreamHttp1 => TitaniumCliHost.CliArmKind.SlowUpstream,
+                    ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaSlowUpstream,
+                    ProbeMode.TwpCliScript1In50Http1 => TitaniumCliHost.CliArmKind.ScriptOneInFifty,
                     _ => TitaniumCliHost.CliArmKind.ForwardHost
                 };
                 var cli = await TitaniumCliHost.StartAsync(originHttpPort, kind, cancellationToken);
@@ -1267,6 +1285,8 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliPlusCidrHttp1 => "twp-cli-plus-cidr-http1",
         ProbeMode.TwpCliPlusJwtHttp1 => "twp-cli-plus-jwt-http1",
         ProbeMode.TwpCliPlusRateLimitHttp1 => "twp-cli-plus-ratelimit-http1",
+        ProbeMode.TwpCliPlusFleetRateLimitHttp1 => "twp-cli-plus-fleet-ratelimit-http1",
+        ProbeMode.TwpCliPlusManagerAgentHttp1 => "twp-cli-plus-manager-agent-http1",
         ProbeMode.TwpCliPlusResilienceHttp1 => "twp-cli-plus-resilience-http1",
         ProbeMode.TwpCliPlusDiscoveryFileHttp1 => "twp-cli-plus-discovery-file-http1",
         ProbeMode.TwpCliPlusMetricsScrapeHttp1 => "twp-cli-plus-metrics-scrape-http1",
@@ -1283,6 +1303,13 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliClusterClientHttp1 => "twp-cli-cluster-client-http1",
         ProbeMode.TwpCliRetryHttp1 => "twp-cli-retry-http1",
         ProbeMode.TwpCliConnCapHttp1 => "twp-cli-conncap-http1",
+        ProbeMode.TwpCliExtAuthHttp1 => "twp-cli-extauth-http1",
+        ProbeMode.TwpCliScriptLuaNoopHttp1 => "twp-cli-script-lua-noop-http1",
+        ProbeMode.TwpCliScriptLuaHeaderHttp1 => "twp-cli-script-lua-header-http1",
+        ProbeMode.TwpCliScriptWasmNoopHttp1 => "twp-cli-script-wasm-noop-http1",
+        ProbeMode.TwpCliSlowUpstreamHttp1 => "twp-cli-slow-upstream-http1",
+        ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 => "twp-cli-script-lua-slow-upstream-http1",
+        ProbeMode.TwpCliScript1In50Http1 => "twp-cli-script-1in50-http1",
         ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()

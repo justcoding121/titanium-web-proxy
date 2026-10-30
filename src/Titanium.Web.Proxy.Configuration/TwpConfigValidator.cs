@@ -1,7 +1,10 @@
 using System.Net;
 using System.Security.Authentication;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Network;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -22,7 +25,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownListenerTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explicit", "transparent", "socks", "quic", "masque",
+        "explicit", "transparent", "socks", "quic", "masque", "udp",
     };
 
     private static readonly HashSet<string> KnownProxyTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -34,12 +37,268 @@ public static class TwpConfigValidator
     {
         ArgumentNullException.ThrowIfNull(config);
         var errors = new List<string>();
-        var clusterIds = ValidateClusters(config.Clusters, errors);
+        var clusterIds = ValidateClusters(config.Clusters ?? [], errors);
         var policyNames = ValidatePolicies(config.Policies, errors);
-        ValidateRoutes(config.Routes, clusterIds, policyNames, errors);
-        ValidateListeners(config.Listeners, errors);
+        ValidateOidcNeedsPlus(config, errors);
+        ValidateWafNeedsPlus(config, errors);
+        var pluginNames = ValidatePlugins(config.Plugins, errors);
+        ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
+        ValidateListeners(config.Listeners ?? [], clusterIds, errors);
+        ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
+        ValidatePlusSecrets(config.Plus, errors);
         return errors;
+    }
+
+    /// <summary>
+    ///     Checks <c>scriptPipeline</c> and <c>listeners[].streamFilters</c>: every name is a loaded <c>lua</c> or <c>wasm</c>
+    ///     plugin, listed once, and stream filters sit on a passthrough listener.
+    /// </summary>
+    private static void ValidateScriptWiring(TwpConfig config, List<string> errors)
+    {
+        var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var plugin in config.Plugins ?? [])
+        {
+            if (plugin?.Name is { Length: > 0 } name)
+            {
+                kinds.TryAdd(name, PluginKinds.Normalize(plugin.Kind));
+            }
+        }
+
+        ValidateScriptNames(config.ScriptPipeline, "scriptPipeline", kinds, errors);
+        foreach (var listener in config.Listeners ?? [])
+        {
+            if (listener?.StreamFilters is not { Count: > 0 } names)
+            {
+                continue;
+            }
+
+            var label = $"Listener port {listener.Port}: streamFilters";
+            if (!listener.Passthrough || listener.DecryptSsl)
+            {
+                errors.Add($"{label} needs passthrough: true and decryptSsl: false.");
+            }
+
+            ValidateScriptNames(names, label, kinds, errors);
+        }
+    }
+
+    private static void ValidateScriptNames(
+        IList<string>? names, string label, Dictionary<string, string> kinds, List<string> errors)
+    {
+        if (names is null)
+        {
+            return;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errors.Add($"{label} has an entry without a name.");
+            }
+            else if (!kinds.TryGetValue(name, out var kind))
+            {
+                errors.Add($"{label} references unknown plugin '{name}'.");
+            }
+            else if (!PluginKinds.IsScript(kind))
+            {
+                errors.Add($"{label} names plugin '{name}', which is kind '{kind}'; only 'lua' and 'wasm' plugins run there.");
+            }
+            else if (!seen.Add(name))
+            {
+                errors.Add($"{label} lists plugin '{name}' more than once.");
+            }
+        }
+    }
+
+    private static void ValidatePlusSecrets(PlusConfig? plus, List<string> errors)
+    {
+        if (plus is null)
+        {
+            return;
+        }
+
+        if (plus.ControlPlane is { } controlPlane)
+        {
+            ValidateSecretReference(
+                "plus.controlPlane.sharedSecret",
+                controlPlane.SharedSecret,
+                controlPlane.SharedSecretEnv,
+                controlPlane.SharedSecretFile,
+                errors);
+            ValidateSecretReference(
+                "plus.controlPlane.dashboardViewerSecret",
+                controlPlane.DashboardViewerSecret,
+                controlPlane.DashboardViewerSecretEnv,
+                controlPlane.DashboardViewerSecretFile,
+                errors);
+            if (controlPlane.DashboardOidc is { } oidc)
+            {
+                ValidateSecretReference(
+                    "plus.controlPlane.dashboardOidc.clientSecret",
+                    oidc.ClientSecret,
+                    oidc.ClientSecretEnv,
+                    oidc.ClientSecretFile,
+                    errors);
+                ValidateSecretReference(
+                    "plus.controlPlane.dashboardOidc.cookieSecret",
+                    oidc.CookieSecret,
+                    oidc.CookieSecretEnv,
+                    oidc.CookieSecretFile,
+                    errors);
+                if (plus.Enabled &&
+                    (!string.IsNullOrWhiteSpace(oidc.Issuer) || !string.IsNullOrWhiteSpace(oidc.ClientId)))
+                {
+                    if (string.IsNullOrWhiteSpace(oidc.Issuer) || string.IsNullOrWhiteSpace(oidc.ClientId))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc needs both issuer and clientId.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(oidc.CookieSecret) &&
+                        string.IsNullOrWhiteSpace(oidc.CookieSecretEnv) &&
+                        string.IsNullOrWhiteSpace(oidc.CookieSecretFile))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc needs cookieSecret, cookieSecretEnv, or cookieSecretFile.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(oidc.RedirectUri))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc needs redirectUri.");
+                    }
+                    else if (!Uri.TryCreate(oidc.RedirectUri.Trim(), UriKind.Absolute, out var redirect) ||
+                             (redirect.Scheme != Uri.UriSchemeHttp && redirect.Scheme != Uri.UriSchemeHttps))
+                    {
+                        errors.Add("plus.controlPlane.dashboardOidc.redirectUri must be an absolute http(s) URI.");
+                    }
+
+                    if (!HasDashboardOidcAllowlist(oidc))
+                    {
+                        errors.Add(
+                            "plus.controlPlane.dashboardOidc needs at least one of allowedEmails, allowedEmailDomains, operatorGroups, or viewerGroups.");
+                    }
+                }
+            }
+
+            ValidateControlPlaneTransport(plus.Enabled, controlPlane, errors);
+        }
+
+        if (plus.Options is not { Count: > 0 } options)
+        {
+            return;
+        }
+
+        foreach (var key in SecretReferenceKeys.PlusOptionKeys)
+        {
+            ValidateSecretReference(
+                $"plus.options.{key}",
+                FindOption(options, key),
+                FindOption(options, key + SecretReferenceKeys.EnvSuffix),
+                FindOption(options, key + SecretReferenceKeys.FileSuffix),
+                errors);
+        }
+    }
+
+    private static bool HasDashboardOidcAllowlist(DashboardOidcConfig oidc) =>
+        HasNonEmptyList(oidc.AllowedEmails) ||
+        HasNonEmptyList(oidc.AllowedEmailDomains) ||
+        HasNonEmptyList(oidc.OperatorGroups) ||
+        HasNonEmptyList(oidc.ViewerGroups);
+
+    private static bool HasNonEmptyList(IEnumerable<string>? values) =>
+        values is not null && values.Any(static v => !string.IsNullOrWhiteSpace(v));
+
+    /// <summary>
+    ///     The control plane carries a shared secret and can rewrite routing, so a listener that is reachable from the
+    ///     network needs TLS. Loopback is exempt; <c>allowInsecureNonLoopback</c> is the explicit opt-out.
+    /// </summary>
+    private static void ValidateControlPlaneTransport(bool plusEnabled, ControlPlaneConfig controlPlane, List<string> errors)
+    {
+        var tls = controlPlane.Tls;
+        if (tls is not null)
+        {
+            if (string.IsNullOrWhiteSpace(tls.CertificatePath) || string.IsNullOrWhiteSpace(tls.KeyPath))
+            {
+                errors.Add("plus.controlPlane.tls needs both certificatePath and keyPath.");
+            }
+        }
+
+        if (!plusEnabled || tls is not null || controlPlane.AllowInsecureNonLoopback)
+        {
+            return;
+        }
+
+        if (!IsLoopbackControlPlaneHost(controlPlane.Host))
+        {
+            errors.Add(
+                $"plus.controlPlane.host '{controlPlane.Host}' is not loopback: set plus.controlPlane.tls " +
+                "(certificatePath and keyPath), or allowInsecureNonLoopback: true when the network already protects the port.");
+        }
+    }
+
+    private static bool IsLoopbackControlPlaneHost(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return true;
+        }
+
+        var trimmed = host.Trim().Trim('[', ']');
+        return trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+               (IPAddress.TryParse(trimmed, out var address) && IPAddress.IsLoopback(address));
+    }
+
+    private static string? FindOption(IDictionary<string, string> options, string key)
+    {
+        foreach (var (name, value) in options)
+        {
+            if (string.Equals(name, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A secret is given as a literal, an environment variable name, or a file path: at most one of the three.</summary>
+    private static void ValidateSecretReference(string path, string? literal, string? env, string? file, List<string> errors)
+    {
+        var set = new List<string>(3);
+        if (!string.IsNullOrEmpty(literal))
+        {
+            set.Add(path);
+        }
+
+        if (env is not null)
+        {
+            if (string.IsNullOrWhiteSpace(env))
+            {
+                errors.Add($"{path}{SecretReferenceKeys.EnvSuffix} must name an environment variable.");
+            }
+            else
+            {
+                set.Add(path + SecretReferenceKeys.EnvSuffix);
+            }
+        }
+
+        if (file is not null)
+        {
+            if (string.IsNullOrWhiteSpace(file))
+            {
+                errors.Add($"{path}{SecretReferenceKeys.FileSuffix} must name a file.");
+            }
+            else
+            {
+                set.Add(path + SecretReferenceKeys.FileSuffix);
+            }
+        }
+
+        if (set.Count > 1)
+        {
+            errors.Add($"Set exactly one of {string.Join(", ", set)}; they are alternative ways to supply the same secret.");
+        }
     }
 
     private static HashSet<string> ValidateClusters(IEnumerable<ClusterConfig> clusters, List<string> errors)
@@ -70,11 +329,185 @@ public static class TwpConfigValidator
             {
                 ValidateDestination(cluster.Id, dest, destinationIds, allDestinationIds, errors);
             }
+
+            ValidateHttpClient(cluster.Id, cluster.HttpClient, errors);
+            ValidateRetry($"clusters.{cluster.Id}.retry", cluster.Retry, errors);
+            ValidateClusterProxyProtocol(cluster, errors);
         }
 
         return clusterIds;
     }
 
+    private static void ValidateClusterProxyProtocol(ClusterConfig cluster, List<string> errors)
+    {
+        if (cluster.SendProxyProtocol is null)
+        {
+            return;
+        }
+
+        if (!IsProxyProtocolMode(cluster.SendProxyProtocol))
+        {
+            errors.Add($"Cluster '{cluster.Id}' sendProxyProtocol '{cluster.SendProxyProtocol}' is not none or v2.");
+        }
+    }
+
+    private static bool IsProxyProtocolMode(string value) =>
+        value.Equals("none", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("v2", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateRetry(string path, RetryConfig? retry, List<string> errors)
+    {
+        if (retry is null)
+        {
+            return;
+        }
+
+        RequireNonNegative(retry.Attempts, $"{path}.attempts", errors);
+        RequireNonNegative(retry.MaxBufferedBodyBytes, $"{path}.maxBufferedBodyBytes", errors);
+        RequireNonNegative(retry.PerTryTimeoutMilliseconds, $"{path}.perTryTimeoutMilliseconds", errors);
+        RequireNonNegative(retry.BackoffMilliseconds, $"{path}.backoffMilliseconds", errors);
+        RequireNonNegative(retry.MaxBackoffMilliseconds, $"{path}.maxBackoffMilliseconds", errors);
+        RequireNonNegative(retry.BudgetMinConcurrent, $"{path}.budgetMinConcurrent", errors);
+
+        if (retry.JitterPercent is < 0 or > 100)
+        {
+            errors.Add($"{path}.jitterPercent must be between 0 and 100.");
+        }
+
+        if (retry.BudgetPercent is < 0 or > 1000)
+        {
+            errors.Add($"{path}.budgetPercent must be between 0 and 1000 (0 = unlimited).");
+        }
+
+        if (retry.StatusCodes is { } codes)
+        {
+            if (codes.Count == 0)
+            {
+                errors.Add($"{path}.statusCodes must list at least one status (or be omitted for 502, 503, 504).");
+            }
+
+            foreach (var code in codes)
+            {
+                if (code is not (429 or (>= 500 and <= 599)))
+                {
+                    errors.Add($"{path}.statusCodes: {code} is not retryable (use 429 or 500-599).");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Upstream TLS files are checked at load time so a typo is a config error, not a 502 on the first request.
+    /// The proxy applies the same rules at run time and fails closed.
+    /// </summary>
+    private static void ValidateHttpClient(string clusterId, ClusterHttpClientConfig? http, List<string> errors)
+    {
+        if (http is null)
+        {
+            return;
+        }
+
+        var prefix = $"Cluster '{clusterId}' httpClient";
+        var hasCertificate = !string.IsNullOrWhiteSpace(http.ClientCertificatePath);
+        var hasKey = !string.IsNullOrWhiteSpace(http.ClientCertificateKeyPath);
+        if (http.ServerName is not null && string.IsNullOrWhiteSpace(http.ServerName))
+        {
+            errors.Add($"{prefix}: serverName must not be blank.");
+        }
+
+        if (hasKey && !hasCertificate)
+        {
+            errors.Add($"{prefix}: clientCertificateKeyPath requires clientCertificatePath.");
+        }
+
+        if (!string.IsNullOrEmpty(http.ClientCertificatePasswordEnv) && !hasCertificate)
+        {
+            errors.Add($"{prefix}: clientCertificatePasswordEnv requires clientCertificatePath.");
+        }
+
+        if (hasCertificate)
+        {
+            ValidateClientCertificateFiles(prefix, http, hasKey, errors);
+        }
+
+        if (!string.IsNullOrWhiteSpace(http.CaBundlePath))
+        {
+            ValidateCaBundle(prefix, http.CaBundlePath, errors);
+        }
+    }
+
+    private static void ValidateClientCertificateFiles(string prefix, ClusterHttpClientConfig http, bool hasKey,
+        List<string> errors)
+    {
+        var certPath = http.ClientCertificatePath!;
+        if (!File.Exists(certPath))
+        {
+            errors.Add($"{prefix}: clientCertificatePath '{certPath}' was not found.");
+            return;
+        }
+
+        if (hasKey && !File.Exists(http.ClientCertificateKeyPath!))
+        {
+            errors.Add($"{prefix}: clientCertificateKeyPath '{http.ClientCertificateKeyPath}' was not found.");
+            return;
+        }
+
+        string? password = null;
+        if (!string.IsNullOrEmpty(http.ClientCertificatePasswordEnv))
+        {
+            password = Environment.GetEnvironmentVariable(http.ClientCertificatePasswordEnv);
+            if (password is null)
+            {
+                errors.Add($"{prefix}: environment variable '{http.ClientCertificatePasswordEnv}' (clientCertificatePasswordEnv) is not set.");
+                return;
+            }
+        }
+
+        try
+        {
+            using var certificate = hasKey
+                ? LoadPemPair(certPath, http.ClientCertificateKeyPath!, password)
+                : X509CertificateLoader.LoadPkcs12FromFile(certPath, password);
+            if (!certificate.HasPrivateKey)
+            {
+                errors.Add($"{prefix}: clientCertificatePath '{certPath}' has no private key.");
+            }
+        }
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException or IOException)
+        {
+            errors.Add($"{prefix}: client certificate does not parse ({ex.Message}).");
+        }
+    }
+
+    private static X509Certificate2 LoadPemPair(string certPath, string keyPath, string? password)
+    {
+        var keyPem = File.ReadAllText(keyPath);
+        return keyPem.Contains("ENCRYPTED PRIVATE KEY", StringComparison.Ordinal)
+            ? X509Certificate2.CreateFromEncryptedPemFile(certPath, password, keyPath)
+            : X509Certificate2.CreateFromPemFile(certPath, keyPath);
+    }
+
+    private static void ValidateCaBundle(string prefix, string path, List<string> errors)
+    {
+        if (!File.Exists(path))
+        {
+            errors.Add($"{prefix}: caBundlePath '{path}' was not found.");
+            return;
+        }
+
+        try
+        {
+            var roots = ClientCertificateAuthorityFiles.Load(path);
+            if (roots.Count == 0)
+            {
+                errors.Add($"{prefix}: caBundlePath contains no certificates.");
+            }
+        }
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException or IOException)
+        {
+            errors.Add($"{prefix}: caBundlePath does not parse ({ex.Message}).");
+        }
+    }
     private static void ValidateDestination(
         string clusterId,
         DestinationConfig dest,
@@ -118,7 +551,35 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth", "oidc", "waf",
+    };
+
+    private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "off", "detect", "block",
+    };
+
+    private static readonly HashSet<string> WafExclusionTargets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "path", "query", "header", "cookie", "body",
+    };
+
+    private static readonly HashSet<string> ExtAuthMethods = new(StringComparer.Ordinal)
+    {
+        "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS",
+    };
+
+    // The proxy sets these on every subrequest, so a configured sendHeaders entry could only shadow them.
+    private static readonly HashSet<string> ExtAuthReservedHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "X-Original-Method", "X-Original-Uri", "X-Original-Host", "X-Forwarded-For", "X-Titanium-ExtAuth",
+    };
+
+    // Hop-by-hop and framing headers describe one connection. They cannot carry a decision.
+    private static readonly HashSet<string> ExtAuthForbiddenHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Connection", "Keep-Alive", "Proxy-Connection", "Proxy-Authenticate", "Proxy-Authorization", "TE", "Trailer",
+        "Transfer-Encoding", "Upgrade", "Content-Length", "Host",
     };
 
     /// <summary>
@@ -186,6 +647,11 @@ public static class TwpConfigValidator
                     errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
                 }
 
+                if (policy.Kind == "rateLimit")
+                {
+                    ValidateRateLimit(policy, errors);
+                }
+
                 break;
             case "ipAllowDeny":
                 if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
@@ -196,7 +662,416 @@ public static class TwpConfigValidator
                 ValidatePrefixList(name, "allow", policy.Allow, errors);
                 ValidatePrefixList(name, "deny", policy.Deny, errors);
                 break;
+            case "extAuth":
+                ValidateExtAuth(policy, errors);
+                break;
+            case "oidc":
+                ValidateOidc(policy, errors);
+                break;
+            case "waf":
+                ValidateWaf(policy, errors);
+                break;
         }
+    }
+
+    private static void ValidateWaf(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.Mode is not null && !WafModes.Contains(policy.Mode))
+        {
+            errors.Add($"Policy '{name}' (waf) mode must be off, detect, or block.");
+        }
+
+        if (policy.ParanoiaLevel is not null and (< 1 or > 3))
+        {
+            errors.Add($"Policy '{name}' (waf) paranoiaLevel must be 1-3.");
+        }
+
+        if (policy.BlockThreshold is not null and (< 1 or > 1000))
+        {
+            errors.Add($"Policy '{name}' (waf) blockThreshold must be 1-1000.");
+        }
+
+        if (policy.DisabledRules is { } disabled)
+        {
+            foreach (var rule in disabled)
+            {
+                if (string.IsNullOrWhiteSpace(rule))
+                {
+                    errors.Add($"Policy '{name}' (waf) disabledRules has an empty entry.");
+                }
+            }
+        }
+
+        if (policy.Exclusions is not { } exclusions)
+        {
+            return;
+        }
+
+        foreach (var exclusion in exclusions)
+        {
+            if (!IsWafExclusion(exclusion))
+            {
+                errors.Add($"Policy '{name}' (waf) exclusion '{exclusion}' must be rule[@target] with a target of path, query[:name], header[:Name], cookie[:name], or body[:field].");
+            }
+        }
+    }
+
+    private static bool IsWafExclusion(string? exclusion)
+    {
+        if (string.IsNullOrWhiteSpace(exclusion))
+        {
+            return false;
+        }
+
+        var at = exclusion.IndexOf('@', StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return true;
+        }
+
+        if (at == 0 || at == exclusion.Length - 1)
+        {
+            return false;
+        }
+
+        var target = exclusion[(at + 1)..];
+        var colon = target.IndexOf(':', StringComparison.Ordinal);
+        var kind = colon < 0 ? target : target[..colon];
+        return WafExclusionTargets.Contains(kind) && (colon < 0 || colon < target.Length - 1);
+    }
+
+    /// <summary>The override is read by the Plus WAF. Without it, or with the WAF switched off, the policy would do nothing.</summary>
+    private static void ValidateWafNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        var wafEnabled = config.Plus?.Enabled == true && config.Plus.Options is { } options &&
+                         options.Any(pair => string.Equals(pair.Key, "waf.enabled", StringComparison.OrdinalIgnoreCase) &&
+                                             (string.Equals(pair.Value, "true", StringComparison.OrdinalIgnoreCase) || pair.Value == "1"));
+        if (wafEnabled)
+        {
+            return;
+        }
+
+        foreach (var policy in policies)
+        {
+            if (string.Equals(policy.Kind, "waf", StringComparison.Ordinal))
+            {
+                errors.Add($"Policy '{policy.Name}' (waf) needs plus.enabled: true and plus.options waf.enabled: \"true\". The WAF is enforced by Titanium Plus.");
+            }
+        }
+    }
+
+    // Connection-level headers and the ones the proxy owns cannot carry a claim.
+    private static readonly HashSet<string> OidcForbiddenClaimHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Connection", "Keep-Alive", "Proxy-Connection", "Proxy-Authenticate", "Proxy-Authorization", "TE", "Trailer",
+        "Transfer-Encoding", "Upgrade", "Content-Length", "Host", "Cookie", "Set-Cookie", "Authorization",
+    };
+
+    /// <summary>The login is enforced by the Plus module. Without it the policy would refuse every request.</summary>
+    private static void ValidateOidcNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Plus?.Enabled == true || config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        foreach (var policy in policies)
+        {
+            if (string.Equals(policy.Kind, "oidc", StringComparison.Ordinal))
+            {
+                errors.Add($"Policy '{policy.Name}' (oidc) needs plus.enabled: true. The login is enforced by Titanium Plus.");
+            }
+        }
+    }
+
+    private static void ValidateOidc(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (!IsOidcIssuer(policy.Issuer))
+        {
+            errors.Add($"Policy '{name}' (oidc) needs issuer, an absolute https URL (http only for a loopback host) without credentials, query, or fragment.");
+        }
+
+        if (string.IsNullOrWhiteSpace(policy.ClientId))
+        {
+            errors.Add($"Policy '{name}' (oidc) needs clientId.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(policy.ClientSecretEnv) && !string.IsNullOrWhiteSpace(policy.ClientSecretFile))
+        {
+            errors.Add($"Policy '{name}' (oidc) sets both clientSecretEnv and clientSecretFile. Set at most one.");
+        }
+
+        var hasCookieEnv = !string.IsNullOrWhiteSpace(policy.CookieSecretEnv);
+        var hasCookieFile = !string.IsNullOrWhiteSpace(policy.CookieSecretFile);
+        if (hasCookieEnv == hasCookieFile)
+        {
+            errors.Add($"Policy '{name}' (oidc) needs exactly one of cookieSecretEnv or cookieSecretFile (a 32-byte key as base64 or 64 hex digits).");
+        }
+
+        ValidateOidcPath(name, "redirectPath", policy.RedirectPath, errors);
+        ValidateOidcPath(name, "logoutPath", policy.LogoutPath, errors);
+        if (policy.RedirectPath is not null && policy.LogoutPath is not null &&
+            string.Equals(policy.RedirectPath, policy.LogoutPath, StringComparison.Ordinal))
+        {
+            errors.Add($"Policy '{name}' (oidc) redirectPath and logoutPath must differ.");
+        }
+
+        if (policy.CookieName is not null && (policy.CookieName.Length is < 1 or > 64 || !IsHeaderToken(policy.CookieName)))
+        {
+            errors.Add($"Policy '{name}' (oidc) cookieName must be 1-64 token characters.");
+        }
+
+        if (policy.SessionTtlSeconds is < 60 or > 2_592_000)
+        {
+            errors.Add($"Policy '{name}' (oidc) sessionTtlSeconds must be 60-2592000.");
+        }
+
+        if (policy.PublicBaseUrl is not null && !IsOrigin(policy.PublicBaseUrl))
+        {
+            errors.Add($"Policy '{name}' (oidc) publicBaseUrl must be an absolute http or https origin such as https://app.example.com.");
+        }
+
+        ValidateOidcList(name, "scopes", policy.Scopes, static v => !HasWhitespace(v), "a scope without spaces", errors);
+        ValidateOidcList(name, "allowedEmails", policy.AllowedEmails,
+            static v => v.IndexOf('@', StringComparison.Ordinal) > 0 && !HasWhitespace(v), "an e-mail address", errors);
+        ValidateOidcList(name, "allowedEmailDomains", policy.AllowedEmailDomains,
+            static v => !v.Contains('@', StringComparison.Ordinal) && !HasWhitespace(v), "a domain without @", errors);
+        ValidateOidcList(name, "allowedGroups", policy.AllowedGroups, static _ => true, "a group name", errors);
+        ValidateOidcList(name, "postLoginRedirectAllowlist", policy.PostLoginRedirectAllowlist,
+            static v => IsOrigin(v), "an absolute http or https origin", errors);
+
+        if (policy.GroupsClaim is not null && string.IsNullOrWhiteSpace(policy.GroupsClaim))
+        {
+            errors.Add($"Policy '{name}' (oidc) groupsClaim must not be empty.");
+        }
+
+        if (policy.PassClaims is { } pass)
+        {
+            foreach (var pair in pass)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                {
+                    errors.Add($"Policy '{name}' (oidc) passClaims has an empty claim name.");
+                }
+
+                var header = pair.Value?.Trim();
+                if (string.IsNullOrEmpty(header) || !IsHeaderToken(header))
+                {
+                    errors.Add($"Policy '{name}' (oidc) passClaims header '{pair.Value}' is not a header name.");
+                }
+                else if (OidcForbiddenClaimHeaders.Contains(header))
+                {
+                    errors.Add($"Policy '{name}' (oidc) passClaims header '{header}' cannot carry a claim.");
+                }
+            }
+        }
+    }
+
+    private static bool IsOidcIssuer(string? issuer)
+    {
+        if (!Uri.TryCreate(issuer, UriKind.Absolute, out var uri) ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        return uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback);
+    }
+
+    private static bool IsOrigin(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
+        (uri.AbsolutePath.Length == 0 || uri.AbsolutePath == "/");
+
+    private static bool HasWhitespace(string value)
+    {
+        foreach (var c in value)
+        {
+            if (char.IsWhiteSpace(c) || char.IsControl(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ValidateOidcPath(string policyName, string field, string? path, List<string> errors)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        if (path.Length < 2 || path[0] != '/' || path[1] == '/' || path[1] == '\\' ||
+            path.Contains('?', StringComparison.Ordinal) || path.Contains('#', StringComparison.Ordinal) || HasWhitespace(path))
+        {
+            errors.Add($"Policy '{policyName}' (oidc) {field} must start with a single '/' and carry no query, fragment, or spaces.");
+        }
+    }
+
+    private static void ValidateOidcList(
+        string policyName, string field, IReadOnlyList<string>? values, Func<string, bool> accepts, string expected,
+        List<string> errors)
+    {
+        if (values is null)
+        {
+            return;
+        }
+
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value) || !accepts(value.Trim()))
+            {
+                errors.Add($"Policy '{policyName}' (oidc) {field} entry '{value}' must be {expected}.");
+            }
+        }
+    }
+    private static void ValidateRateLimit(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.Key is not null && !IsRateLimitKey(policy.Key))
+        {
+            errors.Add(
+                $"Policy '{name}' (rateLimit) key '{policy.Key}' must be client, forwardedClient, route, header:<Name>, or cookie:<Name>.");
+        }
+
+        if (policy.Algorithm is not null && policy.Algorithm is not ("fixedWindow" or "tokenBucket"))
+        {
+            errors.Add($"Policy '{name}' (rateLimit) algorithm '{policy.Algorithm}' must be fixedWindow or tokenBucket.");
+        }
+
+        if (policy.Burst is < 1)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) burst must be >= 1.");
+        }
+
+        if (policy.MaxKeys is < 1000 or > 10_000_000)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) maxKeys must be 1000-10000000.");
+        }
+
+        if (policy.Scope is not null && policy.Scope is not ("node" or "fleet"))
+        {
+            errors.Add($"Policy '{name}' (rateLimit) scope '{policy.Scope}' must be node or fleet.");
+        }
+
+        if (policy.FleetFailMode is not null && policy.FleetFailMode is not ("local" or "open" or "closed"))
+        {
+            errors.Add($"Policy '{name}' (rateLimit) fleetFailMode '{policy.FleetFailMode}' must be local, open, or closed.");
+        }
+
+        if (policy.LocalShare is <= 0 or > 1)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) localShare must be in (0, 1].");
+        }
+
+        var isFleet = string.Equals(policy.Scope, "fleet", StringComparison.OrdinalIgnoreCase);
+        if (!isFleet && policy.FleetFailMode is not null)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) fleetFailMode requires scope: fleet.");
+        }
+
+        if (!isFleet && policy.LocalShare is not null)
+        {
+            errors.Add($"Policy '{name}' (rateLimit) localShare requires scope: fleet.");
+        }
+    }
+
+    private static bool IsRateLimitKey(string key)
+    {
+        if (key is "client" or "forwardedClient" or "route")
+        {
+            return true;
+        }
+
+        const int prefixLength = 7;
+        return key.Length > prefixLength &&
+               (key.StartsWith("header:", StringComparison.Ordinal) ||
+                key.StartsWith("cookie:", StringComparison.Ordinal)) &&
+               IsHeaderToken(key[prefixLength..]);
+    }
+
+    private static void ValidateExtAuth(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (!Uri.TryCreate(policy.Url, UriKind.Absolute, out var url) ||
+            (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps) ||
+            !string.IsNullOrEmpty(url.UserInfo))
+        {
+            errors.Add($"Policy '{name}' (extAuth) needs url, an absolute http or https URL without credentials.");
+        }
+
+        if (policy.Method is not null && !ExtAuthMethods.Contains(policy.Method.Trim().ToUpperInvariant()))
+        {
+            errors.Add($"Policy '{name}' (extAuth) method '{policy.Method}' must be one of GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS.");
+        }
+
+        if (policy.TimeoutMilliseconds is < 1 or > 60_000)
+        {
+            errors.Add($"Policy '{name}' (extAuth) timeoutMilliseconds must be 1-60000.");
+        }
+
+        if (policy.CacheSeconds is < 0)
+        {
+            errors.Add($"Policy '{name}' (extAuth) cacheSeconds must be >= 0.");
+        }
+
+        if (policy.CacheMaxEntries is < 1 or > 1_000_000)
+        {
+            errors.Add($"Policy '{name}' (extAuth) cacheMaxEntries must be 1-1000000.");
+        }
+
+        ValidateExtAuthHeaders(name, "sendHeaders", policy.SendHeaders, rejectReserved: true, errors);
+        ValidateExtAuthHeaders(name, "copyResponseHeaders", policy.CopyResponseHeaders, rejectReserved: false, errors);
+        ValidateExtAuthHeaders(name, "denyResponseHeaders", policy.DenyResponseHeaders, rejectReserved: false, errors);
+    }
+
+    private static void ValidateExtAuthHeaders(
+        string policyName, string field, IReadOnlyList<string>? headers, bool rejectReserved, List<string> errors)
+    {
+        if (headers is null)
+        {
+            return;
+        }
+
+        foreach (var header in headers)
+        {
+            var trimmed = header?.Trim();
+            if (string.IsNullOrEmpty(trimmed) || !IsHeaderToken(trimmed))
+            {
+                errors.Add($"Policy '{policyName}' (extAuth) {field} entry '{header}' is not a header name.");
+            }
+            else if (ExtAuthForbiddenHeaders.Contains(trimmed))
+            {
+                errors.Add($"Policy '{policyName}' (extAuth) {field} entry '{trimmed}' is a connection-level header.");
+            }
+            else if (rejectReserved && ExtAuthReservedHeaders.Contains(trimmed))
+            {
+                errors.Add($"Policy '{policyName}' (extAuth) {field} entry '{trimmed}' is set by the proxy.");
+            }
+        }
+    }
+
+    private static bool IsHeaderToken(string value)
+    {
+        foreach (var c in value)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c, StringComparison.Ordinal)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void ValidatePrefixList(string name, string field, string? csv, List<string> errors)
@@ -219,6 +1094,7 @@ public static class TwpConfigValidator
         IEnumerable<RouteConfig> routes,
         HashSet<string> clusterIds,
         HashSet<string> policyNames,
+        HashSet<string> pluginNames,
         List<string> errors)
     {
         var routeIds = new HashSet<string>(StringComparer.Ordinal);
@@ -227,10 +1103,14 @@ public static class TwpConfigValidator
             ValidateRouteIdentity(route, routeIds, clusterIds, errors);
             ValidateRouteMatch(route, errors);
             ValidateRoutePolicies(route, policyNames, errors);
+            ValidateRoutePlugins(route, pluginNames, errors);
             ValidateRouteMirror(route, clusterIds, errors);
             ValidateRouteRedirect(route, errors);
             ValidateRouteTransforms(route, errors);
             ValidateRouteLimits(route, errors);
+            ValidateRouteCompression(route, errors);
+            ValidateRouteGrpcWeb(route, errors);
+            ValidateRetry($"routes.{route.Id}.retry", route.Retry, errors);
         }
     }
 
@@ -260,6 +1140,8 @@ public static class TwpConfigValidator
             return;
         }
 
+        ValidateQueryParameters(route, errors);
+
         if (route.Match.PathKind == PathMatchKind.Template)
         {
             ValidateTemplate(route, errors);
@@ -273,6 +1155,28 @@ public static class TwpConfigValidator
         }
     }
 
+    private static void ValidateQueryParameters(RouteConfig route, List<string> errors)
+    {
+        if (route.Match.QueryParameters is not { } entries)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            if (entry is null || string.IsNullOrEmpty(entry.Name))
+            {
+                errors.Add($"Route '{route.Id}' has a queryParameters entry without a name.");
+                continue;
+            }
+
+            if (entry.Kind == QueryMatchKind.Regex && !CompilesAsRegex("^(?:" + entry.Value + ")$"))
+            {
+                errors.Add($"Route '{route.Id}' queryParameters '{entry.Name}' has a regex that does not compile.");
+            }
+        }
+    }
+
     private static void ValidateRoutePolicies(RouteConfig route, HashSet<string> policyNames, List<string> errors)
     {
         if (route.Policies is null)
@@ -283,6 +1187,210 @@ public static class TwpConfigValidator
         foreach (var policyName in route.Policies.Where(policyName => !policyNames.Contains(policyName)))
         {
             errors.Add($"Route '{route.Id}' references unknown policy '{policyName}'.");
+        }
+    }
+
+    private static void ValidateRoutePlugins(RouteConfig route, HashSet<string> pluginNames, List<string> errors)
+    {
+        if (route.Middleware is not { } names)
+        {
+            return;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errors.Add($"Route '{route.Id}' has a middleware entry without a name.");
+            }
+            else if (!pluginNames.Contains(name))
+            {
+                errors.Add($"Route '{route.Id}' references unknown plugin '{name}'.");
+            }
+            else if (!seen.Add(name))
+            {
+                errors.Add($"Route '{route.Id}' lists plugin '{name}' more than once.");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Checks every <c>plugins</c> entry: a safe unique name, an assembly that exists and loads, a class in it that
+    ///     implements the plugin contract at a supported version (checked without running any plugin code), a known
+    ///     <c>failMode</c>, and a timeout in range. Returns the names that routes may reference.
+    /// </summary>
+    private static HashSet<string> ValidatePlugins(IEnumerable<PluginConfig>? plugins, List<string> errors)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        if (plugins is null)
+        {
+            return names;
+        }
+
+        foreach (var plugin in plugins)
+        {
+            if (plugin is null)
+            {
+                errors.Add("plugins has an empty entry.");
+                continue;
+            }
+
+            var label = string.IsNullOrWhiteSpace(plugin.Name) ? "(unnamed)" : plugin.Name;
+            ValidatePluginName(plugin, names, errors);
+            ValidatePluginLimits(plugin, label, errors);
+            ValidatePluginKind(plugin, label, errors);
+        }
+
+        return names;
+    }
+
+    private static void ValidatePluginName(PluginConfig plugin, HashSet<string> names, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(plugin.Name))
+        {
+            errors.Add("A plugin is missing name.");
+            return;
+        }
+
+        if (plugin.Name.Length > 64 || !plugin.Name.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'))
+        {
+            errors.Add($"Plugin '{plugin.Name}': name must be 1 to 64 letters, digits, '.', '_' or '-'.");
+        }
+
+        if (!names.Add(plugin.Name))
+        {
+            errors.Add($"Duplicate plugin name '{plugin.Name}'.");
+        }
+    }
+
+    private static void ValidatePluginLimits(PluginConfig plugin, string label, List<string> errors)
+    {
+        if (!string.IsNullOrEmpty(plugin.FailMode) &&
+            !string.Equals(plugin.FailMode, "closed", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(plugin.FailMode, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Plugin '{label}': failMode '{plugin.FailMode}' must be 'closed' or 'open'.");
+        }
+
+        if (plugin.TimeoutMs is < 1 or > 60_000)
+        {
+            errors.Add($"Plugin '{label}': timeoutMs must be 1 to 60000.");
+        }
+
+        if (plugin.Settings is { } settings && settings.Keys.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add($"Plugin '{label}': settings has an empty key.");
+        }
+    }
+
+    /// <summary>
+    ///     Picks the checks by <c>kind</c>: <c>dotnet</c> (default) probes the assembly; <c>lua</c> and <c>wasm</c> need a
+    ///     <c>file</c> that exists and must not set <c>assembly</c> or <c>typeName</c>. The script engine itself is not asked
+    ///     here, so a configuration validates on a build that has no engine; the load step reports the missing engine.
+    /// </summary>
+    private static void ValidatePluginKind(PluginConfig plugin, string label, List<string> errors)
+    {
+        if (!PluginKinds.IsKnown(plugin.Kind))
+        {
+            errors.Add($"Plugin '{label}': kind '{plugin.Kind}' must be 'dotnet', 'lua', or 'wasm'.");
+            return;
+        }
+
+        if (!PluginKinds.IsScript(plugin.Kind))
+        {
+            ValidateDotNetPlugin(plugin, label, errors);
+            return;
+        }
+
+        ValidateScriptPlugin(plugin, label, errors);
+    }
+
+    private static void ValidateDotNetPlugin(PluginConfig plugin, string label, List<string> errors)
+    {
+        var scriptOnly = new List<string>();
+        if (!string.IsNullOrWhiteSpace(plugin.File)) scriptOnly.Add("file");
+        if (!string.IsNullOrWhiteSpace(plugin.VmId)) scriptOnly.Add("vmId");
+        if (!string.IsNullOrWhiteSpace(plugin.BodyMode)) scriptOnly.Add("bodyMode");
+        if (plugin.CalloutHosts is { Count: > 0 }) scriptOnly.Add("calloutHosts");
+        if (plugin.Limits is not null) scriptOnly.Add("limits");
+        if (scriptOnly.Count > 0)
+        {
+            errors.Add($"Plugin '{label}': {string.Join(", ", scriptOnly)} only apply to kind 'lua' or 'wasm', not 'dotnet'.");
+        }
+
+        ValidatePluginAssembly(plugin, label, errors);
+    }
+
+    private static void ValidateScriptPlugin(PluginConfig plugin, string label, List<string> errors)
+    {
+        var kind = PluginKinds.Normalize(plugin.Kind);
+        if (!string.IsNullOrWhiteSpace(plugin.Assembly) || !string.IsNullOrWhiteSpace(plugin.TypeName))
+        {
+            errors.Add($"Plugin '{label}': assembly and typeName only apply to kind 'dotnet', not '{kind}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(plugin.File))
+        {
+            errors.Add($"Plugin '{label}' is missing file (kind '{kind}').");
+        }
+        else if (!File.Exists(Path.GetFullPath(plugin.File)))
+        {
+            errors.Add($"Plugin '{label}': file '{plugin.File}' does not exist.");
+        }
+
+        if (!string.IsNullOrEmpty(plugin.VmId) &&
+            (plugin.VmId.Length > 64 || !plugin.VmId.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-')))
+        {
+            errors.Add($"Plugin '{label}': vmId must be 1 to 64 letters, digits, '.', '_' or '-'.");
+        }
+
+        if (plugin.CalloutHosts is { } hosts && hosts.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add($"Plugin '{label}': calloutHosts has an empty entry.");
+        }
+
+        if (plugin.Limits is { } limits)
+        {
+            ValidatePluginScriptLimits(limits, label, errors);
+        }
+    }
+
+    private static void ValidatePluginScriptLimits(PluginLimitsConfig limits, string label, List<string> errors)
+    {
+        (string Name, long? Value)[] values =
+        [
+            ("memoryMb", limits.MemoryMb),
+            ("maxInstructions", limits.MaxInstructions),
+            ("fuel", limits.Fuel),
+            ("poolSize", limits.PoolSize),
+            ("calloutConcurrency", limits.CalloutConcurrency),
+            ("bufferedBodyBytes", limits.BufferedBodyBytes),
+            ("sharedDataBytes", limits.SharedDataBytes),
+            ("queueBytes", limits.QueueBytes),
+            ("epochDeadlineMs", limits.EpochDeadlineMs),
+        ];
+        foreach (var (name, value) in values)
+        {
+            if (value is < 1)
+            {
+                errors.Add($"Plugin '{label}': limits.{name} must be 1 or more.");
+            }
+        }
+    }
+
+    private static void ValidatePluginAssembly(PluginConfig plugin, string label, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(plugin.Assembly))
+        {
+            errors.Add($"Plugin '{label}' is missing assembly.");
+            return;
+        }
+
+        var problem = PluginTypeResolver.Probe(plugin.Assembly, plugin.TypeName);
+        if (problem is not null)
+        {
+            errors.Add($"Plugin '{label}': {problem}.");
         }
     }
 
@@ -358,15 +1466,123 @@ public static class TwpConfigValidator
         RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
     }
 
-    private static void ValidateListeners(IEnumerable<ListenerConfig> listeners, List<string> errors)
+    private static void ValidateListeners(
+        IEnumerable<ListenerConfig> listeners, HashSet<string> clusterIds, List<string> errors)
     {
         foreach (var listener in listeners)
         {
             ValidateListenerBounds(listener, errors);
+            ValidatePassthrough(listener, clusterIds, errors);
             ValidateMasqueListener(listener, errors);
+            ValidateUdpListener(listener, clusterIds, errors);
             ValidateClientCertificate(listener, errors);
             ValidateTrustedProxySources(listener, errors);
         }
+    }
+
+    private static bool IsUdpListener(ListenerConfig listener) =>
+        string.Equals(listener.Type, "udp", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateUdpListener(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors)
+    {
+        var prefix = $"Listener port {listener.Port}:";
+        if (!IsUdpListener(listener))
+        {
+            var stray = listener.ClusterId is not null
+                        || listener.MaxSessions is not null
+                        || listener.MaxSessionsPerClient is not null
+                        || listener.MaxDatagramBytes is not null
+                        || listener.MaxDatagramsPerSecondPerClient is not null
+                        || listener.SessionAffinity is not null;
+            if (stray)
+            {
+                errors.Add(
+                    $"{prefix} clusterId, maxSessions, maxSessionsPerClient, maxDatagramBytes, maxDatagramsPerSecondPerClient, and sessionAffinity apply only to type: udp.");
+            }
+
+            return;
+        }
+
+        var hasCluster = !string.IsNullOrWhiteSpace(listener.ClusterId);
+        var hasForward = !string.IsNullOrWhiteSpace(listener.ForwardHost);
+        if (hasCluster == hasForward)
+        {
+            errors.Add($"{prefix} a udp listener needs exactly one of clusterId or forwardHost.");
+        }
+
+        if (hasCluster && !clusterIds.Contains(listener.ClusterId!))
+        {
+            errors.Add($"{prefix} clusterId '{listener.ClusterId}' is not a defined cluster.");
+        }
+
+        if (hasForward && listener.ForwardPort is not (>= 1 and <= 65535))
+        {
+            errors.Add($"{prefix} a udp listener with forwardHost needs forwardPort between 1 and 65535.");
+        }
+
+        if (hasCluster && listener.ForwardPort is not null)
+        {
+            errors.Add($"{prefix} forwardPort applies only with forwardHost.");
+        }
+
+        if (hasForward && listener.ForwardPort == listener.Port && IsSelfAddress(listener.ForwardHost!, listener.Host))
+        {
+            errors.Add($"{prefix} forwardHost and forwardPort point back at this listener.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.Host) && listener.Host != "*"
+            && !System.Net.IPAddress.TryParse(listener.Host, out _))
+        {
+            errors.Add($"{prefix} a udp listener's host must be an IP address (0.0.0.0, ::, or a specific address).");
+        }
+
+        if (listener.IdleTimeoutSeconds is not null and not (>= 1 and <= 86400))
+        {
+            errors.Add($"{prefix} a udp listener's idleTimeoutSeconds must be between 1 and 86400.");
+        }
+
+        AddUnless(errors, listener.Port, "maxSessions must be positive.", listener.MaxSessions is <= 0);
+        AddUnless(errors, listener.Port, "maxSessions must be at most 1000000.", listener.MaxSessions is > 1_000_000);
+        AddUnless(errors, listener.Port, "maxSessionsPerClient must be positive.", listener.MaxSessionsPerClient is <= 0);
+        AddUnless(
+            errors,
+            listener.Port,
+            "maxSessionsPerClient must not exceed maxSessions.",
+            listener.MaxSessions is int total && listener.MaxSessionsPerClient is int perClient && perClient > total);
+        AddUnless(errors, listener.Port, "maxDatagramBytes must be between 1 and 65507.", listener.MaxDatagramBytes is <= 0 or > 65507);
+        AddUnless(
+            errors,
+            listener.Port,
+            "maxDatagramsPerSecondPerClient must be between 1 and 10000000.",
+            listener.MaxDatagramsPerSecondPerClient is <= 0 or > 10_000_000);
+
+        if (!string.IsNullOrWhiteSpace(listener.SessionAffinity)
+            && !listener.SessionAffinity.Equals("clientEndpoint", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix} sessionAffinity '{listener.SessionAffinity}' is not clientEndpoint.");
+        }
+
+        if (listener.AcceptProxyProtocol || string.Equals(listener.SendProxyProtocol, "v2", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix} PROXY protocol is not supported on a udp listener.");
+        }
+
+        if (listener.DecryptSsl || listener.Passthrough || (listener.SniRoutes?.Count ?? 0) > 0
+            || !string.IsNullOrEmpty(listener.SniDefaultClusterId) || listener.Masque is not null
+            || listener.EnableHttp2 is not null || listener.EnableHttp3 is not null || listener.AltSvc is not null
+            || !string.IsNullOrWhiteSpace(listener.ClientCertificateMode))
+        {
+            errors.Add(
+                $"{prefix} a udp listener has no HTTP, TLS, passthrough, or MASQUE settings (decryptSsl, passthrough, sniRoutes, masque, enableHttp2, enableHttp3, altSvc, clientCertificateMode).");
+        }
+    }
+
+    private static bool IsSelfAddress(string forwardHost, string? listenerHost)
+    {
+        var bound = string.IsNullOrWhiteSpace(listenerHost) || listenerHost is "*" ? "0.0.0.0" : listenerHost;
+        var loopback = forwardHost is "127.0.0.1" or "::1" or "localhost";
+        return string.Equals(forwardHost, bound, StringComparison.OrdinalIgnoreCase)
+               || (loopback && bound is "0.0.0.0" or "::" or "127.0.0.1" or "::1" or "localhost");
     }
 
     private static void ValidateListenerBounds(ListenerConfig listener, List<string> errors)
@@ -378,7 +1594,7 @@ public static class TwpConfigValidator
 
         if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
         {
-            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque).");
+            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque, udp).");
         }
 
         if (listener.MaxCachedConnections is <= 0)
@@ -410,6 +1626,108 @@ public static class TwpConfigValidator
         {
             errors.Add($"Listener port {listener.Port}: altSvc.maxAgeSeconds must be between 1 and 31536000.");
         }
+    }
+
+    private static void ValidatePassthrough(ListenerConfig listener, HashSet<string> clusterIds, List<string> errors)
+    {
+        var prefix = $"Listener port {listener.Port}:";
+        var routes = listener.SniRoutes ?? [];
+        var hasDefault = !string.IsNullOrWhiteSpace(listener.SniDefaultClusterId);
+        var usesSni = routes.Count > 0 || hasDefault;
+
+        if (usesSni)
+        {
+            if (!listener.Passthrough)
+            {
+                errors.Add($"{prefix} sniRoutes and sniDefaultClusterId require passthrough: true.");
+            }
+
+            if (listener.DecryptSsl)
+            {
+                errors.Add($"{prefix} sniRoutes and sniDefaultClusterId require decryptSsl: false (the proxy reads the ClientHello but never decrypts).");
+            }
+
+            if (!IsTransparentListener(listener))
+            {
+                errors.Add($"{prefix} sniRoutes and sniDefaultClusterId apply only to transparent listeners.");
+            }
+        }
+        else if (listener.Passthrough && string.IsNullOrEmpty(listener.ForwardHost))
+        {
+            errors.Add($"{prefix} passthrough needs sniRoutes, sniDefaultClusterId, or forwardHost.");
+        }
+
+        if (hasDefault && !clusterIds.Contains(listener.SniDefaultClusterId!))
+        {
+            errors.Add($"{prefix} sniDefaultClusterId '{listener.SniDefaultClusterId}' is not a defined cluster.");
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < routes.Count; i++)
+        {
+            var route = routes[i];
+            var name = route.ServerName?.Trim();
+            if (!IsValidSniPattern(name))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].serverName '{route.ServerName}' must be an exact host name or one leading '*.' label followed by a suffix.");
+            }
+            else if (!seen.Add(name!))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].serverName '{name}' is listed twice.");
+            }
+
+            if (string.IsNullOrWhiteSpace(route.ClusterId))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].clusterId is required.");
+            }
+            else if (!clusterIds.Contains(route.ClusterId))
+            {
+                errors.Add($"{prefix} sniRoutes[{i}].clusterId '{route.ClusterId}' is not a defined cluster.");
+            }
+        }
+
+        if (listener.SniReadTimeoutSeconds is < 1 or > 60)
+        {
+            errors.Add($"{prefix} sniReadTimeoutSeconds must be between 1 and 60.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(listener.SendProxyProtocol))
+        {
+            if (!listener.SendProxyProtocol.Equals("none", StringComparison.OrdinalIgnoreCase)
+                && !listener.SendProxyProtocol.Equals("v2", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"{prefix} sendProxyProtocol '{listener.SendProxyProtocol}' is not none or v2.");
+            }
+            else if (!listener.Passthrough && listener.SendProxyProtocol.Equals("v2", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"{prefix} sendProxyProtocol v2 requires passthrough: true.");
+            }
+        }
+    }
+
+    /// <summary>An exact DNS-style name, or <c>*.</c> followed by a suffix with no further wildcard.</summary>
+    private static bool IsValidSniPattern(string? pattern)
+    {
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return false;
+        }
+
+        var host = pattern.StartsWith("*.", StringComparison.Ordinal) ? pattern[2..] : pattern;
+        if (host.Length == 0 || host.Length > 253 || host.StartsWith('.') || host.EndsWith('.') || host.Contains(".."))
+        {
+            return false;
+        }
+
+        foreach (var ch in host)
+        {
+            if (!(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void ValidateMasqueListener(ListenerConfig listener, List<string> errors)
@@ -656,6 +1974,265 @@ public static class TwpConfigValidator
         ValidateUpstream(server.Upstream, errors);
         ValidateCertificateManager(server.CertificateManager, errors);
         ValidateAccessLog(server.AccessLog, errors);
+        ValidateMetrics(server.Metrics, errors);
+        ValidateTelemetry(server.Telemetry, errors);
+        ValidateAdmin(server.Admin, errors);
+        ValidateResponseCompression(server.ResponseCompression, errors);
+        ValidateRequestDecompression(server.RequestDecompression, errors);
+    }
+
+    private static readonly string[] OtlpProtocolNames = ["grpc", "http"];
+    private static readonly string[] TraceSamplerNames = ["always", "ratio", "parentbased"];
+
+    private static void ValidateTelemetry(TelemetryConfig? telemetry, List<string> errors)
+    {
+        if (telemetry is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.telemetry";
+        if (telemetry.ServiceName is { } serviceName && string.IsNullOrWhiteSpace(serviceName))
+        {
+            errors.Add($"{prefix}.serviceName must not be blank.");
+        }
+
+        if (telemetry.ResourceAttributes is { } attributes && attributes.Keys.Any(string.IsNullOrWhiteSpace))
+        {
+            errors.Add($"{prefix}.resourceAttributes must not contain a blank key.");
+        }
+
+        ValidateOtlp(telemetry.Otlp, errors);
+        if (telemetry.Traces is { } traces)
+        {
+            if (traces.Sampler is { } sampler &&
+                !TraceSamplerNames.Contains(sampler.Trim(), StringComparer.OrdinalIgnoreCase))
+            {
+                errors.Add($"{prefix}.traces.sampler '{sampler}' must be one of: {string.Join(", ", TraceSamplerNames)}.");
+            }
+
+            if (traces.Ratio is { } ratio && !(ratio >= 0 && ratio <= 1))
+            {
+                errors.Add($"{prefix}.traces.ratio must be between 0 and 1.");
+            }
+
+            if (traces.HeaderAllowList is { } names && names.Any(name => string.IsNullOrWhiteSpace(name) || !IsHeaderToken(name.Trim())))
+            {
+                errors.Add($"{prefix}.traces.headerAllowList must hold valid header names.");
+            }
+        }
+
+        if (telemetry.Metrics?.IntervalMs is < 100 or > 86_400_000)
+        {
+            errors.Add($"{prefix}.metrics.intervalMs must be between 100 and 86400000.");
+        }
+    }
+
+    private static void ValidateOtlp(OtlpExporterConfig? otlp, List<string> errors)
+    {
+        if (otlp is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.telemetry.otlp";
+        if (otlp.Protocol is { } protocol &&
+            !OtlpProtocolNames.Contains(protocol.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix}.protocol '{protocol}' must be one of: {string.Join(", ", OtlpProtocolNames)}.");
+        }
+
+        if (otlp.Endpoint is { } endpoint && !IsOtlpEndpoint(endpoint))
+        {
+            errors.Add($"{prefix}.endpoint '{endpoint}' must be an http(s) URL or host:port.");
+        }
+
+        if (otlp.TimeoutMs is < 1 or > 600_000)
+        {
+            errors.Add($"{prefix}.timeoutMs must be between 1 and 600000.");
+        }
+
+        if (otlp.HeadersEnv is { } headersEnv && (string.IsNullOrWhiteSpace(headersEnv) || headersEnv.Contains('=')))
+        {
+            errors.Add($"{prefix}.headersEnv must name an environment variable, not hold the headers themselves.");
+        }
+    }
+
+    private static bool IsOtlpEndpoint(string endpoint)
+    {
+        var text = endpoint.Trim();
+        if (text.Length == 0)
+        {
+            return false;
+        }
+
+        if (!text.Contains("://", StringComparison.Ordinal))
+        {
+            text = "http://" + text;
+        }
+
+        return Uri.TryCreate(text, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps) &&
+               !string.IsNullOrEmpty(uri.Host);
+    }
+
+    private const int MaxPreStopDelaySeconds = 3600;
+
+    private static void ValidateAdmin(AdminConfig? admin, List<string> errors)
+    {
+        if (admin is not { Enabled: true })
+        {
+            return;
+        }
+
+        if (admin.Port is < 0 or > 65535)
+        {
+            errors.Add("server.admin.port must be between 0 and 65535 (0 picks a free port).");
+        }
+
+        if (admin.PreStopDelaySeconds is < 0 or > MaxPreStopDelaySeconds)
+        {
+            errors.Add($"server.admin.preStopDelaySeconds must be between 0 and {MaxPreStopDelaySeconds}.");
+        }
+
+        ValidateSecretReference("server.admin.authToken", admin.AuthToken, admin.AuthTokenEnv, admin.AuthTokenFile, errors);
+        var hasToken = !string.IsNullOrEmpty(admin.AuthToken) ||
+                       !string.IsNullOrWhiteSpace(admin.AuthTokenEnv) ||
+                       !string.IsNullOrWhiteSpace(admin.AuthTokenFile);
+
+        System.Net.IPAddress? address = System.Net.IPAddress.Loopback;
+        if (admin.Host is { } host)
+        {
+            if (string.IsNullOrWhiteSpace(host) || !System.Net.IPAddress.TryParse(host.Trim(), out address))
+            {
+                errors.Add($"server.admin.host '{host}' is not an IP address.");
+                return;
+            }
+        }
+
+        if (!System.Net.IPAddress.IsLoopback(address) && !hasToken)
+        {
+            errors.Add(
+                $"server.admin.host '{admin.Host}' is not a loopback address, so server.admin.authTokenEnv (or authTokenFile) is required to protect /metrics and /version.");
+        }
+    }
+
+    private static void ValidateMetrics(MetricsConfig? metrics, List<string> errors)
+    {
+        if (metrics is not { Enabled: true })
+        {
+            return;
+        }
+
+        if (metrics.Port is < 1 or > 65535)
+        {
+            errors.Add("server.metrics.port must be between 1 and 65535.");
+        }
+
+        if (metrics.Host is { } host &&
+            (string.IsNullOrWhiteSpace(host) || !System.Net.IPAddress.TryParse(host.Trim(), out _)))
+        {
+            errors.Add($"server.metrics.host '{host}' is not an IP address.");
+        }
+    }
+
+    private static readonly string[] CompressionAlgorithmNames = ["br", "gzip"];
+
+    private static void ValidateResponseCompression(ResponseCompressionConfig? compression, List<string> errors)
+    {
+        if (compression is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.responseCompression";
+        if (compression.MinBytes < 1)
+        {
+            errors.Add($"{prefix}.minBytes must be at least 1.");
+        }
+
+        if (compression.MaxBytes < 1 || compression.MaxBytes > ResponseCompressionConfig.DefaultMaxBytes)
+        {
+            errors.Add($"{prefix}.maxBytes must be 1-{ResponseCompressionConfig.DefaultMaxBytes}.");
+        }
+        else if (compression.MinBytes > compression.MaxBytes)
+        {
+            errors.Add($"{prefix}.minBytes must not exceed maxBytes.");
+        }
+
+        if (compression.Algorithms is { } algorithms)
+        {
+            if (algorithms.Count == 0)
+            {
+                errors.Add($"{prefix}.algorithms must list at least one of: br, gzip.");
+            }
+
+            foreach (var name in algorithms.Where(name =>
+                         !CompressionAlgorithmNames.Contains(name?.Trim(), StringComparer.OrdinalIgnoreCase)))
+            {
+                errors.Add($"{prefix}.algorithms entry '{name}' is unknown. Use br or gzip.");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(compression.Level) &&
+            !compression.Level.Trim().Equals("fastest", StringComparison.OrdinalIgnoreCase) &&
+            !compression.Level.Trim().Equals("optimal", StringComparison.OrdinalIgnoreCase) &&
+            !compression.Level.Trim().Equals("smallestSize", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix}.level '{compression.Level}' is unknown. Use fastest, optimal, or smallestSize.");
+        }
+
+        if (compression.MimeTypes is { } mimeTypes)
+        {
+            foreach (var type in mimeTypes.Where(type => string.IsNullOrWhiteSpace(type) || !type.Contains('/')))
+            {
+                errors.Add($"{prefix}.mimeTypes entry '{type}' is not a media type such as text/* or application/json.");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(compression.Mode) &&
+            !compression.Mode.Trim().Equals(ResponseCompressionConfig.ModeBuffered, StringComparison.OrdinalIgnoreCase) &&
+            !compression.Mode.Trim().Equals(ResponseCompressionConfig.ModeStreaming, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"{prefix}.mode '{compression.Mode}' is unknown. Use buffered or streaming.");
+        }
+    }
+
+    private static void ValidateRequestDecompression(RequestDecompressionConfig? decompression, List<string> errors)
+    {
+        if (decompression is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.requestDecompression";
+        if (decompression.MaxDecompressedBytes < 1
+            || decompression.MaxDecompressedBytes > RequestDecompressionConfig.MaxAllowedDecompressedBytes)
+        {
+            errors.Add(
+                $"{prefix}.maxDecompressedBytes must be 1-{RequestDecompressionConfig.MaxAllowedDecompressedBytes}.");
+        }
+
+        if (decompression.MaxRatio < 1 || decompression.MaxRatio > RequestDecompressionConfig.MaxAllowedRatio)
+        {
+            errors.Add($"{prefix}.maxRatio must be 1-{RequestDecompressionConfig.MaxAllowedRatio}.");
+        }
+    }
+
+    private static void ValidateRouteCompression(RouteConfig route, List<string> errors)
+    {
+        if (route.Compression is { } mode && !mode.Trim().Equals("off", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Route '{route.Id}' compression '{mode}' is unknown. Only 'off' is supported.");
+        }
+    }
+
+    private static void ValidateRouteGrpcWeb(RouteConfig route, List<string> errors)
+    {
+        if (route.GrpcWeb && (route.Redirect is not null || route.DirectResponse is not null))
+        {
+            errors.Add($"Route '{route.Id}' grpcWeb needs an origin. It cannot be combined with redirect or directResponse.");
+        }
     }
 
     /// <summary>
@@ -942,6 +2519,73 @@ public static class TwpConfigValidator
         if (tls is null) return;
         RejectUnknownProtocols(tls.SupportedSslProtocols, "server.tls.supportedSslProtocols", errors);
         RejectUnknownProtocols(tls.SupportedServerSslProtocols, "server.tls.supportedServerSslProtocols", errors);
+        ValidateListenerTlsPolicy(tls, errors);
+    }
+
+    private static void ValidateListenerTlsPolicy(TlsConfig tls, List<string> errors)
+    {
+        if (tls.MinVersion is not null)
+        {
+            if (!TlsPolicyParser.TryParseMinVersion(tls.MinVersion, out var minimum))
+            {
+                errors.Add($"server.tls.minVersion '{tls.MinVersion}' is not Tls12 or Tls13.");
+            }
+            else if (tls.SupportedSslProtocols is { Count: > 0 } supported
+                     && TryParseProtocolMask(supported, out var mask)
+                     && mask != SslProtocols.None
+                     && (mask & ~(LowestBit(minimum) - 1)) == SslProtocols.None)
+            {
+                errors.Add(
+                    $"server.tls.minVersion {minimum} excludes every protocol in server.tls.supportedSslProtocols.");
+            }
+        }
+
+        if (tls.CipherSuites is null)
+        {
+            return;
+        }
+
+        if (tls.CipherSuites.Count == 0)
+        {
+            errors.Add("server.tls.cipherSuites must list at least one suite (or be omitted for the OS default).");
+            return;
+        }
+
+        foreach (var name in tls.CipherSuites)
+        {
+            if (!TlsPolicyParser.TryParseCipherSuite(name, out _))
+            {
+                errors.Add($"server.tls.cipherSuites '{name}' is not a TlsCipherSuite name.");
+            }
+        }
+    }
+
+    private static bool TryParseProtocolMask(IEnumerable<string> names, out SslProtocols mask)
+    {
+        mask = SslProtocols.None;
+        foreach (var name in names)
+        {
+            if (string.IsNullOrWhiteSpace(name) || !Enum.TryParse<SslProtocols>(name.Trim(), ignoreCase: true, out var part))
+            {
+                return false;
+            }
+
+            mask |= part;
+        }
+
+        return true;
+    }
+
+    private static SslProtocols LowestBit(SslProtocols value) => (SslProtocols)((int)value & -(int)value);
+
+    private static void CollectTlsWarnings(TlsConfig? tls, bool isWindows, List<string> warnings)
+    {
+        if (isWindows && tls?.CipherSuites is { Count: > 0 })
+        {
+            warnings.Add(
+                "server.tls.cipherSuites is ignored on Windows: .NET has no cipher suite policy there. " +
+                "The OS default applies. Use Linux or macOS to restrict listener cipher suites.");
+        }
     }
 
     private static void RejectUnknownProtocols(IList<string>? names, string path, List<string> errors)
@@ -985,13 +2629,63 @@ public static class TwpConfigValidator
                port is > 0 and <= 65535;
     }
 
+    private static void CollectPluginWarnings(TwpConfig config, List<string> warnings)
+    {
+        if (config.Plugins is not { Count: > 0 } plugins)
+        {
+            return;
+        }
+
+        var routes = config.Routes ?? [];
+        var used = new HashSet<string>(
+            routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
+            StringComparer.Ordinal);
+        used.UnionWith(config.ScriptPipeline ?? []);
+        foreach (var listener in config.Listeners ?? [])
+        {
+            used.UnionWith(listener?.StreamFilters ?? []);
+        }
+
+        // A script in the pipeline already runs its request-headers phase on every request, so a route that lists it again
+        // runs that phase twice.
+        var routeNames = new HashSet<string>(
+            routes.Where(route => route.Middleware is not null).SelectMany(route => route.Middleware!),
+            StringComparer.Ordinal);
+        foreach (var name in (config.ScriptPipeline ?? []).Where(routeNames.Contains).Distinct(StringComparer.Ordinal))
+        {
+            warnings.Add($"Plugin '{name}' is in scriptPipeline and in a route's middleware, so its request-headers phase runs twice on that route.");
+        }
+
+        foreach (var plugin in plugins.Where(plugin => plugin is { Name: not null } && !used.Contains(plugin.Name)))
+        {
+            warnings.Add($"Plugin '{plugin.Name}' is loaded but no route lists it in middleware and neither scriptPipeline nor a listener's streamFilters names it, so it never runs.");
+        }
+    }
+
     /// <summary>
     ///     Limits that are accepted by config but not enforced on a live path. Callers print these
     ///     without failing validation.
     /// </summary>
-    public static IReadOnlyList<string> CollectWarnings(TwpConfig config)
+    public static IReadOnlyList<string> CollectWarnings(TwpConfig config) =>
+        CollectWarnings(config, OperatingSystem.IsWindows());
+
+    /// <summary>
+    ///     Same as <see cref="CollectWarnings(TwpConfig)" /> for an explicit platform, so a Windows-only warning
+    ///     can be checked from any host.
+    /// </summary>
+    public static IReadOnlyList<string> CollectWarnings(TwpConfig config, bool isWindows)
     {
         var warnings = new List<string>();
+        CollectTlsWarnings(config.Server?.Tls, isWindows, warnings);
+        CollectClusterProxyProtocolWarnings(config, warnings);
+        if (config.Plus is { Enabled: true, ControlPlane: { AllowInsecureNonLoopback: true, Tls: null } insecure } &&
+            !IsLoopbackControlPlaneHost(insecure.Host))
+        {
+            warnings.Add(
+                $"plus.controlPlane.host '{insecure.Host}' serves the control plane and dashboard over plain HTTP " +
+                "(allowInsecureNonLoopback). The shared secret crosses the network unencrypted unless something else protects it.");
+        }
+
         var limits = config.Server?.Limits;
         if (limits?.MaxDecompressionRatio is not null)
             warnings.Add("server.limits.maxDecompressionRatio is reserved and not enforced. Body expansion is bounded by maxBufferedBodyBytes.");
@@ -999,7 +2693,32 @@ public static class TwpConfigValidator
             warnings.Add("server.limits.maxEncodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
         if (limits?.MaxDecodedBodyBytes is not null)
             warnings.Add("server.limits.maxDecodedBodyBytes is reserved and not enforced. The enforced whole-body budget is maxBufferedBodyBytes.");
-        foreach (var listener in config.Listeners)
+        if (config.Server?.ResponseCompression is { Enabled: true })
+        {
+            warnings.Add(
+                "server.responseCompression compresses HTTP/1.1 and HTTP/2-to-HTTP/1.1 responses only. " +
+                "It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths.");
+        }
+
+        if (config.Server?.RequestDecompression is { Enabled: true })
+        {
+            warnings.Add(
+                "server.requestDecompression decompresses HTTP/1.x request bodies on the full session path only. " +
+                "HTTP/2 and HTTP/3 request bodies, Expect: 100-continue requests, deflate and stacked encodings " +
+                "are forwarded as sent.");
+        }
+
+        CollectPluginWarnings(config, warnings);
+
+        if ((config.Routes ?? []).Any(route => route.GrpcWeb))
+        {
+            warnings.Add(
+                "routes[].grpcWeb translates binary application/grpc-web and application/grpc-web+proto POSTs (unary and " +
+                "server-streaming) for an HTTP/2 origin, from HTTP/2 clients and from HTTP/1.1 clients on a translation bridge. " +
+                "application/grpc-web-text is passed through untranslated, and an HTTP/1.1 origin is not translated.");
+        }
+
+        foreach (var listener in config.Listeners ?? [])
         {
             if (listener.AcceptProxyProtocol && listener.TrustedProxyProtocolSources is not { Count: > 0 })
             {
@@ -1020,9 +2739,48 @@ public static class TwpConfigValidator
                 warnings.Add(
                     $"Listener port {listener.Port}: masque authentication is off on a non-loopback address.");
             }
+
+            if (IsUdpListener(listener) && listener.Host is not ("127.0.0.1" or "::1" or "localhost"))
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: a udp listener has no authentication. Any host that can reach it is relayed " +
+                    "to the upstream, so limit who can reach the port with a firewall.");
+            }
         }
 
         return warnings;
+    }
+
+    private static void CollectClusterProxyProtocolWarnings(TwpConfig config, List<string> warnings)
+    {
+        var passthroughClusters = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var listener in (config.Listeners ?? []).Where(l => l.Passthrough))
+        {
+            if (!string.IsNullOrEmpty(listener.SniDefaultClusterId))
+            {
+                passthroughClusters.Add(listener.SniDefaultClusterId);
+            }
+
+            foreach (var route in listener.SniRoutes ?? [])
+            {
+                if (!string.IsNullOrEmpty(route.ClusterId))
+                {
+                    passthroughClusters.Add(route.ClusterId);
+                }
+            }
+        }
+
+        foreach (var cluster in config.Clusters ?? [])
+        {
+            if (cluster.SendProxyProtocol is { } mode
+                && mode.Equals("v2", StringComparison.OrdinalIgnoreCase)
+                && !passthroughClusters.Contains(cluster.Id))
+            {
+                warnings.Add(
+                    $"Cluster '{cluster.Id}' sets sendProxyProtocol v2, but no passthrough listener routes to it. " +
+                    "HTTP origin connections are pooled across clients and never carry a PROXY header.");
+            }
+        }
     }
 
     private static bool IsClientCertificateModeSet(string? mode) =>
@@ -1034,5 +2792,8 @@ public static class TwpConfigValidator
     /// </summary>
     private static bool IsTransparentListener(ListenerConfig listener) =>
         string.Equals(listener.Type, "transparent", StringComparison.OrdinalIgnoreCase)
-        || (string.IsNullOrWhiteSpace(listener.Type) && !string.IsNullOrEmpty(listener.ForwardHost));
+        || (string.IsNullOrWhiteSpace(listener.Type) &&
+            (!string.IsNullOrEmpty(listener.ForwardHost)
+             || (listener.SniRoutes?.Count ?? 0) > 0
+             || !string.IsNullOrEmpty(listener.SniDefaultClusterId)));
 }

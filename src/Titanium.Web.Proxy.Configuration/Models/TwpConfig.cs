@@ -1,4 +1,5 @@
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 
 namespace Titanium.Web.Proxy.Configuration.Models;
@@ -16,6 +17,20 @@ public sealed class TwpConfig
 
     /// <summary>Named policies referenced by <see cref="RouteConfig.Policies"/>. Empty leaves evaluation off.</summary>
     public IList<RoutePolicyConfig> Policies { get; set; } = new List<RoutePolicyConfig>();
+
+    /// <summary>
+    ///     Per-route .NET plugins (see <see cref="PluginConfig"/>). A plugin runs only on a route that lists its name in
+    ///     <see cref="RouteConfig.Middleware"/>. Unset or empty loads nothing.
+    /// </summary>
+    public IList<PluginConfig>? Plugins { get; set; }
+
+    /// <summary>
+    ///     Names of <c>lua</c> or <c>wasm</c> entries of <see cref="Plugins"/> that run on every request of every route, in
+    ///     list order, through every HTTP phase the script defines (the listener-wide script pipeline). Each script sees the
+    ///     edits of the ones before it, and the first deny wins. Unset or empty adds no pipeline. A plugin may also be
+    ///     listed in <see cref="RouteConfig.Middleware"/>, where it runs the request-headers phase for that route only.
+    /// </summary>
+    public IList<string>? ScriptPipeline { get; set; }
 
     public StaticFilesConfig? StaticFiles { get; set; }
 
@@ -65,7 +80,7 @@ public sealed class ListenerConfig
 
     /// <summary>
     ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
-    ///     <c>socks</c>, <c>quic</c>, or <c>masque</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    ///     <c>socks</c>, <c>quic</c>, <c>masque</c>, or <c>udp</c>. When null, classic ForwardHost rules choose transparent vs explicit.
     /// </summary>
     public string? Type { get; set; }
 
@@ -97,7 +112,10 @@ public sealed class ListenerConfig
     /// <summary>QUIC handshake timeout in seconds.</summary>
     public int? HandshakeTimeoutSeconds { get; set; }
 
-    /// <summary>QUIC idle timeout in seconds.</summary>
+    /// <summary>
+    /// QUIC idle timeout in seconds. On a passthrough listener, seconds with no bytes before the connection closes (0 disables).
+    /// On a <c>udp</c> listener, seconds with no datagram in either direction before a session closes (default 30, at least 1).
+    /// </summary>
     public int? IdleTimeoutSeconds { get; set; }
 
     /// <summary>Require a PROXY protocol preamble before HTTP bytes.</summary>
@@ -111,6 +129,28 @@ public sealed class ListenerConfig
 
     /// <summary>Copy accepted bytes to <see cref="ForwardHost"/> without parsing HTTP.</summary>
     public bool Passthrough { get; set; }
+
+    /// <summary>
+    /// Passthrough only. Sends a connection to a cluster by the TLS server name in the ClientHello.
+    /// Requires <see cref="Passthrough"/> true and <see cref="DecryptSsl"/> false.
+    /// </summary>
+    public IList<SniRouteConfig> SniRoutes { get; set; } = new List<SniRouteConfig>();
+
+    /// <summary>
+    ///     Passthrough only. Names of <c>lua</c> or <c>wasm</c> entries of <c>plugins</c> that see each raw TCP connection
+    ///     (<c>on_connect</c>, <c>on_data</c>, <c>on_close</c>), in list order. The first deny closes the connection. Needs a
+    ///     restart to change the list; the scripts themselves reload with the configuration.
+    /// </summary>
+    public IList<string>? StreamFilters { get; set; }
+
+    /// <summary>Passthrough only. Cluster for connections with no matching or no server name.</summary>
+    public string? SniDefaultClusterId { get; set; }
+
+    /// <summary>Passthrough only. Seconds to wait for the ClientHello when <see cref="SniRoutes"/> is set. Default 5.</summary>
+    public int? SniReadTimeoutSeconds { get; set; }
+
+    /// <summary>Passthrough only: <c>none</c> (default) or <c>v2</c>, a PROXY protocol v2 header sent to the upstream first.</summary>
+    public string? SendProxyProtocol { get; set; }
 
     /// <summary><c>none</c>, <c>allow</c>, or <c>require</c>.</summary>
     public string? ClientCertificateMode { get; set; }
@@ -126,6 +166,37 @@ public sealed class ListenerConfig
 
     /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
     public MasqueListenerConfig? Masque { get; set; }
+
+    /// <summary>
+    /// <c>type: udp</c> only. Cluster whose load balancer picks the upstream once per new session.
+    /// Set this or <see cref="ForwardHost"/> (with <see cref="ForwardPort"/>), not both.
+    /// </summary>
+    public string? ClusterId { get; set; }
+
+    /// <summary><c>type: udp</c> only. Sessions open at once (default 10000). A datagram that would open another is dropped.</summary>
+    public int? MaxSessions { get; set; }
+
+    /// <summary><c>type: udp</c> only. Sessions one client address (an IPv6 client counts by /64) may hold (default 256).</summary>
+    public int? MaxSessionsPerClient { get; set; }
+
+    /// <summary><c>type: udp</c> only. Largest datagram payload relayed in either direction (default 1500, at most 65507).</summary>
+    public int? MaxDatagramBytes { get; set; }
+
+    /// <summary><c>type: udp</c> only. Datagrams per second one client address may send, with a one second burst (default 10000).</summary>
+    public int? MaxDatagramsPerSecondPerClient { get; set; }
+
+    /// <summary><c>type: udp</c> only. How a session is keyed. <c>clientEndpoint</c> (the default and only value) is one session per client address and port.</summary>
+    public string? SessionAffinity { get; set; }
+}
+
+/// <summary>One TCP passthrough route chosen by the client's TLS server name.</summary>
+public sealed class SniRouteConfig
+{
+    /// <summary>Exact host name, or <c>*.example.com</c> for any host below that suffix.</summary>
+    public string? ServerName { get; set; }
+
+    /// <summary>Id of the cluster that receives matching connections.</summary>
+    public string? ClusterId { get; set; }
 }
 
 /// <summary>Alt-Svc advertisement for a listener that also accepts HTTP/3.</summary>
@@ -207,6 +278,95 @@ public sealed class ControlPlaneConfig
     public int? DashboardPort { get; set; }
 
     public string? SharedSecret { get; set; }
+
+    /// <summary>Name of the environment variable holding the shared secret. Set at most one of the three forms.</summary>
+    public string? SharedSecretEnv { get; set; }
+
+    /// <summary>File holding the shared secret (a mounted Secret). Relative paths resolve against the config directory.</summary>
+    public string? SharedSecretFile { get; set; }
+
+    /// <summary>
+    /// Secret that signs a person in to the dashboard read-only (no Drain or Healthy). Must differ from
+    /// <see cref="SharedSecret"/>, which signs in an operator. Unset leaves the viewer role off.
+    /// </summary>
+    public string? DashboardViewerSecret { get; set; }
+
+    /// <summary>Name of the environment variable holding the viewer secret. Set at most one of the three forms.</summary>
+    public string? DashboardViewerSecretEnv { get; set; }
+
+    /// <summary>File holding the viewer secret (a mounted Secret). Relative paths resolve against the config directory.</summary>
+    public string? DashboardViewerSecretFile { get; set; }
+
+    /// <summary>
+    /// Local dashboard users file (<c>user:role:iterations:saltBase64:hashBase64</c>). Relative paths resolve against
+    /// the config directory. Unset leaves username/password sign-in off.
+    /// </summary>
+    public string? DashboardUsersFile { get; set; }
+
+    /// <summary>
+    /// When true (default), the shared secret and viewer secret may still sign in (break-glass). Set false once OIDC
+    /// or local users are the primary path.
+    /// </summary>
+    public bool? DashboardBreakGlass { get; set; }
+
+    /// <summary>Optional OpenID Connect SSO for the dashboard. Unset leaves SSO off.</summary>
+    public DashboardOidcConfig? DashboardOidc { get; set; }
+
+    /// <summary>
+    /// Optional TLS for the control plane and dashboard listeners (PEM certificate chain and private key).
+    /// Required when <see cref="Host"/> is not loopback, unless <see cref="AllowInsecureNonLoopback"/> is set.
+    /// </summary>
+    public ControlPlaneTlsConfig? Tls { get; set; }
+
+    /// <summary>
+    /// Allows a non-loopback <see cref="Host"/> without <see cref="Tls"/>. Only for networks that already
+    /// encrypt and isolate the traffic (for example a service mesh or a restricted pod network).
+    /// </summary>
+    public bool AllowInsecureNonLoopback { get; set; }
+}
+
+/// <summary>PEM certificate and key served by the control plane and dashboard.</summary>
+public sealed class ControlPlaneTlsConfig
+{
+    /// <summary>PEM certificate (chain). Relative paths resolve against the config directory.</summary>
+    public string? CertificatePath { get; set; }
+
+    /// <summary>PEM private key for <see cref="CertificatePath"/>. Relative paths resolve against the config directory.</summary>
+    public string? KeyPath { get; set; }
+}
+
+/// <summary>OpenID Connect settings for the Plus dashboard (authorization code + PKCE).</summary>
+public sealed class DashboardOidcConfig
+{
+    public string? Issuer { get; set; }
+
+    public string? ClientId { get; set; }
+
+    public string? ClientSecret { get; set; }
+
+    public string? ClientSecretEnv { get; set; }
+
+    public string? ClientSecretFile { get; set; }
+
+    /// <summary>Cookie encryption key (32 bytes as base64 or 64 hex digits). Required when SSO is enabled.</summary>
+    public string? CookieSecret { get; set; }
+
+    public string? CookieSecretEnv { get; set; }
+
+    public string? CookieSecretFile { get; set; }
+
+    /// <summary>Absolute redirect URI registered with the IdP. Required when dashboard SSO is enabled.</summary>
+    public string? RedirectUri { get; set; }
+
+    public List<string>? OperatorGroups { get; set; }
+
+    public List<string>? ViewerGroups { get; set; }
+
+    public List<string>? AllowedEmails { get; set; }
+
+    public List<string>? AllowedEmailDomains { get; set; }
+
+    public string? GroupsClaim { get; set; }
 }
 
 /// <summary>Certificate / ACME related paths.</summary>

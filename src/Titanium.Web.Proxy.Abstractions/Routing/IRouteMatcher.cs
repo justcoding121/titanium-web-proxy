@@ -101,6 +101,20 @@ public sealed class TransformRequestContext
     public HashSet<string> ResponseHeadersToRemove { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    ///     Names in <see cref="ResponseHeadersToSet" /> whose staged value is added to the origin's existing
+    ///     values instead of replacing them (a <c>ResponseHeaderAppend</c>). Null until an append is staged.
+    /// </summary>
+    public HashSet<string>? ResponseHeadersToAppend { get; set; }
+
+    /// <summary>
+    ///     Returns the values the client already sent for a request header (all lines joined with <c>", "</c>),
+    ///     or null when it sent none. Lets <c>RequestHeaderAppend</c> merge with them instead of replacing them.
+    ///     Null when the host did not provide a lookup, in which case only headers staged by earlier transforms
+    ///     are visible.
+    /// </summary>
+    public Func<string, string?>? ExistingRequestHeader { get; set; }
+
+    /// <summary>
     ///     When set by <c>RequestHostUseDestination</c>, cleartext upstream Host should be the
     ///     destination bind identity (wire-only; logical Host unchanged).
     /// </summary>

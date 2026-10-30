@@ -1,0 +1,8 @@
+# expect: accept
+# reason: leading zeros are legal 1*DIGIT and carry one unambiguous value
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 003\r\n
+\r\n
+abc

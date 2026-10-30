@@ -1,0 +1,32 @@
+# Fragment of a twp.yaml. Merge `plugins` and the route's `middleware` into your own configuration.
+#
+# Run with the scripting natives beside the binary (the release zips bundle them; `titanium scripting-deps status` checks).
+
+plugins:
+  - name: header-gate
+    kind: lua
+    file: ./header_gate.lua      # relative to the directory of this twp.yaml
+    failMode: closed             # a script that fails answers 503; `open` lets the request through
+    timeoutMs: 200               # wall time of one call
+    settings:
+      requiredHeader: X-Api-Client
+      stampHeader: X-Route-Plugin
+
+routes:
+  - id: api
+    clusterId: backend
+    match: { path: /api, pathKind: Prefix }
+    middleware: [header-gate]    # runs on_request_headers for this route only
+
+# To gate every route instead, use the listener-wide script pipeline. The plugin then runs on every request,
+# so keep `middleware` off the routes or the script runs twice:
+#
+# scriptPipeline: [header-gate]
+
+clusters:
+  - id: backend
+    destinations:
+      - { id: one, address: 127.0.0.1, port: 9000 }
+
+listeners:
+  - port: 8080

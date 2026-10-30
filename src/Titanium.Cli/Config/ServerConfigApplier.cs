@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
@@ -52,6 +53,16 @@ internal static class ServerConfigApplier
         if (server.ForwardedHeaders is not null)
         {
             proxy.ForwardedHeaders = server.ForwardedHeaders;
+        }
+
+        if (server.ResponseCompression is { Enabled: true } compression)
+        {
+            proxy.ResponseCompression = compression;
+        }
+
+        if (server.RequestDecompression is { Enabled: true } decompression)
+        {
+            proxy.RequestDecompression = decompression;
         }
     }
 
@@ -426,6 +437,27 @@ internal static class ServerConfigApplier
             TryParseSslProtocols(serverProtocols, out var server))
         {
             proxy.SupportedServerSslProtocols = server;
+        }
+
+        ApplyListenerTlsPolicy(proxy, tls);
+    }
+
+    private static void ApplyListenerTlsPolicy(ProxyServer proxy, TlsConfig tls)
+    {
+        if (TlsPolicyParser.TryParseMinVersion(tls.MinVersion, out var minimum))
+        {
+            proxy.ListenerMinimumSslProtocol = minimum;
+        }
+
+        if (tls.CipherSuites is { Count: > 0 } names && TlsPolicyParser.TryParseCipherSuites(names, out var suites))
+        {
+            // Windows has no cipher policy: the engine logs a warning and keeps the OS default.
+            proxy.ListenerCipherSuites = suites;
+        }
+
+        if (tls.OcspStapling is bool stapling)
+        {
+            proxy.OcspStapling = stapling;
         }
     }
 

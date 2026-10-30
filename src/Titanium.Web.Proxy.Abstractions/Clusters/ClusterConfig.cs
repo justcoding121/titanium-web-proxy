@@ -98,6 +98,14 @@ public sealed class ClusterConfig
 
     /// <summary>Name of an <c>ILoadBalancingPolicy</c>. Null uses <see cref="Algorithm"/>.</summary>
     public string? LoadBalancingPolicy { get; init; }
+
+    /// <summary>
+    ///     PROXY protocol header written to a TCP origin before any client bytes: <c>none</c> or <c>v2</c>.
+    ///     Null inherits the passthrough listener's <c>sendProxyProtocol</c>. Applies to TCP passthrough
+    ///     connections only. Pooled HTTP origin connections are shared between clients and never carry it.
+    ///     A TCP active health probe sends a v2 LOCAL header when this is <c>v2</c>.
+    /// </summary>
+    public string? SendProxyProtocol { get; init; }
 }
 
 /// <summary>How a sticky pin is read.</summary>
@@ -151,20 +159,71 @@ public sealed class ClusterHttpClientConfig
     /// <summary>Null uses the process request-header timeout.</summary>
     public TimeSpan? RequestTimeout { get; init; }
 
-    /// <summary>Empty when every setting is at the process default.</summary>
-    public string ConnectionKey
-    {
-        get
-        {
-            if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null &&
-                ConnectTimeout is null && RequestTimeout is null)
-            {
-                return string.Empty;
-            }
+    /// <summary>
+    ///     Client certificate presented to the upstream. A PEM certificate when
+    ///     <see cref="ClientCertificateKeyPath"/> is set, otherwise a PFX/PKCS#12 file.
+    /// </summary>
+    public string? ClientCertificatePath { get; init; }
 
-            return (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer +
-                   "|" + ConnectTimeout?.TotalMilliseconds + "|" + RequestTimeout?.TotalMilliseconds;
+    /// <summary>PEM private key that pairs with a PEM <see cref="ClientCertificatePath"/>.</summary>
+    public string? ClientCertificateKeyPath { get; init; }
+
+    /// <summary>
+    ///     Name of the environment variable holding the PFX password, or the password of an encrypted PEM key.
+    ///     The password itself is never read from the configuration file.
+    /// </summary>
+    public string? ClientCertificatePasswordEnv { get; init; }
+
+    /// <summary>PEM or CRT file of trust anchors used instead of the machine store for this cluster.</summary>
+    public string? CaBundlePath { get; init; }
+
+    /// <summary>Overrides the TLS SNI value and the name checked against the upstream certificate.</summary>
+    public string? ServerName { get; init; }
+
+    /// <summary>
+    ///     When false, only a certificate name mismatch is tolerated. Chain, expiry, and revocation
+    ///     errors still fail the handshake.
+    /// </summary>
+    public bool VerifyHostname { get; init; } = true;
+
+    private string? connectionKey;
+    private UpstreamTlsFileSnapshot? tlsFiles;
+
+    /// <summary>True when any setting changes how the upstream TLS handshake is validated or presented.</summary>
+    internal bool HasTlsMaterial =>
+        AcceptAnyServerCertificate || !VerifyHostname || !string.IsNullOrEmpty(ServerName) ||
+        !string.IsNullOrEmpty(ClientCertificatePath) || !string.IsNullOrEmpty(CaBundlePath);
+
+    /// <summary>True when a file-backed TLS setting is present, so the pool key must follow the file contents.</summary>
+    private bool HasTlsFiles =>
+        !string.IsNullOrEmpty(ClientCertificatePath) || !string.IsNullOrEmpty(CaBundlePath);
+
+    /// <summary>
+    ///     File bytes read once per config instance. A reload builds a new instance, so a rotated file is
+    ///     picked up then; nothing re-reads a file on the request path.
+    /// </summary>
+    internal UpstreamTlsFileSnapshot TlsFiles =>
+        tlsFiles ??= UpstreamTlsFileSnapshot.Read(this);
+
+    /// <summary>Empty when every setting is at the process default. Computed once, on first use.</summary>
+    public string ConnectionKey => connectionKey ??= BuildConnectionKey();
+
+    private string BuildConnectionKey()
+    {
+        if (SslProtocols is null && !AcceptAnyServerCertificate && MaxConnectionsPerServer is null &&
+            ConnectTimeout is null && RequestTimeout is null && !HasTlsMaterial)
+        {
+            return string.Empty;
         }
+
+        var key = (SslProtocols ?? string.Empty) + "|" + AcceptAnyServerCertificate + "|" + MaxConnectionsPerServer +
+                  "|" + ConnectTimeout?.TotalMilliseconds + "|" + RequestTimeout?.TotalMilliseconds;
+        if (!HasTlsFiles && VerifyHostname && string.IsNullOrEmpty(ServerName))
+        {
+            return key;
+        }
+
+        return key + "|tls:" + TlsFiles.Fingerprint;
     }
 }
 
@@ -193,9 +252,47 @@ public sealed class ActiveHealthConfig
 /// <summary>Failover onto another destination. Zero attempts means off.</summary>
 public sealed class RetryConfig
 {
+    /// <summary>Most extra destinations one request may be replayed onto. Zero turns retry off.</summary>
     public int Attempts { get; init; }
+
     public bool RetryNonIdempotent { get; init; }
     public int MaxBufferedBodyBytes { get; init; } = 64 * 1024;
+
+    /// <summary>
+    ///     Origin status codes that trigger a replay. Null means 502, 503, and 504. Each entry must be
+    ///     429 or 500 to 599.
+    /// </summary>
+    public IReadOnlyList<int>? StatusCodes { get; init; }
+
+    /// <summary>
+    ///     Response-header deadline for every attempt except the last one. Zero means none. A try that
+    ///     runs out of time counts as a 504 and moves to the next destination.
+    /// </summary>
+    public int PerTryTimeoutMilliseconds { get; init; }
+
+    /// <summary>Wait before the first replay. It doubles on each later one. Zero means replay at once.</summary>
+    public int BackoffMilliseconds { get; init; }
+
+    /// <summary>Upper bound for one wait, including a honored <c>Retry-After</c>.</summary>
+    public int MaxBackoffMilliseconds { get; init; } = 1000;
+
+    /// <summary>Random extra wait, as a percent of the computed backoff (0-100).</summary>
+    public int JitterPercent { get; init; } = 20;
+
+    /// <summary>
+    ///     Use a delta-seconds <c>Retry-After</c> from the origin instead of the computed backoff.
+    ///     The value is capped at <see cref="MaxBackoffMilliseconds" />. An HTTP-date is ignored.
+    /// </summary>
+    public bool HonorRetryAfter { get; init; }
+
+    /// <summary>
+    ///     Share of the cluster's in-flight requests that may be retries at one time (0-100).
+    ///     Zero means no limit.
+    /// </summary>
+    public int BudgetPercent { get; init; }
+
+    /// <summary>Retries always allowed at once, however low the budget works out to.</summary>
+    public int BudgetMinConcurrent { get; init; } = 3;
 }
 
 /// <summary>Optional wait when every destination is at its concurrency cap.</summary>

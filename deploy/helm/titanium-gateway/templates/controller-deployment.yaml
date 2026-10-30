@@ -1,0 +1,158 @@
+{{- $controller := include "titanium-gateway.controllerName" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+    {{- include "titanium-gateway.controllerSelectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.controller.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "titanium-gateway.controllerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.controller.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "titanium-gateway.commonLabels" . | nindent 8 }}
+        {{- include "titanium-gateway.controllerSelectorLabels" . | nindent 8 }}
+        {{- with .Values.controller.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ $controller }}
+      # Service-link variables (TITANIUM_GATEWAY_DATA_PORT and friends) would share the TITANIUM_GATEWAY_ option prefix.
+      enableServiceLinks: false
+      {{- with .Values.controller.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.controller.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: controller
+          image: {{ include "titanium-gateway.image" (dict "image" .Values.controller.image "root" .) | quote }}
+          imagePullPolicy: {{ .Values.controller.image.pullPolicy }}
+          {{- with .Values.controller.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.controller.extraArgs }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: health
+              containerPort: {{ int .Values.controller.healthPort }}
+              protocol: TCP
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TITANIUM_GATEWAY_CONTROLLER_NAME
+              value: {{ .Values.controller.controllerName | quote }}
+            - name: TITANIUM_GATEWAY_DATA_PLANE_NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: TITANIUM_GATEWAY_DATA_PLANE_SERVICE
+              value: {{ include "titanium-gateway.dataName" . | quote }}
+            - name: TITANIUM_GATEWAY_DATA_PLANE_DEPLOYMENT
+              value: {{ include "titanium-gateway.dataName" . | quote }}
+            - name: TITANIUM_GATEWAY_CONFIG_MAP
+              value: {{ include "titanium-gateway.dataName" . | quote }}
+            - name: TITANIUM_GATEWAY_TLS_SECRET
+              value: {{ include "titanium-gateway.tlsSecretName" . | quote }}
+            - name: TITANIUM_GATEWAY_LEASE_NAME
+              value: {{ $controller | quote }}
+            - name: TITANIUM_GATEWAY_PORT_MAP
+              value: {{ include "titanium-gateway.portMap" . | quote }}
+            - name: TITANIUM_GATEWAY_ADMIN_PORT
+              value: {{ .Values.dataPlane.admin.port | quote }}
+            - name: TITANIUM_GATEWAY_HEALTH_PORT
+              value: {{ .Values.controller.healthPort | quote }}
+            - name: TITANIUM_GATEWAY_INGRESS_CONTROLLER_NAME
+              value: {{ .Values.controller.ingressControllerName | quote }}
+            {{- if .Values.controller.watchLegacyAnnotation }}
+            - name: TITANIUM_GATEWAY_WATCH_LEGACY_ANNOTATION
+              value: "true"
+            {{- end }}
+            {{- with .Values.controller.secretNamespaces }}
+            - name: TITANIUM_GATEWAY_SECRET_NAMESPACES
+              value: {{ join "," . | quote }}
+            {{- end }}
+            - name: TITANIUM_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "titanium-gateway.adminSecretName" . }}
+                  key: {{ .Values.dataPlane.admin.token.key }}
+            {{- with .Values.controller.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          {{- with .Values.controller.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+      {{- with .Values.controller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.controller.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- if .Values.controller.podDisruptionBudget.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.controller.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "titanium-gateway.controllerSelectorLabels" . | nindent 6 }}
+{{- end }}

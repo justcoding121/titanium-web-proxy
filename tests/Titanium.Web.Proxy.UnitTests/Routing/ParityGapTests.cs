@@ -256,7 +256,20 @@ public class ParityGapTests
             var read = await originClient.GetStream().ReadAsync(buffer, cts.Token);
             Assert.AreEqual("ping", Encoding.ASCII.GetString(buffer, 0, read));
             client.Close();
-            await relay;
+
+            // The plain forward path half-closes on the client's close, so the origin sees EOF (or a reset).
+            try
+            {
+                Assert.AreEqual(0, await originClient.GetStream().ReadAsync(buffer, cts.Token));
+            }
+            catch (System.IO.IOException)
+            {
+                // The relay closed with a read pending, which can arrive as a reset.
+            }
+
+            originClient.Client.Shutdown(SocketShutdown.Send);
+
+            await relay.WaitAsync(TimeSpan.FromSeconds(5));
         }
         finally
         {

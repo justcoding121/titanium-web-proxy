@@ -1,0 +1,130 @@
+name: kubernetes-smoke
+
+# Installs the Helm chart into a kind cluster and checks probes, scraping, ConfigMap reload, and a drain-safe rollout.
+# Nightly, on demand, and on a pull request that carries the `k8s-smoke` label.
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+    branches:
+      - develop
+      - beta
+      - stable
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubernetes-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kind:
+    # On pull requests, only when the label is present (a later push re-runs it while the label stays).
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'k8s-smoke')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NS: twp-smoke
+      REL: twp
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: titanium-web-proxy:ci
+          build-args: |
+            VERSION=0.0.0-ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: twp
+
+      - name: Load the image and start a throwaway backend
+        run: |
+          set -euo pipefail
+          kind load docker-image titanium-web-proxy:ci --name twp
+          kubectl create namespace "$NS"
+          kubectl -n "$NS" create deployment backend --image=nginx:1.27-alpine --port=80
+          kubectl -n "$NS" expose deployment backend --port=80
+          kubectl -n "$NS" rollout status deployment/backend --timeout=120s
+
+      - name: helm install
+        run: |
+          set -euo pipefail
+          helm install "$REL" deploy/helm/titanium -n "$NS" \
+            -f deploy/helm/titanium/ci/smoke-values.yaml \
+            --set serviceMonitor.enabled=false --set admin.service.enabled=true \
+            --wait --timeout 180s
+
+      - name: Probes, auth, and traffic
+        run: |
+          set -euo pipefail
+          TOKEN="$(kubectl -n "$NS" get secret "${REL}-titanium-admin" -o jsonpath='{.data.admin-token}' | base64 -d)"
+          kubectl -n "$NS" port-forward "svc/${REL}-titanium-admin" 19901:9901 &
+          kubectl -n "$NS" port-forward "svc/${REL}-titanium" 18080:8080 &
+          sleep 3
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19901/healthz)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19901/readyz)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19901/metrics)" = "401"
+          curl -fsS -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:19901/metrics | head -n 5
+          curl -fsS -H "Authorization: Bearer ${TOKEN}" http://127.0.0.1:19901/version
+          # A request through the proxy reaches the backend.
+          curl -fsS http://127.0.0.1:18080/ | grep -qi 'nginx'
+          kill %1 %2 || true
+
+      - name: ConfigMap update is reloaded in place (no restart)
+        run: |
+          set -euo pipefail
+          before="$(kubectl -n "$NS" get pods -l app.kubernetes.io/instance="$REL" -o jsonpath='{range .items[*]}{.metadata.name}={.status.containerStatuses[0].restartCount} {end}')"
+          helm upgrade "$REL" deploy/helm/titanium -n "$NS" \
+            -f deploy/helm/titanium/ci/smoke-values.yaml \
+            --set admin.service.enabled=true \
+            --set 'config.logging.minimumLevel=Warning' \
+            --wait --timeout 180s
+          # kubelet refreshes ConfigMap volumes on its sync period (up to about 90 seconds).
+          for i in $(seq 1 45); do
+            reloaded=0
+            for pod in $(kubectl -n "$NS" get pods -l app.kubernetes.io/instance="$REL" -o name); do
+              if kubectl -n "$NS" logs "$pod" | grep -q 'Config reloaded\.'; then reloaded=$((reloaded + 1)); fi
+            done
+            [[ "$reloaded" -ge 2 ]] && break
+            sleep 5
+          done
+          test "$reloaded" -ge 2 || { kubectl -n "$NS" logs -l app.kubernetes.io/instance="$REL" --tail=50; exit 1; }
+          after="$(kubectl -n "$NS" get pods -l app.kubernetes.io/instance="$REL" -o jsonpath='{range .items[*]}{.metadata.name}={.status.containerStatuses[0].restartCount} {end}')"
+          echo "before: $before"; echo "after:  $after"
+          test "$before" = "$after"
+
+      - name: Rolling restart drops no requests
+        run: |
+          set -euo pipefail
+          # An in-cluster client sends 10 requests a second through the Service for about a minute.
+          kubectl -n "$NS" run loader --image=curlimages/curl:8.11.1 --restart=Never --command -- sh -c \
+            'fail=0; i=0; while [ $i -lt 600 ]; do i=$((i+1)); curl -fsS -o /dev/null --max-time 2 "http://'"${REL}"'-titanium:8080/" || fail=$((fail+1)); sleep 0.1; done; echo "FAILS=$fail"; [ "$fail" -eq 0 ]'
+          kubectl -n "$NS" wait --for=condition=Ready pod/loader --timeout=60s || true
+          sleep 5
+          kubectl -n "$NS" rollout restart "deployment/${REL}-titanium"
+          kubectl -n "$NS" rollout status "deployment/${REL}-titanium" --timeout=180s
+          kubectl -n "$NS" wait --for=jsonpath='{.status.phase}'=Succeeded pod/loader --timeout=180s \
+            || { kubectl -n "$NS" logs loader || true; exit 1; }
+          kubectl -n "$NS" logs loader | tail -n 3
+
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n "$NS" get all,cm,pdb || true
+          kubectl -n "$NS" describe pods || true
+          kubectl -n "$NS" logs -l app.kubernetes.io/instance="$REL" --tail=100 || true

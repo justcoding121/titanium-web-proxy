@@ -1,0 +1,7 @@
+# expect: reject
+# reason: a transfer coding the proxy cannot decode must be refused (501)
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: gzip\r\n
+\r\n

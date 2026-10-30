@@ -154,6 +154,12 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     internal Dictionary<string, string>? ResponseTrailerPlan { get; set; }
 
     /// <summary>
+    ///     Media type the client sent when the request was translated from gRPC-Web, such as
+    ///     <c>application/grpc-web+proto</c>. Null unless <c>grpcWeb</c> rewrote this request.
+    /// </summary>
+    internal string? GrpcWebClientContentType { get; set; }
+
+    /// <summary>
     ///     Enable/disable Windows Authentication (NTLM/Kerberos) for the current session.
     /// </summary>
     public bool EnableWinAuth
@@ -255,6 +261,24 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
     /// <summary>Route chosen for this request. Null when the request was not routed.</summary>
     public Abstractions.Routing.RouteConfig? MatchedRoute { get; internal set; }
 
+    /// <summary>
+    ///     The route this request matches, found without selecting a destination or changing the session.
+    ///     <see cref="MatchedRoute" /> is only set after routing runs, so a <c>BeforeRequest</c> hook or middleware
+    ///     that needs the route's policies calls this instead. Null without routes or without a match.
+    /// </summary>
+    public Abstractions.Routing.RouteConfig? PeekRoute()
+    {
+        if (MatchedRoute is { } routed)
+        {
+            return routed;
+        }
+
+        var fallbackHost = ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent
+            ? transparent.ForwardHost
+            : null;
+        return Routing.DestinationResolver.MatchRoute(Server.ReverseProxy, HttpClient.Request, fallbackHost);
+    }
+
     /// <summary>Request id assigned when <see cref="ProxyServer.RequestIdHeader"/> is set.</summary>
     public string? ProxyRequestId => Extras?.RequestId;
 
@@ -324,6 +348,10 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         {
             CustomUpStreamProxyUsed = null;
 
+            // Releases requests waiting behind this fetch and returns any staging buffer, on every exit path.
+            ResponseCache?.Dispose();
+            ResponseCache = null;
+
             HttpClient.FinishSession();
 
             DataSent = null;
@@ -369,8 +397,16 @@ public abstract class SessionEventArgsBase : ProxyEventArgsBase, IDisposable
         }
     }
 
+    /// <summary>
+    ///     Response-cache state for this session. Null whenever the response cache is not in play, so a session
+    ///     pays one reference and no work. While a streamed response is being cached, its body pieces are appended here.
+    /// </summary>
+    internal Caching.CacheSessionSlot? ResponseCache { get; set; }
+
     internal void OnDataReceived(byte[] buffer, int offset, int count)
     {
+        ResponseCache?.Tee?.Append(buffer, offset, count);
+
         var handler = DataReceived;
         if (handler == null) return;
 

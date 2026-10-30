@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: no response yet, so NotFound and not a throw
+response.code

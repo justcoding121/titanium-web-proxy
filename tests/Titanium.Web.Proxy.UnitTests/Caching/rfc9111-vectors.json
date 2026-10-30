@@ -1,0 +1,323 @@
+{
+  "description": "RFC 9111 subset vectors. Time zero is the Date header of the response: Mon, 01 Jan 2024 00:00:00 GMT. 'store' is whether the response is kept; 'lifetime' its freshness lifetime in seconds; each check asks what the cache does at 'at' seconds after storing, optionally for a request carrying the listed headers. 'sie' asks whether an origin error may be answered with the stale entry.",
+  "vectors": [
+    {
+      "name": "max-age fresh until it expires, no validator",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60"],
+      "store": true, "lifetime": 60,
+      "checks": [
+        { "at": 0, "decision": "Hit" },
+        { "at": 59, "decision": "Hit" },
+        { "at": 60, "decision": "Miss" },
+        { "at": 600, "decision": "Miss" }
+      ]
+    },
+    {
+      "name": "max-age with ETag revalidates instead of refetching once stale",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "ETag: \"v1\""],
+      "store": true, "lifetime": 60,
+      "checks": [
+        { "at": 30, "decision": "Hit" },
+        { "at": 61, "decision": "Revalidate" }
+      ]
+    },
+    {
+      "name": "max-age=0 with a validator is stored and always revalidated",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=0", "Last-Modified: Sun, 31 Dec 2023 00:00:00 GMT"],
+      "store": true, "lifetime": 0,
+      "checks": [ { "at": 0, "decision": "Revalidate" } ]
+    },
+    {
+      "name": "max-age=0 without a validator is not stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=0"],
+      "store": false, "refusal": "stale-on-arrival"
+    },
+    {
+      "name": "s-maxage wins over max-age for a shared cache and forbids serving stale",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=100, s-maxage=10, stale-while-revalidate=30"],
+      "store": true, "lifetime": 10,
+      "checks": [
+        { "at": 9, "decision": "Hit" },
+        { "at": 11, "decision": "Miss" },
+        { "at": 20, "decision": "Miss" }
+      ]
+    },
+    {
+      "name": "Expires gives the lifetime when there is no max-age",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Expires: Mon, 01 Jan 2024 00:00:30 GMT"],
+      "store": true, "lifetime": 30,
+      "checks": [
+        { "at": 29, "decision": "Hit" },
+        { "at": 30, "decision": "Miss" }
+      ]
+    },
+    {
+      "name": "max-age beats Expires",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=5", "Expires: Mon, 01 Jan 2024 01:00:00 GMT"],
+      "store": true, "lifetime": 5,
+      "checks": [ { "at": 6, "decision": "Miss" } ]
+    },
+    {
+      "name": "Expires: 0 means already expired",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Expires: 0"],
+      "store": false, "refusal": "stale-on-arrival"
+    },
+    {
+      "name": "Expires in the past with a validator is stored stale",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Expires: Sun, 31 Dec 2023 00:00:00 GMT", "ETag: \"e\""],
+      "store": true, "lifetime": 0,
+      "checks": [ { "at": 1, "decision": "Revalidate" } ]
+    },
+    {
+      "name": "Age header counts against the lifetime",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Age: 50"],
+      "store": true, "lifetime": 60,
+      "checks": [
+        { "at": 5, "decision": "Hit" },
+        { "at": 10, "decision": "Miss" }
+      ]
+    },
+    {
+      "name": "Age beyond max-age without a validator is not stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Age: 100"],
+      "store": false, "refusal": "stale-on-arrival"
+    },
+    {
+      "name": "Last-Modified alone is not freshness when heuristics are off (default)",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Last-Modified: Sun, 31 Dec 2023 22:00:00 GMT"],
+      "store": false, "refusal": "no-freshness"
+    },
+    {
+      "name": "heuristic freshness is 10 percent of the Last-Modified age",
+      "status": 200,
+      "options": { "heuristic": true },
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Last-Modified: Sun, 31 Dec 2023 22:00:00 GMT"],
+      "store": true, "lifetime": 720,
+      "checks": [
+        { "at": 719, "decision": "Hit" },
+        { "at": 721, "decision": "Revalidate" }
+      ]
+    },
+    {
+      "name": "heuristic freshness is capped at 24 hours",
+      "status": 200,
+      "options": { "heuristic": true },
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Last-Modified: Fri, 01 Dec 2023 00:00:00 GMT"],
+      "store": true, "lifetime": 86400
+    },
+    {
+      "name": "heuristic freshness needs Last-Modified",
+      "status": 200,
+      "options": { "heuristic": true },
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "ETag: \"x\""],
+      "store": false, "refusal": "no-freshness"
+    },
+    {
+      "name": "explicit freshness wins over a configured default ttl",
+      "status": 200,
+      "options": { "defaultTtlSeconds": 3600 },
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=7"],
+      "store": true, "lifetime": 7
+    },
+    {
+      "name": "a configured default ttl applies only without any freshness information",
+      "status": 200,
+      "options": { "defaultTtlSeconds": 3600 },
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT"],
+      "store": true, "lifetime": 3600
+    },
+    {
+      "name": "no freshness information and no default ttl is not stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT"],
+      "store": false, "refusal": "no-freshness"
+    },
+    {
+      "name": "malformed max-age counts as already stale",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=abc", "Expires: Mon, 01 Jan 2024 01:00:00 GMT"],
+      "store": false, "refusal": "stale-on-arrival"
+    },
+    {
+      "name": "the first max-age wins when it is repeated",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=10, max-age=500"],
+      "store": true, "lifetime": 10
+    },
+    {
+      "name": "absurd max-age is clamped to a year",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=99999999999999"],
+      "store": true, "lifetime": 31536000
+    },
+    {
+      "name": "no-store is never stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: no-store, max-age=60"],
+      "store": false, "refusal": "cache-control"
+    },
+    {
+      "name": "private is never stored by a shared cache",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: private, max-age=60"],
+      "store": false, "refusal": "cache-control"
+    },
+    {
+      "name": "no-cache is never stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: no-cache, max-age=60"],
+      "store": false, "refusal": "cache-control"
+    },
+    {
+      "name": "Set-Cookie is never stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Set-Cookie: sid=1"],
+      "store": false, "refusal": "set-cookie"
+    },
+    {
+      "name": "Vary star is never stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Vary: *"],
+      "store": false, "refusal": "vary-star"
+    },
+    {
+      "name": "Vary naming eight headers is stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Vary: A1, A2, A3, A4, A5, A6, A7, A8"],
+      "store": true, "lifetime": 60, "vary": ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"]
+    },
+    {
+      "name": "Vary naming nine headers is not stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Vary: A1, A2, A3, A4, A5, A6, A7, A8, A9"],
+      "store": false, "refusal": "vary-too-many"
+    },
+    {
+      "name": "Vary names are lower-cased, sorted, de-duplicated, and Accept-Encoding is implicit",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Vary: Origin, Accept-Encoding", "Vary: accept-language, ORIGIN"],
+      "store": true, "lifetime": 60, "vary": ["accept-language", "origin"]
+    },
+    {
+      "name": "a partial response is never stored",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "Content-Range: bytes 0-9/100"],
+      "store": false, "refusal": "partial"
+    },
+    {
+      "name": "206 is not a stored status",
+      "status": 206,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60"],
+      "store": false, "refusal": "status"
+    },
+    {
+      "name": "500 is not a stored status",
+      "status": 500,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60"],
+      "store": false, "refusal": "status"
+    },
+    {
+      "name": "404 with explicit freshness is stored",
+      "status": 404,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=30"],
+      "store": true, "lifetime": 30
+    },
+    {
+      "name": "stale-while-revalidate serves stale inside the window",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=10, stale-while-revalidate=30", "ETag: \"s\""],
+      "store": true, "lifetime": 10,
+      "checks": [
+        { "at": 5, "decision": "Hit" },
+        { "at": 11, "decision": "ServeStale" },
+        { "at": 40, "decision": "ServeStale" },
+        { "at": 41, "decision": "Revalidate" }
+      ]
+    },
+    {
+      "name": "must-revalidate disables stale-while-revalidate",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=10, must-revalidate, stale-while-revalidate=30", "ETag: \"s\""],
+      "store": true, "lifetime": 10,
+      "checks": [ { "at": 11, "decision": "Revalidate" } ]
+    },
+    {
+      "name": "stale-if-error answers an origin error inside the window only",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=10, stale-if-error=60"],
+      "store": true, "lifetime": 10,
+      "checks": [
+        { "at": 5, "sie": false },
+        { "at": 11, "sie": true },
+        { "at": 70, "sie": true },
+        { "at": 71, "sie": false },
+        { "at": 11, "sie": false, "request": ["Cache-Control: no-cache"] },
+        { "at": 11, "sie": false, "request": ["Cache-Control: max-age=0"] }
+      ]
+    },
+    {
+      "name": "must-revalidate disables stale-if-error",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=10, must-revalidate, stale-if-error=60"],
+      "store": true, "lifetime": 10,
+      "checks": [ { "at": 11, "sie": false } ]
+    },
+    {
+      "name": "request no-cache forces a revalidation of a fresh entry",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "ETag: \"c\""],
+      "store": true, "lifetime": 60,
+      "checks": [
+        { "at": 5, "decision": "Revalidate", "request": ["Cache-Control: no-cache"] },
+        { "at": 5, "decision": "Revalidate", "request": ["Pragma: no-cache"] },
+        { "at": 5, "decision": "Hit", "request": ["Cache-Control: max-stale=100"] }
+      ]
+    },
+    {
+      "name": "request no-cache without a validator refetches",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60"],
+      "store": true, "lifetime": 60,
+      "checks": [ { "at": 5, "decision": "Miss", "request": ["Cache-Control: no-cache"] } ]
+    },
+    {
+      "name": "request max-age=0 forces a revalidation",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60", "ETag: \"c\""],
+      "store": true, "lifetime": 60,
+      "checks": [ { "at": 5, "decision": "Revalidate", "request": ["Cache-Control: max-age=0"] } ]
+    },
+    {
+      "name": "request max-age is compared with the age of the entry",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=600"],
+      "store": true, "lifetime": 600,
+      "checks": [
+        { "at": 20, "decision": "Hit", "request": ["Cache-Control: max-age=30"] },
+        { "at": 31, "decision": "Miss", "request": ["Cache-Control: max-age=30"] }
+      ]
+    },
+    {
+      "name": "request min-fresh needs that much freshness left",
+      "status": 200,
+      "headers": ["Date: Mon, 01 Jan 2024 00:00:00 GMT", "Cache-Control: max-age=60"],
+      "store": true, "lifetime": 60,
+      "checks": [
+        { "at": 10, "decision": "Hit", "request": ["Cache-Control: min-fresh=20"] },
+        { "at": 50, "decision": "Miss", "request": ["Cache-Control: min-fresh=20"] }
+      ]
+    }
+  ]
+}

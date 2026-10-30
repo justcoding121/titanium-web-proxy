@@ -1,0 +1,3 @@
+# expect: malformed
+# reason: shorter than the 4-byte count
+01 00 00

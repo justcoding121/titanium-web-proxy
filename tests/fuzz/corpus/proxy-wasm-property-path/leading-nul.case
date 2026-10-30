@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: a leading NUL becomes a leading dot
+\0request.path

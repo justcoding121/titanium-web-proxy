@@ -39,12 +39,14 @@ It does **not** bound:
   the proxy.
 - **A custom `RespondStreaming` producer** you supply — the proxy imposes no ceiling on how much you
   choose to write.
-- **HTTP/1 aggregate header-block bytes** — `PolicyFamily.HeaderLimits` exists as a named policy
-  family (see `PolicyFamily.cs`) but is not yet wired to numeric enforcement at every header-reading
-  call site; only the HTTP/2 decoded-header-list cap (`MaxDecodedHeaderListBytes`) and the client
-  header *read deadline* (a time bound, not a byte bound — see
-  [New: client header read deadline](Migration-from-4.x#user-content-new-client-header-read-deadline-opt-in)) are
-  actually enforced today.
+
+Header blocks are bounded by their own limits, not by the body budgets. An HTTP/1 request or origin response
+over `MaxHeaderCount` or `MaxHeaderAggregateBytes` (CLI keys `server.limits.maxHeaderCount` and
+`server.limits.maxHeaderAggregateBytes`) is rejected under the `HeaderLimits` policy family: `431` for a request,
+`502` for an origin response. HTTP/2 has its own decoded-header-list cap (`MaxDecodedHeaderListBytes`), and the
+client header *read deadline* bounds time rather than bytes (see
+[New: client header read deadline](Migration-from-4.x#user-content-new-client-header-read-deadline-opt-in)).
+`LegacyCompatible` keeps `HeaderLimits` at `Observe`; see [Limits and escape hatches](Limits-and-Escape-Hatches).
 
 Treat memory-exhaustion protection as scoped to the specific mechanism you're using, and prefer the
 streaming APIs for anything whose size you can't bound in advance.
@@ -125,6 +127,26 @@ deadlock. Titanium keeps the `IsCompletedSuccessfully` fast path for already-com
 and otherwise runs the incomplete task via `Task.Run` so it does not capture the handshake
 thread's `SynchronizationContext`.
 
+## The Plus WAF screens requests by signature; it is not a full WAF
+
+Titanium Plus can screen requests against a versioned built-in rule pack (`waf-pack-1`) and your own
+YAML rules, score the matches, and refuse a request at a block threshold. It is signature-based
+request screening with detect mode and anomaly scoring; it complements a managed WAF and does not
+claim full OWASP Core Rule Set coverage.
+
+- The default mode is `detect`: matches are logged and counted, nothing is refused. Move a route to
+  `block` only after you have read the false positives.
+- Only urlencoded forms, JSON, and the text fields of multipart bodies up to `waf.inspectBodyBytes`
+  (default 8 KiB) are inspected. Chunked, compressed, over-limit, and binary bodies are not, and
+  responses are never screened.
+- Paranoia levels 2 and 3 match ordinary prose and markup. Use exclusions rather than disabling the
+  WAF for a route.
+- Turning screening on moves requests from H1 terminate-lite to the session path, which costs
+  throughput. Re-measure on your hardware.
+- Log lines carry rule ids and the path, not query strings or bodies.
+
+Options, rule categories, and the per-route `waf` policy are in
+[Plus](https://titaniumproxy.com/docs/plus#web-application-firewall-waf).
 ## See also
 
 - [Migration from 4.x](Migration-from-4.x) — cumulative behavior changes from 4.x through current 7.x.

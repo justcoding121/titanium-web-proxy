@@ -30,6 +30,89 @@ public sealed class PlusActivationContext
     /// <c>ReverseProxyOptions.GrpcJsonTranscoder</c> during refresh.
     /// </summary>
     public IGrpcJsonTranscoder? GrpcJsonTranscoder { get; set; }
+
+    /// <summary>
+    /// Registers a section that is appended to the host's Prometheus text exposition on every scrape.
+    /// Null when the host has no exposition. The appender runs only while a scrape is served.
+    /// </summary>
+    public Action<Action<System.Text.StringBuilder>>? RegisterMetricsAppender { get; init; }
+
+    /// <summary>Config identity, last reload outcome, and certificate inventory for the Plus dashboard. Null when the host has none.</summary>
+    public IPlusHostStatus? HostStatus { get; init; }
+
+    /// <summary>
+    /// Runs the same atomic config reload as SIGHUP / <c>titanium reload</c>. Null when the host cannot reload
+    /// (tests without a CLI host). The dashboard Config page exposes a button only when this is set.
+    /// </summary>
+    public Func<CancellationToken, Task<PlusReloadResult>>? RequestReload { get; init; }
+
+    /// <summary>
+    /// Handlers for route policy kinds that Plus supplies (for example <c>oidc</c>). The host copies them onto
+    /// <c>ReverseProxyOptions.PolicyHandlers</c> during refresh. Null when the host has no such list.
+    /// </summary>
+    public IList<IRoutePolicyHandler>? PolicyHandlers { get; init; }
+
+    /// <summary>
+    /// Named route policies of the running configuration. Plus reads policy kinds that only it enforces
+    /// (for example <c>waf</c>) from here. Null when the host has none.
+    /// </summary>
+    public IReadOnlyList<RoutePolicyConfig>? Policies { get; init; }
+
+    /// <summary>
+    /// Set by Plus when a fleet rate-limit store starts; the host copies it onto
+    /// <c>ReverseProxyOptions.FleetRateStore</c> during refresh. Null when unused.
+    /// </summary>
+    public IFleetRateStore? FleetRateStore { get; set; }
+
+    /// <summary>
+    /// Host seam for applying manager-pushed YAML (write + reload). Null when the host cannot apply
+    /// (tests without a CLI host, or advisory-only enrollment).
+    /// </summary>
+    public IConfigApplier? ConfigApplier { get; init; }
+
+    /// <summary>
+    /// Directory for manager agent state (last-known-good yaml/hash). Null uses <c>./state</c> under the process cwd
+    /// when the agent starts, or <c>manager.stateDir</c> from options.
+    /// </summary>
+    public string? StateDirectory { get; init; }
+}
+
+/// <summary>
+/// Enforces a route policy kind that Core does not implement. Core calls it only for routes that list a policy
+/// of <see cref="Kind"/>, so a handler costs nothing on routes without one.
+/// </summary>
+public interface IRoutePolicyHandler
+{
+    /// <summary>The policy <c>kind</c> this handler enforces (for example <c>oidc</c>).</summary>
+    string Kind { get; }
+
+    /// <summary>
+    /// Decides one request. The handler may stage a response on the session (a redirect, a 401) and report
+    /// <see cref="RoutePolicyVerdict.Responded"/>, or let the request continue, optionally with a
+    /// <c>Set-Cookie</c> value to add to the response.
+    /// </summary>
+    /// <param name="session">The <c>SessionEventArgs</c> of the request.</param>
+    /// <param name="route">The matched route.</param>
+    /// <param name="policy">The policy of <see cref="Kind"/> that the route lists.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    ValueTask<RoutePolicyVerdict> EvaluateAsync(
+        object session, RouteConfig route, RoutePolicyConfig policy, CancellationToken cancellationToken = default);
+}
+
+/// <summary>What an <see cref="IRoutePolicyHandler"/> decided for one request.</summary>
+public readonly struct RoutePolicyVerdict
+{
+    /// <summary>Let the request continue with no change to the response.</summary>
+    public static RoutePolicyVerdict Continue => default;
+
+    /// <summary>A response was staged on the session. The request is not forwarded.</summary>
+    public static RoutePolicyVerdict Respond => new() { Responded = true };
+
+    /// <summary>True when the handler staged a response and the request must not be forwarded.</summary>
+    public bool Responded { get; init; }
+
+    /// <summary>A <c>Set-Cookie</c> value to add to the response of a request that continues. Null adds nothing.</summary>
+    public string? ResponseSetCookie { get; init; }
 }
 
 /// <summary>Opt-in GET/HEAD response cache (empty/off = zero cost when unused).</summary>
@@ -41,13 +124,41 @@ public interface IHttpResponseCache
     int Count { get; }
 }
 
-/// <summary>Cached HTTP response payload.</summary>
+/// <summary>
+/// Cached HTTP response payload. The body is shared by every reader and must be treated as read-only.
+/// A variant marker (status 0, <see cref="VaryNames"/> set, empty body) records which request headers
+/// select a variant of a resource.
+/// </summary>
 public sealed class CachedHttpResponse
 {
     public required int StatusCode { get; init; }
     public required byte[] Body { get; init; }
     public required IReadOnlyList<KeyValuePair<string, string>> Headers { get; init; }
+
+    /// <summary>End of the freshness window. Unset (<see cref="DateTimeOffset.MinValue"/>) means "use the store ttl".</summary>
     public DateTimeOffset ExpiresUtc { get; init; }
+
+    /// <summary>When the response was received (RFC 9111 response_time). Unset means "not age-tracked".</summary>
+    public DateTimeOffset StoredUtc { get; init; }
+
+    /// <summary>Corrected initial age in seconds at <see cref="StoredUtc"/> (RFC 9111 section 4.2.3).</summary>
+    public long InitialAgeSeconds { get; init; }
+
+    /// <summary>
+    /// Last moment the entry may be returned by a store at all (stale entries are kept for revalidation,
+    /// stale-while-revalidate and stale-if-error). Unset or not after <see cref="ExpiresUtc"/> means "drop when stale".
+    /// </summary>
+    public DateTimeOffset RetainUntilUtc { get; init; }
+
+    public int StaleWhileRevalidateSeconds { get; init; }
+
+    public int StaleIfErrorSeconds { get; init; }
+
+    /// <summary>must-revalidate, proxy-revalidate or s-maxage: a stale entry must never be served without validation.</summary>
+    public bool MustRevalidate { get; init; }
+
+    /// <summary>Lower-case request header names named by <c>Vary</c>. Only set on a variant marker.</summary>
+    public IReadOnlyList<string>? VaryNames { get; init; }
 }
 
 /// <summary>Plus plugin entry (ALC). Inspector must never call Apply.</summary>

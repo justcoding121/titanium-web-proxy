@@ -11,7 +11,7 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 | Client | Origin | Kind |
 |--------|--------|------|
 | HTTP/1.x | HTTP/1.x | Native |
-| HTTP/2 | HTTP/2 | Native (ALPN MITM; prior-knowledge h2c on transparent reverse) |
+| HTTP/2 | HTTP/2 | Native frame relay when the route table is forward-host equivalent (one shared origin connection per client connection). Per-stream dispatch via `Http2OriginConnectionPool` when `RequiresPerRequestDispatch` applies (explicit listeners, non-equivalent routes, or policies). |
 | HTTP/3 | HTTP/3 | Native when `EnableHttp3` |
 | HTTP/1.1 ↔ HTTP/2 | Bridge | When `UpstreamHttpProtocol` + `AllowHttpProtocolTranslation` |
 | HTTP/1.1 / HTTP/2 ↔ HTTP/3 | Bridge | When H3 selected |
@@ -32,9 +32,27 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 
 For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, auth), see the [Protocol-Support wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support).
 
+## Response compression
+
+Opt-in `server.responseCompression` compresses origin responses (brotli or gzip), either buffered (up to 1 MiB with a known length) or, with `mode: streaming`, while the body is relayed. Streaming has no size limit, flushes per upstream chunk and uses chunked framing (HTTP/1.1) or DATA frames (the HTTP/2 bridge); HTTP/1.0 clients get identity. See [Configuration](/docs/configuration#response-compression-server-responsecompression).
+
+| Path | Compressed |
+|------|------------|
+| HTTP/1.1 client, HTTP/1.1 origin (session path) | Yes |
+| HTTP/2 client, HTTP/1.1 origin (bridge) | Yes |
+| HTTP/2 client, HTTP/2 origin | No |
+| HTTP/3 | No |
+| HTTP/1.1 client, HTTP/2 origin | No |
+
+Opt-in `server.requestDecompression` decompresses gzip and brotli request bodies before they reach the origin, with a decompressed-size cap and a ratio limit; a breach answers `413`, a corrupt body `400`. It applies to HTTP/1.x requests on the session path only. See [Configuration](/docs/configuration#request-decompression-server-requestdecompression).
+
+## gRPC-Web
+
+A route with `grpcWeb: true` translates a binary gRPC-Web call (`application/grpc-web` or `application/grpc-web+proto`) to native gRPC for an HTTP/2 origin, and folds the origin trailers into a final `0x80` frame. It runs on the HTTP/2-to-HTTP/2 dispatch bridge and on the HTTP/1.1-to-HTTP/2 bridge. Unary and server-streaming only; `application/grpc-web-text` is not translated. See [Configuration](/docs/configuration#grpc-web-route-grpcweb) for the flag and CORS guidance.
+
 ## Routing and clusters
 
-Per-request route dispatch runs on the HTTP/1 session path, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 frame relay still follows the connection's forward target (one origin connection per client connection).
+Per-request route dispatch runs on the HTTP/1 session path, the HTTP/1-to-HTTP/2 bridge, the HTTP/2-to-HTTP/1 bridge, the HTTP/2-to-HTTP/2 dispatch bridge (`SendHttp2ToHttp2DispatchBridge`), the HTTP/2-to-HTTP/3 bridge, and HTTP/3 streams. A session-less HTTP/3 fast path stays on the listener forward target only when the route table is forward-host equivalent; any other route table takes the session path so the route is honored. HTTP/2-to-HTTP/2 native frame relay is unchanged when the listener is forward-host equivalent (no per-request dispatch).
 
 ## Related
 

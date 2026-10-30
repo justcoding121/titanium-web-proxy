@@ -1,0 +1,185 @@
+# Default values for the Titanium Web Proxy chart.
+# The container runs: titanium run --config /etc/titanium/twp.yaml --watch
+# The chart renders `config` (below) into a ConfigMap mounted as the directory /etc/titanium.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/justcoding121/titanium-web-proxy
+  # Defaults to the chart appVersion. A digest, when set, wins over the tag.
+  tag: ""
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # The proxy never calls the Kubernetes API, so no token is mounted.
+  automount: false
+
+podAnnotations: {}
+podLabels: {}
+
+# Roll the pods when the ConfigMap changes. Off by default: `--watch` reloads routes and clusters in place, and
+# a rollout is only needed for settings that do not reload (listeners, certificates, Plus plugins).
+rolloutOnConfigChange: false
+
+# Must be longer than admin.preStopDelaySeconds plus the time in-flight requests need to finish.
+terminationGracePeriodSeconds: 60
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
+
+# The Titanium config document (twp.yaml). The chart owns `server.admin` and overwrites whatever is set there:
+# use the `admin` values below instead. Everything else is passed through unchanged.
+config:
+  schemaVersion: "7.1"
+  listeners:
+    - host: "0.0.0.0"
+      port: 8080
+      decryptSsl: false
+      forwardHost: "backend"
+      forwardPort: 80
+
+# Proxy ports. Each entry becomes a container port and a Service port.
+ports:
+  - name: proxy
+    containerPort: 8080
+    servicePort: 8080
+    protocol: TCP
+
+# Admin listener (server.admin): /healthz, /readyz, /metrics, /version on its own port.
+admin:
+  port: 9901
+  # /readyz answers 503 for this long after SIGTERM, before the drain, so endpoint removal can propagate.
+  preStopDelaySeconds: 5
+  # When true, /readyz is 503 while a cluster has no healthy destination.
+  requireHealthyClusters: false
+  # Bearer token for /metrics and /version. The listener binds 0.0.0.0, so a token is required.
+  token:
+    # Name of an existing Secret. When empty the chart creates one with a random token and keeps it across upgrades.
+    existingSecret: ""
+    key: admin-token
+  # A separate ClusterIP Service for the admin port. Created automatically when serviceMonitor.enabled.
+  service:
+    enabled: false
+    port: 9901
+    annotations: {}
+
+probes:
+  startup:
+    periodSeconds: 2
+    failureThreshold: 30
+  liveness:
+    periodSeconds: 10
+    timeoutSeconds: 2
+    failureThreshold: 3
+  readiness:
+    periodSeconds: 5
+    timeoutSeconds: 2
+    failureThreshold: 2
+
+service:
+  type: ClusterIP
+  annotations: {}
+  # loadBalancerClass, externalTrafficPolicy and similar knobs go here verbatim.
+  extra: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1654
+  runAsGroup: 1654
+  fsGroup: 1654
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Writable scratch space for the read-only root filesystem.
+tmpDir:
+  sizeLimit: 64Mi
+
+# Mount more volumes, for example a Secret that `authTokenFile`, `sharedSecretFile`, or a certificate path points at.
+# Mount Secrets as directories (no subPath) so a Secret update, which swaps the `..data` symlink, is seen by --watch.
+extraVolumes: []
+extraVolumeMounts: []
+extraEnv: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+
+podDisruptionBudget:
+  enabled: true
+  # Set exactly one of these. maxUnavailable keeps a single-replica install drainable.
+  maxUnavailable: 1
+  minAvailable: ""
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: null
+
+# Needs the Prometheus Operator CRDs. Scrapes /metrics on the admin port with the admin token.
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
+# A sample policy. Off by default. An empty `from` list allows any source on that port.
+networkPolicy:
+  enabled: false
+  proxyFrom: []
+  # Example: only a monitoring namespace may reach the admin port.
+  # adminFrom:
+  #   - namespaceSelector:
+  #       matchLabels:
+  #         kubernetes.io/metadata.name: monitoring
+  adminFrom: []
+  egress:
+    enabled: false
+    rules: []
+
+# Titanium Plus. The image must contain the Plus assembly (see the docs); the chart only wires the control plane.
+plus:
+  enabled: false
+  controlPlane:
+    port: 9080
+    # Required when plus.enabled: an existing Secret holding the control-plane shared secret.
+    sharedSecret:
+      existingSecret: ""
+      key: shared-secret
+    # The control plane and dashboard listen on the pod network, so they need TLS: an existing kubernetes.io/tls
+    # Secret (tls.crt and tls.key), mounted at /etc/titanium-plus-tls. Or set allowInsecureNonLoopback: true when a
+    # mesh or network policy already encrypts and isolates the port. One of the two is required when plus.enabled.
+    tls:
+      existingSecret: ""
+    allowInsecureNonLoopback: false
+  # Passed to plus.options verbatim (string values). Secret-bearing options should use their *File siblings.
+  options: {}

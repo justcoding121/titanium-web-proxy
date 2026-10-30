@@ -8,7 +8,7 @@ CLI and Inspector turn HTTP/3 on when this computer supports QUIC. Release zips 
 
 A decrypting listener uses HTTP/3 when QUIC is supported. Omit `enableHttp3` to keep that default:
 
-```yaml
+```yaml twp
 listeners:
   - host: "0.0.0.0"
     port: 443

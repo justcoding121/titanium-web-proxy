@@ -160,7 +160,7 @@ public class HttpResponseCacheMiddlewareTests
     {
         var cache = new MemoryHttpResponseCache();
         var body = Encoding.UTF8.GetBytes("cached");
-        cache.Set("GET:example.com/hit", new CachedHttpResponse
+        cache.Set(HttpResponseCacheMiddleware.BuildCacheKey("GET", "example.com", "/hit"), new CachedHttpResponse
         {
             StatusCode = 200,
             Body = body,
@@ -168,7 +168,7 @@ public class HttpResponseCacheMiddlewareTests
             ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5),
         }, TimeSpan.FromMinutes(5));
 
-        var mw = new HttpResponseCacheMiddleware(cache);
+        var mw = new HttpResponseCacheMiddleware(cache, options: new ResponseCacheOptions { ExposeHeaders = true });
         var nextCalled = false;
         var ctx = new ProxyMiddlewareContext
         {
@@ -220,7 +220,7 @@ public class HttpResponseCacheMiddlewareTests
             [new HttpHeader("Content-Type", "text/plain"), new HttpHeader("Connection", "keep-alive")],
             body);
 
-        Assert.IsTrue(cache.TryGet("GET:example.com/a", out var stored));
+        Assert.IsTrue(cache.TryGet(HttpResponseCacheMiddleware.BuildCacheKey("GET", "example.com", "/a"), out var stored));
         CollectionAssert.AreEqual(body, stored!.Body);
         foreach (var header in stored.Headers)
             Assert.IsFalse(header.Key.Equals("Connection", StringComparison.OrdinalIgnoreCase));
@@ -245,11 +245,94 @@ public class HttpResponseCacheMiddlewareTests
     public void TryStore_SkipsNon200AndOversized()
     {
         var cache = new MemoryHttpResponseCache();
-        var mw = new HttpResponseCacheMiddleware(cache);
-        mw.TryStore("GET", "example.com", "/no", 404, [], [1]);
-        mw.TryStore("POST", "example.com", "/no", 200, [], [1]);
-        mw.TryStore("GET", "example.com", "/big", 200, [], new byte[HttpResponseCacheMiddleware.MaxCachedBodyBytes + 1]);
+        var mw = new HttpResponseCacheMiddleware(cache, options: new ResponseCacheOptions { MaxEntryBytes = 1024 });
+        HttpHeader[] fresh = [new HttpHeader("Cache-Control", "max-age=60")];
+        mw.TryStore("GET", "example.com", "/no", 500, fresh, [1]);
+        mw.TryStore("POST", "example.com", "/no", 200, fresh, [1]);
+        mw.TryStore("GET", "example.com", "/big", 200, fresh, new byte[1025]);
         Assert.AreEqual(0, cache.Count);
+        mw.TryStore("GET", "example.com", "/ok", 200, fresh, new byte[1024]);
+        Assert.AreEqual(1, cache.Count);
+    }
+
+    [TestMethod]
+    [DataRow("Set-Cookie", "sid=1")]
+    [DataRow("Cache-Control", "private")]
+    [DataRow("Cache-Control", "no-store")]
+    [DataRow("Cache-Control", "no-cache")]
+    [DataRow("Cache-Control", "max-age=60, private")]
+    [DataRow("Vary", "*")]
+    public void TryStore_SkipsUnsafeResponseHeaders(string name, string value)
+    {
+        var cache = new MemoryHttpResponseCache();
+        var mw = new HttpResponseCacheMiddleware(cache);
+        mw.TryStore("GET", "example.com", "/unsafe", 200, [new HttpHeader(name, value)], [1]);
+        Assert.AreEqual(0, cache.Count, $"stored despite {name}: {value}");
+    }
+
+    [TestMethod]
+    public void TryStore_SkipsAuthorizationRequest()
+    {
+        var cache = new MemoryHttpResponseCache();
+        var mw = new HttpResponseCacheMiddleware(cache);
+        mw.TryStore("GET", "example.com", "/a", 200, [new HttpHeader("Content-Type", "text/plain")], [1],
+            authorization: "Bearer secret");
+        Assert.AreEqual(0, cache.Count);
+    }
+
+    [TestMethod]
+    public void TryStore_SkipsCookieRequest()
+    {
+        var cache = new MemoryHttpResponseCache();
+        var mw = new HttpResponseCacheMiddleware(cache);
+        mw.TryStore("GET", "example.com", "/a", 200, [new HttpHeader("Content-Type", "text/plain")], [1],
+            cookie: "sid=1");
+        Assert.AreEqual(0, cache.Count);
+    }
+
+    [TestMethod]
+    public void BuildCacheKey_IncludesAcceptEncodingAndQuery()
+    {
+        var withGzip = HttpResponseCacheMiddleware.BuildCacheKey("GET", "h", "/p?q=1", "gzip");
+        var withBr = HttpResponseCacheMiddleware.BuildCacheKey("GET", "h", "/p?q=1", "br");
+        var noQuery = HttpResponseCacheMiddleware.BuildCacheKey("GET", "h", "/p", "gzip");
+        Assert.AreNotEqual(withGzip, withBr);
+        Assert.AreNotEqual(withGzip, noQuery);
+        Assert.IsTrue(withGzip.Contains("ae=gzip", StringComparison.Ordinal));
+        Assert.IsTrue(withGzip.Contains("?q=1", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public async Task InvokeAsync_DifferentAcceptEncoding_Misses()
+    {
+        var cache = new MemoryHttpResponseCache();
+        var mw = new HttpResponseCacheMiddleware(cache);
+        mw.TryStore("GET", "example.com", "/a", 200, [new HttpHeader("Content-Type", "text/plain")], [9],
+            acceptEncoding: "gzip");
+
+        var nextCalled = false;
+        var ctx = new ProxyMiddlewareContext
+        {
+            Session = new object(),
+            Request = new MiddlewareRequestView
+            {
+                Method = "GET",
+                Path = "/a",
+                Host = "example.com",
+                GetHeaderValues = name =>
+                    name.Equals("Accept-Encoding", StringComparison.OrdinalIgnoreCase)
+                        ? ["br"]
+                        : null,
+            },
+        };
+        await mw.InvokeAsync(ctx, (_, _) =>
+        {
+            nextCalled = true;
+            return ValueTask.CompletedTask;
+        }, CancellationToken.None);
+
+        Assert.IsTrue(nextCalled);
+        Assert.IsFalse(ctx.IsHandled);
     }
 
     [TestMethod]
@@ -258,7 +341,7 @@ public class HttpResponseCacheMiddlewareTests
         using var proxy = new ProxyServer(false, false, false);
         var session = MakeSession(proxy, "GET", "http://example.com/hit");
         var cache = new MemoryHttpResponseCache();
-        cache.Set("GET:example.com/hit", new CachedHttpResponse
+        cache.Set(HttpResponseCacheMiddleware.BuildCacheKey("GET", "example.com", "/hit"), new CachedHttpResponse
         {
             StatusCode = 200,
             Body = Encoding.UTF8.GetBytes("cached"),
@@ -293,7 +376,7 @@ public class HttpResponseCacheMiddlewareTests
         var mw = new HttpResponseCacheMiddleware(cache, TimeSpan.FromMinutes(3));
         mw.TryCacheCurrentResponse(session);
 
-        Assert.IsTrue(cache.TryGet("GET:example.com/store", out var hit));
+        Assert.IsTrue(cache.TryGet(HttpResponseCacheMiddleware.BuildCacheKey("GET", "example.com", "/store"), out var hit));
         Assert.AreEqual(200, hit!.StatusCode);
         CollectionAssert.AreEqual(Encoding.UTF8.GetBytes("ok"), hit.Body);
     }

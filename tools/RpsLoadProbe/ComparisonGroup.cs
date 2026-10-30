@@ -223,6 +223,8 @@ internal static class ComparisonGroup
         ("edition-plus-cidr", ["twp-cli-plus-cidr-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-jwt", ["twp-cli-plus-jwt-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-ratelimit", ["twp-cli-plus-ratelimit-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-fleet-ratelimit", ["twp-cli-plus-fleet-ratelimit-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-manager-agent", ["twp-cli-plus-manager-agent-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-resilience", ["twp-cli-plus-resilience-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-discovery", ["twp-cli-plus-discovery-file-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-metrics", ["twp-cli-plus-metrics-scrape-http1", "twp-cli-reverse-http1"]),
@@ -233,6 +235,14 @@ internal static class ComparisonGroup
         ("edition-plus-cors", ["twp-cli-plus-cors-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-circuit", ["twp-cli-plus-circuit-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-retry", ["twp-cli-plus-retry-http1", "twp-cli-reverse-http1"]),
+        // Scripting (S9). A script arm is a route with middleware, so the route arm is the baseline. The slow-upstream
+        // script arm is compared with its own no-script slow origin, so latency (not CPU) is what could drop the ratio.
+        // The scripting natives (lua54 / wasmtime) must sit beside the CLI or the arm fails to start.
+        ("edition-script-lua-noop", ["twp-cli-script-lua-noop-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-script-lua-header", ["twp-cli-script-lua-header-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-script-wasm-noop", ["twp-cli-script-wasm-noop-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-script-slow-upstream", ["twp-cli-script-lua-slow-upstream-http1", "twp-cli-slow-upstream-http1"]),
+        ("edition-script-1in50", ["twp-cli-script-1in50-http1", "twp-cli-reverse-http1-route"]),
     ];
 
     public static IReadOnlyList<(string Key, int ArmCount)> ListEditionGroups() =>

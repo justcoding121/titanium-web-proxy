@@ -1,0 +1,21 @@
+# Build context is the repository root; keep it small. The Dockerfile only needs global.json, NuGet.config and src/.
+**/bin/
+**/obj/
+**/node_modules/
+.git/
+.github/
+.tmp/
+.tmp-rps/
+artifacts/
+BenchmarkDotNet.Artifacts/
+coverage/
+TestResults/
+tmp/
+website/
+wiki/
+docs/
+examples/
+benchmarks/
+tests/
+tools/
+*.log

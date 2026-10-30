@@ -15,8 +15,27 @@ public sealed class ServerConfig
     /// <summary>Off unless <see cref="TracingConfig.Enabled"/> is true.</summary>
     public TracingConfig? Tracing { get; set; }
 
+    /// <summary>
+    ///     OTLP export of traces and metrics, with W3C trace context propagation. Null, or neither signal enabled,
+    ///     is off. Environment variables named <c>OTEL_*</c> supply defaults for anything left unset here.
+    /// </summary>
+    public TelemetryConfig? Telemetry { get; set; }
+
     /// <summary>Null leaves X-Forwarded-* untouched.</summary>
     public Titanium.Web.Proxy.Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
+    /// <summary>
+    ///     gzip / Brotli compression of responses on HTTP/1.1 and HTTP/2-to-HTTP/1.1: buffered for small known-length
+    ///     bodies (default) or streaming (<c>mode: streaming</c>) for any length. Null (or <c>enabled: false</c>) is
+    ///     off and costs one null check.
+    /// </summary>
+    public Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig? ResponseCompression { get; set; }
+
+    /// <summary>
+    ///     Bounded decompression of gzip / Brotli HTTP/1.x request bodies, with a decompressed-size limit and a ratio
+    ///     limit. Null (or <c>enabled: false</c>) is off and costs one null check.
+    /// </summary>
+    public Titanium.Web.Proxy.Abstractions.Routing.RequestDecompressionConfig? RequestDecompression { get; set; }
 
     public bool? EnableHttp2 { get; set; }
 
@@ -112,6 +131,64 @@ public sealed class ServerConfig
 
     /// <summary>Opt-in JSON access log (path + optional sample rate). Null = off (zero cost).</summary>
     public AccessLogConfig? AccessLog { get; set; }
+
+    /// <summary>Opt-in Prometheus text endpoint for the core meter. Null or <c>enabled: false</c> = off (zero cost).</summary>
+    public MetricsConfig? Metrics { get; set; }
+
+    /// <summary>
+    ///     Opt-in admin listener (<c>/healthz</c>, <c>/readyz</c>, <c>/metrics</c>, <c>/version</c>) on its own port,
+    ///     never on a proxy listener. Null or <c>enabled: false</c> = off (zero cost).
+    /// </summary>
+    public AdminConfig? Admin { get; set; }
+}
+
+/// <summary>Admin listener under <c>server.admin</c>. Off unless <see cref="Enabled"/> is true.</summary>
+public sealed class AdminConfig
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Bind address. Default <c>127.0.0.1</c>. A non-loopback address requires an auth token.</summary>
+    public string? Host { get; set; }
+
+    /// <summary>TCP port. 0 (default) lets the OS pick a free port, which the CLI prints at start-up.</summary>
+    public int? Port { get; set; }
+
+    /// <summary>Bearer token for <c>/metrics</c> and <c>/version</c>. Set at most one of this, <see cref="AuthTokenEnv"/>, and <see cref="AuthTokenFile"/>.</summary>
+    public string? AuthToken { get; set; }
+
+    /// <summary>Name of the environment variable holding the bearer token for <c>/metrics</c> and <c>/version</c>.</summary>
+    public string? AuthTokenEnv { get; set; }
+
+    /// <summary>File holding the bearer token (a mounted Secret). Relative paths resolve against the config directory.</summary>
+    public string? AuthTokenFile { get; set; }
+
+    /// <summary>Readiness tuning for <c>/readyz</c>.</summary>
+    public AdminReadinessConfig? Readiness { get; set; }
+
+    /// <summary>
+    ///     Seconds to keep serving after <c>/readyz</c> flips to 503 on SIGTERM/SIGINT and before the proxy drains,
+    ///     so a load balancer or Service stops sending new connections first. Default 0.
+    /// </summary>
+    public int? PreStopDelaySeconds { get; set; }
+}
+
+/// <summary>Readiness rules for <c>/readyz</c>.</summary>
+public sealed class AdminReadinessConfig
+{
+    /// <summary>When true, <c>/readyz</c> is 503 while any cluster has no healthy destination.</summary>
+    public bool RequireHealthyClusters { get; set; }
+}
+
+/// <summary>Prometheus exposition under <c>server.metrics</c>. Off unless <see cref="Enabled"/> is true.</summary>
+public sealed class MetricsConfig
+{
+    public bool Enabled { get; set; }
+
+    /// <summary>Bind address for <c>GET /metrics</c>. Default <c>127.0.0.1</c>.</summary>
+    public string? Host { get; set; }
+
+    /// <summary>TCP port for <c>GET /metrics</c>. Default 9464.</summary>
+    public int? Port { get; set; }
 }
 
 /// <summary>JSON access log under <c>server.accessLog</c>.</summary>
@@ -268,6 +345,28 @@ public sealed class TlsConfig
     public IList<string>? SupportedSslProtocols { get; set; }
 
     public IList<string>? SupportedServerSslProtocols { get; set; }
+
+    /// <summary>
+    ///     Lowest TLS version a client-facing (listener) handshake accepts: <c>Tls12</c> or <c>Tls13</c>.
+    ///     It trims <see cref="SupportedSslProtocols" /> for listeners only and never widens it. Origin-facing
+    ///     handshakes are unchanged. Null keeps the supported-protocol list as the only limit.
+    /// </summary>
+    public string? MinVersion { get; set; }
+
+    /// <summary>
+    ///     TLS cipher suites a listener handshake may negotiate, by <c>System.Net.Security.TlsCipherSuite</c>
+    ///     name (for example <c>TLS_AES_256_GCM_SHA384</c>). Honored on Linux and macOS only; .NET has no cipher
+    ///     policy on Windows, where the list is ignored with a warning. Null keeps the OS default.
+    /// </summary>
+    public IList<string>? CipherSuites { get; set; }
+
+    /// <summary>
+    ///     Lets the server certificate context fetch an OCSP response so .NET can staple it, instead of
+    ///     building the chain offline. Only a certificate with an OCSP responder in its authority information
+    ///     access extension can be stapled; certificates the proxy mints per host have none. Null or false
+    ///     keeps the offline chain build and no stapling.
+    /// </summary>
+    public bool? OcspStapling { get; set; }
 }
 
 /// <summary>Fixed upstream proxies, PAC, and local bind endpoints.</summary>
@@ -355,4 +454,89 @@ public sealed class TracingConfig
 {
     public bool Enabled { get; set; }
     public bool Propagate { get; set; }
+}
+
+/// <summary>
+///     <c>server.telemetry</c>: where spans and metrics go and how they are sampled. Nothing is exported until
+///     <see cref="TelemetryTracesConfig.Enabled" /> or <see cref="TelemetryMetricsConfig.Enabled" /> is true
+///     (or <c>OTEL_TRACES_EXPORTER</c> / <c>OTEL_METRICS_EXPORTER</c> says <c>otlp</c>).
+/// </summary>
+public sealed class TelemetryConfig
+{
+    /// <summary>The collector. Applies to both signals.</summary>
+    public OtlpExporterConfig? Otlp { get; set; }
+
+    /// <summary>Server, upstream and external-authorization spans.</summary>
+    public TelemetryTracesConfig? Traces { get; set; }
+
+    /// <summary>The proxy's <c>twp.*</c> instruments, exported on an interval.</summary>
+    public TelemetryMetricsConfig? Metrics { get; set; }
+
+    /// <summary>Extra <c>Resource</c> attributes. Overrides <c>OTEL_RESOURCE_ATTRIBUTES</c> key by key.</summary>
+    public Dictionary<string, string>? ResourceAttributes { get; set; }
+
+    /// <summary><c>service.name</c>. Defaults to <c>OTEL_SERVICE_NAME</c>, then <c>titanium</c>.</summary>
+    public string? ServiceName { get; set; }
+}
+
+/// <summary>Collector endpoint and transport.</summary>
+public sealed class OtlpExporterConfig
+{
+    /// <summary>
+    ///     Collector URL. Default <c>OTEL_EXPORTER_OTLP_ENDPOINT</c>, then <c>http://localhost:4317</c> for
+    ///     <c>grpc</c> and <c>http://localhost:4318</c> for <c>http</c>. For <c>http</c> the signal path
+    ///     (<c>/v1/traces</c>, <c>/v1/metrics</c>) is appended when the URL has none.
+    /// </summary>
+    public string? Endpoint { get; set; }
+
+    /// <summary><c>grpc</c> or <c>http</c> (OTLP over HTTP with protobuf). Default <c>OTEL_EXPORTER_OTLP_PROTOCOL</c>, then <c>grpc</c>.</summary>
+    public string? Protocol { get; set; }
+
+    /// <summary>
+    ///     Name of the environment variable holding request headers as <c>key=value,key2=value2</c> (for an API
+    ///     key). Credentials stay out of the config file. Default <c>OTEL_EXPORTER_OTLP_HEADERS</c>.
+    /// </summary>
+    public string? HeadersEnv { get; set; }
+
+    /// <summary>Per-export deadline. Default <c>OTEL_EXPORTER_OTLP_TIMEOUT</c>, then 10000.</summary>
+    public int? TimeoutMs { get; set; }
+
+    /// <summary>
+    ///     Use cleartext when the endpoint names no scheme. An explicit <c>http://</c> or <c>https://</c> wins.
+    ///     Default <c>OTEL_EXPORTER_OTLP_INSECURE</c>, then false.
+    /// </summary>
+    public bool? Insecure { get; set; }
+}
+
+/// <summary>Trace export and sampling.</summary>
+public sealed class TelemetryTracesConfig
+{
+    /// <summary>Default: true when <c>OTEL_TRACES_EXPORTER</c> is <c>otlp</c>, otherwise false.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>
+    ///     <c>always</c> records every trace. <c>ratio</c> records <see cref="Ratio" /> of traces by trace id.
+    ///     <c>parentbased</c> follows the incoming sampled flag and applies <see cref="Ratio" /> to new roots.
+    ///     Default <c>OTEL_TRACES_SAMPLER</c>, then <c>parentbased</c>.
+    /// </summary>
+    public string? Sampler { get; set; }
+
+    /// <summary>0 to 1. Default <c>OTEL_TRACES_SAMPLER_ARG</c>, then 1.</summary>
+    public double? Ratio { get; set; }
+
+    /// <summary>
+    ///     Request header names recorded as <c>http.request.header.*</c> attributes. None by default.
+    ///     Cookie, authorization and similar names are refused whatever is listed.
+    /// </summary>
+    public List<string>? HeaderAllowList { get; set; }
+}
+
+/// <summary>Metric export.</summary>
+public sealed class TelemetryMetricsConfig
+{
+    /// <summary>Default: true when <c>OTEL_METRICS_EXPORTER</c> is <c>otlp</c>, otherwise false.</summary>
+    public bool? Enabled { get; set; }
+
+    /// <summary>Export period in milliseconds. Default <c>OTEL_METRIC_EXPORT_INTERVAL</c>, then 60000.</summary>
+    public int? IntervalMs { get; set; }
 }

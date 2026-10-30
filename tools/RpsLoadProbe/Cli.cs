@@ -45,6 +45,7 @@ internal static class Cli
         var clientReadChunkBytes = 0;
         var clientReadSleepMs = 0;
         var stopOnSloFail = true;
+        int? armTimeoutMin = null;
         (int Index, int Count)? armShard = null;
         string? armNameContains = null;
         string? armNameExcludes = null;
@@ -217,6 +218,9 @@ internal static class Cli
                     clientReadSleepMs = int.Parse(RequireValue(args, ref i, "--client-read-sleep-ms"),
                         CultureInfo.InvariantCulture);
                     break;
+                case "--arm-timeout-min":
+                    armTimeoutMin = int.Parse(RequireValue(args, ref i, "--arm-timeout-min"), CultureInfo.InvariantCulture);
+                    break;
                 case "--stop-on-slo-fail":
                     stopOnSloFail = true;
                     break;
@@ -279,7 +283,7 @@ internal static class Cli
                     originHttpsExtraPorts, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "serve" => RunServe(modeText, nginxPath, haproxyPath, envoyPath, maxCachedConnections, cts.Token, workload),
                 "ramp" => RunRamp(modeText, nginxPath, haproxyPath, envoyPath, resultsDir, concurrency, warmupSec, durationSec,
-                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armGroupKey, armNameContains, armNameExcludes, printArms, printGroups, cts.Token),
+                    maxCachedConnections, repeats, workload, stopOnSloFail, armShard, armGroupKey, armNameContains, armNameExcludes, printArms, printGroups, armTimeoutMin, cts.Token),
                 _ => Fail("Required: --serve | --serve-origin | --serve-proxy | --ramp")
             };
         }
@@ -333,7 +337,7 @@ internal static class Cli
     private static int RunRamp(string? modeText, string? nginxPath, string? haproxyPath, string? envoyPath,
         string? resultsDir, List<int> concurrency, int warmupSec, int durationSec, int? maxCachedConnections,
         int repeats, WorkloadOptions workload, bool stopOnSloFail, (int Index, int Count)? armShard,
-        string? armGroupKey, string? armNameContains, string? armNameExcludes, bool printArms, bool printGroups, CancellationToken ct)
+        string? armGroupKey, string? armNameContains, string? armNameExcludes, bool printArms, bool printGroups, int? armTimeoutMin, CancellationToken ct)
     {
         if (modeText == null || !TryParseMode(modeText, out var mode))
             return Fail("Required: --ramp --mode <see --help>");
@@ -350,6 +354,7 @@ internal static class Cli
             MaxCachedConnections = maxCachedConnections,
             Repeats = Math.Max(1, repeats),
             StopOnSloFail = stopOnSloFail,
+            ArmTimeout = armTimeoutMin is > 0 ? TimeSpan.FromMinutes(armTimeoutMin.Value) : null,
             ArmShard = armShard,
             ArmGroupKey = armGroupKey,
             ArmNameContains = armNameContains,
@@ -742,6 +747,12 @@ internal static class Cli
             case "twp-cli-plus-ratelimit-http1":
                 mode = ProbeMode.TwpCliPlusRateLimitHttp1;
                 return true;
+            case "twp-cli-plus-fleet-ratelimit-http1":
+                mode = ProbeMode.TwpCliPlusFleetRateLimitHttp1;
+                return true;
+            case "twp-cli-plus-manager-agent-http1":
+                mode = ProbeMode.TwpCliPlusManagerAgentHttp1;
+                return true;
             case "twp-cli-plus-resilience-http1":
                 mode = ProbeMode.TwpCliPlusResilienceHttp1;
                 return true;
@@ -789,6 +800,27 @@ internal static class Cli
                 return true;
             case "twp-cli-conncap-http1":
                 mode = ProbeMode.TwpCliConnCapHttp1;
+                return true;
+            case "twp-cli-extauth-http1":
+                mode = ProbeMode.TwpCliExtAuthHttp1;
+                return true;
+            case "twp-cli-script-lua-noop-http1":
+                mode = ProbeMode.TwpCliScriptLuaNoopHttp1;
+                return true;
+            case "twp-cli-script-lua-header-http1":
+                mode = ProbeMode.TwpCliScriptLuaHeaderHttp1;
+                return true;
+            case "twp-cli-script-wasm-noop-http1":
+                mode = ProbeMode.TwpCliScriptWasmNoopHttp1;
+                return true;
+            case "twp-cli-slow-upstream-http1":
+                mode = ProbeMode.TwpCliSlowUpstreamHttp1;
+                return true;
+            case "twp-cli-script-lua-slow-upstream-http1":
+                mode = ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1;
+                return true;
+            case "twp-cli-script-1in50-http1":
+                mode = ProbeMode.TwpCliScript1In50Http1;
                 return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
@@ -949,6 +981,8 @@ internal static class Cli
               --concurrency LIST      Default: 8,16,24,32,48,64,128,256,512
               --warmup-sec N
               --duration-sec N
+              --arm-timeout-min N     Per-arm budget in minutes. Default: derived from the ramp, capped at 25.
+                                      A soak must set it above its measure window.
               --repeats N             Full arm sequence N times; print median peaks (default 1)
               --arm-shard i/n|all|KEY Exclusive comparison-group (wiki-row) partition; all = no split;
                                       KEY (e.g. h1c-h1c, h3-h3-body64k) runs exactly one wiki row

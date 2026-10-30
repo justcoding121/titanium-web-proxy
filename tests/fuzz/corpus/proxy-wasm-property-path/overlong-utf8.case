@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: overlong encoding of a dot must not match request.path
+request\xc0\xaepath

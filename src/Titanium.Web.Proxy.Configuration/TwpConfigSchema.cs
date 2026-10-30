@@ -109,9 +109,100 @@ public static class TwpConfigSchema
             case "ListenerConfig.ClientCertificateMode":
                 schema["enum"] = new JsonArray { "none", "allow", "require" };
                 break;
+            case "ClusterConfig.SendProxyProtocol":
+            case "ListenerConfig.SendProxyProtocol":
+                schema["enum"] = new JsonArray { "none", "v2" };
+                break;
+            case "ListenerConfig.SessionAffinity":
+                schema["enum"] = new JsonArray { "clientEndpoint" };
+                break;
+            case "ListenerConfig.MaxSessions":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 1_000_000;
+                break;
+            case "ListenerConfig.MaxSessionsPerClient":
+                schema[MinimumKey] = 1;
+                break;
+            case "ListenerConfig.MaxDatagramBytes":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 65507;
+                break;
+            case "ListenerConfig.MaxDatagramsPerSecondPerClient":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 10_000_000;
+                break;
+            case "ListenerConfig.SniReadTimeoutSeconds":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 60;
+                break;
             case "MirrorConfig.MaxBodyBytes":
                 schema[MinimumKey] = 0;
                 schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;
+                break;
+            case "ResponseCompressionConfig.Level":
+                schema["enum"] = new JsonArray { "fastest", "optimal", "smallestSize" };
+                break;
+            case "ResponseCompressionConfig.Mode":
+                schema["enum"] = new JsonArray { "buffered", "streaming" };
+                break;
+            case "RequestDecompressionConfig.MaxDecompressedBytes":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = RequestDecompressionConfig.MaxAllowedDecompressedBytes;
+                break;
+            case "RequestDecompressionConfig.MaxRatio":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = RequestDecompressionConfig.MaxAllowedRatio;
+                break;
+            case "ResponseCompressionConfig.MinBytes":
+                schema[MinimumKey] = 1;
+                break;
+            case "ResponseCompressionConfig.MaxBytes":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = ResponseCompressionConfig.DefaultMaxBytes;
+                break;
+            case "RouteConfig.Compression":
+                schema["enum"] = new JsonArray { "off" };
+                break;
+            case "PluginConfig.FailMode":
+                schema["enum"] = new JsonArray { "closed", "open" };
+                break;
+            case "PluginConfig.TimeoutMs":
+                schema[MinimumKey] = 1;
+                schema["maximum"] = 60_000;
+                break;
+            case "PluginConfig.Name":
+                schema["pattern"] = "^[A-Za-z0-9._-]{1,64}$";
+                break;
+            case "PluginConfig.Kind":
+                schema["enum"] = new JsonArray { "dotnet", "lua", "wasm" };
+                schema["default"] = "dotnet";
+                break;
+            case "PluginConfig.VmId":
+                schema["pattern"] = "^[A-Za-z0-9._-]{1,64}$";
+                break;
+            case "PluginLimitsConfig.MemoryMb":
+            case "PluginLimitsConfig.MaxInstructions":
+            case "PluginLimitsConfig.Fuel":
+            case "PluginLimitsConfig.PoolSize":
+            case "PluginLimitsConfig.CalloutConcurrency":
+            case "PluginLimitsConfig.BufferedBodyBytes":
+            case "PluginLimitsConfig.SharedDataBytes":
+            case "PluginLimitsConfig.QueueBytes":
+            case "PluginLimitsConfig.EpochDeadlineMs":
+                schema[MinimumKey] = 1;
+                break;
+            case "RoutePolicyConfig.Algorithm":
+                schema["enum"] = new JsonArray { "fixedWindow", "tokenBucket" };
+                break;
+            case "RoutePolicyConfig.Burst":
+                schema[MinimumKey] = 1;
+                break;
+            case "RoutePolicyConfig.Key":
+                schema["pattern"] = "^(client|forwardedClient|route|header:[!#$%&'*+.^_`|~0-9A-Za-z-]+|cookie:[!#$%&'*+.^_`|~0-9A-Za-z-]+)$";
+                break;
+            case "RoutePolicyConfig.MaxKeys":
+                schema[MinimumKey] = 1000;
+                schema["maximum"] = 10_000_000;
                 break;
             case "MasqueListenerConfig.MaxBytesPerSecond":
                 schema[MinimumKey] = 1;

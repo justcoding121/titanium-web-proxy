@@ -202,6 +202,34 @@ public partial class ProxyServer
 
                         await OnBeforeRequest(args);
 
+                        var routeDispatch = ReverseProxy is { HasAsyncPolicies: true }
+                            ? await Routing.ReverseProxySessionDispatch.ApplyWithExtAuthAsync(this, args)
+                            : Routing.ReverseProxySessionDispatch.Apply(this, args);
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.NoDestination)
+                        {
+                            closeConnection = true;
+                            await Routing.ReverseProxySessionDispatch.WriteNoDestinationAsync(args, clientStream,
+                                cancellationToken);
+                            return;
+                        }
+
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
+                        {
+                            closeConnection = true;
+                            await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            args.IsClientResponseCommitted = true;
+                            return;
+                        }
+
+                        var streamConnectHost = connectHost;
+                        var streamConnectPort = connectPort;
+                        if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Routed &&
+                            args.UpstreamConnectHost is { Length: > 0 } routedHost)
+                        {
+                            streamConnectHost = routedHost;
+                            streamConnectPort = args.UpstreamConnectPort;
+                        }
+
                         var keepGoing = true;
 
                         if (!args.IsTransparent && !args.IsSocks)
@@ -267,11 +295,11 @@ public partial class ProxyServer
                             else
                             {
                                 var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
-                                    remotePort, connectHost, connectPort);
+                                    remotePort, streamConnectHost, streamConnectPort);
                                 if (!seedOffered && retainedConnectionTask != null)
                                 {
                                     await OfferRetainedHttp2OriginSeedAsync(poolKey, remoteHostName, remotePort,
-                                        connectHost, connectPort, retainedConnectionTask, cancellationToken);
+                                        streamConnectHost, streamConnectPort, retainedConnectionTask, cancellationToken);
                                     retainedConnectionTask = null;
                                     seedOffered = true;
                                 }
@@ -291,7 +319,7 @@ public partial class ProxyServer
                                 {
                                     // h2 origin without ENABLE_CONNECT_PROTOCOL: dedicated HTTP/1.1 fallback.
                                     await RunHttp11WebSocketHttp11FallbackAsync(args, remoteHostName, remotePort,
-                                        connectHost, connectPort, cancellationTokenSource, cancellationToken);
+                                        streamConnectHost, streamConnectPort, cancellationTokenSource, cancellationToken);
                                 }
                             }
 
@@ -302,18 +330,18 @@ public partial class ProxyServer
                         if (keepGoing)
                         {
                             var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
-                                remotePort, connectHost, connectPort);
+                                remotePort, streamConnectHost, streamConnectPort);
                             if (!seedOffered && retainedConnectionTask != null)
                             {
                                 await OfferRetainedHttp2OriginSeedAsync(poolKey, remoteHostName, remotePort,
-                                    connectHost, connectPort, retainedConnectionTask, cancellationToken);
+                                    streamConnectHost, streamConnectPort, retainedConnectionTask, cancellationToken);
                                 retainedConnectionTask = null;
                                 seedOffered = true;
                             }
 
                             openSession = args;
                             await RunHttp11ToHttp2ExchangeAsync(args, poolKey, openFactory, remoteHostName,
-                                remotePort, connectHost, connectPort, cancellationToken);
+                                remotePort, streamConnectHost, streamConnectPort, cancellationToken);
 
                             if (!args.HttpClient.Response.KeepAlive || clientRequestedClose) closeConnection = true;
                         }
@@ -567,6 +595,9 @@ public partial class ProxyServer
             if (args.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
                 request.IsHttps = false;
 
+            // route grpcWeb: binary gRPC-Web becomes gRPC for the h2 origin; the answer is shaped on delivery.
+            Grpc.GrpcWebTranslation.TryTranslateRequest(args);
+
             PrepareRequestForOrigin(request);
 
             // Expect: 100-continue — H1 clients wait for 100 before sending the body. The h2 origin
@@ -620,33 +651,60 @@ public partial class ProxyServer
                 };
             }
 
-            Http2OriginExchange exchange;
+            Http2OriginExchange exchange = null!;
+            ProxyTimeoutException? perTryTimeout = null;
+            var perTryLimit = PerTryHeaderTimeout(args, copyRequestBody != null);
             try
             {
-                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken,
-                    copyRequestBody);
+                try
+                {
+                    exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken,
+                        copyRequestBody, perTryLimit);
+                }
+                catch (Http2OriginGoAwayException)
+                {
+                    // The origin told us (via GOAWAY) it never took any action for this stream at all (RFC 7540
+                    // §6.8) - the request, still fully buffered in `request`, is safe to replay verbatim on a
+                    // different pooled connection exactly once. Do not dispose a shared conn that may still
+                    // have sibling streams below last-stream-id — Invalidate retires only this member.
+                    if (copyRequestBody != null && !request.IsBodyRead)
+                        throw;
+
+                    Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
+                    originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                        cancellationToken);
+
+                    var retriedConnection = originConnection.ServerConnection;
+                    args.HttpClient.BindUpstreamConnection(retriedConnection);
+                    if (args.Timing != null)
+                        args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
+
+                    args.Timing?.MarkRequestSent();
+                    exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken, null,
+                        perTryLimit);
+                }
             }
-            catch (Http2OriginGoAwayException)
+            catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                   && perTryLimit.HasValue)
             {
-                // The origin told us (via GOAWAY) it never took any action for this stream at all (RFC 7540
-                // §6.8) - the request, still fully buffered in `request`, is safe to replay verbatim on a
-                // different pooled connection exactly once. Do not dispose a shared conn that may still
-                // have sibling streams below last-stream-id — Invalidate retires only this member.
-                if (copyRequestBody != null && !request.IsBodyRead)
-                    throw;
-
-                Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
-                originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
-                    cancellationToken);
-
-                var retriedConnection = originConnection.ServerConnection;
-                args.HttpClient.BindUpstreamConnection(retriedConnection);
-                if (args.Timing != null)
-                    args.Timing.MarkConnectionReady(retriedConnection.Id, !retriedConnection.ClaimFirstUse());
-
-                args.Timing?.MarkRequestSent();
-                exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken);
+                // Only the per-try deadline was passed to the send. It is handled below.
+                perTryTimeout = ex;
             }
+
+            if (args.Extras is not null)
+            {
+                var replayed = await ReplayHttp11ToHttp2GatewayFailuresAsync(args, exchange, perTryTimeout,
+                    originConnection, poolKey, openFactory, remoteHostName, remotePort, relayInterim,
+                    cancellationToken);
+                exchange = replayed.Exchange;
+                perTryTimeout = replayed.Timeout;
+                originConnection = replayed.Origin;
+                poolKey = replayed.PoolKey;
+            }
+
+            // No retry left: the deadline ends the exchange exactly as it would without a retry policy.
+            if (perTryTimeout is not null)
+                throw perTryTimeout;
 
             args.Timing?.MarkResponseHeadersReceived();
 
@@ -671,6 +729,68 @@ public partial class ProxyServer
         }
     }
 
+    private readonly record struct Http11ToHttp2Replay(
+        Http2OriginExchange Exchange, ProxyTimeoutException? Timeout, Http2OriginConnection Origin, string PoolKey);
+
+    /// <summary>
+    ///     While the origin's answer (or a per-try deadline) calls for a retry and attempts remain, sends the
+    ///     request again on a leased stream of the next destination. A body is sent again only when it was fully
+    ///     buffered. Returns the last exchange, or the deadline that ended the last try.
+    /// </summary>
+    private async Task<Http11ToHttp2Replay> ReplayHttp11ToHttp2GatewayFailuresAsync( // NOSONAR S107 -- Parameters kept explicit to avoid allocating options bags on hot bridge/pool paths.
+        SessionEventArgs args, Http2OriginExchange exchange, ProxyTimeoutException? timeout,
+        Http2OriginConnection originConnection, string poolKey,
+        Func<CancellationToken, Task<Http2OriginConnection>> openFactory,
+        string remoteHostName, int remotePort,
+        Func<int, HeaderCollection, CancellationToken, Task>? relayInterim, CancellationToken cancellationToken)
+    {
+        var request = args.HttpClient.Request;
+        try
+        {
+            while (timeout is null
+                       ? Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args,
+                           exchange.Response.StatusCode, exchange.Response, bufferedBodyReplayable: true)
+                       : Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504,
+                           bufferedBodyReplayable: true, timedOut: true))
+            {
+                // Give back the answer being replaced. Draining a streaming body is what releases its lease.
+                if (timeout is null && exchange.Response.StreamBodyWriter is { } abandoned)
+                    await abandoned(Stream.Null, cancellationToken);
+
+                await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(this, args, cancellationToken);
+
+                poolKey = Http2OriginConnectionPool.BuildPoolKey(this, args, remoteHostName, remotePort,
+                    args.UpstreamConnectHost, args.UpstreamConnectPort);
+                originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                    cancellationToken);
+
+                var serverConnection = originConnection.ServerConnection;
+                args.HttpClient.BindUpstreamConnection(serverConnection);
+                if (args.Timing != null)
+                    args.Timing.MarkConnectionReady(serverConnection.Id, !serverConnection.ClaimFirstUse());
+                args.Timing?.MarkRequestSent();
+
+                timeout = null;
+                var limit = PerTryHeaderTimeout(args, false);
+                try
+                {
+                    exchange = await originConnection.SendAsync(request, relayInterim, cancellationToken, null, limit);
+                }
+                catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                       && limit.HasValue)
+                {
+                    timeout = ex;
+                }
+            }
+        }
+        finally
+        {
+            Routing.ReverseProxySessionDispatch.EndGatewayRetry(args);
+        }
+
+        return new Http11ToHttp2Replay(exchange, timeout, originConnection, poolKey);
+    }
+
     /// <summary>
     ///     Writes the translated h2 origin response (status, headers, buffered body, trailers) back to the
     ///     HTTP/1.1 client, running <c>BeforeResponse</c> exactly like the normal HTTP/1.1 pipeline.
@@ -684,6 +804,9 @@ public partial class ProxyServer
         // Http2OriginConnection stamps the response HTTP/1.1 so the client-side status line is valid. The origin
         // leg of this exchange is HTTP/2; record it before BeforeResponse / AfterResponse observe the response.
         args.HttpClient.RecordOriginHttpVersion(HttpHeader.Version20);
+
+        // route grpcWeb: relay the DATA frames and end with a trailer frame instead of HTTP trailers.
+        await Grpc.GrpcWebTranslation.TranslateResponseAsync(args, exchange, cancellationToken);
 
         if (exchange.TrailingHeaders != null)
             foreach (var header in exchange.TrailingHeaders)

@@ -1,8 +1,11 @@
+using Titanium.Cli.Admin;
 using Titanium.Cli.Config;
 using Titanium.Cli.Http3;
+using Titanium.Cli.Scripting;
 using Titanium.Cli.Service;
 using Titanium.Cli.Updates;
 using Titanium.Web.Proxy.Http3;
+using Titanium.Web.Proxy.Scripting;
 
 namespace Titanium.Cli;
 
@@ -15,6 +18,10 @@ internal static class Program
 
         // Framework-dependent macOS Debug: make app-local libmsquic visible to QuicListener.
         Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
+
+        // Before any configuration is loaded, so kind: lua / kind: wasm plugins resolve. Registration is lazy: no native
+        // library loads until a configuration names a script kind.
+        ScriptingBootstrap.Register();
 
         try
         {
@@ -32,10 +39,13 @@ internal static class Program
                     "run" => await RunCommand.ExecuteAsync(args),
                     "reload" => await ReloadCommand.ExecuteAsync(args),
                     "test" => await TestCommand.ExecuteAsync(args),
+                    "healthcheck" => await HealthcheckCommand.ExecuteAsync(args),
                     "version" => await VersionCommand.ExecuteAsync(args),
                     "update" => await UpdateCommand.ExecuteAsync(args),
                     "http3-deps" => await Http3DepsCommand.ExecuteAsync(args),
+                    "scripting-deps" => await ScriptingDepsCommand.ExecuteAsync(args),
                     "service" => await ServiceCommand.ExecuteAsync(args),
+                    "plus" => await PlusCommand.ExecuteAsync(args),
                     "help" or "-h" or "--help" => PrintHelp(),
                     _ => await UnknownAsync(command),
                 };
@@ -61,10 +71,13 @@ internal static class Program
               titanium run -c <config> [-v|--verbose] [--service] [--watch]
               titanium reload -c <config>
               titanium test -c <config>
+              titanium healthcheck (-c <config> | --url <url>)
               titanium version [--check] [--plus] [--channel beta]
               titanium update [--plus] [--remove-plus] [--channel beta]
               titanium http3-deps status|install
+              titanium scripting-deps status|install
               titanium service install|uninstall|start|stop|restart|status
+              titanium plus hash-password [--user <name>] [--role operator|viewer] [password]
 
             Nested help: titanium <command> --help
             """);

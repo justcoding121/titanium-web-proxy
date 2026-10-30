@@ -1,0 +1,182 @@
+# Titanium Gateway: a Gateway API controller (Deployment, 2 replicas, leader-elected) and the Titanium data plane it
+# configures. The controller renders Gateway, HTTPRoute and ReferenceGrant resources into the data plane's twp.yaml
+# (a ConfigMap) and certificates (a Secret), and writes status back to the Gateway API resources.
+#
+# The standard-channel Gateway API CRDs (v1.2.1) are in crds/. Helm installs them with the first `helm install` and does
+# not upgrade them: to move to another Gateway API release, apply that release's CRDs yourself (see the docs).
+
+nameOverride: ""
+fullnameOverride: ""
+imagePullSecrets: []
+
+# A GatewayClass owned by this controller. Gateways name it in spec.gatewayClassName.
+gatewayClass:
+  create: true
+  name: titanium
+  description: Titanium Web Proxy
+
+# An IngressClass owned by this controller. Ingresses name it in spec.ingressClassName. Set default to true to make it
+# the class of Ingresses that name none (only one default class per cluster is meaningful).
+ingressClass:
+  create: true
+  name: titanium
+  default: false
+
+controller:
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/justcoding121/titanium-gateway
+    # Defaults to the chart appVersion. A digest, when set, wins over the tag.
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+
+  # GatewayClass.spec.controllerName this controller owns.
+  controllerName: titaniumproxy.com/gateway-controller
+
+  # IngressClass.spec.controller this controller owns. An Ingress of a class with another controller is never touched.
+  ingressControllerName: titanium.io/ingress-controller
+
+  # Also serve Ingresses that name their class in the legacy kubernetes.io/ingress.class annotation (and no
+  # ingressClassName). Off by default: the annotation is deprecated.
+  watchLegacyAnnotation: false
+
+  # Namespaces whose kubernetes.io/tls Secrets Gateways may reference. Empty grants read access to TLS Secrets in every
+  # namespace (a ClusterRole rule). A list limits both the watch and the RBAC to those namespaces.
+  secretNamespaces: []
+
+  # Extra flags (--verbose, --min-reconcile-ms 500, ...) and environment for the controller container.
+  extraArgs: []
+  extraEnv: []
+
+  # The controller's own probe port (/healthz, /readyz).
+  healthPort: 8081
+
+  serviceAccount:
+    annotations: {}
+
+  podAnnotations: {}
+  podLabels: {}
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      memory: 384Mi
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1654
+    runAsGroup: 1654
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # Spread the replicas over nodes when possible: a follower on another node takes over within the lease duration.
+  topologySpreadConstraints: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+
+dataPlane:
+  replicaCount: 2
+
+  image:
+    repository: ghcr.io/justcoding121/titanium-web-proxy
+    tag: ""
+    digest: ""
+    pullPolicy: IfNotPresent
+
+  # Gateway listener port (servicePort) to the port the non-root data plane binds (containerPort).
+  # A Gateway listener on a port that is not here is reported as not programmed (PortUnavailable).
+  ports:
+    - name: http
+      servicePort: 80
+      containerPort: 8080
+      protocol: TCP
+    - name: https
+      servicePort: 443
+      containerPort: 8443
+      protocol: TCP
+
+  # The Service Gateway.status.addresses is read from. Use type LoadBalancer for an external address.
+  service:
+    type: LoadBalancer
+    annotations: {}
+    # loadBalancerClass, externalTrafficPolicy and similar knobs go here verbatim.
+    extra: {}
+
+  # Admin listener (/healthz, /readyz, /metrics, /version). The controller reads /readyz and /version from every pod
+  # to confirm a Gateway is programmed, so it needs the token too.
+  admin:
+    port: 9901
+    token:
+      # Name of an existing Secret. When empty the chart creates one with a random token and keeps it across upgrades.
+      existingSecret: ""
+      key: admin-token
+
+  # The config the pods start with, before the controller has published anything: no listeners, a 404 for everything, admin only. The
+  # controller replaces it. Keep it equal to what the controller renders for an empty cluster (a test checks this).
+  bootstrapConfig: '{"schemaVersion":"7.1","listeners":[],"routes":[{"id":"titanium-gateway-no-match","clusterId":"titanium-gateway-none","match":{"path":"/","pathKind":"prefix","pathCaseSensitive":true},"order":1,"directResponse":{"status":404},"grpcWeb":false}],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5}}}'
+
+  podAnnotations: {}
+  podLabels: {}
+
+  # Must be longer than the pre-stop delay in the bootstrap config (5s) plus the time in-flight requests need.
+  terminationGracePeriodSeconds: 60
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1654
+    runAsGroup: 1654
+    fsGroup: 1654
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+
+  tmpDir:
+    sizeLimit: 64Mi
+
+  extraEnv: []
+
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+
+  topologySpreadConstraints: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""

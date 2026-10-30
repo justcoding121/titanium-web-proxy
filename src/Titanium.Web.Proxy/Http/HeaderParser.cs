@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Buffers;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
@@ -187,8 +188,12 @@ internal static class HeaderParser
         var colonIndex = tmpLine.IndexOf(':');
         if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
-        var nameSpan = tmpLine.AsSpan(0, colonIndex);
-        var valueSpan = tmpLine.AsSpan(colonIndex + 1).TrimStart();
+        // Whitespace between the name and the colon is normalized away (never forwarded padded); see
+        // tests/fuzz/corpus/http1-request/space-before-colon-*.case.
+        var nameSpan = tmpLine.AsSpan(0, colonIndex).Trim();
+        var rawValue = tmpLine.AsSpan(colonIndex + 1);
+        EnsureFieldLineSafe(nameSpan, rawValue);
+        var valueSpan = rawValue.TrimStart();
 
         if (KnownHeaders.TryMatchName(nameSpan, out var knownName))
         {
@@ -199,7 +204,7 @@ internal static class HeaderParser
             return;
         }
 
-        headerCollection.AddHeader(new HttpHeader(nameSpan.Trim().GetByteString(), valueSpan.Trim().GetByteString()));
+        headerCollection.AddHeader(new HttpHeader(nameSpan.GetByteString(), valueSpan.Trim().GetByteString()));
     }
 
     private static void AddHeaderLine(HeaderCollection headerCollection, ReadOnlySpan<byte> tmpLine)
@@ -213,7 +218,9 @@ internal static class HeaderParser
         if (colonIndex == -1) throw new FormatException("Header line should contain a colon character.");
 
         var nameSpan = TrimAscii(tmpLine.Slice(0, colonIndex));
-        var valueSpan = TrimAscii(tmpLine.Slice(colonIndex + 1));
+        var rawValue = tmpLine.Slice(colonIndex + 1);
+        EnsureFieldLineSafe(nameSpan, rawValue);
+        var valueSpan = TrimAscii(rawValue);
 
         if (KnownHeaders.TryMatchName(nameSpan, out var knownName))
         {
@@ -225,6 +232,53 @@ internal static class HeaderParser
         }
 
         headerCollection.AddHeader(new HttpHeader(CopyBytes(nameSpan), CopyBytes(valueSpan)));
+    }
+
+    /// <summary>
+    ///     RFC 9110 §5.5 / RFC 9112 §5: a field name is a non-empty token, and a field value must not carry a
+    ///     bare CR or a NUL. Lines are split on LF only, so a CR left inside a line is a line break to every peer
+    ///     that treats a lone CR as one, and the bytes after it would be read there as a further header (for
+    ///     example a <c>Content-Length</c> this proxy never saw). Such a message is rejected, not forwarded.
+    /// </summary>
+    /// <param name="name">The name with any padding before the colon already trimmed.</param>
+    /// <param name="rawValue">Everything after the colon, untrimmed, so a CR or NUL anywhere in it is seen.</param>
+    private static void EnsureFieldLineSafe(ReadOnlySpan<char> name, ReadOnlySpan<char> rawValue)
+    {
+        // One vectorized scan per region: the name (empty, or any whitespace/control char) and the value.
+        if (name.IsEmpty)
+            throw new FormatException("HTTP/1.x header field name must not be empty.");
+
+        if (name.IndexOfAny(InvalidNameChars) >= 0)
+            throw new FormatException("HTTP/1.x header field name must not contain whitespace or control characters.");
+
+        if (rawValue.IndexOfAny('\r', '\0') >= 0)
+            throw new FormatException("HTTP/1.x header field value must not contain a bare CR or NUL.");
+    }
+
+    private static void EnsureFieldLineSafe(ReadOnlySpan<byte> name, ReadOnlySpan<byte> rawValue)
+    {
+        if (name.IsEmpty)
+            throw new FormatException("HTTP/1.x header field name must not be empty.");
+
+        if (name.IndexOfAny(InvalidNameBytes) >= 0)
+            throw new FormatException("HTTP/1.x header field name must not contain whitespace or control characters.");
+
+        if (rawValue.IndexOfAny((byte)'\r', (byte)0) >= 0)
+            throw new FormatException("HTTP/1.x header field value must not contain a bare CR or NUL.");
+    }
+
+    // NUL..SP (control characters and whitespace) and DEL: none may appear in a field name.
+    private static readonly SearchValues<char> InvalidNameChars = SearchValues.Create(InvalidNameSet());
+    private static readonly SearchValues<byte> InvalidNameBytes = SearchValues.Create(
+        Array.ConvertAll(InvalidNameSet().ToCharArray(), c => (byte)c));
+
+    private static string InvalidNameSet()
+    {
+        var chars = new char[0x22];
+        for (var i = 0; i <= 0x20; i++)
+            chars[i] = (char)i;
+        chars[0x21] = (char)0x7f;
+        return new string(chars);
     }
 
     private static ByteString CopyBytes(ReadOnlySpan<byte> span) => new(span.ToArray());

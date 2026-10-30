@@ -132,3 +132,17 @@
   color: var(--vp-c-text-2);
   font-size: 0.9rem;
 }
+
+/* The home page has twelve tiles. VitePress gives a multiple of three the grid-6 class (three per row);
+   keep the four-per-row layout the grid-4 class gives eight tiles. */
+@media (min-width: 768px) and (max-width: 959px) {
+  .VPFeatures.VPHomeFeatures .item.grid-6 {
+    width: calc(100% / 2);
+  }
+}
+
+@media (min-width: 960px) {
+  .VPFeatures.VPHomeFeatures .item.grid-6 {
+    width: calc(100% / 4);
+  }
+}

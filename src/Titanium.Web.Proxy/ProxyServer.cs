@@ -1625,8 +1625,52 @@ public partial class ProxyServer : IDisposable
     /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
     public bool PropagateTraceContext { get; set; }
 
+    /// <summary>
+    /// Request header names recorded as <c>http.request.header.*</c> span attributes. Null or empty records none.
+    /// Cookies, credentials and similar secret-bearing headers are never recorded, even when listed.
+    /// </summary>
+    public IReadOnlyList<string>? TracingHeaderAllowList { get; set; }
+
     /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
     public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
+    private Abstractions.Routing.ResponseCompressionConfig? responseCompression;
+
+    /// <summary>
+    /// Buffered gzip / Brotli compression of small known-length responses, applied on HTTP/1.1 and
+    /// HTTP/2-to-HTTP/1.1 sessions only. Null or <c>Enabled = false</c> (the default) is off: one null
+    /// check per response and terminate-lite stays eligible.
+    /// </summary>
+    public Abstractions.Routing.ResponseCompressionConfig? ResponseCompression
+    {
+        get => responseCompression;
+        set
+        {
+            responseCompression = value;
+            CompressionPolicy = Compression.ResponseCompressionPolicy.Create(value);
+        }
+    }
+
+    internal Compression.ResponseCompressionPolicy? CompressionPolicy { get; private set; }
+
+    private Abstractions.Routing.RequestDecompressionConfig? requestDecompression;
+
+    /// <summary>
+    /// Bounded decompression of gzip and Brotli HTTP/1.x request bodies before they reach the origin, with a
+    /// decompressed-size limit and a ratio limit. A body over either limit is answered with 413. Null or
+    /// <c>Enabled = false</c> (the default) is off: one null check per request.
+    /// </summary>
+    public Abstractions.Routing.RequestDecompressionConfig? RequestDecompression
+    {
+        get => requestDecompression;
+        set
+        {
+            requestDecompression = value;
+            RequestDecompressionPolicy = Compression.RequestDecompressionPolicy.Create(value);
+        }
+    }
+
+    internal Compression.RequestDecompressionPolicy? RequestDecompressionPolicy { get; private set; }
 
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
@@ -1645,7 +1689,13 @@ public partial class ProxyServer : IDisposable
         || EnableDecryptFailureBypass
         || TracingEnabled
         || RequestIdHeader is not null
-        || ForwardedHeaders is not null;
+        || ForwardedHeaders is not null
+        || CompressionPolicy is not null
+        || RequestDecompressionPolicy is not null
+        || ReverseProxy is { HasGrpcWebRoutes: true }
+        || ReverseProxy is { HasHandledPolicies: true }
+        || ReverseProxy is { HasRoutePlugins: true }
+        || ReverseProxy is { HasScriptHooks: true };
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the
@@ -1882,7 +1932,7 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost: { Length: > 0 } forwardHost } passthrough)
+            if (endPoint is TransparentBaseProxyEndPoint { HasPassthroughTarget: true } passthrough)
             {
                 if (!TryAdmitClientConnection(endPoint))
                 {
@@ -1892,11 +1942,10 @@ public partial class ProxyServer : IDisposable
 
                 // The relay runs for the life of the connection. Awaiting it here would hold the accept
                 // loop and serialize every passthrough client behind the one before it.
-                var passthroughPort = passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80);
                 var passthroughClient = tcpClient;
                 ThreadPool.UnsafeQueueUserWorkItem(
                     new DeferredWorkItem(() => HandlePassthroughClientAsync(
-                        passthroughClient, endPoint, forwardHost, passthroughPort, cancellationToken)),
+                        passthroughClient, passthrough, cancellationToken)),
                     preferLocal: false);
                 continue;
             }
@@ -1972,28 +2021,6 @@ public partial class ProxyServer : IDisposable
             ReleaseClientConnection(endPoint);
             clientHelloWait = Task.FromResult(0);
             return false;
-        }
-    }
-
-    private async Task HandlePassthroughClientAsync(Socket client, ProxyEndPoint endPoint, string host, int port,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Network.TcpPassthrough.RelayAsync(client, host, port, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // The proxy is stopping. Closing the sockets below ends the relay.
-        }
-        catch (Exception ex)
-        {
-            OnException(null, ex);
-        }
-        finally
-        {
-            client.Dispose();
-            ReleaseClientConnection(endPoint);
         }
     }
 

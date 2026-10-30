@@ -1,0 +1,6 @@
+# expect: reject
+# reason: whitespace inside a field name makes it a different token for different peers
+GET / HTTP/1.1\r\n
+Host: a\r\n
+Content Length: 5\r\n
+\r\n

@@ -21,20 +21,52 @@ hero:
 features:
   - title: Debug HTTPS traffic
     details: Native desktop Inspector on Windows, macOS, and Linux — decrypt HTTPS, turn on system proxy, and inspect sessions, headers, and bodies. Only on machines you control.
+    link: /docs/inspector
+    linkText: Inspector guide
   - title: Rewrite and replay
     details: AutoResponder, Map Local, Map Remote, breakpoints, and Composer. Export or import HAR; copy sessions as curl or fetch.
+    link: /docs/inspector#right-pane-inspect-and-tools
+    linkText: Rewrite tools
   - title: Automatic tunnel
     details: When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic.
+    link: /docs/features#inspector
+    linkText: Inspector features
   - title: HTTP/1 · HTTP/2 · HTTP/3
     details: HTTP/2 is on by default. HTTP/3 is on when QUIC is available. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
+    link: /docs/protocol-support
+    linkText: Protocol support
   - title: Reverse proxy from the CLI
     details: Download the CLI, write a short YAML file, and run `titanium`. Routes, TLS, and optional automatic certificates (ACME).
-  - title: Reload without dropping connections
-    details: Change routes and backends with `titanium reload` while current connections stay up. SIGHUP does the same on Linux and macOS.
-  - title: Balance across backends
-    details: Round-robin, random, least requests, and least time. Stick a client to one backend with a cookie or a header.
+    link: /docs/cli
+    linkText: CLI guide
+  - title: Zero-downtime reload
+    details: Change routes and backends with `titanium reload` while current connections stay up. SIGHUP does the same on Linux and macOS, and `--watch` follows Kubernetes ConfigMap updates.
+    link: /docs/cli#reload-without-restart
+    linkText: Reload without restart
+  - title: Balance and fail over
+    details: Round-robin, random, least requests, and least time. Health checks eject a failing backend, retries move a request to another one within a budget, and a cookie or header can pin a client to one.
+    link: /docs/configuration#routes-clusters
+    linkText: Routes and clusters
+  - title: Secure at the edge
+    details: Set a TLS floor, get ACME certificates, rate-limit by client or header, ask an external service to authorize each request, and add OpenID Connect login and WAF screening with Plus.
+    link: /docs/capabilities#auth-methods
+    linkText: Auth methods
+  - title: Kubernetes native
+    details: A hardened container image, a Helm chart with probes and a graceful drain, and a Gateway API and Ingress controller.
+    link: /docs/kubernetes
+    linkText: Kubernetes guide
+  - title: Observe everything
+    details: Prometheus metrics, OTLP traces and metrics with W3C trace context, a JSON access log, and a Plus dashboard.
+    link: /docs/configuration#observability
+    linkText: Observability
   - title: Chain and authenticate
     details: Forward through an upstream HTTP, HTTPS, or SOCKS proxy. Proxy auth, mTLS, Kerberos, and NTLM are included.
+    link: /docs/library
+    linkText: Library guide
+  - title: Cache, compress, protect
+    details: A shared response cache that skips `Set-Cookie` and private responses (Plus), gzip and brotli response compression, and caps on request bodies, headers, and decompression ratio.
+    link: /docs/capabilities#compression
+    linkText: Compression and caching
 ---
 
 ## What do you want to do?
@@ -53,7 +85,7 @@ features:
   <div class="edition-card">
     <h3>Ops add-on</h3>
     <p class="license"><a href="/docs/plus">Plus</a> · optional</p>
-    <p>Dashboard, metrics, auth helpers, and a thin WAF. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
+    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Embed in .NET</h3>

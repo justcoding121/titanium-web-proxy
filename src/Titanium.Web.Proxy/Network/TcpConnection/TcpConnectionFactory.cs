@@ -929,6 +929,15 @@ internal class TcpConnectionFactory : IDisposable
         else if (isHttps)
             sslProtocol = proxyServer.SupportedSslProtocols;
 
+        // Fail closed: a configured client certificate or CA file that cannot be used must never fall back to the machine
+        // store or an anonymous handshake. The reverse-proxy path answers this as 502 (AuthenticationException).
+        if (isHttps && UpstreamTlsMaterial.For(sessionArgs.UpstreamHttpClient) is { Error: not null } faultedTls)
+        {
+            if (faultedTls.TryClaimErrorLog())
+                ProxyLog.UpstreamTlsMaterialFaulted(proxyServer.Logger, faultedTls.Error!);
+            faultedTls.ThrowIfFaulted();
+        }
+
         var useUpstreamProxy1 = false;
 
         // check if external proxy is set for HTTP/HTTPS
@@ -1382,8 +1391,7 @@ internal class TcpConnectionFactory : IDisposable
                     // HttpServerStream tears down the chain.
                     var sslStream = new SslStream(stream, leaveInnerStreamOpen: false,
                         (sender, certificate, chain, sslPolicyErrors) =>
-                            sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
-                        proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
+                            proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                                 sslPolicyErrors),
                         (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
                         {
@@ -1397,7 +1405,7 @@ internal class TcpConnectionFactory : IDisposable
                     var options = new SslClientAuthenticationOptions
                     {
                         ApplicationProtocols = applicationProtocols,
-                        TargetHost = remoteHostName,
+                        TargetHost = ClusterTargetHost(sessionArgs, remoteHostName),
                         ClientCertificates = null,
                         EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                         CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
@@ -1416,7 +1424,6 @@ internal class TcpConnectionFactory : IDisposable
             {
                 var sslStream = new SslStream(networkStream, leaveInnerStreamOpen: false,
                     (sender, certificate, chain, sslPolicyErrors) =>
-                        sessionArgs?.UpstreamHttpClient?.AcceptAnyServerCertificate == true ||
                         proxyServer.ValidateServerCertificate(sender, sessionArgs, certificate, chain,
                             sslPolicyErrors),
                     (sender, targetHost, localCertificates, remoteCertificate, acceptableIssuers) =>
@@ -1431,7 +1438,7 @@ internal class TcpConnectionFactory : IDisposable
                 var options = new SslClientAuthenticationOptions
                 {
                     ApplicationProtocols = applicationProtocols,
-                    TargetHost = remoteHostName,
+                    TargetHost = ClusterTargetHost(sessionArgs, remoteHostName),
                     ClientCertificates = null,
                     EnabledSslProtocols = ClusterSslProtocols(sessionArgs, enabledSslProtocols),
                     CertificateRevocationCheckMode = proxyServer.CheckCertificateRevocation
@@ -2046,6 +2053,10 @@ internal class TcpConnectionFactory : IDisposable
 
         disposed = true;
     }
+
+    /// <summary>TLS SNI and the name checked against the origin certificate. A cluster's serverName replaces the origin host.</summary>
+    private static string ClusterTargetHost(SessionEventArgsBase? session, string remoteHostName) =>
+        UpstreamTlsMaterial.For(session?.UpstreamHttpClient)?.ServerName ?? remoteHostName;
 
     private static SslProtocols ClusterSslProtocols(SessionEventArgsBase? session, SslProtocols fallback)
     {

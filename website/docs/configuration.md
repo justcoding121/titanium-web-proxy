@@ -6,7 +6,7 @@ Native schema version **7.1**. For CLI operators: start with a minimal reverse f
 
 ## Minimal reverse
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
@@ -25,11 +25,12 @@ titanium run -c twp.yaml
 
 ## Top-level shape
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners: []
 routes: []
 clusters: []
+plugins: []
 staticFiles: null
 plus: null
 certificates: null
@@ -46,7 +47,7 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `host` | string | Bind address. Default `0.0.0.0` (all IPv4 interfaces). `*` is the same as `0.0.0.0`. Use `127.0.0.1` for localhost only. |
 | `port` | int | Default `8000`. `0` is an OS-chosen (ephemeral) port. Inspector toolbar `*` / empty means the same. |
 | `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
-| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, or `masque` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE) |
+| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, or `udp` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
 | `enableHttp3` | bool? | Per-listener; any `false` disables global H3 |
@@ -54,7 +55,102 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `maxConcurrentClients` | int? | Per-endpoint admission cap |
 | `genericCertificateName` | string? | Fallback hostname when SNI is absent |
 | `maxInboundBidirectionalStreams` / `maxInboundUnidirectionalStreams` | int? | QUIC stream caps |
-| `handshakeTimeoutSeconds` / `idleTimeoutSeconds` | int? | QUIC timeouts |
+| `handshakeTimeoutSeconds` / `idleTimeoutSeconds` | int? | QUIC timeouts. On a `passthrough` listener, `idleTimeoutSeconds` closes a connection with no bytes in either direction for that long (`0`, the default, never) |
+| `passthrough` | bool | Copy TCP bytes to the upstream without parsing. See [TCP passthrough with SNI](#tcp-passthrough-with-sni) |
+| `sniRoutes` | list | Passthrough only. Each entry has `serverName` (exact or `*.example.com`) and `clusterId` |
+| `sniDefaultClusterId` | string? | Passthrough only. Cluster for a client with no match, no server name, or no ClientHello |
+| `sniReadTimeoutSeconds` | int? | Passthrough only. How long to wait for the ClientHello, 1 to 60. Default `5` |
+| `sendProxyProtocol` | string? | Passthrough only. `none` (default) or `v2` |
+| `clusterId` | string? | `udp` only. Cluster that supplies the upstream for each new session. Use it or `forwardHost` / `forwardPort`, not both |
+| `maxSessions` | int? | `udp` only. Open sessions across the listener, 1 to 1,000,000. Default `10000` |
+| `maxSessionsPerClient` | int? | `udp` only. Open sessions for one client IP. Default `256`, at most `maxSessions` |
+| `maxDatagramBytes` | int? | `udp` only. Largest datagram relayed, 1 to 65507. Default `1500` |
+| `maxDatagramsPerSecondPerClient` | int? | `udp` only. Datagrams per second one client IP may send. Default `10000` |
+| `sessionAffinity` | string? | `udp` only. `clientEndpoint` (the only value and the default) |
+
+On a `udp` listener `idleTimeoutSeconds` is how long a session may go without a datagram in either direction (1 to 86400, default `30`).
+
+### TCP passthrough with SNI
+
+A passthrough listener copies bytes between the client and an upstream and never decrypts them. With `sniRoutes`, it first reads the client's TLS ClientHello, takes the server name from it, and sends the connection to a cluster. The ClientHello bytes are forwarded unchanged, so the origin completes the handshake and presents its own certificate.
+
+```yaml twp-fragment
+listeners:
+  - port: 443
+    type: transparent
+    passthrough: true
+    decryptSsl: false
+    sniRoutes:
+      - serverName: "api.example.com"
+        clusterId: tcp-api
+      - serverName: "*.example.com"
+        clusterId: tcp-web
+    sniDefaultClusterId: tcp-web
+    sniReadTimeoutSeconds: 5
+    idleTimeoutSeconds: 300
+    sendProxyProtocol: v2
+```
+
+The clusters are ordinary clusters, defined as in [Routes & clusters](#routes-clusters):
+
+```json
+{
+  "clusters": [
+    {
+      "id": "tcp-api",
+      "algorithm": "LeastRequests",
+      "destinations": [
+        { "id": "api1", "address": "10.0.0.11", "port": 443 },
+        { "id": "api2", "address": "10.0.0.12", "port": 443 }
+      ]
+    },
+    {
+      "id": "tcp-web",
+      "destinations": [{ "id": "web1", "address": "10.0.0.21", "port": 443 }]
+    }
+  ]
+}
+```
+
+- **Match order.** An exact name wins. Otherwise the longest matching `*.suffix` wins (`*.api.example.com` beats `*.example.com`, and `*.example.com` also matches `a.b.example.com` but not `example.com`). Then `sniDefaultClusterId`, then `forwardHost`. Names compare without regard to case. With none of those, the connection is closed.
+- **No server name.** A client that connects by IP address, sends no `server_name`, speaks something other than TLS, or stays silent for `sniReadTimeoutSeconds` (a protocol where the server speaks first) is treated as having no name. Whatever it already sent is forwarded.
+- **Balancing.** The cluster's algorithm, weights, priorities, caps, and passive health apply to connections the same way they do to requests. A connect that fails is tried against another destination, up to the smaller of 3 and the number of eligible destinations, and each failure counts toward passive ejection. Open connections count as active requests for `LeastRequests`.
+- **Half-close.** When one side sends EOF, the proxy shuts down sending to the other side and lets the remaining direction finish for up to 30 seconds. A client that finishes its request and waits for the reply works.
+- **`sendProxyProtocol: v2`.** Writes a PROXY protocol v2 header with the client and listener addresses to the upstream before any client bytes. The upstream must expect it. A cluster can set its own `sendProxyProtocol` (see below), which replaces the listener setting for connections routed to that cluster.
+- **Validation.** Every `clusterId` must exist. `serverName` is an exact name or one leading `*.` label. At least one of `sniRoutes`, `sniDefaultClusterId`, or `forwardHost` is required on a passthrough listener, and `sniRoutes` requires `passthrough: true` and `decryptSsl: false`.
+- **Metrics.** `twp.passthrough.connections{route,result}` counts finished connections. `route` is the matching `serverName` pattern, `default`, or `forward`. `result` is `ok`, `idle_timeout`, `grace_expired`, `connect_failed`, `no_destination`, `no_route`, `client_closed`, `cancelled`, or `error`. `twp.passthrough.bytes{direction}` counts bytes relayed (`in` is client to upstream, `out` is upstream to client).
+
+Without `sniRoutes` and `sniDefaultClusterId`, a passthrough listener behaves as before: every connection goes to `forwardHost` and nothing is read ahead.
+
+### UDP listeners
+
+A `type: udp` listener relays datagrams between clients and one upstream, for protocols such as DNS, syslog, or game traffic. It shares nothing with the HTTP paths, so a config may contain only UDP listeners.
+
+```yaml twp
+listeners:
+  - host: "0.0.0.0"
+    port: 5353
+    type: udp
+    clusterId: dns
+    idleTimeoutSeconds: 30
+    maxSessions: 10000
+clusters:
+  - id: dns
+    destinations:
+      - { id: dns-1, address: "10.0.0.53", port: 53 }
+      - { id: dns-2, address: "10.0.0.54", port: 53 }
+```
+
+- **Sessions.** Each client endpoint (IP and port) gets a session with its own connected upstream socket. Every datagram from that client uses the same upstream, and replies are sent only to that client endpoint, so a third party cannot inject traffic into a session or use the relay to amplify.
+- **Destination.** With `clusterId`, the load balancer picks a destination once, when the session opens. Unhealthy, draining, and maintenance destinations are skipped, and a change in health moves new sessions only. Existing sessions keep their upstream until they expire. With `forwardHost` and `forwardPort`, every session goes to that address, which must be an IP address or a name that resolves when the listener starts.
+- **Health.** A send failure or an ICMP port-unreachable on a session's upstream counts as a failure for that destination. A reply clears the streak.
+- **Idle expiry.** Sessions expire after `idleTimeoutSeconds` with no datagram in either direction. A single hashed timer wheel sweeps them, so there is no timer per session. Expiry is accurate to about one eighth of the timeout, and no more than one second.
+- **Limits.** A datagram above `maxDatagramBytes` or an empty datagram is dropped. A new session beyond `maxSessions` or `maxSessionsPerClient` is dropped. A client IP that exceeds `maxDatagramsPerSecondPerClient` has the excess dropped. Datagrams from port 0 or from multicast, broadcast, or unspecified source addresses are dropped as malformed.
+- **IPv4 and IPv6.** A `host` of `::` accepts both families. Upstream sockets use the family of their destination.
+- **Windows.** The listener turns off `SIO_UDP_CONNRESET`, so a client that closed its port does not make the receive loop fail.
+- **Drain.** On shutdown or drain the listener stops opening sessions, keeps relaying for open ones until they expire or the drain timeout passes, and then closes.
+- **Not supported.** `proxyProtocol`, `decryptSsl`, `passthrough`, SNI routing, and the HTTP, MASQUE, and QUIC settings are rejected on a `udp` listener. Validation warns when a non-loopback `udp` listener has no authentication, because UDP has no handshake to authenticate.
+- **Metrics.** `twp.udp.sessions.active` is the number of open sessions. `twp.udp.datagrams{direction}` and `twp.udp.bytes{direction}` count relayed datagrams and payload bytes (`in` is client to upstream, `out` is upstream to client). `twp.udp.dropped{reason}` counts datagrams not relayed, with `reason` one of `oversized`, `empty`, `malformed`, `rate_limited`, `session_cap`, `client_cap`, `draining`, `no_destination`, `resolve_failed`, or `upstream_error`.
 
 ## Observability
 
@@ -67,6 +163,133 @@ Request instruments on the `Titanium.Web.Proxy` meter stay quiet until a listene
 - `twp.proxy.bytes` counts bytes, tagged `direction`.
 
 `server.requestId.enabled` and `server.tracing.enabled` are off by default. Turning either on leaves the terminate-lite path.
+
+### Prometheus metrics (`server.metrics`)
+
+Opt-in text exposition of the core meter. Off by default: with no `server.metrics` (or `enabled: false`) no meter listener exists and the request path costs what it did before.
+
+```yaml twp
+server:
+  metrics:
+    enabled: true
+    host: 127.0.0.1   # default
+    port: 9464        # default
+```
+
+`GET /metrics` serves counters as `_total`, up-down counters as gauges, and the request duration as a histogram with 14 fixed buckets from 1 ms to 30 s. Labels are limited to `route`, `cluster`, `status_class`, `protocol`, `error`, `direction`, `reason`, and `outcome`; at most 200 distinct `route` and 200 distinct `cluster` values are kept before the rest count as `other`. The endpoint is unauthenticated, so keep it on loopback or a private interface. Changing it needs a restart. The full instrument list is in the [Metrics wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics). A .NET host that already uses OpenTelemetry can instead call `AddMeter("Titanium.Web.Proxy")`.
+
+### Admin listener (`server.admin`)
+
+Opt-in probes, metrics, and version on a port of their own, never on a proxy listener. Off by default: with no `server.admin` (or `enabled: false`) no socket is opened and the request path is unchanged.
+
+```yaml twp
+server:
+  admin:
+    enabled: true
+    host: 127.0.0.1             # default; any other address needs authTokenEnv
+    port: 0                     # 0 picks a free port; the CLI prints "Admin: http://host:port"
+    authTokenEnv: TITANIUM_ADMIN_TOKEN
+    preStopDelaySeconds: 5      # keep serving after /readyz flips to 503, before the proxy drains
+    readiness:
+      requireHealthyClusters: false
+```
+
+| Path | Auth | Answer |
+| --- | --- | --- |
+| `GET /healthz` | none | `200` while the process runs. |
+| `GET /readyz` | none | `200` once the config is loaded and the listeners are bound. Otherwise `503` with `{"status":"not_ready","reasons":[...]}` (`config_not_loaded`, `listeners_not_bound`, `draining`, `cluster_unhealthy:<id>`). It flips to `503` on SIGTERM or SIGINT, before the drain starts. |
+| `GET /metrics` | bearer token | The same Prometheus text as `server.metrics`. |
+| `GET /version` | bearer token | `{"version","commit","runtime","edition","config_hash"}`. |
+
+`/metrics` and `/version` need `Authorization: Bearer <token>` when a token is configured (`authToken`, `authTokenEnv`, or `authTokenFile`; see [Secret references](#secret-references)). The check is constant time. A non-loopback `host` without a token is a configuration error. `requireHealthyClusters: true` also makes `/readyz` answer `503` while a cluster has no healthy destination. Changing `server.admin` needs a restart.
+
+### Traces and metrics export (`server.telemetry`)
+
+Opt-in OTLP export of request spans and the proxy meters, with W3C trace context carried through the proxy. Off by default: with no `server.telemetry` and no `OTEL_*` exporter variable, no listener is attached and the request path allocates nothing for tracing.
+
+```yaml twp
+server:
+  telemetry:
+    serviceName: edge-gateway        # default: titanium
+    resourceAttributes:
+      deployment.environment: prod
+    otlp:
+      endpoint: https://collector.example:4318   # default: http://localhost:4317 (grpc) or :4318 (http)
+      protocol: http                 # grpc (default) | http
+      headersEnv: OTLP_HEADERS       # NAME of a variable holding "key=value,key2=value2"; never the value
+      timeoutMs: 10000
+      insecure: false                # plain HTTP for an endpoint written without a scheme
+    traces:
+      enabled: true
+      sampler: parentbased           # always | ratio | parentbased (default)
+      ratio: 0.1                     # 0..1; used by ratio, and by parentbased for new roots
+      headerAllowList: [x-request-id]   # request headers to record as attributes (optional)
+    metrics:
+      enabled: true
+      intervalMs: 60000
+```
+
+Every key is optional. A value in the file wins over the matching `OTEL_*` variable, which wins over the default:
+
+| Setting | Environment default |
+| --- | --- |
+| `otlp.endpoint` | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` |
+| `otlp.protocol`, `otlp.timeoutMs`, `otlp.insecure` | `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, `http/protobuf`), `_TIMEOUT`, `_INSECURE` |
+| `otlp.headersEnv` | `OTEL_EXPORTER_OTLP_HEADERS` |
+| `traces.enabled`, `metrics.enabled` | `OTEL_TRACES_EXPORTER=otlp`, `OTEL_METRICS_EXPORTER=otlp` |
+| `traces.sampler`, `traces.ratio` | `OTEL_TRACES_SAMPLER` (`always_on`, `always_off`, `traceidratio`, `parentbased_*`), `OTEL_TRACES_SAMPLER_ARG` |
+| `metrics.intervalMs` | `OTEL_METRIC_EXPORT_INTERVAL` |
+| `serviceName`, `resourceAttributes` | `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` |
+| queue size, batch size, delay | `OTEL_BSP_MAX_QUEUE_SIZE`, `OTEL_BSP_MAX_EXPORT_BATCH_SIZE`, `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BSP_EXPORT_TIMEOUT` |
+
+`OTEL_SDK_DISABLED=true` turns everything off. With the HTTP protocol, `/v1/traces` and `/v1/metrics` are appended to a general endpoint; a signal-specific `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `_METRICS_ENDPOINT` is used as written. The startup banner prints the endpoints, never the header values.
+
+**Spans.** Each proxied request produces a tree on the `Titanium.Web.Proxy` activity source:
+
+| Span | Kind | Attributes |
+| --- | --- | --- |
+| `twp.proxy.request` | server | `http.request.method`, `url.path` (no query), `url.scheme`, `server.address`, `server.port`, `network.protocol.name`, `network.protocol.version`, `http.response.status_code`, `twp.route`, `twp.cluster`, `error.type` |
+| `twp.proxy.upstream` | client | `server.address`, `server.port`, `http.request.method`, `http.response.status_code`, `twp.destination`, `twp.route`, `twp.cluster`; a `twp.retry` event per retry with `twp.retry.attempt`, `twp.retry.reason` (`status` or `timeout`), `http.response.status_code`, `twp.destination` |
+| `twp.extauth` | client | `twp.extauth.allowed`, `http.response.status_code` |
+
+A server span is an error for a `5xx` status or a proxy error; an upstream span is an error from `400` up. The sampler runs when the server span starts, so a trace that is not sampled costs no attributes and no export.
+
+**Context.** A valid incoming `traceparent` (and `tracestate`) is the parent of the server span; a missing or malformed one starts a new root that the sampler decides on. The upstream request carries a `traceparent` for the upstream span, so two proxies in a chain, and the origin behind them, join one trace. The sampled flag follows the decision, so an unsampled trace is propagated with flag `00`. `baggage` passes through unchanged, and the external authorization sub-request gets the context as well. The JSON access log gains a `traceId` field (see [Access log](#access-log-server-accesslog)).
+
+**Privacy.** The query string, cookies, credentials, and bodies are never recorded. `traces.headerAllowList` adds `http.request.header.<name>` attributes for the names you list, and refuses `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `proxy-authenticate`, `www-authenticate`, `x-api-key`, `x-auth-token`, `x-csrf-token`, and `x-forwarded-client-cert` whatever the list says.
+
+**Failure.** Export runs on a background thread behind a bounded queue (2048 spans by default). A collector that is down, slow, or refusing never delays a request: spans that cannot be queued or delivered are dropped and counted in `twp.telemetry.dropped{reason}` (`queue_full` or `export_failed`) on the `Titanium.Web.Proxy.Telemetry` meter. On shutdown the CLI flushes for up to five seconds and moves on.
+
+Changing `server.telemetry` needs a restart. A .NET host that embeds the library takes no OpenTelemetry dependency from it: set `ProxyServer.TracingEnabled` and `PropagateTraceContext`, then attach an SDK with `AddSource("Titanium.Web.Proxy")`.
+
+### Secret references
+
+A sensitive setting is one of three forms: the literal, a `...Env` sibling that names an environment variable, or a `...File` sibling that names a file (for example a mounted Kubernetes Secret). Set at most one; setting two is a configuration error. There is no `${VAR}` interpolation anywhere else in the file: `${HOME}` in a literal stays the text `${HOME}`.
+
+| Setting | Env sibling | File sibling |
+| --- | --- | --- |
+| `plus.controlPlane.sharedSecret` | `sharedSecretEnv` | `sharedSecretFile` |
+| `plus.controlPlane.dashboardViewerSecret` | `dashboardViewerSecretEnv` | `dashboardViewerSecretFile` |
+| `plus.options` `security.apiKeys` | `security.apiKeysEnv` | `security.apiKeysFile` |
+| `plus.options` `security.basicUsers` | `security.basicUsersEnv` | `security.basicUsersFile` |
+| `plus.options` `state.redis` | `state.redisEnv` | `state.redisFile` |
+| `plus.options` `discovery.consulToken` | `discovery.consulTokenEnv` | `discovery.consulTokenFile` |
+| `server.admin.authToken` | `authTokenEnv` | `authTokenFile` |
+
+```yaml twp
+server:
+  admin:
+    enabled: true
+    authTokenFile: /etc/titanium/secret/admin-token
+plus:
+  enabled: true
+  controlPlane:
+    sharedSecretEnv: TITANIUM_CONTROL_SECRET
+  options:
+    security.apiKeysFile: /etc/titanium/secret/api-keys   # one key per line is fine
+```
+
+A trailing newline in a file is dropped. For `security.apiKeys` and `security.basicUsers` a file may hold one entry per line. Relative paths resolve against the config directory. A reference that is unset, empty, or unreadable stops start-up (and fails a reload, which keeps the running config) with a message that names the setting and the variable or path, never the value. The CLI masks resolved values in its console output. Rotating `server.admin` token files takes effect on reload; Plus options are read at start-up, so changing them needs a restart.
 
 ## Routes & clusters
 
@@ -96,11 +319,75 @@ Request instruments on the `Titanium.Web.Proxy` meter stay quiet until a listene
 }
 ```
 
-Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. A lower `order` wins. Equal `order` is resolved by specificity (exact over segment prefix over prefix, then a longer path, then host, method, and header or query constraints) and then by file order. `segmentPrefix` does not match a longer segment (`/api` does not match `/apiary`). `regex` paths are compiled once. Host lists accept `*.example.com`. Matching uses the path the origin sees: dot segments are removed and unreserved percent-escapes are decoded; other escapes stay encoded. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header. Destination ids must be unique across clusters. When a route matches and no destination is eligible, the proxy answers 503 with `Retry-After: 1` instead of forwarding to the request host. Passive health, when left unset, treats 502, 503, and 504 as destination failures and treats other statuses, including 500, as success. After `reactivateAfterSeconds` an ejected destination receives one trial; a successful trial restores it. `healthCheck.passive.maxEjectionPercent` stops ejecting once that share of the cluster is already out. `healthCheck.active` probes on a background timer and only restores destinations that probe marked unhealthy. `retry.attempts` fails a connect over to the next destination for idempotent methods; set `retryNonIdempotent` to allow a buffered POST. `maxConcurrentRequests`, `priority`, and `backup` limit and order the pool. A destination or cluster `slowStartSeconds` ramps weight from 10 percent. `queue` waits briefly when every destination is at its cap. Dispose `ClusterManager` on shutdown so active probes stop. These knobs leave the single-destination fast path unchanged while they are unset. `server.forwardedHeaders` is off until an action other than Off is set. A peer outside `trustedProxies` cannot append to an inbound X-Forwarded-* value. Setting any forwarded action leaves terminate-lite. A route `policies` list can require a header, check an API key, cap the request body, answer a CORS preflight, or apply a rate, connection, or address limit before a destination is chosen. JWT and distributed rate limits stay in Titanium Plus. An empty policy list leaves terminate-lite alone. A route `clusters` list splits traffic by weight. `redirect.httpToHttps` upgrades a cleartext redirect. `errorPages` replaces the body of a generated status. `sessionAffinity` pins an opaque cookie. `hashKey` feeds consistent hashing. Listener `passthrough` copies TCP bytes, and `acceptProxyProtocol` reads a PROXY preamble. When any cluster uses `LeastTime`, the CLI automatically enables request timing capture so latency EWMA can drive selection.
+Match fields typically include host, path (`Exact` / `Prefix` / `Template`), method, headers, and query. `queryParameters` is an optional list of `name` and `value` entries (add `kind: Regex` to match the whole decoded value with a regular expression); every entry must match, and leaving it unset costs nothing per request. A lower `order` wins. Equal `order` is resolved by specificity (exact over segment prefix over prefix, then a longer path, then host, method, and header or query constraints) and then by file order. `segmentPrefix` does not match a longer segment (`/api` does not match `/apiary`). `regex` paths are compiled once. Host lists accept `*.example.com`. Matching uses the path the origin sees: dot segments are removed and unreserved percent-escapes are decoded; other escapes stay encoded. Cluster algorithms include RoundRobin, Random, LeastRequests, and LeastTime; destinations support weight and sticky cookie/header. Destination ids must be unique across clusters. When a route matches and no destination is eligible, the proxy answers 503 with `Retry-After: 1` instead of forwarding to the request host. Passive health, when left unset, treats 502, 503, and 504 as destination failures and treats other statuses, including 500, as success. After `reactivateAfterSeconds` an ejected destination receives one trial; a successful trial restores it. `healthCheck.passive.maxEjectionPercent` stops ejecting once that share of the cluster is already out. `healthCheck.active` probes on a background timer and only restores destinations that probe marked unhealthy. `retry.attempts` fails a connect over to the next destination for idempotent methods; set `retryNonIdempotent` to allow a buffered POST. `maxConcurrentRequests`, `priority`, and `backup` limit and order the pool. A destination or cluster `slowStartSeconds` ramps weight from 10 percent. `queue` waits briefly when every destination is at its cap. Dispose `ClusterManager` on shutdown so active probes stop. These knobs leave the single-destination fast path unchanged while they are unset. `server.forwardedHeaders` is off until an action other than Off is set. A peer outside `trustedProxies` cannot append to an inbound X-Forwarded-* value. Setting any forwarded action leaves terminate-lite. A route `policies` list can require a header, check an API key, cap the request body, answer a CORS preflight, or apply a rate, connection, or address limit before a destination is chosen. JWT and distributed rate limits stay in Titanium Plus. An empty policy list leaves terminate-lite alone. An `extAuth` policy asks an external service whether to proceed. It sends a bodyless subrequest to `url` (`method` defaults to GET) that carries the `sendHeaders` (default Authorization and Cookie) plus `X-Original-Method`, `X-Original-Uri`, `X-Original-Host`, and `X-Forwarded-For`. Any 2xx lets the request through, and the headers named in `copyResponseHeaders` replace the same-named client headers before the origin sees them. Any other status is answered to the client with that status, a body of at most 64 KiB, and only the `denyResponseHeaders` (default Location, Set-Cookie, WWW-Authenticate, Content-Type). Redirects are relayed, never followed. A timeout (`timeoutMilliseconds`, default 2000, 1 to 60000), a connection error, or a 5xx answers 503 unless `failOpen` is true, in which case the request proceeds and `twp.extauth.requests` counts `error_open`. `cacheSeconds` (default 0) keeps a 2xx verdict for the same method, host, path, and `sendHeaders` values, bounded by `cacheMaxEntries` (default 10000, oldest evicted first). A subrequest carrying `X-Titanium-ExtAuth: 1` is refused with 508 so two proxies cannot loop. A route that lists an `extAuth` policy leaves terminate-lite; routes without one are unchanged. Each request that misses the cache waits for one extra round trip to the service, so keep it on the same host or network and use `cacheSeconds` where a short-lived verdict is acceptable. The `twp-cli-extauth-http1` arm of the load probe measures that cost against an allowing service; re-measure on your own hardware before relying on a number. A route `clusters` list splits traffic by weight. `redirect.httpToHttps` upgrades a cleartext redirect. `errorPages` replaces the body of a generated status. `sessionAffinity` pins an opaque cookie. `hashKey` feeds consistent hashing. Listener `passthrough` copies TCP bytes, and `acceptProxyProtocol` reads a PROXY preamble. When any cluster uses `LeastTime`, the CLI automatically enables request timing capture so latency EWMA can drive selection.
+
+`retry` also replays a gateway answer onto another destination before anything reaches the client. `attempts` bounds the replays, `statusCodes` replaces the default 502, 503, and 504 (429 and 500-599 are accepted), and `perTryTimeoutMilliseconds` ends a slow try as a 504 on every try but the last. `backoffMilliseconds` doubles per replay up to `maxBackoffMilliseconds`, with `jitterPercent` added. `honorRetryAfter` takes a delta-seconds `Retry-After` instead, capped the same way. `budgetPercent` limits replays in flight for a cluster to that share of its in-flight requests, never below `budgetMinConcurrent`, and refused replays count in `twp.proxy.status.retries_refused`. HTTP/2 origins also replay a request whose body was fully buffered. See [Protocol support](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support) for the paths that retry.
+
+A `rateLimit` policy counts requests per key and answers 429 with `Retry-After` (whole seconds until the window ends or a token is back) when the limit is spent. `key` picks what is counted: `client` (default, the socket address), `forwardedClient` (the rightmost `X-Forwarded-For` entry that is not in `server.forwardedHeaders.trustedProxies`, used only when the peer itself is trusted, otherwise the socket address), `header:<Name>`, `cookie:<Name>`, or `route`. A header or cookie value is stored as a 16-byte SHA-256 prefix, and a request without it is counted by client address. `algorithm` is `fixedWindow` (default, `limit` requests per `windowSeconds`) or `tokenBucket` (refills `limit` tokens per `windowSeconds` up to `burst`, which defaults to `limit`). `maxKeys` (1000 to 10000000, default 100000) bounds the counters kept per policy: when full, expired counters are dropped, and any further new key shares one overflow counter, so a client that rotates header values cannot grow memory or dodge the limit. `emitHeaders` (default false) adds `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` to the 429. With the default keys and algorithm, counting is unchanged. The default `scope` is `node`: counters stay in process memory per proxy instance.
+
+### Fleet rate limit {#fleet-rate-limit}
+
+Set `scope: fleet` on a `rateLimit` policy (Plus) to share one token bucket across instances through Redis (`plus.options` `state.redis`, or `state.mode` / `state.redis` as for the older per-IP window). Each node keeps a small local reserve and refills it with a background lease; the request path never awaits Redis. Overshoot across N nodes is bounded by `limit + burst + N * leaseSize` (a node may hold an unused lease). Lease size shrinks toward 1 when `limit` is small, so a single node cannot drain a low fleet budget — accuracy at low limits prefers smaller leases over perfect fairness. When Redis is down or the store is not started, `fleetFailMode` applies: `local` (default) falls back to a per-node bucket at `limit * localShare` (default `0.25`), `open` allows traffic, and `closed` answers 429. `fleetFailMode` and `localShare` are valid only with `scope: fleet`.
+
+```yaml twp
+policies:
+  - name: api
+    kind: rateLimit
+    key: client
+    algorithm: tokenBucket
+    limit: 1000
+    windowSeconds: 60
+    burst: 1000
+    scope: fleet
+    fleetFailMode: local
+    localShare: 0.25
+plus:
+  enabled: true
+  options:
+    state.redis: "localhost:6379"
+```
 
 A route `mirror` sends a copy of matching requests to another cluster and discards the answer. `samplePercent` (0-100, default 100) picks the share, `maxBodyBytes` (default 64 KiB, at most 1 MiB) is the largest body copied and larger bodies are skipped, and `maxConcurrency` (1-16, default 2) bounds the sends in flight. Each mirror route has its own queue and workers, so a slow mirror cannot starve another route. A request line or header that contains a control character is not mirrored. `server.forwardedHeaders.trustedProxies` takes addresses and CIDR prefixes for IPv4 and IPv6; an entry that does not parse fails validation, and an IPv4-mapped client address is written as IPv4. Active health probes run concurrently, probe unix-socket destinations by connecting, and bracket IPv6 hosts.
 
 Optional `limits` on a route overrides that session only: `requestTimeoutSeconds`, `idleTimeoutSeconds`, `maxBufferedBodyBytes`, `maxWebSocketFramePayloadBytes`. Omit it and the server limits apply. Full key list: [Limits and escape hatches](/docs/limits).
+
+### Upstream TLS
+
+Optional `clusters[].httpClient` settings control how the proxy authenticates to a cluster's HTTPS destinations. Every field is off by default. A cluster that sets none of them keeps the machine trust store, the origin host as the TLS name, and the shared connection pool.
+
+```json
+{
+  "schemaVersion": "7.1",
+  "clusters": [
+    {
+      "id": "payments",
+      "destinations": [
+        { "id": "p1", "address": "10.0.0.5", "port": 8443, "useHttps": true }
+      ],
+      "httpClient": {
+        "clientCertificatePath": "/etc/titanium/payments-client.crt",
+        "clientCertificateKeyPath": "/etc/titanium/payments-client.key",
+        "caBundlePath": "/etc/titanium/payments-ca.pem",
+        "serverName": "payments.internal",
+        "verifyHostname": true
+      }
+    }
+  ]
+}
+```
+
+Keep `schemaVersion` (or another native section) in the JSON file. A bare listeners, routes, and clusters document is read by the reverse-proxy subset, which has no `httpClient`.
+
+| Key | Effect |
+|-----|--------|
+| `clientCertificatePath`, `clientCertificateKeyPath` | Client certificate for mutual TLS. Give a PEM certificate and its PEM key together. For a PFX or PKCS#12 file, set only `clientCertificatePath`. |
+| `clientCertificatePasswordEnv` | Name of the environment variable that holds the PFX password, or the password of an encrypted PEM key. The password never appears in the file. |
+| `caBundlePath` | PEM or CRT trust anchors for this cluster. They replace the machine store, so a public CA is not trusted unless the bundle lists it. |
+| `serverName` | Sent as TLS SNI and checked against the origin certificate. The HTTP `Host` header is not changed. |
+| `verifyHostname` | Default `true`. `false` tolerates only a certificate name mismatch. Chain, expiry, and revocation errors still fail. |
+| `acceptAnyServerCertificate` | Skips certificate validation for this cluster on HTTP/1.1, HTTP/2, and HTTP/3. |
+
+The files are read once when the configuration loads or reloads, never per request, and their content is part of the connection pool key, so two clusters with different identities never share a socket. Rotating a file takes effect on the next `titanium reload`. A missing, unreadable, or unparsable file is a validation error at load time; if it breaks later the cluster answers 502 and logs the cause once. It never falls back to the machine store or an anonymous handshake. Active health probes to an HTTPS destination use the same certificate, CA bundle, and server name. A route `mirror` ignores these settings and uses the machine trust store, so a mirror cluster that needs a private CA fails its best-effort copy.
 
 ### Route transforms
 
@@ -124,9 +411,102 @@ Optional `transforms` on a route rewrite the upstream request (and can stage res
 ]
 ```
 
+### gRPC-Web (route `grpcWeb`)
+
+Off by default. A route with `grpcWeb: true` lets a browser gRPC-Web client reach a native gRPC (HTTP/2) origin:
+
+```yaml twp-fragment
+routes:
+  - id: api
+    clusterId: grpc-backend
+    grpcWeb: true
+```
+
+On a matching `POST` the proxy rewrites `application/grpc-web` or `application/grpc-web+proto` to `application/grpc` and adds `te: trailers`. It answers with the client's own media type, relays each length-prefixed message as the origin sends it, and appends the origin trailers (`grpc-status`, `grpc-message`, and any others) as one final frame whose flag byte is `0x80`. A trailers-only reply (status in the headers, no body) becomes that same final frame. An origin reply that is not `application/grpc` (a 404 page, say) is left alone.
+
+v1 limits:
+
+- Unary and server-streaming calls, binary only. `application/grpc-web-text` is not translated and passes through unchanged. `titanium test` warns when a route sets `grpcWeb`.
+- The origin must speak HTTP/2. The route is served on the HTTP/2-to-HTTP/2 dispatch path. A route with `grpcWeb` is never treated as forward-host equivalent, so the native frame relay is not used for it. The flag cannot be combined with `redirect` or `directResponse`.
+- An HTTP/1.1 browser connection reaches an HTTP/2 origin only where the HTTP/1.1-to-HTTP/2 bridge is enabled (the library's `UpstreamHttpProtocol` and `AllowHttpProtocolTranslation`, set in `BeforeSslAuthenticate`). `titanium run` does not set that for you.
+- The response is rebuilt as one body for a known-length reply and streamed for a streaming reply. Trailers reach the browser only as that final frame; the trailers are also copied into response headers so a client that reads headers can see `grpc-status`.
+
+**CORS.** Browsers send a preflight `OPTIONS` before a gRPC-Web call. Answer it with a `cors` policy attached to the route, and list the gRPC-Web request headers in `headerName`:
+
+```yaml twp-fragment
+policies:
+  - name: grpc-web-cors
+    kind: cors
+    origins: https://app.example.com
+    methods: POST, OPTIONS
+    headerName: content-type, x-grpc-web, x-user-agent, grpc-timeout
+routes:
+  - id: api
+    clusterId: grpc-backend
+    grpcWeb: true
+    policies: [grpc-web-cors]
+```
+
+The policy answers preflights only. For the real response, expose the status headers with a `ResponseHeaderSet` transform (`Access-Control-Allow-Origin`, and `Access-Control-Expose-Headers: grpc-status, grpc-message`).
+
+### Login (route policy `oidc`, Plus)
+
+A route can require an OpenID Connect sign-in by listing an `oidc` policy. The proxy runs the authorization-code flow with PKCE against your identity provider, keeps the person signed in with an AES-256-GCM encrypted cookie, can renew the session quietly, and passes chosen claims to the origin as headers (client-sent copies of those headers are removed). It needs `plus.enabled: true`, and a route that lists it always uses the full session path.
+
+```yaml twp-fragment
+plus:
+  enabled: true
+policies:
+  - name: login
+    kind: oidc
+    issuer: https://idp.example.com/realms/main
+    clientId: titanium
+    clientSecretEnv: OIDC_CLIENT_SECRET
+    cookieSecretEnv: OIDC_COOKIE_KEY
+    allowedEmailDomains: [example.com]
+    passClaims: { email: X-User-Email }
+routes:
+  - id: app
+    clusterId: web
+    match: { path: /, pathKind: Prefix }
+    policies: [login]
+```
+
+`cookieSecretEnv` or `cookieSecretFile` holds 32 bytes (64 hex digits or base64); list a second key to rotate. `titanium test` rejects a missing issuer, client, or cookie key, a path that is not a single-slash path, a session lifetime outside 60 to 2592000 seconds, and a `passClaims` header such as `Authorization` or `Cookie`. Fields, the flow, and the limits are in [Plus](/docs/plus#login-with-openid-connect-oidc-policy).
+
+### Request screening (route policy `waf`, Plus)
+
+With `plus.options` `waf.enabled: "true"`, Titanium Plus screens requests by signature in `detect` mode (log and count, never refuse) unless you choose otherwise. A route can override the global WAF settings by listing a `waf` policy. The route that matches the request supplies the policy, and every field is optional.
+
+```yaml twp-fragment
+plus:
+  enabled: true
+  options:
+    waf.enabled: "true"
+policies:
+  - name: checkout-strict
+    kind: waf
+    mode: block              # off | detect | block
+    paranoiaLevel: 2         # 1-3
+    blockThreshold: 5        # 1-1000
+    disabledRules: [TW-SQLI-008]
+    exclusions: ["sqli@query:search", "*@header:Referer"]
+routes:
+  - id: checkout
+    clusterId: shop
+    match: { path: /checkout, pathKind: Prefix }
+    policies: [checkout-strict]
+```
+
+`exclusions` entries are `rule[@target]`: the rule is an id, a category, or `*`, and the target is `path`, `query[:name]`, `header[:Name]`, `cookie[:name]`, or `body[:field]`. `titanium test -c twp.yaml` rejects an unknown mode, a paranoia level or threshold out of range, an empty `disabledRules` entry, a malformed exclusion, and a `waf` policy without `plus.enabled` and `waf.enabled`. Screening reads headers, cookies, and small bodies, so requests use the full session path rather than terminate-lite. The rule pack, scoring, custom rules, and limits are in [Plus](/docs/plus#web-application-firewall-waf).
+
+## Plugins
+
+`plugins` lists .NET assemblies (`name`, `assembly`, optional `typeName`, `settings`, `failMode`, `timeoutMs`) that a route runs through `routes[].middleware: [name]`. Each plugin loads into its own collectible load context, runs behind a timeout and an exception wall (`failMode: closed` answers 503, `open` continues), and is unloaded when the configuration reloads. A route that names no plugin pays nothing, and only a config in which a route names one leaves terminate-lite. Metrics are `twp.plugin.duration` and `twp.plugin.errors`. See [Per-route plugins](/docs/plugins).
+
 ## Static files
 
-```yaml
+```yaml twp
 staticFiles:
   root: "./www"
   enableGzip: true
@@ -137,7 +517,7 @@ staticFiles:
 
 Automatic Certificate Management Environment (**ACME**) can obtain Let’s Encrypt (or other directory) certificates for public listeners:
 
-```yaml
+```yaml twp
 certificates:
   certificatePath: "./certs/fullchain.pem"
   privateKeyPath: "./certs/privkey.pem"
@@ -150,7 +530,7 @@ Use real paths and emails in your environment. Do not commit private keys. MITM 
 
 ## Logging
 
-```yaml
+```yaml twp
 logging:
   enabled: true
   minimumLevel: "Error"   # Error shows limit rejections. Use Debug, or titanium run -v, for Observe lines.
@@ -165,7 +545,7 @@ logging:
 
 ## Plus
 
-```yaml
+```yaml twp
 plus:
   enabled: true
   controlPlane:
@@ -178,6 +558,41 @@ plus:
 
 Common `plus.options` keys (string values): see the table on [Plus](/docs/plus) (`discovery.*`, `security.*`, `waf.*`, `state.*`, `resilience.*`, `cache.enable`, `grpc.transcode.*`). Enabling `grpc.transcode.enabled` forces the HTTP session interception path — see [gRPC-JSON transcoding](/docs/grpc-json-transcoding). Engine settings belong in `server:`, not `plus.options`.
 
+### Response cache
+
+`cache.enable: "true"` adds an in-memory shared HTTP cache (an RFC 9111 subset) to the reverse-proxy middleware chain. It adds no `BeforeResponse` or `AfterResponse` subscription, so a route stays on terminate-lite, and a cache hit never reaches the origin. With `cache.enable` unset, the cache costs nothing per request.
+
+| Key (`plus.options`) | Default | Meaning |
+| --- | --- | --- |
+| `cache.maxBytes` | 64 MiB | Total budget for all entries, headers included. The least recently used entries are evicted first. |
+| `cache.maxEntryBytes` | 1 MiB | Largest body stored for one response. A larger body, or a chunked body that grows past it, streams through uncached. |
+| `cache.defaultTtlSeconds` | 0 (off) | Freshness for a cacheable response that carries no freshness information of its own. |
+| `cache.heuristicFreshness` | false | For a response with `Last-Modified` and no explicit freshness, treat 10 percent of its age as fresh, capped at 24 hours. |
+| `cache.exposeHeaders` | false | Add `X-Cache` (`HIT`, `STALE`, `REVALIDATED`) and `Age` to answers the cache took part in. |
+| `cache.collapse` | true | Concurrent misses for one key wait behind one origin fetch. |
+| `cache.collapse.maxWaiters` | 256 | Requests that may wait behind one fetch. The rest fetch on their own. |
+| `cache.collapse.timeoutMs` | 5000 | How long a waiter waits before it fetches on its own. |
+| `cache.staleRetentionSeconds` | 300 | How long an expired entry with a validator (`ETag` or `Last-Modified`) is kept for conditional revalidation. |
+
+A value that is out of range or not a number is reported once at startup and replaced by its default. Purge by exact key or by prefix through the control plane (`/v1/cache/purge`).
+
+| Behavior | What happens |
+| --- | --- |
+| Freshness | `s-maxage`, then `max-age`, then `Expires` minus `Date`. `Age` from the origin counts against the lifetime. Heuristic freshness only when enabled and only with `Last-Modified`. |
+| Stored statuses | 200, 203, 204, 300, 301, 308, 404, 405, 410, 414, 501 to a `GET`. |
+| Never stored | Responses with `Set-Cookie`, `Cache-Control: private`, `no-store` or `no-cache`, `Vary: *`, a `Vary` naming more than 8 headers, partial content, or no freshness at all. |
+| Requests that skip the cache | Any method other than `GET` and `HEAD`; a request with `Range`, `If-Range`, `If-Match`, `If-Unmodified-Since`, `Authorization`, `Cookie` or `Cache-Control: no-store`; and a request whose host, path, `Accept-Encoding` or named `Vary` value holds control characters or (for the last two) is longer than 256 characters. |
+| Client `Cache-Control` | `no-cache` and `max-age=0` send the request to the origin (conditionally when the entry has a validator). A `max-age` or `min-fresh` the entry cannot meet does the same. |
+| Vary | The key adds a normalized `Accept-Encoding` and each named `Vary` header. A client cannot change the key in any other way. |
+| `HEAD` | Answered from a stored `GET`. A `HEAD` response is never stored. |
+| Compressed bodies | Stored as the origin sent them (with `Content-Encoding`) and served as stored, never compressed again. |
+| Revalidation | A stale entry with a validator is revalidated with `If-None-Match` or `If-Modified-Since`. A 304 refreshes the entry and its stored headers. |
+| `stale-while-revalidate` | The first request after expiry revalidates inline. Requests that arrive while it runs get the stale copy. No background fetch is started. |
+| `stale-if-error` | An origin 5xx answer is replaced by the stale copy while the window allows it. A connection failure is not covered. |
+| Scheme and host | `http` and `https` entries are separate, and so are hosts. |
+
+Metrics: `twp.cache.requests` (label `result`: `hit`, `miss`, `stale`, `bypass`, `revalidated`), `twp.cache.bytes` and `twp.cache.entries`. Enabling the cache registers the bytes and entries gauges.
+
 ## Validate
 
 ```shell
@@ -188,7 +603,7 @@ titanium test -c twp.yaml
 
 Null nested objects and null properties leave the library or profile default. Apply order: `profile` first, then overlays.
 
-```yaml
+```yaml twp
 server:
   profile: Balanced   # Balanced | LegacyCompatible | PublicFacing. PublicFacing sets streams to 256, idle 60s, request 120s.
   enableHttp2: true
@@ -205,7 +620,7 @@ server:
   blockLoopbackDestinations: false
   checkCertificateRevocation: NoCheck
   dnsServerEndPoint: "8.8.8.8:53"
-  accessLog:
+  accessLog:                     # opt-in NDJSON access log (see below)
     path: "logs/access.ndjson"   # omit or null = off (zero cost)
     sampleRate: 1.0              # 0.0–1.0
   timeouts:
@@ -272,6 +687,9 @@ server:
   tls:
     supportedSslProtocols: [Tls12, Tls13]
     supportedServerSslProtocols: [None]
+    minVersion: null          # Tls12 or Tls13, listeners only (see below)
+    cipherSuites: null        # TlsCipherSuite names, Linux and macOS only
+    ocspStapling: false       # let the server certificate context fetch an OCSP response
   upstream:
     forwardToUpstreamGateway: false
     upstreamProxyConfigurationScript: null
@@ -306,25 +724,140 @@ server:
     rootCertificateIssuerName: null
     saveFakeCertificates: true
     disableWildCardCertificates: false
-  accessLog: null   # opt-in NDJSON access log (see below)
 ```
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
-HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+
+### Listener TLS policy (`server.tls`)
+
+These keys shape the handshake the proxy completes with its own clients on terminating listeners (explicit, transparent, and MASQUE). They never change origin-facing handshakes, and each one is off by default.
+
+| Key | Effect |
+|-----|--------|
+| `minVersion` | `Tls12` or `Tls13` (`1.2`, `1.3`, `TLSv1.2`, and `TLSv1.3` also parse). Trims `supportedSslProtocols` for listeners and never widens it. A client that offers only older versions is refused. A `minVersion` that excludes every entry of `supportedSslProtocols` fails validation. |
+| `cipherSuites` | `TlsCipherSuite` names such as `TLS_AES_256_GCM_SHA384`. Linux and macOS only: .NET has no cipher suite policy on Windows, where the list is ignored, a validation warning is printed, and the OS default applies. Leaving out every TLS 1.3 suite turns TLS 1.3 off for listeners. |
+| `ocspStapling` | `true` builds server certificate contexts with `offline: false`, so .NET may fetch an OCSP response and staple it. The default builds them offline: no network use and no stapling. Only a certificate whose authority information access extension names an OCSP responder can be stapled, and the certificates the proxy mints per host have none, so this matters for a certificate you supply. Chain building may touch the network the first time a certificate is presented. |
+
+```yaml twp
+server:
+  tls:
+    minVersion: Tls13
+    cipherSuites: [TLS_AES_256_GCM_SHA384, TLS_AES_128_GCM_SHA256]
+    ocspStapling: true
+```
+
+### PROXY protocol to TCP origins (`clusters[].sendProxyProtocol`)
+
+`none` or `v2`. A cluster that sets it replaces the passthrough listener's `sendProxyProtocol` for connections routed to that cluster: `v2` writes a PROXY protocol v2 header with the client and listener addresses before any client bytes, and `none` suppresses a header the listener would send. Leave it unset to inherit the listener. The setting applies to TCP passthrough only. Pooled HTTP origin connections are shared between clients and never carry a header, so validation warns when a cluster sets `v2` but no passthrough listener routes to it. A TCP active health probe to a `v2` cluster sends a v2 LOCAL header so an origin that insists on the preamble does not reject the probe.
+
+```json
+{
+  "schemaVersion": "7.1",
+  "clusters": [
+    {
+      "id": "tcp-web",
+      "sendProxyProtocol": "v2",
+      "destinations": [{ "id": "w1", "address": "10.0.0.7", "port": 8443 }]
+    }
+  ]
+}
+```
 
 ### Access log (`server.accessLog`)
 
 Opt-in JSON Lines (NDJSON) access log written **after** each response. Bodies are never buffered for this feature.
 
-```yaml
+```yaml twp
 server:
   accessLog:
     path: "./logs/access.ndjson"
     sampleRate: 1.0   # 0.0–1.0; omit for 1.0
 ```
 
-Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
+Each line includes `ts`, `method`, `url`, `host`, `status`, `durationMs`, and `clientIp`. A request that has a trace also carries `traceId` (see [Traces and metrics export](#traces-and-metrics-export-server-telemetry)). Omit `accessLog` (or leave `path` empty) for zero cost on the hot path.
+
+### Response compression (`server.responseCompression`)
+
+Opt-in compression of origin responses, buffered or streaming. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
+
+```yaml twp
+server:
+  responseCompression:
+    enabled: true
+    mode: buffered           # buffered (default) | streaming
+    algorithms: [br, gzip]   # default: both; brotli preferred when the client accepts it
+    minBytes: 1024           # default 1024
+    maxBytes: 1048576        # default 1 MiB, upper limit 1 MiB (buffered mode only)
+    level: fastest           # fastest | optimal | smallestSize
+    mimeTypes:               # default: text/*, application/json, application/javascript, application/xml, image/svg+xml
+      - text/*
+      - application/json
+```
+
+A response is compressed only when **all** of these hold:
+
+- `Accept-Encoding` allows the algorithm (an explicit coding beats `*`; `q=0` forbids it). When the client allows several of the configured algorithms, the highest `q` wins and the order of `algorithms` breaks a tie. On an explicit-proxy listener the proxy first reduces `Accept-Encoding` to the codings it can decode, so `q` weights other than `q=0` are not seen there and `algorithms` decides.
+- Status is `200` (not `206`).
+- `Content-Length` is known and between `minBytes` and `maxBytes` in buffered mode. In streaming mode a known length only has to reach `minBytes`, and a chunked body (no length) is always eligible.
+- The response has no `Content-Encoding`, no `Content-Range` and no `Cache-Control: no-transform`.
+- The request is not `HEAD`, has no `Range`, and is not a WebSocket upgrade.
+- The `Content-Type` matches `mimeTypes`. `text/event-stream` and `application/grpc*` are never compressed.
+
+When it compresses, the proxy sets `Content-Encoding`, replaces (buffered) or removes (streaming) `Content-Length`, adds `Vary: Accept-Encoding`, and weakens a strong `ETag` (`W/"…"`). A `HEAD` response and a `304` are left alone. In buffered mode a body that would not get smaller is sent unchanged.
+
+#### Streaming mode
+
+`mode: streaming` compresses the origin body while it is relayed, so there is no `maxBytes` limit and the first compressed bytes reach the client before the origin has finished. This suits large downloads, long exports and slowly produced bodies.
+
+- **Flush per upstream chunk.** The compressor is flushed after every read from the origin (a sync flush for gzip and brotli), so a chunk the origin sends is readable by the client without waiting for later data. Each flush costs a little compression ratio; that is the price of low latency.
+- **Chunked output.** The response has no `Content-Length`. An HTTP/1.1 client gets `Transfer-Encoding: chunked`; an HTTP/2 client (the HTTP/2-to-HTTP/1.1 bridge) gets DATA frames.
+- **Backpressure.** The write to the client is awaited before the next origin read, so a slow client holds the origin back and memory stays flat (a few tens of KiB per response), however large the body is.
+- **Early abort.** When the client goes away the relay stops reading, no gzip trailer is written, and the origin connection is closed rather than reused, because its body was only partly read. A response that was being stored by the [response cache](#response-cache) is abandoned, not stored.
+- **Algorithms.** gzip and brotli. zstd is not offered: .NET 10 has no zstd stream in the base library, and `algorithms` rejects it.
+- **Left uncompressed.** Everything in the list above, plus `text/event-stream` (server-sent events must reach the client event by event), HTTP/1.0 clients (they cannot take a chunked body), a response whose body a handler already read (`GetResponseBody` in `BeforeResponse`) or replaced, and any proxy that has a body-write hook (`OnResponseBodyWrite`), since those hooks expect the origin's plain bytes.
+- **Sizes and WebAssembly.** `application/wasm` is not in the default `mimeTypes`; add it to compress `.wasm` files.
+
+Streaming mode applies to the same paths as buffered mode (HTTP/1.1 clients and the HTTP/2-to-HTTP/1.1 bridge) and also keeps the H1 terminate-lite shortcut off.
+
+#### BREACH and caches
+
+Compressing a response that mixes a secret (a CSRF token, a session identifier) with attacker-chosen text, over TLS, leaks the secret through the compressed size (BREACH). Compression is therefore off by default and applies to every response whose type matches `mimeTypes`. Exclude such pages with `compression: off` on their route, or narrow `mimeTypes`, and use per-request token masking at the origin.
+
+The [response cache](#response-cache) keys each entry on the client's normalized `Accept-Encoding` as well as on the `Vary` headers the response names, so a gzip client and an identity client never share an entry. The cache decision is made before the response is compressed: it stores the origin's representation, and a cache hit is served as stored, not compressed again. A response that streaming compression rewrote carries `Vary: Accept-Encoding`, so downstream caches also keep the variants apart.
+
+A route opts out with `compression: off`:
+
+```yaml twp-fragment
+routes:
+  - id: downloads
+    clusterId: files
+    compression: off
+```
+
+Both modes apply to HTTP/1.1 responses and to the HTTP/2-to-HTTP/1.1 bridge only. They are not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths; `titanium test` warns about that.
+
+### Request decompression (`server.requestDecompression`)
+
+Opt-in, bounded decompression of request bodies. A request with `Content-Encoding: gzip` or `br` is decompressed before it is sent to the origin, so the origin (and a body-aware policy) sees plain bytes: the `Content-Encoding` header is removed and `Content-Length` is set to the decompressed size. Off by default and costs one null check when absent. Enabling it moves traffic onto the session path (the H1 terminate-lite shortcut is skipped).
+
+```yaml twp
+server:
+  requestDecompression:
+    enabled: true
+    maxDecompressedBytes: 10485760   # default 10 MiB, upper limit 64 MiB
+    maxRatio: 100                    # default 100, upper limit 10000
+```
+
+Both the compressed and the decompressed body are held in memory, so two limits stop a zip bomb while decompressing, before the origin sees a byte:
+
+- `maxDecompressedBytes` is the most decompressed bytes a request may produce. The compressed body is read under the same limit.
+- `maxRatio` is the largest decompressed-to-compressed ratio. It is not applied while the output is still under 4 KiB, so tiny bodies are not refused for compressing well.
+
+A body that breaches either limit is answered with `413` and the connection is closed. A body that is corrupt or cut short is answered with `400`. Truncation is detected for both codings (gzip by its length trailer, brotli by the decoder state). Only single-member gzip is accepted. Every decompressed body is recorded in the `twp.body.decompressed_bytes` histogram, tagged `direction=request`; see [Metrics](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics).
+
+Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium test` warns about that.
 
 ### Graceful reload
 
@@ -349,6 +882,8 @@ titanium reload -c twp.yaml
 | Unix **SIGHUP** / systemd `systemctl reload` | Unit includes `ExecReload=/bin/kill -HUP $MAINPID` |
 | `titanium run --watch` | Debounced file watch (optional) |
 | Plus `PUT /v1/snapshot` | Programmatic route/cluster swap without editing the file |
+
+With `--watch`, Titanium watches the directory that contains the config file, so Kubernetes ConfigMap and Secret updates work: kubelet publishes a new revision by atomically repointing the `..data` symlink, and `--watch` notices that swap. Files referenced through `*File` secret settings are watched the same way. Events are debounced (250 ms) and compared by content hash, so one swap causes exactly one reload; a 30 s content-hash poll covers mounts that do not deliver file events. The same applies to the certificate files used by `server.tls` and client-certificate authorities.
 
 Invalid reloads keep the previous routes and clusters; the process stays up. Unlike a typical YARP process recycle, Titanium keeps listeners bound and in-flight sessions on the old cluster snapshot until they finish.
 

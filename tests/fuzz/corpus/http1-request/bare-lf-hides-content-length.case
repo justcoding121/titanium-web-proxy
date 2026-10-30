@@ -1,0 +1,10 @@
+# expect: normalize
+# reason: a bare LF inside a header block splits a header; the proxy and the origin must agree on that split
+# assert-header: Content-Length=5
+# assert-header-count: Content-Length=1
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+X-A: b\nContent-Length: 5\r\n
+\r\n
+hello

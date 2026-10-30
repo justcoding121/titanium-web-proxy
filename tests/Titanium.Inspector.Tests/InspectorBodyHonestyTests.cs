@@ -61,6 +61,28 @@ public class InspectorBodyHonestyTests
 
         Assert.IsNull(InspectorBodyLimits.TryPrettyPrint("{not-json", "application/json"));
         Assert.IsNull(InspectorBodyLimits.TryPrettyPrint("xxxx", "image/png"));
+
+        // Unlabeled JSON (common for analytics ingest) still pretty-prints when it parses.
+        var plainArray = InspectorBodyLimits.TryPrettyPrint(
+            "[{\"t\":\"hf\",\"d\":1},{\"t\":\"POST\",\"d\":\"https://ex/\"}]",
+            "text/plain");
+        Assert.IsNotNull(plainArray);
+        StringAssert.StartsWith(plainArray!, "[");
+        StringAssert.Contains(plainArray!, "\n");
+        StringAssert.Contains(plainArray!, "\"t\": \"hf\"");
+
+        var plainCharset = InspectorBodyLimits.TryPrettyPrint(
+            "[{\"a\":1}]",
+            "text/plain; charset=utf-8");
+        Assert.IsNotNull(plainCharset);
+        StringAssert.Contains(plainCharset!, "\"a\": 1");
+
+        var octetObject = InspectorBodyLimits.TryPrettyPrint("{\"k\":2}", "application/octet-stream");
+        Assert.IsNotNull(octetObject);
+        StringAssert.Contains(octetObject!, "\"k\": 2");
+
+        Assert.IsNull(InspectorBodyLimits.TryPrettyPrint("hello world", "text/plain"));
+        Assert.IsNull(InspectorBodyLimits.TryPrettyPrint("{not-json", "text/plain"));
     }
 
     [TestMethod]

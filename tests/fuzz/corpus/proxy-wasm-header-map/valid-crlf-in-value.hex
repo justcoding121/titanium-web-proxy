@@ -1,0 +1,3 @@
+# expect: parsed:1
+# reason: a CR LF in a value decodes; the header writer is what must refuse to emit it
+01 00 00 00 01 00 00 00 03 00 00 00 61 00 62 0d 0a 00

@@ -177,14 +177,19 @@ public class RunCommandListenerCoverageTests
             Certificates = new CertificatesConfig { AcmeEmail = "a@b.test", AcmeDomain = "b.test" },
         });
         var middleware = new List<IProxyMiddleware>();
-        Invoke("ConfigureResponseCache", proxy, middleware, new MemoryHttpResponseCache(),
+        Invoke("ConfigureResponseCache", middleware, new MemoryHttpResponseCache(),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["cache.enable"] = "true",
                 ["cache.maxEntries"] = "16",
-            });
-        Invoke("ConfigureResponseCache", proxy, new List<IProxyMiddleware>(), new MemoryHttpResponseCache(),
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase));
+            }, new Titanium.Web.Proxy.Caching.ResponseCacheOptions());
+        Assert.AreEqual(1, middleware.Count);
+        Assert.IsInstanceOfType<Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware>(middleware[0]);
+        var disabled = new List<IProxyMiddleware>();
+        Invoke("ConfigureResponseCache", disabled, new MemoryHttpResponseCache(),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+            new Titanium.Web.Proxy.Caching.ResponseCacheOptions());
+        Assert.AreEqual(0, disabled.Count);
 
         RunCommand.ConfigureProxyFlags(proxy, new TwpConfig
         {
@@ -298,7 +303,12 @@ public class RunCommandListenerCoverageTests
         {
             try
             {
-                return method.Invoke(null, args);
+                // Reflection does not fill in optional parameters on its own.
+                var parameters = method.GetParameters();
+                var full = args.Length < parameters.Length && parameters.Skip(args.Length).All(static p => p.IsOptional)
+                    ? [.. args, .. parameters.Skip(args.Length).Select(static p => p.DefaultValue)]
+                    : args;
+                return method.Invoke(null, full);
             }
             catch (TargetParameterCountException)
             {

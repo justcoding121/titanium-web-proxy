@@ -1,0 +1,223 @@
+name: kubernetes-ci
+
+# Container image and Helm chart checks on pull requests. Nothing is pushed from here; releases push in release.yml.
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - beta
+      - stable
+    paths:
+      - 'packaging/docker/**'
+      - '.dockerignore'
+      - 'deploy/helm/**'
+      - 'src/Titanium.Cli/**'
+      - 'src/Titanium.Gateway/**'
+      - 'src/Titanium.Manager/**'
+      - 'src/Titanium.Web.Proxy.Configuration/**'
+      - 'tests/Titanium.Cli.Tests/HelmChartTests.cs'
+      - 'tests/Titanium.Gateway.Tests/**'
+      - '.github/workflows/kubernetes-ci.yml'
+  push:
+    branches:
+      - develop
+      - beta
+      - stable
+    paths:
+      - 'packaging/docker/**'
+      - '.dockerignore'
+      - 'deploy/helm/**'
+      - 'src/Titanium.Manager/**'
+      - '.github/workflows/kubernetes-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kubernetes-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HELM_VERSION: v3.17.3
+  KUBECONFORM_VERSION: v0.6.7
+  KUBERNETES_VERSION: 1.31.0
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      # Both architectures must build; only the runner's own is loaded for the run test below.
+      - name: Build linux/amd64 and linux/arm64 (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The Gateway API controller image builds for both architectures too.
+      - name: Build the titanium-gateway image for linux/amd64 and linux/arm64 (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile.gateway
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Manager control-plane image (same multi-arch contract as CLI/gateway).
+      - name: Build the titanium-manager image for linux/amd64 and linux/arm64 (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile.manager
+          platforms: linux/amd64,linux/arm64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build linux/amd64 and load it
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: titanium-web-proxy:ci
+          build-args: |
+            VERSION=0.0.0-ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+
+      - name: Image runs non-root, read-only, drains on SIGTERM, and reports healthy
+        shell: bash
+        run: |
+          set -euo pipefail
+          user="$(docker image inspect titanium-web-proxy:ci --format '{{.Config.User}}')"
+          test "$user" = "1654:1654"
+          docker run --rm --entrypoint titanium titanium-web-proxy:ci version
+
+          mkdir -p conf
+          cat > conf/twp.yaml <<'YAML'
+          schemaVersion: "7.1"
+          listeners:
+            - host: 0.0.0.0
+              port: 8080
+              forwardHost: 127.0.0.1
+              forwardPort: 9
+          server:
+            admin:
+              enabled: true
+              host: 0.0.0.0
+              port: 9901
+              authTokenEnv: TITANIUM_ADMIN_TOKEN
+              preStopDelaySeconds: 1
+          YAML
+          docker run -d --name twp --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e TITANIUM_ADMIN_TOKEN=ci-token \
+            -v "$PWD/conf:/etc/titanium:ro" -p 9901:9901 titanium-web-proxy:ci
+
+          for i in $(seq 1 30); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9901/readyz || true)"
+            [[ "$code" == "200" ]] && break
+            sleep 1
+          done
+          test "$code" = "200" || { docker logs twp; exit 1; }
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9901/metrics)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer ci-token' http://127.0.0.1:9901/metrics)" = "200"
+
+          # The image HEALTHCHECK runs `titanium healthcheck`; run it by hand rather than wait for the interval.
+          docker exec twp titanium healthcheck --config /etc/titanium/twp.yaml
+
+          docker stop --time 30 twp
+          test "$(docker inspect twp --format '{{.State.ExitCode}}')" = "0" || { docker logs twp; exit 1; }
+
+  helm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: helm lint
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/titanium --strict
+          helm lint deploy/helm/titanium --strict -f deploy/helm/titanium/ci/full-values.yaml
+          helm lint deploy/helm/titanium --strict -f deploy/helm/titanium/ci/smoke-values.yaml
+
+      # The Prometheus Operator CRD schema comes from the public CRDs catalog.
+      - name: kubeconform
+        run: |
+          set -euo pipefail
+          for values in "" "-f deploy/helm/titanium/ci/full-values.yaml" "-f deploy/helm/titanium/ci/smoke-values.yaml"; do
+            helm template rel deploy/helm/titanium $values \
+              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
+                  -schema-location default \
+                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          done
+
+      # Renders the chart and loads the rendered twp.yaml with the CLI's own loader and validator.
+      - name: Chart config passes the Titanium validator
+        run: dotnet test tests/Titanium.Cli.Tests -c Release --filter "FullyQualifiedName~HelmChartTests|FullyQualifiedName~HealthcheckCommandTests"
+
+      # The Gateway API chart: lint, schema-check every rendered object (the GatewayClass schema comes from the CRDs
+      # catalog), and run the chart tests, which also check the bootstrap config and the RBAC.
+      - name: titanium-gateway chart lint
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/titanium-gateway --strict
+          helm lint deploy/helm/titanium-gateway --strict -f deploy/helm/titanium-gateway/ci/kind-values.yaml
+
+      - name: titanium-gateway chart kubeconform
+        run: |
+          set -euo pipefail
+          for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
+            helm template rel deploy/helm/titanium-gateway --namespace gateway-system  \
+              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
+                  -schema-location default \
+                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          done
+
+      - name: titanium-gateway chart tests
+        run: dotnet test tests/Titanium.Gateway.Tests -c Release --filter "FullyQualifiedName~GatewayChartTests"
+
+      - name: titanium-manager chart lint
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/titanium-manager --strict
+          helm lint deploy/helm/titanium-manager --strict -f deploy/helm/titanium-manager/ci/smoke-values.yaml
+
+      - name: titanium-manager chart kubeconform
+        run: |
+          set -euo pipefail
+          for values in "" "-f deploy/helm/titanium-manager/ci/smoke-values.yaml"; do
+            helm template rel deploy/helm/titanium-manager $values \
+              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
+                  -schema-location default -
+          done

@@ -108,6 +108,10 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         return null;
     }
 
+    /// <summary>How many destinations a pick could return right now, after state, tier, and cap filtering.</summary>
+    internal int CountEligible(ClusterConfig cluster, ImmutableClusterSnapshot snapshot) =>
+        Collect(cluster, snapshot, cluster.HealthCheck?.Passive).Count;
+
     public void Record(string name, TimeSpan duration) => RecordDestination(name, duration);
 
     public void RecordDestination(string destinationId, TimeSpan duration)

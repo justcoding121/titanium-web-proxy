@@ -1,0 +1,3 @@
+# expect: malformed
+# reason: count 2 but room for one (klen, vlen) entry
+02 00 00 00 01 00 00 00 01 00 00 00

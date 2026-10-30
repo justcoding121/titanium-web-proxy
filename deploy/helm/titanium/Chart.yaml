@@ -1,0 +1,14 @@
+apiVersion: v2
+name: titanium
+description: Titanium Web Proxy CLI as a Kubernetes Deployment, with probes, graceful drain, and ConfigMap reload.
+type: application
+version: 0.1.0
+appVersion: "7.0.27"
+kubeVersion: ">=1.27.0-0"
+home: https://titaniumproxy.com/docs/kubernetes
+sources:
+  - https://github.com/justcoding121/titanium-web-proxy
+keywords:
+  - proxy
+  - reverse-proxy
+  - titanium

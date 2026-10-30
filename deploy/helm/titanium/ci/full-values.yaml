@@ -1,0 +1,66 @@
+# Every optional template switched on, for helm lint and kubeconform in CI.
+replicaCount: 3
+rolloutOnConfigChange: true
+admin:
+  preStopDelaySeconds: 10
+  requireHealthyClusters: true
+  service:
+    enabled: true
+terminationGracePeriodSeconds: 90
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 12
+  targetMemoryUtilizationPercentage: 80
+serviceMonitor:
+  enabled: true
+  labels:
+    release: prometheus
+networkPolicy:
+  enabled: true
+  adminFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+  egress:
+    enabled: true
+    rules:
+      - to:
+          - namespaceSelector: {}
+        ports:
+          - port: 80
+            protocol: TCP
+plus:
+  enabled: true
+  controlPlane:
+    sharedSecret:
+      existingSecret: titanium-control-plane
+    tls:
+      existingSecret: titanium-control-plane-tls
+  options:
+    security.apiKeysFile: /etc/titanium-secret/api-keys
+extraVolumes:
+  - name: plus-secret
+    secret:
+      secretName: titanium-plus
+extraVolumeMounts:
+  - name: plus-secret
+    mountPath: /etc/titanium-secret
+    readOnly: true
+config:
+  schemaVersion: "7.1"
+  listeners:
+    - host: "0.0.0.0"
+      port: 8080
+      decryptSsl: false
+  clusters:
+    - id: web
+      destinations:
+        - id: backend
+          address: backend.default.svc.cluster.local
+          port: 80
+  routes:
+    - id: all
+      clusterId: web
+      match:
+        path: /

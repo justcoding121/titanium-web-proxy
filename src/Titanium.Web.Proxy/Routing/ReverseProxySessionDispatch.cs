@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -43,10 +43,162 @@ internal static class ReverseProxySessionDispatch
 
     public static RouteDispatchResult Apply(ProxyServer server, SessionEventArgsBase session)
     {
-        var options = server.ReverseProxy;
+        var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
+        return BeginUpstreamIfForwarded(server, session,
+            finished ?? Finish(server, session, options!, resolution, destination, route));
+    }
+
+    /// <summary>
+    /// A request no route claimed is still forwarded, so it gets its upstream span here. Routed requests
+    /// get theirs when the destination is bound, and a settled one never reaches an upstream.
+    /// </summary>
+    private static RouteDispatchResult BeginUpstreamIfForwarded(
+        ProxyServer server, SessionEventArgsBase session, RouteDispatchResult result)
+    {
+        if (result == RouteDispatchResult.NotRouted && session.Extras?.Activity is not null)
+        {
+            ProxyTracing.BeginUpstream(server, session, null);
+        }
+
+        return result;
+    }
+
+    private static void BeginServerSpan(ProxyServer server, SessionEventArgsBase session)
+    {
+        if (!server.TracingEnabled)
+        {
+            return;
+        }
+
+        var activity = ProxyTracing.StartServer(server, session);
+        if (activity is null)
+        {
+            return;
+        }
+
+        session.Extras ??= new RoutingFeatureState();
+        session.Extras.Activity = activity;
+    }
+
+    /// <summary>
+    /// Same as <see cref="Apply"/>, but runs every <c>oidc</c> and <c>extAuth</c> policy and then every per-route plugin of
+    /// the matched route before a destination is bound. Callers use it only when <c>HasAsyncPolicies</c> is set; the synchronous
+    /// <see cref="Apply"/> stays the default path.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static async ValueTask<RouteDispatchResult> ApplyWithExtAuthAsync(
+        ProxyServer server, SessionEventArgsBase session)
+    {
+        var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
+
+        // With script hooks configured an unmatched request still runs them, so the early NotRouted return waits.
+        if (finished is { } early &&
+            !(early == RouteDispatchResult.NotRouted && options is { HasScriptHooks: true } && session is SessionEventArgs))
+        {
+            return BeginUpstreamIfForwarded(server, session, early);
+        }
+
+        string? scriptCluster = null;
+        if (session is SessionEventArgs args)
+        {
+            if (route is not null)
+            {
+                // A login comes first, so a service that decides on identity headers sees the ones it set.
+                if (await PolicyHandlerDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false) ||
+                    await ExternalAuthorization.DeniedAsync(options!, route, args).ConfigureAwait(false))
+                {
+                    return RouteDispatchResult.Handled;
+                }
+            }
+
+            if (options is { HasScriptHooks: true })
+            {
+                // Listener-wide scripts run after authentication and before any per-route plugin.
+                if (options.GlobalMiddleware is { Count: > 0 } &&
+                    await RoutePluginDispatch.GlobalDeniedAsync(options, args).ConfigureAwait(false))
+                {
+                    return RouteDispatchResult.Handled;
+                }
+            }
+
+            // Plugins come last, so a request that failed authentication never reaches plugin code.
+            if (route?.Middleware is { Count: > 0 } &&
+                await RoutePluginDispatch.DeniedAsync(options!, route, args).ConfigureAwait(false))
+            {
+                return RouteDispatchResult.Handled;
+            }
+
+            if (options?.ScriptPipeline is not null)
+            {
+                var scripted = await ScriptPhaseDispatch.RunRequestAsync(options, route, args).ConfigureAwait(false);
+                if (scripted.Denied)
+                {
+                    return RouteDispatchResult.Handled;
+                }
+
+                scriptCluster = scripted.ClusterId;
+            }
+        }
+
+        if (scriptCluster is not null && resolution != DestinationResolution.Terminal)
+        {
+            return BeginUpstreamIfForwarded(server, session,
+                BindScriptCluster(server, session, options!, route, scriptCluster));
+        }
+
+        return BeginUpstreamIfForwarded(server, session,
+            finished ?? Finish(server, session, options!, resolution, destination, route));
+    }
+
+    /// <summary>
+    /// A script chose a cluster. The destination is picked again through the load balancer of that cluster, so
+    /// affinity, health, and limits apply as for a routed request. An unmatched request gets a synthetic route.
+    /// </summary>
+    private static RouteDispatchResult BindScriptCluster(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        RouteConfig? route,
+        string clusterId)
+    {
+        var request = session.HttpClient.Request;
+        var picked = DestinationResolver.ResolveCluster(options, request, clusterId, out var destination);
+        if (picked != DestinationResolution.Resolved || destination is null)
+        {
+            session.MatchedRoute = route;
+            return RouteDispatchResult.NoDestination;
+        }
+
+        route ??= new RouteConfig
+        {
+            Id = "script",
+            ClusterId = clusterId,
+            Match = new RouteMatch(),
+        };
+        return BindDestination(server, session, options, request, destination, route, clusterId);
+    }
+
+    /// <summary>
+    /// Resets per-session routing state, matches the route, and runs the synchronous policies.
+    /// Returns a result when the session is already settled, or null to continue with <see cref="Finish"/>.
+    /// </summary>
+    private static RouteDispatchResult? Begin(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        out Titanium.Web.Proxy.Abstractions.ReverseProxyOptions? options,
+        out DestinationResolution resolution,
+        out DestinationConfig? destination,
+        out RouteConfig? route)
+    {
+        options = server.ReverseProxy;
+        resolution = default;
+        destination = null;
+        route = null;
         session.ResponseHeaderTransformPlan = null;
+        session.GrpcWebClientContentType = null;
         if (options?.Routes is null || options.Routes.Count == 0)
         {
+            BeginServerSpan(server, session);
             return RouteDispatchResult.NotRouted;
         }
 
@@ -58,8 +210,10 @@ internal static class ReverseProxySessionDispatch
         session.MatchedRoute = null;
         session.ClusterConnectionKey = null;
         session.ForwarderError = Abstractions.Diagnostics.ForwarderError.None;
-        session.Extras?.Activity?.Dispose();
+        // Reset releases a retry-budget slot a cancelled mid-replay request still holds, and disposes both spans.
+        session.Extras?.Reset();
         session.Extras = null;
+        BeginServerSpan(server, session);
 
         var request = session.HttpClient.Request;
         string? fallbackHost = null;
@@ -70,13 +224,30 @@ internal static class ReverseProxySessionDispatch
             fallbackPort = transparent.ForwardPort ?? (request.IsHttps ? 443 : 80);
         }
 
-        var resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
-            out var destination, out var route);
+        resolution = DestinationResolver.Resolve(options, request, fallbackHost, fallbackPort,
+            out destination, out route);
+        if (route is not null)
+        {
+            ProxyTracing.RecordRoute(session.Extras?.Activity, route.Id, route.ClusterId);
+        }
+
         if (route is not null && RoutePolicies.TryDeny(server, session, route))
         {
             return RouteDispatchResult.Handled;
         }
 
+        return null;
+    }
+
+    private static RouteDispatchResult Finish(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
+        DestinationResolution resolution,
+        DestinationConfig? destination,
+        RouteConfig? route)
+    {
+        var request = session.HttpClient.Request;
         if (resolution == DestinationResolution.Terminal && route is not null)
         {
             PrepareTerminalResponse(session, route);
@@ -109,7 +280,8 @@ internal static class ReverseProxySessionDispatch
         Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         Request request,
         DestinationConfig destination,
-        RouteConfig route)
+        RouteConfig route,
+        string? clusterOverride = null)
     {
         var port = destination.Port;
         if (port == 0)
@@ -138,7 +310,7 @@ internal static class ReverseProxySessionDispatch
             server.Mirror.TryEnqueue(mirror, request, FirstMirrorDestination(options, mirror.ClusterId), route.Id);
         }
 
-        var cluster = ApplyCluster(options, session, route, destination, request);
+        var cluster = ApplyCluster(options, session, route, destination, request, clusterOverride);
 
         var retry = route.Retry ?? cluster?.Retry;
         if (retry is { Attempts: > 0 })
@@ -146,6 +318,7 @@ internal static class ReverseProxySessionDispatch
             session.Extras ??= new RoutingFeatureState();
             session.Extras.Retry = retry;
             session.Extras.Remember(destination.Id);
+            ApplyPerTryTimeout(server, session, retry, cluster);
         }
 
         StreamDestinationDispatch.ApplyRouteLimits(route, session);
@@ -178,9 +351,10 @@ internal static class ReverseProxySessionDispatch
         SessionEventArgsBase session,
         RouteConfig route,
         DestinationConfig destination,
-        Request request)
+        Request request,
+        string? clusterOverride = null)
     {
-        var clusterId = SelectedClusterId(options, route, destination.Id);
+        var clusterId = clusterOverride ?? SelectedClusterId(options, route, destination.Id);
         var manager = options.ClusterManager;
         if (manager is null || !manager.Snapshot.Clusters.TryGetValue(clusterId, out var cluster))
         {
@@ -440,33 +614,248 @@ internal static class ReverseProxySessionDispatch
     }
 
     /// <summary>
-    /// Stages one status retry when the origin answered 502, 503, or 504 and nothing has been written
-    /// to the client. Off unless a retry policy is set. Connect failover is unchanged.
+    /// Stages one more replay onto another destination when the origin answered with a retryable status
+    /// (or a per-try deadline ran out) and nothing has been written to the client. Off unless a retry
+    /// policy is set. Stops after <see cref="RetryConfig.Attempts" /> replays. Connect failover is unchanged.
     /// </summary>
-    internal static bool TryStageGatewayRetry(ProxyServer server, SessionEventArgsBase session, int? status = null)
+    /// <param name="status">Status to judge. Defaults to the session's current response.</param>
+    /// <param name="originResponse">
+    /// The origin's answer when it has not been assigned to the session yet (HTTP/2 origins). Used for
+    /// <c>Retry-After</c>.
+    /// </param>
+    /// <param name="bufferedBodyReplayable">
+    /// True for HTTP/2 origins, which can send a body again. A body is replayed only when it was fully
+    /// buffered within <see cref="RetryConfig.MaxBufferedBodyBytes" />. HTTP/1 origins replay headers only.
+    /// </param>
+    /// <param name="timedOut">True when the per-try response-header deadline fired. Counts as a 504.</param>
+    internal static bool TryStageGatewayRetry(
+        ProxyServer server,
+        SessionEventArgsBase session,
+        int? status = null,
+        Response? originResponse = null,
+        bool bufferedBodyReplayable = false,
+        bool timedOut = false)
     {
         var extras = session.Extras;
         var retry = extras?.Retry;
-        if (retry is not { Attempts: > 0 } || extras!.StatusRetried || session.IsClientResponseCommitted)
+        if (retry is not { Attempts: > 0 } || extras!.StatusRetries >= retry.Attempts || session.IsClientResponseCommitted)
         {
             return false;
         }
 
-        var code = status ?? session.HttpClient.Response.StatusCode;
-        if (code is not (502 or 503 or 504))
+        if (timedOut)
+        {
+            if (!extras.PerTryTimeoutActive)
+            {
+                return false;
+            }
+        }
+        else if (!IsRetryableStatus(retry, status ?? session.HttpClient.Response.StatusCode))
         {
             return false;
         }
 
         var request = session.HttpClient.Request;
-        // Replay sends headers only. A body, even one already buffered, would be dropped.
-        if (request.HasBody)
+        if (request.ExpectContinue || request.UpgradeToWebSocket || session is SessionEventArgs { EnableWinAuth: true })
         {
             return false;
         }
 
-        extras.StatusRetried = true;
-        return TrySelectAlternate(server, session);
+        if (request.HasBody && !HasReplayableBufferedBody(request, retry, bufferedBodyReplayable))
+        {
+            return false;
+        }
+
+        // Method and attempt limits are checked before the budget so a request that could never be
+        // replayed does not count as a budget refusal.
+        if (!RetryAllowsMethod(extras, request))
+        {
+            return false;
+        }
+
+        if (retry.BudgetPercent > 0 && !TryHoldRetryBudget(server, session, extras, retry))
+        {
+            ProxyMetrics.RecordStatusRetryRefused("budget");
+            return false;
+        }
+
+        var index = extras.StatusRetries++;
+        if (!TrySelectAlternate(server, session))
+        {
+            extras.ReleaseRetryBudget();
+            return false;
+        }
+
+        extras.PendingRetryDelayMilliseconds = ComputeRetryDelayMilliseconds(
+            retry, index, timedOut ? null : originResponse ?? session.HttpClient.Response);
+        if (extras.StatusRetries >= retry.Attempts)
+        {
+            RestoreResponseHeaderTimeout(session, extras);
+        }
+
+        if (timedOut && session is SessionEventArgs timedArgs)
+        {
+            // The firing was handled by this retry. Left recorded, it would colour a later, unrelated cancel.
+            timedArgs.Deadlines.Reset();
+        }
+
+        ProxyMetrics.RecordStatusRetry(timedOut ? "timeout" : "status");
+        ProxyTracing.RecordRetry(session, index + 1, timedOut, status ?? session.HttpClient.Response.StatusCode);
+        return true;
+    }
+
+    /// <summary>Waits out the backoff chosen by <see cref="TryStageGatewayRetry" />. No cost when there is none.</summary>
+    internal static ValueTask WaitBeforeRetryAsync(
+        ProxyServer server, SessionEventArgsBase session, CancellationToken cancellationToken)
+    {
+        var extras = session.Extras;
+        var milliseconds = extras?.PendingRetryDelayMilliseconds ?? 0;
+        if (milliseconds <= 0)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        extras!.PendingRetryDelayMilliseconds = 0;
+        var time = (server.ReverseProxy?.ClusterManager as ClusterManager)?.Time ?? TimeProvider.System;
+        return new ValueTask(Task.Delay(TimeSpan.FromMilliseconds(milliseconds), time, cancellationToken));
+    }
+
+    /// <summary>Gives back the retry-budget slot once the replay has an answer or has failed.</summary>
+    internal static void EndGatewayRetry(SessionEventArgsBase session) => session.Extras?.ReleaseRetryBudget();
+
+    /// <summary>
+    /// Puts the per-try deadline on the session when the cluster has somewhere to retry. The last attempt
+    /// goes back to the route's own deadline in <see cref="TryStageGatewayRetry" />.
+    /// </summary>
+    private static void ApplyPerTryTimeout(
+        ProxyServer server, SessionEventArgsBase session, RetryConfig retry, ClusterConfig? cluster)
+    {
+        if (retry.PerTryTimeoutMilliseconds <= 0 || cluster is not { Destinations.Count: > 1 } ||
+            session is not SessionEventArgs args || args.Extras is not { } extras)
+        {
+            return;
+        }
+
+        var perTry = TimeSpan.FromMilliseconds(retry.PerTryTimeoutMilliseconds);
+        var existing = args.ResponseHeaderTimeout
+                       ?? (server.ResponseHeaderTimeoutSeconds > 0
+                           ? TimeSpan.FromSeconds(server.ResponseHeaderTimeoutSeconds)
+                           : null);
+        // A stricter deadline already in force wins, and its expiry is a plain timeout, not a try.
+        if (existing is { } current && current <= perTry)
+        {
+            return;
+        }
+
+        extras.ResponseHeaderTimeoutBeforePerTry = args.ResponseHeaderTimeout;
+        extras.PerTryTimeoutActive = true;
+        args.ResponseHeaderTimeout = perTry;
+    }
+
+    private static void RestoreResponseHeaderTimeout(SessionEventArgsBase session, RoutingFeatureState extras)
+    {
+        if (!extras.PerTryTimeoutActive)
+        {
+            return;
+        }
+
+        extras.PerTryTimeoutActive = false;
+        if (session is SessionEventArgs args)
+        {
+            args.ResponseHeaderTimeout = extras.ResponseHeaderTimeoutBeforePerTry;
+        }
+    }
+
+    private static bool IsRetryableStatus(RetryConfig retry, int code)
+    {
+        var codes = retry.StatusCodes;
+        if (codes is null)
+        {
+            return code is 502 or 503 or 504;
+        }
+
+        for (var i = 0; i < codes.Count; i++)
+        {
+            if (codes[i] == code)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasReplayableBufferedBody(Request request, RetryConfig retry, bool bufferedBodyReplayable)
+    {
+        // A streamed body has already been consumed from the client. Only a fully buffered one can go again.
+        return bufferedBodyReplayable
+               && request.IsBodyRead
+               && request.BodyAvailable
+               && request.Body.Length <= retry.MaxBufferedBodyBytes;
+    }
+
+    private static bool TryHoldRetryBudget(
+        ProxyServer server, SessionEventArgsBase session, RoutingFeatureState extras, RetryConfig retry)
+    {
+        var options = server.ReverseProxy;
+        if (options?.LoadBalancer is not LoadBalancer balancer || options.ClusterManager is not ClusterManager manager)
+        {
+            return true;
+        }
+
+        var snapshot = manager.Snapshot;
+        var owner = FindOwningCluster(snapshot, session.UpstreamDestinationId);
+        var runtime = owner is null ? null : ClusterRuntime.Find(snapshot, owner.Id);
+        if (owner is null || runtime is null)
+        {
+            return true;
+        }
+
+        long inFlight = 0;
+        for (var i = 0; i < owner.Destinations.Count; i++)
+        {
+            inFlight += balancer.Health.GetActiveRequests(owner.Destinations[i].Id);
+        }
+
+        var share = Math.Min(inFlight * retry.BudgetPercent / 100, int.MaxValue);
+        var limit = (int)Math.Max(retry.BudgetMinConcurrent, share);
+        return extras.TryHoldRetryBudget(runtime, limit);
+    }
+
+    /// <summary>
+    /// Backoff times two for each earlier replay, capped, plus jitter. A delta-seconds <c>Retry-After</c>
+    /// replaces it when the route asks to honor it, capped the same way.
+    /// </summary>
+    internal static int ComputeRetryDelayMilliseconds(RetryConfig retry, int retryIndex, Response? origin)
+    {
+        var cap = Math.Max(0, retry.MaxBackoffMilliseconds);
+        if (retry.HonorRetryAfter && origin is not null && TryReadRetryAfterSeconds(origin, out var seconds))
+        {
+            return (int)Math.Min(seconds * 1000L, cap);
+        }
+
+        if (retry.BackoffMilliseconds <= 0)
+        {
+            return 0;
+        }
+
+        var delay = Math.Min((long)retry.BackoffMilliseconds << Math.Min(retryIndex, 20), cap);
+        if (delay > 0 && retry.JitterPercent > 0)
+        {
+            delay += Random.Shared.NextInt64(0, delay * Math.Min(retry.JitterPercent, 100) / 100 + 1);
+        }
+
+        return (int)Math.Min(delay, int.MaxValue);
+    }
+
+    private static bool TryReadRetryAfterSeconds(Response response, out int seconds)
+    {
+        seconds = 0;
+        var value = response.Headers.GetHeaderValueOrNull("Retry-After");
+        // An HTTP-date is not honored. It would need the origin's clock to mean anything.
+        return value is not null &&
+               int.TryParse(value.AsSpan().Trim(), System.Globalization.NumberStyles.None,
+                   System.Globalization.CultureInfo.InvariantCulture, out seconds);
     }
 
     /// <summary>Picks another destination after a connect failure. False means do not retry.</summary>
@@ -652,6 +1041,13 @@ internal static class ReverseProxySessionDispatch
         }
 
         var reverse = server.ReverseProxy;
+
+        // A script may send any request to another cluster, so the origin socket cannot be pinned to ForwardHost.
+        if (reverse?.ScriptPipeline is not null)
+        {
+            return false;
+        }
+
         if (reverse?.Routes is not { Count: > 0 })
         {
             return true;
@@ -681,6 +1077,14 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ctx = new TransformRequestContext { Path = path };
+        if (HasKind(transforms, TransformKinds.RequestHeaderAppend))
+        {
+            // Append extends what the client sent (Gateway API Add semantics). Only wired when a transform
+            // needs it, so the common path pays no closure.
+            var clientHeaders = request.Headers;
+            ctx.ExistingRequestHeader = name => JoinHeaderValues(clientHeaders.GetHeaders(name));
+        }
+
         if (session.ClientConnection is Network.Tcp.TcpClientConnection { ClientCertificate: { } clientCert })
         {
             ctx.ClientCertificateSubject = clientCert.Subject;
@@ -724,10 +1128,46 @@ internal static class ReverseProxySessionDispatch
         if (ctx.ResponseHeadersToSet.Count > 0 || ctx.ResponseHeadersToRemove.Count > 0)
         {
             session.ResponseHeaderTransformPlan =
-                new TransformResponseHeaderPlan(ctx.ResponseHeadersToSet, ctx.ResponseHeadersToRemove);
+                new TransformResponseHeaderPlan(ctx.ResponseHeadersToSet, ctx.ResponseHeadersToRemove,
+                    ctx.ResponseHeadersToAppend);
         }
 
         return ctx.UseDestinationHost;
+    }
+
+    private static bool HasKind(IReadOnlyList<TransformConfig> transforms, string kind)
+    {
+        for (var i = 0; i < transforms.Count; i++)
+        {
+            if (string.Equals(transforms[i].Kind, kind, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>All lines of one header joined with <c>", "</c>; null when the header is absent.</summary>
+    internal static string? JoinHeaderValues(List<HttpHeader>? lines)
+    {
+        if (lines is null || lines.Count == 0)
+        {
+            return null;
+        }
+
+        if (lines.Count == 1)
+        {
+            return lines[0].Value;
+        }
+
+        var values = new string[lines.Count];
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = lines[i].Value;
+        }
+
+        return string.Join(", ", values);
     }
 
     /// <summary>Applies staged response header transforms when present.</summary>
@@ -751,6 +1191,11 @@ internal static class ReverseProxySessionDispatch
         {
             session.HttpClient.Response.Headers.AddHeader("Set-Cookie", cookie);
         }
+
+        if (session.Extras?.PolicySetCookie is { Length: > 0 } policyCookie && session.HttpClient.Response is not null)
+        {
+            session.HttpClient.Response.Headers.AddHeader("Set-Cookie", policyCookie);
+        }
     }
 
     internal static void ObserveRequestStart(ProxyServer server, SessionEventArgsBase session, RouteConfig route)
@@ -770,24 +1215,9 @@ internal static class ReverseProxySessionDispatch
             session.HttpClient.Request.Headers.SetOrAddHeaderValue(headerName, id);
         }
 
-        if (!server.TracingEnabled)
+        if (server.TracingEnabled)
         {
-            return;
-        }
-
-        var activity = ProxyMetrics.ActivitySource.StartActivity("twp.proxy.request", ActivityKind.Server);
-        if (activity is null)
-        {
-            return;
-        }
-
-        activity.SetTag("twp.route", route.Id);
-        activity.SetTag("twp.cluster", route.ClusterId);
-        session.Extras ??= new RoutingFeatureState();
-        session.Extras.Activity = activity;
-        if (server.PropagateTraceContext)
-        {
-            session.HttpClient.Request.Headers.SetOrAddHeaderValue("traceparent", activity.Id ?? string.Empty);
+            ProxyTracing.BeginUpstream(server, session, session.UpstreamDestinationId);
         }
     }
 
@@ -836,7 +1266,8 @@ internal static class ReverseProxySessionDispatch
         {
             // Cleared so a second finish cannot hand the same slot back twice.
             extras.HeldConnectionPolicy = null;
-            RoutePolicies.Release(held);
+            RoutePolicies.ReleaseHeld(extras.HeldConnectionRuntime, held);
+            extras.HeldConnectionRuntime = null;
         }
 
         if (started != 0)
@@ -845,8 +1276,10 @@ internal static class ReverseProxySessionDispatch
             ProxyMetrics.AddActiveRequest(-1);
         }
 
-        extras.Activity?.SetTag("http.response.status_code", session.HttpClient.Response.StatusCode);
-        extras.Activity?.Stop();
+        if (extras.Activity is not null)
+        {
+            ProxyTracing.Finish(extras, session.HttpClient.Response.StatusCode, error);
+        }
     }
 
     internal static ForwarderError Classify(SessionEventArgsBase session)
@@ -927,10 +1360,14 @@ internal static class ReverseProxySessionDispatch
 /// <summary>Stashed on the session so response transforms apply without an always-on middleware.</summary>
 internal sealed class TransformResponseHeaderPlan(
     Dictionary<string, string> set,
-    HashSet<string> remove)
+    HashSet<string> remove,
+    HashSet<string>? append = null)
 {
     public Dictionary<string, string> Set { get; } = set;
     public HashSet<string> Remove { get; } = remove;
+
+    /// <summary>Names in <see cref="Set" /> that extend the origin's values instead of replacing them.</summary>
+    public HashSet<string>? Append { get; } = append;
 
     public void Apply(HeaderCollection headers)
     {
@@ -941,7 +1378,34 @@ internal sealed class TransformResponseHeaderPlan(
 
         foreach (var pair in Set)
         {
+            if (Append is not null && Append.Contains(pair.Key))
+            {
+                ApplyAppend(headers, pair.Key, pair.Value);
+                continue;
+            }
+
             headers.SetOrAddHeaderValue(pair.Key, pair.Value);
         }
+    }
+
+    private static void ApplyAppend(HeaderCollection headers, string name, string value)
+    {
+        // Set-Cookie cannot be comma-folded (RFC 6265 §3); each cookie keeps its own line.
+        if (string.Equals(name, "Set-Cookie", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.AddHeader(name, value);
+            return;
+        }
+
+        var existing = ReverseProxySessionDispatch.JoinHeaderValues(headers.GetHeaders(name));
+        if (string.IsNullOrEmpty(existing))
+        {
+            headers.SetOrAddHeaderValue(name, value);
+            return;
+        }
+
+        // Replace every origin line with the merged value (also collapses duplicate lines).
+        headers.RemoveHeader(name);
+        headers.AddHeader(name, existing + ", " + value);
     }
 }

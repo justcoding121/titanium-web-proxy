@@ -251,7 +251,10 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.proxy.upstream.retries", "{retry}", "Upstream retry attempts.");
 
     private static readonly Counter<long> StatusRetries =
-        Meter.CreateCounter<long>("twp.proxy.status.retries", "{retry}", "Gateway status retries after 502, 503, or 504.");
+        Meter.CreateCounter<long>("twp.proxy.status.retries", "{retry}", "Gateway retries, by reason: status or timeout.");
+
+    private static readonly Counter<long> StatusRetriesRefused =
+        Meter.CreateCounter<long>("twp.proxy.status.retries_refused", "{retry}", "Gateway retries not attempted, by reason: budget.");
 
     private static readonly Counter<long> DestinationEjections =
         Meter.CreateCounter<long>("twp.proxy.destination.ejections", "{ejection}", "Destinations marked unhealthy.");
@@ -270,6 +273,213 @@ internal static class ProxyMetrics
 
     private static readonly Counter<long> MirrorSkipped =
         Meter.CreateCounter<long>("twp.proxy.mirror.skipped", RequestUnit, "Mirrored requests skipped because the body was missing, streaming, or over the cap.");
+
+    private static readonly Counter<long> ExtAuthRequests =
+        Meter.CreateCounter<long>("twp.extauth.requests", RequestUnit,
+            "External authorization decisions by result: allow, deny, error_open, error_closed, cache_hit, coalesced, and saturated_* or cooldown_* (open or closed) when the service was not called.");
+
+    public static void RecordExtAuth(string result)
+    {
+        if (ExtAuthRequests.Enabled)
+        {
+            ExtAuthRequests.Add(1, new KeyValuePair<string, object?>("result", result));
+        }
+    }
+
+    private static readonly Histogram<double> PluginDuration =
+        Meter.CreateHistogram<double>("twp.plugin.duration", "s",
+            "Time one per-route plugin call took, tagged by the plugin name from the configuration.");
+
+    private static readonly Counter<long> PluginErrors =
+        Meter.CreateCounter<long>("twp.plugin.errors", "{error}",
+            "Per-route plugin calls that failed, tagged by plugin name and kind: exception, timeout, or unloaded.");
+
+    /// <param name="plugin">The configured plugin name (a bounded set; never a request value).</param>
+    /// <param name="seconds">Wall time of the call.</param>
+    public static void RecordPluginCall(string plugin, double seconds)
+    {
+        if (PluginDuration.Enabled)
+        {
+            PluginDuration.Record(seconds, new KeyValuePair<string, object?>("plugin", plugin));
+        }
+    }
+
+    /// <param name="plugin">The configured plugin name.</param>
+    /// <param name="kind"><c>exception</c>, <c>timeout</c> or <c>unloaded</c>.</param>
+    public static void RecordPluginError(string plugin, string kind)
+    {
+        if (PluginErrors.Enabled)
+        {
+            PluginErrors.Add(1,
+                new KeyValuePair<string, object?>("plugin", plugin),
+                new KeyValuePair<string, object?>("kind", kind));
+        }
+    }
+
+    /// <summary>
+    ///     Running proxy servers, held weakly like <see cref="LiveCertificateManagers" />. <c>twp.lite.eligible</c> reads each one live,
+    ///     so a reload that adds or removes a lite blocker shows on the next collection.
+    /// </summary>
+    private static readonly ConditionalWeakTable<ProxyServer, object?> LiveProxyServers = new();
+
+    private static readonly ObservableGauge<int> LiteEligible = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
+        Meter.CreateObservableGauge("twp.lite.eligible", ObserveLiteEligible, "{state}",
+            "1 when H1 terminate-lite can serve requests on a running proxy that has a fixed ForwardHost listener, 0 when a " +
+            "configured feature (route plugins, extAuth/oidc, grpcWeb, connectionLimit, compression, session-only middleware) " +
+            "forces the slower full session path. One measurement per such server; reports nothing otherwise.");
+
+    private static IEnumerable<Measurement<int>> ObserveLiteEligible()
+    {
+        foreach (var pair in LiveProxyServers)
+        {
+            if (pair.Key.LiteEligibleValue() is { } value)
+            {
+                yield return new Measurement<int>(value);
+            }
+        }
+    }
+
+    /// <summary>Called once per <c>ProxyServer.Start()</c>.</summary>
+    internal static void RegisterProxyServer(ProxyServer server) =>
+        LiveProxyServers.AddOrUpdate(server, null);
+
+    private static readonly Counter<long> CacheRequests =
+        Meter.CreateCounter<long>("twp.cache.requests", RequestUnit,
+            "Response cache outcomes by result: hit, miss, stale, bypass, revalidated.");
+
+    /// <summary>
+    ///     Live response caches, held weakly like <see cref="LiveCertificateManagers" />, so the gauges below sum
+    ///     whatever is alive in this process without keeping a cache (and its bodies) reachable.
+    /// </summary>
+    private static readonly ConditionalWeakTable<Caching.MemoryHttpResponseCache, object?> LiveResponseCaches = new();
+
+    private static readonly ObservableGauge<long> CacheBytes = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
+        Meter.CreateObservableGauge("twp.cache.bytes", ObserveCacheBytes, "By",
+            "Bytes charged to the in-memory response cache (bodies, headers and keys), summed across live caches.");
+
+    private static readonly ObservableGauge<long> CacheEntries = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
+        Meter.CreateObservableGauge("twp.cache.entries", ObserveCacheEntries, "{entry}",
+            "Entries held by the in-memory response cache, summed across live caches.");
+
+    private static IEnumerable<Measurement<long>> ObserveCacheBytes()
+    {
+        long total = 0;
+        foreach (var pair in LiveResponseCaches)
+        {
+            total += pair.Key.Bytes;
+        }
+
+        yield return new Measurement<long>(total);
+    }
+
+    private static IEnumerable<Measurement<long>> ObserveCacheEntries()
+    {
+        long total = 0;
+        foreach (var pair in LiveResponseCaches)
+        {
+            total += pair.Key.Count;
+        }
+
+        yield return new Measurement<long>(total);
+    }
+
+    /// <summary>Called once by each <see cref="Caching.MemoryHttpResponseCache" /> constructor.</summary>
+    internal static void RegisterResponseCache(Caching.MemoryHttpResponseCache cache) =>
+        LiveResponseCaches.AddOrUpdate(cache, null);
+
+    /// <param name="result"><c>hit</c>, <c>miss</c>, <c>stale</c>, <c>bypass</c> or <c>revalidated</c>.</param>
+    public static void RecordCacheRequest(string result)
+    {
+        if (CacheRequests.Enabled)
+        {
+            CacheRequests.Add(1, new KeyValuePair<string, object?>("result", result));
+        }
+    }
+
+    private static readonly Counter<long> PassthroughConnections =
+        Meter.CreateCounter<long>("twp.passthrough.connections", "{connection}",
+            "Finished TCP passthrough connections by route (a configured server name pattern, default, or forward) and result.");
+
+    private static readonly Counter<long> PassthroughBytes =
+        Meter.CreateCounter<long>("twp.passthrough.bytes", "By",
+            "Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client).");
+
+    public static void RecordPassthrough(string route, string result, long bytesIn, long bytesOut)
+    {
+        if (PassthroughConnections.Enabled)
+        {
+            PassthroughConnections.Add(1,
+                new KeyValuePair<string, object?>("route", route),
+                new KeyValuePair<string, object?>("result", result));
+        }
+
+        if (PassthroughBytes.Enabled)
+        {
+            if (bytesIn > 0)
+            {
+                PassthroughBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+            }
+
+            if (bytesOut > 0)
+            {
+                PassthroughBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
+            }
+        }
+    }
+
+    private static readonly UpDownCounter<long> UdpSessionsActive =
+        Meter.CreateUpDownCounter<long>("twp.udp.sessions.active", "{session}",
+            "UDP relay sessions currently open (one per client endpoint), summed across UDP listeners.");
+
+    private static readonly Counter<long> UdpDatagrams =
+        Meter.CreateCounter<long>("twp.udp.datagrams", "{datagram}",
+            "Datagrams relayed by UDP listeners, by direction: in (client to upstream) or out (upstream to client).");
+
+    private static readonly Counter<long> UdpBytes =
+        Meter.CreateCounter<long>("twp.udp.bytes", "By",
+            "Payload bytes relayed by UDP listeners, by direction: in (client to upstream) or out (upstream to client).");
+
+    private static readonly Counter<long> UdpDropped =
+        Meter.CreateCounter<long>("twp.udp.dropped", "{datagram}",
+            "Datagrams a UDP listener did not relay, by reason: oversized, empty, malformed, rate_limited, session_cap, client_cap, draining, no_destination, resolve_failed, or upstream_error.");
+
+    public static void UdpSessionOpened()
+    {
+        if (UdpSessionsActive.Enabled)
+        {
+            UdpSessionsActive.Add(1);
+        }
+    }
+
+    public static void UdpSessionClosed()
+    {
+        if (UdpSessionsActive.Enabled)
+        {
+            UdpSessionsActive.Add(-1);
+        }
+    }
+
+    /// <param name="direction"><c>in</c> (client to upstream) or <c>out</c> (upstream to client).</param>
+    public static void UdpDatagramRelayed(string direction, int bytes)
+    {
+        if (UdpDatagrams.Enabled)
+        {
+            UdpDatagrams.Add(1, new KeyValuePair<string, object?>("direction", direction));
+        }
+
+        if (UdpBytes.Enabled)
+        {
+            UdpBytes.Add(bytes, new KeyValuePair<string, object?>("direction", direction));
+        }
+    }
+
+    public static void UdpDatagramDropped(string reason)
+    {
+        if (UdpDropped.Enabled)
+        {
+            UdpDropped.Add(1, new KeyValuePair<string, object?>("reason", reason));
+        }
+    }
 
     /// <summary>Live listener check. Do not cache the result.</summary>
     public static bool RequestInstrumentsEnabled =>
@@ -295,11 +505,21 @@ internal static class ProxyMetrics
         }
     }
 
-    public static void RecordStatusRetry()
+    /// <param name="reason"><c>status</c> for a retryable origin status, <c>timeout</c> for a per-try deadline.</param>
+    public static void RecordStatusRetry(string reason)
     {
         if (StatusRetries.Enabled)
         {
-            StatusRetries.Add(1);
+            StatusRetries.Add(1, new KeyValuePair<string, object?>("reason", reason));
+        }
+    }
+
+    /// <param name="reason"><c>budget</c> when the cluster's retry budget had no slot left.</param>
+    public static void RecordStatusRetryRefused(string reason)
+    {
+        if (StatusRetriesRefused.Enabled)
+        {
+            StatusRetriesRefused.Add(1, new KeyValuePair<string, object?>("reason", reason));
         }
     }
 

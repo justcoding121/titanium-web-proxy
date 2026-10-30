@@ -105,18 +105,13 @@ public sealed class CircuitBreakerController : IDisposable
         {
             _ejectedUntil.TryRemove(id, out _);
             _consecutiveFailures[id] = 0;
-            _manager.TrySetDestinationState(id, DestinationState.Unhealthy, DestinationState.Healthy);
+            Recover(id);
         }
 
         var status = e.HttpClient.Response.StatusCode;
         if (status is >= 500 and <= 599)
         {
-            var count = _consecutiveFailures.AddOrUpdate(id, 1, static (_, v) => v + 1);
-            if (count >= _threshold
-                && _manager.TrySetDestinationState(id, DestinationState.Healthy, DestinationState.Unhealthy))
-            {
-                _ejectedUntil[id] = _time.GetUtcNow().Add(_cooldown);
-            }
+            NoteServerError(id);
         }
         else if (status is >= 200 and < 500)
         {
@@ -202,18 +197,42 @@ public sealed class CircuitBreakerController : IDisposable
 
         if (statusCode is >= 500 and <= 599)
         {
-            var count = _consecutiveFailures.AddOrUpdate(destinationId, 1, static (_, v) => v + 1);
-            if (count >= _threshold
-                && _manager.TrySetDestinationState(destinationId, DestinationState.Healthy, DestinationState.Unhealthy))
-            {
-                _ejectedUntil[destinationId] = _time.GetUtcNow().Add(_cooldown);
-            }
+            NoteServerError(destinationId);
         }
         else
         {
             _consecutiveFailures[destinationId] = 0;
         }
     }
+
+    private void NoteServerError(string id)
+    {
+        var count = _consecutiveFailures.AddOrUpdate(id, 1, static (_, v) => v + 1);
+        if (count >= _threshold
+            && _manager!.TrySetDestinationState(id, DestinationState.Healthy, DestinationState.Unhealthy))
+        {
+            _ejectedUntil[id] = _time.GetUtcNow().Add(_cooldown);
+            Report(id, "ejection", $"{count} consecutive 5xx, cooldown {(int)_cooldown.TotalSeconds}s");
+        }
+    }
+
+    private void Recover(string id)
+    {
+        if (_manager!.TrySetDestinationState(id, DestinationState.Unhealthy, DestinationState.Healthy))
+        {
+            Report(id, "recovery", "cooldown elapsed");
+        }
+    }
+
+    private void Report(string id, string kind, string detail) =>
+        (_manager as IDestinationHealthEvents)?.ReportHealthEvent(new DestinationHealthEvent
+        {
+            Time = _time.GetUtcNow(),
+            DestinationId = id,
+            Kind = kind,
+            Source = "circuit-breaker",
+            Detail = detail,
+        });
 
     internal void RecoverExpiredForTests()
     {
@@ -227,7 +246,10 @@ public sealed class CircuitBreakerController : IDisposable
 
             _ejectedUntil.TryRemove(pair.Key, out _);
             _consecutiveFailures[pair.Key] = 0;
-            _manager?.TrySetDestinationState(pair.Key, DestinationState.Unhealthy, DestinationState.Healthy);
+            if (_manager is not null)
+            {
+                Recover(pair.Key);
+            }
         }
     }
 

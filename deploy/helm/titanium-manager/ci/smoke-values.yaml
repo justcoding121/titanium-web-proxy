@@ -1,0 +1,11 @@
+# Local / CI values: use a pre-loaded image tag and a small claim.
+image:
+  repository: titanium-manager
+  tag: ci
+  pullPolicy: Never
+persistence:
+  size: 100Mi
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi

@@ -29,6 +29,53 @@ public class TwpConfigLoaderTests
     }
 
     [TestMethod]
+    public void LoadYaml_ParsesClustersRoutesAndReadOnlyCollections()
+    {
+        var config = TwpConfigLoader.LoadYaml("""
+            schemaVersion: "7.1"
+            listeners:
+              - host: 0.0.0.0
+                port: 8080
+            clusters:
+              - id: web
+                destinations:
+                  - id: a
+                    address: backend.internal
+                    port: 80
+                  - id: b
+                    address: 10.0.0.2
+                    port: 8080
+                healthCheck:
+                  passive:
+                    failureStatusCodes: [502, 503]
+            routes:
+              - id: api
+                clusterId: web
+                match:
+                  path: /api
+                  hosts: [a.test, b.test]
+                  methods: [GET, POST]
+                  headers:
+                    X-A: "1"
+                transforms:
+                  - kind: PathSet
+                    parameters:
+                      path: /x
+            """);
+
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+        var cluster = config.Clusters.Single();
+        Assert.AreEqual(2, cluster.Destinations.Count);
+        Assert.AreEqual("backend.internal", cluster.Destinations[0].Address);
+        CollectionAssert.AreEqual(new[] { 502, 503 }, cluster.HealthCheck!.Passive!.FailureStatusCodes!.ToArray());
+        var route = config.Routes.Single();
+        CollectionAssert.AreEqual(new[] { "a.test", "b.test" }, route.Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(new[] { "GET", "POST" }, route.Match.Methods!.ToArray());
+        Assert.AreEqual("1", route.Match.Headers!["X-A"]);
+        Assert.AreEqual("/x", route.Transforms!.Single().Parameters!["path"]);
+    }
+
+    [TestMethod]
     public void SiteFileReader_ParsesUpstream()
     {
         var config = SiteFileReader.Parse("api.example.com /api => http://127.0.0.1:5000\n");
@@ -104,6 +151,39 @@ public class TwpConfigLoaderTests
         var route = JsonReverseProxyDocument.Parse(json).Routes[0];
         Assert.IsNotNull(route.Retry);
         Assert.AreEqual(1, route.Retry.Attempts);
+    }
+
+    [TestMethod]
+    public void JsonReverseProxyDocument_ParsesEveryRetryOption()
+    {
+        var json = """
+            {
+              "clusters": [{ "id": "backend", "destinations": [{ "address": "127.0.0.1" }] }],
+              "routes": [{ "clusterId": "backend", "retry": {
+                "attempts": 2, "statusCodes": [429, 503], "perTryTimeoutMilliseconds": 800,
+                "backoffMilliseconds": 50, "maxBackoffMilliseconds": 400, "jitterPercent": 10,
+                "honorRetryAfter": true, "budgetPercent": 20, "budgetMinConcurrent": 5 } }]
+            }
+            """;
+        var retry = JsonReverseProxyDocument.Parse(json).Routes[0].Retry!;
+        Assert.AreEqual(2, retry.Attempts);
+        CollectionAssert.AreEqual(new[] { 429, 503 }, retry.StatusCodes!.ToArray());
+        Assert.AreEqual(800, retry.PerTryTimeoutMilliseconds);
+        Assert.AreEqual(50, retry.BackoffMilliseconds);
+        Assert.AreEqual(400, retry.MaxBackoffMilliseconds);
+        Assert.AreEqual(10, retry.JitterPercent);
+        Assert.IsTrue(retry.HonorRetryAfter);
+        Assert.AreEqual(20, retry.BudgetPercent);
+        Assert.AreEqual(5, retry.BudgetMinConcurrent);
+
+        var defaults = JsonReverseProxyDocument.Parse(
+            """{ "clusters": [{ "id": "b", "destinations": [{ "address": "127.0.0.1" }] }], "routes": [{ "clusterId": "b", "retry": { "attempts": 1 } }] }""")
+            .Routes[0].Retry!;
+        Assert.IsNull(defaults.StatusCodes);
+        Assert.AreEqual(1000, defaults.MaxBackoffMilliseconds);
+        Assert.AreEqual(20, defaults.JitterPercent);
+        Assert.AreEqual(3, defaults.BudgetMinConcurrent);
+        Assert.AreEqual(0, defaults.BudgetPercent);
     }
 
     [TestMethod]

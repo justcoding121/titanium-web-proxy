@@ -1,0 +1,6 @@
+# expect: reject
+# reason: an empty request line
+# reject-type: FormatException
+\r\n
+Host: a\r\n
+\r\n

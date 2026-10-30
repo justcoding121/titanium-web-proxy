@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The Wasmtime native is not committed. Point this at a folder the bundle script filled
+         (tools/packaging/bundle-scripting-native.ps1 -PublishDir artifacts/scripting-natives/<rid>); tests that need it
+         are inconclusive when it is missing. -->
+    <ScriptingNativeDir Condition="'$(ScriptingNativeDir)' == ''">$(MSBuildThisFileDirectory)..\..\artifacts\scripting-natives\$(NETCoreSdkRuntimeIdentifier)\</ScriptingNativeDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- In-process Kestrel origin (HTTP/1.1 and h2c) for the callout tests. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Scripting\Titanium.Web.Proxy.Scripting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Wasm\Samples\**\*" CopyToOutputDirectory="PreserveNewest" />
+    <!-- proxy-wasm host-call fuzz corpus (tests/fuzz/README.md) and the loader the parser corpus already uses. -->
+    <None Include="..\fuzz\corpus\proxy-wasm-*\**\*" Link="fuzz\corpus\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Titanium.Web.Proxy.UnitTests\Fuzz\FuzzCorpus.cs" Link="Fuzz\FuzzCorpus.cs" />
+    <None Include="$(ScriptingNativeDir)*wasmtime*" Exclude="$(ScriptingNativeDir)*.txt" Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" Condition="Exists('$(ScriptingNativeDir)')" />
+  </ItemGroup>
+
+  <!-- Builds the Lua shim into ScriptingNativeDir (skipped when it is up to date) and copies it beside the tests. A host with no
+       C compiler fetches the pinned Zig toolchain on Windows; if the build still fails, Lua tests are inconclusive.
+       Set SkipLuaShimBuild=true to only copy an existing build. -->
+  <Target Name="BuildLuaShim" AfterTargets="Build">
+    <Exec Condition="'$(SkipLuaShimBuild)' != 'true'"
+          Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\tools\scripting\build-lua-shim.ps1&quot; -OutDir &quot;$(ScriptingNativeDir.TrimEnd('\').TrimEnd('/'))&quot; -FetchZig"
+          ContinueOnError="WarnAndContinue" IgnoreExitCode="false" StandardOutputImportance="low" />
+    <ItemGroup>
+      <_LuaShimNative Include="$(ScriptingNativeDir)lua54*.dll;$(ScriptingNativeDir)liblua54*.so;$(ScriptingNativeDir)liblua54*.dylib" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LuaShimNative)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

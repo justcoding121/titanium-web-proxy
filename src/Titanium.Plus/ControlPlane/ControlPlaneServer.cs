@@ -1,7 +1,8 @@
 using System.Net;
-using System.Text;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Titanium.Plus.Audit;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -10,6 +11,9 @@ namespace Titanium.Plus.ControlPlane;
 
 /// <summary>
 /// Loopback-default control plane with shared-secret header auth (GET/PUT snapshot, cache purge).
+/// A non-loopback host needs <see cref="ControlPlaneTlsOptions"/> unless <c>allowInsecureNonLoopback</c> is set.
+/// Every login failure and mutation lands in <see cref="ControlPlaneSecurity.Audit"/>; repeated failures from one
+/// remote are answered 429 (<see cref="ControlPlaneSecurity.Throttle"/>).
 /// </summary>
 public sealed class ControlPlaneServer : IDisposable
 {
@@ -33,8 +37,9 @@ public sealed class ControlPlaneServer : IDisposable
     private readonly string _host;
     private readonly int _port;
     private readonly string _sharedSecret;
-    private HttpListener? _listener;
-    private CancellationTokenSource? _cts;
+    private readonly ControlPlaneTlsOptions? _tls;
+    private readonly bool _allowInsecureNonLoopback;
+    private ControlHttpServer? _server;
 
     public ControlPlaneServer(IClusterManager? clusters, string host, int port, string sharedSecret)
         : this(clusters, host, port, sharedSecret, routes: null, refresh: null, responseCache: null)
@@ -48,7 +53,10 @@ public sealed class ControlPlaneServer : IDisposable
         string sharedSecret,
         IList<RouteConfig>? routes,
         Action? refresh = null,
-        IHttpResponseCache? responseCache = null)
+        IHttpResponseCache? responseCache = null,
+        ControlPlaneSecurity? security = null,
+        ControlPlaneTlsOptions? tls = null,
+        bool allowInsecureNonLoopback = false)
     {
         _clusters = clusters;
         _host = host;
@@ -57,20 +65,44 @@ public sealed class ControlPlaneServer : IDisposable
         _routes = routes;
         _refresh = refresh;
         _responseCache = responseCache;
+        _tls = tls;
+        _allowInsecureNonLoopback = allowInsecureNonLoopback;
+        Security = security ?? new ControlPlaneSecurity();
     }
 
     public string Host => _host;
-    public int Port => _port;
+    public int Port => _server?.Port ?? _port;
     public string SharedSecret => _sharedSecret;
 
-    // Loopback-oriented control plane over HttpListener; TLS is not used by design (shared-secret auth).
+    /// <summary>Audit trail and failed-login throttle, shared with the dashboard.</summary>
+    public ControlPlaneSecurity Security { get; }
+
+    /// <summary>True when the listener serves HTTPS.</summary>
+    public bool IsTls => _tls is not null;
+
+    // Loopback by default; plain HTTP is allowed off loopback only with controlPlane.allowInsecureNonLoopback.
 #pragma warning disable S5332
-    public string Prefix => $"http://{_host}:{_port}/";
+    public string Prefix => $"{(IsTls ? "https" : "http")}://{FormatHost(_host)}:{Port}/";
 #pragma warning restore S5332
+
+    /// <summary>The loaded TLS certificate (null for plain HTTP); the dashboard serves the same one.</summary>
+    internal X509Certificate2? Certificate { get; private set; }
+
+    public static bool IsLoopbackHost(string? host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return true;
+        }
+
+        var trimmed = host.Trim().Trim('[', ']');
+        return trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+               (IPAddress.TryParse(trimmed, out var address) && IPAddress.IsLoopback(address));
+    }
 
     public static void ValidateSecret(string host, string sharedSecret, bool allowInsecureDevSecret = false)
     {
-        var isLoopback = host is "127.0.0.1" or "localhost" or "::1";
+        var isLoopback = IsLoopbackHost(host);
         if ((string.IsNullOrWhiteSpace(sharedSecret) ||
              sharedSecret.Equals("changeme", StringComparison.OrdinalIgnoreCase)) &&
             !(isLoopback && allowInsecureDevSecret))
@@ -81,106 +113,96 @@ public sealed class ControlPlaneServer : IDisposable
         }
     }
 
+    /// <summary>
+    /// A control plane reachable from the network must be encrypted: it carries the shared secret and can rewrite
+    /// routing. Loopback is exempt, and <paramref name="allowInsecureNonLoopback"/> is the explicit opt-out.
+    /// </summary>
+    public static void ValidateTransport(string host, ControlPlaneTlsOptions? tls, bool allowInsecureNonLoopback = false)
+    {
+        if (tls is null && !allowInsecureNonLoopback && !IsLoopbackHost(host))
+        {
+            throw new InvalidOperationException(
+                $"Plus control plane host '{host}' is not loopback. Set controlPlane.tls (certificatePath and keyPath), " +
+                "or controlPlane.allowInsecureNonLoopback: true when the network already protects the port.");
+        }
+    }
+
     public void Start()
     {
-        _cts = new CancellationTokenSource();
-        _listener = new HttpListener();
-        _listener.Prefixes.Add(Prefix);
-        _listener.Start();
-        _ = Task.Run(() => AcceptLoopAsync(_cts.Token), _cts.Token);
+        ValidateTransport(_host, _tls, _allowInsecureNonLoopback);
+        var certificate = _tls?.LoadCertificate();
+        var server = new ControlHttpServer(ControlHttpServer.ResolveBindAddress(_host), _port, certificate, HandleAsync);
+        try
+        {
+            server.Start();
+        }
+        catch
+        {
+            server.Dispose();
+            certificate?.Dispose();
+            throw;
+        }
+
+        _server = server;
+        Certificate = certificate;
     }
 
     public void Dispose()
     {
-        try
+        _server?.Dispose();
+        _server = null;
+        Certificate?.Dispose();
+        Certificate = null;
+        if (Security.OwnsAudit)
         {
-            _cts?.Cancel();
+            Security.Audit.Dispose();
         }
-        catch (ObjectDisposedException)
-        {
-            // already disposed
-        }
-
-        _listener?.Stop();
-        _listener?.Close();
-        _cts?.Dispose();
-        _cts = null;
     }
 
-    private async Task AcceptLoopAsync(CancellationToken cancellationToken)
+    private static string FormatHost(string host) =>
+        host.Contains(':', StringComparison.Ordinal) && !host.StartsWith('[') ? $"[{host}]" : host;
+
+    private async Task<ControlHttpResponse> HandleAsync(ControlHttpRequest request, CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested && _listener is { IsListening: true })
+        var denied = Security.Authenticate(request, ControlPlaneSecurity.ControlSurface, _sharedSecret, out var actor);
+        if (denied is not null)
         {
-            HttpListenerContext ctx;
-            try
-            {
-                ctx = await _listener.GetContextAsync().WaitAsync(cancellationToken);
-            }
-            catch (Exception) when (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch
-            {
-                continue;
-            }
-
-            _ = Task.Run(() => HandleAsync(ctx, cancellationToken), cancellationToken);
+            return denied;
         }
+
+        var path = request.Path.TrimEnd('/');
+        var method = request.Method;
+        var remote = request.RemoteAddress?.ToString();
+        if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase) &&
+            method.Equals("GET", StringComparison.OrdinalIgnoreCase))
+        {
+            return HandleGetSnapshot();
+        }
+
+        if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase) &&
+            method.Equals("PUT", StringComparison.OrdinalIgnoreCase))
+        {
+            var (response, result) = await HandlePutSnapshotAsync(request.BodyText(), cancellationToken).ConfigureAwait(false);
+            Security.Audit.Record(actor, remote, AuditActions.SnapshotPut, "/v1/snapshot", result);
+            return response;
+        }
+
+        if (path.Equals("/v1/cache/purge", StringComparison.OrdinalIgnoreCase) &&
+            method.Equals("POST", StringComparison.OrdinalIgnoreCase))
+        {
+            var prefix = request.QueryValue("prefix");
+            var (response, result) = HandleCachePurge(prefix);
+            Security.Audit.Record(actor, remote, AuditActions.CachePurge, string.IsNullOrEmpty(prefix) ? "*" : prefix, result);
+            return response;
+        }
+
+        return ControlHttpResponse.Text(404, "text/plain; charset=utf-8", "not found");
     }
 
-    private async Task HandleAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
-    {
-        try
-        {
-            if (!Authorize(ctx.Request))
-            {
-                ctx.Response.StatusCode = 401;
-                await WriteAsync(ctx.Response, "unauthorized", cancellationToken);
-                return;
-            }
+    private static ControlHttpResponse Json(int status, string json) =>
+        ControlHttpResponse.Text(status, "application/json", json);
 
-            var path = ctx.Request.Url?.AbsolutePath.TrimEnd('/') ?? "";
-            var method = ctx.Request.HttpMethod;
-            if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase) &&
-                method.Equals("GET", StringComparison.OrdinalIgnoreCase))
-            {
-                await HandleGetSnapshotAsync(ctx, cancellationToken);
-                return;
-            }
-
-            if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase) &&
-                method.Equals("PUT", StringComparison.OrdinalIgnoreCase))
-            {
-                await HandlePutSnapshotAsync(ctx, cancellationToken);
-                return;
-            }
-
-            if (path.Equals("/v1/cache/purge", StringComparison.OrdinalIgnoreCase) &&
-                method.Equals("POST", StringComparison.OrdinalIgnoreCase))
-            {
-                await HandleCachePurgeAsync(ctx, cancellationToken);
-                return;
-            }
-
-            ctx.Response.StatusCode = 404;
-            await WriteAsync(ctx.Response, "not found", cancellationToken);
-        }
-        catch
-        {
-            try
-            {
-                ctx.Response.StatusCode = 500;
-                ctx.Response.Close();
-            }
-            catch
-            {
-                // ignore
-            }
-        }
-    }
-
-    private async Task HandleGetSnapshotAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
+    private ControlHttpResponse HandleGetSnapshot()
     {
         var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
         var json = JsonSerializer.Serialize(new
@@ -204,42 +226,35 @@ public sealed class ControlPlaneServer : IDisposable
             routes = _routes,
             destinationStates = snap.DestinationStates,
         }, JsonOptions);
-        ctx.Response.ContentType = "application/json";
-        await WriteAsync(ctx.Response, json, cancellationToken);
+        return Json(200, json);
     }
 
-    private async Task HandlePutSnapshotAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
+    private async Task<(ControlHttpResponse Response, string Result)> HandlePutSnapshotAsync(
+        string body,
+        CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(ctx.Request.InputStream, ctx.Request.ContentEncoding);
-        var body = await reader.ReadToEndAsync(cancellationToken);
         try
         {
             if (!TryParseSnapshotBody(body, out var clusters, out var routes, out var error))
             {
-                ctx.Response.StatusCode = 400;
-                await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error }, JsonOptions), cancellationToken);
-                return;
+                return (Json(400, JsonSerializer.Serialize(new { error }, JsonOptions)), AuditResults.Rejected);
             }
 
             if (clusters is not null)
             {
                 if (_clusters is null)
                 {
-                    ctx.Response.StatusCode = 503;
-                    await WriteAsync(ctx.Response, "{\"error\":\"no cluster manager\"}", cancellationToken);
-                    return;
+                    return (Json(503, "{\"error\":\"no cluster manager\"}"), AuditResults.Unavailable);
                 }
 
-                await _clusters.ApplyAsync(clusters, cancellationToken);
+                await _clusters.ApplyAsync(clusters, cancellationToken).ConfigureAwait(false);
             }
 
             if (routes is not null)
             {
                 if (_routes is null)
                 {
-                    ctx.Response.StatusCode = 503;
-                    await WriteAsync(ctx.Response, "{\"error\":\"no routes list\"}", cancellationToken);
-                    return;
+                    return (Json(503, "{\"error\":\"no routes list\"}"), AuditResults.Unavailable);
                 }
 
                 _routes.Clear();
@@ -250,36 +265,29 @@ public sealed class ControlPlaneServer : IDisposable
             }
 
             _refresh?.Invoke();
-            ctx.Response.StatusCode = 200;
-            await WriteAsync(ctx.Response, JsonSerializer.Serialize(new
+            return (Json(200, JsonSerializer.Serialize(new
             {
                 status = "applied",
                 clusters = clusters?.Count,
                 routes = routes?.Count,
-            }, JsonOptions), cancellationToken);
+            }, JsonOptions)), AuditResults.Ok);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ctx.Response.StatusCode = 400;
-            await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions), cancellationToken);
+            return (Json(400, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions)), AuditResults.Error);
         }
     }
 
-    private async Task HandleCachePurgeAsync(HttpListenerContext ctx, CancellationToken cancellationToken)
+    private (ControlHttpResponse Response, string Result) HandleCachePurge(string? prefix)
     {
         if (_responseCache is null)
         {
-            ctx.Response.StatusCode = 503;
-            await WriteAsync(ctx.Response, "{\"error\":\"no response cache\"}", cancellationToken);
-            return;
+            return (Json(503, "{\"error\":\"no response cache\"}"), AuditResults.Unavailable);
         }
 
-        var prefix = ctx.Request.QueryString["prefix"];
         var removed = _responseCache.Purge(string.IsNullOrEmpty(prefix) ? null : prefix);
-        ctx.Response.StatusCode = 200;
-        await WriteAsync(ctx.Response, JsonSerializer.Serialize(new { status = "purged", removed }, JsonOptions), cancellationToken);
+        return (Json(200, JsonSerializer.Serialize(new { status = "purged", removed }, JsonOptions)), AuditResults.Ok);
     }
-
     /// <summary>
     /// Accepts <c>{ "clusters": [...], "routes": [...] }</c>, routes-only, clusters-only,
     /// or a bare cluster array (backward compatible).
@@ -335,20 +343,6 @@ public sealed class ControlPlaneServer : IDisposable
         return true;
     }
 
-    private bool Authorize(HttpListenerRequest request)
-    {
-        var header = request.Headers[SharedSecretHeader];
-        return !string.IsNullOrEmpty(header) &&
-               string.Equals(header, _sharedSecret, StringComparison.Ordinal);
-    }
-
-    private static async Task WriteAsync(HttpListenerResponse response, string text, CancellationToken cancellationToken)
-    {
-        var bytes = Encoding.UTF8.GetBytes(text);
-        response.ContentLength64 = bytes.Length;
-        await response.OutputStream.WriteAsync(bytes, cancellationToken);
-        response.Close();
-    }
 }
 
 /// <summary>Maps leasttime / least_time / leastTime to <see cref="LoadBalanceAlgorithm.LeastTime"/>.</summary>

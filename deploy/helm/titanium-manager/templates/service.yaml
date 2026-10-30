@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "titanium-manager.fullname" . }}
+  labels:
+    {{- include "titanium-manager.labels" . | nindent 4 }}
+    app.kubernetes.io/component: manager
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- with .Values.service.extra }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ int .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "titanium-manager.selectorLabels" . | nindent 4 }}

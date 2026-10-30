@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: replacement characters never match a name
+request.\xff\xfe\x80

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -188,6 +189,77 @@ public class HeaderParserTests
         var headers = new HeaderCollection();
         Assert.IsTrue(await HeaderParser.TryReadHeadersAsync(ok, headers, CancellationToken.None, raised));
         Assert.AreEqual("example", headers.GetFirstHeader(KnownHeaders.Host)!.Value);
+    }
+
+    [DataTestMethod]
+    [DataRow(": 1")]
+    [DataRow(" \t: 1")]
+    [DataRow("X A: 1")]
+    [DataRow("X-\u0001A: 1")]
+    [DataRow("X-A\u007f: 1")]
+    [DataRow("X-A: a\rb")]
+    [DataRow("X-A: a\0b")]
+    public async Task ReadHeaders_char_path_rejects_unsafe_field_lines(string line)
+    {
+        await Assert.ThrowsExactlyAsync<FormatException>(() =>
+            HeaderParser.ReadHeaders(new ScriptedLineReader(dataAvailable: true, line, ""),
+                new HeaderCollection(), CancellationToken.None).AsTask());
+    }
+
+    [DataTestMethod]
+    [DataRow(": 1")]
+    [DataRow(" \t: 1")]
+    [DataRow("X A: 1")]
+    [DataRow("X-\u0001A: 1")]
+    [DataRow("X-A\u007f: 1")]
+    [DataRow("X-A: a\rb")]
+    [DataRow("X-A: a\0b")]
+    public async Task TryReadHeadersAsync_byte_path_rejects_unsafe_field_lines(string line)
+    {
+        using var stream = CreateHttpStream(Encoding.Latin1.GetBytes(line + "\n\r\n"));
+        Assert.IsTrue(await stream.FillBufferAsync(CancellationToken.None));
+
+        await Assert.ThrowsExactlyAsync<FormatException>(() =>
+            HeaderParser.TryReadHeadersAsync(stream, new HeaderCollection(), CancellationToken.None).AsTask());
+    }
+
+    [TestMethod]
+    public async Task Field_lines_with_colon_in_value_and_padded_values_still_parse_on_both_paths()
+    {
+        var chars = new HeaderCollection();
+        await HeaderParser.ReadHeaders(
+            new ScriptedLineReader(dataAvailable: true, "X-A:  a:b \t", "X-B:", ""),
+            chars, CancellationToken.None);
+        Assert.AreEqual("a:b", chars.GetFirstHeader("X-A")!.Value);
+        Assert.AreEqual("", chars.GetFirstHeader("X-B")!.Value);
+
+        using var stream = CreateHttpStream(Encoding.ASCII.GetBytes("X-A:  a:b \t\r\nX-B:\r\n\r\n"));
+        Assert.IsTrue(await stream.FillBufferAsync(CancellationToken.None));
+        var bytes = new HeaderCollection();
+        Assert.IsTrue(await HeaderParser.TryReadHeadersAsync(stream, bytes, CancellationToken.None));
+        Assert.AreEqual("a:b", bytes.GetFirstHeader("X-A")!.Value);
+        Assert.AreEqual("", bytes.GetFirstHeader("X-B")!.Value);
+    }
+
+    [TestMethod]
+    public async Task Whitespace_before_colon_is_normalized_not_forwarded_padded_on_both_paths()
+    {
+        // Pinned by tests/fuzz/corpus/http1-request/space-before-colon-*.case: stripped, never kept in the name.
+        var chars = new HeaderCollection();
+        await HeaderParser.ReadHeaders(
+            new ScriptedLineReader(dataAvailable: true, "Host : a", "Content-Length\t: 5", "X-A \t: 1", ""),
+            chars, CancellationToken.None);
+        Assert.AreEqual("a", chars.GetFirstHeader(KnownHeaders.Host)!.Value);
+        Assert.AreEqual("5", chars.GetFirstHeader(KnownHeaders.ContentLength)!.Value);
+        Assert.AreEqual("X-A", chars.GetAllHeaders().Single(h => h.Value == "1").Name);
+
+        using var stream = CreateHttpStream(Encoding.ASCII.GetBytes("Host : a\r\nContent-Length\t: 5\r\nX-A \t: 1\r\n\r\n"));
+        Assert.IsTrue(await stream.FillBufferAsync(CancellationToken.None));
+        var bytes = new HeaderCollection();
+        Assert.IsTrue(await HeaderParser.TryReadHeadersAsync(stream, bytes, CancellationToken.None));
+        Assert.AreEqual("a", bytes.GetFirstHeader(KnownHeaders.Host)!.Value);
+        Assert.AreEqual("5", bytes.GetFirstHeader(KnownHeaders.ContentLength)!.Value);
+        Assert.AreEqual("X-A", bytes.GetAllHeaders().Single(h => h.Value == "1").Name);
     }
 
     private static HttpStream CreateHttpStream(byte[] payload) =>

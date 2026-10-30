@@ -90,8 +90,8 @@ jobs:
         /o:"justcoding121"
         /d:sonar.token="$env:SONAR_TOKEN"
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
-        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginBridge.Quic.cs,**/Http3/Http3OriginBridge.Http2.cs,**/Http3/Http3OriginBridge.Tcp.cs,**/Http3/Http3OriginClientSession.cs,**/Http3/Http3RequestStream.cs,**/Http2/Http2Helper.Copy.cs,**/Http2/Http2Helper.Copy.Headers.cs,**/Handlers/Http11ToHttp2BridgeHandler.cs,**/Handlers/Http2ToHttp11BridgeHandler.cs,**/Handlers/H1TerminateFastForward.cs,**/Titanium.Plus/Dashboard/**,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Plus/Discovery/**,**/Titanium.Plus/Security/**,**/Titanium.Plus/State/**,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs"
+        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/WasmModule.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmWasi.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmHostFunction.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmImports.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmRuntime.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmVm.cs"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/Http3/Http3OriginBridge.cs,**/Http3/Http3OriginBridge.Quic.cs,**/Http3/Http3OriginBridge.Http2.cs,**/Http3/Http3OriginBridge.Tcp.cs,**/Http3/Http3OriginClientSession.cs,**/Http3/Http3RequestStream.cs,**/Http2/Http2Helper.Copy.cs,**/Http2/Http2Helper.Copy.Headers.cs,**/Handlers/Http11ToHttp2BridgeHandler.cs,**/Handlers/Http2ToHttp11BridgeHandler.cs,**/Handlers/H1TerminateFastForward.cs,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Cli/Scripting/ScriptingDepsCommand.cs,**/Titanium.Plus/Discovery/**,**/Titanium.Plus/Security/**,**/Titanium.Plus/State/**,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/**,**/Titanium.Manager/Program.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
@@ -107,6 +107,12 @@ jobs:
         dotnet test tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/configuration
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/plus
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/manager
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/scripting
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/gateway
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/inspector
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -199,6 +205,41 @@ jobs:
           Start-Sleep -Seconds (2 * $attempt)
         }
         throw "Failed to publish documentation after retries"
+
+  # Fleet Redis rate-limit store (Linux only: Actions service containers are not available on Windows).
+  redis-fleet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TITANIUM_TEST_REDIS: 127.0.0.1:6379
+      TITANIUM_REQUIRE_REDIS: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Restore and build
+      run: |
+        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+        dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
+    - name: Redis fleet rate-limit tests
+      run: |
+        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Redis"
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~FleetRateLimitChaos"
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
   # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).

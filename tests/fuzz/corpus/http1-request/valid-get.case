@@ -1,0 +1,6 @@
+# expect: accept
+# reason: sanity seed - a well formed request is accepted
+GET /index.html HTTP/1.1\r\n
+Host: example.com\r\n
+Accept: */*\r\n
+\r\n

@@ -25,6 +25,9 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 - [Screenshots](#user-content-screenshots)
 - [Performance](Performance) — measured throughput vs peers
 - [Security considerations](Security-Considerations)
+- [Metrics](Metrics) — Prometheus exposition of the core meter
+- [Kubernetes](Kubernetes) — container image, Helm chart, probes, and ConfigMap reload
+- [Gateway API](Gateway-API) — `titanium-gateway` controller for Gateway, HTTPRoute, and ReferenceGrant
 - [Limits and escape hatches](Limits-and-Escape-Hatches)
 - [Why did my request fail](Troubleshooting)
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#user-content-protocol-bridges))

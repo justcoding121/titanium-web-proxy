@@ -13,8 +13,33 @@
     <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
   </ItemGroup>
   
+  <!-- The CLI is unsigned and this project is strong-named, so the self-contained exposition sources are linked in
+       to drive the real internal ProxyMetrics.RecordRequest through them. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\Titanium.Cli\Admin\MetricsListener.cs" Link="Admin\MetricsListener.cs" />
+    <Compile Include="..\..\src\Titanium.Cli\Admin\MetricsExposition.cs" Link="Admin\MetricsExposition.cs" />
+    <Compile Include="..\..\src\Titanium.Cli\Admin\PrometheusTextWriter.cs" Link="Admin\PrometheusTextWriter.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Caching\rfc9111-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Adversarial parser corpus shared with external fuzzers (tests/fuzz/README.md). -->
+    <None Include="..\fuzz\corpus\**\*" Link="fuzz\corpus\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
+    <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
+  </ItemGroup>
+
+  <!-- Plugin assemblies the tests load into their own contexts. They are unsigned, so they are built and copied beside the
+       tests but never referenced at compile time. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Titanium.Web.Proxy.TestPlugins\Titanium.Web.Proxy.TestPlugins.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\..\examples\Titanium.Web.Proxy.Examples.RoutePlugin\Titanium.Web.Proxy.Examples.RoutePlugin.csproj"
+                      ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

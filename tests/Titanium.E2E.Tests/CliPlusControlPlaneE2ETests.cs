@@ -223,7 +223,7 @@ public class CliPlusControlPlaneE2ETests
             // Dashboard without secret → 401
             Assert.AreEqual(
                 HttpStatusCode.Unauthorized,
-                (await http.GetAsync($"http://127.0.0.1:{dashboard}/")).StatusCode);
+                (await http.GetAsync($"http://127.0.0.1:{dashboard}/api/snapshot")).StatusCode);
         }
         finally
         {
@@ -284,7 +284,7 @@ public class CliPlusControlPlaneE2ETests
             origin.Port,
             control,
             secret,
-            new Dictionary<string, string> { ["cache.enable"] = "true" },
+            new Dictionary<string, string> { ["cache.enable"] = "true", ["cache.exposeHeaders"] = "true" },
             useRoutes: true);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);

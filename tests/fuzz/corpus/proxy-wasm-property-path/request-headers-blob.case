@@ -1,0 +1,3 @@
+# expect: any
+# reason: serialized map attribute
+request.headers

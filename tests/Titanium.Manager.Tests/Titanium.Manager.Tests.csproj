@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Titanium.Manager\Titanium.Manager.csproj" />
+    <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Manager revision YAML + agent ack fuzz corpus (tests/fuzz/README.md). -->
+    <None Include="..\fuzz\corpus\manager-revision-yaml\**\*" Link="fuzz\corpus\manager-revision-yaml\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\fuzz\corpus\manager-agent-ack\**\*" Link="fuzz\corpus\manager-agent-ack\%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\Titanium.Web.Proxy.UnitTests\Fuzz\FuzzCorpus.cs" Link="Fuzz\FuzzCorpus.cs" />
+  </ItemGroup>
+</Project>

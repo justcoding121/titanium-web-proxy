@@ -1,0 +1,7 @@
+# expect: reject
+# reason: obsolete line folding (RFC 9112 5.2) must not be unfolded
+# reject-type: FormatException
+GET / HTTP/1.1\r\n
+Host: a\r\n
+ X-Folded: b\r\n
+\r\n

@@ -1,0 +1,3 @@
+# expect: parsed:1
+# reason: a UTF-8 encoded surrogate half (ED A0 80) in a value
+01 00 00 00 01 00 00 00 03 00 00 00 61 00 ed a0 80 00

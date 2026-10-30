@@ -1,0 +1,7 @@
+# expect: incomplete
+# reason: EOF in the middle of a chunk must never be forwarded as a complete message
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+a\r\nabc

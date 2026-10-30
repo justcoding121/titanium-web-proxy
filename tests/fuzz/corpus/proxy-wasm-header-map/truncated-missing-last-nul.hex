@@ -1,0 +1,3 @@
+# expect: malformed
+# reason: the value NUL terminator is missing
+01 00 00 00 01 00 00 00 01 00 00 00 61 00 62

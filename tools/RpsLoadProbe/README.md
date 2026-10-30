@@ -10,6 +10,8 @@ Manual CI: [RPS saturation](../../.github/workflows/rps-saturation.yml) (`workfl
 
 **macOS lab deps (workflow):** Homebrew nginx with `http_v3_module` (fail if missing), Homebrew `haproxy` with `USE_QUIC` (fail if missing; 3.2 osx source fallback), Homebrew `envoy` when a bottle exists otherwise pinned darwin-arm64 1.36.7, Homebrew `libmsquic` + `openssl@3` on `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` (assert `QuicListener.IsSupported`), bombardier darwin-arm64, and YARP via the same .NET probe arms as Linux/Windows.
 
+**Soak:** [soak.yml](../../.github/workflows/soak.yml) runs `twp-cli-reverse-http1` for 60 minutes at c=64 and gates on errors, RSS growth and fd growth (assertions are in the workflow header). A window longer than the default 25-minute per-arm budget needs `-ArmTimeoutMin` on `run-rps.ps1` (`--arm-timeout-min` on the probe).
+
 ## Tiered cadence
 
 | Tier | Mode | When |
@@ -204,7 +206,7 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-plus-base-http1` | Plus ALC + control plane (no options) |
 | `twp-cli-plus-cache-http1` | Plus + `cache.enable` (cold) |
 | `twp-cli-intercept-http1` | Route `RequestHeaderSet` transform → session path |
-| `twp-cli-plus-waf-http1` | WAF denyPaths that do not match `/` |
+| `twp-cli-plus-waf-http1` | WAF defaults (detect-mode screening on the session path) plus denyPaths that do not match `/` |
 | `twp-cli-plus-cidr-http1` | `security.allowCidrs=127.0.0.0/8` |
 | `twp-cli-plus-jwt-http1` | RS256 JWT + JWKS mini-server; Bearer on every request |
 | `twp-cli-plus-ratelimit-http1` | `state.mode=memory` + very high rate limit |
@@ -218,6 +220,12 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-static-http1` | `staticFiles.root` tiny file |
 | `twp-cli-logging-http1` | Logging enabled + Info file sink |
 | `twp-cli-lb-leasttime-http1` | LeastTime across two healthy origins |
+| `twp-cli-script-lua-noop-http1` | Route middleware: Lua plugin that does nothing (needs the `lua54` native) |
+| `twp-cli-script-lua-header-http1` | Route middleware: Lua plugin that sets one request header |
+| `twp-cli-script-wasm-noop-http1` | Route middleware: proxy-wasm module that continues (needs the `wasmtime` native) |
+| `twp-cli-slow-upstream-http1` | Route to a 20 ms origin, no script (baseline for the next arm) |
+| `twp-cli-script-lua-slow-upstream-http1` | No-op Lua plugin in front of the 20 ms origin |
+| `twp-cli-script-1in50-http1` | One of fifty routes carries a Lua plugin; the load hits a plugin-free route |
 | `twp-cli-dialect-twp-http1` | `.twp` `listen`/`forward` site-file |
 
 Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the control-plane port). Prometheus `/metrics` lives on the **dashboard** listener, not `controlPort + 1`. The metrics-scrape arm polls control `/v1/snapshot` and dashboard `/metrics` every 10s via the CLI host’s `DashboardUrl`.

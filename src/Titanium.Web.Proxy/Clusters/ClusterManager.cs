@@ -6,7 +6,9 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Clusters;
 
@@ -14,7 +16,7 @@ namespace Titanium.Web.Proxy.Clusters;
 /// Thread-safe cluster manager. Snapshot swaps use compare-and-swap;
 /// in-flight sessions keep the previous snapshot reference.
 /// </summary>
-public sealed class ClusterManager : IClusterManager, IAsyncDisposable
+public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, IAsyncDisposable
 {
     private ImmutableClusterSnapshot _snapshot = ImmutableClusterSnapshot.Empty;
     private readonly List<DestinationHealthTracker> _healthTrackers = new();
@@ -29,8 +31,41 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
 
     internal ClusterManager(TimeProvider timeProvider) => _time = timeProvider;
 
+    /// <summary>Clock for waits that belong to routing, such as retry backoff.</summary>
+    internal TimeProvider Time => _time;
+
     /// <summary>Raised after a destination state value actually changes. Not raised on the request hot path.</summary>
     internal event Action<string, DestinationState, DestinationState>? StateChanged;
+
+    /// <summary>
+    ///     Raised when a destination is ejected, recovers, or fails an active probe. Handlers run on the thread
+    ///     that decided (a request, a probe round, or a circuit breaker), so they must be quick and must not throw.
+    /// </summary>
+    public event Action<DestinationHealthEvent>? HealthEvent;
+
+    /// <inheritdoc />
+    public void ReportHealthEvent(DestinationHealthEvent healthEvent)
+    {
+        ArgumentNullException.ThrowIfNull(healthEvent);
+        try
+        {
+            HealthEvent?.Invoke(healthEvent);
+        }
+        catch (Exception)
+        {
+            // A diagnostics subscriber must never break health bookkeeping on the request path.
+        }
+    }
+
+    internal void ReportHealthEvent(string destinationId, string kind, string source, string? detail) =>
+        ReportHealthEvent(new DestinationHealthEvent
+        {
+            Time = _time.GetUtcNow(),
+            DestinationId = destinationId,
+            Kind = kind,
+            Source = source,
+            Detail = detail,
+        });
 
     public ImmutableClusterSnapshot Snapshot => Volatile.Read(ref _snapshot);
 
@@ -68,6 +103,19 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     {
         cancellationToken.ThrowIfCancellationRequested();
         _ = reconcileBackground;
+
+        // Read and parse each cluster's upstream TLS files now, so a request never does file I/O and the
+        // pool key already holds the content fingerprint. A broken file is logged by the first request
+        // that needs it and fails closed there.
+        foreach (var cluster in clusters)
+        {
+            if (cluster.HttpClient is { } httpClient)
+            {
+                _ = UpstreamTlsMaterial.For(httpClient);
+                _ = httpClient.ConnectionKey;
+            }
+        }
+
         while (true)
         {
             var current = Volatile.Read(ref _snapshot);

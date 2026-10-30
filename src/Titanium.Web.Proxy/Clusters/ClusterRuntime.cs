@@ -1,3 +1,4 @@
+using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 
 namespace Titanium.Web.Proxy.Clusters;
@@ -48,6 +49,29 @@ internal sealed class ClusterRuntime
     public bool HasAffinity { get; }
     public PassiveHealthConfig? Passive { get; }
     public ActiveHealthConfig? Active { get; }
+
+    private int activeRetries;
+
+    /// <summary>Replays in flight against this cluster right now.</summary>
+    public int ActiveRetries => Volatile.Read(ref activeRetries);
+
+    /// <summary>
+    /// Takes one retry slot unless that would put more than <paramref name="limit" /> replays in flight.
+    /// A negative limit means no limit.
+    /// </summary>
+    public bool TryAcquireRetry(int limit)
+    {
+        var now = Interlocked.Increment(ref activeRetries);
+        if (limit >= 0 && now > limit)
+        {
+            Interlocked.Decrement(ref activeRetries);
+            return false;
+        }
+
+        return true;
+    }
+
+    public void ReleaseRetry() => Interlocked.Decrement(ref activeRetries);
 
     public static ClusterRuntime? Find(ImmutableClusterSnapshot snapshot, string clusterId) =>
         snapshot.Runtimes.TryGetValue(clusterId, out var value) ? value as ClusterRuntime : null;
