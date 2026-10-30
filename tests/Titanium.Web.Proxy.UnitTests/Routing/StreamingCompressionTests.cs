@@ -491,7 +491,7 @@ public class StreamingCompressionTests
         var origin = new PieceStream([Text(1000)]);
         var sink = new RecordingSink();
 
-        await Assert.ThrowsExceptionAsync<IOException>(() => StreamingResponseRelay.RelayAsync(origin, sink,
+        await Assert.ThrowsExactlyAsync<IOException>(() => StreamingResponseRelay.RelayAsync(origin, sink,
             HttpCompression.Gzip, CompressionLevel.Fastest, new byte[8192], 5000, null, null, CancellationToken.None));
     }
 

@@ -64,6 +64,8 @@ internal sealed class DashboardOidc : IDisposable
 {
     public const string FlowCookiePrefix = "titanium_plus_oidc_f";
     private const string FlowPurpose = "flow";
+    private const string PlainTextUtf8 = "text/plain; charset=utf-8";
+    private const string BadRequestBody = "bad request";
     private static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(10);
 
     private readonly OidcSettings _settings;
@@ -77,27 +79,29 @@ internal sealed class DashboardOidc : IDisposable
     private readonly HttpClient _http;
     private bool _disposed;
 
-    private DashboardOidc(
-        OidcSettings settings,
-        OidcProvider provider,
-        OidcGuards guards,
-        OidcCookieCrypto crypto,
-        TimeProvider time,
-        HashSet<string> operatorGroups,
-        HashSet<string> viewerGroups,
-        string redirectUri,
-        HttpClient http)
+    private DashboardOidc(DashboardOidcParts parts)
     {
-        _settings = settings;
-        _provider = provider;
-        _guards = guards;
-        _crypto = crypto;
-        _time = time;
-        _operatorGroups = operatorGroups;
-        _viewerGroups = viewerGroups;
-        _redirectUri = redirectUri;
-        _http = http;
+        _settings = parts.Settings;
+        _provider = parts.Provider;
+        _guards = parts.Guards;
+        _crypto = parts.Crypto;
+        _time = parts.Time;
+        _operatorGroups = parts.OperatorGroups;
+        _viewerGroups = parts.ViewerGroups;
+        _redirectUri = parts.RedirectUri;
+        _http = parts.Http;
     }
+
+    private sealed record DashboardOidcParts(
+        OidcSettings Settings,
+        OidcProvider Provider,
+        OidcGuards Guards,
+        OidcCookieCrypto Crypto,
+        TimeProvider Time,
+        HashSet<string> OperatorGroups,
+        HashSet<string> ViewerGroups,
+        string RedirectUri,
+        HttpClient Http);
 
     /// <summary>How many times the provider was built (tests: default config must stay at zero).</summary>
     internal static int ConstructedProviders { get; private set; }
@@ -163,7 +167,7 @@ internal sealed class DashboardOidc : IDisposable
         var provider = new OidcProvider(settings, http, time, logger: null);
         ConstructedProviders++;
 
-        return new DashboardOidc(
+        return new DashboardOidc(new DashboardOidcParts(
             settings,
             provider,
             new OidcGuards(time),
@@ -172,7 +176,7 @@ internal sealed class DashboardOidc : IDisposable
             operatorGroups,
             viewerGroups,
             options.RedirectUri.Trim(),
-            http);
+            http));
     }
 
     /// <summary>Resets the construction counter (tests).</summary>
@@ -187,7 +191,7 @@ internal sealed class DashboardOidc : IDisposable
         }
         catch (OidcProviderUnavailableException)
         {
-            return ControlHttpResponse.Text(503, "text/plain; charset=utf-8", "login provider unavailable",
+            return ControlHttpResponse.Text(503, PlainTextUtf8, "login provider unavailable",
                 new KeyValuePair<string, string>("Retry-After", "5"));
         }
 
@@ -216,7 +220,7 @@ internal sealed class DashboardOidc : IDisposable
                        "&code_challenge=" + challenge +
                        "&code_challenge_method=S256";
 
-        return ControlHttpResponse.Text(303, "text/plain; charset=utf-8", "",
+        return ControlHttpResponse.Text(303, PlainTextUtf8, "",
             new KeyValuePair<string, string>("Location", location),
             FlowCookieHeader(flowName, sealedFlow, FlowLifetime, secure));
     }
@@ -229,14 +233,14 @@ internal sealed class DashboardOidc : IDisposable
         var client = request.RemoteAddress?.ToString() ?? "unknown";
         if (!_guards.TryAdmitCallback(client, limitPerMinute: 30))
         {
-            return (ControlHttpResponse.Text(429, "text/plain; charset=utf-8", "too many requests",
+            return (ControlHttpResponse.Text(429, PlainTextUtf8, "too many requests",
                 new KeyValuePair<string, string>("Retry-After", "60")), null, DashboardRole.Viewer);
         }
 
         var state = request.QueryValue("state");
         if (string.IsNullOrEmpty(state) || state.Length > 256)
         {
-            return (ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request"), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(400, PlainTextUtf8, BadRequestBody), null, DashboardRole.Viewer);
         }
 
         var flowName = FlowCookieName(state);
@@ -245,23 +249,23 @@ internal sealed class DashboardOidc : IDisposable
         var nowUnix = _time.GetUtcNow().ToUnixTimeSeconds();
         if (flow is null || flow.ExpiresAt <= nowUnix || !OidcProvider.FixedEquals(flow.State, state))
         {
-            return (ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request", clear), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(400, PlainTextUtf8, BadRequestBody, clear), null, DashboardRole.Viewer);
         }
 
         if (!_guards.TryUseState(state, FlowLifetime))
         {
-            return (ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request", clear), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(400, PlainTextUtf8, BadRequestBody, clear), null, DashboardRole.Viewer);
         }
 
         if (!string.IsNullOrEmpty(request.QueryValue("error")))
         {
-            return (ControlHttpResponse.Text(401, "text/plain; charset=utf-8", "sign-in was not completed", clear), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(401, PlainTextUtf8, "sign-in was not completed", clear), null, DashboardRole.Viewer);
         }
 
         var code = request.QueryValue("code");
         if (string.IsNullOrEmpty(code) || code.Length > 2048)
         {
-            return (ControlHttpResponse.Text(400, "text/plain; charset=utf-8", "bad request", clear), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(400, PlainTextUtf8, BadRequestBody, clear), null, DashboardRole.Viewer);
         }
 
         OidcIdentity identity;
@@ -271,7 +275,7 @@ internal sealed class DashboardOidc : IDisposable
                 .ConfigureAwait(false);
             if (string.IsNullOrEmpty(tokens.IdToken))
             {
-                return (ControlHttpResponse.Text(401, "text/plain; charset=utf-8", "unauthorized", clear), null, DashboardRole.Viewer);
+                return (ControlHttpResponse.Text(401, PlainTextUtf8, "unauthorized", clear), null, DashboardRole.Viewer);
             }
 
             identity = await _provider.ValidateIdTokenAsync(tokens.IdToken, flow.Nonce, cancellationToken)
@@ -279,11 +283,11 @@ internal sealed class DashboardOidc : IDisposable
         }
         catch (Exception ex) when (ex is OidcTokenRejectedException or OidcTokenInvalidException)
         {
-            return (ControlHttpResponse.Text(401, "text/plain; charset=utf-8", "unauthorized", clear), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(401, PlainTextUtf8, "unauthorized", clear), null, DashboardRole.Viewer);
         }
         catch (OidcProviderUnavailableException)
         {
-            return (ControlHttpResponse.Text(503, "text/plain; charset=utf-8", "login provider unavailable",
+            return (ControlHttpResponse.Text(503, PlainTextUtf8, "login provider unavailable",
                 new KeyValuePair<string, string>("Retry-After", "5"), clear), null, DashboardRole.Viewer);
         }
 
@@ -291,36 +295,24 @@ internal sealed class DashboardOidc : IDisposable
             !_settings.Allows(identity.Email, identity.EmailVerified, identity.Groups) ||
             !TryMapRole(identity.Groups, out var role))
         {
-            return (ControlHttpResponse.Text(403, "text/plain; charset=utf-8", "forbidden", clear), null, DashboardRole.Viewer);
+            return (ControlHttpResponse.Text(403, PlainTextUtf8, "forbidden", clear), null, DashboardRole.Viewer);
         }
 
-        return (ControlHttpResponse.Text(200, "text/plain; charset=utf-8", "ok", clear), identity, role);
+        return (ControlHttpResponse.Text(200, PlainTextUtf8, "ok", clear), identity, role);
     }
 
     internal bool TryMapRole(IReadOnlyCollection<string> groups, out DashboardRole role)
     {
-        if (_operatorGroups.Count > 0)
+        if (_operatorGroups.Count > 0 && groups.Any(_operatorGroups.Contains))
         {
-            foreach (var group in groups)
-            {
-                if (_operatorGroups.Contains(group))
-                {
-                    role = DashboardRole.Operator;
-                    return true;
-                }
-            }
+            role = DashboardRole.Operator;
+            return true;
         }
 
-        if (_viewerGroups.Count > 0)
+        if (_viewerGroups.Count > 0 && groups.Any(_viewerGroups.Contains))
         {
-            foreach (var group in groups)
-            {
-                if (_viewerGroups.Contains(group))
-                {
-                    role = DashboardRole.Viewer;
-                    return true;
-                }
-            }
+            role = DashboardRole.Viewer;
+            return true;
         }
 
         // No group lists configured: any identity that passed allow-lists is a viewer.
@@ -396,12 +388,9 @@ internal sealed class DashboardOidc : IDisposable
             return set;
         }
 
-        foreach (var value in values)
+        foreach (var value in values.Where(static v => !string.IsNullOrWhiteSpace(v)))
         {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                set.Add(value.Trim());
-            }
+            set.Add(value.Trim());
         }
 
         return set;

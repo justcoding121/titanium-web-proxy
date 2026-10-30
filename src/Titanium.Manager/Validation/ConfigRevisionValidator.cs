@@ -1,3 +1,4 @@
+using System.Linq;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -63,13 +64,10 @@ internal static class ConfigRevisionValidator
             return;
         }
 
-        foreach (var key in SecretReferenceKeys.PlusOptionKeys)
+        foreach (var key in SecretReferenceKeys.PlusOptionKeys.Where(key => FindOption(options, key) is { Length: > 0 }))
         {
-            if (FindOption(options, key) is { Length: > 0 })
-            {
-                errors.Add(
-                    $"Inline secret rejected: plus.options.{key} (use {key}{SecretReferenceKeys.EnvSuffix} or {key}{SecretReferenceKeys.FileSuffix}).");
-            }
+            errors.Add(
+                $"Inline secret rejected: plus.options.{key} (use {key}{SecretReferenceKeys.EnvSuffix} or {key}{SecretReferenceKeys.FileSuffix}).");
         }
     }
 

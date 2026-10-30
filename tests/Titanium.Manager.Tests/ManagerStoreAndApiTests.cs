@@ -342,7 +342,7 @@ public class ManagerStoreAndApiTests
         }));
         Assert.AreEqual(HttpStatusCode.OK, ack.StatusCode);
         using var ackDoc = await ManagerTestHost.ReadJsonAsync(ack);
-        Assert.AreEqual(true, ackDoc.RootElement.GetProperty("rolloutPaused").GetBoolean());
+        Assert.IsTrue(ackDoc.RootElement.GetProperty("rolloutPaused").GetBoolean());
 
         var rollout = host.Store.GetRollout(fleetId, rolloutId)!;
         Assert.AreEqual("paused", rollout.State);

@@ -6,6 +6,8 @@ namespace Titanium.Gateway.Translation;
 
 internal sealed partial class TranslationPass
 {
+    private const string PatternTransformKey = "pattern";
+
     private sealed class MatchSpec
     {
         public string? Path { get; set; }
@@ -22,7 +24,7 @@ internal sealed partial class TranslationPass
         public List<QueryParameterMatch>? Query { get; set; }
     }
 
-    private void EmitMatch(
+    private static void EmitMatch( // NOSONAR S3776 -- Match emission handles redirects, host expansion, and rewrite transforms together.
         RouteOutcome route,
         int ruleIndex,
         int matchIndex,
@@ -55,7 +57,7 @@ internal sealed partial class TranslationPass
             {
                 foreach (var host in hosts)
                 {
-                    drafts.Add(MakeDraft(route, ruleIndex, matchIndex, spec, [host!], plan, transforms, redirect, host, false));
+                    drafts.Add(MakeDraft(route, ruleIndex, matchIndex, spec, [host], plan, transforms, redirect, host, false));
                 }
 
                 return;
@@ -70,7 +72,7 @@ internal sealed partial class TranslationPass
         drafts.Add(MakeDraft(route, ruleIndex, matchIndex, spec, hosts, plan, transforms, redirect, null, direct500));
     }
 
-    private static RouteDraft MakeDraft(
+    private static RouteDraft MakeDraft( // NOSONAR S107 -- Draft factory keeps Gateway API match fields explicit for stable ordering.
         RouteOutcome route,
         int ruleIndex,
         int matchIndex,
@@ -159,7 +161,7 @@ internal sealed partial class TranslationPass
             .ToList();
 
     /// <summary>The hostnames the route serves, over every listener it attached to. Null means any hostname.</summary>
-    private static IReadOnlyList<string>? AttachedHosts(RouteOutcome route)
+    private static List<string>? AttachedHosts(RouteOutcome route)
     {
         var hosts = route.Parents
             .Where(p => p.Accepted)
@@ -174,7 +176,7 @@ internal sealed partial class TranslationPass
         return hosts.Select(h => h!).Distinct(StringComparer.Ordinal).OrderBy(h => h, StringComparer.Ordinal).ToList();
     }
 
-    private static MatchSpec BuildMatch(HttpRouteMatch match, List<string> problems)
+    private static MatchSpec BuildMatch(HttpRouteMatch match, List<string> problems) // NOSONAR S3776 -- Gateway match parsing validates path, headers, and query in one pass.
     {
         var spec = new MatchSpec();
         BuildPath(match.Path, spec, problems);
@@ -314,7 +316,7 @@ internal sealed partial class TranslationPass
             // Keeps the query string: the pattern covers the path part only.
             transforms.Add(Transform(
                 TransformKinds.PathRegexReplace,
-                ("pattern", "^[^?]*"),
+                (PatternTransformKey, "^[^?]*"),
                 ("replacement", EscapeReplacement(path.ReplaceFullPath))));
             return true;
         }
@@ -348,9 +350,9 @@ internal sealed partial class TranslationPass
 
         var escaped = Regex.Escape(prefix);
         var target = EscapeReplacement(replacement.Length == 0 ? "/" : replacement);
-        transforms.Add(Transform(TransformKinds.PathRegexReplace, ("pattern", "^" + escaped + "/"), ("replacement", EscapeReplacement(replacement) + "/")));
-        transforms.Add(Transform(TransformKinds.PathRegexReplace, ("pattern", "^" + escaped + "\\?"), ("replacement", target + "?")));
-        transforms.Add(Transform(TransformKinds.PathRegexReplace, ("pattern", "^" + escaped + "$"), ("replacement", target)));
+        transforms.Add(Transform(TransformKinds.PathRegexReplace, (PatternTransformKey, "^" + escaped + "/"), ("replacement", EscapeReplacement(replacement) + "/")));
+        transforms.Add(Transform(TransformKinds.PathRegexReplace, (PatternTransformKey, "^" + escaped + "\\?"), ("replacement", target + "?")));
+        transforms.Add(Transform(TransformKinds.PathRegexReplace, (PatternTransformKey, "^" + escaped + "$"), ("replacement", target)));
     }
 
     private static string EscapeReplacement(string value) => value.Replace("$", "$$", StringComparison.Ordinal);

@@ -220,7 +220,7 @@ internal sealed class OidcHarness : IAsyncDisposable
     public Browser NewBrowser() => new(ProxyPort);
 
     /// <summary>Asks for a page with no session: the proxy answers with the sign-in redirect.</summary>
-    public async Task<string> StartLoginAsync(Browser browser, string path = "/app?x=1")
+    public static async Task<string> StartLoginAsync(Browser browser, string path = "/app?x=1")
     {
         using var response = await browser.GetAsync($"http://{Host}{path}", ("Accept", "text/html"));
         Assert.AreEqual(HttpStatusCode.Found, response.StatusCode);
@@ -228,7 +228,7 @@ internal sealed class OidcHarness : IAsyncDisposable
     }
 
     /// <summary>Follows the authorize redirect the way a browser would and returns where the provider sends it next.</summary>
-    public async Task<string> VisitProviderAsync(Browser browser, string authorizeUrl)
+    public static async Task<string> VisitProviderAsync(Browser browser, string authorizeUrl)
     {
         using var response = await browser.GetDirectAsync(authorizeUrl);
         Assert.AreEqual(HttpStatusCode.Found, response.StatusCode, "the provider refused the authorize request");
@@ -236,7 +236,7 @@ internal sealed class OidcHarness : IAsyncDisposable
     }
 
     /// <summary>The whole sign-in. Returns the callback response (a redirect back to the page when it works).</summary>
-    public async Task<HttpResponseMessage> SignInAsync(Browser browser, string path = "/app?x=1")
+    public static async Task<HttpResponseMessage> SignInAsync(Browser browser, string path = "/app?x=1")
     {
         var authorize = await StartLoginAsync(browser, path);
         var callback = await VisitProviderAsync(browser, authorize);

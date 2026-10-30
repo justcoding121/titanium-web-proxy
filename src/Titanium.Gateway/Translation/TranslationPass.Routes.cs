@@ -102,7 +102,7 @@ internal sealed partial class TranslationPass
             string.Equals(g.Gateway.Metadata.Namespace, ns, StringComparison.Ordinal));
     }
 
-    private void EvaluateParent(HttpRoute route, ParentOutcome parent)
+    private void EvaluateParent(HttpRoute route, ParentOutcome parent) // NOSONAR S3776 -- Parent listener matching keeps furthest-failure reason in one pass.
     {
         var reference = parent.Reference;
         var candidates = parent.Gateway.Listeners

@@ -176,7 +176,7 @@ internal sealed class TelemetryHost : IDisposable
     private static Func<BatchActivityExportProcessor, long> BuildDroppedCountReader()
     {
         var property = typeof(BatchExportProcessor<Activity>).GetProperty(
-            "DroppedCount", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            "DroppedCount", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic); // NOSONAR S3011 -- SDK exposes DroppedCount only via non-public API; pinned package version.
         var getter = property?.GetGetMethod(nonPublic: true);
         if (getter is null)
         {
@@ -230,12 +230,12 @@ internal sealed class TelemetryHost : IDisposable
 
         public long FailedSpans => Interlocked.Read(ref failedSpans);
 
-        public override ExportResult Export(in Batch<Activity> batch)
+        public override ExportResult Export(in Batch<Activity> activityBatch)
         {
-            var count = batch.Count;
+            var count = activityBatch.Count;
             try
             {
-                var result = base.Export(batch);
+                var result = base.Export(activityBatch);
                 if (result != ExportResult.Success)
                 {
                     Interlocked.Add(ref failedSpans, count);

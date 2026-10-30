@@ -118,6 +118,8 @@ internal sealed class WasmSharedState
         }
     }
 
+    private static int AllocateQueueToken() => Interlocked.Increment(ref _nextToken);
+
     /// <summary>Registers (or re-registers) a queue in this scope and returns its token. The caller becomes a reader.</summary>
     public int RegisterQueue(string name, WasmVm vm, int rootId)
     {
@@ -128,7 +130,7 @@ internal sealed class WasmSharedState
             {
                 if (!_queues.TryGetValue(name, out queue!))
                 {
-                    queue = new WasmSharedQueue(++_nextToken, this);
+                    queue = new WasmSharedQueue(AllocateQueueToken(), this);
                     _queues[name] = queue;
                     QueuesByToken[queue.Token] = queue;
                 }
@@ -220,8 +222,8 @@ internal sealed class WasmSharedQueue(int token, WasmSharedState scope)
 
         if (reader is { } target)
         {
-            var token = Token;
-            _ = Task.Run(() => target.Vm.Pool.Deliver(target.Vm, target.RootId, _ => target.Vm.Call("proxy_on_queue_ready", [target.RootId, token])));
+            var queueToken = Token;
+            _ = Task.Run(() => target.Vm.Pool.Deliver(target.Vm, target.RootId, _ => target.Vm.Call("proxy_on_queue_ready", [target.RootId, queueToken])));
         }
 
         return WasmResult.Ok;

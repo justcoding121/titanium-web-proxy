@@ -30,6 +30,12 @@ internal static class ManagerUiViews
         (ManagerUiView.Audit, "/audit", "audit", "Audit"),
     ];
 
+    private const string HtmlCloseTd = "</td>";
+    private const string HtmlCloseTdTr = "</td></tr>";
+    private const string HtmlCloseTableSection = "</tbody></table></section>";
+    private const string HtmlCloseDd = "</dd>";
+    private const string HtmlCloseDiv = "</div>";
+
     public static string Enc(string? value) => WebUtility.HtmlEncode(value ?? "");
 
     public static string Login(string? error)
@@ -81,13 +87,9 @@ internal static class ManagerUiViews
         foreach (var (_, path, navSlug, navTitle) in Navigation)
         {
             sb.Append("<a data-testid=\"nav-").Append(navSlug).Append("\" href=\"").Append(path).Append('"');
-            if ((view == ManagerUiView.Fleets || view == ManagerUiView.Fleet || view == ManagerUiView.Revisions ||
-                 view == ManagerUiView.Diff || view == ManagerUiView.Editor || view == ManagerUiView.Rollouts ||
-                 view == ManagerUiView.Rollout) && navSlug == "fleets")
-            {
-                sb.Append(" aria-current=\"page\"");
-            }
-            else if (view == ManagerUiView.Audit && navSlug == "audit")
+            if (((view is ManagerUiView.Fleets or ManagerUiView.Fleet or ManagerUiView.Revisions or ManagerUiView.Diff
+                      or ManagerUiView.Editor or ManagerUiView.Rollouts or ManagerUiView.Rollout) && navSlug == "fleets")
+                || (view == ManagerUiView.Audit && navSlug == "audit"))
             {
                 sb.Append(" aria-current=\"page\"");
             }
@@ -134,15 +136,15 @@ internal static class ManagerUiViews
             foreach (var f in fleets)
             {
                 sb.Append("<tr data-testid=\"fleet-row-").Append(f.Id.ToString(CultureInfo.InvariantCulture)).Append("\">")
-                    .Append("<td>").Append(f.Id.ToString(CultureInfo.InvariantCulture)).Append("</td>")
+                    .Append("<td>").Append(f.Id.ToString(CultureInfo.InvariantCulture)).Append(HtmlCloseTd)
                     .Append("<td><a href=\"/fleets/").Append(f.Id.ToString(CultureInfo.InvariantCulture))
                     .Append("\" data-testid=\"fleet-link-").Append(f.Id.ToString(CultureInfo.InvariantCulture))
                     .Append("\">").Append(Enc(f.Name)).Append("</a></td>")
-                    .Append("<td>").Append(Enc(f.CreatedAt.ToString("u", CultureInfo.InvariantCulture))).Append("</td></tr>");
+                    .Append("<td>").Append(Enc(f.CreatedAt.ToString("u", CultureInfo.InvariantCulture))).Append(HtmlCloseTdTr);
             }
         }
 
-        return sb.Append("</tbody></table></section>").ToString();
+        return sb.Append(HtmlCloseTableSection).ToString();
     }
 
     public static string FleetDetail(
@@ -156,7 +158,7 @@ internal static class ManagerUiViews
             .Append("<dl class=\"facts\">")
             .Append("<dt>Published revision</dt><dd data-testid=\"published-revision\">")
             .Append(published is null ? "none" : published.RevisionId.ToString(CultureInfo.InvariantCulture))
-            .Append("</dd>")
+            .Append(HtmlCloseDd)
             .Append("<dt>Published hash</dt><dd data-testid=\"published-hash\">")
             .Append(Enc(published?.ContentHash ?? "-"))
             .Append("</dd></dl>")
@@ -180,20 +182,24 @@ internal static class ManagerUiViews
             {
                 var drift = publishedHash is not null &&
                             !string.Equals(a.ConfigHash, publishedHash, StringComparison.OrdinalIgnoreCase);
-                sb.Append("<tr data-testid=\"agent-row-").Append(Enc(a.NodeId)).Append("\"")
-                    .Append(drift ? " class=\"drift\"" : "")
-                    .Append("><td>").Append(Enc(a.NodeId)).Append("</td>")
-                    .Append("<td>").Append(Enc(a.Status)).Append(drift ? " (drift)" : "").Append("</td>")
-                    .Append("<td>").Append(Enc(a.ConfigHash ?? "-")).Append("</td>")
-                    .Append("<td>").Append(a.DesiredRevisionId?.ToString(CultureInfo.InvariantCulture) ?? "-").Append("</td>")
+                sb.Append("<tr data-testid=\"agent-row-").Append(Enc(a.NodeId)).Append('"');
+                if (drift)
+                {
+                    sb.Append(" class=\"drift\"");
+                }
+
+                sb.Append("><td>").Append(Enc(a.NodeId)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.Status)).Append(drift ? " (drift)" : "").Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.ConfigHash ?? "-")).Append(HtmlCloseTd)
+                    .Append("<td>").Append(a.DesiredRevisionId?.ToString(CultureInfo.InvariantCulture) ?? "-").Append(HtmlCloseTd)
                     .Append("<td>").Append(a.LastSeen is null
                         ? "-"
-                        : Enc(a.LastSeen.Value.ToString("u", CultureInfo.InvariantCulture))).Append("</td>")
-                    .Append("<td>").Append(Enc(a.HealthJson ?? "-")).Append("</td></tr>");
+                        : Enc(a.LastSeen.Value.ToString("u", CultureInfo.InvariantCulture))).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.HealthJson ?? "-")).Append(HtmlCloseTdTr);
             }
         }
 
-        return sb.Append("</tbody></table></section>").ToString();
+        return sb.Append(HtmlCloseTableSection).ToString();
     }
 
     public static string Revisions(long fleetId, IReadOnlyList<RevisionRow> revisions)
@@ -212,11 +218,11 @@ internal static class ManagerUiViews
             {
                 var rid = r.Id.ToString(CultureInfo.InvariantCulture);
                 sb.Append("<tr data-testid=\"revision-row-").Append(rid).Append("\">")
-                    .Append("<td>").Append(rid).Append("</td>")
+                    .Append("<td>").Append(rid).Append(HtmlCloseTd)
                     .Append("<td><code>").Append(Enc(r.ContentHash)).Append("</code></td>")
-                    .Append("<td>").Append(Enc(r.Author)).Append("</td>")
-                    .Append("<td>").Append(r.ParentId?.ToString(CultureInfo.InvariantCulture) ?? "-").Append("</td>")
-                    .Append("<td>").Append(Enc(r.CreatedAt.ToString("u", CultureInfo.InvariantCulture))).Append("</td>")
+                    .Append("<td>").Append(Enc(r.Author)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(r.ParentId?.ToString(CultureInfo.InvariantCulture) ?? "-").Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(r.CreatedAt.ToString("u", CultureInfo.InvariantCulture))).Append(HtmlCloseTd)
                     .Append("<td>");
                 if (r.ParentId is long parent)
                 {
@@ -225,11 +231,11 @@ internal static class ManagerUiViews
                         .Append("&to=").Append(rid).Append("\">Diff</a>");
                 }
 
-                sb.Append("</td></tr>");
+                sb.Append(HtmlCloseTdTr);
             }
         }
 
-        return sb.Append("</tbody></table></section>").ToString();
+        return sb.Append(HtmlCloseTableSection).ToString();
     }
 
     public static string Diff(long fleetId, long fromId, long toId, string unified)
@@ -271,7 +277,7 @@ internal static class ManagerUiViews
                 .Append("<button type=\"button\" data-testid=\"btn-publish\" data-act=\"publish\">Publish</button>");
         }
 
-        sb.Append("</div>")
+        sb.Append(HtmlCloseDiv)
             .Append("<pre id=\"editor-result\" data-testid=\"editor-result\" class=\"result\"></pre>")
             .Append("</div><aside class=\"editor-side\" data-testid=\"editor-side\">")
             .Append("<h3>Routes</h3><ul id=\"route-list\" data-testid=\"route-list\">");
@@ -296,7 +302,7 @@ internal static class ManagerUiViews
                 .Append("<input id=\"route-cluster\" data-testid=\"route-cluster\" type=\"text\"/>")
                 .Append("<button type=\"button\" data-testid=\"btn-upsert-route\" data-act=\"upsert-route\">Add / update route</button> ")
                 .Append("<button type=\"button\" data-testid=\"btn-remove-route\" data-act=\"remove-route\">Remove route</button>")
-                .Append("</div>");
+                .Append(HtmlCloseDiv);
         }
 
         sb.Append("<h3>Clusters</h3><ul id=\"cluster-list\" data-testid=\"cluster-list\">");
@@ -316,7 +322,7 @@ internal static class ManagerUiViews
                 .Append("<input id=\"cluster-id\" data-testid=\"cluster-id\" type=\"text\"/>")
                 .Append("<button type=\"button\" data-testid=\"btn-upsert-cluster\" data-act=\"upsert-cluster\">Add cluster stub</button> ")
                 .Append("<button type=\"button\" data-testid=\"btn-remove-cluster\" data-act=\"remove-cluster\">Remove cluster</button>")
-                .Append("</div>");
+                .Append(HtmlCloseDiv);
         }
 
         sb.Append("</aside></div>")
@@ -342,14 +348,14 @@ internal static class ManagerUiViews
                 sb.Append("<tr data-testid=\"rollout-row-").Append(rid).Append("\">")
                     .Append("<td><a href=\"/fleets/").Append(fid).Append("/rollouts/").Append(rid)
                     .Append("\" data-testid=\"rollout-link-").Append(rid).Append("\">").Append(rid).Append("</a></td>")
-                    .Append("<td>").Append(r.RevisionId.ToString(CultureInfo.InvariantCulture)).Append("</td>")
-                    .Append("<td>").Append(Enc(r.State)).Append("</td>")
-                    .Append("<td>").Append(Enc(r.PauseReason ?? "-")).Append("</td>")
-                    .Append("<td>").Append(Enc(r.UpdatedAt.ToString("u", CultureInfo.InvariantCulture))).Append("</td></tr>");
+                    .Append("<td>").Append(r.RevisionId.ToString(CultureInfo.InvariantCulture)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(r.State)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(r.PauseReason ?? "-")).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(r.UpdatedAt.ToString("u", CultureInfo.InvariantCulture))).Append(HtmlCloseTdTr);
             }
         }
 
-        return sb.Append("</tbody></table></section>").ToString();
+        return sb.Append(HtmlCloseTableSection).ToString();
     }
 
     public static string RolloutDetail(long fleetId, RolloutRow rollout, IReadOnlyList<RolloutStepRow> steps, bool canEdit)
@@ -359,11 +365,11 @@ internal static class ManagerUiViews
         var sb = new StringBuilder("<section data-testid=\"rollout-detail\">")
             .Append("<h2>Rollout #").Append(rid).Append("</h2>")
             .Append("<dl class=\"facts\">")
-            .Append("<dt>Revision</dt><dd>").Append(rollout.RevisionId.ToString(CultureInfo.InvariantCulture)).Append("</dd>")
+            .Append("<dt>Revision</dt><dd>").Append(rollout.RevisionId.ToString(CultureInfo.InvariantCulture)).Append(HtmlCloseDd)
             .Append("<dt>Previous</dt><dd>")
-            .Append(rollout.PreviousRevisionId?.ToString(CultureInfo.InvariantCulture) ?? "-").Append("</dd>")
-            .Append("<dt>State</dt><dd data-testid=\"rollout-state\">").Append(Enc(rollout.State)).Append("</dd>")
-            .Append("<dt>Pause reason</dt><dd>").Append(Enc(rollout.PauseReason ?? "-")).Append("</dd>")
+            .Append(rollout.PreviousRevisionId?.ToString(CultureInfo.InvariantCulture) ?? "-").Append(HtmlCloseDd)
+            .Append("<dt>State</dt><dd data-testid=\"rollout-state\">").Append(Enc(rollout.State)).Append(HtmlCloseDd)
+            .Append("<dt>Pause reason</dt><dd>").Append(Enc(rollout.PauseReason ?? "-")).Append(HtmlCloseDd)
             .Append("</dl>");
 
         if (canEdit)
@@ -375,18 +381,18 @@ internal static class ManagerUiViews
                 .Append(rid).Append("\">Resume</button> ")
                 .Append("<button type=\"button\" data-testid=\"btn-rollback-rollout\" data-act=\"rollback-rollout\" data-id=\"")
                 .Append(rid).Append("\">Rollback</button>")
-                .Append("</div>");
+                .Append(HtmlCloseDiv);
         }
 
         sb.Append("<h3>Steps</h3>")
             .Append("<table><thead><tr><th>#</th><th>Selector</th><th>Max unavail</th><th>Bake</th><th>State</th></tr></thead><tbody>");
         foreach (var s in steps)
         {
-            sb.Append("<tr><td>").Append(s.Ordinal.ToString(CultureInfo.InvariantCulture)).Append("</td>")
+            sb.Append("<tr><td>").Append(s.Ordinal.ToString(CultureInfo.InvariantCulture)).Append(HtmlCloseTd)
                 .Append("<td><code>").Append(Enc(s.LabelSelectorJson)).Append("</code></td>")
-                .Append("<td>").Append(s.MaxUnavailable.ToString(CultureInfo.InvariantCulture)).Append("</td>")
+                .Append("<td>").Append(s.MaxUnavailable.ToString(CultureInfo.InvariantCulture)).Append(HtmlCloseTd)
                 .Append("<td>").Append(s.BakeSeconds.ToString(CultureInfo.InvariantCulture)).Append("s</td>")
-                .Append("<td>").Append(Enc(s.State)).Append("</td></tr>");
+                .Append("<td>").Append(Enc(s.State)).Append(HtmlCloseTdTr);
         }
 
         if (steps.Count == 0)
@@ -413,16 +419,16 @@ internal static class ManagerUiViews
             foreach (var a in rows)
             {
                 sb.Append("<tr data-testid=\"audit-row-").Append(a.Id.ToString(CultureInfo.InvariantCulture)).Append("\">")
-                    .Append("<td>").Append(Enc(a.Time.ToString("u", CultureInfo.InvariantCulture))).Append("</td>")
-                    .Append("<td>").Append(Enc(a.Actor)).Append("</td>")
-                    .Append("<td data-testid=\"audit-action\">").Append(Enc(a.Action)).Append("</td>")
-                    .Append("<td>").Append(Enc(a.Target)).Append("</td>")
-                    .Append("<td>").Append(Enc(a.Result)).Append("</td>")
-                    .Append("<td>").Append(Enc(a.Detail ?? "")).Append("</td></tr>");
+                    .Append("<td>").Append(Enc(a.Time.ToString("u", CultureInfo.InvariantCulture))).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.Actor)).Append(HtmlCloseTd)
+                    .Append("<td data-testid=\"audit-action\">").Append(Enc(a.Action)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.Target)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.Result)).Append(HtmlCloseTd)
+                    .Append("<td>").Append(Enc(a.Detail ?? "")).Append(HtmlCloseTdTr);
             }
         }
 
-        return sb.Append("</tbody></table></section>").ToString();
+        return sb.Append(HtmlCloseTableSection).ToString();
     }
 
     public static string RoleName(AdminRole role) => AdminRoleParser.ToApi(role);

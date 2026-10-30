@@ -14,7 +14,7 @@ try
 }
 catch (ArgumentException ex)
 {
-    Console.Error.WriteLine($"titanium-gateway: {ex.Message}");
+    await Console.Error.WriteLineAsync($"titanium-gateway: {ex.Message}").ConfigureAwait(false);
     return 2;
 }
 
@@ -63,12 +63,15 @@ try
         events: new EventWriter(api, options.IngressControllerName, log));
 
     using var health = new HealthServer(options.HealthPort, () => controller.Ready, log);
-    log.LogInformation(
-        "titanium-gateway starting as {Identity}: controller {Controller}, data plane {Namespace}/{Service}.",
-        options.Identity,
-        options.ControllerName,
-        options.DataPlaneNamespace,
-        options.DataPlaneService);
+    if (log.IsEnabled(LogLevel.Information))
+    {
+        log.LogInformation(
+            "titanium-gateway starting as {Identity}: controller {Controller}, data plane {Namespace}/{Service}.",
+            options.Identity,
+            options.ControllerName,
+            options.DataPlaneNamespace,
+            options.DataPlaneService);
+    }
     await Task.WhenAll(controller.RunAsync(stop.Token), health.RunAsync(stop.Token)).ConfigureAwait(false);
     return 0;
 }
@@ -78,6 +81,10 @@ catch (OperationCanceledException)
 }
 catch (Exception ex)
 {
-    log.LogCritical("titanium-gateway stopped: {Message}", ex.Message);
+    if (log.IsEnabled(LogLevel.Critical))
+    {
+        log.LogCritical(ex, "titanium-gateway stopped: {Message}", ex.Message);
+    }
+
     return 1;
 }

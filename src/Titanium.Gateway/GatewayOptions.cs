@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using Titanium.Gateway.Control;
 using Titanium.Gateway.Kube;
 using Titanium.Gateway.Model;
@@ -75,7 +76,7 @@ public sealed class GatewayOptions
 
     private static string KnownList => string.Join(", ", Known.Order(StringComparer.Ordinal));
 
-    public static GatewayOptions Parse(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> environment)
+    public static GatewayOptions Parse(IReadOnlyList<string> args, IReadOnlyDictionary<string, string?> environment) // NOSONAR S3776 -- CLI/env merge keeps validation and defaults in one pass.
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         var ignoredEnvironment = new List<string>();
@@ -96,7 +97,8 @@ public sealed class GatewayOptions
             }
         }
 
-        for (var i = 0; i < args.Count; i++)
+        var i = 0;
+        while (i < args.Count)
         {
             var arg = args[i];
             if (!arg.StartsWith("--", StringComparison.Ordinal))
@@ -109,27 +111,31 @@ public sealed class GatewayOptions
             if (eq >= 0)
             {
                 values[name[..eq]] = name[(eq + 1)..];
+                i++;
+                continue;
             }
-            else if (name is "verbose" or "no-leader-election" or "watch-legacy-annotation")
+
+            if (name is "verbose" or "no-leader-election" or "watch-legacy-annotation")
             {
                 values[name] = "true";
+                i++;
+                continue;
             }
-            else if (i + 1 < args.Count)
+
+            if (i + 1 < args.Count)
             {
-                values[name] = args[++i];
+                values[name] = args[i + 1];
+                i += 2;
+                continue;
             }
-            else
-            {
-                throw new ArgumentException($"Option '{arg}' needs a value.");
-            }
+
+            throw new ArgumentException($"Option '{arg}' needs a value.");
         }
 
-        foreach (var name in values.Keys)
+        var unknown = values.Keys.FirstOrDefault(n => !Known.Contains(n));
+        if (unknown is not null)
         {
-            if (!Known.Contains(name))
-            {
-                throw new ArgumentException($"Unknown option '{name}'. Known options: {KnownList}.");
-            }
+            throw new ArgumentException($"Unknown option '{unknown}'. Known options: {KnownList}.");
         }
 
         string? Get(string name) => values.TryGetValue(name, out var value) ? value : null;

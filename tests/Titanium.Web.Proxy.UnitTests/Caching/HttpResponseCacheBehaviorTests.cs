@@ -98,7 +98,7 @@ internal sealed class CacheHarness
 
             if (state is not null)
             {
-                state.Owner.ApplyConditionalHeaders(state, outgoing);
+                HttpResponseCacheMiddleware.ApplyConditionalHeaders(state, outgoing);
             }
 
             Interlocked.Increment(ref _originHits);

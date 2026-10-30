@@ -52,20 +52,9 @@ internal sealed class CliManagedConfigApplier : IConfigApplier
 
             await File.WriteAllTextAsync(tmp, yaml, encoding, cancellationToken).ConfigureAwait(false);
 
-            LoadedConfig loaded;
-            try
+            if (TryLoadAndValidate(tmp, out var loadError) is null)
             {
-                loaded = ConfigLoader.Load(tmp);
-            }
-            catch (Exception ex)
-            {
-                return new ConfigApplyResult { Ok = false, Error = "invalid config: " + ex.Message };
-            }
-
-            var errors = TwpConfigValidator.Validate(loaded.Config);
-            if (errors.Count > 0)
-            {
-                return new ConfigApplyResult { Ok = false, Error = string.Join("; ", errors) };
+                return new ConfigApplyResult { Ok = false, Error = loadError };
             }
 
             if (File.Exists(fullPath))
@@ -79,27 +68,7 @@ internal sealed class CliManagedConfigApplier : IConfigApplier
             var result = await _reload(cancellationToken).ConfigureAwait(false);
             if (!result.Ok)
             {
-                if (File.Exists(bak))
-                {
-                    try
-                    {
-                        File.Copy(bak, fullPath, overwrite: true);
-                    }
-                    catch (Exception restoreEx) when (restoreEx is IOException or UnauthorizedAccessException)
-                    {
-                        return new ConfigApplyResult
-                        {
-                            Ok = false,
-                            Error = (result.Error ?? "reload failed") + "; restore failed: " + restoreEx.Message,
-                        };
-                    }
-                }
-
-                return new ConfigApplyResult
-                {
-                    Ok = false,
-                    Error = result.Error ?? "reload failed",
-                };
+                return RestoreAfterFailedReload(fullPath, bak, result);
             }
 
             return new ConfigApplyResult
@@ -128,5 +97,54 @@ internal sealed class CliManagedConfigApplier : IConfigApplier
 
             _gate.Release();
         }
+    }
+
+    private static LoadedConfig? TryLoadAndValidate(string path, out string? error)
+    {
+        LoadedConfig loaded;
+        try
+        {
+            loaded = ConfigLoader.Load(path);
+        }
+        catch (Exception ex)
+        {
+            error = "invalid config: " + ex.Message;
+            return null;
+        }
+
+        var errors = TwpConfigValidator.Validate(loaded.Config);
+        if (errors.Count > 0)
+        {
+            error = string.Join("; ", errors);
+            return null;
+        }
+
+        error = null;
+        return loaded;
+    }
+
+    private static ConfigApplyResult RestoreAfterFailedReload(string fullPath, string bak, PlusReloadResult result)
+    {
+        if (File.Exists(bak))
+        {
+            try
+            {
+                File.Copy(bak, fullPath, overwrite: true);
+            }
+            catch (Exception restoreEx) when (restoreEx is IOException or UnauthorizedAccessException)
+            {
+                return new ConfigApplyResult
+                {
+                    Ok = false,
+                    Error = (result.Error ?? "reload failed") + "; restore failed: " + restoreEx.Message,
+                };
+            }
+        }
+
+        return new ConfigApplyResult
+        {
+            Ok = false,
+            Error = result.Error ?? "reload failed",
+        };
     }
 }

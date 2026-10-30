@@ -30,3 +30,22 @@ Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.Kind.get -> string!
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.TryCreate(Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig! config, Microsoft.Extensions.Logging.ILogger? logger, out Titanium.Web.Proxy.Abstractions.Middleware.IProxyMiddleware? middleware, out string? error) -> bool
 Titanium.Web.Proxy.Scripting.Wasm.WasmPluginEngine.WasmPluginEngine() -> void
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Broken = 6 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Deadline = 4 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Instructions = 2 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Load = 0 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Memory = 3 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Missing = 7 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Output = 5 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Runtime = 1 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaFailure.Timeout = 8 -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaScriptException
+Titanium.Web.Proxy.Scripting.Lua.LuaScriptException.Failure.get -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+Titanium.Web.Proxy.Scripting.Lua.LuaScriptException.LuaScriptException(Titanium.Web.Proxy.Scripting.Lua.LuaFailure failure, string! message) -> void
+Titanium.Web.Proxy.Scripting.Lua.LuaScriptException.RetiresState.get -> bool
+static Titanium.Web.Proxy.Scripting.Lua.LuaScriptException.FailureOf(int code) -> Titanium.Web.Proxy.Scripting.Lua.LuaFailure
+static Titanium.Web.Proxy.Scripting.Lua.LuaScriptException.IsLimit(Titanium.Web.Proxy.Scripting.Lua.LuaFailure failure) -> bool
+static Titanium.Web.Proxy.Scripting.Lua.LuaScriptException.Reason(Titanium.Web.Proxy.Scripting.Lua.LuaFailure failure) -> string!
+Titanium.Web.Proxy.Scripting.Wasm.WasmPoolClosedException
+Titanium.Web.Proxy.Scripting.Wasm.WasmPoolClosedException.WasmPoolClosedException() -> void

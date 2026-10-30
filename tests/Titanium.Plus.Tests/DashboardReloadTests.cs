@@ -14,8 +14,10 @@ using Titanium.Web.Proxy.Clusters;
 namespace Titanium.Plus.Tests;
 
 [TestClass]
-public class DashboardReloadTests
+public partial class DashboardReloadTests
 {
+    [GeneratedRegex("data-csrf=\"([^\"]+)\"")]
+    private static partial Regex CsrfTokenPattern();
     private const string Secret = "operator-secret-value";
     private const string ViewerSecret = "viewer-secret-value";
     private const string Remote = "10.4.5.6";
@@ -194,7 +196,7 @@ public class DashboardReloadTests
         public async Task<string> CsrfAsync(string cookie)
         {
             var page = await SendAsync("GET", "/", cookie: cookie);
-            return Regex.Match(page.Text, "data-csrf=\"([^\"]+)\"").Groups[1].Value;
+            return CsrfTokenPattern().Match(page.Text).Groups[1].Value;
         }
 
         public ValueTask DisposeAsync()

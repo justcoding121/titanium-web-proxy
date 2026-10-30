@@ -31,6 +31,10 @@ public sealed record AuthorizeCall(IReadOnlyDictionary<string, string> Query);
 /// </summary>
 public sealed class FakeIdp : IAsyncDisposable
 {
+    private static readonly string[] ResponseTypesSupported = ["code"];
+    private static readonly string[] TokenEndpointAuthMethodsSupported = ["client_secret_basic"];
+    private static readonly string[] CodeChallengeMethodsSupported = ["S256"];
+
     public const string ClientId = "twp-client";
     public const string ClientSecret = "client-secret-value";
 
@@ -200,9 +204,9 @@ public sealed class FakeIdp : IAsyncDisposable
                     ["authorization_endpoint"] = Issuer + "/authorize",
                     ["token_endpoint"] = Issuer + "/token",
                     ["jwks_uri"] = Issuer + "/jwks",
-                    ["response_types_supported"] = new[] { "code" },
-                    ["token_endpoint_auth_methods_supported"] = new[] { "client_secret_basic" },
-                    ["code_challenge_methods_supported"] = new[] { "S256" },
+                    ["response_types_supported"] = ResponseTypesSupported,
+                    ["token_endpoint_auth_methods_supported"] = TokenEndpointAuthMethodsSupported,
+                    ["code_challenge_methods_supported"] = CodeChallengeMethodsSupported,
                 });
                 break;
             case "/jwks":

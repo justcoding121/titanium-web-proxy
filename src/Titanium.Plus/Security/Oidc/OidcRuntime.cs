@@ -43,6 +43,10 @@ internal sealed class OidcRuntime
 {
     private const string SessionPurpose = "session";
     private const string FlowPurpose = "flow";
+    private const string TextPlain = "text/plain";
+    private const string RetryAfterHeader = "Retry-After";
+    private const string BadRequestBody = "bad request";
+    private const string UnauthorizedBody = "unauthorized";
     private static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(10);
     private static readonly long SkewSeconds = (long)OidcProvider.ClockSkew.TotalSeconds;
 
@@ -101,7 +105,7 @@ internal sealed class OidcRuntime
         }
         catch (OidcConfigException ex)
         {
-            logger?.LogError("Plus OIDC: {Message} The policy refuses every request until the config is fixed.", ex.Message);
+            logger?.LogError(ex, "Plus OIDC: {Message} The policy refuses every request until the config is fixed.", ex.Message);
             return new OidcRuntime(ex.Message);
         }
     }
@@ -128,67 +132,28 @@ internal sealed class OidcRuntime
     private async ValueTask<RoutePolicyVerdict> GuardAsync(SessionEventArgs session, Request request, CancellationToken cancellationToken)
     {
         var cookies = OidcCookies.Values(request, _settings.CookieName);
-
-        // Nothing the client sent for these names reaches the origin: the session cookie holds tokens, and a
-        // claim header is only ever set here.
-        OidcCookies.RemoveOwn(request, _settings.CookieName, _settings.FlowCookiePrefix);
-        foreach (var pair in _settings.PassClaims)
-        {
-            request.Headers.RemoveHeader(pair.Value);
-        }
+        StripInboundOidcHeaders(request);
 
         var nowUnix = _time.GetUtcNow().ToUnixTimeSeconds();
-        OidcSession? current = null;
-        foreach (var value in cookies)
-        {
-            current = OpenSession(value);
-            if (current is not null)
-            {
-                break;
-            }
-        }
-
-        if (current is not null &&
-            (current.ExpiresAt <= nowUnix || !_settings.Allows(current.Email, null, current.Groups)))
-        {
-            current = null;
-        }
-
+        var current = FindValidSession(cookies, nowUnix);
         string? renewedCookie = null;
         var clearCookie = cookies.Count > 0 && current is null;
         if (current is not null && _settings.RefreshTokens && nowUnix >= current.RefreshAt - SkewSeconds)
         {
-            var refreshed = await RefreshAsync(current, nowUnix).ConfigureAwait(false);
-            switch (refreshed.Status)
+            var refreshVerdict = await ApplySessionRefreshAsync(session, current, nowUnix).ConfigureAwait(false);
+            if (refreshVerdict.Early.HasValue)
             {
-                case OidcRefresher.Status.Renewed:
-                    current = refreshed.Session;
-                    renewedCookie = refreshed.SetCookie;
-                    break;
-                case OidcRefresher.Status.Rejected:
-                    current = null;
-                    clearCookie = true;
-                    break;
-                default:
-                    if (nowUnix >= current.RefreshAt + SkewSeconds)
-                    {
-                        return Reply(session, 503, "text/plain", "login provider unavailable", [("Retry-After", "5")]);
-                    }
-
-                    break;
+                return refreshVerdict.Early.Value;
             }
+
+            current = refreshVerdict.Session;
+            renewedCookie = refreshVerdict.RenewedCookie;
+            clearCookie = refreshVerdict.ClearCookie;
         }
 
         if (current is not null)
         {
-            foreach (var pair in _settings.PassClaims)
-            {
-                if (current.Claims.TryGetValue(pair.Key, out var claim) && claim.Length > 0)
-                {
-                    request.Headers.AddHeader(pair.Value, claim);
-                }
-            }
-
+            ApplyPassClaimHeaders(request, current);
             return renewedCookie is null
                 ? RoutePolicyVerdict.Continue
                 : new RoutePolicyVerdict { ResponseSetCookie = renewedCookie };
@@ -206,6 +171,61 @@ internal sealed class OidcRuntime
         return await StartLoginAsync(session, request, clear, cancellationToken).ConfigureAwait(false);
     }
 
+    private void StripInboundOidcHeaders(Request request)
+    {
+        OidcCookies.RemoveOwn(request, _settings.CookieName, _settings.FlowCookiePrefix);
+        foreach (var pair in _settings.PassClaims)
+        {
+            request.Headers.RemoveHeader(pair.Value);
+        }
+    }
+
+    private OidcSession? FindValidSession(IReadOnlyList<string> cookies, long nowUnix)
+    {
+        OidcSession? current = null;
+        foreach (var value in cookies)
+        {
+            current = OpenSession(value);
+            if (current is not null)
+            {
+                break;
+            }
+        }
+
+        if (current is not null &&
+            (current.ExpiresAt <= nowUnix || !_settings.Allows(current.Email, null, current.Groups)))
+        {
+            return null;
+        }
+
+        return current;
+    }
+
+    private async ValueTask<(OidcSession? Session, string? RenewedCookie, bool ClearCookie, RoutePolicyVerdict? Early)> ApplySessionRefreshAsync(
+        SessionEventArgs session, OidcSession current, long nowUnix)
+    {
+        var refreshed = await RefreshAsync(current, nowUnix).ConfigureAwait(false);
+        return refreshed.Status switch
+        {
+            OidcRefresher.Status.Renewed => (refreshed.Session, refreshed.SetCookie, false, null),
+            OidcRefresher.Status.Rejected => (null, null, true, null),
+            _ when nowUnix >= current.RefreshAt + SkewSeconds =>
+                (null, null, false, Reply(session, 503, TextPlain, "login provider unavailable", [(RetryAfterHeader, "5")])),
+            _ => (current, null, false, null),
+        };
+    }
+
+    private void ApplyPassClaimHeaders(Request request, OidcSession current)
+    {
+        foreach (var pair in _settings.PassClaims)
+        {
+            if (current.Claims.TryGetValue(pair.Key, out var claim) && claim.Length > 0)
+            {
+                request.Headers.AddHeader(pair.Value, claim);
+            }
+        }
+    }
+
     private async Task<OidcRefresher.Outcome> RefreshAsync(OidcSession current, long nowUnix)
     {
         if (current.RefreshToken is not { Length: > 0 } refreshToken)
@@ -219,7 +239,7 @@ internal sealed class OidcRuntime
         return await _refresher.RunAsync(refreshToken, () => RedeemRefreshTokenAsync(current, refreshToken)).ConfigureAwait(false);
     }
 
-    private async Task<OidcRefresher.Outcome> RedeemRefreshTokenAsync(OidcSession old, string refreshToken)
+    private async Task<OidcRefresher.Outcome> RedeemRefreshTokenAsync(OidcSession old, string refreshToken) // NOSONAR S3776 -- Refresh redeem maps provider errors onto session outcome.
     {
         try
         {
@@ -274,7 +294,11 @@ internal sealed class OidcRuntime
         }
         catch (Exception ex) when (ex is OidcTokenRejectedException or OidcTokenInvalidException)
         {
-            _logger?.LogInformation("Plus OIDC: policy {Policy}: refresh refused ({Reason}).", _settings.PolicyName, ex.Message);
+            if (_logger?.IsEnabled(LogLevel.Information) == true)
+            {
+                _logger.LogInformation(ex, "Plus OIDC: policy {Policy}: refresh refused ({Reason}).", _settings.PolicyName, ex.Message);
+            }
+
             return new OidcRefresher.Outcome(OidcRefresher.Status.Rejected, null, null);
         }
         catch (OidcProviderUnavailableException)
@@ -295,13 +319,13 @@ internal sealed class OidcRuntime
         }
         catch (OidcProviderUnavailableException)
         {
-            return Reply(session, 503, "text/plain", "login provider unavailable", [("Retry-After", "5")], clearCookie);
+            return Reply(session, 503, TextPlain, "login provider unavailable", [(RetryAfterHeader, "5")], clearCookie);
         }
 
         var redirectUri = RedirectUriFor(request);
         if (redirectUri is null)
         {
-            return Reply(session, 400, "text/plain", "bad request", [], clearCookie);
+            return Reply(session, 400, TextPlain, BadRequestBody, [], clearCookie);
         }
 
         var state = RandomText(32);
@@ -380,17 +404,17 @@ internal sealed class OidcRuntime
 
     // ------------------------------------------------------------------ callback
 
-    private async ValueTask<RoutePolicyVerdict> CallbackAsync(SessionEventArgs session, Request request, CancellationToken cancellationToken)
+    private async ValueTask<RoutePolicyVerdict> CallbackAsync(SessionEventArgs session, Request request, CancellationToken cancellationToken) // NOSONAR S3776 -- OIDC callback validates state, tokens, and allow rules in one flow.
     {
         var client = session.ClientRemoteEndPoint?.Address.ToString() ?? "unknown";
         if (!_guards.TryAdmitCallback(client, _owner.CallbackLimitPerMinute))
         {
-            return Reply(session, 429, "text/plain", "too many requests", [("Retry-After", "60")]);
+            return Reply(session, 429, TextPlain, "too many requests", [(RetryAfterHeader, "60")]);
         }
 
         if (!string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase))
         {
-            return Reply(session, 405, "text/plain", "method not allowed", [("Allow", "GET")]);
+            return Reply(session, 405, TextPlain, "method not allowed", [("Allow", "GET")]);
         }
 
         var (_, queryText) = SplitTarget(request.RequestUriString);
@@ -398,7 +422,7 @@ internal sealed class OidcRuntime
         var state = query["state"];
         if (string.IsNullOrEmpty(state) || state.Length > 256)
         {
-            return Reply(session, 400, "text/plain", "bad request");
+            return Reply(session, 400, TextPlain, BadRequestBody);
         }
 
         var flowName = FlowCookieName(state);
@@ -410,24 +434,24 @@ internal sealed class OidcRuntime
         // (a forged link) has no matching cookie.
         if (flow is null || flow.ExpiresAt <= nowUnix || !OidcProvider.FixedEquals(flow.State, state))
         {
-            return Reply(session, 400, "text/plain", "bad request", [], clear);
+            return Reply(session, 400, TextPlain, BadRequestBody, [], clear);
         }
 
         if (!_guards.TryUseState(state, FlowLifetime))
         {
             _logger?.LogWarning("Plus OIDC: policy {Policy}: a callback was replayed.", _settings.PolicyName);
-            return Reply(session, 400, "text/plain", "bad request", [], clear);
+            return Reply(session, 400, TextPlain, BadRequestBody, [], clear);
         }
 
         if (!string.IsNullOrEmpty(query["error"]))
         {
-            return Reply(session, 401, "text/plain", "sign-in was not completed", [], clear);
+            return Reply(session, 401, TextPlain, "sign-in was not completed", [], clear);
         }
 
         var code = query["code"];
         if (string.IsNullOrEmpty(code) || code.Length > 2048)
         {
-            return Reply(session, 400, "text/plain", "bad request", [], clear);
+            return Reply(session, 400, TextPlain, BadRequestBody, [], clear);
         }
 
         OidcTokens tokens;
@@ -438,41 +462,59 @@ internal sealed class OidcRuntime
             if (string.IsNullOrEmpty(tokens.IdToken))
             {
                 _logger?.LogWarning("Plus OIDC: policy {Policy}: the token answer had no ID token.", _settings.PolicyName);
-                return Reply(session, 401, "text/plain", "unauthorized", [], clear);
+                return Reply(session, 401, TextPlain, UnauthorizedBody, [], clear);
             }
 
             identity = await _provider.ValidateIdTokenAsync(tokens.IdToken, flow.Nonce, cancellationToken).ConfigureAwait(false);
         }
         catch (OidcTokenRejectedException ex)
         {
-            _logger?.LogWarning("Plus OIDC: policy {Policy}: the provider refused the code ({Reason}).", _settings.PolicyName, ex.Message);
-            return Reply(session, 401, "text/plain", "unauthorized", [], clear);
+            _logger?.LogWarning(ex, "Plus OIDC: policy {Policy}: the provider refused the code ({Reason}).", _settings.PolicyName, ex.Message);
+            return Reply(session, 401, TextPlain, UnauthorizedBody, [], clear);
         }
         catch (OidcTokenInvalidException ex)
         {
-            _logger?.LogWarning("Plus OIDC: policy {Policy}: the ID token was rejected ({Reason}).", _settings.PolicyName, ex.Message);
-            return Reply(session, 401, "text/plain", "unauthorized", [], clear);
+            _logger?.LogWarning(ex, "Plus OIDC: policy {Policy}: the ID token was rejected ({Reason}).", _settings.PolicyName, ex.Message);
+            return Reply(session, 401, TextPlain, UnauthorizedBody, [], clear);
         }
         catch (OidcProviderUnavailableException)
         {
             // Fail closed: a JWKS or token-endpoint outage must not keep admitting logins on stale keys.
-            return Reply(session, 503, "text/plain", "login provider unavailable", [("Retry-After", "5")], clear);
+            return Reply(session, 503, TextPlain, "login provider unavailable", [(RetryAfterHeader, "5")], clear);
         }
 
         if (string.IsNullOrEmpty(identity.Subject))
         {
-            return Reply(session, 401, "text/plain", "unauthorized", [], clear);
+            return Reply(session, 401, TextPlain, UnauthorizedBody, [], clear);
         }
 
         if (!_settings.Allows(identity.Email, identity.EmailVerified, identity.Groups))
         {
-            _logger?.LogInformation("Plus OIDC: policy {Policy}: a sign-in was denied by the allow rules.", _settings.PolicyName);
-            return Reply(session, 403, "text/plain", "forbidden", [], clear);
+            if (_logger?.IsEnabled(LogLevel.Information) == true)
+            {
+                _logger.LogInformation("Plus OIDC: policy {Policy}: a sign-in was denied by the allow rules.", _settings.PolicyName);
+            }
+
+            return Reply(session, 403, TextPlain, "forbidden", [], clear);
+        }
+
+        if (!TrySealCallbackSession(identity, tokens, out var value, out var fresh))
+        {
+            _logger?.LogError("Plus OIDC: policy {Policy}: the session does not fit in a cookie. Trim passClaims or allowedGroups.", _settings.PolicyName);
+            return Reply(session, 500, TextPlain, "session too large", [], clear);
         }
 
         var now = _time.GetUtcNow().ToUnixTimeSeconds();
+        var lifetime = TimeSpan.FromSeconds(Math.Max(1, fresh.ExpiresAt - now));
+        var target = OidcRedirect.Resolve(flow.ReturnTo, _settings.RedirectOrigins) ?? "/";
+        return Redirect(session, target, [OidcCookies.Set(_settings.CookieName, value, lifetime), clear]);
+    }
+
+    private bool TrySealCallbackSession(OidcIdentity identity, OidcTokens tokens, out string value, out OidcSession fresh)
+    {
+        var now = _time.GetUtcNow().ToUnixTimeSeconds();
         var refreshToken = _settings.RefreshTokens && tokens.RefreshToken is { Length: > 0 } rt ? rt : null;
-        var fresh = new OidcSession
+        fresh = new OidcSession
         {
             Subject = identity.Subject,
             Email = identity.Email,
@@ -484,25 +526,17 @@ internal sealed class OidcRuntime
         };
         if (_settings.RefreshTokens && refreshToken is null)
         {
-            // Nothing to renew with: the session ends with the ID token.
             fresh.ExpiresAt = Math.Min(fresh.ExpiresAt, fresh.RefreshAt);
         }
 
-        if (!TrySeal(fresh, out var value))
+        if (TrySeal(fresh, out value))
         {
-            // Without the refresh token the session ends with the ID token, but it still fits.
-            fresh.RefreshToken = null;
-            fresh.ExpiresAt = Math.Min(fresh.ExpiresAt, fresh.RefreshAt);
-            if (!TrySeal(fresh, out value))
-            {
-                _logger?.LogError("Plus OIDC: policy {Policy}: the session does not fit in a cookie. Trim passClaims or allowedGroups.", _settings.PolicyName);
-                return Reply(session, 500, "text/plain", "session too large", [], clear);
-            }
+            return true;
         }
 
-        var lifetime = TimeSpan.FromSeconds(Math.Max(1, fresh.ExpiresAt - now));
-        var target = OidcRedirect.Resolve(flow.ReturnTo, _settings.RedirectOrigins) ?? "/";
-        return Redirect(session, target, [OidcCookies.Set(_settings.CookieName, value, lifetime), clear]);
+        fresh.RefreshToken = null;
+        fresh.ExpiresAt = Math.Min(fresh.ExpiresAt, fresh.RefreshAt);
+        return TrySeal(fresh, out value);
     }
 
     // ------------------------------------------------------------------ sign-out
@@ -605,18 +639,12 @@ internal sealed class OidcRuntime
             return false;
         }
 
-        var wantsJson = false;
-        foreach (var line in accept)
+        if (accept.Any(line => line.Value.Contains("text/html", StringComparison.OrdinalIgnoreCase)))
         {
-            if (line.Value.Contains("text/html", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            wantsJson |= line.Value.Contains("application/json", StringComparison.OrdinalIgnoreCase);
+            return false;
         }
 
-        return wantsJson;
+        return accept.Any(line => line.Value.Contains("application/json", StringComparison.OrdinalIgnoreCase));
     }
 
     private static RoutePolicyVerdict Redirect(SessionEventArgs session, string location, IEnumerable<string> cookies)
@@ -664,5 +692,5 @@ internal sealed class OidcRuntime
 
     /// <summary>The 503 sent for every request while the policy cannot run (bad secret, missing file).</summary>
     public static RoutePolicyVerdict Refuse(SessionEventArgs session) =>
-        Reply(session, 503, "text/plain", "login is not available", [("Retry-After", "30")]);
+        Reply(session, 503, TextPlain, "login is not available", [(RetryAfterHeader, "30")]);
 }

@@ -8,6 +8,8 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public sealed class LeaderElectorTests
 {
+    private static readonly bool[] LeaderLostOnce = [false];
+
     private sealed class ManualTime : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 10, 28, 12, 0, 0, TimeSpan.Zero);
@@ -91,7 +93,7 @@ public sealed class LeaderElectorTests
         await a.StepAsync(CancellationToken.None);
 
         Assert.IsFalse(a.IsLeader);
-        CollectionAssert.AreEqual(new[] { false }, changes);
+        CollectionAssert.AreEqual(LeaderLostOnce, changes);
     }
 
     [TestMethod]

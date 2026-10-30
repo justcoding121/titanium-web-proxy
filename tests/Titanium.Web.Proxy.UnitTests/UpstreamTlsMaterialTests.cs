@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using System.Net;
 using System.Net.Security;
 using System.Security.Authentication;
@@ -21,7 +22,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 ///     Per-cluster upstream TLS: material loading, pool identity, and the central validation policy.
 /// </summary>
 [TestClass]
-public class UpstreamTlsMaterialTests
+public partial class UpstreamTlsMaterialTests
 {
     private const string PasswordEnv = "TWP_TEST_UPSTREAM_PFX_PASSWORD";
 
@@ -43,7 +44,7 @@ public class UpstreamTlsMaterialTests
         Assert.IsNull(UpstreamTlsMaterial.For(new ClusterHttpClientConfig()));
         Assert.IsNull(UpstreamTlsMaterial.For(plain));
         Assert.AreEqual(string.Empty, new ClusterHttpClientConfig().ConnectionKey);
-        StringAssert.DoesNotMatch(plain.ConnectionKey, new System.Text.RegularExpressions.Regex("tls:"));
+        StringAssert.DoesNotMatch(plain.ConnectionKey, TlsConnectionKeyMarkerRegex());
     }
 
     [TestMethod]
@@ -391,4 +392,7 @@ public class UpstreamTlsMaterialTests
             listener.Stop();
         }
     }
+
+    [GeneratedRegex("tls:")]
+    private static partial Regex TlsConnectionKeyMarkerRegex();
 }

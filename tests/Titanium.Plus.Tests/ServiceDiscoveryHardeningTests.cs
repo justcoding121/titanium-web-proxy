@@ -16,6 +16,11 @@ namespace Titanium.Plus.Tests;
 public class ServiceDiscoveryHardeningTests
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+    private static readonly string[] K8sAddress10003 = ["10.0.0.3"];
+    private static readonly string[] K8sAddress10001 = ["10.0.0.1"];
+    private static readonly string[] K8sAddresses10001And10003 = ["10.0.0.1", "10.0.0.3"];
+    private static readonly string[] ConsulAddress100101 = ["10.1.0.1"];
+    private static readonly int[] ConsulPollSequence = [1, 2, 3];
 
     // ---------------------------------------------------------------- Kubernetes
 
@@ -50,7 +55,7 @@ public class ServiceDiscoveryHardeningTests
         using var discovery = StartK8s(manager, api, "svc");
 
         await WaitUntilAsync(() => Addresses(manager, "k8s").SequenceEqual(["10.0.0.3"]));
-        CollectionAssert.AreEqual(new[] { "10.0.0.3" }, Addresses(manager, "k8s").ToArray(),
+        CollectionAssert.AreEqual(K8sAddress10003, Addresses(manager, "k8s").ToArray(),
             "A not-ready endpoint is skipped, the MODIFIED slice replaces the original, DELETED removes slice b.");
 
         var list = api.Requests.First(r => !r.IsWatch);
@@ -92,11 +97,11 @@ public class ServiceDiscoveryHardeningTests
 
         var manager = new ClusterManager();
         using var discovery = StartK8s(manager, api, "svc");
-        await WaitUntilAsync(() => Addresses(manager, "k8s").Any());
+        await WaitUntilAsync(() => Addresses(manager, "k8s").Count > 0);
         release.TrySetResult();
         await WaitUntilAsync(() => api.Requests.Count(r => r.IsWatch) >= 2);
         Assert.AreEqual("77", ResourceVersionOf(api.Requests.Where(r => r.IsWatch).ElementAt(1)));
-        CollectionAssert.AreEqual(new[] { "10.0.0.1" }, Addresses(manager, "k8s").ToArray());
+        CollectionAssert.AreEqual(K8sAddress10001, Addresses(manager, "k8s").ToArray());
     }
 
     [TestMethod]
@@ -206,13 +211,13 @@ public class ServiceDiscoveryHardeningTests
 
         Volatile.Write(ref phase, 1);
         await WaitUntilAsync(() => Volatile.Read(ref lists) >= 4, "relist should keep retrying with backoff");
-        CollectionAssert.AreEqual(new[] { "10.0.0.1" }, Addresses(manager, "k8s").ToArray(),
+        CollectionAssert.AreEqual(K8sAddress10001, Addresses(manager, "k8s").ToArray(),
             "HTTP 503 must not replace or clear the last known destinations.");
 
         Volatile.Write(ref phase, 2);
         var seen = Volatile.Read(ref lists);
         await WaitUntilAsync(() => Volatile.Read(ref lists) >= seen + 2);
-        CollectionAssert.AreEqual(new[] { "10.0.0.1" }, Addresses(manager, "k8s").ToArray(),
+        CollectionAssert.AreEqual(K8sAddress10001, Addresses(manager, "k8s").ToArray(),
             "An empty result is never applied.");
 
         Volatile.Write(ref phase, 3);
@@ -284,7 +289,7 @@ public class ServiceDiscoveryHardeningTests
                 ["discovery.k8sTokenRefreshSeconds"] = "0",
             });
 
-            await WaitUntilAsync(() => api.Requests.Count(r => r.IsWatch) >= 1);
+            await WaitUntilAsync(() => api.Requests.Any(r => r.IsWatch));
             await File.WriteAllTextAsync(Path.Combine(sa, "token"), "token-two\n");
             release.TrySetResult();
             await WaitUntilAsync(() => api.Requests.Count(r => r.IsWatch) >= 2);
@@ -330,7 +335,7 @@ public class ServiceDiscoveryHardeningTests
                 ["discovery.k8sTokenRefreshSeconds"] = "3600",
             });
 
-            await WaitUntilAsync(() => api.Requests.Count >= 1);
+            await WaitUntilAsync(() => api.Requests.Length >= 1);
             await File.WriteAllTextAsync(Path.Combine(sa, "token"), "fresh");
             await WaitUntilAsync(() => Addresses(manager, "k8s").SequenceEqual(["10.0.0.1"]));
         }
@@ -405,7 +410,7 @@ public class ServiceDiscoveryHardeningTests
                {"addresses":["10.0.0.3"]}]}
             """);
         var first = ServiceDiscovery.ParseEndpointSlice(doc.RootElement, null);
-        CollectionAssert.AreEqual(new[] { "10.0.0.1", "10.0.0.3" }, first.Select(d => d.Address).ToArray());
+        CollectionAssert.AreEqual(K8sAddresses10001And10003, first.Select(d => d.Address).ToArray());
         Assert.IsTrue(first.All(d => d.Port == 9090));
 
         var named = ServiceDiscovery.ParseEndpointSlice(doc.RootElement, "http");
@@ -506,12 +511,12 @@ public class ServiceDiscoveryHardeningTests
         using var discovery = ServiceDiscovery.TryStart(Context(manager, options), options);
         await WaitUntilAsync(() => Addresses(manager, "consul").SequenceEqual(["10.1.0.1"]));
 
-        foreach (var next in new[] { 1, 2, 3 })
+        foreach (var next in ConsulPollSequence)
         {
             Volatile.Write(ref phase, next);
             var seen = Volatile.Read(ref calls);
             await WaitUntilAsync(() => Volatile.Read(ref calls) >= seen + 3, $"phase {next} should keep retrying");
-            CollectionAssert.AreEqual(new[] { "10.1.0.1" }, Addresses(manager, "consul").ToArray(),
+            CollectionAssert.AreEqual(ConsulAddress100101, Addresses(manager, "consul").ToArray(),
                 $"phase {next} must retain the last known good destinations");
         }
 
@@ -538,7 +543,7 @@ public class ServiceDiscoveryHardeningTests
         var options = ConsulOptions(api);
         options["discovery.intervalMs"] = "100";
         using var discovery = ServiceDiscovery.TryStart(Context(manager, options), options);
-        await WaitUntilAsync(() => api.Requests.Count >= 3);
+        await WaitUntilAsync(() => api.Requests.Length >= 3);
 
         Assert.IsTrue(api.Requests[1].Query.Contains("index=50", StringComparison.Ordinal));
         Assert.IsFalse(api.Requests[2].Query.Contains("index=50", StringComparison.Ordinal),
@@ -634,7 +639,7 @@ public class ServiceDiscoveryHardeningTests
             Options = options,
         };
 
-    private static IReadOnlyList<string> Addresses(ClusterManager manager, string clusterId) =>
+    private static List<string> Addresses(ClusterManager manager, string clusterId) =>
         manager.Snapshot.Clusters.TryGetValue(clusterId, out var cluster)
             ? cluster.Destinations.Select(d => d.Address).ToList()
             : [];
@@ -757,7 +762,7 @@ public class ServiceDiscoveryHardeningTests
 
         private ConcurrentQueue<FakeRequest> RequestLog { get; }
 
-        public IReadOnlyList<FakeRequest> Requests => RequestLog.ToArray();
+        public FakeRequest[] Requests => RequestLog.ToArray();
 
         public static async Task<FakeApi> StartAsync(Func<HttpContext, Task> handler)
         {

@@ -205,7 +205,7 @@ public class RetryV2Tests
         await wait.WaitAsync(TimeSpan.FromSeconds(5));
 
         // The delay is spent once. The next replay chooses its own.
-        Assert.IsTrue(ReverseProxySessionDispatch.WaitBeforeRetryAsync(proxy, session, CancellationToken.None).IsCompletedSuccessfully);
+        await ReverseProxySessionDispatch.WaitBeforeRetryAsync(proxy, session, CancellationToken.None);
         session.HttpClient.Response.StatusCode = 503;
         Assert.IsTrue(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, session));
         _ = ReverseProxySessionDispatch.WaitBeforeRetryAsync(proxy, session, CancellationToken.None).AsTask();

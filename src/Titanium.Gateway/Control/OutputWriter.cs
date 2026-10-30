@@ -34,6 +34,8 @@ public sealed record OutputOptions
 /// </summary>
 public sealed class OutputWriter
 {
+    private const string MetadataKey = "metadata";
+
     /// <summary>A ConfigMap is limited to 1 MiB by the API server; leave room for the metadata.</summary>
     internal const int MaxConfigBytes = 900 * 1024;
 
@@ -80,7 +82,7 @@ public sealed class OutputWriter
         {
             ["apiVersion"] = "v1",
             ["kind"] = "Secret",
-            ["metadata"] = new JsonObject { ["name"] = _options.TlsSecretName, ["namespace"] = _options.Namespace },
+            [MetadataKey] = new JsonObject { ["name"] = _options.TlsSecretName, ["namespace"] = _options.Namespace },
             ["type"] = "Opaque",
             ["data"] = data,
         };
@@ -90,7 +92,7 @@ public sealed class OutputWriter
         {
             ["apiVersion"] = "v1",
             ["kind"] = "ConfigMap",
-            ["metadata"] = new JsonObject { ["name"] = _options.ConfigMapName, ["namespace"] = _options.Namespace },
+            [MetadataKey] = new JsonObject { ["name"] = _options.ConfigMapName, ["namespace"] = _options.Namespace },
             ["data"] = new JsonObject { [_options.ConfigKey] = Encoding.UTF8.GetString(configBytes) },
         };
         await ApplyObjectAsync($"/api/v1/namespaces/{Uri.EscapeDataString(_options.Namespace)}/configmaps/{Uri.EscapeDataString(_options.ConfigMapName)}", configMap, cancellationToken).ConfigureAwait(false);
@@ -126,7 +128,7 @@ public sealed class OutputWriter
         }
 
         using var document = JsonDocument.Parse(current.Body);
-        var recorded = document.RootElement.GetString("spec", "template", "metadata", "annotations", ListenersAnnotation);
+        var recorded = document.RootElement.GetString("spec", "template", MetadataKey, "annotations", ListenersAnnotation);
         if (string.Equals(recorded ?? NoListeners, signature, StringComparison.Ordinal))
         {
             return;
@@ -138,7 +140,7 @@ public sealed class OutputWriter
             {
                 ["template"] = new JsonObject
                 {
-                    ["metadata"] = new JsonObject { ["annotations"] = new JsonObject { [ListenersAnnotation] = signature } },
+                    [MetadataKey] = new JsonObject { ["annotations"] = new JsonObject { [ListenersAnnotation] = signature } },
                 },
             },
         };
@@ -161,7 +163,7 @@ public sealed class OutputWriter
     {
         var patch = new JsonObject
         {
-            ["metadata"] = new JsonObject { ["annotations"] = new JsonObject { [PokeAnnotation] = token } },
+            [MetadataKey] = new JsonObject { ["annotations"] = new JsonObject { [PokeAnnotation] = token } },
         }.ToJsonString();
         var failed = 0;
         foreach (var name in podNames.Distinct(StringComparer.Ordinal))

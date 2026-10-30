@@ -187,10 +187,10 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         var allowedEmails = SplitList(First(options, "controlPlane.dashboardOidc.allowedEmails", "dashboard.oidc.allowedEmails"));
         var allowedEmailDomains = SplitList(
             First(options, "controlPlane.dashboardOidc.allowedEmailDomains", "dashboard.oidc.allowedEmailDomains"));
-        if ((operatorGroups is null || operatorGroups.Count == 0) &&
-            (viewerGroups is null || viewerGroups.Count == 0) &&
-            (allowedEmails is null || allowedEmails.Count == 0) &&
-            (allowedEmailDomains is null || allowedEmailDomains.Count == 0))
+        if ((operatorGroups is null || operatorGroups.Length == 0) &&
+            (viewerGroups is null || viewerGroups.Length == 0) &&
+            (allowedEmails is null || allowedEmails.Length == 0) &&
+            (allowedEmailDomains is null || allowedEmailDomains.Length == 0))
         {
             throw new InvalidOperationException(
                 "controlPlane.dashboardOidc needs at least one of allowedEmails, allowedEmailDomains, operatorGroups, or viewerGroups.");
@@ -224,7 +224,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         return null;
     }
 
-    private static IReadOnlyList<string>? SplitList(string? value)
+    private static string[]? SplitList(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

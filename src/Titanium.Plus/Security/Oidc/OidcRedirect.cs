@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace Titanium.Plus.Security.Oidc;
 
 /// <summary>
@@ -30,15 +32,9 @@ internal static class OidcRedirect
         }
 
         var origin = OriginOf(uri);
-        foreach (var allowed in allowedOrigins)
-        {
-            if (string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
+        return allowedOrigins.Any(allowed => string.Equals(allowed, origin, StringComparison.OrdinalIgnoreCase))
+            ? candidate
+            : null;
     }
 
     /// <summary>The scheme, host, and non-default port of an absolute http(s) URL. Null for anything else.</summary>
@@ -81,16 +77,6 @@ internal static class OidcRedirect
         return trimmed.Length > 0 && trimmed[0] == '/' && Resolve(trimmed, []) is not null ? trimmed : null;
     }
 
-    private static bool HasUnsafeCharacter(string value)
-    {
-        foreach (var c in value)
-        {
-            if (c <= ' ' || c == '\u007f' || c == '\\')
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasUnsafeCharacter(string value) =>
+        value.Any(c => c <= ' ' || c == '\u007f' || c == '\\');
 }

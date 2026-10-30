@@ -12,6 +12,10 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public sealed class GatewayControllerTests
 {
+    private static readonly string[] AppTestHost = ["app.test"];
+    private static readonly string[] DualBackendAddresses = ["10.0.0.7:8080", "10.0.0.8:8080"];
+    private static readonly string[] GoodPfxFiles = ["default.good.pfx"];
+
     private static JsonObject Status(ClusterFixture f, string plural, string? ns, string name) =>
         f.Api.Get(plural, ns, name)!["status"]!.AsObject();
 
@@ -36,7 +40,7 @@ public sealed class GatewayControllerTests
         Assert.AreEqual(1, config.UserRoutes().Count);
         Assert.AreEqual(GatewayTranslator.NoMatchRouteId, config.Routes[^1].Id, "a request no route matches gets 404, never a forward to the named host");
         Assert.AreEqual(404, config.Routes[^1].DirectResponse?.Status);
-        CollectionAssert.AreEqual(new[] { "app.test" }, config.UserRoutes()[0].Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(AppTestHost, config.UserRoutes()[0].Match.Hosts!.ToArray());
         var destination = config.Clusters.Single().Destinations.Single();
         Assert.AreEqual("10.0.0.1", destination.Address);
         Assert.AreEqual(8080, destination.Port);
@@ -103,7 +107,7 @@ public sealed class GatewayControllerTests
         var first = Token("data-0");
         Assert.AreEqual(16, first.Length, "the first poke carries the config hash");
         Assert.AreEqual(first, Token("data-1"));
-        Assert.AreEqual("application/merge-patch+json", f.Api.WritesTo("/pods/data-0").First().ContentType);
+        Assert.AreEqual("application/merge-patch+json", f.Api.WritesTo("/pods/data-0")[0].ContentType);
 
         // Nothing changed and every pod runs the config: no further poke.
         var writes = f.Api.WritesTo("/pods/").Count;
@@ -128,7 +132,7 @@ public sealed class GatewayControllerTests
         await ClusterFixture.WaitForAsync(() => f.Cache.Snapshot().EndpointSlices.Any(s => s.Name == "web-abc" && s.Endpoints.Count == 2));
         await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
         var addresses = TwpConfigLoader.LoadYaml(f.ConfigText()!).Clusters.Single().Destinations.Select(d => $"{d.Address}:{d.Port}").Order().ToArray();
-        CollectionAssert.AreEqual(new[] { "10.0.0.7:8080", "10.0.0.8:8080" }, addresses);
+        CollectionAssert.AreEqual(DualBackendAddresses, addresses);
 
         f.Api.Delete("endpointslices", "default", "web-abc");
         await ClusterFixture.WaitForAsync(() => f.Cache.Snapshot().EndpointSlices.All(s => s.Name != "web-abc"));
@@ -219,7 +223,7 @@ public sealed class GatewayControllerTests
 
         var secret = f.Api.Get("secrets", ClusterFixture.DataNamespace, ClusterFixture.DataService + "-tls")!;
         var files = secret["data"]!.AsObject().Select(p => p.Key).ToArray();
-        CollectionAssert.AreEqual(new[] { "default.good.pfx" }, files);
+        CollectionAssert.AreEqual(GoodPfxFiles, files);
         var pfx = Convert.FromBase64String(secret["data"]!["default.good.pfx"]!.GetValue<string>());
         using var loaded = System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(pfx, null);
         Assert.IsTrue(loaded.HasPrivateKey);
@@ -323,5 +327,6 @@ public sealed class GatewayControllerTests
 
         f.AddRoute("late", "late.test");
         await ClusterFixture.WaitForAsync(() => f.Cache.Snapshot().HttpRoutes.Count == 2);
+        Assert.AreEqual(2, f.Cache.Snapshot().HttpRoutes.Count);
     }
 }

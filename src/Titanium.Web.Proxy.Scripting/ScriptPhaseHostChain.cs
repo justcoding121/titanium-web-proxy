@@ -74,7 +74,7 @@ public sealed class ScriptPhaseHostChain : IScriptPhaseHost
         }
     }
 
-    private async ValueTask<ScriptPhaseResult> RunAsync(ScriptPhaseContext context, CancellationToken cancellationToken)
+    private async ValueTask<ScriptPhaseResult> RunAsync(ScriptPhaseContext context, CancellationToken cancellationToken) // NOSONAR S3776 -- Script phase chain merges header/body edits across hosts in one pass.
     {
         var headers = context.Headers;
         var chunk = context.Chunk;
@@ -160,19 +160,21 @@ public sealed class ScriptPhaseHostChain : IScriptPhaseHost
     private static async ValueTask<ScriptPhaseResult> InvokeAsync(IScriptPhaseHost host, ScriptPhaseContext context,
         CancellationToken cancellationToken)
     {
-        var result = await (context.Phase switch
+        ScriptPhaseResult result = context.Phase switch
         {
-            ScriptPhases.RequestHeaders => host.OnRequestHeadersAsync(context, cancellationToken),
-            ScriptPhases.RequestBody => host.OnRequestBodyAsync(context, cancellationToken),
-            ScriptPhases.RequestTrailers => host.OnRequestTrailersAsync(context, cancellationToken),
-            ScriptPhases.ResponseHeaders => host.OnResponseHeadersAsync(context, cancellationToken),
-            ScriptPhases.ResponseBody => host.OnResponseBodyAsync(context, cancellationToken),
-            ScriptPhases.ResponseTrailers => host.OnResponseTrailersAsync(context, cancellationToken),
-            _ => new ValueTask<ScriptPhaseResult>(ScriptPhaseResult.Continue),
-        }).ConfigureAwait(false);
+            ScriptPhases.RequestHeaders => await host.OnRequestHeadersAsync(context, cancellationToken).ConfigureAwait(false),
+            ScriptPhases.RequestBody => await host.OnRequestBodyAsync(context, cancellationToken).ConfigureAwait(false),
+            ScriptPhases.RequestTrailers => await host.OnRequestTrailersAsync(context, cancellationToken).ConfigureAwait(false),
+            ScriptPhases.ResponseHeaders => await host.OnResponseHeadersAsync(context, cancellationToken).ConfigureAwait(false),
+            ScriptPhases.ResponseBody => await host.OnResponseBodyAsync(context, cancellationToken).ConfigureAwait(false),
+            ScriptPhases.ResponseTrailers => await host.OnResponseTrailersAsync(context, cancellationToken).ConfigureAwait(false),
+            _ => ScriptPhaseResult.Continue,
+        };
 
-        for (var resumes = 1; result.Action == ScriptAction.Pause; resumes++)
+        var resumes = 0;
+        while (result.Action == ScriptAction.Pause)
         {
+            resumes++;
             if (resumes > MaxResumes)
             {
                 return ScriptPhaseResult.Deny(504, "Script did not finish.");

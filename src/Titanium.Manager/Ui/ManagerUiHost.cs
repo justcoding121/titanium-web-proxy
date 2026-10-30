@@ -19,6 +19,7 @@ internal sealed class ManagerUiHost
         "default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
     private const int MaxLoginBodyBytes = 4096;
+    private const string LoginPath = "/login";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -41,7 +42,7 @@ internal sealed class ManagerUiHost
     ///     Returns true when the request was handled as a UI/asset/login route (including redirects).
     ///     API routes under <c>/v1/</c> are left to the caller.
     /// </summary>
-    public async Task<bool> TryHandleAsync(HttpListenerContext context, string method, string path)
+    public async Task<bool> TryHandleAsync(HttpListenerContext context, string method, string path) // NOSONAR S3776 -- UI routing shares session/CSRF gates; splitting would scatter security checks.
     {
         if (method == "GET" && path.Equals(ManagerUiAssets.ScriptPath, StringComparison.Ordinal))
         {
@@ -57,7 +58,7 @@ internal sealed class ManagerUiHost
             return true;
         }
 
-        if (path.Equals("/login", StringComparison.OrdinalIgnoreCase))
+        if (path.Equals(LoginPath, StringComparison.OrdinalIgnoreCase))
         {
             // Same shape as Plus DashboardHost: route by method without nesting a user-controlled
             // method check around session lookups (avoids CodeQL cs/user-controlled-bypass).
@@ -129,7 +130,7 @@ internal sealed class ManagerUiHost
             var session = FindSession(context.Request, touch: true);
             if (session is null)
             {
-                await RedirectAsync(context, "/login").ConfigureAwait(false);
+                await RedirectAsync(context, LoginPath).ConfigureAwait(false);
                 return true;
             }
 
@@ -165,7 +166,7 @@ internal sealed class ManagerUiHost
         return true;
     }
 
-    private async Task HandleUiApiAsync(
+    private async Task HandleUiApiAsync( // NOSONAR S3776 -- UI JSON helpers share editor role checks and draft patch routing.
         HttpListenerContext context,
         string method,
         string path,
@@ -187,7 +188,7 @@ internal sealed class ManagerUiHost
                 return;
             }
 
-            var fleet = _store.CreateFleet(name!);
+            var fleet = _store.CreateFleet(name);
             _store.Audit(session.Actor, "fleet.create", $"fleet:{fleet.Id}", "ok", fleet.Name);
             await WriteJsonAsync(context, 201, new { id = fleet.Id, name = fleet.Name }).ConfigureAwait(false);
             return;
@@ -263,7 +264,7 @@ internal sealed class ManagerUiHost
         await WriteTextAsync(context, 404, "not found").ConfigureAwait(false);
     }
 
-    private async Task HandlePageAsync(HttpListenerContext context, string path, ManagerSession session)
+    private async Task HandlePageAsync(HttpListenerContext context, string path, ManagerSession session) // NOSONAR S3776 -- Fleet page routing shares one session/CSRF envelope.
     {
         var role = ManagerUiViews.RoleName(session.Role);
         var canEdit = session.Role >= AdminRole.Editor;
@@ -375,7 +376,7 @@ internal sealed class ManagerUiHost
             var published = _store.GetPublished(fleetId);
             var revisions = _store.ListRevisions(fleetId);
             var yaml = published?.YamlText
-                       ?? revisions.FirstOrDefault()?.YamlText
+                       ?? (revisions.Count > 0 ? revisions[0].YamlText : null)
                        ?? ManagerUiYamlDraft.EmptyDraft;
             DraftSummary summary;
             try
@@ -469,18 +470,18 @@ internal sealed class ManagerUiHost
         var admin = _store.FindAdminByToken(token);
         if (admin is null || !AdminRoleParser.TryParse(admin.Role, out var role))
         {
-            _store.Audit("ui:anonymous", "ui.login", "/login", "denied");
+            _store.Audit("ui:anonymous", "ui.login", LoginPath, "denied");
             await WriteHtmlAsync(context, 401, ManagerUiViews.Login("Wrong admin token.")).ConfigureAwait(false);
             return;
         }
 
         var actor = $"ui:{admin.Name}:{AdminRoleParser.ToApi(role)}";
         var id = Sessions.Create(role, actor, out _);
-        _store.Audit(actor, "ui.login", "/login", "ok");
+        _store.Audit(actor, "ui.login", LoginPath, "ok");
         await RedirectAsync(context, "/", SessionCookieHeader(id)).ConfigureAwait(false);
     }
 
-    private bool RequireCsrf(HttpListenerContext context, ManagerSession session)
+    private static bool RequireCsrf(HttpListenerContext context, ManagerSession session)
     {
         var presented = context.Request.Headers[CsrfHeader]
                         ?? context.Request.Headers["X-CSRF-Token"];

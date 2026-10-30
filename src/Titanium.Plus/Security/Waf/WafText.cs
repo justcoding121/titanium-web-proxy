@@ -10,28 +10,31 @@ internal static class WafText
     /// Percent-decodes <c>%XX</c> and <c>%uXXXX</c>. A two-byte UTF-8 sequence (<c>%c3%a9</c>, and the overlong
     /// <c>%c0%af</c> forms old servers accepted) becomes one char. Invalid escapes stay as they are.
     /// </summary>
-    public static int UrlDecode(ReadOnlySpan<char> src, Span<char> dst, bool plusAsSpace)
+    public static int UrlDecode(ReadOnlySpan<char> src, Span<char> dst, bool plusAsSpace) // NOSONAR S3776 -- URL decoding keeps UTF-8 and legacy escape paths in one scan.
     {
         var o = 0;
-        for (var i = 0; i < src.Length; i++)
+        var i = 0;
+        while (i < src.Length)
         {
             var c = src[i];
             if (c == '+' && plusAsSpace)
             {
                 dst[o++] = ' ';
+                i++;
                 continue;
             }
 
             if (c != '%')
             {
                 dst[o++] = c;
+                i++;
                 continue;
             }
 
             if (i + 5 < src.Length && (src[i + 1] is 'u' or 'U') && TryHex4(src.Slice(i + 2, 4), out var wide))
             {
                 dst[o++] = (char)wide;
-                i += 5;
+                i += 6;
                 continue;
             }
 
@@ -42,15 +45,17 @@ internal static class WafText
                     TryHex2(src[i + 2], src[i + 3], out var b2) && (b2 & 0xC0) == 0x80)
                 {
                     dst[o++] = (char)(((b & 0x1F) << 6) | (b2 & 0x3F));
-                    i += 3;
+                    i += 4;
                     continue;
                 }
 
                 dst[o++] = (char)b;
+                i++;
                 continue;
             }
 
             dst[o++] = c;
+            i++;
         }
 
         return o;
@@ -108,12 +113,14 @@ internal static class WafText
     public static int HtmlEntityDecode(ReadOnlySpan<char> src, Span<char> dst)
     {
         var o = 0;
-        for (var i = 0; i < src.Length; i++)
+        var i = 0;
+        while (i < src.Length)
         {
             var c = src[i];
             if (c != '&' || i + 1 >= src.Length)
             {
                 dst[o++] = c;
+                i++;
                 continue;
             }
 
@@ -122,18 +129,19 @@ internal static class WafText
                 if (TryNumericEntity(src, i, out var decoded, out var consumed))
                 {
                     dst[o++] = decoded;
-                    i += consumed - 1;
+                    i += consumed;
                     continue;
                 }
             }
             else if (TryNamedEntity(src, i, out var named, out var length))
             {
                 dst[o++] = named;
-                i += length - 1;
+                i += length;
                 continue;
             }
 
             dst[o++] = c;
+            i++;
         }
 
         return o;
@@ -154,7 +162,7 @@ internal static class WafText
         return src.Length;
     }
 
-    private static bool TryNumericEntity(ReadOnlySpan<char> src, int start, out char decoded, out int consumed)
+    private static bool TryNumericEntity(ReadOnlySpan<char> src, int start, out char decoded, out int consumed) // NOSONAR S3776 -- Numeric entity parsing keeps hex and decimal forms in one routine.
     {
         decoded = default;
         consumed = 0;
@@ -231,7 +239,7 @@ internal static class WafText
         return true;
     }
 
-    private static char NamedEntity(ReadOnlySpan<char> name)
+    private static char NamedEntity(ReadOnlySpan<char> name) // NOSONAR S3776 -- Named entity lookup is a flat catalog of legacy HTML tokens.
     {
         if (name.Equals("lt", StringComparison.OrdinalIgnoreCase)) return '<';
         if (name.Equals("gt", StringComparison.OrdinalIgnoreCase)) return '>';

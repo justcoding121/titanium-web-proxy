@@ -77,12 +77,18 @@ internal sealed class TcpPassthroughOptions
         IdleTimeout > TimeSpan.Zero || HalfCloseGrace > TimeSpan.Zero || !Preamble.IsEmpty;
 
     /// <summary>The relay loop these options select.</summary>
-    internal PassthroughRelayVariant Variant =>
-        Filters is not null
-            ? PassthroughRelayVariant.Filtered
-            : NeedsEnhancedRelay
-                ? PassthroughRelayVariant.Enhanced
-                : PassthroughRelayVariant.Plain;
+    internal PassthroughRelayVariant Variant
+    {
+        get
+        {
+            if (Filters is not null)
+            {
+                return PassthroughRelayVariant.Filtered;
+            }
+
+            return NeedsEnhancedRelay ? PassthroughRelayVariant.Enhanced : PassthroughRelayVariant.Plain;
+        }
+    }
 }
 
 /// <summary>Copies bytes between a client socket and an upstream TCP endpoint.</summary>
@@ -121,6 +127,17 @@ internal static class TcpPassthrough
         var result = await RelayAsync(client, upstream, options, cancellationToken).ConfigureAwait(false);
         return result with { BytesIn = result.BytesIn + initialBytes.Length };
     }
+
+    /// <summary>
+    ///     Copies both directions. With no idle timeout, no preamble and no half-close grace, an EOF is a send
+    ///     shutdown and the other direction may still drain — no timers are allocated. A positive
+    ///     <see cref="TcpPassthroughOptions.HalfCloseGrace" /> bounds how long that drain may last.
+    /// </summary>
+    public static Task<PassthroughRelayResult> RelayAsync(
+        Socket client, Socket upstream, TcpPassthroughOptions options, CancellationToken cancellationToken) =>
+        options.Variant == PassthroughRelayVariant.Plain
+            ? RelayPlainAsync(client, upstream, cancellationToken)
+            : RelayEnhancedAsync(client, upstream, options, cancellationToken);
 
     /// <summary>
     ///     Connects to the upstream and writes the preamble and <paramref name="initialBytes" />. A failure in any
@@ -171,17 +188,6 @@ internal static class TcpPassthrough
     }
 
     /// <summary>
-    ///     Copies both directions. With no idle timeout, no preamble and no half-close grace, an EOF is a send
-    ///     shutdown and the other direction may still drain — no timers are allocated. A positive
-    ///     <see cref="TcpPassthroughOptions.HalfCloseGrace" /> bounds how long that drain may last.
-    /// </summary>
-    public static Task<PassthroughRelayResult> RelayAsync(
-        Socket client, Socket upstream, TcpPassthroughOptions options, CancellationToken cancellationToken) =>
-        options.Variant == PassthroughRelayVariant.Plain
-            ? RelayPlainAsync(client, upstream, cancellationToken)
-            : RelayEnhancedAsync(client, upstream, options, cancellationToken);
-
-    /// <summary>
     ///     Half-closes on EOF and waits for the other direction. No timers, no linked tokens, no shared counters.
     ///     A failed pump closes both sockets so a stuck peer cannot hang the relay.
     /// </summary>
@@ -202,14 +208,23 @@ internal static class TcpPassthrough
         var backResult = await back.ConfigureAwait(false);
         TryCloseBoth(client, upstream);
 
-        var outcome = cancellationToken.IsCancellationRequested
+        PassthroughOutcome outcome;
+        if (cancellationToken.IsCancellationRequested
             || firstResult.Error is OperationCanceledException
             || forwardResult.Error is OperationCanceledException
-            || backResult.Error is OperationCanceledException
-            ? PassthroughOutcome.Cancelled
-            : firstResult.Error is not null || forwardResult.Error is not null || backResult.Error is not null
-                ? PassthroughOutcome.Error
-                : PassthroughOutcome.Completed;
+            || backResult.Error is OperationCanceledException)
+        {
+            outcome = PassthroughOutcome.Cancelled;
+        }
+        else if (firstResult.Error is not null || forwardResult.Error is not null || backResult.Error is not null)
+        {
+            outcome = PassthroughOutcome.Error;
+        }
+        else
+        {
+            outcome = PassthroughOutcome.Completed;
+        }
+
         return new PassthroughRelayResult(forwardResult.Bytes, backResult.Bytes, outcome);
     }
 
@@ -259,7 +274,7 @@ internal static class TcpPassthrough
         }
     }
 
-    private static async Task<PassthroughRelayResult> RelayEnhancedAsync(
+    private static async Task<PassthroughRelayResult> RelayEnhancedAsync( // NOSONAR S3776 -- Timer-backed relay coordinates idle, grace, and filter pumps on shared state.
         Socket client, Socket upstream, TcpPassthroughOptions options, CancellationToken cancellationToken)
     {
         var filters = options.Filters;
@@ -308,7 +323,7 @@ internal static class TcpPassthrough
             }
             else
             {
-                relayCts.Cancel();
+                await relayCts.CancelAsync().ConfigureAwait(false);
             }
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
@@ -42,9 +43,40 @@ internal static class ExternalAuthorization
     internal static async ValueTask<bool> DeniedAsync(
         ReverseProxyOptions options, RouteConfig route, SessionEventArgs session)
     {
-        if (route.Policies is not { Count: > 0 } names || options.Policies is not { Count: > 0 } policies)
+        var clients = ResolveExtAuthClients(options, route);
+        if (clients is null)
         {
             return false;
+        }
+
+        var request = session.HttpClient.Request;
+        if (request.Headers.HeaderExists(LoopHeader))
+        {
+            ProxyMetrics.RecordExtAuth("deny");
+            Refuse(session, new ExtAuthVerdict { Status = 508 });
+            return true;
+        }
+
+        var (denied, copied) = await RunExtAuthChecksAsync(session, clients, request).ConfigureAwait(false);
+        if (denied)
+        {
+            return true;
+        }
+
+        StripClientCopyHeaders(request, clients);
+        if (copied.Count > 0)
+        {
+            ApplyCopiedHeaders(request, copied);
+        }
+
+        return false;
+    }
+
+    private static List<ExtAuthClient>? ResolveExtAuthClients(ReverseProxyOptions options, RouteConfig route)
+    {
+        if (route.Policies is not { Count: > 0 } names || options.Policies is not { Count: > 0 } policies)
+        {
+            return null;
         }
 
         List<ExtAuthClient>? clients = null;
@@ -61,19 +93,12 @@ internal static class ExternalAuthorization
             }
         }
 
-        if (clients is null)
-        {
-            return false;
-        }
+        return clients;
+    }
 
-        var request = session.HttpClient.Request;
-        if (request.Headers.HeaderExists(LoopHeader))
-        {
-            ProxyMetrics.RecordExtAuth("deny");
-            Refuse(session, new ExtAuthVerdict { Status = 508 });
-            return true;
-        }
-
+    private static async Task<(bool Denied, List<KeyValuePair<string, string>> Copied)> RunExtAuthChecksAsync(
+        SessionEventArgs session, List<ExtAuthClient> clients, Request request)
+    {
         var peer = session.ClientRemoteEndPoint?.Address;
         List<KeyValuePair<string, string>>? copied = null;
         for (var i = 0; i < clients.Count; i++)
@@ -94,7 +119,7 @@ internal static class ExternalAuthorization
             if (!verdict.Allowed)
             {
                 Refuse(session, verdict);
-                return true;
+                return (true, []);
             }
 
             if (verdict.Copy is { Count: > 0 })
@@ -103,7 +128,11 @@ internal static class ExternalAuthorization
             }
         }
 
-        // A client-supplied header of the same name must never reach the upstream as if the service had set it.
+        return (false, copied ?? []);
+    }
+
+    private static void StripClientCopyHeaders(Request request, List<ExtAuthClient> clients)
+    {
         for (var i = 0; i < clients.Count; i++)
         {
             foreach (var name in clients[i].CopyNames)
@@ -111,16 +140,14 @@ internal static class ExternalAuthorization
                 request.Headers.RemoveHeader(name);
             }
         }
+    }
 
-        if (copied is not null)
+    private static void ApplyCopiedHeaders(Request request, List<KeyValuePair<string, string>> copied)
+    {
+        foreach (var pair in copied)
         {
-            foreach (var pair in copied)
-            {
-                request.Headers.AddHeader(pair.Key, pair.Value);
-            }
+            request.Headers.AddHeader(pair.Key, pair.Value);
         }
-
-        return false;
     }
 
     private static void Refuse(SessionEventArgs session, ExtAuthVerdict verdict)
@@ -345,7 +372,7 @@ internal static class ExternalAuthorization
             }
 
             // Never queue: a service that cannot keep up must not turn into an unbounded pile of waiting requests.
-            if (!inFlight.Wait(0))
+            if (!await inFlight.WaitAsync(0).ConfigureAwait(false))
             {
                 return Failure("saturated");
             }
@@ -623,7 +650,7 @@ internal static class ExternalAuthorization
         }
 
         /// <summary>The headers a response asked for, as a read-only list: the answer may be cached and handed to many requests.</summary>
-        private static IReadOnlyList<KeyValuePair<string, string>> Collect(HttpResponseMessage response, string[] names)
+        private static System.Collections.ObjectModel.ReadOnlyCollection<KeyValuePair<string, string>> Collect(HttpResponseMessage response, string[] names)
         {
             var result = new List<KeyValuePair<string, string>>();
             foreach (var name in names)
@@ -642,26 +669,15 @@ internal static class ExternalAuthorization
                 return;
             }
 
-            foreach (var value in values)
+            foreach (var value in values.Where(IsSafeValue))
             {
-                if (IsSafeValue(value))
-                {
-                    result.Add(new KeyValuePair<string, string>(name, value));
-                }
+                result.Add(new KeyValuePair<string, string>(name, value));
             }
         }
 
         private static bool IsSafeValue(string value)
         {
-            foreach (var c in value)
-            {
-                if (c is '\r' or '\n' or '\0')
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return value.All(static c => c is not '\r' and not '\n' and not '\0');
         }
 
         private static async Task<byte[]> ReadCappedAsync(HttpResponseMessage response, CancellationToken token)

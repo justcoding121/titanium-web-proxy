@@ -221,13 +221,8 @@ internal sealed class WafRuleSet
         var cookie = new List<Entry>();
         var body = new List<Entry>();
         var checks = new Entry?[Enum.GetValues<WafCheck>().Length];
-        foreach (var rule in rules)
+        foreach (var rule in rules.Where(r => !IsRuleDisabled(r, paranoia, disabled)))
         {
-            if (rule.Paranoia > paranoia || disabled.Contains(rule.Id) || disabled.Contains(rule.Category))
-            {
-                continue;
-            }
-
             var entry = new Entry(rule, all.Count);
             all.Add(rule);
             if (rule.Check != WafCheck.None)
@@ -245,6 +240,9 @@ internal sealed class WafRuleSet
 
         return new WafRuleSet(all.ToArray(), path.ToArray(), query.ToArray(), header.ToArray(), cookie.ToArray(), body.ToArray(), checks);
     }
+
+    private static bool IsRuleDisabled(WafRule rule, int paranoia, ISet<string> disabled) =>
+        rule.Paranoia > paranoia || disabled.Contains(rule.Id) || disabled.Contains(rule.Category);
 
     public Entry[] For(WafTargets target) => target switch
     {

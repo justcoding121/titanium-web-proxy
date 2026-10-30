@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Middleware;
+using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -88,7 +89,7 @@ public partial class ProxyServer
     ///     or <see cref="AfterResponse"/> subscriber still forces the full session path via
     ///     <see cref="NeedsHttpInterception"/>.
     /// </summary>
-    internal bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue,
+    internal bool CanUseH1TerminateLite(ProxyEndPoint endPoint, Request request, bool enable100Continue, // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         bool enableWinAuth, bool hasCustomUpstreamProxyFunc, UpstreamHttpProtocol? upstreamProtocol = null)
     {
         // This path only speaks HTTP/1.1 TCP to the origin. H2/H3 must not take lite (historical 100% errors).
@@ -225,7 +226,10 @@ public partial class ProxyServer
 
         request.Locked = true;
         request.IsBodyReceived = true;
-        cacheState?.Owner.ApplyConditionalHeaders(cacheState, request.Headers);
+        if (cacheState is not null)
+        {
+            HttpResponseCacheMiddleware.ApplyConditionalHeaders(cacheState, request.Headers);
+        }
 
         // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
         // Connection: close; forwarding it forces the origin to close and defeats pooling (Bare still
@@ -656,7 +660,7 @@ public partial class ProxyServer
             }
 
             var mayNeedBodyAfterWrite = AfterResponse != null || HasOnResponseBodyWriteSubscribers;
-            if (response.HasBody && response.IsBodyRead)
+            if ((response.HasBody && response.IsBodyRead) || !response.HasBody)
             {
                 ApplyResponseHeaderContributor(response);
                 await clientStream.WriteResponseAsync(response, cancellationToken);
@@ -733,11 +737,6 @@ public partial class ProxyServer
                     false, args, cancellationToken);
                 response.IsBodyReceived = true;
                 args.ResponseCache?.FinishStore();
-            }
-            else
-            {
-                ApplyResponseHeaderContributor(response);
-                await clientStream.WriteResponseAsync(response, cancellationToken);
             }
 
             if (!response.KeepAlive

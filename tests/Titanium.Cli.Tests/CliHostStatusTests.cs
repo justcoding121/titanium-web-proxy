@@ -11,6 +11,8 @@ namespace Titanium.Cli.Tests;
 [TestClass]
 public class CliHostStatusTests
 {
+    private static readonly string[] ExpectedBundleSubjects = ["CN=one", "CN=two"];
+
     private string _dir = null!;
 
     [TestInitialize]
@@ -184,7 +186,7 @@ public class CliHostStatusTests
 
         Assert.AreEqual(2, certs.Count);
         Assert.IsTrue(certs.Any(c => c.Name.EndsWith("(1/2)", StringComparison.Ordinal)));
-        CollectionAssert.AreEquivalent(new[] { "CN=one", "CN=two" }, certs.Select(c => c.Subject).ToArray());
+        CollectionAssert.AreEquivalent(ExpectedBundleSubjects, certs.Select(c => c.Subject).ToArray());
     }
 
     [TestMethod]

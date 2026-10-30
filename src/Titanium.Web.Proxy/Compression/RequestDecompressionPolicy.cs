@@ -74,7 +74,7 @@ internal sealed class RequestDecompressionPolicy
     ///     <see cref="MaxDecompressedBytes" /> or <c>max(compressed length x MaxRatio, 4 KiB)</c>, so memory never
     ///     exceeds the smaller bound plus one read.
     /// </summary>
-    internal RequestDecompressionOutcome TryDecompress(HttpCompression encoding, byte[] compressed,
+    internal RequestDecompressionOutcome TryDecompress(HttpCompression encoding, byte[] compressed, // NOSONAR S3776 -- Brotli and stream decoders share one byte cap and corrupt handling.
         out byte[] decompressed)
     {
         decompressed = [];

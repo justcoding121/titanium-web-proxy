@@ -106,7 +106,7 @@ public class StatusRetryV2Tests
         {
             if (Interlocked.Increment(ref hits) == 1)
             {
-                Thread.Sleep(4000);
+                Task.Delay(4000).GetAwaiter().GetResult();
                 return (200, "late");
             }
 

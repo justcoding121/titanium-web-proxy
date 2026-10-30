@@ -33,6 +33,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [DoNotParallelize]
 public class ScriptPhaseSeamTests
 {
+    private static readonly string[] PluginOrder = ["global", "route"];
     [TestMethod]
     [Timeout(60 * 1000)]
     public async Task RequestAndResponseHeaders_AreCalledAndEditsTakeEffect_ThenLogRuns()
@@ -252,7 +253,7 @@ public class ScriptPhaseSeamTests
         using var response = await rig.Client.GetAsync(rig.Url("/echo"));
         var echoed = await response.Content.ReadAsStringAsync();
 
-        CollectionAssert.AreEqual(new[] { "global", "route" }, order.ToArray(), "the listener-wide chain runs first");
+        CollectionAssert.AreEqual(PluginOrder, order.ToArray(), "the listener-wide chain runs first");
         StringAssert.Contains(echoed, "x-global=1;");
 
         var deny = new DelegateMiddleware("deny", order, args => args.GenericResponse("blocked", HttpStatusCode.UnavailableForLegalReasons));

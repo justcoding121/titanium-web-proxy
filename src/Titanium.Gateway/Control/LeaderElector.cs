@@ -31,6 +31,10 @@ public sealed record LeaderElectionOptions
 /// </summary>
 public sealed class LeaderElector
 {
+    private const string HolderIdentityKey = "holderIdentity";
+    private const string LeaseTransitionsKey = "leaseTransitions";
+    private const string MetadataKey = "metadata";
+
     private readonly IKubeApi _api;
     private readonly LeaderElectionOptions _options;
     private readonly ILogger _log;
@@ -70,6 +74,7 @@ public sealed class LeaderElector
         }
         catch (OperationCanceledException)
         {
+            // RunAsync was cancelled.
         }
 
         await ReleaseAsync().ConfigureAwait(false);
@@ -85,7 +90,7 @@ public sealed class LeaderElector
         }
         catch (Exception ex) when (ex is HttpRequestException or KubeApiException or IOException or JsonException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            _log.LogWarning("Leader election could not reach the API server: {Message}", ex.Message);
+            _log.LogWarning(ex, "Leader election could not reach the API server: {Message}", ex.Message);
         }
 
         var now = _time.GetUtcNow();
@@ -122,12 +127,12 @@ public sealed class LeaderElector
 
         using var document = JsonDocument.Parse(response.Body);
         var root = document.RootElement;
-        var holder = root.GetString("spec", "holderIdentity") ?? string.Empty;
+        var holder = root.GetString("spec", HolderIdentityKey) ?? string.Empty;
         var renew = root.GetString("spec", "renewTime");
         var acquire = root.GetString("spec", "acquireTime");
-        var transitions = root.GetInt("spec", "leaseTransitions") ?? 0;
+        var transitions = root.GetInt("spec", LeaseTransitionsKey) ?? 0;
         var duration = TimeSpan.FromSeconds(root.GetInt("spec", "leaseDurationSeconds") ?? (int)_options.LeaseDuration.TotalSeconds);
-        var resourceVersion = root.GetString("metadata", "resourceVersion");
+        var resourceVersion = root.GetString(MetadataKey, "resourceVersion");
 
         // Expiry is judged on the local clock from when this process last saw the record change, so clock skew
         // between nodes cannot make two replicas both think the lease is theirs.
@@ -145,9 +150,16 @@ public sealed class LeaderElector
             return false;
         }
 
-        var body = mine
-            ? NewLease(resourceVersion, ParseTime(acquire) ?? now, transitions, now)
-            : NewLease(resourceVersion, now, string.IsNullOrEmpty(holder) ? transitions : transitions + 1, now);
+        string body;
+        if (mine)
+        {
+            body = NewLease(resourceVersion, ParseTime(acquire) ?? now, transitions, now);
+        }
+        else
+        {
+            var nextTransitions = string.IsNullOrEmpty(holder) ? transitions : transitions + 1;
+            body = NewLease(resourceVersion, now, nextTransitions, now);
+        }
         var updated = await _api.SendAsync(HttpMethod.Put, LeasePath, body, "application/json", cancellationToken).ConfigureAwait(false);
         if (updated.IsSuccess)
         {
@@ -184,7 +196,7 @@ public sealed class LeaderElector
 
             using var document = JsonDocument.Parse(response.Body);
             var root = document.RootElement;
-            if (root.GetString("spec", "holderIdentity") != _options.Identity)
+            if (root.GetString("spec", HolderIdentityKey) != _options.Identity)
             {
                 return;
             }
@@ -192,44 +204,47 @@ public sealed class LeaderElector
             var now = _time.GetUtcNow();
             var spec = new JsonObject
             {
-                ["holderIdentity"] = string.Empty,
+                [HolderIdentityKey] = string.Empty,
                 ["leaseDurationSeconds"] = 1,
                 ["renewTime"] = GatewayJson.FormatMicroTime(now),
-                ["leaseTransitions"] = root.GetInt("spec", "leaseTransitions") ?? 0,
+                [LeaseTransitionsKey] = root.GetInt("spec", LeaseTransitionsKey) ?? 0,
             };
             var patch = new JsonObject
             {
-                ["metadata"] = new JsonObject { ["resourceVersion"] = root.GetString("metadata", "resourceVersion") },
+                [MetadataKey] = new JsonObject { ["resourceVersion"] = root.GetString(MetadataKey, "resourceVersion") },
                 ["spec"] = spec,
             };
             await _api.SendAsync(HttpMethod.Patch, LeasePath, patch.ToJsonString(), "application/merge-patch+json", cts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is HttpRequestException or KubeApiException or OperationCanceledException or JsonException)
         {
-            _log.LogDebug("Could not release the lease: {Message}", ex.Message);
+            if (_log.IsEnabled(LogLevel.Debug))
+            {
+                _log.LogDebug(ex, "Could not release the lease: {Message}", ex.Message);
+            }
         }
     }
 
     private string NewLease(string? resourceVersion, DateTimeOffset acquireTime, int transitions, DateTimeOffset renewTime)
     {
-        var metadata = new JsonObject { ["name"] = _options.Name, ["namespace"] = _options.Namespace };
+        var metadataObject = new JsonObject { ["name"] = _options.Name, ["namespace"] = _options.Namespace };
         if (resourceVersion is not null)
         {
-            metadata["resourceVersion"] = resourceVersion;
+            metadataObject["resourceVersion"] = resourceVersion;
         }
 
         var lease = new JsonObject
         {
             ["apiVersion"] = "coordination.k8s.io/v1",
             ["kind"] = "Lease",
-            ["metadata"] = metadata,
+            [MetadataKey] = metadataObject,
             ["spec"] = new JsonObject
             {
-                ["holderIdentity"] = _options.Identity,
+                [HolderIdentityKey] = _options.Identity,
                 ["leaseDurationSeconds"] = (int)_options.LeaseDuration.TotalSeconds,
                 ["acquireTime"] = GatewayJson.FormatMicroTime(acquireTime),
                 ["renewTime"] = GatewayJson.FormatMicroTime(renewTime),
-                ["leaseTransitions"] = transitions,
+                [LeaseTransitionsKey] = transitions,
             },
         };
         return lease.ToJsonString();
@@ -246,7 +261,18 @@ public sealed class LeaderElector
         }
 
         _isLeader = leader;
-        _log.LogInformation(leader ? "{Identity} became the leader." : "{Identity} is no longer the leader.", _options.Identity);
+        if (_log.IsEnabled(LogLevel.Information))
+        {
+            if (leader)
+            {
+                _log.LogInformation("{Identity} became the leader.", _options.Identity);
+            }
+            else
+            {
+                _log.LogInformation("{Identity} is no longer the leader.", _options.Identity);
+            }
+        }
+
         LeadershipChanged?.Invoke(leader);
     }
 }

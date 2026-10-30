@@ -11,6 +11,9 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public class GatewayTranslatorBackendTests
 {
+    private static readonly string[] RoundRobinBackendIps = ["10.0.0.1", "10.0.0.3"];
+    private static readonly string[] RedirectExampleHosts = ["a.example.com", "b.example.com"];
+
     private static Condition Cond(IReadOnlyList<Condition> list, string type) => list.Single(c => c.Type == type);
 
     private static RenderResult Render(StateBuilder b, HttpRoute route)
@@ -73,7 +76,7 @@ public class GatewayTranslatorBackendTests
         var result = Render(b, WithBackends(new HttpBackendRef { Name = "web", Port = 8080 }));
 
         CollectionAssert.AreEqual(
-            new[] { "10.0.0.1", "10.0.0.3" },
+            RoundRobinBackendIps,
             result.Config.Clusters.Single().Destinations.Select(d => d.Address).ToArray());
     }
 
@@ -358,7 +361,7 @@ public class GatewayTranslatorBackendTests
         var routes = Render(b, Route("r", "default", ["a.example.com", "b.example.com"], rule)).Config.UserRoutes();
 
         Assert.AreEqual(2, routes.Count);
-        CollectionAssert.AreEquivalent(new[] { "a.example.com", "b.example.com" }, routes.Select(r => r.Redirect!.Host).ToArray());
+        CollectionAssert.AreEquivalent(RedirectExampleHosts, routes.Select(r => r.Redirect!.Host).ToArray());
         Assert.AreEqual(2, routes.Select(r => r.Id).Distinct().Count());
     }
 

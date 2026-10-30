@@ -5,64 +5,23 @@ using Titanium.Manager.Store;
 
 return await RunAsync(args).ConfigureAwait(false);
 
-static async Task<int> RunAsync(string[] args)
+static async Task<int> RunAsync(string[] args) // NOSONAR S3776 -- Top-level host wiring keeps healthcheck and server modes in one entry.
 {
     if (args.Length > 0 && args[0].Equals("healthcheck", StringComparison.OrdinalIgnoreCase))
     {
         return await RunHealthcheckAsync(args[1..]).ConfigureAwait(false);
     }
 
-    string listen = "http://127.0.0.1:7700/";
-    string db = Path.Combine(Environment.CurrentDirectory, "titanium-manager.db");
-    string? adminToken = Environment.GetEnvironmentVariable("TITANIUM_MANAGER_ADMIN_TOKEN");
-
-    for (var i = 0; i < args.Length; i++)
+    if (!TryParseServerArgs(args, out var listen, out var db, out var adminToken, out var exitCode))
     {
-        var arg = args[i];
-        if (arg is "--help" or "-h")
-        {
-            PrintHelp();
-            return 0;
-        }
-
-        if (arg == "--listen" && i + 1 < args.Length)
-        {
-            listen = args[++i];
-            continue;
-        }
-
-        if (arg == "--db" && i + 1 < args.Length)
-        {
-            db = args[++i];
-            continue;
-        }
-
-        if (arg is "--admin-token" && i + 1 < args.Length)
-        {
-            adminToken = args[++i];
-            continue;
-        }
-
-        Console.Error.WriteLine($"titanium-manager: unknown argument '{arg}'");
-        PrintHelp();
-        return 2;
-    }
-
-    if (!listen.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
-        !listen.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-    {
-        listen = "http://" + listen;
-    }
-
-    if (!listen.EndsWith('/'))
-    {
-        listen += "/";
+        return exitCode;
     }
 
     if (string.IsNullOrWhiteSpace(adminToken))
     {
-        Console.Error.WriteLine(
-            "titanium-manager: set --admin-token or TITANIUM_MANAGER_ADMIN_TOKEN (hashed into SQLite as role admin).");
+        await Console.Error.WriteLineAsync(
+            "titanium-manager: set --admin-token or TITANIUM_MANAGER_ADMIN_TOKEN (hashed into SQLite as role admin).")
+            .ConfigureAwait(false);
         return 2;
     }
 
@@ -76,16 +35,19 @@ static async Task<int> RunAsync(string[] args)
     }
     catch (HttpListenerException ex)
     {
-        Console.Error.WriteLine($"titanium-manager: failed to listen on {listen}: {ex.Message}");
+        await Console.Error.WriteLineAsync($"titanium-manager: failed to listen on {listen}: {ex.Message}")
+            .ConfigureAwait(false);
         return 1;
     }
     catch (SocketException ex)
     {
-        Console.Error.WriteLine($"titanium-manager: failed to listen on {listen}: {ex.Message}");
+        await Console.Error.WriteLineAsync($"titanium-manager: failed to listen on {listen}: {ex.Message}")
+            .ConfigureAwait(false);
         return 1;
     }
 
-    Console.WriteLine($"titanium-manager listening on {server.BaseUrl} db={Path.GetFullPath(db)} (single-instance)");
+    await Console.Out.WriteLineAsync(
+        $"titanium-manager listening on {server.BaseUrl} db={Path.GetFullPath(db)} (single-instance)").ConfigureAwait(false);
 
     using var stop = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) =>
@@ -114,50 +76,144 @@ static async Task<int> RunAsync(string[] args)
         // graceful shutdown
     }
 
-    Console.WriteLine("titanium-manager shutting down");
+    await Console.Out.WriteLineAsync("titanium-manager shutting down").ConfigureAwait(false);
     return 0;
 }
 
-static async Task<int> RunHealthcheckAsync(string[] args)
+static bool TryParseServerArgs(string[] args, out string listen, out string db, out string? adminToken, out int exitCode) // NOSONAR S3776 -- CLI flag parsing keeps defaults and validation together.
 {
-    // Container HEALTHCHECK for the chiseled image (no shell/curl). Exit 0 is healthy.
-    var url = "http://127.0.0.1:7700/v1/healthz";
-    var timeout = TimeSpan.FromSeconds(3);
-    for (var i = 0; i < args.Length; i++)
+    listen = "http://127.0.0.1:7700/";
+    db = Path.Combine(Environment.CurrentDirectory, "titanium-manager.db");
+    adminToken = Environment.GetEnvironmentVariable("TITANIUM_MANAGER_ADMIN_TOKEN");
+    exitCode = 0;
+
+    var i = 0;
+    while (i < args.Length)
     {
         var arg = args[i];
         if (arg is "--help" or "-h")
         {
-            Console.WriteLine(
+            PrintHelp();
+            return false;
+        }
+
+        if (arg == "--listen")
+        {
+            if (i + 1 >= args.Length)
+            {
+                exitCode = 2;
+                return false;
+            }
+
+            listen = args[i + 1];
+            i += 2;
+            continue;
+        }
+
+        if (arg == "--db")
+        {
+            if (i + 1 >= args.Length)
+            {
+                exitCode = 2;
+                return false;
+            }
+
+            db = args[i + 1];
+            i += 2;
+            continue;
+        }
+
+        if (arg is "--admin-token")
+        {
+            if (i + 1 >= args.Length)
+            {
+                exitCode = 2;
+                return false;
+            }
+
+            adminToken = args[i + 1];
+            i += 2;
+            continue;
+        }
+
+        Console.Error.WriteLine($"titanium-manager: unknown argument '{arg}'");
+        PrintHelp();
+        exitCode = 2;
+        return false;
+    }
+
+    if (!listen.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+        !listen.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+    {
+        listen = "http://" + listen;
+    }
+
+    if (!listen.EndsWith('/'))
+    {
+        listen += "/";
+    }
+
+    return true;
+}
+
+static async Task<int> RunHealthcheckAsync(string[] args) // NOSONAR S3776 -- Healthcheck flag parsing and probe share one container entrypoint.
+{
+    // Container HEALTHCHECK for the chiseled image (no shell/curl). Exit 0 is healthy.
+    var url = DefaultHealthcheckUrl();
+    var timeout = TimeSpan.FromSeconds(3);
+    var i = 0;
+    while (i < args.Length)
+    {
+        var arg = args[i];
+        if (arg is "--help" or "-h")
+        {
+            await Console.Out.WriteLineAsync(
                 """
                 titanium-manager healthcheck [--url <url>] [--timeout <seconds>]
 
                   Probes GET /v1/healthz (default http://127.0.0.1:7700/v1/healthz). Exit 0 when HTTP 200.
-                """);
+                """).ConfigureAwait(false);
             return 0;
         }
 
-        if (arg == "--url" && i + 1 < args.Length)
+        if (arg == "--url")
         {
-            url = args[++i];
+            if (i + 1 >= args.Length)
+            {
+                await Console.Error.WriteLineAsync("titanium-manager healthcheck: --url requires a value.")
+                    .ConfigureAwait(false);
+                return 2;
+            }
+
+            url = args[i + 1];
+            i += 2;
             continue;
         }
 
-        if (arg == "--timeout" && i + 1 < args.Length)
+        if (arg == "--timeout")
         {
-            if (!double.TryParse(args[++i], System.Globalization.NumberStyles.Float,
+            if (i + 1 >= args.Length)
+            {
+                await Console.Error.WriteLineAsync("titanium-manager healthcheck: --timeout requires a value.")
+                    .ConfigureAwait(false);
+                return 2;
+            }
+
+            if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture, out var seconds) ||
                 seconds <= 0 || seconds > 300)
             {
-                Console.Error.WriteLine("titanium-manager healthcheck: --timeout must be between 0 and 300 seconds.");
+                await Console.Error.WriteLineAsync(
+                    "titanium-manager healthcheck: --timeout must be between 0 and 300 seconds.").ConfigureAwait(false);
                 return 2;
             }
 
             timeout = TimeSpan.FromSeconds(seconds);
+            i += 2;
             continue;
         }
 
-        Console.Error.WriteLine($"titanium-manager healthcheck: unknown argument '{arg}'");
+        await Console.Error.WriteLineAsync($"titanium-manager healthcheck: unknown argument '{arg}'").ConfigureAwait(false);
         return 2;
     }
 
@@ -171,15 +227,19 @@ static async Task<int> RunHealthcheckAsync(string[] args)
             return 0;
         }
 
-        Console.Error.WriteLine($"titanium-manager healthcheck: {(int)response.StatusCode} {response.ReasonPhrase}");
+        await Console.Error.WriteLineAsync($"titanium-manager healthcheck: {(int)response.StatusCode} {response.ReasonPhrase}")
+            .ConfigureAwait(false);
         return 1;
     }
     catch (Exception ex)
     {
-        Console.Error.WriteLine($"titanium-manager healthcheck: {ex.Message}");
+        await Console.Error.WriteLineAsync($"titanium-manager healthcheck: {ex.Message}").ConfigureAwait(false);
         return 1;
     }
 }
+
+static string DefaultHealthcheckUrl() =>
+    new UriBuilder(Uri.UriSchemeHttp, "127.0.0.1", 7700, "/v1/healthz").Uri.AbsoluteUri;
 
 static void PrintHelp()
 {

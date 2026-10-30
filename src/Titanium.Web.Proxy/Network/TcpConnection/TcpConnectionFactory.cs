@@ -934,7 +934,7 @@ internal class TcpConnectionFactory : IDisposable
         if (isHttps && UpstreamTlsMaterial.For(sessionArgs.UpstreamHttpClient) is { Error: not null } faultedTls)
         {
             if (faultedTls.TryClaimErrorLog())
-                ProxyLog.UpstreamTlsMaterialFaulted(proxyServer.Logger, faultedTls.Error!);
+                ProxyLog.UpstreamTlsMaterialFaulted(proxyServer.Logger, faultedTls.Error);
             faultedTls.ThrowIfFaulted();
         }
 

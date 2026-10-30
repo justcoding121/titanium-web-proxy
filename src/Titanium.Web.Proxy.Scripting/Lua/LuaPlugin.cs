@@ -13,6 +13,12 @@ namespace Titanium.Web.Proxy.Scripting.Lua;
 /// </summary>
 internal sealed partial class LuaPlugin : IProxyMiddleware, IScriptPhaseHost, IRequiresSessionPathMiddleware, IDisposable
 {
+    private static readonly ScriptPhases[] AllPhases =
+    [
+        ScriptPhases.RequestHeaders, ScriptPhases.RequestBody, ScriptPhases.RequestTrailers, ScriptPhases.ResponseHeaders,
+        ScriptPhases.ResponseBody, ScriptPhases.ResponseTrailers, ScriptPhases.Log,
+    ];
+
     private readonly string _varsKey;
     private int _disposed;
 
@@ -36,16 +42,9 @@ internal sealed partial class LuaPlugin : IProxyMiddleware, IScriptPhaseHost, IR
     private static ScriptPhases PhasesOf(LuaRuntime runtime)
     {
         var phases = ScriptPhases.None;
-        foreach (var phase in new[]
-                 {
-                     ScriptPhases.RequestHeaders, ScriptPhases.RequestBody, ScriptPhases.RequestTrailers, ScriptPhases.ResponseHeaders,
-                     ScriptPhases.ResponseBody, ScriptPhases.ResponseTrailers, ScriptPhases.Log,
-                 })
+        foreach (var phase in AllPhases.Where(p => runtime.Defines(LuaSnapshot.FunctionName(p))))
         {
-            if (runtime.Defines(LuaSnapshot.FunctionName(phase)))
-            {
-                phases |= phase;
-            }
+            phases |= phase;
         }
 
         return phases;
@@ -90,7 +89,7 @@ internal sealed partial class LuaPlugin : IProxyMiddleware, IScriptPhaseHost, IR
         }
         catch (LuaScriptException ex)
         {
-            Logger?.LogWarning("Lua plugin '{Plugin}' on_log failed: {Error}", Name, ex.Message);
+            Logger?.LogWarning(ex, "Lua plugin '{Plugin}' on_log failed.", Name);
         }
     }
 

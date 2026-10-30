@@ -12,6 +12,10 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public class GatewayTranslatorRouteTests
 {
+    private static readonly string[] ExpectedClusterAddresses = ["10.0.0.1", "10.0.0.2"];
+    private static readonly string[] AppExampleHost = ["app.example.com"];
+    private static readonly string[] OnlyExampleHost = ["only.example.com"];
+
     private static Condition Cond(IReadOnlyList<Condition> list, string type) => list.Single(c => c.Type == type);
 
     private static RouteParentStatus Parent(RenderResult result, string route = "r") =>
@@ -68,7 +72,7 @@ public class GatewayTranslatorRouteTests
         Assert.IsNull(route.Match.Path);
         Assert.IsNull(route.Clusters);
         var cluster = result.Config.Clusters.Single();
-        CollectionAssert.AreEqual(new[] { "10.0.0.1", "10.0.0.2" }, cluster.Destinations.Select(d => d.Address).ToArray());
+        CollectionAssert.AreEqual(ExpectedClusterAddresses, cluster.Destinations.Select(d => d.Address).ToArray());
         Assert.IsTrue(cluster.Destinations.All(d => d.Port == 8080));
     }
 
@@ -189,7 +193,7 @@ public class GatewayTranslatorRouteTests
         b.Gateways[0].Spec.Listeners[0].Hostname = "*.example.com";
         var result = RenderRoute(b, Route("r", "default", ["app.example.com", "other.org"], Rule("web")));
 
-        CollectionAssert.AreEqual(new[] { "app.example.com" }, result.Config.UserRoutes().Single().Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(AppExampleHost, result.Config.UserRoutes().Single().Match.Hosts!.ToArray());
     }
 
     [TestMethod]
@@ -209,7 +213,7 @@ public class GatewayTranslatorRouteTests
         b.Gateways[0].Spec.Listeners[0].Hostname = "only.example.com";
         var result = RenderRoute(b, Route("r", "default", null, Rule("web")));
 
-        CollectionAssert.AreEqual(new[] { "only.example.com" }, result.Config.UserRoutes().Single().Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(OnlyExampleHost, result.Config.UserRoutes().Single().Match.Hosts!.ToArray());
     }
 
     [TestMethod]

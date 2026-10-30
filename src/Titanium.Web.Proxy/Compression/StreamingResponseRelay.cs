@@ -38,7 +38,8 @@ internal static class StreamingResponseRelay
     /// <param name="onOriginBytes">Observes each piece of origin bytes (data events, the response cache tee).</param>
     /// <param name="clientGone">Polled after each sink write.</param>
     /// <param name="cancellationToken">Cancels the relay.</param>
-    internal static async Task<bool> RelayAsync(Stream origin, Stream sink, HttpCompression algorithm,
+    internal static async Task<bool> RelayAsync( // NOSONAR S107 -- Relay keeps origin/sink wiring explicit without a context bag.
+        Stream origin, Stream sink, HttpCompression algorithm,
         CompressionLevel level, byte[] readBuffer, long expectedLength, Action<byte[], int, int>? onOriginBytes,
         Func<bool>? clientGone, CancellationToken cancellationToken)
     {
@@ -143,29 +144,29 @@ internal static class StreamingResponseRelay
                 ArrayPool<byte>.Shared.Return(rented);
         }
 
-        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> data,
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
             CancellationToken cancellationToken = default)
         {
-            if (abandoned || data.IsEmpty || buffer is null)
+            if (abandoned || buffer.IsEmpty || this.buffer is null)
                 return;
 
-            if (count + data.Length > buffer.Length)
+            if (count + buffer.Length > this.buffer.Length)
             {
                 await SendPendingAsync(cancellationToken).ConfigureAwait(false);
 
-                if (data.Length >= buffer.Length)
+                if (buffer.Length >= this.buffer.Length)
                 {
-                    await inner.WriteAsync(data, cancellationToken).ConfigureAwait(false);
+                    await inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
                     return;
                 }
             }
 
-            data.CopyTo(buffer.AsMemory(count));
-            count += data.Length;
+            buffer.CopyTo(this.buffer.AsMemory(count));
+            count += buffer.Length;
         }
 
-        public override Task WriteAsync(byte[] data, int offset, int length, CancellationToken cancellationToken) =>
-            WriteAsync(data.AsMemory(offset, length), cancellationToken).AsTask();
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
         public override async Task FlushAsync(CancellationToken cancellationToken)
         {
@@ -187,10 +188,10 @@ internal static class StreamingResponseRelay
 
         public override void Flush() => throw new NotSupportedException("Use FlushAsync.");
 
-        public override void Write(byte[] data, int offset, int length) =>
+        public override void Write(byte[] buffer, int offset, int count) =>
             throw new NotSupportedException("Use WriteAsync.");
 
-        public override int Read(byte[] data, int offset, int length) => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 

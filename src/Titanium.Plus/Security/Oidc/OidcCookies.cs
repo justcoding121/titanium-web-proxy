@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Http;
 
@@ -6,11 +7,13 @@ namespace Titanium.Plus.Security.Oidc;
 /// <summary>Reads and removes the policy's cookies on the client request, and builds the ones it sets.</summary>
 internal static class OidcCookies
 {
+    private const string CookieHeader = "Cookie";
+
     /// <summary>Every value of the cookie called <paramref name="name"/>, in the order the client sent them.</summary>
     public static List<string> Values(Request request, string name)
     {
         var found = new List<string>(1);
-        var lines = request.Headers.GetHeaders("Cookie");
+        var lines = request.Headers.GetHeaders(CookieHeader);
         if (lines is null)
         {
             return found;
@@ -18,13 +21,10 @@ internal static class OidcCookies
 
         foreach (var line in lines)
         {
-            foreach (var pair in Pairs(line.Value))
-            {
-                if (pair.Name.Equals(name, StringComparison.Ordinal))
-                {
-                    found.Add(pair.Value.ToString());
-                }
-            }
+            found.AddRange(
+                Pairs(line.Value)
+                    .Where(pair => pair.Name.Equals(name, StringComparison.Ordinal))
+                    .Select(pair => pair.Value.ToString()));
         }
 
         return found;
@@ -36,7 +36,7 @@ internal static class OidcCookies
     /// </summary>
     public static void RemoveOwn(Request request, string sessionName, string flowPrefix)
     {
-        var lines = request.Headers.GetHeaders("Cookie");
+        var lines = request.Headers.GetHeaders(CookieHeader);
         if (lines is null || lines.Count == 0)
         {
             return;
@@ -64,10 +64,10 @@ internal static class OidcCookies
             return;
         }
 
-        request.Headers.RemoveHeader("Cookie");
+        request.Headers.RemoveHeader(CookieHeader);
         if (kept.Count > 0)
         {
-            request.Headers.AddHeader("Cookie", string.Join("; ", kept));
+            request.Headers.AddHeader(CookieHeader, string.Join("; ", kept));
         }
     }
 

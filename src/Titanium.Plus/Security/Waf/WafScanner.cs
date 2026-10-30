@@ -226,7 +226,7 @@ internal sealed class WafScanner
 
     // ---- one value --------------------------------------------------------------------------------------------
 
-    private void ScanValue(ReadOnlySpan<char> raw, WafTargets target, ReadOnlySpan<char> name, bool formEncoded)
+    private void ScanValue(ReadOnlySpan<char> raw, WafTargets target, ReadOnlySpan<char> name, bool formEncoded) // NOSONAR S3776 -- Decode passes share pooled buffers and rule targets.
     {
         if (raw.IsEmpty)
         {
@@ -241,8 +241,14 @@ internal sealed class WafScanner
 
         char[]? rentedA = null;
         char[]? rentedB = null;
-        Span<char> a = raw.Length <= StackChars ? stackalloc char[StackChars] : (rentedA = ArrayPool<char>.Shared.Rent(raw.Length));
-        Span<char> b = raw.Length <= StackChars ? stackalloc char[StackChars] : (rentedB = ArrayPool<char>.Shared.Rent(raw.Length));
+        if (raw.Length > StackChars)
+        {
+            rentedA = ArrayPool<char>.Shared.Rent(raw.Length);
+            rentedB = ArrayPool<char>.Shared.Rent(raw.Length);
+        }
+
+        Span<char> a = raw.Length <= StackChars ? stackalloc char[StackChars] : rentedA!;
+        Span<char> b = raw.Length <= StackChars ? stackalloc char[StackChars] : rentedB!;
         try
         {
             // The first slice is local so later slices of the stack buffers may be assigned to it.
@@ -466,7 +472,7 @@ internal sealed class WafScanner
         }
     }
 
-    private void ScanMultipart(ReadOnlySpan<byte> body, string contentType)
+    private void ScanMultipart(ReadOnlySpan<byte> body, string contentType) // NOSONAR S3776 -- Multipart scanning walks boundaries and part headers in one pass.
     {
         var boundary = WafBodyPolicy.MultipartBoundary(contentType);
         if (boundary is null || boundary.Length > 200)

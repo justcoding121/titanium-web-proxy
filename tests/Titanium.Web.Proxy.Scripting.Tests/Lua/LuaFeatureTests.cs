@@ -176,7 +176,7 @@ public class LuaFeatureTests
     {
         var handler = new FakeHandler((_, token) => Hang(token));
         using var plugin = CreateWith(Config(CalloutScript, calloutHosts: ["api.test"], timeoutMs: 300), handler);
-        var ex = await Assert.ThrowsExceptionAsync<LuaScriptException>(() => Call(plugin, "go", default, ("url", "http://api.test/"),
+        var ex = await Assert.ThrowsExactlyAsync<LuaScriptException>(() => Call(plugin, "go", default, ("url", "http://api.test/"),
             ("timeout", 60_000L)));
         Assert.AreEqual(LuaFailure.Timeout, ex.Failure);
         await WaitForAsync(() => plugin.Runtime.CalloutsInFlight == 0);

@@ -20,6 +20,8 @@ namespace Titanium.Plus.Discovery;
 /// </summary>
 public sealed class ServiceDiscovery : IDisposable
 {
+    private const string LabelSelectorQueryKey = "labelSelector";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -219,7 +221,7 @@ public sealed class ServiceDiscovery : IDisposable
         _ = Task.Run(() => RunConsulAsync(context, settings, _cts.Token), _cts.Token);
     }
 
-    private async Task RunConsulAsync(PlusActivationContext context, ConsulSettings settings, CancellationToken ct)
+    private static async Task RunConsulAsync(PlusActivationContext context, ConsulSettings settings, CancellationToken ct) // NOSONAR S3776 -- Consul blocking loop keeps index, backoff, and apply state in one place.
     {
         using var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         var backoff = new DiscoveryBackoff(settings.Backoff.MinMs, settings.Backoff.MaxMs);
@@ -603,7 +605,7 @@ public sealed class ServiceDiscovery : IDisposable
 
     private const string DefaultServiceAccountDir = "/var/run/secrets/kubernetes.io/serviceaccount";
 
-    private void StartKubernetes(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    private void StartKubernetes(PlusActivationContext context, IReadOnlyDictionary<string, string> options) // NOSONAR S3776 -- Kubernetes discovery wiring validates URL, selectors, and service-account paths together.
     {
         var saOption = options.GetValueOrDefault("discovery.k8sServiceAccountDir");
         var explicitSa = !string.IsNullOrWhiteSpace(saOption);
@@ -711,7 +713,13 @@ public sealed class ServiceDiscovery : IDisposable
     {
         try
         {
-            return File.Exists(path) ? File.ReadAllText(path).Trim() is { Length: > 0 } ns ? ns : null : null;
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var text = File.ReadAllText(path).Trim();
+            return text.Length > 0 ? text : null;
         }
         catch (IOException)
         {
@@ -723,7 +731,7 @@ public sealed class ServiceDiscovery : IDisposable
         }
     }
 
-    private async Task RunKubernetesAsync(PlusActivationContext context, KubernetesSettings s, CancellationToken ct)
+    private static async Task RunKubernetesAsync(PlusActivationContext context, KubernetesSettings s, CancellationToken ct) // NOSONAR S3776 -- Kubernetes list-watch loop coordinates credentials, slices, and apply state.
     {
         var credentials = new ServiceAccountCredentials(
             Path.Combine(s.ServiceAccountDir, "token"),
@@ -837,7 +845,7 @@ public sealed class ServiceDiscovery : IDisposable
     {
         var url = s.LabelSelector is null
             ? s.ListUrl
-            : WithQuery(s.ListUrl, [new("labelSelector", s.LabelSelector)], "labelSelector");
+            : WithQuery(s.ListUrl, [new(LabelSelectorQueryKey, s.LabelSelector)], LabelSelectorQueryKey);
         using var request = CreateKubernetesRequest(url, credentials, sendToken);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
         linked.CancelAfter(TimeSpan.FromSeconds(30));
@@ -870,7 +878,7 @@ public sealed class ServiceDiscovery : IDisposable
     }
 
     /// <summary>Streams one watch window. Returns the resourceVersion to resume from.</summary>
-    private static async Task<string> WatchAsync(
+    private static async Task<string> WatchAsync( // NOSONAR S107 -- Watch parameters mirror the Kubernetes client context without an extra options bag.
         PlusActivationContext context,
         KubernetesSettings s,
         HttpClient http,
@@ -898,13 +906,13 @@ public sealed class ServiceDiscovery : IDisposable
 
         if (s.LabelSelector is not null)
         {
-            query.Add(new("labelSelector", s.LabelSelector));
+            query.Add(new(LabelSelectorQueryKey, s.LabelSelector));
         }
 
         // A selector already present on an explicit discovery.k8sUrl stays unless a configured one replaces it.
         var replaced = s.LabelSelector is null
             ? new[] { "watch", "allowWatchBookmarks", "timeoutSeconds", "resourceVersion" }
-            : ["watch", "allowWatchBookmarks", "timeoutSeconds", "resourceVersion", "labelSelector"];
+            : ["watch", "allowWatchBookmarks", "timeoutSeconds", "resourceVersion", LabelSelectorQueryKey];
         var url = WithQuery(s.ListUrl, query, replaced);
         using var request = CreateKubernetesRequest(url, credentials, sendToken);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -1007,7 +1015,7 @@ public sealed class ServiceDiscovery : IDisposable
     /// skipped; a missing condition counts as ready. With <paramref name="portName"/> the matching named port
     /// is used, otherwise the first TCP port.
     /// </summary>
-    internal static List<DestinationConfig> ParseEndpointSlice(JsonElement slice, string? portName)
+    internal static List<DestinationConfig> ParseEndpointSlice(JsonElement slice, string? portName) // NOSONAR S3776 -- EndpointSlice parsing keeps port selection and ready endpoints in one routine.
     {
         var list = new List<DestinationConfig>();
         var port = 80;
@@ -1222,7 +1230,7 @@ internal sealed record KubernetesListResult(
     List<DestinationConfig>? Snapshot);
 
 /// <summary>The API server rejected a resourceVersion (HTTP 410 or a watch ERROR event): relist.</summary>
-internal sealed class KubernetesGoneException : Exception
+public sealed class KubernetesGoneException : Exception
 {
     public KubernetesGoneException()
         : base("kubernetes resourceVersion is too old (410 Gone)")
@@ -1273,12 +1281,9 @@ internal sealed class EndpointSliceSet
         var result = new List<DestinationConfig>();
         foreach (var name in _slices.Keys.OrderBy(k => k, StringComparer.Ordinal))
         {
-            foreach (var destination in _slices[name])
+            foreach (var destination in _slices[name].Where(d => seen.Add(d.Id)))
             {
-                if (seen.Add(destination.Id))
-                {
-                    result.Add(destination);
-                }
+                result.Add(destination);
             }
         }
 
@@ -1373,6 +1378,7 @@ internal sealed class ServiceAccountCredentials
             }
             catch (UnauthorizedAccessException)
             {
+                // Keep the previous token; the file may be mid-rotation.
             }
 
             return _token;

@@ -3,7 +3,7 @@ using Titanium.Web.Proxy.Scripting.Lua.Native;
 namespace Titanium.Web.Proxy.Scripting.Lua;
 
 /// <summary>Why a Lua call failed. The limit kinds also retire the state that hit them.</summary>
-internal enum LuaFailure
+public enum LuaFailure
 {
     Load,
     Runtime,
@@ -16,7 +16,7 @@ internal enum LuaFailure
     Timeout,
 }
 
-internal sealed class LuaScriptException : Exception
+public sealed class LuaScriptException : Exception
 {
     public LuaScriptException(LuaFailure failure, string message)
         : base(message) => Failure = failure;

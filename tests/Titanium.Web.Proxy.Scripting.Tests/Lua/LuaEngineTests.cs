@@ -11,6 +11,7 @@ namespace Titanium.Web.Proxy.Scripting.Tests.Lua;
 [TestClass]
 public class LuaEngineTests
 {
+    private static readonly string[] XDropHeader = ["x-drop"];
     [TestMethod]
     public void Bootstrap_registers_the_lua_engine()
     {
@@ -92,7 +93,7 @@ public class LuaEngineTests
             function count() return collectgarbage("count") > 0 end
             """);
         StringAssert.Contains((await CallFailsAsync(plugin, "stop")).Message, "invalid option");
-        Assert.AreEqual(true, await CallAsync(plugin, "count"));
+        Assert.IsTrue((bool)(await CallAsync(plugin, "count"))!);
     }
 
     [TestMethod]
@@ -241,7 +242,7 @@ public class LuaEngineTests
             Phase(ScriptPhases.RequestHeaders, items, [H("X-User", "alice"), H("x-drop", "1")]), CancellationToken.None);
         Assert.AreEqual(ScriptAction.Continue, request.Action);
         Assert.AreEqual("GET /foo?x=1 10.1.2.3 r1", request.SetHeaders!["x-seen"]);
-        CollectionAssert.AreEqual(new[] { "x-drop" }, request.RemoveHeaders!.ToArray());
+        CollectionAssert.AreEqual(XDropHeader, request.RemoveHeaders!.ToArray());
         Assert.AreEqual("blue", request.UpstreamClusterId);
 
         var response = await plugin.OnResponseHeadersAsync(Phase(ScriptPhases.ResponseHeaders, items, status: 201), CancellationToken.None);
@@ -347,7 +348,7 @@ public class LuaEngineTests
         next.Dispose();
 
         Assert.AreEqual(0, errors);
-        Assert.IsTrue(seen.Count > 0);
+        Assert.IsFalse(seen.IsEmpty);
         Assert.IsTrue(seen.All(v => v == "2"), string.Join(",", seen.Distinct()));
     }
 }

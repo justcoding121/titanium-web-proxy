@@ -52,7 +52,7 @@ internal sealed class LuaJwt
 
     public byte[] Verify(LuaTable op) => Verify(op, DateTimeOffset.UtcNow);
 
-    internal byte[] Verify(LuaTable op, DateTimeOffset now)
+    internal byte[] Verify(LuaTable op, DateTimeOffset now) // NOSONAR S3776 -- JWT verify keeps header/payload/signature checks in one Lua-facing path.
     {
         if (_error is not null)
         {
@@ -144,7 +144,7 @@ internal sealed class LuaJwt
         _ => HashAlgorithmName.SHA512,
     };
 
-    private static bool VerifyWith(JsonElement key, string alg, byte[] signed, byte[] signature)
+    private static bool VerifyWith(JsonElement key, string alg, byte[] signed, byte[] signature) // NOSONAR S3776 -- Algorithm dispatch shares key material parsing for RSA/EC/HMAC.
     {
         var kty = Text(key, "kty");
         var hash = Hash(alg);

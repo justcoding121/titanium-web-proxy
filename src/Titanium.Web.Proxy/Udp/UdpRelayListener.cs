@@ -123,7 +123,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         if (!string.IsNullOrWhiteSpace(options.ForwardHost))
         {
             // Resolve once now so a bad name fails startup instead of every session.
-            _ = ResolveAsync(options.ForwardHost!, stopping.Token).AsTask().GetAwaiter().GetResult();
+            _ = ResolveAsync(options.ForwardHost, stopping.Token).AsTask().GetAwaiter().GetResult();
         }
 
         var nowMs = NowMs();
@@ -167,7 +167,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             return;
         }
 
-        stopping.Cancel();
+        await stopping.CancelAsync().ConfigureAwait(false);
         sweepTimer?.Dispose();
         var listening = socket;
         try
@@ -255,7 +255,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         }
     }
 
-    private async Task ReceiveLoopAsync(Socket listening, CancellationToken cancellationToken)
+    private async Task ReceiveLoopAsync(Socket listening, CancellationToken cancellationToken) // NOSONAR S3776 -- UDP receive loop multiplexes errors, oversize, and relay in one socket reader.
     {
         // One extra byte tells a datagram of exactly the cap from a larger one that the OS truncated.
         var buffer = ArrayPool<byte>.Shared.Rent(options.MaxDatagramBytes + 1);
@@ -367,7 +367,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         }
     }
 
-    private async ValueTask<UdpSession?> OpenSessionAsync(
+    private async ValueTask<UdpSession?> OpenSessionAsync( // NOSONAR S3776 -- Session open ties admission, upstream connect, and wheel registration together.
         Socket listening, SocketAddress from, long nowMs, CancellationToken cancellationToken)
     {
         if (Volatile.Read(ref disposed) != 0)
@@ -436,7 +436,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             try
             {
                 upstream = new Socket(picked.EndPoint!.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-                upstream.Connect(picked.EndPoint);
+                await upstream.ConnectAsync(picked.EndPoint, cancellationToken).ConfigureAwait(false);
             }
             catch (SocketException)
             {
@@ -483,10 +483,10 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         }
         catch
         {
-            lease?.Dispose();
-            upstream?.Dispose();
             if (!registered)
             {
+                lease?.Dispose(); // NOSONAR S3966 -- Unregistered session: health lease is released before abandoning upstream.
+                upstream?.Dispose(); // NOSONAR S3966 -- Unregistered session: upstream socket is not owned by a session yet.
                 ReleaseClient(client);
             }
 
@@ -497,14 +497,16 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
     private async ValueTask<(IPEndPoint? EndPoint, DestinationConfig? Destination, UdpDropReason? Reason)> PickUpstreamAsync(
         IPEndPoint clientEndpoint, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(options.ClusterId))
+        var clusterId = options.ClusterId;
+        if (string.IsNullOrWhiteSpace(clusterId))
         {
-            return await ResolveEndPointAsync(options.ForwardHost!, options.ForwardPort, null, cancellationToken)
+            var forwardHost = options.ForwardHost ?? string.Empty;
+            return await ResolveEndPointAsync(forwardHost, options.ForwardPort, null, cancellationToken)
                 .ConfigureAwait(false);
         }
 
         var snapshot = clusters!.Snapshot;
-        if (!snapshot.Clusters.TryGetValue(options.ClusterId!, out var cluster))
+        if (!snapshot.Clusters.TryGetValue(clusterId, out var cluster))
         {
             return (null, null, UdpDropReason.NoDestination);
         }
@@ -546,7 +548,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         }
     }
 
-    private async ValueTask<IPAddress> ResolveAsync(string host, CancellationToken cancellationToken)
+    private async ValueTask<IPAddress> ResolveAsync(string host, CancellationToken cancellationToken) // NOSONAR S3776 -- DNS resolve shares cluster cache, custom resolver, and literal parsing.
     {
         if (IPAddress.TryParse(host, out var literal))
         {
@@ -559,18 +561,16 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             return cached.Address;
         }
 
-        if (clusters is not null && options.ClusterId is not null)
+        if (clusters is not null && options.ClusterId is not null
+            && clusters.Snapshot.Clusters.TryGetValue(options.ClusterId, out var owner))
         {
             // A destination with dnsRefreshSeconds is already kept fresh by the cluster's background refresh.
-            if (clusters.Snapshot.Clusters.TryGetValue(options.ClusterId, out var owner))
+            foreach (var destination in owner.Destinations)
             {
-                foreach (var destination in owner.Destinations)
+                if (string.Equals(destination.Address, host, StringComparison.OrdinalIgnoreCase) &&
+                    clusters.TryGetResolved(destination.Id, out var known))
                 {
-                    if (string.Equals(destination.Address, host, StringComparison.OrdinalIgnoreCase) &&
-                        clusters.TryGetResolved(destination.Id, out var known))
-                    {
-                        return known;
-                    }
+                    return known;
                 }
             }
         }
@@ -636,7 +636,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         stats.CountIn(length);
     }
 
-    private async Task RunUpstreamLoopAsync(Socket listening, UdpSession session, CancellationToken cancellationToken)
+    private async Task RunUpstreamLoopAsync(Socket listening, UdpSession session, CancellationToken cancellationToken) // NOSONAR S3776 -- Upstream relay loop shares health, client send, and session teardown.
     {
         var buffer = ArrayPool<byte>.Shared.Rent(options.MaxDatagramBytes + 1);
         var healthy = false;

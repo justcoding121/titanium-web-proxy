@@ -19,8 +19,10 @@ namespace Titanium.Plus.Tests;
 
 /// <summary>Dashboard OIDC SSO, local users, break-glass, throttle, and CSRF identity audits.</summary>
 [TestClass]
-public class DashboardAuthTests
+public partial class DashboardAuthTests
 {
+    [GeneratedRegex("data-csrf=\"([^\"]+)\"")]
+    private static partial Regex CsrfTokenPattern();
     private const string Secret = "operator-secret-value";
     private const string Remote = "10.9.8.7";
     private static readonly string CookieKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -296,7 +298,7 @@ public class DashboardAuthTests
         public async Task<string> CsrfAsync(string cookie)
         {
             var page = await SendAsync("GET", "/", cookie: cookie);
-            return Regex.Match(page.Text, "data-csrf=\"([^\"]+)\"").Groups[1].Value;
+            return CsrfTokenPattern().Match(page.Text).Groups[1].Value;
         }
 
         public ValueTask DisposeAsync()

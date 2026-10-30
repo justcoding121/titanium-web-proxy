@@ -225,7 +225,7 @@ internal static class ManagerUiYamlDraft
         return created;
     }
 
-    private static IReadOnlyList<object> ReadList(Dictionary<object, object> root, string key)
+    private static List<object> ReadList(Dictionary<object, object> root, string key)
     {
         if (!root.TryGetValue(key, out var value) || value is null)
         {

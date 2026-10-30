@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,6 +9,11 @@ namespace Titanium.Manager.Store;
 
 internal sealed class ManagerStore : IDisposable
 {
+    private const string RolloutsTable = "rollouts";
+    private const string TextNullTypedef = "TEXT NULL";
+    private const string StateRunning = "running";
+    private const string StatePaused = "paused";
+
     private readonly SqliteConnection _db;
     private readonly object _gate = new();
 
@@ -126,9 +132,9 @@ internal sealed class ManagerStore : IDisposable
         cmd.ExecuteNonQuery();
 
         // Additive columns for DBs created before staged rollouts.
-        EnsureColumn("rollouts", "previous_revision_id", "INTEGER NULL");
-        EnsureColumn("rollouts", "updated_at", "TEXT NULL");
-        EnsureColumn("rollouts", "pause_reason", "TEXT NULL");
+        EnsureColumn(RolloutsTable, "previous_revision_id", "INTEGER NULL");
+        EnsureColumn(RolloutsTable, "updated_at", TextNullTypedef);
+        EnsureColumn(RolloutsTable, "pause_reason", TextNullTypedef);
     }
 
     private void EnsureColumn(string table, string column, string typedef)
@@ -136,11 +142,11 @@ internal sealed class ManagerStore : IDisposable
         // ALTER TABLE cannot bind identifiers; keep migration DDL as compile-time constants.
         var alterSql = (table, column, typedef) switch
         {
-            ("rollouts", "previous_revision_id", "INTEGER NULL") =>
+            (RolloutsTable, "previous_revision_id", "INTEGER NULL") =>
                 "ALTER TABLE rollouts ADD COLUMN previous_revision_id INTEGER NULL;",
-            ("rollouts", "updated_at", "TEXT NULL") =>
+            (RolloutsTable, "updated_at", TextNullTypedef) =>
                 "ALTER TABLE rollouts ADD COLUMN updated_at TEXT NULL;",
-            ("rollouts", "pause_reason", "TEXT NULL") =>
+            (RolloutsTable, "pause_reason", TextNullTypedef) =>
                 "ALTER TABLE rollouts ADD COLUMN pause_reason TEXT NULL;",
             _ => throw new ArgumentException($"unsupported schema migration: {table}.{column} {typedef}"),
         };
@@ -409,7 +415,7 @@ internal sealed class ManagerStore : IDisposable
             else
             {
                 rolloutId = InsertRolloutUnlocked(
-                    fleetId, revisionId, previousId, "running", now, now, null, tx);
+                    fleetId, revisionId, previousId, StateRunning, now, now, null, tx);
 
                 for (var i = 0; i < waves!.Count; i++)
                 {
@@ -418,7 +424,7 @@ internal sealed class ManagerStore : IDisposable
                     var bake = w.BakeSeconds >= 0
                         ? w.BakeSeconds
                         : defaultBakeSeconds ?? 0;
-                    var state = i == 0 ? "running" : "pending";
+                    var state = i == 0 ? StateRunning : "pending";
                     var started = i == 0 ? now : null;
                     InsertStepUnlocked(
                         rolloutId,
@@ -485,7 +491,7 @@ internal sealed class ManagerStore : IDisposable
     {
         lock (_gate)
         {
-            return SetRolloutStateUnlocked(fleetId, rolloutId, "paused", reason);
+            return SetRolloutStateUnlocked(fleetId, rolloutId, StatePaused, reason);
         }
     }
 
@@ -500,12 +506,12 @@ internal sealed class ManagerStore : IDisposable
                 throw new KeyNotFoundException($"rollout {rolloutId} not in fleet {fleetId}");
             }
 
-            if (!string.Equals(row.State, "paused", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(row.State, StatePaused, StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException($"rollout {rolloutId} is {row.State}, not paused");
             }
 
-            return SetRolloutStateUnlocked(fleetId, rolloutId, "running", null);
+            return SetRolloutStateUnlocked(fleetId, rolloutId, StateRunning, null);
         }
     }
 
@@ -576,7 +582,6 @@ internal sealed class ManagerStore : IDisposable
     {
         lock (_gate)
         {
-            var changed = new HashSet<long>();
             using var cmd = _db.CreateCommand();
             cmd.CommandText =
                 """
@@ -592,15 +597,7 @@ internal sealed class ManagerStore : IDisposable
 
             reader.Close();
 
-            foreach (var rollout in running)
-            {
-                if (AdvanceRolloutUnlocked(rollout))
-                {
-                    changed.Add(rollout.FleetId);
-                }
-            }
-
-            return changed.ToList();
+            return running.Where(AdvanceRolloutUnlocked).Select(r => r.FleetId).Distinct().ToList();
         }
     }
 
@@ -622,7 +619,7 @@ internal sealed class ManagerStore : IDisposable
         {
             if (!string.IsNullOrWhiteSpace(nodeId))
             {
-                var agent = GetAgentUnlocked(fleetId, nodeId!);
+                var agent = GetAgentUnlocked(fleetId, nodeId);
                 if (agent?.DesiredRevisionId is long desiredId)
                 {
                     var rev = GetRevisionUnlocked(desiredId);
@@ -637,8 +634,8 @@ internal sealed class ManagerStore : IDisposable
                 var active = GetActiveRolloutUnlocked(fleetId);
                 if (active is not null &&
                     active.PreviousRevisionId is long prevId &&
-                    (string.Equals(active.State, "running", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(active.State, "paused", StringComparison.OrdinalIgnoreCase)))
+                    (string.Equals(active.State, StateRunning, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(active.State, StatePaused, StringComparison.OrdinalIgnoreCase)))
                 {
                     var prev = GetRevisionUnlocked(prevId);
                     if (prev is not null)
@@ -734,7 +731,7 @@ internal sealed class ManagerStore : IDisposable
 
             var labels = string.IsNullOrWhiteSpace(labelsJson)
                 ? previous?.LabelsJson ?? "{}"
-                : labelsJson!;
+                : labelsJson;
 
             using var cmd = _db.CreateCommand();
             cmd.CommandText =
@@ -769,22 +766,22 @@ internal sealed class ManagerStore : IDisposable
             var paused = false;
             var active = GetActiveRolloutUnlocked(fleetId);
             if (active is not null &&
-                string.Equals(active.State, "running", StringComparison.OrdinalIgnoreCase))
+                string.Equals(active.State, StateRunning, StringComparison.OrdinalIgnoreCase))
             {
                 if (!ok)
                 {
-                    SetRolloutStateUnlocked(fleetId, active.Id, "paused", $"nack:{nodeId}");
+                    SetRolloutStateUnlocked(fleetId, active.Id, StatePaused, $"nack:{nodeId}");
                     paused = true;
                 }
                 else if (IsHealthRegression(previous?.HealthJson, health))
                 {
-                    SetRolloutStateUnlocked(fleetId, active.Id, "paused", $"health:{nodeId}");
+                    SetRolloutStateUnlocked(fleetId, active.Id, StatePaused, $"health:{nodeId}");
                     paused = true;
                 }
                 else
                 {
                     // Ready agents may allow the current wave to advance.
-                    AdvanceRolloutUnlocked(active);
+                    _ = AdvanceRolloutUnlocked(active);
                 }
             }
 
@@ -816,7 +813,7 @@ internal sealed class ManagerStore : IDisposable
             cmd.Parameters.AddWithValue("$h", hash);
             cmd.Parameters.AddWithValue("$t", created);
             var id = (long)(cmd.ExecuteScalar() ?? throw new InvalidOperationException("token insert failed"));
-            return (new AgentTokenRow(id, fleetId, name, hash, DateTimeOffset.Parse(created), null), plain);
+            return (new AgentTokenRow(id, fleetId, name, hash, ParseUtc(created), null), plain);
         }
     }
 
@@ -873,7 +870,7 @@ internal sealed class ManagerStore : IDisposable
             {
                 list.Add(new AuditRow(
                     reader.GetInt64(0),
-                    DateTimeOffset.Parse(reader.GetString(1)),
+                    ParseUtc(reader.GetString(1)),
                     reader.GetString(2),
                     reader.GetString(3),
                     reader.GetString(4),
@@ -913,14 +910,14 @@ internal sealed class ManagerStore : IDisposable
 
     private bool AdvanceRolloutUnlocked(RolloutRow rollout)
     {
-        if (!string.Equals(rollout.State, "running", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(rollout.State, StateRunning, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         var steps = ListStepsUnlocked(rollout.Id);
         var current = steps.FirstOrDefault(s =>
-            string.Equals(s.State, "running", StringComparison.OrdinalIgnoreCase));
+            string.Equals(s.State, StateRunning, StringComparison.OrdinalIgnoreCase));
         if (current is null)
         {
             return false;
@@ -1078,7 +1075,7 @@ internal sealed class ManagerStore : IDisposable
                ?? throw new InvalidOperationException("rollout missing after state change");
     }
 
-    private long InsertRolloutUnlocked(
+    private long InsertRolloutUnlocked( // NOSONAR S107 -- SQLite insert keeps column wiring explicit without a parameter bag.
         long fleetId,
         long revisionId,
         long? previousRevisionId,
@@ -1106,7 +1103,7 @@ internal sealed class ManagerStore : IDisposable
         return (long)(cmd.ExecuteScalar() ?? throw new InvalidOperationException("rollout insert failed"));
     }
 
-    private void InsertStepUnlocked(
+    private void InsertStepUnlocked( // NOSONAR S107 -- SQLite insert keeps column wiring explicit without a parameter bag.
         long rolloutId,
         int ordinal,
         string labelSelectorJson,
@@ -1198,7 +1195,7 @@ internal sealed class ManagerStore : IDisposable
         return reader.Read() ? ReadRollout(reader) : null;
     }
 
-    private IReadOnlyList<RolloutStepRow> ListStepsUnlocked(long rolloutId)
+    private List<RolloutStepRow> ListStepsUnlocked(long rolloutId)
     {
         using var cmd = _db.CreateCommand();
         cmd.CommandText =
@@ -1217,7 +1214,7 @@ internal sealed class ManagerStore : IDisposable
         return list;
     }
 
-    private IReadOnlyList<AgentRow> ListAgentsUnlocked(long fleetId)
+    private List<AgentRow> ListAgentsUnlocked(long fleetId)
     {
         using var cmd = _db.CreateCommand();
         cmd.CommandText =
@@ -1363,10 +1360,13 @@ internal sealed class ManagerStore : IDisposable
     private static string SerializeLabels(IReadOnlyDictionary<string, string> labels) =>
         JsonSerializer.Serialize(labels);
 
-    private static string UtcNow() => DateTimeOffset.UtcNow.ToString("O");
+    private static string UtcNow() => DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+
+    private static DateTimeOffset ParseUtc(string text) =>
+        DateTimeOffset.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
     private static FleetRow ReadFleet(SqliteDataReader r) =>
-        new(r.GetInt64(0), r.GetString(1), r.GetString(2), DateTimeOffset.Parse(r.GetString(3)));
+        new(r.GetInt64(0), r.GetString(1), r.GetString(2), ParseUtc(r.GetString(3)));
 
     private static RevisionRow ReadRevision(SqliteDataReader r) =>
         new(
@@ -1376,7 +1376,7 @@ internal sealed class ManagerStore : IDisposable
             r.GetString(3),
             r.GetString(4),
             r.IsDBNull(5) ? null : r.GetInt64(5),
-            DateTimeOffset.Parse(r.GetString(6)));
+            ParseUtc(r.GetString(6)));
 
     private static AgentRow ReadAgent(SqliteDataReader r) =>
         new(
@@ -1384,7 +1384,7 @@ internal sealed class ManagerStore : IDisposable
             r.GetInt64(1),
             r.GetString(2),
             r.GetString(3),
-            r.IsDBNull(4) ? null : DateTimeOffset.Parse(r.GetString(4)),
+            r.IsDBNull(4) ? null : ParseUtc(r.GetString(4)),
             r.IsDBNull(5) ? null : r.GetString(5),
             r.IsDBNull(6) ? null : r.GetString(6),
             r.GetString(7),
@@ -1397,10 +1397,10 @@ internal sealed class ManagerStore : IDisposable
             r.GetInt64(2),
             r.IsDBNull(3) ? null : r.GetInt64(3),
             r.GetString(4),
-            DateTimeOffset.Parse(r.GetString(5)),
+            ParseUtc(r.GetString(5)),
             r.IsDBNull(6) || string.IsNullOrEmpty(r.GetString(6))
-                ? DateTimeOffset.Parse(r.GetString(5))
-                : DateTimeOffset.Parse(r.GetString(6)),
+                ? ParseUtc(r.GetString(5))
+                : ParseUtc(r.GetString(6)),
             r.IsDBNull(7) ? null : r.GetString(7));
 
     private static RolloutStepRow ReadStep(SqliteDataReader r) =>
@@ -1412,8 +1412,8 @@ internal sealed class ManagerStore : IDisposable
             r.GetInt32(4),
             r.GetInt32(5),
             r.GetString(6),
-            r.IsDBNull(7) ? null : DateTimeOffset.Parse(r.GetString(7)),
-            r.IsDBNull(8) ? null : DateTimeOffset.Parse(r.GetString(8)));
+            r.IsDBNull(7) ? null : ParseUtc(r.GetString(7)),
+            r.IsDBNull(8) ? null : ParseUtc(r.GetString(8)));
 
     private static AgentTokenRow ReadAgentToken(SqliteDataReader r) =>
         new(
@@ -1421,8 +1421,8 @@ internal sealed class ManagerStore : IDisposable
             r.GetInt64(1),
             r.GetString(2),
             r.GetString(3),
-            DateTimeOffset.Parse(r.GetString(4)),
-            r.IsDBNull(5) ? null : DateTimeOffset.Parse(r.GetString(5)));
+            ParseUtc(r.GetString(4)),
+            r.IsDBNull(5) ? null : ParseUtc(r.GetString(5)));
 
     private static AdminTokenRow ReadAdmin(SqliteDataReader r) =>
         new(
@@ -1430,8 +1430,8 @@ internal sealed class ManagerStore : IDisposable
             r.GetString(1),
             r.GetString(2),
             r.GetString(3),
-            DateTimeOffset.Parse(r.GetString(4)),
-            r.IsDBNull(5) ? null : DateTimeOffset.Parse(r.GetString(5)));
+            ParseUtc(r.GetString(4)),
+            r.IsDBNull(5) ? null : ParseUtc(r.GetString(5)));
 
     private enum HealthClass
     {

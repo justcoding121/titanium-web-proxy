@@ -8,8 +8,11 @@ using Titanium.Manager.Ui;
 namespace Titanium.Manager.Tests;
 
 [TestClass]
-public class ManagerUiTests
+public partial class ManagerUiTests
 {
+    [GeneratedRegex("data-csrf=\"([^\"]+)\"")]
+    private static partial Regex CsrfTokenRegex();
+
     private const string ValidYaml = """
         listeners:
           - port: 8000
@@ -147,7 +150,7 @@ public class ManagerUiTests
         var bad = await PostJsonAsync(client, $"/v1/fleets/{fleetId}/validate", new { yaml = BadYaml }, csrf);
         Assert.AreEqual(HttpStatusCode.BadRequest, bad.StatusCode);
         using var badDoc = await ReadJsonAsync(bad);
-        Assert.AreEqual(false, badDoc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.IsFalse(badDoc.RootElement.GetProperty("ok").GetBoolean());
         Assert.IsTrue(badDoc.RootElement.GetProperty("errors").GetArrayLength() > 0);
 
         var good = await PostJsonAsync(client, $"/v1/fleets/{fleetId}/validate", new { yaml = ValidYaml }, csrf);
@@ -222,7 +225,7 @@ public class ManagerUiTests
     {
         var page = await client.GetAsync("/");
         var html = await page.Content.ReadAsStringAsync();
-        var match = Regex.Match(html, "data-csrf=\"([^\"]+)\"");
+        var match = CsrfTokenRegex().Match(html);
         Assert.IsTrue(match.Success, "csrf missing from page");
         return match.Groups[1].Value;
     }

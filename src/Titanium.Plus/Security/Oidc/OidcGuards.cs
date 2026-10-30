@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -129,12 +130,9 @@ internal sealed class OidcRefresher(TimeProvider time)
 
     private void Sweep(DateTimeOffset now)
     {
-        foreach (var pair in _entries)
+        foreach (var pair in _entries.Where(p => p.Value.IsStale(now)))
         {
-            if (pair.Value.IsStale(now))
-            {
-                _entries.TryRemove(pair);
-            }
+            _entries.TryRemove(pair);
         }
     }
 

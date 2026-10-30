@@ -176,7 +176,7 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
+            context.Response.Headers.CacheControl = "max-age=60";
             context.Response.ContentType = "text/plain";
             await context.Response.WriteAsync("small-body");
         });
@@ -203,7 +203,7 @@ public class ResponseCachePathsTests
         new Random(7).NextBytes(payload);
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
+            context.Response.Headers.CacheControl = "max-age=60";
             context.Response.ContentType = "application/octet-stream";
             context.Response.ContentLength = payload.Length;
             await context.Response.Body.WriteAsync(payload);
@@ -224,7 +224,7 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
+            context.Response.Headers.CacheControl = "max-age=60";
             context.Response.ContentType = "text/plain";
             await context.Response.WriteAsync("chunk-one;");
             await context.Response.Body.FlushAsync();
@@ -250,7 +250,7 @@ public class ResponseCachePathsTests
         new Random(3).NextBytes(payload);
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
+            context.Response.Headers.CacheControl = "max-age=60";
             context.Response.ContentLength = payload.Length;
             await context.Response.Body.WriteAsync(payload);
         }, new ResponseCacheOptions { MaxEntryBytes = 16 * 1024, ExposeHeaders = true });
@@ -284,9 +284,9 @@ public class ResponseCachePathsTests
 
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
-            context.Response.Headers["Content-Encoding"] = "gzip";
-            context.Response.Headers["Vary"] = "Accept-Encoding";
+            context.Response.Headers.CacheControl = "max-age=60";
+            context.Response.Headers.ContentEncoding = "gzip";
+            context.Response.Headers.Vary = "Accept-Encoding";
             context.Response.ContentType = "text/plain";
             context.Response.ContentLength = gzip.Length;
             await context.Response.Body.WriteAsync(gzip);
@@ -312,9 +312,9 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            var language = context.Request.Headers["Accept-Language"].ToString();
-            context.Response.Headers["Cache-Control"] = "max-age=60";
-            context.Response.Headers["Vary"] = "Accept-Language";
+            var language = context.Request.Headers.AcceptLanguage.ToString();
+            context.Response.Headers.CacheControl = "max-age=60";
+            context.Response.Headers.Vary = "Accept-Language";
             await context.Response.WriteAsync("lang=" + language);
         });
 
@@ -336,7 +336,7 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
+            context.Response.Headers.CacheControl = "max-age=60";
             context.Response.ContentType = "text/plain";
             await context.Response.WriteAsync("twelve bytes");
         });
@@ -357,19 +357,19 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            if (context.Request.Headers["If-None-Match"].ToString() == "\"v1\"")
+            if (context.Request.Headers.IfNoneMatch.ToString() == "\"v1\"")
             {
                 context.Response.StatusCode = 304;
-                context.Response.Headers["ETag"] = "\"v1\"";
-                context.Response.Headers["Cache-Control"] = "max-age=300";
+                context.Response.Headers.ETag = "\"v1\"";
+                context.Response.Headers.CacheControl = "max-age=300";
                 context.Response.Headers["X-Revalidated"] = "yes";
                 return;
             }
 
             // Already stale on arrival (Age beyond max-age) but revalidatable.
-            context.Response.Headers["Cache-Control"] = "max-age=10";
-            context.Response.Headers["Age"] = "100";
-            context.Response.Headers["ETag"] = "\"v1\"";
+            context.Response.Headers.CacheControl = "max-age=10";
+            context.Response.Headers.Age = "100";
+            context.Response.Headers.ETag = "\"v1\"";
             context.Response.ContentType = "text/plain";
             await context.Response.WriteAsync("revalidated-body");
         });
@@ -409,8 +409,8 @@ public class ResponseCachePathsTests
                 return;
             }
 
-            context.Response.Headers["Cache-Control"] = "max-age=10, stale-if-error=600";
-            context.Response.Headers["Age"] = "100";
+            context.Response.Headers.CacheControl = "max-age=10, stale-if-error=600";
+            context.Response.Headers.Age = "100";
             await context.Response.WriteAsync("last-good");
         });
 
@@ -433,16 +433,16 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            if (context.Request.Headers["If-None-Match"].ToString() == "\"v1\"")
+            if (context.Request.Headers.IfNoneMatch.ToString() == "\"v1\"")
             {
                 context.Response.StatusCode = 304;
-                context.Response.Headers["Cache-Control"] = "max-age=60";
-                context.Response.Headers["ETag"] = "\"v1\"";
+                context.Response.Headers.CacheControl = "max-age=60";
+                context.Response.Headers.ETag = "\"v1\"";
                 return;
             }
 
-            context.Response.Headers["Cache-Control"] = "max-age=60";
-            context.Response.Headers["ETag"] = "\"v1\"";
+            context.Response.Headers.CacheControl = "max-age=60";
+            context.Response.Headers.ETag = "\"v1\"";
             await context.Response.WriteAsync("etagged");
         });
 
@@ -460,8 +460,8 @@ public class ResponseCachePathsTests
     {
         using var f = new Fixture(mode, async context =>
         {
-            context.Response.Headers["Cache-Control"] = "max-age=60";
-            await context.Response.WriteAsync("for:" + context.Request.Headers["Authorization"].ToString());
+            context.Response.Headers.CacheControl = "max-age=60";
+            await context.Response.WriteAsync("for:" + context.Request.Headers.Authorization.ToString());
         });
 
         Assert.AreEqual("for:", await (await f.GetAsync("/a")).Content.ReadAsStringAsync());
@@ -484,7 +484,7 @@ public class ResponseCachePathsTests
         using var f = new Fixture(mode, async context =>
         {
             await release.Task;
-            context.Response.Headers["Cache-Control"] = "max-age=60";
+            context.Response.Headers.CacheControl = "max-age=60";
             await context.Response.WriteAsync("collapsed");
         });
 

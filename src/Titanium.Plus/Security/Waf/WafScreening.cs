@@ -70,8 +70,20 @@ public sealed class WafStats
     private long _timeouts;
 
     /// <summary>Requests screened in the given mode.</summary>
-    public long Requests(WafMode mode) =>
-        mode == WafMode.Detect ? Volatile.Read(ref _detectRequests) : mode == WafMode.Block ? Volatile.Read(ref _blockRequests) : 0;
+    public long Requests(WafMode mode)
+    {
+        if (mode == WafMode.Detect)
+        {
+            return Volatile.Read(ref _detectRequests);
+        }
+
+        if (mode == WafMode.Block)
+        {
+            return Volatile.Read(ref _blockRequests);
+        }
+
+        return 0;
+    }
 
     /// <summary>Requests whose score reached the threshold, in detect or block mode.</summary>
     public long WouldBlock => Volatile.Read(ref _wouldBlock);
@@ -195,14 +207,11 @@ public sealed class WafScreeningMiddleware : IProxyMiddleware, IRequiresSessionP
     {
         _engine = engine;
         _logger = logger;
-        foreach (var policy in policies ?? [])
+        foreach (var policy in (policies ?? []).Where(p => string.Equals(p.Kind, "waf", StringComparison.Ordinal)))
         {
-            if (string.Equals(policy.Kind, "waf", StringComparison.Ordinal))
-            {
-                // Build now so a bad policy fails at startup, not on the first request that reaches its route.
-                _ = engine.Profiles.ForPolicy(policy);
-                _policies[policy.Name] = policy;
-            }
+            // Build now so a bad policy fails at startup, not on the first request that reaches its route.
+            _ = engine.Profiles.ForPolicy(policy);
+            _policies[policy.Name] = policy;
         }
     }
 
@@ -255,7 +264,10 @@ public sealed class WafScreeningMiddleware : IProxyMiddleware, IRequiresSessionP
             {
                 // The body cannot be read here (already streamed, or a tunnel). Screen the rest of the request.
                 outcome = WafBodyOutcome.NotEligible;
-                _logger?.LogDebug("Plus WAF: request body not read: {Reason}", ex.Message);
+                if (_logger?.IsEnabled(LogLevel.Debug) == true)
+                {
+                    _logger.LogDebug(ex, "Plus WAF: request body not read.");
+                }
             }
         }
 
@@ -374,7 +386,19 @@ public sealed class WafScreeningMiddleware : IProxyMiddleware, IRequiresSessionP
         }
 
         var rules = string.Join(',', verdict.Matches.Select(m => m.RuleId));
-        var action = verdict.Blocked ? "blocked" : verdict.WouldBlock ? "would block" : "noted";
+        string action;
+        if (verdict.Blocked)
+        {
+            action = "blocked";
+        }
+        else if (verdict.WouldBlock)
+        {
+            action = "would block";
+        }
+        else
+        {
+            action = "noted";
+        }
         _logger.LogWarning(
             "Plus WAF {Action} ({Mode}): score={Score} rules={Rules} {Method} {Path}",
             action, verdict.Mode.ToString().ToLowerInvariant(), verdict.Score, rules, method, path);

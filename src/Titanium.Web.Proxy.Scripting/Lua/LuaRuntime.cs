@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Scripting.Lua.Native;
@@ -101,14 +102,9 @@ internal sealed partial class LuaRuntime : IDisposable
             }
 
             LuaCalls.Load(handle, Options.Source, "@" + Path.GetFileName(Options.File), Options.MaxInstructions, Micros(Options.EngineDeadline));
-            var functions = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var name in EntryPoints)
-            {
-                if (LuaCalls.HasFunction(handle, name))
-                {
-                    functions.Add(name);
-                }
-            }
+            var functions = new HashSet<string>(
+                EntryPoints.Where(name => LuaCalls.HasFunction(handle, name)),
+                StringComparer.Ordinal);
 
             if (functions.Contains(OnConfigure))
             {
@@ -178,9 +174,8 @@ internal sealed partial class LuaRuntime : IDisposable
     private async ValueTask<LuaCallResult> RunAsync(string function, ReadOnlyMemory<byte> snapshot, CancellationToken token)
     {
         var instance = await Pool.AcquireAsync(token).ConfigureAwait(false);
-        var gateHeld = true;
         var callId = 0;
-        var waiting = false;
+        var suspendedOnOperation = false;
         var budget = Options.MaxInstructions;
         var cpu = Options.EngineDeadline;
         try
@@ -193,19 +188,17 @@ internal sealed partial class LuaRuntime : IDisposable
 
             while (segment.Code == LuaNative.Yield)
             {
-                waiting = true;
                 instance.Gate.Release();
-                gateHeld = false;
+                suspendedOnOperation = true; // NOSONAR S1854 -- finally reads this if await throws/cancels.
 
                 var values = await RunOperationAsync(segment.Output, token).ConfigureAwait(false);
 
                 await instance.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                gateHeld = true;
+                suspendedOnOperation = false;
                 started = Stopwatch.GetTimestamp();
                 segment = LuaCalls.Resume(instance.Handle, callId, values, Math.Max(1, budget), Math.Max(1, Micros(cpu)));
                 cpu -= Stopwatch.GetElapsedTime(started);
                 budget -= segment.Used;
-                waiting = false;
             }
 
             if (LuaScriptException.IsLimit(LuaScriptException.FailureOf(segment.Code)) && segment.Code != LuaNative.Ok)
@@ -219,19 +212,14 @@ internal sealed partial class LuaRuntime : IDisposable
         }
         finally
         {
-            if (waiting)
+            if (suspendedOnOperation)
             {
                 // Abandoned while waiting (timeout or cancellation): drop the suspended coroutine.
-                if (!gateHeld)
-                {
-                    await instance.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                    gateHeld = true;
-                }
-
+                await instance.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
                 LuaCalls.Cancel(instance.Handle, callId);
+                instance.Gate.Release();
             }
-
-            if (gateHeld)
+            else
             {
                 instance.Gate.Release();
             }
@@ -331,7 +319,7 @@ internal sealed partial class LuaRuntime : IDisposable
         return result;
     }
 
-    private void Apply(LuaTable? commands, LuaCallResult result, bool acceptTimers)
+    private void Apply(LuaTable? commands, LuaCallResult result, bool acceptTimers) // NOSONAR S3776 -- Command dispatch table mirrors script surface; splitting obscures apply order.
     {
         if (commands is null)
         {
@@ -416,7 +404,10 @@ internal sealed partial class LuaRuntime : IDisposable
             "error" => LogLevel.Error,
             _ => LogLevel.Information,
         };
-        Logger.Log(logLevel, "[lua:{Plugin}] {Message}", Name, message);
+        if (Logger.IsEnabled(logLevel))
+        {
+            Logger.Log(logLevel, "[lua:{Plugin}] {Message}", Name, message);
+        }
     }
 
     internal static long Micros(TimeSpan span) => Math.Max(1, (long)(span.TotalMilliseconds * 1000));

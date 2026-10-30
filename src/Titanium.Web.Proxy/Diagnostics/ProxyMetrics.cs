@@ -41,12 +41,15 @@ internal static class ProxyMetrics
     /// <summary>Exposed for host applications that want distributed-tracing spans, not just counters.</summary>
     public static readonly ActivitySource ActivitySource = new(MeterName, "1.0.0");
 
+    private const string ConnectionUnit = "{connection}";
+    private const string DirectionTag = "direction";
+
     private static readonly UpDownCounter<long> ActiveConnections =
-        Meter.CreateUpDownCounter<long>("twp.connections.active", "{connection}",
+        Meter.CreateUpDownCounter<long>("twp.connections.active", ConnectionUnit,
             "Client connections currently admitted and being handled.");
 
     private static readonly Counter<long> RejectedConnections =
-        Meter.CreateCounter<long>("twp.connections.rejected", "{connection}",
+        Meter.CreateCounter<long>("twp.connections.rejected", ConnectionUnit,
             "Client connections rejected before a handler task started, by reason.");
 
     private static readonly UpDownCounter<long> ActiveStreams =
@@ -74,7 +77,7 @@ internal static class ProxyMetrics
             "Cumulative decompressed bytes produced draining a Content-Encoding chain, tagged by direction.");
 
     private static readonly Counter<long> PoolOutcomes =
-        Meter.CreateCounter<long>("twp.pool.outcomes", "{connection}",
+        Meter.CreateCounter<long>("twp.pool.outcomes", ConnectionUnit,
             "Upstream connection pool outcomes: reuse, retry after a dead pooled connection, or protocol downgrade.");
 
     private static readonly Counter<long> ParserErrors =
@@ -173,10 +176,10 @@ internal static class ProxyMetrics
         TimeoutOutcomes.Add(1, new KeyValuePair<string, object?>("kind", kind));
 
     public static void BodyBuffered(long bytes, string direction) =>
-        BufferedBodyBytes.Record(bytes, new KeyValuePair<string, object?>("direction", direction));
+        BufferedBodyBytes.Record(bytes, new KeyValuePair<string, object?>(DirectionTag, direction));
 
     public static void BodyDecompressed(long bytes, string direction) =>
-        DecompressedBodyBytes.Record(bytes, new KeyValuePair<string, object?>("direction", direction));
+        DecompressedBodyBytes.Record(bytes, new KeyValuePair<string, object?>(DirectionTag, direction));
 
     public static void PoolReused() =>
         PoolOutcomes.Add(1, new KeyValuePair<string, object?>(OutcomeTag, "reuse"));
@@ -397,7 +400,7 @@ internal static class ProxyMetrics
     }
 
     private static readonly Counter<long> PassthroughConnections =
-        Meter.CreateCounter<long>("twp.passthrough.connections", "{connection}",
+        Meter.CreateCounter<long>("twp.passthrough.connections", ConnectionUnit,
             "Finished TCP passthrough connections by route (a configured server name pattern, default, or forward) and result.");
 
     private static readonly Counter<long> PassthroughBytes =
@@ -417,12 +420,12 @@ internal static class ProxyMetrics
         {
             if (bytesIn > 0)
             {
-                PassthroughBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+                PassthroughBytes.Add(bytesIn, new KeyValuePair<string, object?>(DirectionTag, "in"));
             }
 
             if (bytesOut > 0)
             {
-                PassthroughBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
+                PassthroughBytes.Add(bytesOut, new KeyValuePair<string, object?>(DirectionTag, "out"));
             }
         }
     }
@@ -464,12 +467,12 @@ internal static class ProxyMetrics
     {
         if (UdpDatagrams.Enabled)
         {
-            UdpDatagrams.Add(1, new KeyValuePair<string, object?>("direction", direction));
+            UdpDatagrams.Add(1, new KeyValuePair<string, object?>(DirectionTag, direction));
         }
 
         if (UdpBytes.Enabled)
         {
-            UdpBytes.Add(bytes, new KeyValuePair<string, object?>("direction", direction));
+            UdpBytes.Add(bytes, new KeyValuePair<string, object?>(DirectionTag, direction));
         }
     }
 
@@ -634,12 +637,12 @@ internal static class ProxyMetrics
 
         if (bytesIn > 0)
         {
-            ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>("direction", "in"));
+            ProxyBytes.Add(bytesIn, new KeyValuePair<string, object?>(DirectionTag, "in"));
         }
 
         if (bytesOut > 0)
         {
-            ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>("direction", "out"));
+            ProxyBytes.Add(bytesOut, new KeyValuePair<string, object?>(DirectionTag, "out"));
         }
     }
 }

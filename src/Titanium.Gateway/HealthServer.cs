@@ -30,7 +30,7 @@ public sealed class HealthServer : IDisposable
         }
         catch (HttpListenerException ex)
         {
-            _log.LogWarning("Health endpoint not started: {Message}", ex.Message);
+            _log.LogWarning(ex, "Health endpoint not started: {Message}", ex.Message);
             return;
         }
 

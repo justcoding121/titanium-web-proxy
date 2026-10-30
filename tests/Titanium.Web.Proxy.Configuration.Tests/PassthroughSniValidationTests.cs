@@ -8,6 +8,8 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class PassthroughSniValidationTests
 {
+    private static readonly string[] TcpApiWebClusterIds = ["tcp-api", "tcp-web"];
+
     private static ClusterConfig Cluster(string id) => new()
     {
         Id = id,
@@ -64,7 +66,7 @@ public class PassthroughSniValidationTests
             """;
 
         var config = TwpConfigLoader.LoadYaml(yaml);
-        config.Clusters = new[] { "tcp-api", "tcp-web" }.Select(Cluster).ToList();
+        config.Clusters = TcpApiWebClusterIds.Select(Cluster).ToList();
 
         var listener = config.Listeners.Single();
         Assert.AreEqual(2, listener.SniRoutes.Count);

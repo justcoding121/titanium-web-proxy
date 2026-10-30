@@ -460,7 +460,7 @@ internal sealed class RateLimiter
         return headers is { Count: > 0 } ? headers[0].Value : null;
     }
 
-    private static string? CookieValue(Request request, string name)
+    private static string? CookieValue(Request request, string name) // NOSONAR S3776 -- Cookie parsing walks semicolon-separated header lines in one pass.
     {
         var lines = request.Headers.GetHeaders("Cookie");
         if (lines is not { Count: > 0 })
@@ -493,7 +493,7 @@ internal sealed class RateLimiter
     ///     trusted. A peer that is not trusted could have written the whole chain, so its address is used.
     ///     A chain that is empty, entirely trusted, or ends in something that is not an address also falls back to the peer.
     /// </summary>
-    internal static IPAddress? ResolveForwardedClient(Request request, IPAddress? peer, IReadOnlyList<string>? trustedProxies)
+    internal static IPAddress? ResolveForwardedClient(Request request, IPAddress? peer, IReadOnlyList<string>? trustedProxies) // NOSONAR S3776 -- Forwarded-client resolution walks X-Forwarded-For from the right in one pass.
     {
         if (peer is null)
         {

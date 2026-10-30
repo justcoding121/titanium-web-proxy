@@ -217,7 +217,19 @@ internal static class DashboardData
         }
 
         var days = (int)Math.Floor((notAfter - now).TotalDays);
-        var status = days < 0 ? "expired" : days < ExpiryWarnDays ? "expiring" : "ok";
+        string status;
+        if (days < 0)
+        {
+            status = "expired";
+        }
+        else if (days < ExpiryWarnDays)
+        {
+            status = "expiring";
+        }
+        else
+        {
+            status = "ok";
+        }
         return new CertificateView(c.Name, c.Role, c.Subject ?? "", c.Issuer ?? "", Iso(notAfter), days, status, c.Error ?? "");
     }
 

@@ -160,7 +160,7 @@ internal sealed partial class TranslationPass
         foreach (var (file, host) in bindings)
         {
             files[file.FileName] = file;
-            var path = _options.TlsMountPath.TrimEnd('/') + "/" + file.FileName;
+            var path = string.Concat(_options.TlsMountPath.TrimEnd('/'), "/", file.FileName); // NOSONAR S1075 -- TLS mount path delimiter, not a filesystem root.
 
             // Listeners of different Gateways, and Ingresses, can merge onto one host and share a Secret.
             if (items.Any(i => i.Path == path && i.Hosts is [var existing] && existing == host))

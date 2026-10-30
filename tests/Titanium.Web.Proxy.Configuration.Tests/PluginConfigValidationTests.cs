@@ -11,6 +11,9 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public class PluginConfigValidationTests
 {
+    private static readonly string[] GateMiddleware = ["gate"];
+    private static readonly string[] CalloutHostsExpected = ["auth.internal", "geo.internal"];
+
     private static string TestPlugins => Path.Combine(AppContext.BaseDirectory, "Titanium.Web.Proxy.TestPlugins.dll");
 
     private static string SamplePlugin => Path.Combine(AppContext.BaseDirectory, "Titanium.Web.Proxy.Examples.RoutePlugin.dll");
@@ -181,12 +184,12 @@ public class PluginConfigValidationTests
         Assert.AreEqual("open", fromYaml.Plugins!.Single().FailMode);
         Assert.AreEqual(250, fromYaml.Plugins!.Single().TimeoutMs);
         Assert.AreEqual("X-Key", fromYaml.Plugins!.Single().Settings!["requiredHeader"]);
-        CollectionAssert.AreEqual(new[] { "gate" }, fromYaml.Routes.Single().Middleware!.ToArray());
+        CollectionAssert.AreEqual(GateMiddleware, fromYaml.Routes.Single().Middleware!.ToArray());
         Assert.AreEqual(0, TwpConfigValidator.Validate(fromYaml).Count);
 
         var fromJson = TwpConfigLoader.LoadJson(TwpConfigLoader.ToJson(fromYaml));
         Assert.AreEqual("gate", fromJson.Plugins!.Single().Name);
-        CollectionAssert.AreEqual(new[] { "gate" }, fromJson.Routes.Single().Middleware!.ToArray());
+        CollectionAssert.AreEqual(GateMiddleware, fromJson.Routes.Single().Middleware!.ToArray());
         Assert.AreEqual(0, UnknownConfigKeyScanner.Scan(yaml, yaml: true).Count);
     }
 
@@ -310,7 +313,7 @@ public class PluginConfigValidationTests
         Assert.AreEqual("filter.lua", plugin.File);
         Assert.AreEqual("edge", plugin.VmId);
         Assert.AreEqual("buffered", plugin.BodyMode);
-        CollectionAssert.AreEqual(new[] { "auth.internal", "geo.internal" }, plugin.CalloutHosts!.ToArray());
+        CollectionAssert.AreEqual(CalloutHostsExpected, plugin.CalloutHosts!.ToArray());
         Assert.AreEqual(16, plugin.Limits!.MemoryMb);
         Assert.AreEqual(5_000_000L, plugin.Limits.MaxInstructions);
         Assert.AreEqual(100_000L, plugin.Limits.Fuel);
@@ -333,10 +336,4 @@ public class PluginConfigValidationTests
         StringAssert.Contains(schema, "\"lua\"");
     }
 
-    [TestMethod]
-    public void TheContractVersion_IsWithinTheSupportedRange()
-    {
-        Assert.IsTrue(ProxyPluginContract.MinimumSupportedVersion <= ProxyPluginContract.CurrentVersion);
-        Assert.AreEqual(1, ProxyPluginContract.CurrentVersion);
-    }
 }

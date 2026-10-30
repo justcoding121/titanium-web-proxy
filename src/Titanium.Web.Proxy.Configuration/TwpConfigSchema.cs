@@ -12,6 +12,7 @@ public static class TwpConfigSchema
     private const string ObjectType = "object";
     private const string StringType = "string";
     private const string MinimumKey = "minimum";
+    private const string MaximumKey = "maximum";
 
     public static string Generate()
     {
@@ -117,27 +118,28 @@ public static class TwpConfigSchema
                 schema["enum"] = new JsonArray { "clientEndpoint" };
                 break;
             case "ListenerConfig.MaxSessions":
+            case "MasqueListenerConfig.MaxDatagramsPerSecond":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = 1_000_000;
+                schema[MaximumKey] = 1_000_000;
                 break;
             case "ListenerConfig.MaxSessionsPerClient":
                 schema[MinimumKey] = 1;
                 break;
             case "ListenerConfig.MaxDatagramBytes":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = 65507;
+                schema[MaximumKey] = 65507;
                 break;
             case "ListenerConfig.MaxDatagramsPerSecondPerClient":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = 10_000_000;
+                schema[MaximumKey] = 10_000_000;
                 break;
             case "ListenerConfig.SniReadTimeoutSeconds":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = 60;
+                schema[MaximumKey] = 60;
                 break;
             case "MirrorConfig.MaxBodyBytes":
                 schema[MinimumKey] = 0;
-                schema["maximum"] = MirrorConfig.MaxAllowedBodyBytes;
+                schema[MaximumKey] = MirrorConfig.MaxAllowedBodyBytes;
                 break;
             case "ResponseCompressionConfig.Level":
                 schema["enum"] = new JsonArray { "fastest", "optimal", "smallestSize" };
@@ -147,18 +149,18 @@ public static class TwpConfigSchema
                 break;
             case "RequestDecompressionConfig.MaxDecompressedBytes":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = RequestDecompressionConfig.MaxAllowedDecompressedBytes;
+                schema[MaximumKey] = RequestDecompressionConfig.MaxAllowedDecompressedBytes;
                 break;
             case "RequestDecompressionConfig.MaxRatio":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = RequestDecompressionConfig.MaxAllowedRatio;
+                schema[MaximumKey] = RequestDecompressionConfig.MaxAllowedRatio;
                 break;
             case "ResponseCompressionConfig.MinBytes":
                 schema[MinimumKey] = 1;
                 break;
             case "ResponseCompressionConfig.MaxBytes":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = ResponseCompressionConfig.DefaultMaxBytes;
+                schema[MaximumKey] = ResponseCompressionConfig.DefaultMaxBytes;
                 break;
             case "RouteConfig.Compression":
                 schema["enum"] = new JsonArray { "off" };
@@ -168,7 +170,7 @@ public static class TwpConfigSchema
                 break;
             case "PluginConfig.TimeoutMs":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = 60_000;
+                schema[MaximumKey] = 60_000;
                 break;
             case "PluginConfig.Name":
                 schema["pattern"] = "^[A-Za-z0-9._-]{1,64}$";
@@ -202,15 +204,11 @@ public static class TwpConfigSchema
                 break;
             case "RoutePolicyConfig.MaxKeys":
                 schema[MinimumKey] = 1000;
-                schema["maximum"] = 10_000_000;
+                schema[MaximumKey] = 10_000_000;
                 break;
             case "MasqueListenerConfig.MaxBytesPerSecond":
                 schema[MinimumKey] = 1;
-                schema["maximum"] = 1_073_741_824;
-                break;
-            case "MasqueListenerConfig.MaxDatagramsPerSecond":
-                schema[MinimumKey] = 1;
-                schema["maximum"] = 1_000_000;
+                schema[MaximumKey] = 1_073_741_824;
                 break;
             case "MasqueListenerConfig.MaxTunnels":
             case "MasqueListenerConfig.MaxTunnelsPerClient":

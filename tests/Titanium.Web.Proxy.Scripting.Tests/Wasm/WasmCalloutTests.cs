@@ -15,7 +15,7 @@ public class WasmCalloutTests
     [ClassInitialize]
     public static async Task StartOrigin(TestContext _) => _origin = await CalloutOrigin.StartAsync();
 
-    [ClassCleanup]
+    [ClassCleanup(ClassCleanupBehavior.EndOfClass)]
     public static async Task StopOrigin() => await _origin.DisposeAsync();
 
     [TestMethod]

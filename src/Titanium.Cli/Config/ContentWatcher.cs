@@ -42,7 +42,7 @@ internal sealed class ContentWatcher : IDisposable
     private readonly SemaphoreSlim _checkLock = new(1, 1);
     private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _stop = new();
-    private ITimer? _poll;
+    private readonly ITimer? _poll;
     private CancellationTokenSource? _pending;
     private string[] _resolvedTargets = [];
     private string? _last;
@@ -80,10 +80,9 @@ internal sealed class ContentWatcher : IDisposable
         }
 
         var interval = pollInterval ?? DefaultPollInterval;
-        if (interval > TimeSpan.Zero && interval != Timeout.InfiniteTimeSpan)
-        {
-            _poll = _time.CreateTimer(static state => ((ContentWatcher)state!).Trigger(), this, interval, interval);
-        }
+        _poll = interval > TimeSpan.Zero && interval != Timeout.InfiniteTimeSpan
+            ? _time.CreateTimer(static state => ((ContentWatcher)state!).Trigger(), this, interval, interval)
+            : null;
     }
 
     /// <summary>Paths being watched, absolute.</summary>
@@ -296,7 +295,8 @@ internal sealed class ContentWatcher : IDisposable
 
     /// <summary>True for a path with a <c>..data</c> or <c>..2026_…</c> segment, the names a Kubernetes volume swaps.</summary>
     internal static bool HasKubernetesSegment(string path) =>
-        path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+        path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .Split(Path.DirectorySeparatorChar)
             .Any(static segment => segment.Length > 2 && segment.StartsWith("..", StringComparison.Ordinal));
 
     private void OnEvent(object? sender, FileSystemEventArgs e)
@@ -327,23 +327,12 @@ internal sealed class ContentWatcher : IDisposable
             targets = _resolvedTargets;
         }
 
-        foreach (var path in _paths)
+        if (_paths.Any(path => string.Equals(path, full, GetPathComparison())))
         {
-            if (string.Equals(path, full, GetPathComparison()))
-            {
-                return true;
-            }
+            return true;
         }
 
-        foreach (var target in targets)
-        {
-            if (string.Equals(target, full, GetPathComparison()))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return targets.Any(target => string.Equals(target, full, GetPathComparison()));
     }
 
     private static StringComparison GetPathComparison() =>

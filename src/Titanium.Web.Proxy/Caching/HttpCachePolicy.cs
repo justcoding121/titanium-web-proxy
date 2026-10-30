@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
@@ -81,12 +82,9 @@ internal static class HttpCachePolicy
     internal static Directives ParseCacheControl(IReadOnlyList<KeyValuePair<string, string>> headers)
     {
         var d = Directives.Create();
-        foreach (var h in headers)
+        foreach (var h in headers.Where(h => h.Key.Equals("Cache-Control", StringComparison.OrdinalIgnoreCase)))
         {
-            if (h.Key.Equals("Cache-Control", StringComparison.OrdinalIgnoreCase))
-            {
-                ParseCacheControlValue(h.Value, ref d);
-            }
+            ParseCacheControlValue(h.Value, ref d);
         }
 
         return d;
@@ -108,7 +106,7 @@ internal static class HttpCachePolicy
         return d;
     }
 
-    private static void ParseCacheControlValue(string value, ref Directives d)
+    private static void ParseCacheControlValue(string value, ref Directives d) // NOSONAR S3776 -- Directive tokenizer keeps RFC 9111 parsing in one place.
     {
         var span = value.AsSpan();
         while (!span.IsEmpty)
@@ -295,7 +293,7 @@ internal static class HttpCachePolicy
         public required int StaleWhileRevalidateSeconds { get; init; }
         public required int StaleIfErrorSeconds { get; init; }
         public required bool MustRevalidate { get; init; }
-        public required bool HasValidator { get; init; }
+        public required bool EntryHasValidator { get; init; }
 
         /// <summary>Named Vary headers (lower-case, Accept-Encoding excluded because it is always keyed).</summary>
         public required IReadOnlyList<string> VaryNames { get; init; }
@@ -308,7 +306,7 @@ internal static class HttpCachePolicy
     /// Never stores: Set-Cookie, Cache-Control private / no-store / no-cache, Vary: *, a Vary naming more than
     /// <see cref="MaxVaryHeaders"/> headers, partial content, and a response with no usable freshness.
     /// </summary>
-    internal static bool TryPlanStore(
+    internal static bool TryPlanStore( // NOSONAR S3776 -- Store planning combines RFC 9111 refusal rules and freshness math.
         int statusCode,
         IReadOnlyList<KeyValuePair<string, string>> headers,
         DateTimeOffset now,
@@ -324,20 +322,17 @@ internal static class HttpCachePolicy
             return false;
         }
 
-        foreach (var h in headers)
+        if (headers.Any(h => h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase) ||
+                              h.Key.Equals("Set-Cookie2", StringComparison.OrdinalIgnoreCase)))
         {
-            if (h.Key.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase) ||
-                h.Key.Equals("Set-Cookie2", StringComparison.OrdinalIgnoreCase))
-            {
-                refusal = "set-cookie";
-                return false;
-            }
+            refusal = "set-cookie";
+            return false;
+        }
 
-            if (h.Key.Equals("Content-Range", StringComparison.OrdinalIgnoreCase))
-            {
-                refusal = "partial";
-                return false;
-            }
+        if (headers.Any(h => h.Key.Equals("Content-Range", StringComparison.OrdinalIgnoreCase)))
+        {
+            refusal = "partial";
+            return false;
         }
 
         var cc = ParseCacheControl(headers);
@@ -443,27 +438,22 @@ internal static class HttpCachePolicy
             StaleWhileRevalidateSeconds = swr,
             StaleIfErrorSeconds = sie,
             MustRevalidate = mustRevalidate,
-            HasValidator = hasValidator,
+            EntryHasValidator = hasValidator,
             VaryNames = varyNames,
             HasDateHeader = hasDate,
         };
         return true;
     }
 
-    private static bool TryParseVary(
+    private static bool TryParseVary( // NOSONAR S3776 -- Vary parsing validates tokens and enforces header limits.
         IReadOnlyList<KeyValuePair<string, string>> headers,
         out List<string> names,
         out string refusal)
     {
         names = [];
         refusal = string.Empty;
-        foreach (var h in headers)
+        foreach (var h in headers.Where(h => h.Key.Equals("Vary", StringComparison.OrdinalIgnoreCase)))
         {
-            if (!h.Key.Equals("Vary", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             foreach (var raw in h.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
                 if (raw == "*")
@@ -519,7 +509,7 @@ internal static class HttpCachePolicy
     };
 
     /// <summary>Headers worth keeping, with framing normalized: no hop-by-hop, no Age, one Content-Length for the body.</summary>
-    internal static List<KeyValuePair<string, string>> BuildStoredHeaders(
+    internal static List<KeyValuePair<string, string>> BuildStoredHeaders( // NOSONAR S3776 -- Stored header normalization combines hop-by-hop stripping and framing.
         IReadOnlyList<KeyValuePair<string, string>> headers,
         int statusCode,
         int bodyLength,
@@ -527,31 +517,20 @@ internal static class HttpCachePolicy
         bool hasDate)
     {
         HashSet<string>? listed = null;
-        foreach (var h in headers)
+        foreach (var h in headers.Where(h => h.Key.Equals("Connection", StringComparison.OrdinalIgnoreCase)))
         {
-            if (!h.Key.Equals("Connection", StringComparison.OrdinalIgnoreCase))
+            foreach (var part in h.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                         .Where(part => !part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
+                                        !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase)))
             {
-                continue;
-            }
-
-            foreach (var part in h.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (!part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
-                    !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase))
-                {
-                    (listed ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(part);
-                }
+                (listed ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(part);
             }
         }
 
         var kept = new List<KeyValuePair<string, string>>(headers.Count + 2);
-        foreach (var h in headers)
+        foreach (var h in headers.Where(h => !NeverStoredHeaders.Contains(h.Key) &&
+                                             (listed is null || !listed.Contains(h.Key))))
         {
-            if (NeverStoredHeaders.Contains(h.Key) || (listed is not null && listed.Contains(h.Key)))
-            {
-                continue;
-            }
-
             kept.Add(h);
         }
 
@@ -619,13 +598,7 @@ internal static class HttpCachePolicy
             var noCache = d.NoCache;
             if (!noCache && header("Cache-Control") is not { Count: > 0 } && header("Pragma") is { } pragma)
             {
-                foreach (var p in pragma)
-                {
-                    if (p.Contains("no-cache", StringComparison.OrdinalIgnoreCase))
-                    {
-                        noCache = true;
-                    }
-                }
+                noCache = pragma.Any(p => p.Contains("no-cache", StringComparison.OrdinalIgnoreCase));
             }
 
             return new RequestDirectives
@@ -707,30 +680,19 @@ internal static class HttpCachePolicy
         CachedHttpResponse stored,
         IReadOnlyList<KeyValuePair<string, string>> notModified)
     {
-        HashSet<string>? replaced = null;
-        foreach (var h in notModified)
-        {
-            if (!NotUpdatedBy304.Contains(h.Key))
-            {
-                (replaced ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(h.Key);
-            }
-        }
+        var replaced = notModified.Where(h => !NotUpdatedBy304.Contains(h.Key))
+            .Select(h => h.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var merged = new List<KeyValuePair<string, string>>(stored.Headers.Count + notModified.Count);
-        foreach (var h in stored.Headers)
+        foreach (var h in stored.Headers.Where(h => !replaced.Contains(h.Key)))
         {
-            if (replaced is null || !replaced.Contains(h.Key))
-            {
-                merged.Add(h);
-            }
+            merged.Add(h);
         }
 
-        foreach (var h in notModified)
+        foreach (var h in notModified.Where(h => !NotUpdatedBy304.Contains(h.Key)))
         {
-            if (!NotUpdatedBy304.Contains(h.Key))
-            {
-                merged.Add(h);
-            }
+            merged.Add(h);
         }
 
         return merged;
@@ -786,7 +748,7 @@ internal static class HttpCachePolicy
     };
 
     /// <summary>Header value normalized for a secondary key: fields joined, whitespace collapsed, token headers lower-cased.</summary>
-    internal static string NormalizeVaryValue(string lowerName, IReadOnlyList<string>? values)
+    internal static string NormalizeVaryValue(string lowerName, IReadOnlyList<string>? values) // NOSONAR S3776 -- Vary normalization handles token casing and whitespace collapse.
     {
         if (values is null || values.Count == 0)
         {
@@ -907,15 +869,10 @@ internal static class HttpCachePolicy
                 return ClientConditional.None;
             }
 
-            foreach (var line in inm)
+            if (inm.SelectMany(line => line.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                .Any(candidate => candidate == "*" || WeakEquals(candidate, etag)))
             {
-                foreach (var candidate in line.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-                {
-                    if (candidate == "*" || WeakEquals(candidate, etag))
-                    {
-                        return ClientConditional.NotModified;
-                    }
-                }
+                return ClientConditional.NotModified;
             }
 
             return ClientConditional.None;

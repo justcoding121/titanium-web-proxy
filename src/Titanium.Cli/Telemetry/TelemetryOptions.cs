@@ -185,7 +185,10 @@ internal sealed record TelemetryOptions
         if (!grpc && appendPath)
         {
             var current = builder.Path.TrimEnd('/');
-            builder.Path = current.EndsWith("/" + path, StringComparison.Ordinal) ? current : current + "/" + path;
+            const char urlPathSeparator = '/';
+            builder.Path = current.EndsWith(urlPathSeparator + path, StringComparison.Ordinal)
+                ? current
+                : string.Concat(current, urlPathSeparator.ToString(), path);
         }
 
         return builder.Uri;

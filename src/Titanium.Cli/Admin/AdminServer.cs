@@ -26,6 +26,7 @@ internal sealed class AdminServer : IDisposable
     public const string DefaultHost = "127.0.0.1";
 
     private const int MaxRequestBytes = 8192;
+    private const string HttpStatus200Ok = "200 OK";
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
     private static readonly byte[] EmptyDigest = new byte[SHA256.HashSizeInBytes];
 
@@ -181,10 +182,10 @@ internal sealed class AdminServer : IDisposable
 
         var response = path switch
         {
-            "/healthz" => AdminResponse.Text("200 OK", "ok\n"),
+            "/healthz" => AdminResponse.Text(HttpStatus200Ok, "ok\n"),
             "/readyz" => ReadyResponse(),
-            "/metrics" => Authorize(lines) ?? new AdminResponse("200 OK", PrometheusTextWriter.ContentType, _exposition.Render()),
-            "/version" => Authorize(lines) ?? new AdminResponse("200 OK", "application/json", VersionJson(_version())),
+            "/metrics" => Authorize(lines) ?? new AdminResponse(HttpStatus200Ok, PrometheusTextWriter.ContentType, _exposition.Render()),
+            "/version" => Authorize(lines) ?? new AdminResponse(HttpStatus200Ok, "application/json", VersionJson(_version())),
             _ => AdminResponse.Text("404 Not Found", "not found\n"),
         };
 
@@ -195,7 +196,7 @@ internal sealed class AdminServer : IDisposable
     {
         var report = _readiness.Check();
         return report.Ready
-            ? new AdminResponse("200 OK", "application/json", "{\"status\":\"ready\"}\n")
+            ? new AdminResponse(HttpStatus200Ok, "application/json", "{\"status\":\"ready\"}\n")
             : new AdminResponse("503 Service Unavailable", "application/json", NotReadyJson(report.Reasons));
     }
 

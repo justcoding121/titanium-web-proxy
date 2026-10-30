@@ -11,6 +11,10 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 public class TwpConfigLoaderTests
 {
     private static readonly string[] ExpectedTlsProtocols = ["Tls12", "Tls13"];
+    private static readonly int[] PassiveFailure502503 = [502, 503];
+    private static readonly string[] HostsATestBTest = ["a.test", "b.test"];
+    private static readonly string[] MethodsGetPost = ["GET", "POST"];
+    private static readonly int[] RetryStatus429503 = [429, 503];
 
     [TestMethod]
     public void LoadJson_ParsesListenersAndRoutes()
@@ -67,10 +71,10 @@ public class TwpConfigLoaderTests
         var cluster = config.Clusters.Single();
         Assert.AreEqual(2, cluster.Destinations.Count);
         Assert.AreEqual("backend.internal", cluster.Destinations[0].Address);
-        CollectionAssert.AreEqual(new[] { 502, 503 }, cluster.HealthCheck!.Passive!.FailureStatusCodes!.ToArray());
+        CollectionAssert.AreEqual(PassiveFailure502503, cluster.HealthCheck!.Passive!.FailureStatusCodes!.ToArray());
         var route = config.Routes.Single();
-        CollectionAssert.AreEqual(new[] { "a.test", "b.test" }, route.Match.Hosts!.ToArray());
-        CollectionAssert.AreEqual(new[] { "GET", "POST" }, route.Match.Methods!.ToArray());
+        CollectionAssert.AreEqual(HostsATestBTest, route.Match.Hosts!.ToArray());
+        CollectionAssert.AreEqual(MethodsGetPost, route.Match.Methods!.ToArray());
         Assert.AreEqual("1", route.Match.Headers!["X-A"]);
         Assert.AreEqual("/x", route.Transforms!.Single().Parameters!["path"]);
     }
@@ -167,7 +171,7 @@ public class TwpConfigLoaderTests
             """;
         var retry = JsonReverseProxyDocument.Parse(json).Routes[0].Retry!;
         Assert.AreEqual(2, retry.Attempts);
-        CollectionAssert.AreEqual(new[] { 429, 503 }, retry.StatusCodes!.ToArray());
+        CollectionAssert.AreEqual(RetryStatus429503, retry.StatusCodes!.ToArray());
         Assert.AreEqual(800, retry.PerTryTimeoutMilliseconds);
         Assert.AreEqual(50, retry.BackoffMilliseconds);
         Assert.AreEqual(400, retry.MaxBackoffMilliseconds);

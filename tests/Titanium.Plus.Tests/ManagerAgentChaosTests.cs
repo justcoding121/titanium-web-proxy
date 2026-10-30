@@ -32,16 +32,16 @@ public class ManagerAgentChaosTests
             using var agent = StartAgent(harness, stateDir, tokenFile, applier, status, mode: "managed", debounceMs: 200);
             Assert.IsNotNull(agent);
 
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Count >= 1, TimeSpan.FromSeconds(8));
-            Assert.AreEqual(1, applier.SuccessfulApplies.Count);
+            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            Assert.AreEqual(1, applier.SuccessfulApplies.Length);
             Assert.IsTrue(ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var lkgHash));
             Assert.AreEqual(expectedHash, lkgHash);
 
             // Manager goes away: stop the listener. Agent must not re-apply (have hash set) and LKG stays.
             await harness.SuspendAsync();
-            var appliesAtDown = applier.SuccessfulApplies.Count;
+            var appliesAtDown = applier.SuccessfulApplies.Length;
             await Task.Delay(1500);
-            Assert.AreEqual(appliesAtDown, applier.SuccessfulApplies.Count,
+            Assert.AreEqual(appliesAtDown, applier.SuccessfulApplies.Length,
                 "manager down must not churn applies while LKG is held");
             Assert.IsTrue(ManagerAgent.TryReadLastKnownGood(stateDir, out var lkgYaml, out var stillHash));
             Assert.AreEqual(expectedHash, stillHash);
@@ -56,8 +56,8 @@ public class ManagerAgentChaosTests
             }
 
             await Task.Delay(900);
-            Assert.IsTrue(applier.SuccessfulApplies.Count < appliesAtDown + 6,
-                $"applies={applier.SuccessfulApplies.Count} after flap republishes");
+            Assert.IsTrue(applier.SuccessfulApplies.Length < appliesAtDown + 6,
+                $"applies={applier.SuccessfulApplies.Length} after flap republishes");
             Assert.IsTrue(ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var finalHash));
             Assert.AreEqual(harness.ConfigVersion.ToString(), finalHash);
         }
@@ -176,7 +176,7 @@ public class ManagerAgentChaosTests
     {
         private readonly ConcurrentQueue<(string Yaml, string Hash)> _ok = new();
         public int Attempts { get; private set; }
-        public IReadOnlyList<(string Yaml, string Hash)> SuccessfulApplies => _ok.ToArray();
+        public (string Yaml, string Hash)[] SuccessfulApplies => _ok.ToArray();
 
         public Task<ConfigApplyResult> ApplyAsync(string yaml, string configHash, CancellationToken cancellationToken = default)
         {

@@ -32,6 +32,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class ExtAuthRouteTests
 {
     private const string Good = "Bearer good";
+    private static readonly string?[] ExpectedUsersRoundTrip = ["user-a", "user-b", "user-a"];
 
     [DataTestMethod]
     [DataRow(ClientKind.H1Cleartext)]
@@ -130,8 +131,8 @@ public class ExtAuthRouteTests
 
         Assert.AreEqual(HttpStatusCode.Found, response.StatusCode);
         Assert.AreEqual(target, response.Headers.Location?.ToString());
-        Assert.AreEqual(1, service.Requests.Count);
-        Assert.AreEqual(0, landing.Requests.Count, "the proxy must not follow the redirect");
+        Assert.AreEqual(1, service.Requests.Length);
+        Assert.AreEqual(0, landing.Requests.Length, "the proxy must not follow the redirect");
         Assert.AreEqual(0, origin.Hits);
     }
 
@@ -228,7 +229,7 @@ public class ExtAuthRouteTests
             Assert.AreEqual(HttpStatusCode.OK, ok.StatusCode);
         }
 
-        Assert.AreEqual(1, service.Requests.Count, "two of three were answered from the cache");
+        Assert.AreEqual(1, service.Requests.Length, "two of three were answered from the cache");
         Assert.AreEqual(2, metrics.Count("cache_hit"));
         Assert.AreEqual(1, metrics.Count("allow"));
 
@@ -236,16 +237,16 @@ public class ExtAuthRouteTests
         Assert.AreEqual(HttpStatusCode.Unauthorized, other.StatusCode);
         using var again = await client.SendAsync(NewRequest(proxy, ClientKind.H1Cleartext, "/p", ("Authorization", "Bearer other")));
         Assert.AreEqual(HttpStatusCode.Unauthorized, again.StatusCode);
-        Assert.AreEqual(3, service.Requests.Count, "a denial is never cached");
+        Assert.AreEqual(3, service.Requests.Length, "a denial is never cached");
 
         using var otherPath = await client.SendAsync(NewRequest(proxy, ClientKind.H1Cleartext, "/q", ("Authorization", Good)));
         Assert.AreEqual(HttpStatusCode.OK, otherPath.StatusCode);
-        Assert.AreEqual(4, service.Requests.Count, "the decision is keyed by path as well as credentials");
+        Assert.AreEqual(4, service.Requests.Length, "the decision is keyed by path as well as credentials");
 
         using var otherQuery = await client.SendAsync(
             NewRequest(proxy, ClientKind.H1Cleartext, "/q?token=other", ("Authorization", Good)));
         Assert.AreEqual(HttpStatusCode.OK, otherQuery.StatusCode);
-        Assert.AreEqual(5, service.Requests.Count, "the decision is keyed by query as well as path");
+        Assert.AreEqual(5, service.Requests.Length, "the decision is keyed by query as well as path");
     }
 
     [TestMethod]
@@ -273,16 +274,16 @@ public class ExtAuthRouteTests
             await Send("t1");
             await Send("t2");
             await Send("t3");
-            Assert.AreEqual(3, service.Requests.Count);
+            Assert.AreEqual(3, service.Requests.Length);
             await Send("t3");
             await Send("t2");
-            Assert.AreEqual(3, service.Requests.Count, "the two newest are still cached");
+            Assert.AreEqual(3, service.Requests.Length, "the two newest are still cached");
             await Send("t1");
-            Assert.AreEqual(4, service.Requests.Count, "the oldest entry was evicted");
+            Assert.AreEqual(4, service.Requests.Length, "the oldest entry was evicted");
 
             clock.Advance(TimeSpan.FromSeconds(11));
             await Send("t1");
-            Assert.AreEqual(5, service.Requests.Count, "an expired entry is asked again");
+            Assert.AreEqual(5, service.Requests.Length, "an expired entry is asked again");
         }
         finally
         {
@@ -334,14 +335,14 @@ public class ExtAuthRouteTests
         Assert.AreEqual(HttpStatusCode.OK, await Send("Bearer b"));
         Assert.AreEqual(HttpStatusCode.OK, await Send("Bearer a"));
 
-        Assert.AreEqual(5, service.Requests.Count);
+        Assert.AreEqual(5, service.Requests.Length);
         CollectionAssert.AreEqual(
             new string?[] { "Bearer a", "Bearer nope", null, "Bearer b", "Bearer a" },
             service.Requests.Select(r => r.Header("Authorization")).ToArray());
         Assert.AreEqual("sid=1", service.Requests[0].Header("Cookie"));
         Assert.IsNull(service.Requests[1].Header("Cookie"), "the earlier cookie must not leak into a later subrequest");
         Assert.AreEqual(1, service.Connections, "the subrequests share one keep-alive connection");
-        CollectionAssert.AreEqual(new string?[] { "user-a", "user-b", "user-a" }, users);
+        CollectionAssert.AreEqual(ExpectedUsersRoundTrip, users);
     }
 
     [TestMethod]
@@ -357,7 +358,7 @@ public class ExtAuthRouteTests
             NewRequest(proxy, ClientKind.H1Cleartext, "/loop", ("X-Titanium-ExtAuth", "1")));
 
         Assert.AreEqual((HttpStatusCode)508, response.StatusCode);
-        Assert.AreEqual(0, service.Requests.Count);
+        Assert.AreEqual(0, service.Requests.Length);
         Assert.AreEqual(0, origin.Hits);
     }
 
@@ -393,7 +394,7 @@ public class ExtAuthRouteTests
         using var response = await client.SendAsync(NewRequest(proxy, ClientKind.H1Cleartext, "/t"));
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.AreEqual(0, service.Requests.Count);
+        Assert.AreEqual(0, service.Requests.Length);
     }
 
     [TestMethod]
@@ -471,7 +472,7 @@ public class ExtAuthRouteTests
         }
 
         Assert.AreEqual(1, Volatile.Read(ref hits));
-        Assert.AreEqual(2, service.Requests.Count);
+        Assert.AreEqual(2, service.Requests.Length);
     }
 
     // ---- helpers ----------------------------------------------------------------------------------------------
@@ -760,7 +761,7 @@ public class ExtAuthRouteTests
 
         public int Connections => Volatile.Read(ref connections);
 
-        public IReadOnlyList<AuthRequest> Requests
+        public AuthRequest[] Requests
         {
             get
             {

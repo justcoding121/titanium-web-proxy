@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.Linq;
 using System.Threading;
 
 namespace Titanium.Cli.Admin;
@@ -67,18 +68,8 @@ internal sealed class MetricsListener : IDisposable
     /// <summary>Enabled instruments in publish order. Safe to read while measurements arrive.</summary>
     public InstrumentState[] Instruments => Volatile.Read(ref _instruments);
 
-    public static bool IsSelected(string instrumentName)
-    {
-        foreach (var prefix in SelectedPrefixes)
-        {
-            if (instrumentName.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    public static bool IsSelected(string instrumentName) =>
+        SelectedPrefixes.Any(prefix => instrumentName.StartsWith(prefix, StringComparison.Ordinal));
 
     public void Start()
     {
@@ -411,7 +402,7 @@ internal sealed class MetricsListener : IDisposable
             }
         }
 
-        public double ReadDouble(Cell cell) => BitConverter.Int64BitsToDouble(Volatile.Read(ref cell.DoubleBits));
+        public static double ReadDouble(Cell cell) => BitConverter.Int64BitsToDouble(Volatile.Read(ref cell.DoubleBits));
 
         private static void AddDouble(ref long bits, double value)
         {

@@ -74,6 +74,7 @@ public class AgentConfigCorpusTests
         AgentConfigPayload.Fuzz(Encoding.UTF8.GetBytes(
             """{"configHash":"h","yaml":"listeners: []\n"}"""));
         AgentConfigPayload.Fuzz([0xff, (byte)'{', 0]);
+        Assert.AreEqual(0, AgentConfigPayload.Check([0xff, (byte)'{', 0]).Count);
     }
 
     private static IEnumerable<byte[]> Mutations(byte[] seed, Random random)

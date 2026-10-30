@@ -21,6 +21,8 @@ public class OidcLoginIntegrationTests
 
     private static (string Name, string Value) Html => ("Accept", "text/html");
 
+    private static readonly string[] GateCookieNames = ["gate"];
+
     // ------------------------------------------------------------------ the happy path
 
     [TestMethod]
@@ -30,7 +32,7 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
 
-        var authorize = await h.StartLoginAsync(browser, "/app?x=1");
+        var authorize = await OidcHarness.StartLoginAsync(browser, "/app?x=1");
         var uri = new Uri(authorize);
         Assert.AreEqual(h.Idp.Issuer, uri.GetLeftPart(UriPartial.Authority));
         Assert.AreEqual("/authorize", uri.AbsolutePath);
@@ -51,7 +53,7 @@ public class OidcLoginIntegrationTests
         Assert.IsFalse(flow.Contains(query["state"]!, StringComparison.Ordinal), "the flow cookie is encrypted, not just signed");
         Assert.IsFalse(flow.Contains(query["nonce"]!, StringComparison.Ordinal));
 
-        var callback = await h.VisitProviderAsync(browser, authorize);
+        var callback = await OidcHarness.VisitProviderAsync(browser, authorize);
         using var done = await browser.GetAsync(callback, Html);
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
         Assert.AreEqual("/app?x=1", done.Headers.Location!.OriginalString);
@@ -92,7 +94,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -118,10 +120,10 @@ public class OidcLoginIntegrationTests
         h.Idp.RegisteredRedirectUri = "http://matrix.test/auth/cb";
         using var browser = h.NewBrowser();
 
-        using var done = await h.SignInAsync(browser);
+        using var done = await OidcHarness.SignInAsync(browser);
 
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
-        CollectionAssert.AreEquivalent(new[] { "gate" }, browser.Cookies.Keys.ToArray());
+        CollectionAssert.AreEquivalent(GateCookieNames, browser.Cookies.Keys.ToArray());
         using var page = await browser.GetAsync("http://matrix.test/app", Html);
         Assert.AreEqual(HttpStatusCode.OK, page.StatusCode);
     }
@@ -134,11 +136,11 @@ public class OidcLoginIntegrationTests
         h.Idp.RegisteredRedirectUri = "https://app.example.test" + Callback;
         using var browser = h.NewBrowser();
 
-        var authorize = await h.StartLoginAsync(browser);
+        var authorize = await OidcHarness.StartLoginAsync(browser);
 
         var query = HttpUtility.ParseQueryString(new Uri(authorize).Query);
         Assert.AreEqual("https://app.example.test" + Callback, query["redirect_uri"]);
-        var next = await h.VisitProviderAsync(browser, authorize);
+        var next = await OidcHarness.VisitProviderAsync(browser, authorize);
         StringAssert.StartsWith(next, "https://app.example.test" + Callback);
     }
 
@@ -198,7 +200,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -258,7 +260,7 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync();
         var oldKey = h.Options.CookieKeys;
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -270,7 +272,7 @@ public class OidcLoginIntegrationTests
         Assert.AreEqual(HttpStatusCode.OK, stillValid.StatusCode, "a session made under the old key survives rotation");
 
         using var fresh = h.NewBrowser();
-        using (await h.SignInAsync(fresh))
+        using (await OidcHarness.SignInAsync(fresh))
         {
         }
 
@@ -286,7 +288,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync(o => o.SessionTtlSeconds = 600);
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -313,7 +315,7 @@ public class OidcLoginIntegrationTests
         h.Idp.Groups = Enumerable.Range(0, 800).Select(static i => "group-" + i).ToArray();
         using var browser = h.NewBrowser();
 
-        using var done = await h.SignInAsync(browser);
+        using var done = await OidcHarness.SignInAsync(browser);
 
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
         Assert.IsTrue(browser.Cookies[Session].Length < 3000);
@@ -347,7 +349,7 @@ public class OidcLoginIntegrationTests
         }
 
         using var browser = h.NewBrowser();
-        using var done = await h.SignInAsync(browser);
+        using var done = await OidcHarness.SignInAsync(browser);
 
         Assert.AreEqual(HttpStatusCode.Unauthorized, done.StatusCode, flaw);
         Assert.IsFalse(browser.Cookies.ContainsKey(Session), "no session is made from a bad answer");
@@ -363,11 +365,11 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync();
         h.Idp.IdTokenLifetime = TimeSpan.FromSeconds(-30);
         using var inside = h.NewBrowser();
-        using var accepted = await h.SignInAsync(inside);
+        using var accepted = await OidcHarness.SignInAsync(inside);
 
         h.Idp.IdTokenLifetime = TimeSpan.FromSeconds(-90);
         using var outside = h.NewBrowser();
-        using var refused = await h.SignInAsync(outside);
+        using var refused = await OidcHarness.SignInAsync(outside);
 
         Assert.AreEqual(HttpStatusCode.Found, accepted.StatusCode, "60 seconds of clock skew are allowed");
         Assert.AreEqual(HttpStatusCode.Unauthorized, refused.StatusCode);
@@ -379,7 +381,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -398,11 +400,11 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync(o => o.AllowedGroups = ["admins"]);
         h.Idp.Groups = ["users"];
         using var denied = h.NewBrowser();
-        using var refused = await h.SignInAsync(denied);
+        using var refused = await OidcHarness.SignInAsync(denied);
 
         h.Idp.Groups = ["users", "admins"];
         using var allowed = h.NewBrowser();
-        using var accepted = await h.SignInAsync(allowed);
+        using var accepted = await OidcHarness.SignInAsync(allowed);
 
         Assert.AreEqual(HttpStatusCode.Forbidden, refused.StatusCode);
         Assert.IsFalse(denied.Cookies.ContainsKey(Session));
@@ -424,7 +426,7 @@ public class OidcLoginIntegrationTests
         h.Idp.Groups = ["ops"];
         using var browser = h.NewBrowser();
 
-        using var done = await h.SignInAsync(browser);
+        using var done = await OidcHarness.SignInAsync(browser);
 
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
     }
@@ -444,7 +446,7 @@ public class OidcLoginIntegrationTests
             h.Idp.Email = email;
             h.Idp.EmailVerified = verified;
             using var browser = h.NewBrowser();
-            using var done = await h.SignInAsync(browser);
+            using var done = await OidcHarness.SignInAsync(browser);
             return done.StatusCode;
         }
 
@@ -468,16 +470,16 @@ public class OidcLoginIntegrationTests
         h.Idp.Groups = ["admins"];
         h.Idp.Email = "x@other.test";
         using var wrongDomain = h.NewBrowser();
-        using var first = await h.SignInAsync(wrongDomain);
+        using var first = await OidcHarness.SignInAsync(wrongDomain);
 
         h.Idp.Email = "x@example.test";
         h.Idp.Groups = ["users"];
         using var wrongGroup = h.NewBrowser();
-        using var second = await h.SignInAsync(wrongGroup);
+        using var second = await OidcHarness.SignInAsync(wrongGroup);
 
         h.Idp.Groups = ["admins"];
         using var both = h.NewBrowser();
-        using var third = await h.SignInAsync(both);
+        using var third = await OidcHarness.SignInAsync(both);
 
         Assert.AreEqual(HttpStatusCode.Forbidden, first.StatusCode);
         Assert.AreEqual(HttpStatusCode.Forbidden, second.StatusCode);
@@ -502,7 +504,7 @@ public class OidcLoginIntegrationTests
         using var browser = h.NewBrowser();
         var path = "/app?rd=" + Uri.EscapeDataString(rd);
 
-        using var done = await h.SignInAsync(browser, path);
+        using var done = await OidcHarness.SignInAsync(browser, path);
 
         Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
         var location = done.Headers.Location!.OriginalString;
@@ -516,11 +518,11 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync(o => o.Allowlist = ["https://app.example.test"]);
         using var local = h.NewBrowser();
-        using var toPath = await h.SignInAsync(local, "/start?rd=" + Uri.EscapeDataString("/dashboard?tab=2"));
+        using var toPath = await OidcHarness.SignInAsync(local, "/start?rd=" + Uri.EscapeDataString("/dashboard?tab=2"));
         using var listed = h.NewBrowser();
-        using var toOrigin = await h.SignInAsync(listed, "/start?rd=" + Uri.EscapeDataString("https://app.example.test/dash"));
+        using var toOrigin = await OidcHarness.SignInAsync(listed, "/start?rd=" + Uri.EscapeDataString("https://app.example.test/dash"));
         using var other = h.NewBrowser();
-        using var unlisted = await h.SignInAsync(other, "/start?rd=" + Uri.EscapeDataString("https://app.example.test:8443/dash"));
+        using var unlisted = await OidcHarness.SignInAsync(other, "/start?rd=" + Uri.EscapeDataString("https://app.example.test:8443/dash"));
 
         Assert.AreEqual("/dashboard?tab=2", toPath.Headers.Location!.OriginalString);
         Assert.AreEqual("https://app.example.test/dash", toOrigin.Headers.Location!.OriginalString);
@@ -534,7 +536,7 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
 
-        using var done = await h.SignInAsync(browser, "//evil.test/x");
+        using var done = await OidcHarness.SignInAsync(browser, "//evil.test/x");
 
         var location = done.Headers.Location!.OriginalString;
         Assert.AreEqual("/evil.test/x", location);
@@ -548,8 +550,8 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var victim = h.NewBrowser();
-        var authorize = await h.StartLoginAsync(victim);
-        var callback = await h.VisitProviderAsync(victim, authorize);
+        var authorize = await OidcHarness.StartLoginAsync(victim);
+        var callback = await OidcHarness.VisitProviderAsync(victim, authorize);
 
         using var attacker = h.NewBrowser();
         using var response = await attacker.GetAsync(callback, Html);
@@ -565,9 +567,9 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        var first = await h.StartLoginAsync(browser, "/one");
-        var second = await h.StartLoginAsync(browser, "/two");
-        var callback = await h.VisitProviderAsync(browser, first);
+        var first = await OidcHarness.StartLoginAsync(browser, "/one");
+        var second = await OidcHarness.StartLoginAsync(browser, "/two");
+        var callback = await OidcHarness.VisitProviderAsync(browser, first);
         var otherState = HttpUtility.ParseQueryString(new Uri(second).Query)["state"]!;
         var mixed = callback[..callback.IndexOf("state=", StringComparison.Ordinal)] + "state=" + Uri.EscapeDataString(otherState);
 
@@ -583,7 +585,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        await h.StartLoginAsync(browser);
+        await OidcHarness.StartLoginAsync(browser);
 
         using var response = await browser.GetAsync($"http://matrix.test{Callback}?code=abc&state=forged", Html);
 
@@ -597,8 +599,8 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        var authorize = await h.StartLoginAsync(browser);
-        var callback = await h.VisitProviderAsync(browser, authorize);
+        var authorize = await OidcHarness.StartLoginAsync(browser);
+        var callback = await OidcHarness.VisitProviderAsync(browser, authorize);
         var flowCookies = browser.Cookies.ToDictionary(static c => c.Key, static c => c.Value);
         using (var first = await browser.GetAsync(callback, Html))
         {
@@ -667,9 +669,9 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync(o => o.Refresh = true);
         h.Idp.IdTokenLifetime = TimeSpan.FromMinutes(10);
         using var browser = h.NewBrowser();
-        var authorize = await h.StartLoginAsync(browser);
+        var authorize = await OidcHarness.StartLoginAsync(browser);
         StringAssert.Contains(HttpUtility.ParseQueryString(new Uri(authorize).Query)["scope"]!, "offline_access");
-        var callback = await h.VisitProviderAsync(browser, authorize);
+        var callback = await OidcHarness.VisitProviderAsync(browser, authorize);
         using (await browser.GetAsync(callback, Html))
         {
         }
@@ -708,7 +710,7 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync(o => o.Refresh = true);
         h.Idp.IdTokenLifetime = TimeSpan.FromMinutes(10);
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -735,7 +737,7 @@ public class OidcLoginIntegrationTests
         await using var h = await OidcHarness.StartAsync(o => o.Refresh = true);
         h.Idp.IdTokenLifetime = TimeSpan.FromMinutes(10);
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -766,7 +768,7 @@ public class OidcLoginIntegrationTests
         h.Idp.RotateRefreshToken = true;
         h.Idp.RefreshDelay = TimeSpan.FromMilliseconds(400);
         using var origin = h.NewBrowser();
-        using (await h.SignInAsync(origin))
+        using (await OidcHarness.SignInAsync(origin))
         {
         }
 
@@ -810,7 +812,7 @@ public class OidcLoginIntegrationTests
         h.Idp.IdTokenLifetime = TimeSpan.FromMinutes(10);
         h.Idp.IssueRefreshToken = false;
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -834,7 +836,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var browser = h.NewBrowser();
-        using (await h.SignInAsync(browser))
+        using (await OidcHarness.SignInAsync(browser))
         {
         }
 
@@ -872,7 +874,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var first = h.NewBrowser();
-        using (var done = await h.SignInAsync(first))
+        using (var done = await OidcHarness.SignInAsync(first))
         {
             Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
         }
@@ -881,7 +883,7 @@ public class OidcLoginIntegrationTests
         h.Idp.RotateKeys();
 
         using var tooSoon = h.NewBrowser();
-        using (var refused = await h.SignInAsync(tooSoon))
+        using (var refused = await OidcHarness.SignInAsync(tooSoon))
         {
             Assert.AreEqual(HttpStatusCode.Unauthorized, refused.StatusCode, "a flood of unknown key ids cannot make the proxy hammer the provider");
         }
@@ -890,7 +892,7 @@ public class OidcLoginIntegrationTests
         h.Clock.Advance(TimeSpan.FromSeconds(31));
 
         using var later = h.NewBrowser();
-        using var accepted = await h.SignInAsync(later);
+        using var accepted = await OidcHarness.SignInAsync(later);
 
         Assert.AreEqual(HttpStatusCode.Found, accepted.StatusCode);
         Assert.AreEqual(2, h.Idp.JwksHits);
@@ -902,7 +904,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var first = h.NewBrowser();
-        using (var accepted = await h.SignInAsync(first))
+        using (var accepted = await OidcHarness.SignInAsync(first))
         {
             Assert.AreEqual(HttpStatusCode.Found, accepted.StatusCode);
         }
@@ -910,7 +912,7 @@ public class OidcLoginIntegrationTests
         h.Idp.RotateKeys();
         h.Clock.Advance(TimeSpan.FromSeconds(31));
         using var overlap = h.NewBrowser();
-        using (var stillOk = await h.SignInAsync(overlap))
+        using (var stillOk = await OidcHarness.SignInAsync(overlap))
         {
             Assert.AreEqual(HttpStatusCode.Found, stillOk.StatusCode, "both keys published: new kid works");
         }
@@ -919,7 +921,7 @@ public class OidcLoginIntegrationTests
         h.Idp.SignWithRevokedKey = true;
         h.Clock.Advance(TimeSpan.FromMinutes(6));
         using var other = h.NewBrowser();
-        using var refused = await h.SignInAsync(other);
+        using var refused = await OidcHarness.SignInAsync(other);
         Assert.AreEqual(HttpStatusCode.Unauthorized, refused.StatusCode,
             "a kid dropped from JWKS must fail once the proxy refreshes");
     }
@@ -930,7 +932,7 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var first = h.NewBrowser();
-        using (var done = await h.SignInAsync(first))
+        using (var done = await OidcHarness.SignInAsync(first))
         {
             Assert.AreEqual(HttpStatusCode.Found, done.StatusCode);
         }
@@ -938,7 +940,7 @@ public class OidcLoginIntegrationTests
         h.Idp.JwksDown = true;
         h.Clock.Advance(TimeSpan.FromMinutes(6));
         using var second = h.NewBrowser();
-        using var refused = await h.SignInAsync(second);
+        using var refused = await OidcHarness.SignInAsync(second);
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, refused.StatusCode,
             "a JWKS outage must not keep validating with keys that may already have been rotated away");
     }
@@ -949,14 +951,14 @@ public class OidcLoginIntegrationTests
     {
         await using var h = await OidcHarness.StartAsync();
         using var one = h.NewBrowser();
-        await h.StartLoginAsync(one);
+        await OidcHarness.StartLoginAsync(one);
         using var two = h.NewBrowser();
-        await h.StartLoginAsync(two);
+        await OidcHarness.StartLoginAsync(two);
         Assert.AreEqual(1, h.Idp.DiscoveryHits, "the second login uses the cached document");
 
         h.Clock.Advance(TimeSpan.FromMinutes(61));
         using var three = h.NewBrowser();
-        await h.StartLoginAsync(three);
+        await OidcHarness.StartLoginAsync(three);
         Assert.AreEqual(2, h.Idp.DiscoveryHits);
 
         h.Idp.Down = true;

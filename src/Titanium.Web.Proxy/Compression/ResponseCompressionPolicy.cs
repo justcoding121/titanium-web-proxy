@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.IO;
 using System.IO.Compression;
 using Titanium.Web.Proxy.Abstractions.Routing;
@@ -285,19 +286,12 @@ internal sealed class ResponseCompressionPolicy
             || type.StartsWith("application/grpc", StringComparison.Ordinal))
             return false;
 
-        foreach (var exact in exactTypes)
+        if (exactTypes.Any(exact => type == exact))
         {
-            if (type == exact)
-                return true;
+            return true;
         }
 
-        foreach (var prefix in familyPrefixes)
-        {
-            if (type.StartsWith(prefix, StringComparison.Ordinal))
-                return true;
-        }
-
-        return false;
+        return familyPrefixes.Any(prefix => type.StartsWith(prefix, StringComparison.Ordinal));
     }
 
     /// <summary>True when a comma-separated header value list contains <paramref name="token" /> (case-insensitive).</summary>
@@ -332,7 +326,7 @@ internal sealed class ResponseCompressionPolicy
     ///     The client's weight for <paramref name="coding" />: its explicit <c>q</c>, else the <c>*</c> weight,
     ///     else 0. A coding the client does not list (or lists with <c>q=0</c>) has weight 0.
     /// </summary>
-    internal static double Weight(List<HttpHeader> acceptEncoding, string coding)
+    internal static double Weight(List<HttpHeader> acceptEncoding, string coding) // NOSONAR S3776 -- Accept-Encoding q parsing shares one pass over comma-separated tokens.
     {
         var explicitWeight = -1d;
         var starWeight = -1d;

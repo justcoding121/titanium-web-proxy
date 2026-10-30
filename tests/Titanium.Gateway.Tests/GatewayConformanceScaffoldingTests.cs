@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using YamlDotNet.RepresentationModel;
 
@@ -5,9 +6,16 @@ namespace Titanium.Gateway.Tests;
 
 /// <summary>The conformance scaffolding cannot run here (it needs Linux, Docker, and kind), so these tests keep it consistent.</summary>
 [TestClass]
-public class GatewayConformanceScaffoldingTests
+public partial class GatewayConformanceScaffoldingTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
+    private static readonly string[] SupportedFeaturesCap =
+    [
+        "HTTPRouteQueryParamMatching", "HTTPRouteMethodMatching", "HTTPRouteHostRewrite", "HTTPRoutePathRewrite", "HTTPRouteRequestMirror",
+    ];
+
+    [GeneratedRegex(@"v\d+\.\d+\.\d+")]
+    private static partial Regex GatewayApiCrdVersionRegex();
 
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([RepoRoot, .. parts]));
 
@@ -44,10 +52,7 @@ public class GatewayConformanceScaffoldingTests
             .Trim()
             .Trim('"')
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        CollectionAssert.IsSubsetOf(features, new[]
-        {
-            "HTTPRouteQueryParamMatching", "HTTPRouteMethodMatching", "HTTPRouteHostRewrite", "HTTPRoutePathRewrite", "HTTPRouteRequestMirror",
-        });
+        CollectionAssert.IsSubsetOf(features, SupportedFeaturesCap);
         foreach (var unsupported in new[]
         {
             "HTTPRouteBackendTimeout", "HTTPRouteRequestTimeout", "HTTPRouteBackendProtocolH2C", "GatewayPort8080", "HTTPRouteParentRefPort",
@@ -63,7 +68,7 @@ public class GatewayConformanceScaffoldingTests
     {
         var goMod = Read("tests", "gateway-conformance", "go.mod");
         var crd = Directory.GetFiles(Path.Combine(RepoRoot, "deploy", "helm", "titanium-gateway", "crds")).Single();
-        var version = System.Text.RegularExpressions.Regex.Match(Path.GetFileName(crd), @"v\d+\.\d+\.\d+").Value;
+        var version = GatewayApiCrdVersionRegex().Match(Path.GetFileName(crd)).Value;
         StringAssert.Contains(goMod, "sigs.k8s.io/gateway-api " + version);
         StringAssert.Contains(Read("tests", "gateway-conformance", "conformance_test.go"), "conformance.RunConformance(t)");
     }

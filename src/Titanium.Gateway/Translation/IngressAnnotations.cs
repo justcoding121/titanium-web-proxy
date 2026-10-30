@@ -35,6 +35,8 @@ public static partial class IngressAnnotations
 {
     public const string Prefix = "titanium.io/";
 
+    private static readonly string[] CanaryDependents = ["canary-weight", "canary-by-header"];
+
     /// <summary>Every annotation, in the order the docs list them.</summary>
     public static IReadOnlyList<AnnotationSpec> All { get; } =
     [
@@ -149,12 +151,9 @@ public static partial class IngressAnnotations
 
         if (!settings.Canary)
         {
-            foreach (var dependent in new[] { "canary-weight", "canary-by-header" })
+            foreach (var dependent in CanaryDependents.Where(d => annotations.ContainsKey(Prefix + d)))
             {
-                if (annotations.ContainsKey(Prefix + dependent))
-                {
-                    settings.Problems.Add($"{Prefix}{dependent} needs {Prefix}canary: \"true\".");
-                }
+                settings.Problems.Add($"{Prefix}{dependent} needs {Prefix}canary: \"true\".");
             }
         }
 
@@ -166,7 +165,7 @@ public static partial class IngressAnnotations
         return settings;
     }
 
-    private static void ParseOne(IngressSettings settings, string name, string value, string ingressNamespace)
+    private static void ParseOne(IngressSettings settings, string name, string value, string ingressNamespace) // NOSONAR S3776 -- Annotation kinds share one problem reporter; splitting the switch would scatter validation messages.
     {
         var key = Prefix + name;
         void Bad(string expected) => settings.Problems.Add($"{key} is \"{value}\"; expected {expected}.");

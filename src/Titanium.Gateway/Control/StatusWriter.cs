@@ -45,7 +45,7 @@ public sealed class StatusWriter
             catch (Exception ex) when (ex is HttpRequestException or KubeApiException or IOException)
             {
                 failed++;
-                _log.LogWarning("Could not write status of {Key}: {Message}", patch.Key, ex.Message);
+                _log.LogWarning(ex, "Could not write status of {Key}: {Message}", patch.Key, ex.Message);
             }
         }
 
@@ -54,97 +54,9 @@ public sealed class StatusWriter
 
     private async Task<bool> ApplyOneAsync(StatusPatch patch, ClusterState current, CancellationToken cancellationToken)
     {
-        object? desired;
-        string path;
-        switch (patch.Kind)
+        if (!TryBuildStatusWrite(patch, current, out var desired, out var path))
         {
-            case StatusKind.GatewayClass:
-            {
-                var existing = current.GatewayClasses.FirstOrDefault(c => c.Metadata.Name == patch.Name);
-                if (existing is null)
-                {
-                    return false;
-                }
-
-                var conditions = Stamp(patch, existing.Status?.Conditions);
-                if (Same(conditions, existing.Status?.Conditions))
-                {
-                    return false;
-                }
-
-                desired = new { conditions };
-                path = $"/apis/{Group}/v1/gatewayclasses/{Uri.EscapeDataString(patch.Name)}/status";
-                break;
-            }
-
-            case StatusKind.Gateway:
-            {
-                var existing = current.Gateways.FirstOrDefault(g => g.Metadata.Namespace == patch.Namespace && g.Metadata.Name == patch.Name);
-                if (existing is null)
-                {
-                    return false;
-                }
-
-                var conditions = Stamp(patch, existing.Status?.Conditions);
-                var listeners = (patch.Listeners ?? []).Select(l => StampListener(l, existing.Status?.Listeners)).ToList();
-                var addresses = patch.Addresses ?? [];
-                var unchanged = Same(conditions, existing.Status?.Conditions) &&
-                                Json(listeners) == Json(existing.Status?.Listeners ?? []) &&
-                                Json(addresses) == Json(existing.Status?.Addresses ?? []);
-                if (unchanged)
-                {
-                    return false;
-                }
-
-                desired = new { addresses, conditions, listeners };
-                path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/gateways/{Uri.EscapeDataString(patch.Name)}/status";
-                break;
-            }
-
-            case StatusKind.Ingress:
-            {
-                var existing = current.Ingresses.FirstOrDefault(i => i.Metadata.Namespace == patch.Namespace && i.Metadata.Name == patch.Name);
-                if (existing is null)
-                {
-                    return false;
-                }
-
-                var entries = (patch.Addresses ?? [])
-                    .Select(a => a.Type == "Hostname"
-                        ? new IngressLoadBalancerEntry { Hostname = a.Value }
-                        : new IngressLoadBalancerEntry { Ip = a.Value })
-                    .ToList();
-                if (Json(entries) == Json(existing.Status?.LoadBalancer?.Ingress ?? []))
-                {
-                    return false;
-                }
-
-                desired = new { loadBalancer = new { ingress = entries } };
-                path = $"/apis/{IngressApiNames.Group}/{IngressApiNames.Version}/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/ingresses/{Uri.EscapeDataString(patch.Name)}/status";
-                break;
-            }
-
-            default:
-            {
-                var existing = current.HttpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name);
-                if (existing is null)
-                {
-                    return false;
-                }
-
-                var previous = existing.Status?.Parents ?? [];
-                var others = previous.Where(p => !string.Equals(p.ControllerName, _controllerName, StringComparison.Ordinal)).ToList();
-                var ours = previous.Where(p => string.Equals(p.ControllerName, _controllerName, StringComparison.Ordinal)).ToList();
-                var parents = (patch.Parents ?? []).Select(p => StampParent(p, ours)).ToList();
-                if (Json(parents) == Json(ours))
-                {
-                    return false;
-                }
-
-                desired = new { parents = others.Concat(parents).ToList() };
-                path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/httproutes/{Uri.EscapeDataString(patch.Name)}/status";
-                break;
-            }
+            return false;
         }
 
         var body = JsonSerializer.Serialize(new { status = desired }, GatewayJson.Options);
@@ -159,6 +71,128 @@ public sealed class StatusWriter
             throw new KubeApiException(response.Status, response.Body);
         }
 
+        return true;
+    }
+
+    private bool TryBuildStatusWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        switch (patch.Kind)
+        {
+            case StatusKind.GatewayClass:
+                return TryBuildGatewayClassWrite(patch, current, out desired, out path);
+
+            case StatusKind.Gateway:
+                return TryBuildGatewayWrite(patch, current, out desired, out path);
+
+            case StatusKind.Ingress:
+                return TryBuildIngressWrite(patch, current, out desired, out path);
+
+            default:
+                return TryBuildHttpRouteWrite(patch, current, out desired, out path);
+        }
+    }
+
+    private bool TryBuildGatewayClassWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        var existing = current.GatewayClasses.FirstOrDefault(c => c.Metadata.Name == patch.Name);
+        if (existing is null)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        var conditions = Stamp(patch, existing.Status?.Conditions);
+        if (Same(conditions, existing.Status?.Conditions))
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        desired = new { conditions };
+        path = $"/apis/{Group}/v1/gatewayclasses/{Uri.EscapeDataString(patch.Name)}/status";
+        return true;
+    }
+
+    private bool TryBuildGatewayWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        var existing = current.Gateways.FirstOrDefault(g => g.Metadata.Namespace == patch.Namespace && g.Metadata.Name == patch.Name);
+        if (existing is null)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        var conditions = Stamp(patch, existing.Status?.Conditions);
+        var listeners = (patch.Listeners ?? []).Select(l => StampListener(l, existing.Status?.Listeners)).ToList();
+        var addresses = patch.Addresses ?? [];
+        var unchanged = Same(conditions, existing.Status?.Conditions) &&
+                        Json(listeners) == Json(existing.Status?.Listeners ?? []) &&
+                        Json(addresses) == Json(existing.Status?.Addresses ?? []);
+        if (unchanged)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        desired = new { addresses, conditions, listeners };
+        path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/gateways/{Uri.EscapeDataString(patch.Name)}/status";
+        return true;
+    }
+
+    private static bool TryBuildIngressWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        var existing = current.Ingresses.FirstOrDefault(i => i.Metadata.Namespace == patch.Namespace && i.Metadata.Name == patch.Name);
+        if (existing is null)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        var entries = (patch.Addresses ?? [])
+            .Select(a => a.Type == "Hostname"
+                ? new IngressLoadBalancerEntry { Hostname = a.Value }
+                : new IngressLoadBalancerEntry { Ip = a.Value })
+            .ToList();
+        if (Json(entries) == Json(existing.Status?.LoadBalancer?.Ingress ?? []))
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        desired = new { loadBalancer = new { ingress = entries } };
+        path = $"/apis/{IngressApiNames.Group}/{IngressApiNames.Version}/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/ingresses/{Uri.EscapeDataString(patch.Name)}/status";
+        return true;
+    }
+
+    private bool TryBuildHttpRouteWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        var existing = current.HttpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name);
+        if (existing is null)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        var previous = existing.Status?.Parents ?? [];
+        var others = previous.Where(p => !string.Equals(p.ControllerName, _controllerName, StringComparison.Ordinal)).ToList();
+        var ours = previous.Where(p => string.Equals(p.ControllerName, _controllerName, StringComparison.Ordinal)).ToList();
+        var parents = (patch.Parents ?? []).Select(p => StampParent(p, ours)).ToList();
+        if (Json(parents) == Json(ours))
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        desired = new { parents = others.Concat(parents).ToList() };
+        path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/httproutes/{Uri.EscapeDataString(patch.Name)}/status";
         return true;
     }
 

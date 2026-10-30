@@ -24,7 +24,7 @@ public partial class ProxyServer
 
     private LoadBalancer? passthroughFallbackBalancer;
 
-    private async Task HandlePassthroughClientAsync(
+    private async Task HandlePassthroughClientAsync( // NOSONAR S3776 -- Passthrough path shares socket state across destination attempts.
         Socket client, TransparentBaseProxyEndPoint endPoint, CancellationToken cancellationToken)
     {
         var route = "forward";
@@ -307,8 +307,15 @@ public partial class ProxyServer
             ? pinned.ToString()
             : destination.Address;
 
-    private static int DestinationPort(DestinationConfig destination) =>
-        destination.Port != 0 ? destination.Port : destination.UseHttps ? 443 : 80;
+    private static int DestinationPort(DestinationConfig destination)
+    {
+        if (destination.Port != 0)
+        {
+            return destination.Port;
+        }
+
+        return destination.UseHttps ? 443 : 80;
+    }
 
     private static string OutcomeName(PassthroughOutcome outcome) => outcome switch
     {
