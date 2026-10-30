@@ -97,7 +97,7 @@ public class ServiceDiscoveryHardeningTests
 
         var manager = new ClusterManager();
         using var discovery = StartK8s(manager, api, "svc");
-        await WaitUntilAsync(() => Addresses(manager, "k8s").Any());
+        await WaitUntilAsync(() => Addresses(manager, "k8s").Count > 0);
         release.TrySetResult();
         await WaitUntilAsync(() => api.Requests.Count(r => r.IsWatch) >= 2);
         Assert.AreEqual("77", ResourceVersionOf(api.Requests.Where(r => r.IsWatch).ElementAt(1)));

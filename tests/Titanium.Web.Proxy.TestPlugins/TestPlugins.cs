@@ -150,5 +150,5 @@ public sealed class FaultyConstructorPlugin : IProxyMiddleware
 public sealed class NotAPlugin
 {
     /// <summary>Marker so the type is loadable but not a <see cref="IProxyMiddleware"/>.</summary>
-    public bool ImplementsMiddlewareContract => false;
+    public static bool ImplementsMiddlewareContract => false;
 }

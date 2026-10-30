@@ -143,7 +143,7 @@ public sealed class StatusWriter
         return true;
     }
 
-    private bool TryBuildIngressWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    private static bool TryBuildIngressWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
     {
         var existing = current.Ingresses.FirstOrDefault(i => i.Metadata.Namespace == patch.Namespace && i.Metadata.Name == patch.Name);
         if (existing is null)

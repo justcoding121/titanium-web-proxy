@@ -91,12 +91,9 @@ internal sealed class ClusterEndpoints
 
             foreach (var endpoint in slice.Endpoints.Where(e => e.Ready != false))
             {
-                foreach (var address in endpoint.Addresses)
+                foreach (var address in endpoint.Addresses.Where(a => seen.Add((a, slicePort.Port))))
                 {
-                    if (seen.Add((address, slicePort.Port)))
-                    {
-                        found.Add((address, slicePort.Port));
-                    }
+                    found.Add((address, slicePort.Port));
                 }
             }
         }

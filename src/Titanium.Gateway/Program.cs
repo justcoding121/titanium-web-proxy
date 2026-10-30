@@ -81,6 +81,10 @@ catch (OperationCanceledException)
 }
 catch (Exception ex)
 {
-    log.LogCritical(ex, "titanium-gateway stopped: {Message}", ex.Message);
+    if (log.IsEnabled(LogLevel.Critical))
+    {
+        log.LogCritical(ex, "titanium-gateway stopped: {Message}", ex.Message);
+    }
+
     return 1;
 }

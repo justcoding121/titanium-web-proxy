@@ -295,7 +295,8 @@ internal sealed class ContentWatcher : IDisposable
 
     /// <summary>True for a path with a <c>..data</c> or <c>..2026_…</c> segment, the names a Kubernetes volume swaps.</summary>
     internal static bool HasKubernetesSegment(string path) =>
-        path.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar])
+        path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .Split(Path.DirectorySeparatorChar)
             .Any(static segment => segment.Length > 2 && segment.StartsWith("..", StringComparison.Ordinal));
 
     private void OnEvent(object? sender, FileSystemEventArgs e)

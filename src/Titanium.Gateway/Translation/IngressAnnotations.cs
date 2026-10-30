@@ -35,6 +35,8 @@ public static partial class IngressAnnotations
 {
     public const string Prefix = "titanium.io/";
 
+    private static readonly string[] CanaryDependents = ["canary-weight", "canary-by-header"];
+
     /// <summary>Every annotation, in the order the docs list them.</summary>
     public static IReadOnlyList<AnnotationSpec> All { get; } =
     [
@@ -149,7 +151,7 @@ public static partial class IngressAnnotations
 
         if (!settings.Canary)
         {
-            foreach (var dependent in new[] { "canary-weight", "canary-by-header" }.Where(d => annotations.ContainsKey(Prefix + d)))
+            foreach (var dependent in CanaryDependents.Where(d => annotations.ContainsKey(Prefix + d)))
             {
                 settings.Problems.Add($"{Prefix}{dependent} needs {Prefix}canary: \"true\".");
             }

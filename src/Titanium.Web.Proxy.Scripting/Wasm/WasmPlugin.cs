@@ -194,7 +194,10 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
             }
             catch (WasmVmFaultException ex)
             {
-                Logger?.LogDebug(ex, "WASM plugin '{Plugin}' failed while it closed a connection: {Reason}", Name, ex.Message);
+                if (Logger?.IsEnabled(LogLevel.Debug) == true)
+                {
+                    Logger.LogDebug(ex, "WASM plugin '{Plugin}' failed while it closed a connection: {Reason}", Name, ex.Message);
+                }
             }
             finally
             {
@@ -516,7 +519,10 @@ internal sealed class WasmPlugin : IProxyMiddleware, IScriptPhaseHost, IStreamSc
             }
             catch (WasmVmFaultException ex)
             {
-                Logger?.LogDebug(ex, "WASM plugin '{Plugin}' failed while it closed a request: {Reason}", Name, ex.Message);
+                if (Logger?.IsEnabled(LogLevel.Debug) == true)
+                {
+                    Logger.LogDebug(ex, "WASM plugin '{Plugin}' failed while it closed a request: {Reason}", Name, ex.Message);
+                }
             }
             finally
             {

@@ -340,6 +340,6 @@ public class PluginConfigValidationTests
     public void TheContractVersion_IsWithinTheSupportedRange()
     {
         Assert.AreEqual(1, ProxyPluginContract.CurrentVersion);
-        Assert.IsTrue(ProxyPluginContract.MinimumSupportedVersion <= 1);
+        Assert.IsTrue(ProxyPluginContract.MinimumSupportedVersion <= ProxyPluginContract.CurrentVersion);
     }
 }

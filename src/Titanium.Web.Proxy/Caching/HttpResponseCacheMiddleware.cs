@@ -571,7 +571,7 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         context.Items.TryGetValue(StateItemKey, out var value) ? value as CacheRequestState : null;
 
     /// <summary>Adds If-None-Match / If-Modified-Since from the stale entry to the request headed for the origin.</summary>
-    internal void ApplyConditionalHeaders(CacheRequestState st, HeaderCollection headers) // NOSONAR S2325 -- Terminate-lite forwards through the middleware instance registered on the pipeline.
+    internal static void ApplyConditionalHeaders(CacheRequestState st, HeaderCollection headers)
     {
         if (st.Stale is not { } stale || !st.Conditional)
         {

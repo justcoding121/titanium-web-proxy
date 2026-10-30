@@ -598,9 +598,12 @@ internal sealed class ManagerStore : IDisposable
 
             reader.Close();
 
-            foreach (var rollout in running.Where(AdvanceRolloutUnlocked))
+            foreach (var rollout in running)
             {
-                changed.Add(rollout.FleetId);
+                if (AdvanceRolloutUnlocked(rollout))
+                {
+                    changed.Add(rollout.FleetId);
+                }
             }
 
             return changed.ToList();
@@ -787,7 +790,7 @@ internal sealed class ManagerStore : IDisposable
                 else
                 {
                     // Ready agents may allow the current wave to advance.
-                    AdvanceRolloutUnlocked(active);
+                    _ = AdvanceRolloutUnlocked(active);
                 }
             }
 

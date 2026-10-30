@@ -174,9 +174,8 @@ internal sealed partial class LuaRuntime : IDisposable
     private async ValueTask<LuaCallResult> RunAsync(string function, ReadOnlyMemory<byte> snapshot, CancellationToken token)
     {
         var instance = await Pool.AcquireAsync(token).ConfigureAwait(false);
-        var gateHeld = true;
         var callId = 0;
-        var waitingOnOperation = false;
+        var suspendedOnOperation = false;
         var budget = Options.MaxInstructions;
         var cpu = Options.EngineDeadline;
         try
@@ -189,15 +188,13 @@ internal sealed partial class LuaRuntime : IDisposable
 
             while (segment.Code == LuaNative.Yield)
             {
-                waitingOnOperation = true;
                 instance.Gate.Release();
-                gateHeld = false;
+                suspendedOnOperation = true;
 
                 var values = await RunOperationAsync(segment.Output, token).ConfigureAwait(false);
 
                 await instance.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                gateHeld = true;
-                waitingOnOperation = false;
+                suspendedOnOperation = false;
                 started = Stopwatch.GetTimestamp();
                 segment = LuaCalls.Resume(instance.Handle, callId, values, Math.Max(1, budget), Math.Max(1, Micros(cpu)));
                 cpu -= Stopwatch.GetElapsedTime(started);
@@ -215,19 +212,14 @@ internal sealed partial class LuaRuntime : IDisposable
         }
         finally
         {
-            if (waitingOnOperation)
+            if (suspendedOnOperation)
             {
                 // Abandoned while waiting (timeout or cancellation): drop the suspended coroutine.
-                if (!gateHeld)
-                {
-                    await instance.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-                    gateHeld = true;
-                }
-
+                await instance.Gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
                 LuaCalls.Cancel(instance.Handle, callId);
+                instance.Gate.Release();
             }
-
-            if (gateHeld)
+            else
             {
                 instance.Gate.Release();
             }

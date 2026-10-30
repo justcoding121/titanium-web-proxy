@@ -25,18 +25,19 @@ internal static class HealthcheckCommand
             string? url = null;
             string? configPath = null;
             var timeout = DefaultTimeout;
-            for (var i = 1; i < args.Length; i++)
+            var i = 1;
+            while (i < args.Length)
             {
                 switch (args[i])
                 {
                     case "--url" when i + 1 < args.Length:
                         url = args[i + 1];
-                        i++;
-                        break;
+                        i += 2;
+                        continue;
                     case "-c" or "--config" when i + 1 < args.Length:
                         configPath = args[i + 1];
-                        i++;
-                        break;
+                        i += 2;
+                        continue;
                     case "--timeout" when i + 1 < args.Length:
                         if (!double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float,
                                 System.Globalization.CultureInfo.InvariantCulture, out var seconds) ||
@@ -46,9 +47,11 @@ internal static class HealthcheckCommand
                         }
 
                         timeout = TimeSpan.FromSeconds(seconds);
-                        i++;
-                        break;
+                        i += 2;
+                        continue;
                 }
+
+                i++;
             }
 
             if (url is null)

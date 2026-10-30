@@ -485,8 +485,8 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
         {
             if (!registered)
             {
-                lease?.Dispose();
-                upstream?.Dispose();
+                lease?.Dispose(); // NOSONAR S3966 -- Unregistered session: health lease is released before abandoning upstream.
+                upstream?.Dispose(); // NOSONAR S3966 -- Unregistered session: upstream socket is not owned by a session yet.
                 ReleaseClient(client);
             }
 

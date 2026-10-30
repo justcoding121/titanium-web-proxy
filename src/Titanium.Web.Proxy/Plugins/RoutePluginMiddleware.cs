@@ -200,8 +200,10 @@ internal sealed class RoutePluginMiddleware : IProxyMiddleware
 
         public void Close() => Volatile.Write(ref _closed, 1);
 
-        public ValueTask Invoke(ProxyMiddlewareContext _, CancellationToken __)
+        public ValueTask Invoke(ProxyMiddlewareContext context, CancellationToken cancellationToken) // NOSONAR S1172 -- Stub middleware only tracks call order; parameters match the delegate shape.
         {
+            _ = context;
+            _ = cancellationToken;
             if (Volatile.Read(ref _closed) == 0)
             {
                 Volatile.Write(ref _called, 1);

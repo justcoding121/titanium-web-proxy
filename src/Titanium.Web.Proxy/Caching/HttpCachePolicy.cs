@@ -519,13 +519,11 @@ internal static class HttpCachePolicy
         HashSet<string>? listed = null;
         foreach (var h in headers.Where(h => h.Key.Equals("Connection", StringComparison.OrdinalIgnoreCase)))
         {
-            foreach (var part in h.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            foreach (var part in h.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                         .Where(part => !part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
+                                        !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase)))
             {
-                if (!part.Equals("close", StringComparison.OrdinalIgnoreCase) &&
-                    !part.Equals("keep-alive", StringComparison.OrdinalIgnoreCase))
-                {
-                    (listed ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(part);
-                }
+                (listed ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(part);
             }
         }
 

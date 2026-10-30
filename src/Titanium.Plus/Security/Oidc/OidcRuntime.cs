@@ -294,7 +294,11 @@ internal sealed class OidcRuntime
         }
         catch (Exception ex) when (ex is OidcTokenRejectedException or OidcTokenInvalidException)
         {
-            _logger?.LogInformation(ex, "Plus OIDC: policy {Policy}: refresh refused ({Reason}).", _settings.PolicyName, ex.Message);
+            if (_logger?.IsEnabled(LogLevel.Information) == true)
+            {
+                _logger.LogInformation(ex, "Plus OIDC: policy {Policy}: refresh refused ({Reason}).", _settings.PolicyName, ex.Message);
+            }
+
             return new OidcRefresher.Outcome(OidcRefresher.Status.Rejected, null, null);
         }
         catch (OidcProviderUnavailableException)
@@ -400,7 +404,7 @@ internal sealed class OidcRuntime
 
     // ------------------------------------------------------------------ callback
 
-    private async ValueTask<RoutePolicyVerdict> CallbackAsync(SessionEventArgs session, Request request, CancellationToken cancellationToken)
+    private async ValueTask<RoutePolicyVerdict> CallbackAsync(SessionEventArgs session, Request request, CancellationToken cancellationToken) // NOSONAR S3776 -- OIDC callback validates state, tokens, and allow rules in one flow.
     {
         var client = session.ClientRemoteEndPoint?.Address.ToString() ?? "unknown";
         if (!_guards.TryAdmitCallback(client, _owner.CallbackLimitPerMinute))
@@ -486,7 +490,11 @@ internal sealed class OidcRuntime
 
         if (!_settings.Allows(identity.Email, identity.EmailVerified, identity.Groups))
         {
-            _logger?.LogInformation("Plus OIDC: policy {Policy}: a sign-in was denied by the allow rules.", _settings.PolicyName);
+            if (_logger?.IsEnabled(LogLevel.Information) == true)
+            {
+                _logger.LogInformation("Plus OIDC: policy {Policy}: a sign-in was denied by the allow rules.", _settings.PolicyName);
+            }
+
             return Reply(session, 403, TextPlain, "forbidden", [], clear);
         }
 

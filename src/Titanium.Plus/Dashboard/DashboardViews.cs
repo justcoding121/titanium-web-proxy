@@ -287,10 +287,10 @@ internal static class DashboardViews
         foreach (var c in certs)
         {
             sb.Append("<tr class=\"").Append(Enc(c.Status)).Append("\"><td>").Append(Enc(c.Name))
-                .Append("</td><td>").Append(Enc(c.Role)).Append("</td><td>").Append(Enc(c.Subject))
-                .Append("</td><td>").Append(Enc(c.Issuer)).Append("</td><td>").Append(Enc(c.NotAfter ?? "-"))
-                .Append("</td><td>").Append(c.DaysLeft?.ToString(CultureInfo.InvariantCulture) ?? "-")
-                .Append("</td><td>").Append(Enc(c.Error.Length > 0 ? c.Status + ": " + c.Error : c.Status)).Append("</td></tr>");
+                .Append(TableCellCloseOpen).Append(Enc(c.Role)).Append(TableCellCloseOpen).Append(Enc(c.Subject))
+                .Append(TableCellCloseOpen).Append(Enc(c.Issuer)).Append(TableCellCloseOpen).Append(Enc(c.NotAfter ?? "-"))
+                .Append(TableCellCloseOpen).Append(c.DaysLeft?.ToString(CultureInfo.InvariantCulture) ?? "-")
+                .Append(TableCellCloseOpen).Append(Enc(c.Error.Length > 0 ? c.Status + ": " + c.Error : c.Status)).Append(TableRowClose);
         }
 
         return sb.Append("</tbody></table>").ToString();
@@ -308,9 +308,9 @@ internal static class DashboardViews
 
         foreach (var e in entries)
         {
-            sb.Append("<tr><td>").Append(Enc(e.Time)).Append("</td><td>").Append(Enc(e.Actor))
-                .Append("</td><td>").Append(Enc(e.Remote)).Append("</td><td>").Append(Enc(e.Action))
-                .Append("</td><td>").Append(Enc(e.Target)).Append("</td><td>").Append(Enc(e.Result)).Append("</td></tr>");
+            sb.Append("<tr><td>").Append(Enc(e.Time)).Append(TableCellCloseOpen).Append(Enc(e.Actor))
+                .Append(TableCellCloseOpen).Append(Enc(e.Remote)).Append(TableCellCloseOpen).Append(Enc(e.Action))
+                .Append(TableCellCloseOpen).Append(Enc(e.Target)).Append(TableCellCloseOpen).Append(Enc(e.Result)).Append(TableRowClose);
         }
 
         return sb.Append("</tbody></table>").ToString();

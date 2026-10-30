@@ -241,9 +241,14 @@ internal sealed class WafScanner
 
         char[]? rentedA = null;
         char[]? rentedB = null;
-        // Ternary keeps stackalloc in one expression (required by definite-assignment / escape rules).
-        Span<char> a = raw.Length <= StackChars ? stackalloc char[StackChars] : (rentedA = ArrayPool<char>.Shared.Rent(raw.Length));
-        Span<char> b = raw.Length <= StackChars ? stackalloc char[StackChars] : (rentedB = ArrayPool<char>.Shared.Rent(raw.Length));
+        if (raw.Length > StackChars)
+        {
+            rentedA = ArrayPool<char>.Shared.Rent(raw.Length);
+            rentedB = ArrayPool<char>.Shared.Rent(raw.Length);
+        }
+
+        Span<char> a = raw.Length <= StackChars ? stackalloc char[StackChars] : rentedA!;
+        Span<char> b = raw.Length <= StackChars ? stackalloc char[StackChars] : rentedB!;
         try
         {
             // The first slice is local so later slices of the stack buffers may be assigned to it.

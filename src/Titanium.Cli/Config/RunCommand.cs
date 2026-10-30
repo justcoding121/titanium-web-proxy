@@ -250,7 +250,6 @@ internal static class RunCommand
                     t => grpcJsonTranscoder = t,
                     RefreshReverseProxy,
                     policies,
-                    ct,
                     // A rotated Secret takes effect for /metrics and /version without a restart.
                     // Dropping the token needs a restart: the bind address is not re-applied here.
                     onApplied: applied =>
@@ -264,7 +263,8 @@ internal static class RunCommand
                     },
                     getPlugins: () => pluginHost,
                     setPlugins: next => pluginHost = next,
-                    scriptPipeline: scriptPipeline).ConfigureAwait(false);
+                    scriptPipeline: scriptPipeline,
+                    stoppingToken: ct).ConfigureAwait(false);
                 configHash = AdminHost.ComputeConfigHash(configPath);
                 AsyncConsole.WriteLine("Config reloaded.");
                 await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -448,7 +448,7 @@ internal static class RunCommand
     /// Reloads routes/clusters (and server settings) from <paramref name="configPath"/>.
     /// Validation failures throw before mutating <paramref name="routes"/> or the cluster manager.
     /// </summary>
-    internal static async Task ReloadConfigAsync( // NOSONAR S107, CA1068 -- Reload keeps established config wiring; optional callbacks follow the run token.
+    internal static async Task ReloadConfigAsync( // NOSONAR S107 -- Reload keeps established config wiring without an options bag.
         string configPath,
         ProxyServer proxy,
         ClusterManager clusterManager,
@@ -461,11 +461,11 @@ internal static class RunCommand
         Action<IGrpcJsonTranscoder?> setGrpc,
         Action refreshReverseProxy,
         List<RoutePolicyConfig>? policies = null,
-        CancellationToken stoppingToken = default,
         Action<TwpConfig>? onApplied = null,
         Func<PluginHost?>? getPlugins = null,
         Action<PluginHost>? setPlugins = null,
-        List<string>? scriptPipeline = null)
+        List<string>? scriptPipeline = null,
+        CancellationToken stoppingToken = default)
     {
         var loaded = ConfigLoader.Load(configPath);
         var errors = TwpConfigValidator.Validate(loaded.Config);
@@ -641,10 +641,11 @@ internal static class RunCommand
         _ = BuildScriptPipeline(plugins, config.ScriptPipeline?.ToList());
         foreach (var listener in config.Listeners)
         {
-            foreach (var name in (listener.StreamFilters ?? []).Where(n => !plugins.CanFilterStreams(n)))
+            var missingFilter = (listener.StreamFilters ?? []).FirstOrDefault(n => !plugins.CanFilterStreams(n));
+            if (missingFilter is not null)
             {
                 throw new InvalidOperationException(
-                    $"Listener port {listener.Port}: streamFilters plugin '{name}' is not a loaded script plugin.");
+                    $"Listener port {listener.Port}: streamFilters plugin '{missingFilter}' is not a loaded script plugin.");
             }
         }
     }

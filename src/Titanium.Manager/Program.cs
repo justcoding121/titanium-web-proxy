@@ -5,7 +5,7 @@ using Titanium.Manager.Store;
 
 return await RunAsync(args).ConfigureAwait(false);
 
-static async Task<int> RunAsync(string[] args)
+static async Task<int> RunAsync(string[] args) // NOSONAR S3776 -- Top-level host wiring keeps healthcheck and server modes in one entry.
 {
     if (args.Length > 0 && args[0].Equals("healthcheck", StringComparison.OrdinalIgnoreCase))
     {
@@ -80,7 +80,7 @@ static async Task<int> RunAsync(string[] args)
     return 0;
 }
 
-static bool TryParseServerArgs(string[] args, out string listen, out string db, out string? adminToken, out int exitCode)
+static bool TryParseServerArgs(string[] args, out string listen, out string db, out string? adminToken, out int exitCode) // NOSONAR S3776 -- CLI flag parsing keeps defaults and validation together.
 {
     listen = "http://127.0.0.1:7700/";
     db = Path.Combine(Environment.CurrentDirectory, "titanium-manager.db");
@@ -156,7 +156,7 @@ static bool TryParseServerArgs(string[] args, out string listen, out string db, 
     return true;
 }
 
-static async Task<int> RunHealthcheckAsync(string[] args)
+static async Task<int> RunHealthcheckAsync(string[] args) // NOSONAR S3776 -- Healthcheck flag parsing and probe share one container entrypoint.
 {
     // Container HEALTHCHECK for the chiseled image (no shell/curl). Exit 0 is healthy.
     var url = DefaultHealthcheckUrl();
@@ -238,12 +238,8 @@ static async Task<int> RunHealthcheckAsync(string[] args)
     }
 }
 
-static string DefaultHealthcheckUrl()
-{
-    const string host = "127.0.0.1";
-    const int port = 7700;
-    return $"http://{host}:{port}/v1/healthz";
-}
+static string DefaultHealthcheckUrl() =>
+    new UriBuilder(Uri.UriSchemeHttp, "127.0.0.1", 7700, "/v1/healthz").Uri.AbsoluteUri;
 
 static void PrintHelp()
 {

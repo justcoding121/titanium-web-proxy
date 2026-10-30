@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Middleware;
+using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -225,7 +226,10 @@ public partial class ProxyServer
 
         request.Locked = true;
         request.IsBodyReceived = true;
-        cacheState?.Owner.ApplyConditionalHeaders(cacheState, request.Headers);
+        if (cacheState is not null)
+        {
+            HttpResponseCacheMiddleware.ApplyConditionalHeaders(cacheState, request.Headers);
+        }
 
         // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
         // Connection: close; forwarding it forces the origin to close and defeats pooling (Bare still

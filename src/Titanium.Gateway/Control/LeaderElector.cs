@@ -218,7 +218,10 @@ public sealed class LeaderElector
         }
         catch (Exception ex) when (ex is HttpRequestException or KubeApiException or OperationCanceledException or JsonException)
         {
-            _log.LogDebug(ex, "Could not release the lease: {Message}", ex.Message);
+            if (_log.IsEnabled(LogLevel.Debug))
+            {
+                _log.LogDebug(ex, "Could not release the lease: {Message}", ex.Message);
+            }
         }
     }
 
