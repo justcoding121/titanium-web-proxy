@@ -21,7 +21,7 @@ CLUSTER="${CLUSTER:-titanium-conformance}"
 NAMESPACE="gateway-system"
 RELEASE="titanium-gateway"
 METALLB_VERSION="v0.14.9"
-GOLANG_IMAGE="golang:1.23"
+GOLANG_IMAGE="golang:1.25"
 REPORT="${REPORT:-$ROOT/artifacts/gateway-conformance-report.yaml}"
 VERSION="$(sed -n 's/^appVersion: "\(.*\)"/\1/p' "$ROOT/deploy/helm/titanium-gateway/Chart.yaml")"
 
