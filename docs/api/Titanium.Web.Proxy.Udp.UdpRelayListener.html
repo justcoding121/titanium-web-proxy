@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title>Class UdpRelayListener | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content="Class UdpRelayListener | Titanium Web Proxy ">
+    
+    <meta name="description" content="Relays UDP datagrams between clients and an upstream with one session per client endpoint. A single receive loop reads the listening socket; the first datagram from a client endpoint picks an upstream (a cluster destination through the load balancer, or the fixed forward host), connects a UDP socket to it, and later datagrams from that endpoint reuse the socket. Each session has its own upstream receive loop that sends replies back through the listening socket to that client endpoint only. Idle sessions are closed by a timer wheel, so no session owns a timer. The listener has no connection to any HTTP path.">
+      <link rel="shortcut icon" href="../favicon.ico">
+      <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="../styles/docfx.css">
+      <link rel="stylesheet" href="../styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="toc.html">
+    
+    <meta property="docfx:rel" content="../">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener">
+
+
+
+  <h1 id="Titanium_Web_Proxy_Udp_UdpRelayListener" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener" class="text-break">Class UdpRelayListener</h1>
+  <div class="markdown level0 summary"><p>Relays UDP datagrams between clients and an upstream with one session per client endpoint. A single receive
+loop reads the listening socket; the first datagram from a client endpoint picks an upstream (a cluster
+destination through the load balancer, or the fixed forward host), connects a UDP socket to it, and later
+datagrams from that endpoint reuse the socket. Each session has its own upstream receive loop that sends
+replies back through the listening socket to that client endpoint only. Idle sessions are closed by a timer
+wheel, so no session owns a timer. The listener has no connection to any HTTP path.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object">object</a></div>
+    <div class="level1"><span class="xref">UdpRelayListener</span></div>
+  </div>
+  <div class="implements">
+    <h5>Implements</h5>
+    <div><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.iasyncdisposable">IAsyncDisposable</a></div>
+    <div><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.idisposable">IDisposable</a></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object)">object.Equals(object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.equals#system-object-equals(system-object-system-object)">object.Equals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gethashcode">object.GetHashCode()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.gettype">object.GetType()</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.referenceequals">object.ReferenceEquals(object, object)</a>
+    </div>
+    <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.object.tostring">object.ToString()</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <span class="xref">Titanium</span>.<span class="xref">Web</span>.<a class="xref" href="Titanium.Web.Proxy.html">Proxy</a>.<a class="xref" href="Titanium.Web.Proxy.Udp.html">Udp</a></h6>
+  <h6><strong>Assembly</strong>: Titanium.Web.Proxy.dll</h6>
+  <h5 id="Titanium_Web_Proxy_Udp_UdpRelayListener_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public sealed class UdpRelayListener : IAsyncDisposable, IDisposable</code></pre>
+  </div>
+  <h3 id="constructors">Constructors
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener__ctor_Titanium_Web_Proxy_Udp_UdpRelayOptions_Titanium_Web_Proxy_Clusters_ClusterManager_Titanium_Web_Proxy_Clusters_LoadBalancer_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.%23ctor(Titanium.Web.Proxy.Udp.UdpRelayOptions%2CTitanium.Web.Proxy.Clusters.ClusterManager%2CTitanium.Web.Proxy.Clusters.LoadBalancer)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L63">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener__ctor_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener__ctor_Titanium_Web_Proxy_Udp_UdpRelayOptions_Titanium_Web_Proxy_Clusters_ClusterManager_Titanium_Web_Proxy_Clusters_LoadBalancer_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.#ctor(Titanium.Web.Proxy.Udp.UdpRelayOptions,Titanium.Web.Proxy.Clusters.ClusterManager,Titanium.Web.Proxy.Clusters.LoadBalancer)">UdpRelayListener(UdpRelayOptions, ClusterManager?, LoadBalancer?)</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public UdpRelayListener(UdpRelayOptions options, ClusterManager? clusters = null, LoadBalancer? loadBalancer = null)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Udp.UdpRelayOptions.html">UdpRelayOptions</a></td>
+        <td><span class="parametername">options</span></td>
+        <td><p>Listener settings. Copy semantics: later changes to the object are not observed.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Clusters.ClusterManager.html">ClusterManager</a></td>
+        <td><span class="parametername">clusters</span></td>
+        <td><p>Cluster manager that owns destination state. Required with <a class="xref" href="Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ClusterId">ClusterId</a>.</p>
+</td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Clusters.LoadBalancer.html">LoadBalancer</a></td>
+        <td><span class="parametername">loadBalancer</span></td>
+        <td><p>Picks the destination for a new session. Required with <a class="xref" href="Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ClusterId">ClusterId</a>.</p>
+</td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_ActiveSessions.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L83">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_ActiveSessions_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_ActiveSessions" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions">ActiveSessions</h4>
+  <div class="markdown level1 summary"><p>Sessions open right now.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int ActiveSessions { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_IsDraining.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L86">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_IsDraining_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_IsDraining" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining">IsDraining</h4>
+  <div class="markdown level1 summary"><p>True after <a class="xref" href="Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain">BeginDrain()</a>. A draining listener relays existing sessions and opens no new one.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool IsDraining { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_LocalEndPoint.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L80">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_LocalEndPoint_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_LocalEndPoint" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint">LocalEndPoint</h4>
+  <div class="markdown level1 summary"><p>The bound address and port. Null before <a class="xref" href="Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_Start">Start()</a>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IPEndPoint? LocalEndPoint { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.ipendpoint">IPEndPoint</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="methods">Methods
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L137">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain">BeginDrain()</h4>
+  <div class="markdown level1 summary"><p>Stops opening sessions. Datagrams on open sessions keep flowing until they go idle.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void BeginDrain()</code></pre>
+  </div>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_Dispose.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L212">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_Dispose_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_Dispose" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose">Dispose()</h4>
+  <div class="markdown level1 summary"><p>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Dispose()</code></pre>
+  </div>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_DisposeAsync.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L163">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_DisposeAsync_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_DisposeAsync" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync">DisposeAsync()</h4>
+  <div class="markdown level1 summary"><p>Closes every session and the listening socket.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ValueTask DisposeAsync()</code></pre>
+  </div>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.valuetask">ValueTask</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_DrainAsync_System_TimeSpan_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync(System.TimeSpan)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L143">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_DrainAsync_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_DrainAsync_System_TimeSpan_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync(System.TimeSpan)">DrainAsync(TimeSpan)</h4>
+  <div class="markdown level1 summary"><p>Calls <a class="xref" href="Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain">BeginDrain()</a> and waits until every session has closed or <code class="paramref">timeout</code>
+passes, whichever is first. Returns true when no session is left.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public Task&lt;bool&gt; DrainAsync(TimeSpan timeout)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.timespan">TimeSpan</a></td>
+        <td><span class="parametername">timeout</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.threading.tasks.task-1">Task</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener_Start.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener.Start%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L91">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Udp_UdpRelayListener_Start_" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.Start*"></a>
+  <h4 id="Titanium_Web_Proxy_Udp_UdpRelayListener_Start" data-uid="Titanium.Web.Proxy.Udp.UdpRelayListener.Start">Start()</h4>
+  <div class="markdown level1 summary"><p>Binds the socket and starts the receive loop and the idle sweep.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public void Start()</code></pre>
+  </div>
+  <h3 id="implements">Implements</h3>
+  <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.iasyncdisposable">IAsyncDisposable</a>
+  </div>
+  <div>
+      <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.idisposable">IDisposable</a>
+  </div>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Udp_UdpRelayListener.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Udp.UdpRelayListener%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Udp/UdpRelayListener.cs/#L24" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+      <title> | Titanium Web Proxy </title>
+      <meta name="viewport" content="width=device-width">
+      <meta name="title" content=" | Titanium Web Proxy ">
+    
+    
+      <link rel="shortcut icon" href="favicon.ico">
+      <link rel="stylesheet" href="styles/docfx.vendor.min.css">
+      <link rel="stylesheet" href="styles/docfx.css">
+      <link rel="stylesheet" href="styles/main.css">
+      <meta property="docfx:navrel" content="">
+      <meta property="docfx:tocrel" content="">
+    
+    <meta property="docfx:rel" content="">
+    
+  </head>
+  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="index.html">
+                <img id="logo" class="svg" src="logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div class="container body-content">
+
+        <div id="search-results">
+          <div class="search-list">Search Results for <span></span></div>
+          <div class="sr-items">
+            <p><i class="glyphicon glyphicon-refresh index-loading"></i></p>
+          </div>
+          <ul id="pagination" data-first=First data-prev=Previous data-next=Next data-last=Last></ul>
+        </div>
+      </div>
+      <div role="main" class="container body-content hide-when-search">
+        <div class="article row grid">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="">
+
+<h2 id="summary">Summary</h2>
+<!-- What changed and why. Name the behavior, not the tooling. -->
+<h2 id="work-items">Work items</h2>
+<!-- List WI-n covered by this PR (one commit per work item on feat/commercial-grade-parity). -->
+<h2 id="regression-proof-per-commit">Regression proof (per commit)</h2>
+<p>Tick for every work-item commit in this PR:</p>
+<ul>
+<li>[ ] Default cost is <code>none</code> or <code>one bool check</code> when the new knob is unset</li>
+<li>[ ] Terminate-lite stays eligible when unset; disabled only when set (tests present)</li>
+<li>[ ] <code>HotPathAllocationTests</code> ceilings unchanged (or a new ceiling is lower)</li>
+<li>[ ] No new lock, shared write, or allocation on the default request path</li>
+<li>[ ] Hot logic lives in a separate <code>NoInlining</code> method when it can be off</li>
+<li>[ ] New per-request fields cleared in <code>ResetForKeepAlive</code>; <code>KeepAliveResetCoversAllSessionFields</code> still passes</li>
+<li>[ ] Every new resource has an owner and a disposal/reload test</li>
+<li>[ ] Every new map/cache/session table has a size cap, eviction rule, and concurrency stress test</li>
+<li>[ ] Every external call has a timeout and honors the request <code>CancellationToken</code></li>
+<li>[ ] Security features fail closed unless explicitly configured otherwise</li>
+<li>[ ] Schema / <code>PublicAPI.Unshipped.txt</code> / docs updated for this item</li>
+<li>[ ] No performance numbers claimed in this PR text (maintainers run paired A/B)</li>
+</ul>
+<h2 id="test-plan">Test plan</h2>
+<ul>
+<li>[ ] <code>dotnet build src/Titanium.Web.Proxy.sln -c Release --warnaserror</code></li>
+<li>[ ] Unit, Integration, Configuration, Cli, Plus, E2E projects green</li>
+<li>[ ] New tests failed first for the stated reason</li>
+<li>[ ] Maintainers: link <code>rps-ab.yml</code> run(s) per commit SHA (links only)</li>
+</ul>
+<h2 id="merge">Merge</h2>
+<p>Do <strong>not</strong> squash-merge. Preserve per-work-item commits (merge commit or rebase-merge).</p>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/.github/pull_request_template.md/#L1" class="contribution-link">Edit this page</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="styles/docfx.js"></script>
+    <script type="text/javascript" src="styles/main.js"></script>
+  </body>
+</html>

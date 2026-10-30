@@ -86,11 +86,19 @@
 Classes
 </h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html">HttpResponseCacheMiddleware</a></h4>
-      <section><p>GET/HEAD response cache middleware. Only allocated when placed in the middleware list;
-otherwise the hot path pays nothing.</p>
+      <section><p>Shared GET/HEAD response cache implementing an RFC 9111 subset (see <span class="xref">Titanium.Web.Proxy.Caching.HttpCachePolicy</span>): freshness from
+s-maxage, max-age, Expires and Age (plus opt-in heuristic freshness), <code>Vary</code> secondary keys, conditional
+revalidation with 304 merge, stale-while-revalidate, stale-if-error, and request collapsing of concurrent misses.
+Only allocated when placed in the middleware list; otherwise the hot path pays nothing.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html">MemoryHttpResponseCache</a></h4>
-      <section><p>In-process GET/HEAD response cache. Zero cost when unused (not registered in middleware).</p>
+      <section><p>In-process response cache bounded by bytes. Entries are charged for their body, headers and key; when the total
+would exceed <a class="xref" href="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes">MaxBytes</a> the least recently used entries are evicted first. Zero cost when unused
+(not registered in middleware).</p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Caching.ResponseCacheOptions.html">ResponseCacheOptions</a></h4>
+      <section><p>Behavior knobs for <a class="xref" href="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html">HttpResponseCacheMiddleware</a>. Every default is the conservative choice:
+heuristic freshness off, cache-status headers hidden, authenticated requests never stored.</p>
 </section>
 
 

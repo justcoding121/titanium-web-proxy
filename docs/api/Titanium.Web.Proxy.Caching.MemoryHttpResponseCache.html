@@ -9,7 +9,7 @@
       <meta name="viewport" content="width=device-width">
       <meta name="title" content="Class MemoryHttpResponseCache | Titanium Web Proxy ">
     
-    <meta name="description" content="In-process GET/HEAD response cache. Zero cost when unused (not registered in middleware).">
+    <meta name="description" content="In-process response cache bounded by bytes. Entries are charged for their body, headers and key; when the total would exceed  the least recently used entries are evicted first. Zero cost when unused (not registered in middleware).">
       <link rel="shortcut icon" href="../favicon.ico">
       <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
       <link rel="stylesheet" href="../styles/docfx.css">
@@ -81,7 +81,9 @@
 
 
   <h1 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache" class="text-break">Class MemoryHttpResponseCache</h1>
-  <div class="markdown level0 summary"><p>In-process GET/HEAD response cache. Zero cost when unused (not registered in middleware).</p>
+  <div class="markdown level0 summary"><p>In-process response cache bounded by bytes. Entries are charged for their body, headers and key; when the total
+would exceed <a class="xref" href="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes">MaxBytes</a> the least recently used entries are evicted first. Zero cost when unused
+(not registered in middleware).</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -120,14 +122,153 @@
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public sealed class MemoryHttpResponseCache : IHttpResponseCache</code></pre>
   </div>
+  <h5 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_remarks"><strong>Remarks</strong></h5>
+  <div class="markdown level0 remarks"><p>The store is split into up to 16 independently locked shards, so concurrent lookups of different keys do not
+contend, and eviction recency is exact within a shard (approximate across shards). Each shard owns an equal slice
+of <a class="xref" href="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes">MaxBytes</a>, and the shard count shrinks until every slice can hold one maximum-size entry.
+Resident bodies are exact-size arrays shared by all readers (a hit copies nothing); the pooled staging buffers
+used while a streamed body is accumulated are returned before the entry is stored.</p>
+</div>
+  <h3 id="constructors">Constructors
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache__ctor_System_Int64_System_Int32_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.%23ctor(System.Int64%2CSystem.Int32)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L60">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache__ctor_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.#ctor*"></a>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache__ctor_System_Int64_System_Int32_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.#ctor(System.Int64,System.Int32)">MemoryHttpResponseCache(long, int)</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public MemoryHttpResponseCache(long maxBytes = 67108864, int maxEntryBytes = 1048576)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td><span class="parametername">maxBytes</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td><span class="parametername">maxEntryBytes</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="fields">Fields
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_DefaultMaxBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L25">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_DefaultMaxBytes" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxBytes">DefaultMaxBytes</h4>
+  <div class="markdown level1 summary"><p>Default total budget: 64 MiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public const long DefaultMaxBytes = 67108864</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_DefaultMaxEntryBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxEntryBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L28">View Source</a>
+  </span>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_DefaultMaxEntryBytes" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxEntryBytes">DefaultMaxEntryBytes</h4>
+  <div class="markdown level1 summary"><p>Default largest single body: 1 MiB.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public const int DefaultMaxEntryBytes = 1048576</code></pre>
+  </div>
+  <h5 class="fieldValue">Field Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <h3 id="properties">Properties
 </h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Bytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L92">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Bytes_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Bytes" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes">Bytes</h4>
+  <div class="markdown level1 summary"><p>Bytes currently charged, headers and keys included.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long Bytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Count.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L14">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L89">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Count_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count*"></a>
   <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Count" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count">Count</h4>
@@ -152,6 +293,99 @@
       </tr>
     </tbody>
   </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Evictions.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L95">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Evictions_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions*"></a>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Evictions" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions">Evictions</h4>
+  <div class="markdown level1 summary"><p>Entries removed to make room since creation.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long Evictions { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L84">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes">MaxBytes</h4>
+  <div class="markdown level1 summary"><p>Total byte budget across all entries.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public long MaxBytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int64">long</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxEntryBytes.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L87">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxEntryBytes_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes*"></a>
+  <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxEntryBytes" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes">MaxEntryBytes</h4>
+  <div class="markdown level1 summary"><p>Largest body that will be stored.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public int MaxEntryBytes { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
   <h3 id="methods">Methods
 </h3>
   <span class="small pull-right mobile-hide">
@@ -159,11 +393,14 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Purge_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L62">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L186">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Purge_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge*"></a>
   <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Purge_System_String_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(System.String)">Purge(string?)</h4>
-  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 summary"><p>Removes entries. <code>null</code> or empty removes everything. Otherwise an entry goes when its key starts with
+<code class="paramref">pathPrefix</code>, or the key without its leading <code>METHOD:</code> (and then without
+<code>http://</code> or <code>https://</code>) does, compared case-insensitively. Variant markers go with their resource.</p>
+</div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
@@ -206,7 +443,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Set_System_String_Titanium_Web_Proxy_Abstractions_Plugins_CachedHttpResponse_System_TimeSpan_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(System.String%2CTitanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse%2CSystem.TimeSpan)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L37">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L123">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Set_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set*"></a>
   <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Set_System_String_Titanium_Web_Proxy_Abstractions_Plugins_CachedHttpResponse_System_TimeSpan_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Set(System.String,Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse,System.TimeSpan)">Set(string, CachedHttpResponse, TimeSpan)</h4>
@@ -248,7 +485,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_TryGet_System_String_Titanium_Web_Proxy_Abstractions_Plugins_CachedHttpResponse__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(System.String%2CTitanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse%40)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L16">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L97">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_TryGet_" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet*"></a>
   <h4 id="Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_TryGet_System_String_Titanium_Web_Proxy_Abstractions_Plugins_CachedHttpResponse__" data-uid="Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet(System.String,Titanium.Web.Proxy.Abstractions.Plugins.CachedHttpResponse@)">TryGet(string, out CachedHttpResponse?)</h4>
@@ -311,7 +548,7 @@
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_MemoryHttpResponseCache.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.MemoryHttpResponseCache%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L9" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/MemoryHttpResponseCache.cs/#L22" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>

@@ -113,6 +113,10 @@ So client application know that it is communicating with a proxy server.</p>
 <a class="xref" href="Titanium.Web.Proxy.Models.MasqueOptions.html#Titanium_Web_Proxy_Models_MasqueOptions_AllowHttp11Upgrade">AllowHttp11Upgrade</a> is set.
 The relay is opaque: tunneled QUIC stays encrypted. Experimental.</p>
 </section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.PassthroughSniRoute.html">PassthroughSniRoute</a></h4>
+      <section><p>Sends a TCP passthrough connection to a cluster when the client's TLS server name matches.
+<a class="xref" href="Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute_ServerName">ServerName</a> is an exact host or <code>*.example.com</code> (any host below that suffix).</p>
+</section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html">ProxyAuthenticationContext</a></h4>
       <section><p>A context container for authentication flows</p>
 </section>
@@ -200,6 +204,9 @@ the version the client itself declared on its own connection to the proxy.</p>
     back to the client using the client's own originally declared version and its own persistence rules,
     regardless of this policy.
 </p>
+</section>
+      <h4><a class="xref" href="Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.html">PassthroughProxyProtocolMode</a></h4>
+      <section><p>PROXY protocol header a passthrough listener writes to the upstream before client bytes.</p>
 </section>
       <h4><a class="xref" href="Titanium.Web.Proxy.Models.ProxyAuthenticationResult.html">ProxyAuthenticationResult</a></h4>
       <section></section>

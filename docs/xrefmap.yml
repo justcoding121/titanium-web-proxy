@@ -19,15 +19,15 @@ references:
   commentId: T:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
   fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware
   nameWithType: HttpResponseCacheMiddleware
-- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan})
-  name: HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?)
-  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__
-  commentId: M:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan})
-  name.vb: New(IHttpResponseCache, TimeSpan?)
-  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache, System.TimeSpan?)
-  fullName.vb: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.New(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache, System.TimeSpan?)
-  nameWithType: HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?)
-  nameWithType.vb: HttpResponseCacheMiddleware.New(IHttpResponseCache, TimeSpan?)
+- uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan},System.Boolean,Titanium.Web.Proxy.Caching.ResponseCacheOptions)
+  name: HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?, bool, ResponseCacheOptions?)
+  href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__System_Boolean_Titanium_Web_Proxy_Caching_ResponseCacheOptions_
+  commentId: M:Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan},System.Boolean,Titanium.Web.Proxy.Caching.ResponseCacheOptions)
+  name.vb: New(IHttpResponseCache, TimeSpan?, Boolean, ResponseCacheOptions)
+  fullName: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache, System.TimeSpan?, bool, Titanium.Web.Proxy.Caching.ResponseCacheOptions?)
+  fullName.vb: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.New(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache, System.TimeSpan?, Boolean, Titanium.Web.Proxy.Caching.ResponseCacheOptions)
+  nameWithType: HttpResponseCacheMiddleware.HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?, bool, ResponseCacheOptions?)
+  nameWithType.vb: HttpResponseCacheMiddleware.New(IHttpResponseCache, TimeSpan?, Boolean, ResponseCacheOptions)
 - uid: Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor*
   name: HttpResponseCacheMiddleware
   href: api/Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.html#Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_
@@ -70,6 +70,38 @@ references:
   commentId: T:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
   fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache
   nameWithType: MemoryHttpResponseCache
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.#ctor(System.Int64,System.Int32)
+  name: MemoryHttpResponseCache(long, int)
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache__ctor_System_Int64_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.#ctor(System.Int64,System.Int32)
+  name.vb: New(Long, Integer)
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MemoryHttpResponseCache(long, int)
+  fullName.vb: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.New(Long, Integer)
+  nameWithType: MemoryHttpResponseCache.MemoryHttpResponseCache(long, int)
+  nameWithType.vb: MemoryHttpResponseCache.New(Long, Integer)
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.#ctor*
+  name: MemoryHttpResponseCache
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MemoryHttpResponseCache
+  fullName.vb: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.New
+  nameWithType: MemoryHttpResponseCache.MemoryHttpResponseCache
+  nameWithType.vb: MemoryHttpResponseCache.New
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes
+  name: Bytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Bytes
+  commentId: P:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes
+  nameWithType: MemoryHttpResponseCache.Bytes
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes*
+  name: Bytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Bytes_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Bytes
+  nameWithType: MemoryHttpResponseCache.Bytes
 - uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
   name: Count
   href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Count
@@ -83,6 +115,57 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Count
   nameWithType: MemoryHttpResponseCache.Count
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxBytes
+  name: DefaultMaxBytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_DefaultMaxBytes
+  commentId: F:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxBytes
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxBytes
+  nameWithType: MemoryHttpResponseCache.DefaultMaxBytes
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxEntryBytes
+  name: DefaultMaxEntryBytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_DefaultMaxEntryBytes
+  commentId: F:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxEntryBytes
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.DefaultMaxEntryBytes
+  nameWithType: MemoryHttpResponseCache.DefaultMaxEntryBytes
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions
+  name: Evictions
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Evictions
+  commentId: P:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions
+  nameWithType: MemoryHttpResponseCache.Evictions
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions*
+  name: Evictions
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Evictions_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Evictions
+  nameWithType: MemoryHttpResponseCache.Evictions
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes
+  name: MaxBytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes
+  commentId: P:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes
+  nameWithType: MemoryHttpResponseCache.MaxBytes
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes*
+  name: MaxBytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxBytes_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxBytes
+  nameWithType: MemoryHttpResponseCache.MaxBytes
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes
+  name: MaxEntryBytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxEntryBytes
+  commentId: P:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes
+  nameWithType: MemoryHttpResponseCache.MaxEntryBytes
+- uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes*
+  name: MaxEntryBytes
+  href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_MaxEntryBytes_
+  commentId: Overload:Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.MaxEntryBytes
+  nameWithType: MemoryHttpResponseCache.MaxEntryBytes
 - uid: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.Purge(System.String)
   name: Purge(string?)
   href: api/Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.html#Titanium_Web_Proxy_Caching_MemoryHttpResponseCache_Purge_System_String_
@@ -131,6 +214,142 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Caching.MemoryHttpResponseCache.TryGet
   nameWithType: MemoryHttpResponseCache.TryGet
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions
+  name: ResponseCacheOptions
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html
+  commentId: T:Titanium.Web.Proxy.Caching.ResponseCacheOptions
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions
+  nameWithType: ResponseCacheOptions
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated
+  name: AllowAuthenticated
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_AllowAuthenticated
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated
+  nameWithType: ResponseCacheOptions.AllowAuthenticated
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated*
+  name: AllowAuthenticated
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_AllowAuthenticated_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.AllowAuthenticated
+  nameWithType: ResponseCacheOptions.AllowAuthenticated
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse
+  name: Collapse
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_Collapse
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse
+  nameWithType: ResponseCacheOptions.Collapse
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse*
+  name: Collapse
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_Collapse_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.Collapse
+  nameWithType: ResponseCacheOptions.Collapse
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights
+  name: CollapseMaxFlights
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_CollapseMaxFlights
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights
+  nameWithType: ResponseCacheOptions.CollapseMaxFlights
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights*
+  name: CollapseMaxFlights
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_CollapseMaxFlights_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxFlights
+  nameWithType: ResponseCacheOptions.CollapseMaxFlights
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters
+  name: CollapseMaxWaiters
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_CollapseMaxWaiters
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters
+  nameWithType: ResponseCacheOptions.CollapseMaxWaiters
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters*
+  name: CollapseMaxWaiters
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_CollapseMaxWaiters_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseMaxWaiters
+  nameWithType: ResponseCacheOptions.CollapseMaxWaiters
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout
+  name: CollapseTimeout
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_CollapseTimeout
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout
+  nameWithType: ResponseCacheOptions.CollapseTimeout
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout*
+  name: CollapseTimeout
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_CollapseTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.CollapseTimeout
+  nameWithType: ResponseCacheOptions.CollapseTimeout
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl
+  name: DefaultTtl
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_DefaultTtl
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl
+  nameWithType: ResponseCacheOptions.DefaultTtl
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl*
+  name: DefaultTtl
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_DefaultTtl_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.DefaultTtl
+  nameWithType: ResponseCacheOptions.DefaultTtl
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders
+  name: ExposeHeaders
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_ExposeHeaders
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders
+  nameWithType: ResponseCacheOptions.ExposeHeaders
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders*
+  name: ExposeHeaders
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_ExposeHeaders_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.ExposeHeaders
+  nameWithType: ResponseCacheOptions.ExposeHeaders
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness
+  name: HeuristicFreshness
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_HeuristicFreshness
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness
+  nameWithType: ResponseCacheOptions.HeuristicFreshness
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness*
+  name: HeuristicFreshness
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_HeuristicFreshness_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.HeuristicFreshness
+  nameWithType: ResponseCacheOptions.HeuristicFreshness
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes
+  name: MaxEntryBytes
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_MaxEntryBytes
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes
+  nameWithType: ResponseCacheOptions.MaxEntryBytes
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes*
+  name: MaxEntryBytes
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_MaxEntryBytes_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.MaxEntryBytes
+  nameWithType: ResponseCacheOptions.MaxEntryBytes
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention
+  name: StaleRetention
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_StaleRetention
+  commentId: P:Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention
+  nameWithType: ResponseCacheOptions.StaleRetention
+- uid: Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention*
+  name: StaleRetention
+  href: api/Titanium.Web.Proxy.Caching.ResponseCacheOptions.html#Titanium_Web_Proxy_Caching_ResponseCacheOptions_StaleRetention_
+  commentId: Overload:Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Caching.ResponseCacheOptions.StaleRetention
+  nameWithType: ResponseCacheOptions.StaleRetention
 - uid: Titanium.Web.Proxy.Certificates
   name: Titanium.Web.Proxy.Certificates
   href: api/Titanium.Web.Proxy.Certificates.html
@@ -283,6 +502,25 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState
   nameWithType: ClusterManager.GetDestinationState
+- uid: Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent
+  name: HealthEvent
+  href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_HealthEvent
+  commentId: E:Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent
+  fullName: Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent
+  nameWithType: ClusterManager.HealthEvent
+- uid: Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent)
+  name: ReportHealthEvent(DestinationHealthEvent)
+  href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_ReportHealthEvent_Titanium_Web_Proxy_Abstractions_Plugins_DestinationHealthEvent_
+  commentId: M:Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent)
+  fullName: Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent)
+  nameWithType: ClusterManager.ReportHealthEvent(DestinationHealthEvent)
+- uid: Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent*
+  name: ReportHealthEvent
+  href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_ReportHealthEvent_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent
+  nameWithType: ClusterManager.ReportHealthEvent
 - uid: Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(System.String,Titanium.Web.Proxy.Abstractions.Clusters.DestinationState)
   name: SetDestinationState(string, DestinationState)
   href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_SetDestinationState_System_String_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_
@@ -2737,6 +2975,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.OnException
   nameWithType: SessionEventArgsBase.OnException
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute
+  name: PeekRoute()
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_PeekRoute
+  commentId: M:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute()
+  nameWithType: SessionEventArgsBase.PeekRoute()
+- uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute*
+  name: PeekRoute
+  href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_PeekRoute_
+  commentId: Overload:Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.PeekRoute
+  nameWithType: SessionEventArgsBase.PeekRoute
 - uid: Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.ProxyEndPoint
   name: ProxyEndPoint
   href: api/Titanium.Web.Proxy.EventArguments.SessionEventArgsBase.html#Titanium_Web_Proxy_EventArguments_SessionEventArgsBase_ProxyEndPoint
@@ -6787,6 +7038,75 @@ references:
   commentId: F:Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.PreserveClientVersion
   fullName: Titanium.Web.Proxy.Models.OriginHttpVersionPolicy.PreserveClientVersion
   nameWithType: OriginHttpVersionPolicy.PreserveClientVersion
+- uid: Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+  name: PassthroughProxyProtocolMode
+  href: api/Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.html
+  commentId: T:Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+  fullName: Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode
+  nameWithType: PassthroughProxyProtocolMode
+- uid: Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.None
+  name: None
+  href: api/Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.html#Titanium_Web_Proxy_Models_PassthroughProxyProtocolMode_None
+  commentId: F:Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.None
+  fullName: Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.None
+  nameWithType: PassthroughProxyProtocolMode.None
+- uid: Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.V2
+  name: V2
+  href: api/Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.html#Titanium_Web_Proxy_Models_PassthroughProxyProtocolMode_V2
+  commentId: F:Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.V2
+  fullName: Titanium.Web.Proxy.Models.PassthroughProxyProtocolMode.V2
+  nameWithType: PassthroughProxyProtocolMode.V2
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute
+  name: PassthroughSniRoute
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html
+  commentId: T:Titanium.Web.Proxy.Models.PassthroughSniRoute
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute
+  nameWithType: PassthroughSniRoute
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute.#ctor(System.String,System.String)
+  name: PassthroughSniRoute(string, string)
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute__ctor_System_String_System_String_
+  commentId: M:Titanium.Web.Proxy.Models.PassthroughSniRoute.#ctor(System.String,System.String)
+  name.vb: New(String, String)
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute.PassthroughSniRoute(string, string)
+  fullName.vb: Titanium.Web.Proxy.Models.PassthroughSniRoute.New(String, String)
+  nameWithType: PassthroughSniRoute.PassthroughSniRoute(string, string)
+  nameWithType.vb: PassthroughSniRoute.New(String, String)
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute.#ctor*
+  name: PassthroughSniRoute
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Models.PassthroughSniRoute.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute.PassthroughSniRoute
+  fullName.vb: Titanium.Web.Proxy.Models.PassthroughSniRoute.New
+  nameWithType: PassthroughSniRoute.PassthroughSniRoute
+  nameWithType.vb: PassthroughSniRoute.New
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId
+  name: ClusterId
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute_ClusterId
+  commentId: P:Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId
+  nameWithType: PassthroughSniRoute.ClusterId
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId*
+  name: ClusterId
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute_ClusterId_
+  commentId: Overload:Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute.ClusterId
+  nameWithType: PassthroughSniRoute.ClusterId
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName
+  name: ServerName
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute_ServerName
+  commentId: P:Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName
+  nameWithType: PassthroughSniRoute.ServerName
+- uid: Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName*
+  name: ServerName
+  href: api/Titanium.Web.Proxy.Models.PassthroughSniRoute.html#Titanium_Web_Proxy_Models_PassthroughSniRoute_ServerName_
+  commentId: Overload:Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.PassthroughSniRoute.ServerName
+  nameWithType: PassthroughSniRoute.ServerName
 - uid: Titanium.Web.Proxy.Models.ProxyAuthenticationContext
   name: ProxyAuthenticationContext
   href: api/Titanium.Web.Proxy.Models.ProxyAuthenticationContext.html
@@ -7272,6 +7592,84 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough
   nameWithType: TransparentBaseProxyEndPoint.Passthrough
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+  name: PassthroughDefaultClusterId
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughDefaultClusterId
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId*
+  name: PassthroughDefaultClusterId
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughDefaultClusterId_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughDefaultClusterId
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+  name: PassthroughIdleTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughIdleTimeout
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout*
+  name: PassthroughIdleTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughIdleTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughIdleTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+  name: PassthroughProxyProtocol
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughProxyProtocol
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol*
+  name: PassthroughProxyProtocol
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughProxyProtocol_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughProxyProtocol
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes
+  name: PassthroughRoutes
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughRoutes
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughRoutes
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes*
+  name: PassthroughRoutes
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughRoutes_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughRoutes
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughRoutes
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+  name: PassthroughSniReadTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughSniReadTimeout
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout*
+  name: PassthroughSniReadTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_PassthroughSniReadTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+  nameWithType: TransparentBaseProxyEndPoint.PassthroughSniReadTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters
+  name: StreamFilters
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_StreamFilters
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters
+  nameWithType: TransparentBaseProxyEndPoint.StreamFilters
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters*
+  name: StreamFilters
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_StreamFilters_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters
+  nameWithType: TransparentBaseProxyEndPoint.StreamFilters
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint
   name: TransparentProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html
@@ -8050,6 +8448,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.LoadRootCertificate
   nameWithType: CertificateManager.LoadRootCertificate
+- uid: Titanium.Web.Proxy.Network.CertificateManager.OcspStapling
+  name: OcspStapling
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_OcspStapling
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.OcspStapling
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.OcspStapling
+  nameWithType: CertificateManager.OcspStapling
+- uid: Titanium.Web.Proxy.Network.CertificateManager.OcspStapling*
+  name: OcspStapling
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_OcspStapling_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.OcspStapling
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.OcspStapling
+  nameWithType: CertificateManager.OcspStapling
 - uid: Titanium.Web.Proxy.Network.CertificateManager.OpenMacKeychainGuidance
   name: OpenMacKeychainGuidance()
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_OpenMacKeychainGuidance
@@ -10089,6 +10500,214 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Options.ResolvedSessionPolicy.WithResourceLimits
   nameWithType: ResolvedSessionPolicy.WithResourceLimits
+- uid: Titanium.Web.Proxy.Plugins
+  name: Titanium.Web.Proxy.Plugins
+  href: api/Titanium.Web.Proxy.Plugins.html
+  commentId: N:Titanium.Web.Proxy.Plugins
+  fullName: Titanium.Web.Proxy.Plugins
+  nameWithType: Titanium.Web.Proxy.Plugins
+- uid: Titanium.Web.Proxy.Plugins.PluginHost
+  name: PluginHost
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html
+  commentId: T:Titanium.Web.Proxy.Plugins.PluginHost
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost
+  nameWithType: PluginHost
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams(System.String)
+  name: CanFilterStreams(string)
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_CanFilterStreams_System_String_
+  commentId: M:Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams(System.String)
+  name.vb: CanFilterStreams(String)
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams(string)
+  fullName.vb: Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams(String)
+  nameWithType: PluginHost.CanFilterStreams(string)
+  nameWithType.vb: PluginHost.CanFilterStreams(String)
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams*
+  name: CanFilterStreams
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_CanFilterStreams_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.CanFilterStreams
+  nameWithType: PluginHost.CanFilterStreams
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Dispose
+  name: Dispose()
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Dispose
+  commentId: M:Titanium.Web.Proxy.Plugins.PluginHost.Dispose
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Dispose()
+  nameWithType: PluginHost.Dispose()
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Dispose*
+  name: Dispose
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Dispose_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.Dispose
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Dispose
+  nameWithType: PluginHost.Dispose
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost(System.String)
+  name: GetScriptHost(string)
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_GetScriptHost_System_String_
+  commentId: M:Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost(System.String)
+  name.vb: GetScriptHost(String)
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost(string)
+  fullName.vb: Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost(String)
+  nameWithType: PluginHost.GetScriptHost(string)
+  nameWithType.vb: PluginHost.GetScriptHost(String)
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost*
+  name: GetScriptHost
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_GetScriptHost_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.GetScriptHost
+  nameWithType: PluginHost.GetScriptHost
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed
+  name: IsDisposed
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_IsDisposed
+  commentId: P:Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed
+  nameWithType: PluginHost.IsDisposed
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed*
+  name: IsDisposed
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_IsDisposed_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.IsDisposed
+  nameWithType: PluginHost.IsDisposed
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Load(System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig},Microsoft.Extensions.Logging.ILogger)
+  name: Load(IEnumerable<PluginConfig>?, ILogger?)
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Load_System_Collections_Generic_IEnumerable_Titanium_Web_Proxy_Abstractions_Plugins_PluginConfig__Microsoft_Extensions_Logging_ILogger_
+  commentId: M:Titanium.Web.Proxy.Plugins.PluginHost.Load(System.Collections.Generic.IEnumerable{Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig},Microsoft.Extensions.Logging.ILogger)
+  name.vb: Load(IEnumerable(Of PluginConfig), ILogger)
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Load(System.Collections.Generic.IEnumerable<Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig>?, Microsoft.Extensions.Logging.ILogger?)
+  fullName.vb: Titanium.Web.Proxy.Plugins.PluginHost.Load(System.Collections.Generic.IEnumerable(Of Titanium.Web.Proxy.Abstractions.Plugins.PluginConfig), Microsoft.Extensions.Logging.ILogger)
+  nameWithType: PluginHost.Load(IEnumerable<PluginConfig>?, ILogger?)
+  nameWithType.vb: PluginHost.Load(IEnumerable(Of PluginConfig), ILogger)
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Load*
+  name: Load
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Load_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.Load
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Load
+  nameWithType: PluginHost.Load
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts
+  name: LoadContexts
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_LoadContexts
+  commentId: P:Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts
+  nameWithType: PluginHost.LoadContexts
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts*
+  name: LoadContexts
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_LoadContexts_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.LoadContexts
+  nameWithType: PluginHost.LoadContexts
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Plugins
+  name: Plugins
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Plugins
+  commentId: P:Titanium.Web.Proxy.Plugins.PluginHost.Plugins
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Plugins
+  nameWithType: PluginHost.Plugins
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Plugins*
+  name: Plugins
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Plugins_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.Plugins
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Plugins
+  nameWithType: PluginHost.Plugins
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Retire
+  name: Retire()
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Retire
+  commentId: M:Titanium.Web.Proxy.Plugins.PluginHost.Retire
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Retire()
+  nameWithType: PluginHost.Retire()
+- uid: Titanium.Web.Proxy.Plugins.PluginHost.Retire*
+  name: Retire
+  href: api/Titanium.Web.Proxy.Plugins.PluginHost.html#Titanium_Web_Proxy_Plugins_PluginHost_Retire_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.PluginHost.Retire
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.PluginHost.Retire
+  nameWithType: PluginHost.Retire
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter
+  name: ReloadableStreamFilter
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html
+  commentId: T:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter
+  nameWithType: ReloadableStreamFilter
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.#ctor(System.String,System.Func{Titanium.Web.Proxy.Plugins.PluginHost})
+  name: ReloadableStreamFilter(string, Func<PluginHost?>)
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter__ctor_System_String_System_Func_Titanium_Web_Proxy_Plugins_PluginHost__
+  commentId: M:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.#ctor(System.String,System.Func{Titanium.Web.Proxy.Plugins.PluginHost})
+  name.vb: New(String, Func(Of PluginHost))
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.ReloadableStreamFilter(string, System.Func<Titanium.Web.Proxy.Plugins.PluginHost?>)
+  fullName.vb: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.New(String, System.Func(Of Titanium.Web.Proxy.Plugins.PluginHost))
+  nameWithType: ReloadableStreamFilter.ReloadableStreamFilter(string, Func<PluginHost?>)
+  nameWithType.vb: ReloadableStreamFilter.New(String, Func(Of PluginHost))
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.#ctor*
+  name: ReloadableStreamFilter
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.ReloadableStreamFilter
+  fullName.vb: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.New
+  nameWithType: ReloadableStreamFilter.ReloadableStreamFilter
+  nameWithType.vb: ReloadableStreamFilter.New
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext)
+  name: OnCloseAsync(StreamConnectionContext)
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnCloseAsync_Titanium_Web_Proxy_Abstractions_Scripting_StreamConnectionContext_
+  commentId: M:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext)
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext)
+  nameWithType: ReloadableStreamFilter.OnCloseAsync(StreamConnectionContext)
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync*
+  name: OnCloseAsync
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnCloseAsync_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnCloseAsync
+  nameWithType: ReloadableStreamFilter.OnCloseAsync
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext,System.ReadOnlyMemory{System.Byte},System.Threading.CancellationToken)
+  name: OnDownstreamDataAsync(StreamConnectionContext, ReadOnlyMemory<byte>, CancellationToken)
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnDownstreamDataAsync_Titanium_Web_Proxy_Abstractions_Scripting_StreamConnectionContext_System_ReadOnlyMemory_System_Byte__System_Threading_CancellationToken_
+  commentId: M:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext,System.ReadOnlyMemory{System.Byte},System.Threading.CancellationToken)
+  name.vb: OnDownstreamDataAsync(StreamConnectionContext, ReadOnlyMemory(Of Byte), CancellationToken)
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext, System.ReadOnlyMemory<byte>, System.Threading.CancellationToken)
+  fullName.vb: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext, System.ReadOnlyMemory(Of Byte), System.Threading.CancellationToken)
+  nameWithType: ReloadableStreamFilter.OnDownstreamDataAsync(StreamConnectionContext, ReadOnlyMemory<byte>, CancellationToken)
+  nameWithType.vb: ReloadableStreamFilter.OnDownstreamDataAsync(StreamConnectionContext, ReadOnlyMemory(Of Byte), CancellationToken)
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync*
+  name: OnDownstreamDataAsync
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnDownstreamDataAsync_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnDownstreamDataAsync
+  nameWithType: ReloadableStreamFilter.OnDownstreamDataAsync
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext,System.Threading.CancellationToken)
+  name: OnNewConnectionAsync(StreamConnectionContext, CancellationToken)
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnNewConnectionAsync_Titanium_Web_Proxy_Abstractions_Scripting_StreamConnectionContext_System_Threading_CancellationToken_
+  commentId: M:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext,System.Threading.CancellationToken)
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext, System.Threading.CancellationToken)
+  nameWithType: ReloadableStreamFilter.OnNewConnectionAsync(StreamConnectionContext, CancellationToken)
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync*
+  name: OnNewConnectionAsync
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnNewConnectionAsync_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnNewConnectionAsync
+  nameWithType: ReloadableStreamFilter.OnNewConnectionAsync
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext,System.ReadOnlyMemory{System.Byte},System.Threading.CancellationToken)
+  name: OnUpstreamDataAsync(StreamConnectionContext, ReadOnlyMemory<byte>, CancellationToken)
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnUpstreamDataAsync_Titanium_Web_Proxy_Abstractions_Scripting_StreamConnectionContext_System_ReadOnlyMemory_System_Byte__System_Threading_CancellationToken_
+  commentId: M:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext,System.ReadOnlyMemory{System.Byte},System.Threading.CancellationToken)
+  name.vb: OnUpstreamDataAsync(StreamConnectionContext, ReadOnlyMemory(Of Byte), CancellationToken)
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext, System.ReadOnlyMemory<byte>, System.Threading.CancellationToken)
+  fullName.vb: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync(Titanium.Web.Proxy.Abstractions.Scripting.StreamConnectionContext, System.ReadOnlyMemory(Of Byte), System.Threading.CancellationToken)
+  nameWithType: ReloadableStreamFilter.OnUpstreamDataAsync(StreamConnectionContext, ReadOnlyMemory<byte>, CancellationToken)
+  nameWithType.vb: ReloadableStreamFilter.OnUpstreamDataAsync(StreamConnectionContext, ReadOnlyMemory(Of Byte), CancellationToken)
+- uid: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync*
+  name: OnUpstreamDataAsync
+  href: api/Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.html#Titanium_Web_Proxy_Plugins_ReloadableStreamFilter_OnUpstreamDataAsync_
+  commentId: Overload:Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Plugins.ReloadableStreamFilter.OnUpstreamDataAsync
+  nameWithType: ReloadableStreamFilter.OnUpstreamDataAsync
 - uid: Titanium.Web.Proxy.ProxyLimits
   name: ProxyLimits
   href: api/Titanium.Web.Proxy.ProxyLimits.html
@@ -10958,6 +11577,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ListenerBackLog
   nameWithType: ProxyServer.ListenerBackLog
+- uid: Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites
+  name: ListenerCipherSuites
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ListenerCipherSuites
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites
+  fullName: Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites
+  nameWithType: ProxyServer.ListenerCipherSuites
+- uid: Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites*
+  name: ListenerCipherSuites
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ListenerCipherSuites_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites
+  nameWithType: ProxyServer.ListenerCipherSuites
+- uid: Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol
+  name: ListenerMinimumSslProtocol
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ListenerMinimumSslProtocol
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol
+  fullName: Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol
+  nameWithType: ProxyServer.ListenerMinimumSslProtocol
+- uid: Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol*
+  name: ListenerMinimumSslProtocol
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ListenerMinimumSslProtocol_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol
+  nameWithType: ProxyServer.ListenerMinimumSslProtocol
 - uid: Titanium.Web.Proxy.ProxyServer.Logger
   name: Logger
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Logger
@@ -11088,6 +11733,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.NoDelay
   nameWithType: ProxyServer.NoDelay
+- uid: Titanium.Web.Proxy.ProxyServer.OcspStapling
+  name: OcspStapling
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OcspStapling
+  commentId: P:Titanium.Web.Proxy.ProxyServer.OcspStapling
+  fullName: Titanium.Web.Proxy.ProxyServer.OcspStapling
+  nameWithType: ProxyServer.OcspStapling
+- uid: Titanium.Web.Proxy.ProxyServer.OcspStapling*
+  name: OcspStapling
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OcspStapling_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.OcspStapling
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.OcspStapling
+  nameWithType: ProxyServer.OcspStapling
 - uid: Titanium.Web.Proxy.ProxyServer.OnClientConnectionCreate
   name: OnClientConnectionCreate
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OnClientConnectionCreate
@@ -11271,6 +11929,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.RemoveEndPoint
   nameWithType: ProxyServer.RemoveEndPoint
+- uid: Titanium.Web.Proxy.ProxyServer.RequestDecompression
+  name: RequestDecompression
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RequestDecompression
+  commentId: P:Titanium.Web.Proxy.ProxyServer.RequestDecompression
+  fullName: Titanium.Web.Proxy.ProxyServer.RequestDecompression
+  nameWithType: ProxyServer.RequestDecompression
+- uid: Titanium.Web.Proxy.ProxyServer.RequestDecompression*
+  name: RequestDecompression
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RequestDecompression_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.RequestDecompression
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.RequestDecompression
+  nameWithType: ProxyServer.RequestDecompression
 - uid: Titanium.Web.Proxy.ProxyServer.RequestIdHeader
   name: RequestIdHeader
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_RequestIdHeader
@@ -11310,6 +11981,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ResourceLimits
   nameWithType: ProxyServer.ResourceLimits
+- uid: Titanium.Web.Proxy.ProxyServer.ResponseCompression
+  name: ResponseCompression
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseCompression
+  commentId: P:Titanium.Web.Proxy.ProxyServer.ResponseCompression
+  fullName: Titanium.Web.Proxy.ProxyServer.ResponseCompression
+  nameWithType: ProxyServer.ResponseCompression
+- uid: Titanium.Web.Proxy.ProxyServer.ResponseCompression*
+  name: ResponseCompression
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseCompression_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.ResponseCompression
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.ResponseCompression
+  nameWithType: ProxyServer.ResponseCompression
 - uid: Titanium.Web.Proxy.ProxyServer.ResponseHeaderContributor
   name: ResponseHeaderContributor
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ResponseHeaderContributor
@@ -11612,6 +12296,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.TracingEnabled
   nameWithType: ProxyServer.TracingEnabled
+- uid: Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
+  name: TracingHeaderAllowList
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TracingHeaderAllowList
+  commentId: P:Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
+  fullName: Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
+  nameWithType: ProxyServer.TracingHeaderAllowList
+- uid: Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList*
+  name: TracingHeaderAllowList
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TracingHeaderAllowList_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
+  nameWithType: ProxyServer.TracingHeaderAllowList
 - uid: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
   name: TryDisableAllSystemProxies()
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableAllSystemProxies
@@ -12846,6 +13543,313 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Transforms.TransformEngine.Factories
   nameWithType: TransformEngine.Factories
+- uid: Titanium.Web.Proxy.Udp
+  name: Titanium.Web.Proxy.Udp
+  href: api/Titanium.Web.Proxy.Udp.html
+  commentId: N:Titanium.Web.Proxy.Udp
+  fullName: Titanium.Web.Proxy.Udp
+  nameWithType: Titanium.Web.Proxy.Udp
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener
+  name: UdpRelayListener
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html
+  commentId: T:Titanium.Web.Proxy.Udp.UdpRelayListener
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener
+  nameWithType: UdpRelayListener
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.#ctor(Titanium.Web.Proxy.Udp.UdpRelayOptions,Titanium.Web.Proxy.Clusters.ClusterManager,Titanium.Web.Proxy.Clusters.LoadBalancer)
+  name: UdpRelayListener(UdpRelayOptions, ClusterManager?, LoadBalancer?)
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener__ctor_Titanium_Web_Proxy_Udp_UdpRelayOptions_Titanium_Web_Proxy_Clusters_ClusterManager_Titanium_Web_Proxy_Clusters_LoadBalancer_
+  commentId: M:Titanium.Web.Proxy.Udp.UdpRelayListener.#ctor(Titanium.Web.Proxy.Udp.UdpRelayOptions,Titanium.Web.Proxy.Clusters.ClusterManager,Titanium.Web.Proxy.Clusters.LoadBalancer)
+  name.vb: New(UdpRelayOptions, ClusterManager, LoadBalancer)
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.UdpRelayListener(Titanium.Web.Proxy.Udp.UdpRelayOptions, Titanium.Web.Proxy.Clusters.ClusterManager?, Titanium.Web.Proxy.Clusters.LoadBalancer?)
+  fullName.vb: Titanium.Web.Proxy.Udp.UdpRelayListener.New(Titanium.Web.Proxy.Udp.UdpRelayOptions, Titanium.Web.Proxy.Clusters.ClusterManager, Titanium.Web.Proxy.Clusters.LoadBalancer)
+  nameWithType: UdpRelayListener.UdpRelayListener(UdpRelayOptions, ClusterManager?, LoadBalancer?)
+  nameWithType.vb: UdpRelayListener.New(UdpRelayOptions, ClusterManager, LoadBalancer)
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.#ctor*
+  name: UdpRelayListener
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.UdpRelayListener
+  fullName.vb: Titanium.Web.Proxy.Udp.UdpRelayListener.New
+  nameWithType: UdpRelayListener.UdpRelayListener
+  nameWithType.vb: UdpRelayListener.New
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions
+  name: ActiveSessions
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_ActiveSessions
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions
+  nameWithType: UdpRelayListener.ActiveSessions
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions*
+  name: ActiveSessions
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_ActiveSessions_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.ActiveSessions
+  nameWithType: UdpRelayListener.ActiveSessions
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain
+  name: BeginDrain()
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain
+  commentId: M:Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain()
+  nameWithType: UdpRelayListener.BeginDrain()
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain*
+  name: BeginDrain
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_BeginDrain_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.BeginDrain
+  nameWithType: UdpRelayListener.BeginDrain
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose
+  name: Dispose()
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_Dispose
+  commentId: M:Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose()
+  nameWithType: UdpRelayListener.Dispose()
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose*
+  name: Dispose
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_Dispose_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.Dispose
+  nameWithType: UdpRelayListener.Dispose
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync
+  name: DisposeAsync()
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_DisposeAsync
+  commentId: M:Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync()
+  nameWithType: UdpRelayListener.DisposeAsync()
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync*
+  name: DisposeAsync
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_DisposeAsync_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.DisposeAsync
+  nameWithType: UdpRelayListener.DisposeAsync
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync(System.TimeSpan)
+  name: DrainAsync(TimeSpan)
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_DrainAsync_System_TimeSpan_
+  commentId: M:Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync(System.TimeSpan)
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync(System.TimeSpan)
+  nameWithType: UdpRelayListener.DrainAsync(TimeSpan)
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync*
+  name: DrainAsync
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_DrainAsync_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.DrainAsync
+  nameWithType: UdpRelayListener.DrainAsync
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining
+  name: IsDraining
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_IsDraining
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining
+  nameWithType: UdpRelayListener.IsDraining
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining*
+  name: IsDraining
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_IsDraining_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.IsDraining
+  nameWithType: UdpRelayListener.IsDraining
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint
+  name: LocalEndPoint
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_LocalEndPoint
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint
+  nameWithType: UdpRelayListener.LocalEndPoint
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint*
+  name: LocalEndPoint
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_LocalEndPoint_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.LocalEndPoint
+  nameWithType: UdpRelayListener.LocalEndPoint
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.Start
+  name: Start()
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_Start
+  commentId: M:Titanium.Web.Proxy.Udp.UdpRelayListener.Start
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.Start()
+  nameWithType: UdpRelayListener.Start()
+- uid: Titanium.Web.Proxy.Udp.UdpRelayListener.Start*
+  name: Start
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayListener.html#Titanium_Web_Proxy_Udp_UdpRelayListener_Start_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayListener.Start
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayListener.Start
+  nameWithType: UdpRelayListener.Start
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions
+  name: UdpRelayOptions
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html
+  commentId: T:Titanium.Web.Proxy.Udp.UdpRelayOptions
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions
+  nameWithType: UdpRelayOptions
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress
+  name: BindAddress
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_BindAddress
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress
+  nameWithType: UdpRelayOptions.BindAddress
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress*
+  name: BindAddress
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_BindAddress_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.BindAddress
+  nameWithType: UdpRelayOptions.BindAddress
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId
+  name: ClusterId
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ClusterId
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId
+  nameWithType: UdpRelayOptions.ClusterId
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId*
+  name: ClusterId
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ClusterId_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.ClusterId
+  nameWithType: UdpRelayOptions.ClusterId
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultIdleTimeoutSeconds
+  name: DefaultIdleTimeoutSeconds
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_DefaultIdleTimeoutSeconds
+  commentId: F:Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultIdleTimeoutSeconds
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultIdleTimeoutSeconds
+  nameWithType: UdpRelayOptions.DefaultIdleTimeoutSeconds
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramBytes
+  name: DefaultMaxDatagramBytes
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_DefaultMaxDatagramBytes
+  commentId: F:Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramBytes
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramBytes
+  nameWithType: UdpRelayOptions.DefaultMaxDatagramBytes
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramsPerSecondPerClient
+  name: DefaultMaxDatagramsPerSecondPerClient
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_DefaultMaxDatagramsPerSecondPerClient
+  commentId: F:Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramsPerSecondPerClient
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxDatagramsPerSecondPerClient
+  nameWithType: UdpRelayOptions.DefaultMaxDatagramsPerSecondPerClient
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessions
+  name: DefaultMaxSessions
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_DefaultMaxSessions
+  commentId: F:Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessions
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessions
+  nameWithType: UdpRelayOptions.DefaultMaxSessions
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessionsPerClient
+  name: DefaultMaxSessionsPerClient
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_DefaultMaxSessionsPerClient
+  commentId: F:Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessionsPerClient
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.DefaultMaxSessionsPerClient
+  nameWithType: UdpRelayOptions.DefaultMaxSessionsPerClient
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost
+  name: ForwardHost
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ForwardHost
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost
+  nameWithType: UdpRelayOptions.ForwardHost
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost*
+  name: ForwardHost
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ForwardHost_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardHost
+  nameWithType: UdpRelayOptions.ForwardHost
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort
+  name: ForwardPort
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ForwardPort
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort
+  nameWithType: UdpRelayOptions.ForwardPort
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort*
+  name: ForwardPort
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_ForwardPort_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.ForwardPort
+  nameWithType: UdpRelayOptions.ForwardPort
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout
+  name: IdleTimeout
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_IdleTimeout
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout
+  nameWithType: UdpRelayOptions.IdleTimeout
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout*
+  name: IdleTimeout
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_IdleTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.IdleTimeout
+  nameWithType: UdpRelayOptions.IdleTimeout
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxAllowedDatagramBytes
+  name: MaxAllowedDatagramBytes
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxAllowedDatagramBytes
+  commentId: F:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxAllowedDatagramBytes
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxAllowedDatagramBytes
+  nameWithType: UdpRelayOptions.MaxAllowedDatagramBytes
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes
+  name: MaxDatagramBytes
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxDatagramBytes
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes
+  nameWithType: UdpRelayOptions.MaxDatagramBytes
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes*
+  name: MaxDatagramBytes
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxDatagramBytes_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramBytes
+  nameWithType: UdpRelayOptions.MaxDatagramBytes
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient
+  name: MaxDatagramsPerSecondPerClient
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxDatagramsPerSecondPerClient
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient
+  nameWithType: UdpRelayOptions.MaxDatagramsPerSecondPerClient
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient*
+  name: MaxDatagramsPerSecondPerClient
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxDatagramsPerSecondPerClient_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxDatagramsPerSecondPerClient
+  nameWithType: UdpRelayOptions.MaxDatagramsPerSecondPerClient
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions
+  name: MaxSessions
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxSessions
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions
+  nameWithType: UdpRelayOptions.MaxSessions
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions*
+  name: MaxSessions
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxSessions_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessions
+  nameWithType: UdpRelayOptions.MaxSessions
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient
+  name: MaxSessionsPerClient
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxSessionsPerClient
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient
+  nameWithType: UdpRelayOptions.MaxSessionsPerClient
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient*
+  name: MaxSessionsPerClient
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_MaxSessionsPerClient_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.MaxSessionsPerClient
+  nameWithType: UdpRelayOptions.MaxSessionsPerClient
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.Port
+  name: Port
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_Port
+  commentId: P:Titanium.Web.Proxy.Udp.UdpRelayOptions.Port
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.Port
+  nameWithType: UdpRelayOptions.Port
+- uid: Titanium.Web.Proxy.Udp.UdpRelayOptions.Port*
+  name: Port
+  href: api/Titanium.Web.Proxy.Udp.UdpRelayOptions.html#Titanium_Web_Proxy_Udp_UdpRelayOptions_Port_
+  commentId: Overload:Titanium.Web.Proxy.Udp.UdpRelayOptions.Port
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Udp.UdpRelayOptions.Port
+  nameWithType: UdpRelayOptions.Port
 - uid: Titanium.Web.Proxy.WebSocketDecoder
   name: WebSocketDecoder
   href: api/Titanium.Web.Proxy.WebSocketDecoder.html

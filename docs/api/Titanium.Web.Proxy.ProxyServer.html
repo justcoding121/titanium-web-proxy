@@ -1546,7 +1546,7 @@ Defaults to false.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ForwardedHeaders.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ForwardedHeaders%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1629">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1635">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ForwardedHeaders_" data-uid="Titanium.Web.Proxy.ProxyServer.ForwardedHeaders*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ForwardedHeaders" data-uid="Titanium.Web.Proxy.ProxyServer.ForwardedHeaders">ForwardedHeaders</h4>
@@ -1859,6 +1859,74 @@ A subscribed <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_
     <tbody>
       <tr>
         <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.int32">int</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ListenerCipherSuites.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.ListenerTls.cs/#L29">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_ListenerCipherSuites_" data-uid="Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ListenerCipherSuites" data-uid="Titanium.Web.Proxy.ProxyServer.ListenerCipherSuites">ListenerCipherSuites</h4>
+  <div class="markdown level1 summary"><p>Cipher suites a client-facing handshake may negotiate. Null (the default) keeps the OS defaults.
+.NET has no cipher suite policy on Windows, where this setting is ignored and a warning is logged on
+first use. Excluding every TLS 1.3 suite disables TLS 1.3 for listeners.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IReadOnlyList&lt;TlsCipherSuite&gt;? ListenerCipherSuites { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.net.security.tlsciphersuite">TlsCipherSuite</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ListenerMinimumSslProtocol.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.ListenerTls.cs/#L22">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_ListenerMinimumSslProtocol_" data-uid="Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ListenerMinimumSslProtocol" data-uid="Titanium.Web.Proxy.ProxyServer.ListenerMinimumSslProtocol">ListenerMinimumSslProtocol</h4>
+  <div class="markdown level1 summary"><p>Lowest TLS version a client-facing handshake accepts (<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.authentication.sslprotocols#system-security-authentication-sslprotocols-tls12">Tls12</a> or
+<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.authentication.sslprotocols#system-security-authentication-sslprotocols-tls13">Tls13</a>). It trims <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols">SupportedSslProtocols</a> for listeners
+(explicit, transparent, and MASQUE) and never widens it; outbound handshakes are unchanged.
+Default <a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.authentication.sslprotocols#system-security-authentication-sslprotocols-none">None</a> leaves <a class="xref" href="Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SupportedSslProtocols">SupportedSslProtocols</a> as the only limit.
+When the minimum excludes every supported protocol, listeners accept the minimum and above.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public SslProtocols ListenerMinimumSslProtocol { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.authentication.sslprotocols">SslProtocols</a></td>
         <td></td>
       </tr>
     </tbody>
@@ -2258,6 +2326,38 @@ Defaults to true, no nagle algorithm is used.</p>
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_OcspStapling.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.OcspStapling%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.ListenerTls.cs/#L44">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_OcspStapling_" data-uid="Titanium.Web.Proxy.ProxyServer.OcspStapling*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_OcspStapling" data-uid="Titanium.Web.Proxy.ProxyServer.OcspStapling">OcspStapling</h4>
+  <div class="markdown level1 summary"><p>Lets listener certificates be stapled with an OCSP response. Forwards to
+Certificates.CertificateManager.OcspStapling. Default <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">false</a>.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public bool OcspStapling { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_OriginHttpVersionPolicy.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.OriginHttpVersionPolicy%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -2613,6 +2713,39 @@ Should return success for successful authentication, continuation if the package
   </table>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_RequestDecompression.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.RequestDecompression%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1663">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_RequestDecompression_" data-uid="Titanium.Web.Proxy.ProxyServer.RequestDecompression*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_RequestDecompression" data-uid="Titanium.Web.Proxy.ProxyServer.RequestDecompression">RequestDecompression</h4>
+  <div class="markdown level1 summary"><p>Bounded decompression of gzip and Brotli HTTP/1.x request bodies before they reach the origin, with a
+decompressed-size limit and a ratio limit. A body over either limit is answered with 413. Null or
+<code>Enabled = false</code> (the default) is off: one null check per request.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public RequestDecompressionConfig? RequestDecompression { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">RequestDecompressionConfig</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_RequestIdHeader.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.RequestIdHeader%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
@@ -2713,6 +2846,39 @@ and should usually be kept in sync with <a class="xref" href="Titanium.Web.Proxy
     <tbody>
       <tr>
         <td><a class="xref" href="Titanium.Web.Proxy.Options.ProxyResourceLimits.html">ProxyResourceLimits</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ResponseCompression.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ResponseCompression%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1644">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_ResponseCompression_" data-uid="Titanium.Web.Proxy.ProxyServer.ResponseCompression*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_ResponseCompression" data-uid="Titanium.Web.Proxy.ProxyServer.ResponseCompression">ResponseCompression</h4>
+  <div class="markdown level1 summary"><p>Buffered gzip / Brotli compression of small known-length responses, applied on HTTP/1.1 and
+HTTP/2-to-HTTP/1.1 sessions only. Null or <code>Enabled = false</code> (the default) is off: one null
+check per response and terminate-lite stays eligible.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public ResponseCompressionConfig? ResponseCompression { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">ResponseCompressionConfig</span></td>
         <td></td>
       </tr>
     </tbody>
@@ -3040,7 +3206,7 @@ accumulation; the 1-second connection disposal delay already prefers peer-first 
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1667">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1717">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread_" data-uid="Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_ThreadPoolWorkerThread" data-uid="Titanium.Web.Proxy.ProxyServer.ThreadPoolWorkerThread">ThreadPoolWorkerThread</h4>
@@ -3095,6 +3261,38 @@ starved while the pool is still ramping workers.</p>
     <tbody>
       <tr>
         <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_TracingHeaderAllowList.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.cs/#L1632">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_ProxyServer_TracingHeaderAllowList_" data-uid="Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList*"></a>
+  <h4 id="Titanium_Web_Proxy_ProxyServer_TracingHeaderAllowList" data-uid="Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList">TracingHeaderAllowList</h4>
+  <div class="markdown level1 summary"><p>Request header names recorded as <code>http.request.header.*</code> span attributes. Null or empty records none.
+Cookies, credentials and similar secret-bearing headers are never recorded, even when listed.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IReadOnlyList&lt;string&gt;? TracingHeaderAllowList { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a>&gt;</td>
         <td></td>
       </tr>
     </tbody>
@@ -3518,7 +3716,7 @@ effect immediately - whether the proxy is stopped (e.g. before using
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Dispose.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Dispose%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L403">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L405">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Dispose_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Dispose" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose">Dispose()</h4>
@@ -3534,7 +3732,7 @@ effect immediately - whether the proxy is stopped (e.g. before using
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Dispose_System_Boolean_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Dispose(System.Boolean)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L409">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L411">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Dispose_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Dispose_System_Boolean_" data-uid="Titanium.Web.Proxy.ProxyServer.Dispose(System.Boolean)">Dispose(bool)</h4>
@@ -3567,7 +3765,7 @@ protected virtual void Dispose(bool disposing)</code></pre>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_DrainAsync_System_TimeSpan_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.DrainAsync(System.TimeSpan)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L282">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L284">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_DrainAsync_" data-uid="Titanium.Web.Proxy.ProxyServer.DrainAsync*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_DrainAsync_System_TimeSpan_" data-uid="Titanium.Web.Proxy.ProxyServer.DrainAsync(System.TimeSpan)">DrainAsync(TimeSpan)</h4>
@@ -4172,7 +4370,7 @@ E.g due to ungracious proxy shutdown before.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_Stop.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.Stop%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L302">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L304">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_Stop_" data-uid="Titanium.Web.Proxy.ProxyServer.Stop*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_Stop" data-uid="Titanium.Web.Proxy.ProxyServer.Stop">Stop()</h4>
@@ -4187,7 +4385,7 @@ E.g due to ungracious proxy shutdown before.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_ProxyServer_StopAsync_System_Nullable_System_TimeSpan__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.ProxyServer.StopAsync(System.Nullable%7BSystem.TimeSpan%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L315">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/ProxyServer.Lifecycle.cs/#L317">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_ProxyServer_StopAsync_" data-uid="Titanium.Web.Proxy.ProxyServer.StopAsync*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_StopAsync_System_Nullable_System_TimeSpan__" data-uid="Titanium.Web.Proxy.ProxyServer.StopAsync(System.Nullable{System.TimeSpan})">StopAsync(TimeSpan?)</h4>
