@@ -21,16 +21,17 @@ public class SmokeMatrixCoverageTests
         Assert.IsTrue(entries.Count > 0, "smoke-matrix.yml must list at least one entry.");
 
         var missing = entries.Where(e => e.Status.Equals("missing", StringComparison.OrdinalIgnoreCase)).ToList();
-        if (missing.Count > 0)
+        if (missing.Count == 0)
         {
-            Console.WriteLine($"smoke-matrix.yml: {missing.Count} entr{(missing.Count == 1 ? "y" : "ies")} still missing automated smoke:");
-            foreach (var entry in missing)
-            {
-                Console.WriteLine($"  - {entry.Id}: {entry.Capability}");
-            }
+            return;
         }
 
-        Assert.IsTrue(true, "missing smoke entries are advisory until the matrix is fully wired.");
+        // Advisory only: log gaps; covered rows are enforced in SmokeMatrix_CoveredEntries_ReferenceNonEmptyTests.
+        Console.WriteLine($"smoke-matrix.yml: {missing.Count} entr{(missing.Count == 1 ? "y" : "ies")} still missing automated smoke:");
+        foreach (var entry in missing)
+        {
+            Console.WriteLine($"  - {entry.Id}: {entry.Capability}");
+        }
     }
 
     [TestMethod]

@@ -18,7 +18,7 @@ public class CliPlusHashPasswordE2ETests
         StringAssert.Contains(text, "alice");
         Assert.IsTrue(
             text.Contains("$2", StringComparison.Ordinal) || text.Contains("bcrypt", StringComparison.OrdinalIgnoreCase) ||
-            text.Contains("hash", StringComparison.OrdinalIgnoreCase) || text.Contains(":", StringComparison.Ordinal),
+            text.Contains("hash", StringComparison.OrdinalIgnoreCase) || text.Contains(':'),
             text);
     }
 

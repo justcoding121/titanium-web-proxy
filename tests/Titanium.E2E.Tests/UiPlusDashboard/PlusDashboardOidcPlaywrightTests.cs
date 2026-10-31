@@ -122,7 +122,7 @@ public class PlusDashboardOidcPlaywrightTests : PageTest
         await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
     }
 
-    private OidcDashboardHost StartHost(
+    private static OidcDashboardHost StartHost(
         DashboardOidcOptions? oidc = null,
         string? usersFile = null,
         bool breakGlass = true,
@@ -176,7 +176,7 @@ public class PlusDashboardOidcPlaywrightTests : PageTest
                     Id = "c1",
                     Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 80 }],
                 },
-            ]).GetAwaiter().GetResult();
+            ]).AsTask().GetAwaiter().GetResult();
 
             var control = new ControlPlaneServer(manager, "127.0.0.1", FreePort(), secret);
             control.Start();
