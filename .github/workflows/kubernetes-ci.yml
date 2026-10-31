@@ -18,6 +18,9 @@ on:
       - 'src/Titanium.Web.Proxy.Configuration/**'
       - 'tests/Titanium.Cli.Tests/HelmChartTests.cs'
       - 'tests/Titanium.Gateway.Tests/**'
+      - 'tests/Titanium.Manager.Tests/**'
+      - 'tests/smoke-matrix.yml'
+      - 'tests/Titanium.Web.Proxy.Configuration.Tests/SmokeMatrixCoverageTests.cs'
       - '.github/workflows/kubernetes-ci.yml'
   push:
     branches:
@@ -144,6 +147,106 @@ jobs:
           docker stop --time 30 twp
           test "$(docker inspect twp --format '{{.State.ExitCode}}')" = "0" || { docker logs twp; exit 1; }
 
+      - name: Build titanium-gateway linux/amd64 and load it
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tools/packaging/docker/Dockerfile.gateway
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: titanium-gateway:ci
+          build-args: |
+            VERSION=0.0.0-ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+
+      - name: Build titanium-manager linux/amd64 and load it
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tools/packaging/docker/Dockerfile.manager
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: titanium-manager:ci
+          build-args: |
+            VERSION=0.0.0-ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+
+      - name: Manager image runs non-root, read-only, and reports healthy
+        shell: bash
+        run: |
+          set -euo pipefail
+          user="$(docker image inspect titanium-manager:ci --format '{{.Config.User}}')"
+          test "$user" = "1654:1654"
+
+          docker volume create mgr-ci-data >/dev/null
+          docker run -d --name mgr --read-only --tmpfs /tmp \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e TITANIUM_MANAGER_ADMIN_TOKEN=ci-token \
+            -v mgr-ci-data:/var/lib/titanium-manager \
+            -p 7700:7700 titanium-manager:ci
+
+          for i in $(seq 1 30); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7700/v1/healthz || true)"
+            [[ "$code" == "200" ]] && break
+            sleep 1
+          done
+          test "$code" = "200" || { docker logs mgr; exit 1; }
+
+          docker exec mgr titanium-manager healthcheck
+          docker stop --time 30 mgr
+          test "$(docker inspect mgr --format '{{.State.ExitCode}}')" = "0" || { docker logs mgr; exit 1; }
+          docker volume rm mgr-ci-data >/dev/null
+
+      - name: Gateway image is non-root and serves controller health in kind
+        shell: bash
+        run: |
+          set -euo pipefail
+          user="$(docker image inspect titanium-gateway:ci --format '{{.Config.User}}')"
+          test "$user" = "1654:1654"
+
+          if ! command -v kind >/dev/null 2>&1; then
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              -Lo /usr/local/bin/kind "https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64"
+            chmod +x /usr/local/bin/kind
+          fi
+          if ! command -v helm >/dev/null 2>&1; then
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" \
+              | tar xz -C /usr/local/bin linux-amd64/helm --strip-components=1
+          fi
+          if ! command -v kubectl >/dev/null 2>&1; then
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              -Lo /usr/local/bin/kubectl "https://dl.k8s.io/release/v${KUBERNETES_VERSION}/bin/linux/amd64/kubectl"
+            chmod +x /usr/local/bin/kubectl
+          fi
+
+          kind create cluster --name twp-gw-ci --wait 120s
+          kind load docker-image titanium-web-proxy:ci titanium-gateway:ci --name twp-gw-ci
+
+          helm install titanium-gateway deploy/helm/titanium-gateway --namespace gateway-system --create-namespace \
+            -f deploy/helm/titanium-gateway/ci/kind-values.yaml \
+            --wait --timeout 5m
+
+          kubectl -n gateway-system wait gatewayclass/titanium --for=condition=Accepted --timeout=120s
+          kubectl -n gateway-system rollout status deployment/titanium-gateway-controller --timeout=180s
+
+          kubectl -n gateway-system port-forward deployment/titanium-gateway-controller 18081:8081 &
+          pf=$!
+          sleep 3
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/healthz)" = "200"
+          for i in $(seq 1 60); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18081/readyz || true)"
+            [[ "$code" == "200" ]] && break
+            sleep 2
+          done
+          test "$code" = "200" || { kubectl -n gateway-system logs -l app.kubernetes.io/component=controller --tail=80; exit 1; }
+          kill "$pf" || true
+          kind delete cluster --name twp-gw-ci
+
   helm:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -221,3 +324,9 @@ jobs:
               | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
                   -schema-location default -
           done
+
+      - name: titanium-manager chart tests
+        run: dotnet test tests/Titanium.Manager.Tests -c Release --filter "FullyQualifiedName~ManagerChartTests"
+
+      - name: smoke matrix coverage tests
+        run: dotnet test tests/Titanium.Web.Proxy.Configuration.Tests -c Release --filter "FullyQualifiedName~SmokeMatrixCoverageTests"

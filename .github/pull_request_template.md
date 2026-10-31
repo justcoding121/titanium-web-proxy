@@ -22,6 +22,7 @@ Tick for every work-item commit in this PR:
 - [ ] Security features fail closed unless explicitly configured otherwise
 - [ ] Schema / `PublicAPI.Unshipped.txt` / docs updated for this item
 - [ ] No performance numbers claimed in this PR text (maintainers run paired A/B)
+- [ ] New or changed **supported** capability has a smoke entry in `tests/smoke-matrix.yml` (test FQN or workflow job)
 
 ## Test plan
 

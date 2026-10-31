@@ -240,6 +240,7 @@ jobs:
       run: |
         dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Redis"
         dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "FullyQualifiedName~FleetRateLimitChaos"
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Redis"
 
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
   # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).
@@ -367,7 +368,7 @@ jobs:
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI"
     - name: Inspector Headless + Visual + Plus Playwright
       run: |
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard|TestCategory=E2E-UI-Manager"
     - name: Inspector retention stress (spill + H3)
       run: |
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress|TestCategory=Inspector-Trust-Decision"
@@ -427,6 +428,27 @@ jobs:
         dotnet build src/Titanium.Cli/Titanium.Cli.csproj --configuration Release --no-restore
         dotnet build src/Titanium.Plus/Titanium.Plus.csproj --configuration Release --no-restore
         dotnet build tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-restore
+    - name: Detect scripting RID
+      id: scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+    - name: Cache scripting natives
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.scripting-rid.outputs.rid }}
+    - name: Bundle scripting natives beside CLI
+      shell: pwsh
+      run: |
+        $rid = '${{ steps.scripting-rid.outputs.rid }}'
+        $out = (Get-ChildItem -Recurse -Filter titanium.dll src/Titanium.Cli/bin/Release | Select-Object -First 1).DirectoryName
+        if (-not $out) { throw 'CLI output dir not found' }
+        ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
     - name: Install Playwright Chromium
       shell: pwsh
       run: |

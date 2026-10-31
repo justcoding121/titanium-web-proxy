@@ -14,6 +14,7 @@ namespace Titanium.E2E.Tests.UiPlusDashboard;
 public class CliHostedPlusDashboardPlaywrightTests : PageTest
 {
     private const string Secret = "pw-cli-dashboard-secret";
+    private const string ViewerSecret = "pw-cli-dashboard-viewer-secret";
 
     private string _tempDir = null!;
     private CliProcessHarness? _harness;
@@ -30,15 +31,14 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         var listen = CliProcessHarness.GetFreePort();
         var control = CliProcessHarness.GetFreePort();
         _dashboardPort = CliProcessHarness.GetFreePort();
-        var cfg = ConfigFixtures.WritePlusOptions(
+        var cfg = WriteCliHostedDashboardConfig(
             _tempDir,
             listen,
             _origin.Port,
             control,
             Secret,
-            new Dictionary<string, string>(),
-            useRoutes: true,
-            dashboardPort: _dashboardPort);
+            ViewerSecret,
+            _dashboardPort);
 
         _harness = new CliProcessHarness();
         _harness.EnsurePlusDllBesideCli(copy: true);
@@ -151,6 +151,17 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
     [TestMethod]
     [TestCategory("E2E-UI-Plus-Dashboard")]
     [TestCategory("E2E")]
+    public async Task CliHosted_ViewerSecret_ShowsViewerRole()
+    {
+        await LoginAsync(ViewerSecret);
+        await Expect(Page.GetByTestId("whoami")).ToContainTextAsync("viewer");
+        await Page.GotoAsync(_prefix + "routes");
+        await Expect(Page.GetByTestId("btn-drain-d1")).ToBeDisabledAsync();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
     public async Task CliHosted_MetricsLink()
     {
         await LoginAsync(Secret);
@@ -165,5 +176,57 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         await Expect(Page.GetByTestId("login-form")).ToBeVisibleAsync();
         await Page.GetByTestId("login-secret").FillAsync(secret);
         await Page.GetByTestId("login-submit").ClickAsync();
+        if (secret is Secret or ViewerSecret)
+        {
+            await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
+        }
+    }
+
+    private static string WriteCliHostedDashboardConfig(
+        string dir,
+        int listen,
+        int origin,
+        int control,
+        string secret,
+        string viewerSecret,
+        int dashboardPort)
+    {
+        var path = Path.Combine(dir, $"cli-dash-{listen}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listen}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{origin}}, "useDestinationHost": true }
+                  ]
+                }
+              ],
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{control}},
+                  "sharedSecret": "{{secret}}",
+                  "dashboardPort": {{dashboardPort}},
+                  "dashboardViewerSecret": "{{viewerSecret}}"
+                }
+              }
+            }
+            """);
+        return path;
     }
 }
