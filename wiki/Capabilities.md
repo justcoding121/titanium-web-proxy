@@ -182,3 +182,5 @@
 | OpenResty, Kong PDK, and APISIX Lua APIs | not supported | — | There is no ngx API, Kong PDK, APISIX plugin API, LuaJIT, FFI, cosocket, or require. Lua here is the 5.4 language with the libraries on the Scripting page. | [Scripting](https://titaniumproxy.com/docs/scripting#parity-checklist) |
 
 This table is written from `website/docs/.capabilities.yml`. A unit test checks that each config key exists in `twp.schema.json`, that each link target exists, and that this page carries every row.
+
+**Smoke coverage:** every `supported` product surface that ships a binary path should have an entry in [`tests/smoke-matrix.yml`](../tests/smoke-matrix.yml). Process CLI smokes run under `TestCategory=E2E` (`cli-e2e`). Inspector Headless/Visual, Plus dashboard Playwright, and Manager Playwright (`TestCategory=E2E-UI-Manager`) run in `ui-portable` — Manager UI must stay in that CI filter.

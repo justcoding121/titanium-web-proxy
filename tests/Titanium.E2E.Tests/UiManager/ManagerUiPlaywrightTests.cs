@@ -27,7 +27,7 @@ public class ManagerUiPlaywrightTests : PageTest
 
     [TestMethod]
     [TestCategory("E2E-UI-Manager")]
-    public async Task SignIn_CreateFleet_EditPublish_ShowsRolloutAndAudit()
+    public async Task SignIn_CreateFleet_EditPublish_PauseResumeRollbackAndAudit()
     {
         var prefix = _host!.BaseUrl;
 
@@ -66,13 +66,33 @@ public class ManagerUiPlaywrightTests : PageTest
 
         await Page.GetByTestId("btn-publish").ClickAsync();
         await Expect(Page.GetByTestId("rollout-detail")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+
+        // Second publish so rollback has a previous revision.
+        await Page.GetByTestId("nav-editor").ClickAsync();
+        await Expect(Page.GetByTestId("editor")).ToBeVisibleAsync();
+        await Page.GetByTestId("route-path").FillAsync("/v2");
+        await Page.GetByTestId("btn-upsert-route").ClickAsync();
+        await Page.GetByTestId("btn-publish").ClickAsync();
+        await Expect(Page.GetByTestId("rollout-detail")).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await Expect(Page.GetByTestId("btn-rollback-rollout")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("btn-pause-rollout")).ToBeVisibleAsync();
+
+        await Page.GetByTestId("btn-pause-rollout").ClickAsync();
+        await Expect(Page.GetByTestId("rollout-state")).ToContainTextAsync("paused", new() { Timeout = 10_000 });
+
+        await Page.GetByTestId("btn-resume-rollout").ClickAsync();
+        await Expect(Page.GetByTestId("rollout-state")).ToContainTextAsync("running", new() { Timeout = 10_000 });
+
+        await Page.GetByTestId("btn-rollback-rollout").ClickAsync();
+        await Expect(Page.GetByTestId("rollout-state")).ToContainTextAsync("rolled_back", new() { Timeout = 10_000 });
 
         await Page.GetByTestId("nav-audit").ClickAsync();
         await Expect(Page.GetByTestId("audit")).ToBeVisibleAsync();
         await Expect(Page.Locator("[data-testid='audit-action']").Filter(new() { HasText = "revision.publish" }).First)
             .ToBeVisibleAsync();
+
+        await Page.GetByTestId("btn-logout").ClickAsync();
+        await Expect(Page.GetByTestId("login-form")).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [TestMethod]

@@ -34,6 +34,7 @@
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
     <ProjectReference Include="..\..\tools\InspectorDesktopProbe\Shared\Titanium.Inspector.DesktopProbe.Shared.csproj" />
+    <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />
