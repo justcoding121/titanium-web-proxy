@@ -41,7 +41,12 @@ public class ManagerAgentTests
             Assert.IsNotNull(agent);
             Assert.IsTrue(ManagerAgent.LiveLoops >= 1);
 
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            // ApplyAsync resolves before WriteLastKnownGood; wait for LKG, not only SuccessfulApplies.
+            await WaitUntilAsync(
+                () => applier.SuccessfulApplies.Length >= 1
+                      && ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var hash)
+                      && string.Equals(hash, expectedHash, StringComparison.Ordinal),
+                TimeSpan.FromSeconds(8));
             Assert.AreEqual(1, applier.SuccessfulApplies.Length);
             Assert.AreEqual(expectedHash, applier.SuccessfulApplies[0].Hash);
 
@@ -85,9 +90,14 @@ public class ManagerAgentTests
             // A later successful apply should be the first success (prior state kept).
             applier.FailNext = false;
             harness.PublishConfig(new { v = 2 });
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            var secondHash = harness.ConfigVersion.ToString();
+            await WaitUntilAsync(
+                () => applier.SuccessfulApplies.Length >= 1
+                      && ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var hash)
+                      && string.Equals(hash, secondHash, StringComparison.Ordinal),
+                TimeSpan.FromSeconds(8));
             Assert.AreEqual(1, applier.SuccessfulApplies.Length);
-            Assert.AreEqual(harness.ConfigVersion.ToString(), applier.SuccessfulApplies[0].Hash);
+            Assert.AreEqual(secondHash, applier.SuccessfulApplies[0].Hash);
         }
         finally
         {
@@ -109,7 +119,12 @@ public class ManagerAgentTests
         try
         {
             using var agent = StartAgent(harness, stateDir, tokenFile, applier, status, mode: "managed", debounceMs: 400);
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            var firstHash = harness.ConfigVersion.ToString();
+            await WaitUntilAsync(
+                () => applier.SuccessfulApplies.Length >= 1
+                      && ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var hash)
+                      && string.Equals(hash, firstHash, StringComparison.Ordinal),
+                TimeSpan.FromSeconds(8));
             var afterFirst = applier.SuccessfulApplies.Length;
 
             for (var i = 1; i <= 5; i++)
