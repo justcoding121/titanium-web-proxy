@@ -60,13 +60,35 @@ public class CliFleetRateLimitE2ETests
         try
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            Assert.AreEqual(HttpStatusCode.OK, (await http.GetAsync($"http://127.0.0.1:{listen}/a")).StatusCode);
+            // Fleet limiter starts with an empty local reserve and refills asynchronously from Redis.
+            var first = await WaitForStatusAsync(http, $"http://127.0.0.1:{listen}/a", HttpStatusCode.OK, TimeSpan.FromSeconds(15));
+            Assert.AreEqual(HttpStatusCode.OK, first);
             Assert.AreEqual(HttpStatusCode.TooManyRequests, (await http.GetAsync($"http://127.0.0.1:{listen}/b")).StatusCode);
         }
         finally
         {
             harness.Dispose();
         }
+    }
+
+    private static async Task<HttpStatusCode> WaitForStatusAsync(
+        HttpClient http,
+        string url,
+        HttpStatusCode want,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        HttpStatusCode last = 0;
+        while (DateTime.UtcNow < deadline)
+        {
+            using var resp = await http.GetAsync(url);
+            last = resp.StatusCode;
+            if (last == want)
+                return last;
+            await Task.Delay(50);
+        }
+
+        return last;
     }
 
     private static string WriteFleetRateLimit(
