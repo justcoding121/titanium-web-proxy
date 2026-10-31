@@ -32,7 +32,12 @@ public class ManagerAgentChaosTests
             using var agent = StartAgent(harness, stateDir, tokenFile, applier, status, mode: "managed", debounceMs: 200);
             Assert.IsNotNull(agent);
 
-            await WaitUntilAsync(() => applier.SuccessfulApplies.Length >= 1, TimeSpan.FromSeconds(8));
+            // ApplyAsync resolves before WriteLastKnownGood; wait for the LKG files, not only SuccessfulApplies.
+            await WaitUntilAsync(
+                () => applier.SuccessfulApplies.Length >= 1
+                      && ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var hash)
+                      && string.Equals(hash, expectedHash, StringComparison.Ordinal),
+                TimeSpan.FromSeconds(8));
             Assert.AreEqual(1, applier.SuccessfulApplies.Length);
             Assert.IsTrue(ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var lkgHash));
             Assert.AreEqual(expectedHash, lkgHash);
@@ -55,11 +60,16 @@ public class ManagerAgentChaosTests
                 await Task.Delay(40);
             }
 
-            await Task.Delay(900);
+            var finalExpected = harness.ConfigVersion.ToString();
+            await WaitUntilAsync(
+                () => applier.SuccessfulApplies.Length > appliesAtDown
+                      && ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var hash)
+                      && string.Equals(hash, finalExpected, StringComparison.Ordinal),
+                TimeSpan.FromSeconds(8));
             Assert.IsTrue(applier.SuccessfulApplies.Length < appliesAtDown + 6,
                 $"applies={applier.SuccessfulApplies.Length} after flap republishes");
             Assert.IsTrue(ManagerAgent.TryReadLastKnownGood(stateDir, out _, out var finalHash));
-            Assert.AreEqual(harness.ConfigVersion.ToString(), finalHash);
+            Assert.AreEqual(finalExpected, finalHash);
         }
         finally
         {
