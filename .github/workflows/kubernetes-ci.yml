@@ -182,11 +182,12 @@ jobs:
           user="$(docker image inspect titanium-manager:ci --format '{{.Config.User}}')"
           test "$user" = "1654:1654"
 
-          docker volume create mgr-ci-data >/dev/null
-          docker run -d --name mgr --read-only --tmpfs /tmp \
+          # Chiseled image has no chown; tmpfs with uid/gid lets non-root SQLite create manager.db.
+          docker run -d --name mgr --read-only \
+            --tmpfs /tmp \
+            --tmpfs /var/lib/titanium-manager:uid=1654,gid=1654,mode=0755 \
             --cap-drop ALL --security-opt no-new-privileges \
             -e TITANIUM_MANAGER_ADMIN_TOKEN=ci-token \
-            -v mgr-ci-data:/var/lib/titanium-manager \
             -p 7700:7700 titanium-manager:ci
 
           for i in $(seq 1 30); do
@@ -199,7 +200,6 @@ jobs:
           docker exec mgr titanium-manager healthcheck
           docker stop --time 30 mgr
           test "$(docker inspect mgr --format '{{.State.ExitCode}}')" = "0" || { docker logs mgr; exit 1; }
-          docker volume rm mgr-ci-data >/dev/null
 
       - name: Gateway image is non-root and serves controller health in kind
         shell: bash

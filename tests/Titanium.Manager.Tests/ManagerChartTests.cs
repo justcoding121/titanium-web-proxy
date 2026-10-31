@@ -88,9 +88,11 @@ public sealed class ManagerChartTests
             return;
         }
 
-        foreach (var values in new[] { "", "-f ci/smoke-values.yaml" })
+        foreach (var values in new string?[] { null, "ci/smoke-values.yaml" })
         {
-            var valuesArgs = values.Length == 0 ? string.Empty : $" {values}";
+            var valuesArgs = values is null
+                ? string.Empty
+                : $" -f \"{Path.Combine(ChartDir, values)}\"";
             var (lintExit, lintOut) = Run(helm, $"lint \"{ChartDir}\" --strict{valuesArgs}");
             Assert.AreEqual(0, lintExit, lintOut);
 

@@ -44,9 +44,14 @@ public class CliFleetRateLimitE2ETests
             return;
         }
 
+        // Unique route/policy names so shared CI Redis cannot carry a spent fleet bucket from other tests.
+        var prefix = RedisTestHelper.NewKeyPrefix().TrimEnd(':');
+        var policyName = "limit-" + prefix;
+        var routeId = "r-" + prefix;
+
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
-        var cfg = WriteFleetRateLimit(_tempDir, listen, origin.Port, RedisTestHelper.EndPoints);
+        var cfg = WriteFleetRateLimit(_tempDir, listen, origin.Port, RedisTestHelper.EndPoints, policyName, routeId);
 
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
@@ -64,7 +69,13 @@ public class CliFleetRateLimitE2ETests
         }
     }
 
-    private static string WriteFleetRateLimit(string dir, int listen, int origin, string redis)
+    private static string WriteFleetRateLimit(
+        string dir,
+        int listen,
+        int origin,
+        string redis,
+        string policyName,
+        string routeId)
     {
         var path = Path.Combine(dir, $"fleet-rl-{listen}.json");
         File.WriteAllText(path, $$"""
@@ -75,10 +86,10 @@ public class CliFleetRateLimitE2ETests
               ],
               "routes": [
                 {
-                  "id": "r1",
+                  "id": "{{routeId}}",
                   "clusterId": "c1",
                   "order": 1,
-                  "policies": [ "limit" ],
+                  "policies": [ "{{policyName}}" ],
                   "match": { "path": "/", "pathKind": "Prefix" }
                 }
               ],
@@ -93,7 +104,7 @@ public class CliFleetRateLimitE2ETests
               ],
               "policies": [
                 {
-                  "name": "limit",
+                  "name": "{{policyName}}",
                   "kind": "rateLimit",
                   "limit": 1,
                   "windowSeconds": 60,

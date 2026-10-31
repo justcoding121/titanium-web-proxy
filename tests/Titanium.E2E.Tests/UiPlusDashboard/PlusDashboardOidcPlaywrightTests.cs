@@ -40,6 +40,7 @@ public class PlusDashboardOidcPlaywrightTests : PageTest
             ClientSecret = FakeIdp.ClientSecret,
             CookieSecret = CookieKey,
             RedirectUri = idp.RegisteredRedirectUri,
+            AllowedEmails = ["operator@example.test"],
         });
 
         await Page.GotoAsync(_host.Prefix + "login");
