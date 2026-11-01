@@ -144,7 +144,16 @@ Every change a session makes (Drain, Healthy, Reload, Sign out) needs the CSRF t
 
 Every response carries `Content-Security-Policy: default-src 'self'` (no inline script or style), `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. Values from your config, such as a destination id, are HTML-encoded.
 
-Editing routes from the dashboard is not provided — change routes in the file, push a snapshot through the control plane, or publish through [titanium-manager](/docs/manager).
+### Editing routes and clusters
+
+With `plus.controlPlane.dashboardEditing: true` (and the CLI as host), an operator sees an **Edit configuration** panel at the top of the Routes view: one link per route and cluster, **Add route** and **Add cluster**, and the state of the saved overlay. Each link opens a JSON editor with the item as it runs now, in the same shape the config file and the snapshot PUT use.
+
+- **Validate** runs the same validator as a reload against the live configuration with your change applied, and changes nothing.
+- **Save** validates again, applies the change live under the same lock as reloads, and keeps it in the overlay file (`plus.controlPlane.overlayPath`) beside the config file. A rejected change shows the validator's messages and leaves the running config alone.
+- **Delete** removes the item the same way. An id cannot be changed; delete and add instead. **Add** refuses an id that already exists.
+- **Clear dashboard edits** deletes the overlay and returns to the file as written. A banner on the panel shows how many edits are layered over the file, and any overlay entry that no longer matches it.
+
+Editing is off by default, needs the operator role and the CSRF token, and every save, delete and clear is written to the [audit log](#audit-log). The viewer role never sees the panel. Listeners, certificates, plugins and `server.*` settings are not editable here; change those in the file.
 
 ## Control-plane and credential hardening
 

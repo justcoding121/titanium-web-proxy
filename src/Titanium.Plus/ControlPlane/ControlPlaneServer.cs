@@ -28,7 +28,7 @@ public sealed class ControlPlaneServer : IDisposable
 {
     public const string SharedSecretHeader = "X-Titanium-Control-Secret";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
