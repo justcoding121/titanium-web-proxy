@@ -20,6 +20,7 @@ public partial class ProxyServer
     /// <summary>Current <see cref="Resilience.OverloadLevel"/> as 0, 1, or 2.</summary>
     public int OverloadLevel => Volatile.Read(ref _overloadLevel);
 
+    /// <summary>Updates runtime overload shedding state from the CLI sampler.</summary>
     public void SetOverloadRuntime(
         bool enabled,
         int level,

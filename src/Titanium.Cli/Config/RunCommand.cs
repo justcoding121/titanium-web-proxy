@@ -1,11 +1,13 @@
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
 using Titanium.Cli.Admin;
 using Titanium.Cli.Compression;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Geo;
+using Titanium.Cli.Xds;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
 using Titanium.Web.Proxy;
@@ -208,6 +210,8 @@ internal static class RunCommand
         }
 
         // A udp listener is a datagram relay that never touches the HTTP server, so it is started on its own below.
+        var reusePort = loaded.Config.Server?.HotRestart?.Enabled == true;
+        var runningListeners = new Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>();
         var udpListeners = new List<ListenerConfig>();
         foreach (var listener in loaded.Config.Listeners)
         {
@@ -217,14 +221,18 @@ internal static class RunCommand
                 continue;
             }
 
-            AddListener(proxy, listener, () => pluginHost);
+            var endPoint = AddListener(proxy, listener, () => pluginHost, reusePort);
+            runningListeners[ListenerKey.From(listener)] = (CloneListener(listener), endPoint);
         }
 
         ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(proxy, loaded.Config.Server);
 
         if (loaded.Config.Listeners.Count == 0)
         {
-            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, false));
+            var fallback = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, false) { ReusePort = reusePort };
+            proxy.AddEndPoint(fallback);
+            var fallbackConfig = new ListenerConfig { Host = "127.0.0.1", Port = 8000 };
+            runningListeners[ListenerKey.From(fallbackConfig)] = (fallbackConfig, fallback);
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
@@ -306,7 +314,8 @@ internal static class RunCommand
                     getPlugins: () => pluginHost,
                     setPlugins: next => pluginHost = next,
                     scriptPipeline: scriptPipeline,
-                    stoppingToken: ct).ConfigureAwait(false);
+                    stoppingToken: ct,
+                    runningListeners: runningListeners).ConfigureAwait(false);
                 configHash = AdminHost.ComputeConfigHash(configPath);
                 AsyncConsole.WriteLine("Config reloaded.");
                 await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -372,6 +381,23 @@ internal static class RunCommand
         JsonAccessLogWriter? accessLog = null;
         MetricsHttpEndpoint? metricsEndpoint = null;
         var udpRelays = new List<UdpRelayListener>();
+        XdsHostHandle? xdsHost = null;
+        if (loaded.Config.Xds?.Server is not null)
+        {
+            loaded.Config.Server ??= new ServerConfig();
+            loaded.Config.Server.ReloadListeners = true;
+            var xdsStateDir = Path.Combine(managerStateDir, "xds");
+            Directory.CreateDirectory(xdsStateDir);
+            xdsHost = XdsHostHandle.TryStart(
+                loaded.Config.Xds,
+                loaded.Config,
+                xdsStateDir,
+                cfg => _ = ApplyXdsConfigAsync(
+                    cfg, proxy, clusterManager, routes, RefreshReverseProxy, runningListeners, () => pluginHost, stoppingToken),
+                stoppingToken);
+        }
+
+        OverloadProtectionHost? overloadHost = null;
         try
         {
             // The admin port opens before the proxy binds, so /healthz answers and /readyz says 503
@@ -382,6 +408,12 @@ internal static class RunCommand
                 metricsExposition,
                 () => AdminHost.BuildVersionInfo(configHash, plusActive));
             proxy.Start();
+            if (loaded.Config.Server?.Overload is { Enabled: true } overloadConfig)
+            {
+                overloadHost = new OverloadProtectionHost(proxy, overloadConfig);
+                overloadHost.Start();
+            }
+
             StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
             readiness.MarkListenersBound();
             StartAcmeIfConfigured(proxy, loaded.Config);
@@ -446,7 +478,16 @@ internal static class RunCommand
             adminServer?.Dispose();
             metricsEndpoint?.Dispose();
             accessLog?.Dispose();
+            if (overloadHost is not null)
+            {
+                await overloadHost.DisposeAsync().ConfigureAwait(false);
+            }
+
             pluginHost.Dispose();
+            if (xdsHost is not null)
+            {
+                await xdsHost.DisposeAsync();
+            }
         }
     }
 
@@ -522,7 +563,8 @@ internal static class RunCommand
         CancellationToken stoppingToken = default,
         ConfigOverlayStore? overlayStore = null,
         CliConfigEditor? configEditor = null,
-        SemaphoreSlim? configEditGate = null)
+        SemaphoreSlim? configEditGate = null,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>? runningListeners = null)
     {
         if (configEditGate is not null)
         {
@@ -553,6 +595,28 @@ internal static class RunCommand
         }
 
         WriteConfigWarnings(loaded);
+
+        var desiredHttpListeners = loaded.Config.Listeners.Where(l => !IsUdpListener(l)).ToList();
+        if (runningListeners is not null)
+        {
+            var runningConfigs = runningListeners.ToDictionary(static k => k.Key, static k => k.Value.Config);
+            if (loaded.Config.Server?.ReloadListeners == true)
+            {
+                var reusePort = loaded.Config.Server?.HotRestart?.Enabled == true;
+                await ListenerReconciler.ApplyAsync(
+                    proxy,
+                    desiredHttpListeners,
+                    runningListeners,
+                    listener => AddListener(proxy, listener, getPlugins, reusePort),
+                    ResolveDrainTimeoutSeconds(loaded.Config.Server),
+                    stoppingToken).ConfigureAwait(false);
+            }
+            else if (ListenerReconciler.DetectListenerChangeWithoutReload(runningConfigs, desiredHttpListeners))
+            {
+                AsyncConsole.WriteError(
+                    "Listener definitions changed but server.reloadListeners is false; restart the process to apply listener changes.");
+            }
+        }
 
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
@@ -672,6 +736,35 @@ internal static class RunCommand
         }, cancellationToken).ConfigureAwait(false);
         _ = proxy;
     }
+
+    private static async Task ApplyXdsConfigAsync(
+        TwpConfig config,
+        ProxyServer proxy,
+        ClusterManager clusterManager,
+        List<RouteConfig> routes,
+        Action refreshReverseProxy,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> runningListeners,
+        Func<PluginHost?> getPlugins,
+        CancellationToken cancellationToken)
+    {
+        config.Server ??= new ServerConfig();
+        config.Server.ReloadListeners = true;
+        var reusePort = config.Server.HotRestart?.Enabled == true;
+        var desiredHttpListeners = config.Listeners.Where(l => !IsUdpListener(l)).ToList();
+        await ListenerReconciler.ApplyAsync(
+            proxy,
+            desiredHttpListeners,
+            runningListeners,
+            listener => AddListener(proxy, listener, getPlugins, reusePort),
+            ResolveDrainTimeoutSeconds(config.Server),
+            cancellationToken).ConfigureAwait(false);
+        await ApplyRoutesClustersLiveAsync(
+            config, proxy, clusterManager, routes, refreshReverseProxy, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static ListenerConfig CloneListener(ListenerConfig listener) =>
+        JsonSerializer.Deserialize<ListenerConfig>(ListenerReconciler.CanonicalJson(listener))
+        ?? new ListenerConfig { Host = listener.Host, Port = listener.Port, Type = listener.Type };
 
     private static string ResolveOverlayPath(TwpConfig config, string? configDir)
     {
@@ -1396,7 +1489,11 @@ internal static class RunCommand
         return options;
     }
 
-    private static void AddListener(ProxyServer proxy, ListenerConfig listener, Func<PluginHost?>? currentPlugins = null)
+    private static ProxyEndPoint AddListener(
+        ProxyServer proxy,
+        ListenerConfig listener,
+        Func<PluginHost?>? currentPlugins = null,
+        bool reusePort = false)
     {
         var host = listener.Host ?? DefaultBindHost;
         var ip = host is DefaultBindHost or "*"
@@ -1414,6 +1511,7 @@ internal static class RunCommand
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
 
+        endPoint.ReusePort = reusePort;
         ApplyListenerOverrides(endPoint, listener);
         ApplyStreamFilters(endPoint, listener, currentPlugins);
         proxy.AddEndPoint(endPoint);
@@ -1428,6 +1526,8 @@ internal static class RunCommand
         {
             AsyncConsole.WriteLine($"Listener {host}:{listener.Port} {kind} decryptSsl={listener.DecryptSsl}");
         }
+
+        return endPoint;
     }
 
     private static string ResolveListenerKind(ListenerConfig listener)

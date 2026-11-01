@@ -43,6 +43,9 @@ public sealed class TwpConfig
 
     /// <summary>Optional <c>ProxyServer</c> knobs (profile, timeouts, TLS, limits, upstream, …).</summary>
     public ServerConfig? Server { get; set; }
+
+    /// <summary>Optional Envoy xDS ADS client. When set, the CLI loads <c>Titanium.Xds</c> lazily.</summary>
+    public XdsConfig? Xds { get; set; }
 }
 
 /// <summary>Built-in async console/file logging options for CLI <c>ProxyServer</c>.</summary>

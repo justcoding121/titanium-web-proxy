@@ -1,0 +1,66 @@
+using Envoy.Config.Core.V3;
+using Envoy.Config.Endpoint.V3;
+using Titanium.Web.Proxy.Abstractions.Clusters;
+
+namespace Titanium.Xds.Translation;
+
+public static class EndpointTranslator
+{
+    public static TranslationResult<IReadOnlyList<DestinationConfig>> Translate(ClusterLoadAssignment assignment)
+    {
+        if (string.IsNullOrWhiteSpace(assignment.ClusterName))
+        {
+            return TranslationResult<IReadOnlyList<DestinationConfig>>.Fail(new TranslationError
+            {
+                ResourceName = "(unnamed)",
+                FieldPath = "cluster_name",
+                Message = "cluster_name is required",
+            });
+        }
+
+        var destinations = new List<DestinationConfig>();
+        var index = 0;
+        foreach (var localityEndpoints in assignment.Endpoints)
+        {
+            var zone = localityEndpoints.Locality?.Zone;
+            var priority = localityEndpoints.Priority;
+            foreach (var lb in localityEndpoints.LbEndpoints)
+            {
+                var socket = lb.Endpoint?.Address?.SocketAddress;
+                if (socket is null || string.IsNullOrWhiteSpace(socket.Address))
+                {
+                    return TranslationResult<IReadOnlyList<DestinationConfig>>.Fail(new TranslationError
+                    {
+                        ResourceName = assignment.ClusterName,
+                        FieldPath = $"endpoints[{index}].endpoint.address",
+                        Message = "socket address is required",
+                    });
+                }
+
+                if (socket.PortValue == 0)
+                {
+                    return TranslationResult<IReadOnlyList<DestinationConfig>>.Fail(new TranslationError
+                    {
+                        ResourceName = assignment.ClusterName,
+                        FieldPath = $"endpoints[{index}].endpoint.address.port_value",
+                        Message = "port is required",
+                    });
+                }
+
+                var weight = lb.LoadBalancingWeight == 0 ? 1 : lb.LoadBalancingWeight;
+                destinations.Add(new DestinationConfig
+                {
+                    Id = $"{assignment.ClusterName}-{index}",
+                    Address = socket.Address,
+                    Port = (int)socket.PortValue,
+                    Priority = (int)priority,
+                    Zone = string.IsNullOrWhiteSpace(zone) ? null : zone,
+                    Weight = (int)weight,
+                });
+                index++;
+            }
+        }
+
+        return TranslationResult<IReadOnlyList<DestinationConfig>>.Ok(destinations);
+    }
+}

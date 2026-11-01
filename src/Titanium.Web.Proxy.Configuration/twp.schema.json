@@ -819,6 +819,16 @@
             "dashboardPort": {
               "type": "integer"
             },
+            "dashboardEditing": {
+              "type": "boolean"
+            },
+            "overlayPath": {
+              "type": "string"
+            },
+            "snapshotValidation": {
+              "type": "string",
+              "enum": ["Off", "Warn", "Enforce", "off", "warn", "enforce"]
+            },
             "dashboardUsersFile": {
               "type": "string"
             },
@@ -2070,7 +2080,101 @@
         },
         "viaHeaderPseudonym": {
           "type": "string"
+        },
+        "reloadListeners": {
+          "type": "boolean"
+        },
+        "overload": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "intervalMs": { "type": "integer" },
+            "heapPercent": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "elevated": { "type": "integer" },
+                "critical": { "type": "integer" }
+              }
+            },
+            "threadPoolQueue": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "elevated": { "type": "integer" },
+                "critical": { "type": "integer" }
+              }
+            },
+            "activeConnections": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "elevated": { "type": "integer" },
+                "critical": { "type": "integer" }
+              }
+            },
+            "actions": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "disableKeepAlive": { "type": "boolean" },
+                "stopAccepting": { "type": "boolean" },
+                "rejectNewRequests": { "type": "boolean" },
+                "readyzFailsOnCritical": { "type": "boolean" }
+              }
+            },
+            "retryAfterSeconds": { "type": "integer" }
+          }
+        },
+        "hotRestart": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "pidFile": { "type": "string" },
+            "handoverTimeoutSeconds": { "type": "integer" }
+          }
         }
+      }
+    },
+    "xds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "caPath": { "type": "string" },
+            "clientCertPath": { "type": "string" },
+            "clientKeyPath": { "type": "string" }
+          }
+        },
+        "node": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string" },
+            "cluster": { "type": "string" },
+            "locality": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "zone": { "type": "string" }
+              }
+            }
+          }
+        },
+        "resourceTypes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "initialFetchTimeoutSeconds": { "type": "integer" },
+        "failOpen": { "type": "boolean" }
       }
     },
     "staticFiles": {

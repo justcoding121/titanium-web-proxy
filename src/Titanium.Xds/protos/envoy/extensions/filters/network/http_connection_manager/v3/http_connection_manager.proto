@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package envoy.extensions.filters.network.http_connection_manager.v3;
+
+message HttpConnectionManager {
+  oneof route_specifier {
+    string route_config_name = 2;
+    Rds rds = 3;
+  }
+}
+
+message Rds {
+  string route_config_name = 1;
+}

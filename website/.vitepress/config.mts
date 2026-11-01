@@ -58,6 +58,7 @@ export default defineConfig({
             { text: 'Library (embed)', link: '/docs/library' },
             { text: 'Plus', link: '/docs/plus' },
             { text: 'Manager', link: '/docs/manager' },
+            { text: 'xDS (ADS client)', link: '/docs/xds' },
             { text: 'Inspector', link: '/docs/inspector' },
           ],
         },

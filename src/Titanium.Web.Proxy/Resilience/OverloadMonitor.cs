@@ -12,7 +12,7 @@ public enum OverloadLevel
 }
 
 /// <summary>One sampled signal for overload protection.</summary>
-public interface IPressureSignal
+internal interface IPressureSignal
 {
     string Name { get; }
 

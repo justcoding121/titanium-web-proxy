@@ -158,6 +158,12 @@ public sealed class ServerConfig
 
     /// <summary>Linux TCP hot restart with <c>SO_REUSEPORT</c>. Off unless enabled.</summary>
     public HotRestartConfig? HotRestart { get; set; }
+
+    /// <summary>
+    ///     When true, file reload reconciles listeners through <c>AddEndPoint</c>/<c>RemoveEndPoint</c>.
+    ///     Default false keeps today's restart-required behavior. xDS forces this on.
+    /// </summary>
+    public bool? ReloadListeners { get; set; }
 }
 
 /// <summary>Overload protection under <c>server.overload</c>.</summary>

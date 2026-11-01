@@ -746,11 +746,31 @@ server:
     rootCertificateIssuerName: null
     saveFakeCertificates: true
     disableWildCardCertificates: false
+  overload:                    # opt-in pressure shedding (see below)
+    enabled: false
+    intervalMs: 500
+    heapPercent: { elevated: 85, critical: 95 }
+    threadPoolQueue: { elevated: 1000, critical: 10000 }
+    actions:
+      disableKeepAlive: true
+      stopAccepting: true
+      rejectNewRequests: true
+      readyzFailsOnCritical: true
+    retryAfterSeconds: 1
+  hotRestart:                  # Linux TCP SO_REUSEPORT; full handover is partial
+    enabled: false
+    pidFile: null
+    handoverTimeoutSeconds: 30
+  reloadListeners: false       # true reconciles listeners on reload; xDS forces on
 ```
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
 HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+
+### Overload protection
+
+`server.overload` is off unless `enabled: true`. A background sampler (not the request hot path) reads heap percent, thread-pool queue depth, and active connections, then advances a hysteresis state machine (`Normal` → `Elevated` → `Critical`). At elevated levels the proxy can close HTTP/1 keep-alives; at critical it can stop accepting and answer new requests with `503` plus `Retry-After`. `/healthz` stays up; `/readyz` can fail when `actions.readyzFailsOnCritical` is true. Leave it off unless you need process-local shedding.
 
 ### Listener TLS policy (`server.tls`)
 

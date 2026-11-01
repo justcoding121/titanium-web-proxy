@@ -9,5 +9,7 @@
     <MaxMindDbVersion>5.2.0</MaxMindDbVersion>
     <ZstdSharpPortVersion>0.8.5</ZstdSharpPortVersion>
     <DnsClientVersion>1.8.0</DnsClientVersion>
+    <GrpcVersion>2.67.0</GrpcVersion>
+    <GoogleProtobufVersion>3.31.1</GoogleProtobufVersion>
   </PropertyGroup>
 </Project>

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package envoy.config.cluster.v3;
+
+import "google/protobuf/duration.proto";
+enum ClusterDiscoveryType {
+  STATIC = 0;
+  STRICT_DNS = 1;
+  LOGICAL_DNS = 2;
+  EDS = 3;
+}
+
+enum LbPolicy {
+  ROUND_ROBIN = 0;
+  LEAST_REQUEST = 1;
+  RANDOM = 2;
+  RING_HASH = 3;
+}
+
+message Cluster {
+  string name = 1;
+  ClusterDiscoveryType type = 2;
+  LbPolicy lb_policy = 16;
+  google.protobuf.Duration connect_timeout = 6;
+  EdsClusterConfig eds_cluster_config = 33;
+}
+
+message EdsClusterConfig {
+  string service_name = 1;
+}

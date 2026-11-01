@@ -31,11 +31,7 @@ public class CapabilityCoverageTests
         "h2c Upgrade",
         "Decrypting QUIC inside CONNECT-UDP",
         "0-RTT",
-        "TLSRoute",
-        "xDS",
         "OpenResty",
-        "route editing",
-        "Hot binary upgrade",
     ];
 
     private static string DataPath => Path.Combine(DocsRepository.WebsiteDocs, ".capabilities.yml");

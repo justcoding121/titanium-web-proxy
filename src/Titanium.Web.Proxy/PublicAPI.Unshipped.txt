@@ -541,3 +541,34 @@ Titanium.Web.Proxy.Plugins.PluginHost.Plugins.get -> System.Collections.Generic.
 Titanium.Web.Proxy.Plugins.PluginHost.Retire() -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Scripting.IStreamScriptFilter!>?
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort.get -> bool
+Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort.set -> void
+Titanium.Web.Proxy.Resilience.OverloadLevel
+Titanium.Web.Proxy.Resilience.OverloadLevel.Normal = 0 -> Titanium.Web.Proxy.Resilience.OverloadLevel
+Titanium.Web.Proxy.Resilience.OverloadLevel.Elevated = 1 -> Titanium.Web.Proxy.Resilience.OverloadLevel
+Titanium.Web.Proxy.Resilience.OverloadLevel.Critical = 2 -> Titanium.Web.Proxy.Resilience.OverloadLevel
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.OverloadSignalThresholds() -> void
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt.get -> double
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt.init -> void
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt.get -> double
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt.init -> void
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell.get -> System.TimeSpan
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell.init -> void
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction.get -> double
+Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction.init -> void
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.OverloadMonitorConfig() -> void
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent.get -> Titanium.Web.Proxy.Resilience.OverloadSignalThresholds!
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent.init -> void
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue.get -> Titanium.Web.Proxy.Resilience.OverloadSignalThresholds!
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue.init -> void
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections.get -> Titanium.Web.Proxy.Resilience.OverloadSignalThresholds!
+Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections.init -> void
+Titanium.Web.Proxy.Resilience.OverloadMonitor
+Titanium.Web.Proxy.Resilience.OverloadMonitor.OverloadMonitor(Titanium.Web.Proxy.Resilience.OverloadMonitorConfig! config) -> void
+Titanium.Web.Proxy.Resilience.OverloadMonitor.Level.get -> Titanium.Web.Proxy.Resilience.OverloadLevel
+Titanium.Web.Proxy.Resilience.OverloadMonitor.Next(System.Collections.Generic.IReadOnlyDictionary<string!, double?>! readings, System.DateTimeOffset now) -> Titanium.Web.Proxy.Resilience.OverloadLevel
+Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled.get -> bool
+Titanium.Web.Proxy.ProxyServer.OverloadLevel.get -> int
+Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(bool enabled, int level, bool stopAccepting, bool disableKeepAlive, bool rejectNewRequests, int retryAfterSeconds) -> void
