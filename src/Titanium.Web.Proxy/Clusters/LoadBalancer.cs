@@ -56,7 +56,11 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
 
         if (!string.IsNullOrEmpty(context.AffinityKey))
         {
-            var affinityPool = Collect(cluster, snapshot, passive, applyZoneFilter: false);
+            // A pinned client may stay on a destination outside the local zone. Only a zone-aware cluster needs the
+            // unfiltered pool; every other cluster reuses the list it already built (no second walk, no allocation).
+            var affinityPool = ClusterRuntime.Find(snapshot, cluster.Id)?.ZoneAwareActive == true
+                ? Collect(cluster, snapshot, passive, applyZoneFilter: false)
+                : eligible;
             var affinityMatch = affinityPool.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
             if (affinityMatch is not null)
             {
@@ -296,7 +300,8 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             }
         }
 
-        var keepLocal = localEligible >= runtime.MinLocalEndpoints &&
+        // Never filter down to an empty pool: with no eligible local destination every zone is used.
+        var keepLocal = localEligible > 0 && localEligible >= runtime.MinLocalEndpoints &&
                         localEligible * 100 >= localTotal * runtime.MinLocalHealthyPercent;
         ProxyMetrics.RecordZoneSelection(keepLocal ? "local" : "spill");
         if (keepLocal)

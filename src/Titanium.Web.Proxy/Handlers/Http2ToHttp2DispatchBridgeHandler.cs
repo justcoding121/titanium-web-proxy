@@ -379,7 +379,9 @@ public partial class ProxyServer
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
                 await OnBeforeResponse(sessionArgs, mayCompress: true);
 
-            await ApplyH2ToH2DispatchResponseCompressionAsync(sessionArgs, exchange);
+            // Compression is off by default: skip the async state machine entirely on the common path.
+            if (CompressionPolicy is not null)
+                await ApplyH2ToH2DispatchResponseCompressionAsync(sessionArgs, exchange);
 
             await PrepareHttp2DispatchResponseForEmitAsync(sessionArgs, clientHttpVersion, exchange);
 

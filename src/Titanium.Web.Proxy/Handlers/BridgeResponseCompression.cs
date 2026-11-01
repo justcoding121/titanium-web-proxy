@@ -129,11 +129,13 @@ public partial class ProxyServer
     /// <summary>
     ///     HTTP/3 client path: buffered or streaming compression after <c>BeforeResponse</c>, before QPACK encode.
     /// </summary>
-    internal async Task ApplyHttp3ClientResponseCompressionAsync(SessionEventArgs args)
-    {
-        if (CompressionPolicy is null || args.IsFastPath)
-            return;
+    internal Task ApplyHttp3ClientResponseCompressionAsync(SessionEventArgs args) =>
+        CompressionPolicy is null || args.IsFastPath
+            ? Task.CompletedTask
+            : ApplyHttp3ClientResponseCompressionCoreAsync(args);
 
+    private async Task ApplyHttp3ClientResponseCompressionCoreAsync(SessionEventArgs args)
+    {
         var shape = new BridgeCompressionShape(OriginIsHttp1(args), ClientIsHttp2: false, ClientIsHttp3: true);
         var response = args.HttpClient.Response;
         if (response.Locked || response.Http3RawBodyDrain != null)

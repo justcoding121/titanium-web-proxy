@@ -88,6 +88,43 @@ public class LoadBalancerZoneAwareTests
         Assert.AreEqual("remote", pinned?.Id);
     }
 
+    [TestMethod]
+    public async Task AffinityOnClusterWithoutZoneAware_PinsAndFallsBack()
+    {
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            Algorithm = LoadBalanceAlgorithm.RoundRobin,
+            SessionAffinity = new SessionAffinityConfig { HeaderName = "X-Affinity" },
+            Destinations =
+            [
+                DestWithAffinity("a", "zone-a", "pin-a"),
+                DestWithAffinity("b", "zone-b", "pin-b"),
+            ],
+        };
+        var (_, snapshot) = await SetupAsync("zone-a", cluster);
+        var balancer = new LoadBalancer();
+        Assert.AreEqual("b", balancer.Select(cluster, snapshot, new LoadBalanceContext("pin-b"))?.Id);
+        Assert.IsNotNull(balancer.Select(cluster, snapshot, new LoadBalanceContext("unknown-pin")));
+    }
+
+    [TestMethod]
+    public async Task NoEligibleLocalDestination_FallsBackToAllZonesEvenWithZeroThresholds()
+    {
+        var cluster = new ClusterConfig
+        {
+            Id = "c",
+            Algorithm = LoadBalanceAlgorithm.RoundRobin,
+            ZoneAware = new ZoneAwareConfig { MinLocalHealthyPercent = 0, MinLocalEndpoints = 0 },
+            Destinations = [Dest("local-a", "zone-a"), Dest("remote", "zone-b")],
+        };
+        var manager = new ClusterManager { LocalZone = "zone-a" };
+        await manager.ApplyAsync([cluster]);
+        manager.SetDestinationState("local-a", DestinationState.Unhealthy);
+        var pick = new LoadBalancer().Select(cluster, manager.Snapshot);
+        Assert.AreEqual("remote", pick?.Id);
+    }
+
     private static DestinationConfig DestWithAffinity(string id, string zone, string affinityKey) => new()
     {
         Id = id,
