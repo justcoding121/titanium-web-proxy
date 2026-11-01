@@ -15,21 +15,29 @@ public class ContentCodecsTests
     public void Register_FakeCodec_RoundTripsThroughFactories()
     {
         ContentCodecs.Register(new ReverseCodec());
-        Assert.IsTrue(HttpCompressionNames.TryParse("zstd", out var kind));
-        Assert.AreEqual(HttpCompression.Zstd, kind);
-
-        var plain = Encoding.UTF8.GetBytes("hello bridge codec");
-        using var compressed = new MemoryStream();
-        using (var encoder = CompressionFactory.Create(kind, compressed, CompressionLevel.Fastest, leaveOpen: true))
+        try
         {
-            encoder.Write(plain, 0, plain.Length);
-        }
+            Assert.IsTrue(HttpCompressionNames.TryParse("zstd", out var kind));
+            Assert.AreEqual(HttpCompression.Zstd, kind);
 
-        compressed.Position = 0;
-        using var decoder = DecompressionFactory.Create(kind, compressed, leaveOpen: true);
-        using var output = new MemoryStream();
-        decoder.CopyTo(output);
-        CollectionAssert.AreEqual(plain, output.ToArray());
+            var plain = Encoding.UTF8.GetBytes("hello bridge codec");
+            using var compressed = new MemoryStream();
+            using (var encoder = CompressionFactory.Create(kind, compressed, CompressionLevel.Fastest, leaveOpen: true))
+            {
+                encoder.Write(plain, 0, plain.Length);
+            }
+
+            compressed.Position = 0;
+            using var decoder = DecompressionFactory.Create(kind, compressed, leaveOpen: true);
+            using var output = new MemoryStream();
+            decoder.CopyTo(output);
+            CollectionAssert.AreEqual(plain, output.ToArray());
+        }
+        finally
+        {
+            // The registry is process-wide: leaving the fake registered changes what other tests see for "zstd".
+            ContentCodecs.Unregister("zstd");
+        }
     }
 
     private sealed class ReverseCodec : IContentCodec

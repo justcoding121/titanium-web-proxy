@@ -303,7 +303,7 @@ public class ConfigReloadTests
             Interlocked.Increment(ref reloads);
             return Task.CompletedTask;
         };
-        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, null])!;
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, null, null])!;
         await Task.Delay(300);
         cts.Cancel();
         await waitTask;
@@ -328,7 +328,7 @@ public class ConfigReloadTests
             Interlocked.Increment(ref reloads);
             return Task.CompletedTask;
         };
-        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, loadedHash])!;
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, loadedHash, null])!;
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (Volatile.Read(ref reloads) == 0 && DateTime.UtcNow < deadline)
         {
@@ -355,7 +355,7 @@ public class ConfigReloadTests
             Interlocked.Increment(ref reloads);
             return Task.CompletedTask;
         };
-        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, AdminHost.ComputeConfigHash(path)])!;
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, AdminHost.ComputeConfigHash(path), null])!;
         await Task.Delay(500);
         cts.Cancel();
         await waitTask;

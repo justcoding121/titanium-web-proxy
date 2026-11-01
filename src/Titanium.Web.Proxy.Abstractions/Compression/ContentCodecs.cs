@@ -21,6 +21,10 @@ public static class ContentCodecs
         Codecs[codec.Name.Trim()] = codec;
     }
 
+    /// <summary>Removes the codec registered under <paramref name="name" />. Returns false when there was none.</summary>
+    public static bool Unregister(string name) =>
+        !string.IsNullOrWhiteSpace(name) && Codecs.TryRemove(name.Trim(), out _);
+
     /// <summary>True when a codec is registered for <paramref name="name" />.</summary>
     public static bool IsRegistered(string name) =>
         !string.IsNullOrWhiteSpace(name) && Codecs.ContainsKey(name.Trim());

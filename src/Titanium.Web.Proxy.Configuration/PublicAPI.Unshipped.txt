@@ -774,9 +774,9 @@ Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
 Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode.Off = 0 -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
 Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode.Warn = 1 -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
 Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode.Enforce = 2 -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
-Titanium.Web.Proxy.Configuration.Models.PlusConfig.SnapshotValidation.get -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode?
-Titanium.Web.Proxy.Configuration.Models.PlusConfig.SnapshotValidation.set -> void
-Titanium.Web.Proxy.Configuration.Models.PlusConfig.DashboardEditing.get -> bool?
-Titanium.Web.Proxy.Configuration.Models.PlusConfig.DashboardEditing.set -> void
-Titanium.Web.Proxy.Configuration.Models.PlusConfig.OverlayPath.get -> string?
-Titanium.Web.Proxy.Configuration.Models.PlusConfig.OverlayPath.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardEditing.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardEditing.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.OverlayPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.OverlayPath.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SnapshotValidation.get -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SnapshotValidation.set -> void
