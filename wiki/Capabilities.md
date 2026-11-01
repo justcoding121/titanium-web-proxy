@@ -23,7 +23,7 @@
 | Weights, priority, backup destinations, and slow start | supported | `clusters[].destinations[].weight`, `clusters[].destinations[].priority`, `clusters[].destinations[].backup`, `clusters[].slowStartSeconds` | Slow start ramps a new destination from 10 percent of its weight. | [Configuration](https://titaniumproxy.com/docs/configuration#routes-clusters) |
 | Session affinity by cookie, header, or hash | supported | `clusters[].sessionAffinity`, `clusters[].hashKey` | An opaque affinity cookie, a sticky header, or consistent hashing on a chosen key. | [Configuration](https://titaniumproxy.com/docs/configuration#routes-clusters) |
 | Concurrency caps and a wait queue | supported | `clusters[].destinations[].maxConcurrentRequests`, `clusters[].queue` | The queue waits briefly when every destination is at its cap. | [Configuration](https://titaniumproxy.com/docs/configuration#routes-clusters) |
-| Service discovery | partial | `plus.options: discovery.*` | Plus watches a file, polls DNS, and queries Consul or Kubernetes EndpointSlices. Consul and Kubernetes discovery are best-effort. | [Plus](https://titaniumproxy.com/docs/plus#discovery-consul-and-kubernetes) |
+| Service discovery | partial | `plus.options: discovery.*` | Plus watches a file, polls DNS (A/AAAA or SRV), and queries Consul or Kubernetes EndpointSlices. Consul and Kubernetes discovery are best-effort. | [Plus](https://titaniumproxy.com/docs/plus#discovery-consul-and-kubernetes) |
 
 ## Health checks
 

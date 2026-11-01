@@ -25,7 +25,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 | Weights, priority, backup destinations, and slow start | supported | `clusters[].destinations[].weight`, `clusters[].destinations[].priority`, `clusters[].destinations[].backup`, `clusters[].slowStartSeconds` | Slow start ramps a new destination from 10 percent of its weight. | [Configuration](/docs/configuration#routes-clusters) |
 | Session affinity by cookie, header, or hash | supported | `clusters[].sessionAffinity`, `clusters[].hashKey` | An opaque affinity cookie, a sticky header, or consistent hashing on a chosen key. | [Configuration](/docs/configuration#routes-clusters) |
 | Concurrency caps and a wait queue | supported | `clusters[].destinations[].maxConcurrentRequests`, `clusters[].queue` | The queue waits briefly when every destination is at its cap. | [Configuration](/docs/configuration#routes-clusters) |
-| Service discovery | partial | `plus.options: discovery.*` | Plus watches a file, polls DNS, and queries Consul or Kubernetes EndpointSlices. Consul and Kubernetes discovery are best-effort. | [Plus](/docs/plus#discovery-consul-and-kubernetes) |
+| Service discovery | partial | `plus.options: discovery.*` | Plus watches a file, polls DNS (A/AAAA or SRV), and queries Consul or Kubernetes EndpointSlices. Consul and Kubernetes discovery are best-effort. | [Plus](/docs/plus#discovery-consul-and-kubernetes) |
 
 ## Health checks
 
@@ -103,7 +103,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 
 | Capability | Status | Config key | Notes | Docs |
 |------------|--------|------------|-------|------|
-| Response compression (gzip, brotli) | partial | `server.responseCompression`, `routes[].compression` | Buffered or streaming. Runs on HTTP/1.1 and the HTTP/2-to-HTTP/1.1 bridge only, not on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2. | [Response compression](/docs/configuration#response-compression-server-responsecompression) |
+| Response compression (gzip, brotli, optional zstd) | partial | `server.responseCompression`, `routes[].compression` | Buffered or streaming on HTTP/1.1 clients, HTTP/2 clients, and HTTP/3 clients across H1/H2/H3 origin bridges when interception is on. Optional `zstd` is registered by the CLI when listed in `algorithms`. Fast-path passthrough stays identity. | [Response compression](/docs/configuration#response-compression-server-responsecompression) |
 | Request decompression with size and ratio limits | supported | `server.requestDecompression` | gzip and brotli request bodies on HTTP/1.x, with a decompressed-size cap and a zip-bomb ratio limit. | [Request decompression](/docs/configuration#request-decompression-server-requestdecompression) |
 
 ## WAF

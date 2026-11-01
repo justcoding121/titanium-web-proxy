@@ -337,9 +337,29 @@ public static class TwpConfigValidator
             ValidateHttpClient(cluster.Id, cluster.HttpClient, errors);
             ValidateRetry($"clusters.{cluster.Id}.retry", cluster.Retry, errors);
             ValidateClusterProxyProtocol(cluster, errors);
+            ValidateActiveHealth(cluster, errors);
         }
 
         return clusterIds;
+    }
+
+    private static void ValidateActiveHealth(ClusterConfig cluster, List<string> errors)
+    {
+        var active = cluster.HealthCheck?.Active;
+        if (active is not { Enabled: true })
+        {
+            return;
+        }
+
+        if (active.Kind == ActiveHealthKind.Grpc)
+        {
+            return;
+        }
+
+        if (active.Kind is not (ActiveHealthKind.Http or ActiveHealthKind.Tcp))
+        {
+            errors.Add($"Cluster '{cluster.Id}' healthCheck.active.kind '{active.Kind}' is not http, tcp, or grpc.");
+        }
     }
 
     private static void ValidateClusterProxyProtocol(ClusterConfig cluster, List<string> errors)
@@ -2703,6 +2723,7 @@ public static class TwpConfigValidator
         var warnings = new List<string>();
         CollectTlsWarnings(config.Server?.Tls, isWindows, warnings);
         CollectClusterProxyProtocolWarnings(config, warnings);
+        CollectActiveHealthWarnings(config, warnings);
         if (config.Plus is { Enabled: true, ControlPlane: { AllowInsecureNonLoopback: true, Tls: null } insecure } &&
             !IsLoopbackControlPlaneHost(insecure.Host))
         {
@@ -2721,8 +2742,8 @@ public static class TwpConfigValidator
         if (config.Server?.ResponseCompression is { Enabled: true })
         {
             warnings.Add(
-                "server.responseCompression compresses HTTP/1.1 and HTTP/2-to-HTTP/1.1 responses only. " +
-                "It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths.");
+                "server.responseCompression can compress buffered or streaming responses on HTTP/1.1, HTTP/2, and HTTP/3 " +
+                "clients across H1/H2/H3 origin bridges when interception is on. Fast-path passthrough stays identity.");
         }
 
         if (config.Server?.RequestDecompression is { Enabled: true })
@@ -2774,6 +2795,33 @@ public static class TwpConfigValidator
         }
 
         return warnings;
+    }
+
+    private static void CollectActiveHealthWarnings(TwpConfig config, List<string> warnings)
+    {
+        foreach (var cluster in config.Clusters ?? [])
+        {
+            var active = cluster.HealthCheck?.Active;
+            if (active is not { Enabled: true, Kind: ActiveHealthKind.Grpc })
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(active.Path) && active.Path != "/")
+            {
+                warnings.Add($"Cluster '{cluster.Id}' healthCheck.active.path is ignored when kind is grpc.");
+            }
+
+            if (!string.IsNullOrEmpty(active.Query))
+            {
+                warnings.Add($"Cluster '{cluster.Id}' healthCheck.active.query is ignored when kind is grpc.");
+            }
+
+            if (active.ExpectedStatus is { Count: > 0 })
+            {
+                warnings.Add($"Cluster '{cluster.Id}' healthCheck.active.expectedStatus is ignored when kind is grpc.");
+            }
+        }
     }
 
     private static void CollectClusterProxyProtocolWarnings(TwpConfig config, List<string> warnings)

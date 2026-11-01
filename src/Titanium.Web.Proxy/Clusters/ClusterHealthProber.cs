@@ -265,6 +265,17 @@ internal sealed class ClusterHealthProber : IDisposable
             }
 
             var scheme = dest.UseHttps ? "https" : "http";
+            if (active.Kind == ActiveHealthKind.Grpc)
+            {
+                var uri = new Uri($"{scheme}://{UrlHost(dest.Address)}:{port}{GrpcHealthProbe.CheckPath}");
+                return await GrpcHealthProbe.ProbeAsync(
+                    _tlsHttp ?? SharedHttp,
+                    uri,
+                    active.GrpcService,
+                    dest.UseHttps && _tlsServerName is not null ? _tlsServerName : null,
+                    timeout.Token).ConfigureAwait(false);
+            }
+
             var path = string.IsNullOrEmpty(active.Path) ? "/" : active.Path;
             using var request = new HttpRequestMessage(HttpMethod.Get,
                 $"{scheme}://{UrlHost(dest.Address)}:{port}{path}{ProbeQuery(active.Query)}");

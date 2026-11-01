@@ -352,6 +352,9 @@ Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.UnhealthyThreshold.i
 Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
 Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Http = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
 Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Tcp = 1 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Grpc = 2 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.GrpcService.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.GrpcService.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Queue.get -> Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Queue.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Retry.get -> Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig?

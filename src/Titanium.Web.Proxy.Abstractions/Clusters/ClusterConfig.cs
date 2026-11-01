@@ -232,6 +232,7 @@ public enum ActiveHealthKind
 {
     Http = 0,
     Tcp = 1,
+    Grpc = 2,
 }
 
 /// <summary>Active probe policy. Disabled unless <see cref="Enabled"/> is true.</summary>
@@ -243,6 +244,8 @@ public sealed class ActiveHealthConfig
     public int TimeoutSeconds { get; init; } = 5;
     public ActiveHealthKind Kind { get; init; } = ActiveHealthKind.Http;
     public string Path { get; init; } = "/";
+    /// <summary>grpc.health.v1 service name. Empty checks the whole server (grpc probes only).</summary>
+    public string? GrpcService { get; init; }
     public string? Query { get; init; }
     public IReadOnlyList<int>? ExpectedStatus { get; init; }
     public int HealthyThreshold { get; init; } = 2;
