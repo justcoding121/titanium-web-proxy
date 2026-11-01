@@ -1,6 +1,4 @@
-using System.Net;
 using System.Text.Json;
-using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 
@@ -74,71 +72,87 @@ internal static class ListenerReconciler
         return plan.Any(p => p.Action is not ListenerPlanAction.Keep);
     }
 
-    internal static async Task ApplyAsync(
-        ProxyServer proxy,
+    /// <summary>
+    ///     Applies the plan make-before-break: new listeners bind first, changed listeners are replaced (old endpoint
+    ///     down, new one up), and listeners that are gone are removed last. If any bind fails, everything done in this
+    ///     pass is undone: new endpoints are removed and replaced listeners are restored from their previous config,
+    ///     so a failed reload never leaves the proxy with fewer listeners than it started with.
+    /// </summary>
+    internal static void Apply(
         IReadOnlyList<ListenerConfig> desired,
         Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> running,
-        Action<ListenerConfig> addListener,
-        int drainTimeoutSeconds,
-        CancellationToken cancellationToken)
+        Func<ListenerConfig, ProxyEndPoint> addListener,
+        Action<ProxyEndPoint> removeEndpoint)
     {
         var plan = Plan(running.ToDictionary(k => k.Key, k => k.Value.Config), desired);
         var added = new List<(ListenerKey Key, ProxyEndPoint Endpoint)>();
+        var replaced = new List<(ListenerKey Key, ListenerConfig Config)>();
         try
         {
-            // Removals and replaces tear down first so the same host:port can be rebound.
-            foreach (var entry in plan.Where(p => p.Action is ListenerPlanAction.Remove or ListenerPlanAction.Replace))
+            foreach (var entry in plan.Where(static p => p.Action is ListenerPlanAction.Add && p.Desired is not null))
             {
-                if (!running.TryGetValue(entry.Key, out var existing))
-                {
-                    continue;
-                }
-
-                if (drainTimeoutSeconds > 0)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(drainTimeoutSeconds, 5)), cancellationToken)
-                        .ConfigureAwait(false);
-                }
-
-                proxy.RemoveEndPoint(existing.Endpoint);
-                running.Remove(entry.Key);
+                Bind(entry, running, added, addListener);
             }
 
-            foreach (var entry in plan.Where(p => p.Action is ListenerPlanAction.Add or ListenerPlanAction.Replace))
+            foreach (var entry in plan.Where(static p => p.Action is ListenerPlanAction.Replace && p.Desired is not null))
             {
-                if (entry.Desired is null)
+                // Same host:port, so the old endpoint must be down before the new one can bind.
+                if (running.TryGetValue(entry.Key, out var existing))
                 {
-                    continue;
+                    removeEndpoint(existing.Endpoint);
+                    running.Remove(entry.Key);
+                    replaced.Add((entry.Key, existing.Config));
                 }
 
-                addListener(entry.Desired);
-                var endpoint = proxy.ProxyEndPoints.LastOrDefault();
-                if (endpoint is null)
-                {
-                    throw new InvalidOperationException($"failed to bind listener {entry.Key.Host}:{entry.Key.Port}");
-                }
+                Bind(entry, running, added, addListener);
+            }
 
-                added.Add((entry.Key, endpoint));
-                running[entry.Key] = (entry.Desired, endpoint);
+            foreach (var entry in plan.Where(static p => p.Action is ListenerPlanAction.Remove))
+            {
+                if (running.TryGetValue(entry.Key, out var existing))
+                {
+                    removeEndpoint(existing.Endpoint);
+                    running.Remove(entry.Key);
+                }
             }
         }
         catch
         {
-            foreach (var (_, endpoint) in added)
+            foreach (var (key, endpoint) in added)
             {
-                try
-                {
-                    if (proxy.ProxyEndPoints.Contains(endpoint))
-                    {
-                        proxy.RemoveEndPoint(endpoint);
-                    }
-                }
-                catch (InvalidOperationException)
-                {
-                }
+                TryRun(() => removeEndpoint(endpoint));
+                running.Remove(key);
+            }
+
+            foreach (var (key, config) in replaced)
+            {
+                TryRun(() => running[key] = (config, addListener(config)));
             }
 
             throw;
+        }
+    }
+
+    private static void Bind(
+        ListenerPlanEntry entry,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> running,
+        List<(ListenerKey Key, ProxyEndPoint Endpoint)> added,
+        Func<ListenerConfig, ProxyEndPoint> addListener)
+    {
+        var endpoint = addListener(entry.Desired!);
+        added.Add((entry.Key, endpoint));
+        running[entry.Key] = (entry.Desired!, endpoint);
+    }
+
+    private static void TryRun(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Net.Sockets.SocketException)
+        {
+            // Best effort while unwinding: the original failure is the one that propagates.
         }
     }
 

@@ -20,7 +20,7 @@
 | Dashboard / overlay editing | partial | Overlay + validated snapshot PUT; edit forms incomplete |
 | xDS ADS client with dynamic listeners | supported | Lazy `Titanium.Xds`; no xDS server |
 | Listener changes without restart | supported | `server.reloadListeners`; xDS forces on |
-| Linux TCP hot restart / SO_REUSEPORT | partial | ReusePort available; full pid-file handover incomplete |
+| Linux TCP hot restart / SO_REUSEPORT | partial | TCP handover through a pid file and SIGUSR2; no HTTP/3 or UDP, no restart helper command |
 | Overload protection | supported | Off by default |
 
 ## Still not offered (by design or runtime)
@@ -40,7 +40,7 @@
 ## Newly noted gaps (follow-ups, not blockers for this PR)
 
 1. **Dashboard edit forms** — overlay and control-plane APIs exist; operator UI pages remain incomplete.
-2. **Hot-restart handover** — `ReusePort` + config keys ship; SIGUSR2 / pid-file kill-handover and HTTP/3 deferred bind need a dedicated follow-up.
+2. **Hot restart** — TCP handover ships (`ReusePort`, pid file, SIGUSR2, drain). Still open: the `titanium restart` helper, the deferred HTTP/3 and UDP bind (the validator rejects those listeners meanwhile), and the two-process Linux CI test.
 3. **xDS proto fidelity** — trimmed Envoy subsets; replace with pinned full upstream files when expanding the field list.
 4. **Delta xDS** — state-of-the-world only in v1.
 5. **Checkpoint A/B** — C0–C6 RPS compare-spot against `BASELINE_SHA` must be linked in the Draft PR before merge (not run in this local pass).

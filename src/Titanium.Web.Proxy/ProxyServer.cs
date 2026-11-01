@@ -1928,6 +1928,11 @@ public partial class ProxyServer : IDisposable
 
             if (!ProxyRunning || _stopAccepting || ShouldOverloadStopAccepting)
             {
+                if (ProxyRunning && !_stopAccepting)
+                {
+                    Diagnostics.ProxyMetrics.RecordOverloadAction("stop_accepting");
+                }
+
                 // Unread bytes make Linux answer close() with RST. Drain them so the client sees a FIN.
                 CloseAcceptedSocketWithoutResponse(tcpClient);
                 if (!ProxyRunning)

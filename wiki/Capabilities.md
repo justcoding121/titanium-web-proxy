@@ -133,7 +133,7 @@
 | Gateway API HTTPRoute | partial | `GatewayClass titanium` | HTTP core of the standard channel. A rule the controller cannot honor answers 500 and says why in the route status. | [Gateway API](https://titaniumproxy.com/docs/gateway-api#supported-resources-and-fields) |
 | Ingress | supported | `networking.k8s.io/v1 Ingress` | Served by the same controller, with titanium.io annotations for rewrites and canary. | [Ingress](https://titaniumproxy.com/docs/ingress) |
 | Gateway API TLSRoute, TCPRoute, UDPRoute, and BackendTLSPolicy | supported | `TLSRoute`, `TCPRoute`, `UDPRoute`, `BackendTLSPolicy`, `backendTLSPolicy.enabled` | Optional informers tolerate a missing CRD. BackendTLSPolicy ConfigMap RBAC is behind backendTLSPolicy.enabled (default false). GRPCRoute is also translated. | [Gateway API](https://titaniumproxy.com/docs/gateway-api) |
-| Hot binary upgrade | partial | `server.hotRestart.enabled`, `listeners ReusePort` | Linux TCP SO_REUSEPORT is available; full pid-file handover and HTTP/3 sharing are not. Prefer rolling pods behind readiness drain. | [Kubernetes](https://titaniumproxy.com/docs/kubernetes#graceful-rollout) |
+| Hot binary upgrade | partial | `server.hotRestart.enabled`, `listeners ReusePort` | Linux TCP only: SO_REUSEPORT plus a pid-file and SIGUSR2 handover (the new process signals the old one, which drains and exits). HTTP/3 and UDP listeners are rejected, and there is no restart helper command. Prefer rolling pods behind readiness drain. | [Kubernetes](https://titaniumproxy.com/docs/kubernetes#graceful-rollout) |
 
 ## Protocols
 

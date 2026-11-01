@@ -31,6 +31,7 @@ public partial class ProxyServer
     {
         _overloadEnabled = enabled;
         Volatile.Write(ref _overloadLevel, level);
+        Diagnostics.ProxyMetrics.SetOverloadLevel(enabled ? level : 0);
         _overloadStopAccepting = stopAccepting;
         _overloadDisableKeepAlive = disableKeepAlive;
         _overloadRejectNewRequests = rejectNewRequests;
@@ -63,11 +64,14 @@ public partial class ProxyServer
             return;
         }
 
-        session.HttpClient.Response.Headers.AddHeader("Connection", "close");
+        // Replace, never append: the origin may already have sent a Connection header.
+        session.HttpClient.Response.Headers.SetOrAddHeaderValue(HttpKnownHeaders.Connection, "close");
+        Diagnostics.ProxyMetrics.RecordOverloadAction("disable_keep_alive");
     }
 
     internal void StageOverloadRejection(SessionEventArgs session)
     {
+        Diagnostics.ProxyMetrics.RecordOverloadAction("reject");
         var retry = _overloadRetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         session.HttpClient.Response.StatusCode = 503;
         session.HttpClient.Response.Headers.AddHeader("Retry-After", retry);

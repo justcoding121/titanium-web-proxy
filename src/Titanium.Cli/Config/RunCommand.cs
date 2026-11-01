@@ -278,6 +278,12 @@ internal static class RunCommand
         }
 
         AdminServer? adminServer = null;
+
+        // One host for the whole run: no timer or thread exists until server.overload.enabled is true, and a
+        // reload re-applies the section (start, swap thresholds, or stop).
+        var overloadHost = new OverloadProtectionHost(proxy, AsyncConsole.WriteError);
+        readiness.OverloadCriticalProbe = () => overloadHost.ReadyzShouldFail;
+
         async Task<PlusReloadResult> PerformReloadAsync(CancellationToken ct) // NOSONAR S3776 -- Reload callback keeps proxy wiring in one closure.
         {
             try
@@ -301,6 +307,7 @@ internal static class RunCommand
                     onApplied: applied =>
                     {
                         lastAppliedConfig = applied;
+                        overloadHost.Apply(applied.Server?.Overload);
                         if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
                         {
                             adminServer?.SetAuthToken(rotated);
@@ -392,12 +399,25 @@ internal static class RunCommand
                 loaded.Config.Xds,
                 loaded.Config,
                 xdsStateDir,
-                cfg => _ = ApplyXdsConfigAsync(
-                    cfg, proxy, clusterManager, routes, RefreshReverseProxy, runningListeners, () => pluginHost, stoppingToken),
+                cfg =>
+                {
+                    // The snapshot only carries xDS resources; process-level server settings stay as configured.
+                    cfg.Server ??= new ServerConfig();
+                    cfg.Server.HotRestart ??= loaded.Config.Server?.HotRestart;
+                    _ = ApplyXdsConfigGuardedAsync(
+                        cfg, proxy, clusterManager, routes, RefreshReverseProxy, runningListeners, () => pluginHost,
+                        configEditGate, stoppingToken);
+                },
                 stoppingToken);
         }
 
-        OverloadProtectionHost? overloadHost = null;
+        // server.hotRestart (Linux, TCP only): null unless enabled. The coordinator only touches the pid file.
+        var hotRestartConfig = loaded.Config.Server?.HotRestart;
+        HotRestartCoordinator? hotRestart = hotRestartConfig is { Enabled: true, PidFile: { Length: > 0 } pidFile }
+                                            && OperatingSystem.IsLinux()
+            ? new HotRestartCoordinator(pidFile, new LinuxHotRestartPlatform(), Environment.ProcessId)
+            : null;
+        using var handoverCts = new CancellationTokenSource();
         try
         {
             // The admin port opens before the proxy binds, so /healthz answers and /readyz says 503
@@ -408,14 +428,18 @@ internal static class RunCommand
                 metricsExposition,
                 () => AdminHost.BuildVersionInfo(configHash, plusActive));
             proxy.Start();
-            if (loaded.Config.Server?.Overload is { Enabled: true } overloadConfig)
-            {
-                overloadHost = new OverloadProtectionHost(proxy, overloadConfig);
-                overloadHost.Start();
-            }
+            overloadHost.Apply(loaded.Config.Server?.Overload);
 
             StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
             readiness.MarkListenersBound();
+
+            // Bound and ready: only now is the previous process asked to drain, so a start that fails earlier
+            // never takes the old process out of service.
+            if (hotRestart is not null)
+            {
+                TakeOverFromPreviousProcess(hotRestart, hotRestartConfig!);
+            }
+
             StartAcmeIfConfigured(proxy, loaded.Config);
 
             accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
@@ -450,7 +474,8 @@ internal static class RunCommand
                         }
                     },
                     extraWatchPaths: secretFiles,
-                    loadedConfigHash: configHash).ConfigureAwait(false);
+                    loadedConfigHash: configHash,
+                    onHandoverSignal: hotRestart is null ? null : () => handoverCts.Cancel()).ConfigureAwait(false);
             }
             finally
             {
@@ -462,7 +487,12 @@ internal static class RunCommand
             await readiness.BeginDrainAsync(
                 TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
                 CancellationToken.None).ConfigureAwait(false);
-            var drainTimeout = TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server));
+            // After a hot-restart handover the old process serves its accepted connections for up to
+            // handoverTimeoutSeconds, then exits; otherwise the normal drain timeout applies.
+            var drainTimeout = TimeSpan.FromSeconds(
+                handoverCts.IsCancellationRequested
+                    ? hotRestartConfig?.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds
+                    : ResolveDrainTimeoutSeconds(loaded.Config.Server));
             await proxy.DrainAsync(drainTimeout).ConfigureAwait(false);
             await Task.WhenAll(udpRelays.Select(relay => relay.DrainAsync(drainTimeout))).ConfigureAwait(false);
             await clusterManager.DisposeAsync().ConfigureAwait(false);
@@ -478,16 +508,43 @@ internal static class RunCommand
             adminServer?.Dispose();
             metricsEndpoint?.Dispose();
             accessLog?.Dispose();
-            if (overloadHost is not null)
-            {
-                await overloadHost.DisposeAsync().ConfigureAwait(false);
-            }
+            await overloadHost.DisposeAsync().ConfigureAwait(false);
+            hotRestart?.ReleasePidFile();
 
             pluginHost.Dispose();
             if (xdsHost is not null)
             {
                 await xdsHost.DisposeAsync();
             }
+        }
+    }
+
+    internal const int DefaultHandoverTimeoutSeconds = 60;
+
+    private static void TakeOverFromPreviousProcess(HotRestartCoordinator coordinator, HotRestartConfig config)
+    {
+        try
+        {
+            var outcome = coordinator.TakeOver(TimeSpan.FromSeconds(Math.Min(config.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds, 10)));
+            switch (outcome)
+            {
+                case HotRestartHandover.SignaledPrevious:
+                    AsyncConsole.WriteLine(
+                        $"Hot restart: asked process {coordinator.PreviousPid} to drain and exit; this process owns {config.PidFile}.");
+                    break;
+                case HotRestartHandover.StalePidFile:
+                    AsyncConsole.WriteLine($"Hot restart: ignored a stale {config.PidFile}; no previous process to hand over from.");
+                    break;
+                case HotRestartHandover.SignalFailed:
+                    AsyncConsole.WriteError(
+                        $"Hot restart: the previous process is alive but SIGUSR2 could not be delivered; both processes are serving. {config.PidFile} now names this process.");
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The proxy is already serving; a pid file problem must not take it down.
+            AsyncConsole.WriteError("Hot restart handover failed: " + ex.Message);
         }
     }
 
@@ -597,25 +654,12 @@ internal static class RunCommand
         WriteConfigWarnings(loaded);
 
         var desiredHttpListeners = loaded.Config.Listeners.Where(l => !IsUdpListener(l)).ToList();
-        if (runningListeners is not null)
+        if (runningListeners is not null && loaded.Config.Server?.ReloadListeners != true
+            && ListenerReconciler.DetectListenerChangeWithoutReload(
+                runningListeners.ToDictionary(static k => k.Key, static k => k.Value.Config), desiredHttpListeners))
         {
-            var runningConfigs = runningListeners.ToDictionary(static k => k.Key, static k => k.Value.Config);
-            if (loaded.Config.Server?.ReloadListeners == true)
-            {
-                var reusePort = loaded.Config.Server?.HotRestart?.Enabled == true;
-                await ListenerReconciler.ApplyAsync(
-                    proxy,
-                    desiredHttpListeners,
-                    runningListeners,
-                    listener => AddListener(proxy, listener, getPlugins, reusePort),
-                    ResolveDrainTimeoutSeconds(loaded.Config.Server),
-                    stoppingToken).ConfigureAwait(false);
-            }
-            else if (ListenerReconciler.DetectListenerChangeWithoutReload(runningConfigs, desiredHttpListeners))
-            {
-                AsyncConsole.WriteError(
-                    "Listener definitions changed but server.reloadListeners is false; restart the process to apply listener changes.");
-            }
+            AsyncConsole.WriteError(
+                "Listener definitions changed but server.reloadListeners is false; restart the process to apply listener changes.");
         }
 
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
@@ -701,6 +745,14 @@ internal static class RunCommand
         // Calls in flight finish on the old plugins; the last one out disposes them and unloads their contexts.
         previousPlugins?.Retire();
         CertificateBootstrap.ApplySniItems(proxy, loaded.Config.Certificates);
+
+        // Listeners last (clusters and routes first, listeners after): a new listener never receives traffic for a
+        // route that is not installed yet. A failed bind is rolled back inside the reconciler and fails the reload.
+        if (runningListeners is not null && loaded.Config.Server?.ReloadListeners == true)
+        {
+            ReconcileListeners(proxy, loaded.Config, desiredHttpListeners, runningListeners, getPlugins);
+        }
+
         onApplied?.Invoke(loaded.Config);
         _ = middleware;
         _ = loadBalancer;
@@ -749,17 +801,85 @@ internal static class RunCommand
     {
         config.Server ??= new ServerConfig();
         config.Server.ReloadListeners = true;
-        var reusePort = config.Server.HotRestart?.Enabled == true;
         var desiredHttpListeners = config.Listeners.Where(l => !IsUdpListener(l)).ToList();
-        await ListenerReconciler.ApplyAsync(
-            proxy,
-            desiredHttpListeners,
-            runningListeners,
-            listener => AddListener(proxy, listener, getPlugins, reusePort),
-            ResolveDrainTimeoutSeconds(config.Server),
-            cancellationToken).ConfigureAwait(false);
+
+        // Clusters and routes first, listeners last (xDS order CDS, EDS, RDS, then LDS).
         await ApplyRoutesClustersLiveAsync(
             config, proxy, clusterManager, routes, refreshReverseProxy, cancellationToken).ConfigureAwait(false);
+        ReconcileListeners(proxy, config, desiredHttpListeners, runningListeners, getPlugins);
+    }
+
+    /// <summary>
+    ///     Makes the running listeners match <paramref name="desired" />. An empty desired list while listeners are
+    ///     running is refused: it means "no listener data yet" (an xDS server that has not sent LDS, a half-edited file),
+    ///     and acting on it would take the proxy off the network.
+    /// </summary>
+    private static void ReconcileListeners(
+        ProxyServer proxy,
+        TwpConfig config,
+        IReadOnlyList<ListenerConfig> desired,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> running,
+        Func<PluginHost?>? getPlugins)
+    {
+        if (desired.Count == 0 && running.Count > 0)
+        {
+            AsyncConsole.WriteError(
+                "Listener reconcile skipped: the new config has no listeners, keeping the running ones.");
+            return;
+        }
+
+        var reusePort = config.Server?.HotRestart?.Enabled == true;
+        ListenerReconciler.Apply(
+            desired,
+            running,
+            listener => AddListener(proxy, listener, getPlugins, reusePort),
+            proxy.RemoveEndPoint);
+    }
+
+    /// <summary>
+    ///     Applies an xDS snapshot under the config edit gate, so it cannot interleave with a file reload or a dashboard
+    ///     edit, and never lets an exception escape (the callback is fire-and-forget).
+    /// </summary>
+    private static async Task ApplyXdsConfigGuardedAsync( // NOSONAR S107 -- Wiring keeps dependencies explicit.
+        TwpConfig config,
+        ProxyServer proxy,
+        ClusterManager clusterManager,
+        List<RouteConfig> routes,
+        Action refreshReverseProxy,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> runningListeners,
+        Func<PluginHost?> getPlugins,
+        SemaphoreSlim configEditGate,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await configEditGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var errors = TwpConfigValidator.Validate(config);
+                if (errors.Count > 0)
+                {
+                    AsyncConsole.WriteError("xDS snapshot rejected: " + string.Join("; ", errors));
+                    return;
+                }
+
+                await ApplyXdsConfigAsync(
+                    config, proxy, clusterManager, routes, refreshReverseProxy, runningListeners, getPlugins,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                configEditGate.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutting down.
+        }
+        catch (Exception ex)
+        {
+            AsyncConsole.WriteError("xDS snapshot apply failed: " + ex.Message);
+        }
     }
 
     private static ListenerConfig CloneListener(ListenerConfig listener) =>
@@ -1011,7 +1131,8 @@ internal static class RunCommand
         Func<Task>? onReload,
         Action? onStopRequested = null,
         IReadOnlyList<string>? extraWatchPaths = null,
-        string? loadedConfigHash = null)
+        string? loadedConfigHash = null,
+        Action? onHandoverSignal = null)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1036,6 +1157,7 @@ internal static class RunCommand
         PosixSignalRegistration? sigTerm = null;
         PosixSignalRegistration? sigInt = null;
         PosixSignalRegistration? sigHup = null;
+        PosixSignalRegistration? sigHandover = null;
         EventWaitHandle? winReload = null;
         RegisteredWaitHandle? winReloadWait = null;
         ContentWatcher? contentWatcher = null;
@@ -1053,6 +1175,16 @@ internal static class RunCommand
                     ctx.Cancel = true;
                     RequestStop();
                 });
+                if (onHandoverSignal is not null && OperatingSystem.IsLinux())
+                {
+                    // server.hotRestart: SIGUSR2 from the new process means stop accepting and drain, then exit.
+                    sigHandover = PosixSignalRegistration.Create((PosixSignal)LinuxHotRestartPlatform.SigUsr2, ctx =>
+                    {
+                        ctx.Cancel = true;
+                        onHandoverSignal();
+                        RequestStop();
+                    });
+                }
                 if (onReload is not null)
                 {
                     sigHup = PosixSignalRegistration.Create(PosixSignal.SIGHUP, ctx =>
@@ -1146,6 +1278,7 @@ internal static class RunCommand
             sigTerm?.Dispose();
             sigInt?.Dispose();
             sigHup?.Dispose();
+            sigHandover?.Dispose();
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
             contentWatcher?.Dispose();
@@ -1513,6 +1646,13 @@ internal static class RunCommand
 
         endPoint.ReusePort = reusePort;
         ApplyListenerOverrides(endPoint, listener);
+        if (reusePort && endPoint is TransparentProxyEndPoint { EnableHttp3: true } withHttp3)
+        {
+            // Hot restart is TCP only: the old and the new process cannot both bind the same UDP port, so a
+            // decrypting listener does not open its QUIC side while server.hotRestart is on.
+            withHttp3.EnableHttp3 = false;
+        }
+
         ApplyStreamFilters(endPoint, listener, currentPlugins);
         proxy.AddEndPoint(endPoint);
 

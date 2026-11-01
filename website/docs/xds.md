@@ -6,7 +6,7 @@ Titanium ships **no xDS server**. This is a dataplane client that translates a s
 
 ## Configuration
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 xds:
   server: "127.0.0.1:18000"
@@ -54,9 +54,19 @@ See `src/Titanium.Xds/FEASIBILITY.md` in the repository for the authoritative ta
 When `server.reloadListeners` is true (required for xDS), reload:
 
 1. Plans add/remove/replace by listener key `(type, host, port)`.
-2. Tears down removals and replaces first (so the same host:port can rebind), with a short drain.
-3. Binds adds and replaces next.
-4. Rolls back newly added endpoints if a later bind fails.
+2. Binds new listeners first.
+3. Replaces changed listeners (the old endpoint comes down, then the new one binds on the same host:port).
+4. Removes listeners that are gone, last.
+5. If any bind fails, everything done in that pass is undone: new endpoints are removed and replaced listeners are rebound from their previous config, so a failed apply never leaves fewer listeners than before.
+
+Clusters and routes are applied before listeners (CDS, EDS, RDS, then LDS), so a new listener never receives traffic for a route that is not installed yet.
+
+Safety rules for xDS snapshots:
+
+- Applies run under the same lock as file reloads and dashboard edits, so they never interleave. A snapshot that fails validation or apply is logged and the running config stays in force.
+- A snapshot with **no listeners** while listeners are running is refused for the listener step ("no listener data yet", for example an LDS response that has not arrived). Routes and clusters still apply. To remove every listener, change the file config and reload.
+- Process-level `server.*` settings (including `hotRestart`) come from the file config; the snapshot only carries xDS resources.
+- Secrets (SDS) are translated and written to the state directory, but are not yet wired to listener certificates.
 
 With `reloadListeners: false`, file reload **warns** and leaves listeners unchanged if the listener set would change.
 

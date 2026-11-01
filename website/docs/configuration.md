@@ -757,10 +757,10 @@ server:
       rejectNewRequests: true
       readyzFailsOnCritical: true
     retryAfterSeconds: 1
-  hotRestart:                  # Linux TCP SO_REUSEPORT; full handover is partial
+  hotRestart:                  # Linux, TCP listeners only (see below)
     enabled: false
-    pidFile: null
-    handoverTimeoutSeconds: 30
+    pidFile: null              # required when enabled; its directory must exist
+    handoverTimeoutSeconds: 60 # 5..3600: how long the old process drains after the handover signal
   reloadListeners: false       # true reconciles listeners on reload; xDS forces on
 ```
 
@@ -770,7 +770,22 @@ HTTP interception is not a YAML knob: the CLI turns it on automatically when the
 
 ### Overload protection
 
-`server.overload` is off unless `enabled: true`. A background sampler (not the request hot path) reads heap percent, thread-pool queue depth, and active connections, then advances a hysteresis state machine (`Normal` → `Elevated` → `Critical`). At elevated levels the proxy can close HTTP/1 keep-alives; at critical it can stop accepting and answer new requests with `503` plus `Retry-After`. `/healthz` stays up; `/readyz` can fail when `actions.readyzFailsOnCritical` is true. Leave it off unless you need process-local shedding.
+`server.overload` is off unless `enabled: true`. A background sampler (not the request hot path) reads heap percent, thread-pool queue depth, and active connections, then advances a hysteresis state machine (`Normal` → `Elevated` → `Critical`). At elevated levels the proxy can close HTTP/1 keep-alives; at critical it can stop accepting and answer new requests with `503` plus `Retry-After`. `/healthz` stays up; while the level is critical `/readyz` answers `503` with the reason `overload_critical` when `actions.readyzFailsOnCritical` is true, and recovers when the level drops.
+
+- A missing `heapPercent` or `threadPoolQueue` section uses the default thresholds shown above. `activeConnections` has no default and is off unless you set it. Setting a signal to `{ elevated: 0, critical: 0 }` turns it off. Validation requires `1 <= elevated < critical`, `heapPercent` values of at most 100, and `intervalMs` of 100 to 10000.
+- A config reload re-applies the section on the running sampler: enabling it starts the sampler, changing thresholds swaps them (the level restarts from `Normal` and converges within one dwell), and disabling it clears every action.
+- `disableKeepAlive` sends `Connection: close` on HTTP/1.1 responses that pass through the session path. The terminate-lite fast path does not run response hooks, so it is not covered; `stopAccepting` and `rejectNewRequests` still apply there.
+- Observability: `twp.overload.level` (gauge, 0 to 2) and `twp.overload.actions` (counter by `action`: `disable_keep_alive`, `reject`, `stop_accepting`).
+- Leave it off unless you need process-local shedding.
+
+### Hot restart (Linux, TCP only)
+
+`server.hotRestart.enabled: true` binds every listener with `SO_REUSEPORT`, so a new process can listen on the same ports as the old one. After the new process has bound its listeners and is ready it reads `pidFile`; if that names a live process of the same program it sends `SIGUSR2`, then writes its own pid to the file. The old process stops accepting, serves its accepted connections for up to `handoverTimeoutSeconds`, and exits. The new process never kills the old one, a stale or foreign pid is ignored, and two simultaneous restarts are serialized by an exclusive lock on `<pidFile>.lock`.
+
+- Validation rejects the section on non-Linux hosts and on configs with `quic`, `masque`, or `udp` listeners or `enableHttp3: true`: the old and the new process cannot share a UDP port. Decrypting listeners do not open their QUIC side while hot restart is on.
+- `SO_REUSEPORT` also lets a different process of the same user bind the port. That is why the feature is opt-in and the pid file is checked.
+- The supervisor must tolerate two processes during the handover (systemd: start the new process as a transient unit with `systemd-run`, or use `KillMode=process`).
+- Not shipped yet: a `titanium restart` helper command and the deferred HTTP/3 and UDP bind.
 
 ### Listener TLS policy (`server.tls`)
 

@@ -411,6 +411,29 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.loadbalancer.zone.selections", "{pick}",
             "Load-balancer zone-aware picks: local (stayed in zone) or spill (used all zones).");
 
+    private static int _overloadLevelValue;
+
+    private static readonly Counter<long> OverloadActions =
+        Meter.CreateCounter<long>("twp.overload.actions", "{action}",
+            "Overload shedding actions taken: disable_keep_alive, reject, or stop_accepting.");
+
+    // Observable: sampled by the exporter at scrape time, so the hot path never touches it.
+    private static readonly ObservableGauge<int> OverloadLevelGauge =
+        Meter.CreateObservableGauge("twp.overload.level",
+            () => System.Threading.Volatile.Read(ref _overloadLevelValue), "{level}",
+            "Overload level: 0 normal, 1 elevated, 2 critical.");
+
+    public static void SetOverloadLevel(int level) =>
+        System.Threading.Volatile.Write(ref _overloadLevelValue, level);
+
+    public static void RecordOverloadAction(string action)
+    {
+        if (OverloadActions.Enabled)
+        {
+            OverloadActions.Add(1, new KeyValuePair<string, object?>("action", action));
+        }
+    }
+
     public static void RecordZoneSelection(string scope)
     {
         if (ZoneSelections.Enabled)

@@ -565,7 +565,7 @@ rows:
     schema: 'n/a'
     docs: '/docs/kubernetes#graceful-rollout'
     docsLabel: 'Kubernetes'
-    note: 'Linux TCP SO_REUSEPORT is available; full pid-file handover and HTTP/3 sharing are not. Prefer rolling pods behind readiness drain.'
+    note: 'Linux TCP only: SO_REUSEPORT plus a pid-file and SIGUSR2 handover (the new process signals the old one, which drains and exits). HTTP/3 and UDP listeners are rejected, and there is no restart helper command. Prefer rolling pods behind readiness drain.'
   - area: 'Protocols'
     capability: 'HTTP/1.1 and HTTP/2'
     status: 'supported'

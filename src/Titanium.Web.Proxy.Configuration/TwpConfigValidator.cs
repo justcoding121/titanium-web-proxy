@@ -54,8 +54,135 @@ public static class TwpConfigValidator
         ValidateServer(config.Server, errors);
         ValidateZoneAware(config, errors);
         ValidateTcpTlsListeners(config, errors);
+        ValidateOverload(config.Server?.Overload, errors);
+        ValidateHotRestart(config, errors);
+        ValidateXds(config.Xds, errors);
         ValidatePlusSecrets(config.Plus, errors);
         return errors;
+    }
+
+    /// <summary>Checks <c>server.overload</c>: sampling interval, retry hint, and ordered thresholds per signal.</summary>
+    private static void ValidateOverload(OverloadConfig? overload, List<string> errors)
+    {
+        if (overload is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.overload";
+        if (overload.IntervalMs is { } interval && interval is < 100 or > 10_000)
+        {
+            errors.Add($"{prefix}.intervalMs must be between 100 and 10000.");
+        }
+
+        if (overload.RetryAfterSeconds is { } retry && retry is < 1 or > 3600)
+        {
+            errors.Add($"{prefix}.retryAfterSeconds must be between 1 and 3600.");
+        }
+
+        ValidateOverloadSignal($"{prefix}.heapPercent", overload.HeapPercent, 100, errors);
+        ValidateOverloadSignal($"{prefix}.threadPoolQueue", overload.ThreadPoolQueue, null, errors);
+        ValidateOverloadSignal($"{prefix}.activeConnections", overload.ActiveConnections, null, errors);
+    }
+
+    private static void ValidateOverloadSignal(string path, OverloadSignalConfig? signal, int? max, List<string> errors)
+    {
+        // 0/0 means "signal off". Anything else needs 1 <= elevated < critical (and <= max when the signal is a percent).
+        if (signal is null || signal is { Elevated: 0, Critical: 0 })
+        {
+            return;
+        }
+
+        if (signal.Elevated < 1 || signal.Critical < 1)
+        {
+            errors.Add($"{path}.elevated and {path}.critical must be positive (use 0 and 0 to turn the signal off).");
+        }
+        else if (signal.Elevated >= signal.Critical)
+        {
+            errors.Add($"{path}.elevated must be lower than {path}.critical.");
+        }
+
+        if (max is { } ceiling && (signal.Elevated > ceiling || signal.Critical > ceiling))
+        {
+            errors.Add($"{path} values must be at most {ceiling}.");
+        }
+    }
+
+    /// <summary>
+    ///     Checks <c>server.hotRestart</c>: Linux only (SO_REUSEPORT plus SIGUSR2), a pid file in an existing directory,
+    ///     a sane handover timeout, and no listener that needs a UDP port (the old and new process cannot share one).
+    /// </summary>
+    private static void ValidateHotRestart(TwpConfig config, List<string> errors)
+    {
+        var hotRestart = config.Server?.HotRestart;
+        if (hotRestart is not { Enabled: true })
+        {
+            return;
+        }
+
+        const string prefix = "server.hotRestart";
+        if (!OperatingSystem.IsLinux())
+        {
+            errors.Add($"{prefix} is supported on Linux only.");
+        }
+
+        if (string.IsNullOrWhiteSpace(hotRestart.PidFile))
+        {
+            errors.Add($"{prefix}.pidFile is required when {prefix}.enabled is true.");
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(hotRestart.PidFile));
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                errors.Add($"{prefix}.pidFile directory '{directory}' does not exist.");
+            }
+        }
+
+        if (hotRestart.HandoverTimeoutSeconds is { } timeout && timeout is < 5 or > 3600)
+        {
+            errors.Add($"{prefix}.handoverTimeoutSeconds must be between 5 and 3600.");
+        }
+
+        foreach (var listener in config.Listeners ?? [])
+        {
+            var type = listener?.Type?.Trim();
+            if (listener is not null
+                && (listener.EnableHttp3 == true
+                    || string.Equals(type, "quic", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(type, "masque", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(type, "udp", StringComparison.OrdinalIgnoreCase)))
+            {
+                errors.Add(
+                    $"{prefix} supports TCP listeners only: listener on port {listener.Port} needs a UDP port " +
+                    "(quic, masque, udp, or enableHttp3: true).");
+            }
+        }
+    }
+
+    /// <summary>Checks <c>xds</c>: a control-plane address and a sane initial-fetch timeout.</summary>
+    private static void ValidateXds(XdsConfig? xds, List<string> errors)
+    {
+        if (xds is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(xds.Server))
+        {
+            errors.Add("xds.server is required when the xds section is present (host:port of the ADS server).");
+        }
+
+        if (xds.InitialFetchTimeoutSeconds is { } timeout && timeout is < 1 or > 3600)
+        {
+            errors.Add("xds.initialFetchTimeoutSeconds must be between 1 and 3600.");
+        }
+
+        if (xds.Tls is { } tls
+            && (string.IsNullOrWhiteSpace(tls.ClientCertPath) != string.IsNullOrWhiteSpace(tls.ClientKeyPath)))
+        {
+            errors.Add("xds.tls.clientCertPath and xds.tls.clientKeyPath must be set together.");
+        }
     }
 
     /// <summary>
