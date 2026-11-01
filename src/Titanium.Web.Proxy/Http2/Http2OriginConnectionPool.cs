@@ -214,43 +214,35 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
             return null;
 
         var snapshot = SnapshotMembers(entry);
-        var limits = proxyServer.ResourceLimits;
+        _ = proxyServer.ResourceLimits;
+        var best = PickLeastActiveConnectCapable(snapshot, requireSoftCapacity: true)
+                   ?? PickLeastActiveConnectCapable(snapshot, requireSoftCapacity: false);
+        best?.Touch();
+        return best;
+    }
+
+    private static Http2OriginConnection? PickLeastActiveConnectCapable(
+        Http2OriginConnection[] snapshot,
+        bool requireSoftCapacity)
+    {
         Http2OriginConnection? best = null;
         var bestActive = int.MaxValue;
-        foreach (var c in snapshot)
+        foreach (var connection in snapshot)
         {
-            if (!c.IsUsable || c.IsNearStreamIdExhaustion || !c.EnableConnectProtocol)
+            if (!connection.IsUsable || connection.IsNearStreamIdExhaustion || !connection.EnableConnectProtocol)
                 continue;
 
-            var active = c.ActiveStreamCount;
-            if (active >= c.SoftStreamCapacity)
+            var active = connection.ActiveStreamCount;
+            if (requireSoftCapacity && active >= connection.SoftStreamCapacity)
                 continue;
 
             if (active < bestActive)
             {
-                best = c;
+                best = connection;
                 bestActive = active;
             }
         }
 
-        if (best == null)
-        {
-            foreach (var c in snapshot)
-            {
-                if (!c.IsUsable || c.IsNearStreamIdExhaustion || !c.EnableConnectProtocol)
-                    continue;
-
-                var active = c.ActiveStreamCount;
-                if (active < bestActive)
-                {
-                    best = c;
-                    bestActive = active;
-                }
-            }
-        }
-
-        best?.Touch();
-        _ = limits;
         return best;
     }
 

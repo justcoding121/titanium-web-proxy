@@ -433,7 +433,7 @@ internal static class RunCommand
                     cfg.Server ??= new ServerConfig();
                     cfg.Server.HotRestart ??= loaded.Config.Server?.HotRestart;
                     _ = ApplyXdsConfigGuardedAsync(
-                        cfg, proxy, clusterManager, routes, RefreshReverseProxy, runningListeners, () => pluginHost,
+                        new XdsApplyTarget(cfg, proxy, clusterManager, routes, RefreshReverseProxy, runningListeners, () => pluginHost),
                         configEditGate, stoppingToken);
                 },
                 stoppingToken);
@@ -860,29 +860,6 @@ internal static class RunCommand
         _ = proxy;
     }
 
-    private static async Task ApplyXdsConfigAsync(
-        TwpConfig config,
-        ProxyServer proxy,
-        ClusterManager clusterManager,
-        List<RouteConfig> routes,
-        Action refreshReverseProxy,
-        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> runningListeners,
-        Func<PluginHost?> getPlugins,
-        CancellationToken cancellationToken)
-    {
-        config.Server ??= new ServerConfig();
-        config.Server.ReloadListeners = true;
-        var desiredHttpListeners = config.Listeners.Where(l => !IsUdpListener(l)).ToList();
-
-        // Clusters and routes first, listeners last (xDS order CDS, EDS, RDS, then LDS).
-        await ApplyRoutesClustersLiveAsync(
-            config, proxy, clusterManager, routes, refreshReverseProxy, cancellationToken).ConfigureAwait(false);
-        ReconcileListeners(proxy, config, desiredHttpListeners, runningListeners, getPlugins);
-
-        // SDS certificates (and the file's own SNI items) go onto the listeners that now exist.
-        CertificateBootstrap.ApplySniItems(proxy, config.Certificates);
-    }
-
     /// <summary>
     ///     Makes the running listeners match <paramref name="desired" />. An empty desired list while listeners are
     ///     running is refused: it means "no listener data yet" (an xDS server that has not sent LDS, a half-edited file),
@@ -891,7 +868,7 @@ internal static class RunCommand
     private static void ReconcileListeners(
         ProxyServer proxy,
         TwpConfig config,
-        IReadOnlyList<ListenerConfig> desired,
+        List<ListenerConfig> desired,
         Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> running,
         Func<PluginHost?>? getPlugins)
     {
@@ -910,18 +887,38 @@ internal static class RunCommand
             proxy.RemoveEndPoint);
     }
 
+    private readonly record struct XdsApplyTarget(
+        TwpConfig Config,
+        ProxyServer Proxy,
+        ClusterManager ClusterManager,
+        List<RouteConfig> Routes,
+        Action RefreshReverseProxy,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> RunningListeners,
+        Func<PluginHost?> GetPlugins);
+
+    private static async Task ApplyAcceptedXdsAsync(XdsApplyTarget target, CancellationToken cancellationToken)
+    {
+        target.Config.Server ??= new ServerConfig();
+        target.Config.Server.ReloadListeners = true;
+        var desiredHttpListeners = target.Config.Listeners.Where(l => !IsUdpListener(l)).ToList();
+
+        // Clusters and routes first, listeners last (xDS order CDS, EDS, RDS, then LDS).
+        await ApplyRoutesClustersLiveAsync(
+            target.Config, target.Proxy, target.ClusterManager, target.Routes, target.RefreshReverseProxy,
+            cancellationToken).ConfigureAwait(false);
+        ReconcileListeners(
+            target.Proxy, target.Config, desiredHttpListeners, target.RunningListeners, target.GetPlugins);
+
+        // SDS certificates (and the file's own SNI items) go onto the listeners that now exist.
+        CertificateBootstrap.ApplySniItems(target.Proxy, target.Config.Certificates);
+    }
+
     /// <summary>
     ///     Applies an xDS snapshot under the config edit gate, so it cannot interleave with a file reload or a dashboard
     ///     edit, and never lets an exception escape (the callback is fire-and-forget).
     /// </summary>
-    private static async Task ApplyXdsConfigGuardedAsync( // NOSONAR S107 -- Wiring keeps dependencies explicit.
-        TwpConfig config,
-        ProxyServer proxy,
-        ClusterManager clusterManager,
-        List<RouteConfig> routes,
-        Action refreshReverseProxy,
-        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> runningListeners,
-        Func<PluginHost?> getPlugins,
+    private static async Task ApplyXdsConfigGuardedAsync(
+        XdsApplyTarget target,
         SemaphoreSlim configEditGate,
         CancellationToken cancellationToken)
     {
@@ -930,16 +927,14 @@ internal static class RunCommand
             await configEditGate.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var errors = TwpConfigValidator.Validate(config);
+                var errors = TwpConfigValidator.Validate(target.Config);
                 if (errors.Count > 0)
                 {
                     AsyncConsole.WriteError("xDS snapshot rejected: " + string.Join("; ", errors));
                     return;
                 }
 
-                await ApplyXdsConfigAsync(
-                    config, proxy, clusterManager, routes, refreshReverseProxy, runningListeners, getPlugins,
-                    cancellationToken).ConfigureAwait(false);
+                await ApplyAcceptedXdsAsync(target, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -1646,7 +1641,7 @@ internal static class RunCommand
         string.Equals(listener.Type?.Trim(), "udp", StringComparison.OrdinalIgnoreCase);
 
     private static void StartUdpRelays(
-        IReadOnlyList<ListenerConfig> configs, List<UdpRelayListener> started, ClusterManager clusterManager, LoadBalancer loadBalancer)
+        List<ListenerConfig> configs, List<UdpRelayListener> started, ClusterManager clusterManager, LoadBalancer loadBalancer)
     {
         foreach (var listener in configs)
         {

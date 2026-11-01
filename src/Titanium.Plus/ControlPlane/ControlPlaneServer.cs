@@ -260,69 +260,111 @@ public sealed class ControlPlaneServer : IDisposable
                 return (Json(400, JsonSerializer.Serialize(new { error }, JsonOptions)), AuditResults.Rejected);
             }
 
-            IReadOnlyList<string>? validationWarnings = null;
-            if (_snapshotValidation != SnapshotValidationMode.Off && _configEditor is not null)
+            if (TryRejectSnapshotValidation(routes, clusters, out var validationWarnings, out var rejected))
             {
-                var validationErrors = _configEditor.ValidateCandidate(routes, clusters);
-                if (validationErrors.Count > 0)
-                {
-                    if (_snapshotValidation == SnapshotValidationMode.Enforce)
-                    {
-                        return (Json(422, JsonSerializer.Serialize(new { error = "validation failed", errors = validationErrors }, JsonOptions)),
-                            AuditResults.Rejected);
-                    }
-
-                    validationWarnings = validationErrors;
-                    foreach (var message in validationErrors)
-                    {
-                        _logger?.LogWarning("Snapshot PUT validation: {Message}", message);
-                    }
-                }
+                return rejected;
             }
 
-            if (clusters is not null)
+            var applyFailure = await ApplySnapshotAsync(clusters, routes, cancellationToken).ConfigureAwait(false);
+            if (applyFailure is not null)
             {
-                if (_clusters is null)
-                {
-                    return (Json(503, "{\"error\":\"no cluster manager\"}"), AuditResults.Unavailable);
-                }
-
-                await _clusters.ApplyAsync(clusters, cancellationToken).ConfigureAwait(false);
-            }
-
-            if (routes is not null)
-            {
-                if (_routes is null)
-                {
-                    return (Json(503, "{\"error\":\"no routes list\"}"), AuditResults.Unavailable);
-                }
-
-                _routes.Clear();
-                foreach (var route in routes)
-                {
-                    _routes.Add(route);
-                }
+                return applyFailure.Value;
             }
 
             _refresh?.Invoke();
-            var responseBody = JsonSerializer.Serialize(new
-            {
-                status = "applied",
-                clusters = clusters?.Count,
-                routes = routes?.Count,
-                warnings = validationWarnings,
-            }, JsonOptions);
-            if (validationWarnings is { Count: > 0 })
-            {
-                return (JsonWithHeader(200, responseBody, "X-Titanium-Validation", "failed"), AuditResults.Ok);
-            }
-
-            return (Json(200, responseBody), AuditResults.Ok);
+            return SnapshotApplied(clusters, routes, validationWarnings);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return (Json(400, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions)), AuditResults.Error);
         }
+    }
+
+    private bool TryRejectSnapshotValidation(
+        List<RouteConfig>? routes,
+        List<ClusterConfig>? clusters,
+        out IReadOnlyList<string>? validationWarnings,
+        out (ControlHttpResponse Response, string Result) rejected)
+    {
+        validationWarnings = null;
+        rejected = default;
+        if (_snapshotValidation == SnapshotValidationMode.Off || _configEditor is null)
+        {
+            return false;
+        }
+
+        var validationErrors = _configEditor.ValidateCandidate(routes, clusters);
+        if (validationErrors.Count == 0)
+        {
+            return false;
+        }
+
+        if (_snapshotValidation == SnapshotValidationMode.Enforce)
+        {
+            rejected = (Json(422, JsonSerializer.Serialize(new { error = "validation failed", errors = validationErrors }, JsonOptions)),
+                AuditResults.Rejected);
+            return true;
+        }
+
+        validationWarnings = validationErrors;
+        foreach (var message in validationErrors)
+        {
+            _logger?.LogWarning("Snapshot PUT validation: {Message}", message);
+        }
+
+        return false;
+    }
+
+    private async Task<(ControlHttpResponse Response, string Result)?> ApplySnapshotAsync(
+        List<ClusterConfig>? clusters,
+        List<RouteConfig>? routes,
+        CancellationToken cancellationToken)
+    {
+        if (clusters is not null)
+        {
+            if (_clusters is null)
+            {
+                return (Json(503, "{\"error\":\"no cluster manager\"}"), AuditResults.Unavailable);
+            }
+
+            await _clusters.ApplyAsync(clusters, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (routes is not null)
+        {
+            if (_routes is null)
+            {
+                return (Json(503, "{\"error\":\"no routes list\"}"), AuditResults.Unavailable);
+            }
+
+            _routes.Clear();
+            foreach (var route in routes)
+            {
+                _routes.Add(route);
+            }
+        }
+
+        return null;
+    }
+
+    private static (ControlHttpResponse Response, string Result) SnapshotApplied(
+        List<ClusterConfig>? clusters,
+        List<RouteConfig>? routes,
+        IReadOnlyList<string>? validationWarnings)
+    {
+        var responseBody = JsonSerializer.Serialize(new
+        {
+            status = "applied",
+            clusters = clusters?.Count,
+            routes = routes?.Count,
+            warnings = validationWarnings,
+        }, JsonOptions);
+        if (validationWarnings is { Count: > 0 })
+        {
+            return (JsonWithHeader(200, responseBody, "X-Titanium-Validation", "failed"), AuditResults.Ok);
+        }
+
+        return (Json(200, responseBody), AuditResults.Ok);
     }
 
     private (ControlHttpResponse Response, string Result) HandleCachePurge(string? prefix)

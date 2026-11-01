@@ -57,7 +57,7 @@ public static class SecretTranslator
                 // The CLI binds certificates by SNI from PKCS#12 files, so write one next to the PEM pair. A pair
                 // that does not parse is a NACK: the control plane learns about it instead of serving a dead cert.
                 string pfxPath;
-                IReadOnlyList<string> hosts;
+                List<string> hosts;
                 try
                 {
                     using var pem = X509Certificate2.CreateFromPem(cert.CertificateChain, cert.PrivateKey);
@@ -115,7 +115,7 @@ public static class SecretTranslator
     }
 
     /// <summary>DNS names from the subject alternative name extension, or the common name, or <c>*</c> (any server name).</summary>
-    private static IReadOnlyList<string> ReadHostNames(X509Certificate2 certificate)
+    private static List<string> ReadHostNames(X509Certificate2 certificate)
     {
         var names = new List<string>();
         foreach (var extension in certificate.Extensions.OfType<X509SubjectAlternativeNameExtension>())
@@ -128,7 +128,12 @@ public static class SecretTranslator
             names.Add(cn);
         }
 
-        return names.Count == 0 ? ["*"] : names;
+        if (names.Count == 0)
+        {
+            names.Add("*");
+        }
+
+        return names;
     }
 
     private static string WriteSecretFile(string stateDirectory, string secretName, string suffix, string pem) =>

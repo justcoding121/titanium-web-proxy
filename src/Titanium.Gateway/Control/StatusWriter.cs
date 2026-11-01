@@ -224,7 +224,7 @@ public sealed class StatusWriter
 
     private bool TryBuildRouteParentsWrite(
         StatusPatch patch,
-        IReadOnlyList<RouteParentStatus> previous,
+        List<RouteParentStatus> previous,
         string plural,
         out object desired,
         out string path)
@@ -267,10 +267,10 @@ public sealed class StatusWriter
         return true;
     }
 
-    private List<Condition> Stamp(StatusPatch patch, IReadOnlyList<Condition>? previous) =>
+    private List<Condition> Stamp(StatusPatch patch, List<Condition>? previous) =>
         StampConditions(patch.Conditions, previous, patch.Generation);
 
-    private List<Condition> StampConditions(IReadOnlyList<Condition> wanted, IReadOnlyList<Condition>? previous, long generation)
+    private List<Condition> StampConditions(IReadOnlyList<Condition> wanted, List<Condition>? previous, long generation)
     {
         var now = _time.GetUtcNow();
         var result = new List<Condition>(wanted.Count);
@@ -293,7 +293,7 @@ public sealed class StatusWriter
         return result;
     }
 
-    private ListenerStatus StampListener(ListenerStatus wanted, IReadOnlyList<ListenerStatus>? previous)
+    private ListenerStatus StampListener(ListenerStatus wanted, List<ListenerStatus>? previous)
     {
         var before = previous?.FirstOrDefault(l => l.Name == wanted.Name);
         return new ListenerStatus
@@ -305,7 +305,7 @@ public sealed class StatusWriter
         };
     }
 
-    private RouteParentStatus StampParent(RouteParentStatus wanted, IReadOnlyList<RouteParentStatus> previous)
+    private RouteParentStatus StampParent(RouteParentStatus wanted, List<RouteParentStatus> previous)
     {
         var before = previous.FirstOrDefault(p => SameParent(p.ParentRef, wanted.ParentRef));
         return new RouteParentStatus
@@ -320,7 +320,7 @@ public sealed class StatusWriter
         a.Name == b.Name && (a.Namespace ?? string.Empty) == (b.Namespace ?? string.Empty) &&
         (a.SectionName ?? string.Empty) == (b.SectionName ?? string.Empty) && a.Port == b.Port;
 
-    private static bool Same(IReadOnlyList<Condition> wanted, IReadOnlyList<Condition>? existing) =>
+    private static bool Same(List<Condition> wanted, List<Condition>? existing) =>
         Json(wanted) == Json(existing ?? []);
 
     private static string Json(object value) => JsonSerializer.Serialize(value, GatewayJson.Options);

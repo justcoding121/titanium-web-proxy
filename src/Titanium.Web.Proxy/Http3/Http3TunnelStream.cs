@@ -15,12 +15,12 @@ internal sealed class Http3TunnelStream : Stream
 {
     private readonly QuicStream _stream;
     private readonly long _maxFramePayloadBytes;
-    private readonly Action _onDisposed;
+    private readonly Func<ValueTask> _onDisposed;
 
     private bool disposed;
     private int disposeStarted;
 
-    internal Http3TunnelStream(QuicStream stream, long maxFramePayloadBytes, Action onDisposed)
+    internal Http3TunnelStream(QuicStream stream, long maxFramePayloadBytes, Func<ValueTask> onDisposed)
     {
         _stream = stream;
         _maxFramePayloadBytes = maxFramePayloadBytes;
@@ -146,7 +146,7 @@ internal sealed class Http3TunnelStream : Stream
                 // best-effort
             }
 
-            _onDisposed();
+            await _onDisposed();
         }
     }
 }

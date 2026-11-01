@@ -307,18 +307,26 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             return eligible;
         }
 
+        KeepBestPriorityTier(eligible);
+        return eligible;
+    }
+
+    private static int DestinationRank(DestinationConfig dest) =>
+        dest.Backup ? int.MaxValue : dest.Priority;
+
+    private static void KeepBestPriorityTier(List<DestinationConfig> eligible)
+    {
         var best = int.MaxValue;
         for (var i = 0; i < eligible.Count; i++)
         {
-            var rank = eligible[i].Backup ? int.MaxValue : eligible[i].Priority;
+            var rank = DestinationRank(eligible[i]);
             if (rank < best)
             {
                 best = rank;
             }
         }
 
-        eligible.RemoveAll(dest => (dest.Backup ? int.MaxValue : dest.Priority) != best);
-        return eligible;
+        eligible.RemoveAll(dest => DestinationRank(dest) != best);
     }
 
     private static void ApplyZoneFilter(List<DestinationConfig> eligible, ClusterRuntime runtime)

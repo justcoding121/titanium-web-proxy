@@ -371,8 +371,9 @@ internal static class Http3RequestStream
                     sessionArgs.Http3BufferedBodyReader = null;
                     sessionArgs.Http3RequestBodyPump = null;
 
-                    await Http3ExtendedConnectTunnel.RunAsync(stream, sessionArgs, server, logger, qpackContext,
-                        streamState, onBeforeResponse, cancellationToken);
+                    await Http3ExtendedConnectTunnel.RunAsync(
+                        new TunnelScope(stream, sessionArgs, server, logger, qpackContext, streamState, onBeforeResponse),
+                        cancellationToken);
                 }
                 else if (mitmUnchangedH3H1 || mitmUnchangedH3H3 || mitmUnchangedH3H2)
                 {

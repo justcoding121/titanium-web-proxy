@@ -401,7 +401,7 @@ internal sealed partial class TranslationPass
         var any = false;
         foreach (var reference in rule.BackendRefs ?? [])
         {
-            if (!TryTakeBackend(route, ruleIndex, reference, clusters, register, backendTimeout, usable, out var missed))
+            if (!TryTakeBackend(new BackendTake(route, ruleIndex, clusters, register, backendTimeout), reference, usable, out var missed))
             {
                 continue;
             }
@@ -499,13 +499,16 @@ internal sealed partial class TranslationPass
         static BackendResult Failed(string reason, string message) => new(null, false, reason, message);
     }
 
+    private readonly record struct BackendTake(
+        RouteOutcome Route,
+        int RuleIndex,
+        ClusterRegistry Clusters,
+        bool Register,
+        TimeSpan? BackendTimeout);
+
     private bool TryTakeBackend(
-        RouteOutcome route,
-        int ruleIndex,
+        BackendTake take,
         HttpBackendRef reference,
-        ClusterRegistry clusters,
-        bool register,
-        TimeSpan? backendTimeout,
         List<WeightedCluster> usable,
         out int unavailableWeight)
     {
@@ -516,10 +519,11 @@ internal sealed partial class TranslationPass
             return false;
         }
 
-        var result = ResolveBackend(route, reference, $"{route.Key}/{ruleIndex}", backendTimeout, clusters, register);
+        var result = ResolveBackend(
+            take.Route, reference, $"{take.Route.Key}/{take.RuleIndex}", take.BackendTimeout, take.Clusters, take.Register);
         if (result.ErrorReason is not null)
         {
-            route.AddRefIssue(result.ErrorReason, result.ErrorMessage ?? string.Empty);
+            take.Route.AddRefIssue(result.ErrorReason, result.ErrorMessage ?? string.Empty);
         }
 
         if (result.Usable && result.ClusterId is not null)

@@ -76,7 +76,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         Request request,
         string authorityHost,
         ProxyResourceLimits resourceLimits,
-        Action onTunnelDisposed,
+        Func<ValueTask> onTunnelDisposed,
         CancellationToken cancellationToken)
     {
         if (!await OriginAdvertisesConnectProtocolAsync(cancellationToken))

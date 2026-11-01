@@ -35,7 +35,7 @@ internal static class MmdbTestWriter
 
     private static int BuildTree(
         IReadOnlyList<(IPAddress Network, int PrefixLength, string CountryIsoCode)> networks,
-        IReadOnlyList<int> dataOffsets,
+        List<int> dataOffsets,
         out byte[] treeBytes)
     {
         var nodes = new List<(uint Left, uint Right)> { (0, 0) };
@@ -106,7 +106,7 @@ internal static class MmdbTestWriter
 
     private static uint EncodeDataPointer(uint dataOffset, int nodeCount) => (uint)(nodeCount + 16 + dataOffset);
 
-    private static void WriteRecord(Stream stream, uint value)
+    private static void WriteRecord(MemoryStream stream, uint value)
     {
         Span<byte> buf = stackalloc byte[4];
         buf.Clear();
@@ -114,7 +114,7 @@ internal static class MmdbTestWriter
         stream.Write(buf[^RecordBytes..]);
     }
 
-    private static void WriteCountryRecord(Stream stream, string isoCode)
+    private static void WriteCountryRecord(MemoryStream stream, string isoCode)
     {
         var iso = isoCode.ToUpperInvariant();
         WriteMapHeader(stream, 1);
@@ -124,7 +124,7 @@ internal static class MmdbTestWriter
         WriteUtf8String(stream, iso);
     }
 
-    private static void WriteMapHeader(Stream stream, int pairs)
+    private static void WriteMapHeader(MemoryStream stream, int pairs)
     {
         if (pairs is < 0 or > 28)
         {
@@ -134,7 +134,7 @@ internal static class MmdbTestWriter
         stream.WriteByte((byte)((7 << 5) | pairs));
     }
 
-    private static void WriteUtf8String(Stream stream, string text)
+    private static void WriteUtf8String(MemoryStream stream, string text)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         if (bytes.Length > 28)
@@ -146,7 +146,7 @@ internal static class MmdbTestWriter
         stream.Write(bytes);
     }
 
-    private static void WriteUint32(Stream stream, uint value)
+    private static void WriteUint32(MemoryStream stream, uint value)
     {
         stream.WriteByte((byte)((6 << 5) | 4));
         Span<byte> buf = stackalloc byte[4];
