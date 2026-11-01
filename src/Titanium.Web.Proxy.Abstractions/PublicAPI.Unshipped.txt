@@ -716,6 +716,14 @@ Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MimeTypes.init
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MinBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MinBytes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.ResponseCompressionConfig() -> void
+Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.IsRegistered(string! name) -> bool
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.Register(Titanium.Web.Proxy.Abstractions.Compression.IContentCodec! codec) -> void
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.TryGet(string! name, out Titanium.Web.Proxy.Abstractions.Compression.IContentCodec? codec) -> bool
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec.CreateCompressor(System.IO.Stream! sink, System.IO.Compression.CompressionLevel level, bool leaveOpen = true) -> System.IO.Stream!
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec.CreateDecompressor(System.IO.Stream! source, bool leaveOpen = true) -> System.IO.Stream!
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec.Name.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Compression.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Compression.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.GrpcWeb.get -> bool

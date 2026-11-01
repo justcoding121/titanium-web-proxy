@@ -35,6 +35,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Certes" Version="3.0.4" />
+    <PackageReference Include="ZstdSharp.Port" Version="$(ZstdSharpPortVersion)" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
     <PackageReference Include="OpenTelemetry" Version="$(OpenTelemetryVersion)" />

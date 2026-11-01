@@ -2161,7 +2161,7 @@ public static class TwpConfigValidator
         }
     }
 
-    private static readonly string[] CompressionAlgorithmNames = ["br", "gzip"];
+    private static readonly string[] CompressionAlgorithmNames = ["br", "gzip", "zstd"];
 
     private static void ValidateResponseCompression(ResponseCompressionConfig? compression, List<string> errors) // NOSONAR S3776 -- Response compression validation checks algorithms, sizes, and modes together.
     {
@@ -2189,13 +2189,13 @@ public static class TwpConfigValidator
         {
             if (algorithms.Count == 0)
             {
-                errors.Add($"{prefix}.algorithms must list at least one of: br, gzip.");
+                errors.Add($"{prefix}.algorithms must list at least one of: br, gzip, zstd.");
             }
 
             foreach (var name in algorithms.Where(name =>
                          !CompressionAlgorithmNames.Contains(name?.Trim(), StringComparer.OrdinalIgnoreCase)))
             {
-                errors.Add($"{prefix}.algorithms entry '{name}' is unknown. Use br or gzip.");
+                errors.Add($"{prefix}.algorithms entry '{name}' is unknown. Use br, gzip, or zstd.");
             }
         }
 

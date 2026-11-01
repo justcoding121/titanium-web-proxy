@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
 using Titanium.Cli.Admin;
+using Titanium.Cli.Compression;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Geo;
 using Titanium.Cli.Parsers;
@@ -130,6 +131,7 @@ internal static class RunCommand
 
         // Fast leaf cold-start before server.certificateManager overlays (which may override engine/algo).
         proxy.CertificateManager.ApplyFastColdStartLeafSettings();
+        ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         using var geoIpHost = new GeoIpResolverHost();
         try
@@ -498,6 +500,7 @@ internal static class RunCommand
 
         WriteConfigWarnings(loaded);
 
+        ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
         var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());

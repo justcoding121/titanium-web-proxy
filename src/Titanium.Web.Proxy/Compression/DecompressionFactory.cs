@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
+using Titanium.Web.Proxy.Abstractions.Compression;
 
 namespace Titanium.Web.Proxy.Compression;
 
@@ -23,6 +24,8 @@ internal static class DecompressionFactory
             // that wrapped stream is a LimitedStream (async-only by design - see LimitedStream.Read),
             // this throws NotSupportedException instead of decompressing.
             HttpCompression.Brotli => new BrotliStream(stream, CompressionMode.Decompress, leaveOpen),
+            HttpCompression.Zstd when ContentCodecs.TryGet("zstd", out var codec) && codec is not null
+                => codec.CreateDecompressor(stream, leaveOpen),
             _ => throw new NotSupportedException($"Unsupported decompression mode: {type}")
         };
     }
