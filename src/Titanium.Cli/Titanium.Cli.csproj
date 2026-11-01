@@ -26,6 +26,9 @@
     <ProjectReference Include="..\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
     <ProjectReference Include="..\Titanium.Web.Proxy.Scripting\Titanium.Web.Proxy.Scripting.csproj" />
+    <ProjectReference Include="..\Titanium.Cli.GeoIp\Titanium.Cli.GeoIp.csproj" ReferenceOutputAssembly="false">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <None Include="LICENSE" Pack="true" PackagePath="" />
@@ -39,17 +42,20 @@
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
   </ItemGroup>
   <!-- Local macOS Debug/dotnet run: copy Homebrew MsQuic beside the apphost (Release zips use bundle-http3-native.ps1). -->
+  <Target Name="CopyGeoIpSatellite" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\Titanium.Cli.GeoIp\Titanium.Cli.GeoIp.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)" />
+    <ItemGroup>
+      <_GeoIpSatellite Include="$(MSBuildThisFileDirectory)..\Titanium.Cli.GeoIp\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_GeoIpSatellite)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
   <Target Name="CopyMacHttp3Natives" AfterTargets="Build" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)..\..\tools\packaging\copy-http3-natives-osx.sh&quot; &quot;$(TargetDir)&quot;"
-          IgnoreExitCode="true"
-          StandardOutputImportance="low"
-          StandardErrorImportance="low" />
+    <Exec Command="bash &quot;$(MSBuildThisFileDirectory)..\..\tools\packaging\copy-http3-natives-osx.sh&quot; &quot;$(TargetDir)&quot;" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low" />
     <PropertyGroup>
       <_Http3LaunchSettings>$(MSBuildProjectDirectory)\Properties\launchSettings.json</_Http3LaunchSettings>
       <_Http3TargetDir>$([System.IO.Path]::GetFullPath('$(TargetDir)').TrimEnd('\').TrimEnd('/'))</_Http3TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(MSBuildProjectDirectory)\Properties" />
-    <WriteLinesToFile File="$(_Http3LaunchSettings)" Overwrite="true" Encoding="UTF-8"
-      Lines='{"profiles":{"titanium":{"commandName":"Project","environmentVariables":{"DYLD_FALLBACK_LIBRARY_PATH":"$(_Http3TargetDir)"}}}}' />
+    <WriteLinesToFile File="$(_Http3LaunchSettings)" Overwrite="true" Encoding="UTF-8" Lines="{&quot;profiles&quot;:{&quot;titanium&quot;:{&quot;commandName&quot;:&quot;Project&quot;,&quot;environmentVariables&quot;:{&quot;DYLD_FALLBACK_LIBRARY_PATH&quot;:&quot;$(_Http3TargetDir)&quot;}}}}" />
   </Target>
 </Project>

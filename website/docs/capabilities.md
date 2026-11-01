@@ -112,7 +112,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 |------------|--------|------------|-------|------|
 | Signature screening with detect mode and anomaly scoring | supported | `policies[].mode`, `policies[].paranoiaLevel`, `policies[].blockThreshold` | Built-in rule pack, per-route override, and an operator deny-list (Plus). | [Request screening](/docs/configuration#request-screening-route-policy-waf-plus) |
 | Custom rules | supported | `plus.options: waf.rulesFile` | Your own YAML rules next to the built-in pack. | [Plus](/docs/plus#custom-rules-waf-rulesfile) |
-| Geo-IP databases | not supported | — | Address policies match IP addresses and CIDR prefixes only. No geo-IP data is read. | [Configuration](/docs/configuration#routes-clusters) |
+| Geo country allow and deny | supported | `policies[].kind`, `policies[].allow`, `policies[].deny`, `server.geoIpDatabasePath` | Country codes from an operator-supplied MaxMind DB. Unknown countries fail closed on allow lists and pass on deny-only lists. | [Geo route policy](/docs/configuration#geo-route-policy-geo) |
 
 ## Observability
 

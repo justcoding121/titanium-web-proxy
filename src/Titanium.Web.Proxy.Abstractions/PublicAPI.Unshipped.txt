@@ -1089,6 +1089,8 @@ static readonly Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult.Cont
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult.Pause -> Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult.Continue -> Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult.Deny -> Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!
+Titanium.Web.Proxy.Abstractions.Routing.IGeoIpResolver
+Titanium.Web.Proxy.Abstractions.Routing.IGeoIpResolver.TryGetCountry(System.Net.IPAddress! address, out string! countryIsoCode) -> bool
 Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore
 Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore.LeaseAsync(string! key, int want, Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec spec, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult>
 Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec
@@ -1109,6 +1111,8 @@ Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.StoreAvailable.get -> b
 Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.StoreAvailable.init -> void
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.FleetRateStore.get -> Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore?
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.FleetRateStore.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GeoIpResolver.get -> Titanium.Web.Proxy.Abstractions.Routing.IGeoIpResolver?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GeoIpResolver.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scope.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scope.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.FleetFailMode.get -> string?

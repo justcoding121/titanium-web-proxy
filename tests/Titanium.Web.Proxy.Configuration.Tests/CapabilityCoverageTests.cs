@@ -36,7 +36,6 @@ public class CapabilityCoverageTests
         "OpenResty",
         "route editing",
         "Hot binary upgrade",
-        "Geo-IP",
     ];
 
     private static string DataPath => Path.Combine(DocsRepository.WebsiteDocs, ".capabilities.yml");

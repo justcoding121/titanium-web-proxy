@@ -91,6 +91,12 @@ public sealed class ServerConfig
     /// <summary>DNS resolver for HTTPS/SVCB discovery, e.g. <c>8.8.8.8:53</c>.</summary>
     public string? DnsServerEndPoint { get; set; }
 
+    /// <summary>
+    ///     Path to a MaxMind DB (MMDB) country database for <c>geo</c> route policies. Operator-supplied; not shipped
+    ///     with Titanium. Required when any policy uses kind <c>geo</c>.
+    /// </summary>
+    public string? GeoIpDatabasePath { get; set; }
+
     /// <summary>Seconds to wait for in-flight clients on SIGTERM, SIGINT, or Ctrl+C. Default is 10.</summary>
     public int? DrainTimeoutSeconds { get; set; }
 

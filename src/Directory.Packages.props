@@ -6,5 +6,6 @@
   -->
   <PropertyGroup>
     <OpenTelemetryVersion>1.20.1</OpenTelemetryVersion>
+    <MaxMindDbVersion>5.2.0</MaxMindDbVersion>
   </PropertyGroup>
 </Project>

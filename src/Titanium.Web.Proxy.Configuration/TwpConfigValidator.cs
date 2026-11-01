@@ -46,6 +46,7 @@ public static class TwpConfigValidator
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateOidcNeedsPlus(config, errors);
         ValidateWafNeedsPlus(config, errors);
+        ValidateGeoNeedsDatabase(config, errors);
         var pluginNames = ValidatePlugins(config.Plugins, errors);
         ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners ?? [], clusterIds, errors);
@@ -551,7 +552,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth", "oidc", "waf",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf",
     };
 
     private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
@@ -662,6 +663,15 @@ public static class TwpConfigValidator
                 ValidatePrefixList(name, "allow", policy.Allow, errors);
                 ValidatePrefixList(name, "deny", policy.Deny, errors);
                 break;
+            case "geo":
+                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
+                {
+                    errors.Add($"Policy '{name}' (geo) needs allow or deny.");
+                }
+
+                ValidateCountryList(name, "allow", policy.Allow, errors);
+                ValidateCountryList(name, "deny", policy.Deny, errors);
+                break;
             case "extAuth":
                 ValidateExtAuth(policy, errors);
                 break;
@@ -765,6 +775,48 @@ public static class TwpConfigValidator
     };
 
     /// <summary>The login is enforced by the Plus module. Without it the policy would refuse every request.</summary>
+    private static void ValidateGeoNeedsDatabase(TwpConfig config, List<string> errors)
+    {
+        if (config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        if (!policies.Any(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.Server?.GeoIpDatabasePath))
+        {
+            errors.Add("A geo policy requires server.geoIpDatabasePath.");
+        }
+    }
+
+    private static void ValidateCountryList(string name, string field, string? csv, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(csv))
+        {
+            return;
+        }
+
+        var count = 0;
+        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            count++;
+            if (count > 300)
+            {
+                errors.Add($"Policy '{name}' (geo) {field} has more than 300 country codes.");
+                return;
+            }
+
+            if (part.Length != 2 || !char.IsAsciiLetter(part[0]) || !char.IsAsciiLetter(part[1]))
+            {
+                errors.Add($"Policy '{name}' (geo) {field} entry '{part}' must be a two-letter country code.");
+            }
+        }
+    }
+
     private static void ValidateOidcNeedsPlus(TwpConfig config, List<string> errors)
     {
         if (config.Plus?.Enabled == true || config.Policies is not { Count: > 0 } policies)

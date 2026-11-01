@@ -273,7 +273,7 @@ internal static class RoutePolicies
                 continue;
             }
 
-            var stop = ApplyKind(runtime, policy, route, request, client, trustedProxies, ref decision, ref heldNames);
+            var stop = ApplyKind(options, runtime, policy, route, request, client, trustedProxies, ref decision, ref heldNames);
             if (stop is { } denied)
             {
                 ReleaseHeld(runtime, heldNames);
@@ -299,6 +299,7 @@ internal static class RoutePolicies
 
     /// <summary>Null means keep evaluating. A decision means stop and give back any held connection slots.</summary>
     private static PolicyDecision? ApplyKind( // NOSONAR S107 -- Policy kind dispatch shares mutable held-slot state; a bag type would obscure ref semantics.
+        ReverseProxyOptions options,
         Runtime runtime,
         RoutePolicyConfig policy,
         RouteConfig route,
@@ -337,6 +338,8 @@ internal static class RoutePolicies
                 decision = decision with { Held = heldNames, HeldRuntime = runtime };
                 return null;
             case "ipAllowDeny" when !AllowAddress(policy, client):
+                return Stop(403, string.Empty);
+            case "geo" when !AllowCountry(options.GeoIpResolver, policy, client):
                 return Stop(403, string.Empty);
             default:
                 return null;
@@ -430,6 +433,64 @@ internal static class RoutePolicies
     }
 
     private static readonly ConditionalWeakTable<RoutePolicyConfig, AddressRules> AddressRuleCache = new();
+
+    private static bool AllowCountry(IGeoIpResolver? resolver, RoutePolicyConfig policy, IPAddress? client)
+    {
+        if (client is null)
+        {
+            return string.IsNullOrEmpty(policy.Allow);
+        }
+
+        var rules = CountryRuleCache.GetValue(policy, static p => new CountryRules(p.Allow, p.Deny));
+        string? country = null;
+        if (resolver?.TryGetCountry(client, out var code) == true && !string.IsNullOrEmpty(code))
+        {
+            country = code;
+        }
+
+        if (country is not null)
+        {
+            if (rules.Deny.Contains(country))
+            {
+                return false;
+            }
+
+            if (rules.HasAllow)
+            {
+                return rules.Allow.Contains(country);
+            }
+
+            return true;
+        }
+
+        return !rules.HasAllow;
+    }
+
+    private static readonly ConditionalWeakTable<RoutePolicyConfig, CountryRules> CountryRuleCache = new();
+
+    private sealed class CountryRules(string? allow, string? deny)
+    {
+        public bool HasAllow { get; } = !string.IsNullOrWhiteSpace(allow);
+        public HashSet<string> Allow { get; } = Parse(allow);
+        public HashSet<string> Deny { get; } = Parse(deny);
+
+        private static HashSet<string> Parse(string? csv)
+        {
+            if (string.IsNullOrWhiteSpace(csv))
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var parts = csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var set = new HashSet<string>(parts.Length, StringComparer.OrdinalIgnoreCase);
+            foreach (var part in parts)
+            {
+                set.Add(part.ToUpperInvariant());
+            }
+
+            return set;
+        }
+    }
 
     /// <summary>Parsed once per policy. IPv4 and IPv6 prefixes, and IPv4-mapped IPv6 clients, all match.</summary>
     private sealed class AddressRules(string? allow, string? deny)

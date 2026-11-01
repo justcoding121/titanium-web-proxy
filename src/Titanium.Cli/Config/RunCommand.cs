@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
 using Titanium.Cli.Admin;
 using Titanium.Cli.Certificates;
+using Titanium.Cli.Geo;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
 using Titanium.Web.Proxy;
@@ -130,6 +131,17 @@ internal static class RunCommand
         // Fast leaf cold-start before server.certificateManager overlays (which may override engine/algo).
         proxy.CertificateManager.ApplyFastColdStartLeafSettings();
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        using var geoIpHost = new GeoIpResolverHost();
+        try
+        {
+            geoIpHost.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: true);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException)
+        {
+            AsyncConsole.WriteError(ex.Message);
+            return 1;
+        }
+
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
         // Spans and metrics leave through OTLP; the host is disposed after the drain so the last spans are flushed.
@@ -229,7 +241,8 @@ internal static class RunCommand
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
                 routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers,
-                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline), plusContext?.FleetRateStore);
+                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline), plusContext?.FleetRateStore,
+                geoIpHost.Resolver);
         }
 
         AdminServer? adminServer = null;
@@ -250,6 +263,7 @@ internal static class RunCommand
                     t => grpcJsonTranscoder = t,
                     RefreshReverseProxy,
                     policies,
+                    geoIpHost,
                     // A rotated Secret takes effect for /metrics and /version without a restart.
                     // Dropping the token needs a restart: the bind address is not re-applied here.
                     onApplied: applied =>
@@ -461,6 +475,7 @@ internal static class RunCommand
         Action<IGrpcJsonTranscoder?> setGrpc,
         Action refreshReverseProxy,
         List<RoutePolicyConfig>? policies = null,
+        GeoIpResolverHost? geoIpHost = null,
         Action<TwpConfig>? onApplied = null,
         Func<PluginHost?>? getPlugins = null,
         Action<PluginHost>? setPlugins = null,
@@ -484,6 +499,7 @@ internal static class RunCommand
         WriteConfigWarnings(loaded);
 
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
         var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
         host.RememberAppliedClusters(clusterManager.Snapshot.Clusters.Values.ToList());
 
@@ -588,7 +604,8 @@ internal static class RunCommand
         IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null,
         IReadOnlyDictionary<string, IProxyMiddleware>? routePlugins = null,
         IScriptPhaseHost? scriptPipeline = null,
-        IFleetRateStore? fleetRateStore = null)
+        IFleetRateStore? fleetRateStore = null,
+        IGeoIpResolver? geoIpResolver = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
@@ -607,6 +624,7 @@ internal static class RunCommand
             RoutePlugins = routePlugins is { Count: > 0 } ? routePlugins : null,
             ScriptPipeline = scriptPipeline,
             FleetRateStore = fleetRateStore,
+            GeoIpResolver = geoIpResolver,
         };
     }
 

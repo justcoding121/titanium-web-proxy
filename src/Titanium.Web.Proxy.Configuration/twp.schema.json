@@ -1521,6 +1521,9 @@
             }
           }
         },
+        "geoIpDatabasePath": {
+          "type": "string"
+        },
         "ignoreServerCertificateErrors": {
           "type": "boolean"
         },

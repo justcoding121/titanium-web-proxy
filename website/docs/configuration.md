@@ -325,6 +325,28 @@ Match fields typically include host, path (`Exact` / `Prefix` / `Template`), met
 
 A `rateLimit` policy counts requests per key and answers 429 with `Retry-After` (whole seconds until the window ends or a token is back) when the limit is spent. `key` picks what is counted: `client` (default, the socket address), `forwardedClient` (the rightmost `X-Forwarded-For` entry that is not in `server.forwardedHeaders.trustedProxies`, used only when the peer itself is trusted, otherwise the socket address), `header:<Name>`, `cookie:<Name>`, or `route`. A header or cookie value is stored as a 16-byte SHA-256 prefix, and a request without it is counted by client address. `algorithm` is `fixedWindow` (default, `limit` requests per `windowSeconds`) or `tokenBucket` (refills `limit` tokens per `windowSeconds` up to `burst`, which defaults to `limit`). `maxKeys` (1000 to 10000000, default 100000) bounds the counters kept per policy: when full, expired counters are dropped, and any further new key shares one overflow counter, so a client that rotates header values cannot grow memory or dodge the limit. `emitHeaders` (default false) adds `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` to the 429. With the default keys and algorithm, counting is unchanged. The default `scope` is `node`: counters stay in process memory per proxy instance.
 
+### Geo (route policy `geo`) {#geo-route-policy-geo}
+
+A route can allow or deny clients by country using an operator-supplied MaxMind DB (MMDB) country database. Set `server.geoIpDatabasePath` to the file path, then attach a `geo` policy to the route. The policy reuses the same `allow` and `deny` fields as `ipAllowDeny`, but values are comma-separated two-letter ISO 3166-1 country codes (for example `US, CA, GB`).
+
+```yaml twp-fragment
+server:
+  geoIpDatabasePath: /etc/titanium/GeoLite2-Country.mmdb
+policies:
+  - name: us-only
+    kind: geo
+    allow: US
+routes:
+  - id: app
+    clusterId: web
+    match: { path: /, pathKind: Prefix }
+    policies: [us-only]
+```
+
+When the country is unknown (private address, missing from the database, or no resolver at runtime), an **allow** list denies the request (`403`); a **deny-only** list lets it through. Titanium does not ship a GeoIP database. You are responsible for the database license. On config reload, the CLI swaps in a new MMDB when the path or file timestamp changes and keeps the previous reader for 30 seconds so in-flight lookups finish.
+
+Library hosts set `ReverseProxyOptions.GeoIpResolver` to any `IGeoIpResolver` implementation (the CLI uses MaxMind.Db when `geoIpDatabasePath` is configured).
+
 ### Fleet rate limit {#fleet-rate-limit}
 
 Set `scope: fleet` on a `rateLimit` policy (Plus) to share one token bucket across instances through Redis (`plus.options` `state.redis`, or `state.mode` / `state.redis` as for the older per-IP window). Each node keeps a small local reserve and refills it with a background lease; the request path never awaits Redis. Overshoot across N nodes is bounded by `limit + burst + N * leaseSize` (a node may hold an unused lease). Lease size shrinks toward 1 when `limit` is small, so a single node cannot drain a low fleet budget — accuracy at low limits prefers smaller leases over perfect fairness. When Redis is down or the store is not started, `fleetFailMode` applies: `local` (default) falls back to a per-node bucket at `limit * localShare` (default `0.25`), `open` allows traffic, and `closed` answers 429. `fleetFailMode` and `localShare` are valid only with `scope: fleet`.

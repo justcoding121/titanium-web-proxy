@@ -309,6 +309,8 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.get -> Sys
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.GeoIpDatabasePath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.GeoIpDatabasePath.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Enable100ContinueBehaviour.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Enable100ContinueBehaviour.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp2.get -> bool?
