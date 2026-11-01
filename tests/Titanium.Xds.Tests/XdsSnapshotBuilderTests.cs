@@ -76,20 +76,22 @@ public class XdsSnapshotBuilderTests
         Assert.AreEqual(TimeSpan.FromSeconds(7), cluster.HttpClient!.ConnectTimeout);
     }
 
+    private static readonly string[] ClusterConfigPropertyNames =
+    [
+        "AffinityCookie", "AffinityHeader", "Algorithm", "Destinations", "HashKey", "HealthCheck", "HttpClient",
+        "Id", "LoadBalancingPolicy", "Queue", "Retry", "SendProxyProtocol", "SessionAffinity", "SlowStartSeconds",
+        "ZoneAware",
+    ];
+
+    private static readonly string[] AppExampleHost = ["app.example.com"];
+
     [TestMethod]
     public void ClusterConfig_PropertySet_IsCoveredByTheEdsCopy()
     {
         // XdsSnapshotBuilder.WithDestinations copies every ClusterConfig setting. A new property must be added there
         // too, otherwise EDS silently drops it; this list fails first.
         var names = typeof(ClusterConfig).GetProperties().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal);
-        CollectionAssert.AreEqual(
-            new[]
-            {
-                "AffinityCookie", "AffinityHeader", "Algorithm", "Destinations", "HashKey", "HealthCheck", "HttpClient",
-                "Id", "LoadBalancingPolicy", "Queue", "Retry", "SendProxyProtocol", "SessionAffinity", "SlowStartSeconds",
-                "ZoneAware",
-            },
-            names.ToArray());
+        CollectionAssert.AreEqual(ClusterConfigPropertyNames, names.ToArray());
     }
 
     private static (string CertPem, string KeyPem) SelfSigned(string dnsName)
@@ -134,7 +136,7 @@ public class XdsSnapshotBuilderTests
         Assert.AreEqual("file.pfx", certificates.Items[0].Path);
         var sds = certificates.Items[1];
         Assert.IsTrue(File.Exists(sds.Path));
-        CollectionAssert.AreEqual(new[] { "app.example.com" }, sds.Hosts.ToArray());
+        CollectionAssert.AreEqual(AppExampleHost, sds.Hosts.ToArray());
         using var loaded = X509CertificateLoader.LoadPkcs12FromFile(sds.Path!, password: null);
         Assert.IsTrue(loaded.HasPrivateKey);
     }

@@ -143,30 +143,40 @@ internal sealed partial class TranslationPass
             var rules = route.Route.Spec.Rules ?? [];
             for (var ruleIndex = 0; ruleIndex < rules.Count; ruleIndex++)
             {
-                var rule = rules[ruleIndex];
-                var plan = new RulePlan();
-                foreach (var filter in rule.Filters ?? [])
-                {
-                    ApplyGrpcFilter(route, ruleIndex, filter, plan, httpShim, clusters);
-                }
-
-                PlanGrpcBackends(route, ruleIndex, rule, plan, clusters, httpShim);
-                var matches = rule.Matches is { Count: > 0 } ? rule.Matches : [new GrpcRouteMatch()];
-                for (var matchIndex = 0; matchIndex < matches.Count; matchIndex++)
-                {
-                    if (!TryBuildGrpcMatch(matches[matchIndex], out var httpMatch, out var problem))
-                    {
-                        route.Unsupported.Add($"rule {ruleIndex} match {matchIndex}: {problem}");
-                        plan.Direct500 = true;
-                    }
-
-                    EmitMatch(httpShim, ruleIndex, matchIndex, httpMatch ?? new HttpRouteMatch(), plan, drafts);
-                }
+                TranslateGrpcRule(route, httpShim, rules[ruleIndex], ruleIndex, clusters, drafts);
             }
 
             route.RefsReason = httpShim.RefsReason;
             route.RefsMessage = httpShim.RefsMessage;
             route.Unsupported.AddRange(httpShim.Unsupported);
+        }
+    }
+
+    private void TranslateGrpcRule(
+        GrpcRouteOutcome route,
+        RouteOutcome httpShim,
+        GrpcRouteRule rule,
+        int ruleIndex,
+        ClusterRegistry clusters,
+        List<RouteDraft> drafts)
+    {
+        var plan = new RulePlan();
+        foreach (var filter in rule.Filters ?? [])
+        {
+            ApplyGrpcFilter(route, ruleIndex, filter, plan, httpShim, clusters);
+        }
+
+        PlanGrpcBackends(route, ruleIndex, rule, plan, clusters, httpShim);
+        var matches = rule.Matches is { Count: > 0 } ? rule.Matches : [new GrpcRouteMatch()];
+        for (var matchIndex = 0; matchIndex < matches.Count; matchIndex++)
+        {
+            if (!TryBuildGrpcMatch(matches[matchIndex], out var httpMatch, out var problem))
+            {
+                route.Unsupported.Add($"rule {ruleIndex} match {matchIndex}: {problem}");
+                plan.Direct500 = true;
+            }
+
+            EmitMatch(httpShim, ruleIndex, matchIndex, httpMatch ?? new HttpRouteMatch(), plan, drafts);
         }
     }
 

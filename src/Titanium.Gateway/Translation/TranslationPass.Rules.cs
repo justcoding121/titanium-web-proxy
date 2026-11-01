@@ -71,7 +71,7 @@ internal sealed class ClusterEndpoints
     public ServiceInfo? FindService(string ns, string name) =>
         _state.Services.FirstOrDefault(s => s.Namespace == ns && s.Name == name);
 
-    internal bool IsZoneAwareService(ServiceInfo service) =>
+    internal static bool IsZoneAwareService(ServiceInfo service) =>
         service.Annotations.TryGetValue("titanium.io/zone-aware", out var value) &&
         string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
@@ -401,27 +401,13 @@ internal sealed partial class TranslationPass
         var any = false;
         foreach (var reference in rule.BackendRefs ?? [])
         {
-            var weight = reference.Weight ?? 1;
-            if (weight <= 0)
+            if (!TryTakeBackend(route, ruleIndex, reference, clusters, register, backendTimeout, usable, out var missed))
             {
                 continue;
             }
 
             any = true;
-            var result = ResolveBackend(route, reference, $"{route.Key}/{ruleIndex}", backendTimeout, clusters, register);
-            if (result.ErrorReason is not null)
-            {
-                route.AddRefIssue(result.ErrorReason, result.ErrorMessage ?? string.Empty);
-            }
-
-            if (result.Usable && result.ClusterId is not null)
-            {
-                usable.Add(new WeightedCluster { ClusterId = result.ClusterId, Weight = weight });
-            }
-            else
-            {
-                unavailableWeight += weight;
-            }
+            unavailableWeight += missed;
         }
 
         if (!any || usable.Count == 0)
@@ -468,15 +454,7 @@ internal sealed partial class TranslationPass
 
         var routeNamespace = route.Route.Metadata.Namespace ?? "default";
         var ns = string.IsNullOrEmpty(reference.Namespace) ? routeNamespace : reference.Namespace;
-        if (!string.Equals(ns, routeNamespace, StringComparison.Ordinal) &&
-            !_grants.Allows(
-                GatewayApiNames.Group,
-                GatewayApiNames.HttpRouteKind,
-                routeNamespace,
-                string.Empty,
-                GatewayApiNames.ServiceKind,
-                ns,
-                reference.Name))
+        if (CrossNamespaceDenied(routeNamespace, ns, reference.Name))
         {
             return Failed("RefNotPermitted", $"backendRef {ns}/{reference.Name} is in another namespace and no ReferenceGrant allows it.");
         }
@@ -513,26 +491,82 @@ internal sealed partial class TranslationPass
 
         if (register && !clusters.Contains(id))
         {
-            clusters.Add(new ClusterConfig
-            {
-                Id = id,
-                Algorithm = LoadBalanceAlgorithm.RoundRobin,
-                HttpClient = backendTimeout is { } t ? new ClusterHttpClientConfig { RequestTimeout = t } : null,
-                Destinations = endpoints
-                    .Select(e => new DestinationConfig
-                    {
-                        Id = $"{id}/{e.Address}:{e.Port}",
-                        Address = e.Address,
-                        Port = e.Port,
-                        Zone = e.Zone,
-                    })
-                    .ToList(),
-                ZoneAware = clusters.Endpoints.IsZoneAwareService(service) ? new ZoneAwareConfig() : null,
-            });
+            AddBackendCluster(clusters, id, backendTimeout, service, endpoints);
         }
 
         return new BackendResult(id, true, null, null);
 
         static BackendResult Failed(string reason, string message) => new(null, false, reason, message);
+    }
+
+    private bool TryTakeBackend(
+        RouteOutcome route,
+        int ruleIndex,
+        HttpBackendRef reference,
+        ClusterRegistry clusters,
+        bool register,
+        TimeSpan? backendTimeout,
+        List<WeightedCluster> usable,
+        out int unavailableWeight)
+    {
+        unavailableWeight = 0;
+        var weight = reference.Weight ?? 1;
+        if (weight <= 0)
+        {
+            return false;
+        }
+
+        var result = ResolveBackend(route, reference, $"{route.Key}/{ruleIndex}", backendTimeout, clusters, register);
+        if (result.ErrorReason is not null)
+        {
+            route.AddRefIssue(result.ErrorReason, result.ErrorMessage ?? string.Empty);
+        }
+
+        if (result.Usable && result.ClusterId is not null)
+        {
+            usable.Add(new WeightedCluster { ClusterId = result.ClusterId, Weight = weight });
+        }
+        else
+        {
+            unavailableWeight = weight;
+        }
+
+        return true;
+    }
+
+    private bool CrossNamespaceDenied(string routeNamespace, string ns, string name) =>
+        !string.Equals(ns, routeNamespace, StringComparison.Ordinal) &&
+        !_grants.Allows(
+            GatewayApiNames.Group,
+            GatewayApiNames.HttpRouteKind,
+            routeNamespace,
+            string.Empty,
+            GatewayApiNames.ServiceKind,
+            ns,
+            name);
+
+    private static void AddBackendCluster(
+        ClusterRegistry clusters,
+        string id,
+        TimeSpan? backendTimeout,
+        ServiceInfo service,
+        List<(string Address, int Port, string? Zone)> endpoints)
+    {
+        clusters.Add(new ClusterConfig
+        {
+            Id = id,
+            Algorithm = LoadBalanceAlgorithm.RoundRobin,
+            HttpClient = backendTimeout is { } timeout ? new ClusterHttpClientConfig { RequestTimeout = timeout } : null,
+            Destinations = endpoints
+                .Select(e => new DestinationConfig
+                {
+                    Id = $"{id}/{e.Address}:{e.Port}",
+                    Address = e.Address,
+                    Port = e.Port,
+                    Zone = e.Zone,
+                })
+                .ToList(),
+            ZoneAware = ClusterEndpoints.IsZoneAwareService(service) ? new ZoneAwareConfig() : null,
+        });
     }
 }

@@ -383,7 +383,7 @@ public partial class ProxyServer
             if (CompressionPolicy is not null)
                 await ApplyH2ToH2DispatchResponseCompressionAsync(sessionArgs, exchange);
 
-            await PrepareHttp2DispatchResponseForEmitAsync(sessionArgs, clientHttpVersion, exchange);
+            await PrepareHttp2DispatchResponseForEmitAsync(sessionArgs, clientHttpVersion);
 
             await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
                 cancellationToken);
@@ -522,7 +522,7 @@ public partial class ProxyServer
         if (response.Locked)
             return;
 
-        var shape = new BridgeCompressionShape(OriginIsHttp1: false, ClientIsHttp2: true, ClientIsHttp3: false);
+        var shape = new BridgeCompressionShape(OriginLegIsHttp1: false, ClientIsHttp2: true, ClientIsHttp3: false);
         if (CompressionPolicy is { Streaming: false })
         {
             var body = response.IsBodyRead ? response.Body : exchange.Body;
@@ -535,7 +535,7 @@ public partial class ProxyServer
         if (plan is null || response.StreamBodyWriter is not { } originWriter)
             return;
 
-        var policy = CompressionPolicy!;
+        var policy = CompressionPolicy;
         response.StreamBodyWriter = async (sink, ct) =>
         {
             await using var origin = new StreamBodyWriterPumpStream(originWriter, ct);
@@ -553,8 +553,7 @@ public partial class ProxyServer
         };
     }
 
-    private async Task PrepareHttp2DispatchResponseForEmitAsync(SessionEventArgs sessionArgs, Version clientHttpVersion,
-        Http2OriginExchange exchange)
+    private async Task PrepareHttp2DispatchResponseForEmitAsync(SessionEventArgs sessionArgs, Version clientHttpVersion)
     {
         var response = sessionArgs.HttpClient.Response;
         if (response.Locked)

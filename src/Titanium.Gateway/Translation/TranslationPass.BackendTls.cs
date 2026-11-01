@@ -24,26 +24,7 @@ internal sealed partial class TranslationPass
                      .ThenBy(p => p.Metadata.Namespace, StringComparer.Ordinal)
                      .ThenBy(p => p.Metadata.Name, StringComparer.Ordinal))
         {
-            var target = policy.Spec.TargetRefs?.FirstOrDefault(t =>
-                (string.IsNullOrEmpty(t.Group) || t.Group == string.Empty) &&
-                (string.IsNullOrEmpty(t.Kind) || t.Kind == GatewayApiNames.ServiceKind));
-            if (target is null)
-            {
-                continue;
-            }
-
-            var key = $"{policy.Metadata.Namespace}/{target.Name}";
-            if (_servicePolicies.ContainsKey(key))
-            {
-                continue;
-            }
-
-            if (policy.Spec.Validation?.SubjectAltNames is { Count: > 0 })
-            {
-                continue;
-            }
-
-            _servicePolicies[key] = policy;
+            IndexBackendTlsPolicy(policy);
         }
 
         foreach (var cluster in clusters.Build())
@@ -157,6 +138,32 @@ internal sealed partial class TranslationPass
         pem = builder.ToString();
         return pem.Length > 0;
     }
+
+    private void IndexBackendTlsPolicy(BackendTlsPolicy policy)
+    {
+        var target = policy.Spec.TargetRefs?.FirstOrDefault(t => IsCoreServiceRef(t.Group, t.Kind));
+        if (target is null)
+        {
+            return;
+        }
+
+        var key = $"{policy.Metadata.Namespace}/{target.Name}";
+        if (_servicePolicies.ContainsKey(key))
+        {
+            return;
+        }
+
+        if (policy.Spec.Validation?.SubjectAltNames is { Count: > 0 })
+        {
+            return;
+        }
+
+        _servicePolicies[key] = policy;
+    }
+
+    private static bool IsCoreServiceRef(string? group, string? kind) =>
+        (string.IsNullOrEmpty(group) || group == string.Empty) &&
+        (string.IsNullOrEmpty(kind) || kind == GatewayApiNames.ServiceKind);
 
     private static string? ServiceKeyFromClusterId(string clusterId)
     {

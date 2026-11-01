@@ -21,104 +21,32 @@ public static class XdsSnapshotBuilder
     public static XdsSnapshotBuildResult Build(AdsResourceStore store, string stateDirectory, TwpConfig bootstrap)
     {
         var clusters = new Dictionary<string, ClusterConfig>(StringComparer.Ordinal);
-        if (store.TryGetAll(XdsTypeUrls.Cluster, out var clusterResources))
+        if (TranslateClusters(store, clusters) is { } clusterError)
         {
-            foreach (var (_, any) in clusterResources)
-            {
-                var cluster = any.Unpack<Envoy.Config.Cluster.V3.Cluster>();
-                var translated = ClusterTranslator.Translate(cluster);
-                if (!translated.IsSuccess)
-                {
-                    return new XdsSnapshotBuildResult { Error = translated.Error };
-                }
-
-                clusters[cluster.Name] = translated.Value!;
-            }
+            return Failed(clusterError);
         }
 
-        if (store.TryGetAll(XdsTypeUrls.ClusterLoadAssignment, out var endpointResources))
+        if (ApplyEndpoints(store, clusters) is { } endpointError)
         {
-            foreach (var (_, any) in endpointResources)
-            {
-                var assignment = any.Unpack<Envoy.Config.Endpoint.V3.ClusterLoadAssignment>();
-                var translated = EndpointTranslator.Translate(assignment);
-                if (!translated.IsSuccess)
-                {
-                    return new XdsSnapshotBuildResult { Error = translated.Error };
-                }
-
-                if (!clusters.TryGetValue(assignment.ClusterName, out var cluster))
-                {
-                    return new XdsSnapshotBuildResult
-                    {
-                        Error = new TranslationError
-                        {
-                            ResourceName = assignment.ClusterName,
-                            FieldPath = "cluster_name",
-                            Message = "cluster load assignment references an unknown cluster",
-                        },
-                    };
-                }
-
-                clusters[assignment.ClusterName] = WithDestinations(cluster, translated.Value!.ToList());
-            }
+            return Failed(endpointError);
         }
 
         var routes = new List<RouteConfig>();
-        if (store.TryGetAll(XdsTypeUrls.RouteConfiguration, out var routeResources))
+        if (TranslateRoutes(store, routes) is { } routeError)
         {
-            foreach (var (_, any) in routeResources)
-            {
-                var routeConfiguration = any.Unpack<Envoy.Config.Route.V3.RouteConfiguration>();
-                var translated = RouteTranslator.Translate(routeConfiguration);
-                if (!translated.IsSuccess)
-                {
-                    return new XdsSnapshotBuildResult { Error = translated.Error };
-                }
-
-                routes.AddRange(translated.Value!);
-            }
+            return Failed(routeError);
         }
 
         var listeners = new List<ListenerConfig>();
-        if (store.TryGetAll(XdsTypeUrls.Listener, out var listenerResources))
+        if (TranslateListeners(store, listeners) is { } listenerError)
         {
-            foreach (var (_, any) in listenerResources)
-            {
-                var listener = any.Unpack<Envoy.Config.Listener.V3.Listener>();
-                var translated = ListenerTranslator.Translate(listener);
-                if (!translated.IsSuccess)
-                {
-                    return new XdsSnapshotBuildResult { Error = translated.Error };
-                }
-
-                listeners.Add(translated.Value!);
-            }
+            return Failed(listenerError);
         }
 
         var certificateItems = new List<CertificateFileConfig>();
-        if (store.TryGetAll(XdsTypeUrls.Secret, out var secretResources))
+        if (TranslateSecrets(store, stateDirectory, certificateItems) is { } secretError)
         {
-            foreach (var (_, any) in secretResources)
-            {
-                var secret = any.Unpack<Envoy.Extensions.TransportSockets.Tls.V3.Secret>();
-                var translated = SecretTranslator.Translate(secret, stateDirectory);
-                if (!translated.IsSuccess)
-                {
-                    return new XdsSnapshotBuildResult { Error = translated.Error };
-                }
-
-                // A TLS certificate secret becomes an SNI-selected certificate on the decrypting and TLS-terminating
-                // listeners. Validation contexts (trusted CAs) are written to the state directory only.
-                if (translated.Value!.PfxPath is { } pfxPath)
-                {
-                    certificateItems.Add(new CertificateFileConfig
-                    {
-                        Path = pfxPath,
-                        Hosts = translated.Value.Hosts.ToList(),
-                    });
-                }
-            }
+            return Failed(secretError);
         }
 
         return new XdsSnapshotBuildResult
@@ -134,6 +62,138 @@ public static class XdsSnapshotBuilder
                 Certificates = MergeCertificates(bootstrap.Certificates, certificateItems),
             },
         };
+    }
+
+    private static XdsSnapshotBuildResult Failed(TranslationError error) => new() { Error = error };
+
+    private static TranslationError? TranslateClusters(AdsResourceStore store, Dictionary<string, ClusterConfig> clusters)
+    {
+        if (!store.TryGetAll(XdsTypeUrls.Cluster, out var clusterResources))
+        {
+            return null;
+        }
+
+        foreach (var (_, any) in clusterResources)
+        {
+            var cluster = any.Unpack<Envoy.Config.Cluster.V3.Cluster>();
+            var translated = ClusterTranslator.Translate(cluster);
+            if (!translated.IsSuccess)
+            {
+                return translated.Error;
+            }
+
+            clusters[cluster.Name] = translated.Value!;
+        }
+
+        return null;
+    }
+
+    private static TranslationError? ApplyEndpoints(AdsResourceStore store, Dictionary<string, ClusterConfig> clusters)
+    {
+        if (!store.TryGetAll(XdsTypeUrls.ClusterLoadAssignment, out var endpointResources))
+        {
+            return null;
+        }
+
+        foreach (var (_, any) in endpointResources)
+        {
+            var assignment = any.Unpack<Envoy.Config.Endpoint.V3.ClusterLoadAssignment>();
+            var translated = EndpointTranslator.Translate(assignment);
+            if (!translated.IsSuccess)
+            {
+                return translated.Error;
+            }
+
+            if (!clusters.TryGetValue(assignment.ClusterName, out var cluster))
+            {
+                return new TranslationError
+                {
+                    ResourceName = assignment.ClusterName,
+                    FieldPath = "cluster_name",
+                    Message = "cluster load assignment references an unknown cluster",
+                };
+            }
+
+            clusters[assignment.ClusterName] = WithDestinations(cluster, translated.Value!.ToList());
+        }
+
+        return null;
+    }
+
+    private static TranslationError? TranslateRoutes(AdsResourceStore store, List<RouteConfig> routes)
+    {
+        if (!store.TryGetAll(XdsTypeUrls.RouteConfiguration, out var routeResources))
+        {
+            return null;
+        }
+
+        foreach (var (_, any) in routeResources)
+        {
+            var routeConfiguration = any.Unpack<Envoy.Config.Route.V3.RouteConfiguration>();
+            var translated = RouteTranslator.Translate(routeConfiguration);
+            if (!translated.IsSuccess)
+            {
+                return translated.Error;
+            }
+
+            routes.AddRange(translated.Value!);
+        }
+
+        return null;
+    }
+
+    private static TranslationError? TranslateListeners(AdsResourceStore store, List<ListenerConfig> listeners)
+    {
+        if (!store.TryGetAll(XdsTypeUrls.Listener, out var listenerResources))
+        {
+            return null;
+        }
+
+        foreach (var (_, any) in listenerResources)
+        {
+            var listener = any.Unpack<Envoy.Config.Listener.V3.Listener>();
+            var translated = ListenerTranslator.Translate(listener);
+            if (!translated.IsSuccess)
+            {
+                return translated.Error;
+            }
+
+            listeners.Add(translated.Value!);
+        }
+
+        return null;
+    }
+
+    private static TranslationError? TranslateSecrets(
+        AdsResourceStore store, string stateDirectory, List<CertificateFileConfig> certificateItems)
+    {
+        if (!store.TryGetAll(XdsTypeUrls.Secret, out var secretResources))
+        {
+            return null;
+        }
+
+        foreach (var (_, any) in secretResources)
+        {
+            var secret = any.Unpack<Envoy.Extensions.TransportSockets.Tls.V3.Secret>();
+            var translated = SecretTranslator.Translate(secret, stateDirectory);
+            if (!translated.IsSuccess)
+            {
+                return translated.Error;
+            }
+
+            // A TLS certificate secret becomes an SNI-selected certificate on the decrypting and TLS-terminating
+            // listeners. Validation contexts (trusted CAs) are written to the state directory only.
+            if (translated.Value!.PfxPath is { } pfxPath)
+            {
+                certificateItems.Add(new CertificateFileConfig
+                {
+                    Path = pfxPath,
+                    Hosts = translated.Value.Hosts.ToList(),
+                });
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Keeps the file's certificate settings and adds the SDS certificates after the file's own items.</summary>

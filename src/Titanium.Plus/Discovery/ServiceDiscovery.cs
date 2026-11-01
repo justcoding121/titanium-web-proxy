@@ -21,6 +21,7 @@ namespace Titanium.Plus.Discovery;
 public sealed class ServiceDiscovery : IDisposable
 {
     private const string LabelSelectorQueryKey = "labelSelector";
+    private const string ClusterIdOption = "discovery.clusterId";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -194,24 +195,7 @@ public sealed class ServiceDiscovery : IDisposable
                 while (!_cts.IsCancellationRequested)
                 {
                     await Task.Delay(200, _cts.Token);
-                    if (!await ApplyFileAsync(context, full, _cts.Token))
-                    {
-                        // Truncate-then-write often yields one empty read before the bytes land.
-                        for (var retry = 0; retry < 5 && !_cts.IsCancellationRequested; retry++)
-                        {
-                            await Task.Delay(100, _cts.Token);
-                            if (await ApplyFileAsync(context, full, _cts.Token))
-                            {
-                                StampAppliedFile(full);
-                                break;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        StampAppliedFile(full);
-                    }
-
+                    await ApplyDebouncedFileOnceAsync(context, full);
                     if (Interlocked.Exchange(ref _fileWatchState, 0) != 2)
                     {
                         return;
@@ -230,6 +214,26 @@ public sealed class ServiceDiscovery : IDisposable
                 Interlocked.Exchange(ref _fileWatchState, 0);
             }
         }, _cts.Token);
+    }
+
+    private async Task ApplyDebouncedFileOnceAsync(PlusActivationContext context, string full)
+    {
+        if (await ApplyFileAsync(context, full, _cts.Token))
+        {
+            StampAppliedFile(full);
+            return;
+        }
+
+        // Truncate-then-write often yields one empty read before the bytes land.
+        for (var retry = 0; retry < 5 && !_cts.IsCancellationRequested; retry++)
+        {
+            await Task.Delay(100, _cts.Token);
+            if (await ApplyFileAsync(context, full, _cts.Token))
+            {
+                StampAppliedFile(full);
+                return;
+            }
+        }
     }
 
     private void StampAppliedFile(string full)
@@ -260,7 +264,7 @@ public sealed class ServiceDiscovery : IDisposable
 
         var port = int.TryParse(options.GetValueOrDefault("discovery.dnsPort"), out var p) ? p : 80;
         var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
-        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? dnsName;
+        var clusterId = options.GetValueOrDefault(ClusterIdOption) ?? dnsName;
         PlusLog.Info(context, $"Plus Discovery: DNS {dnsName}:{port} every {intervalMs}ms → cluster {clusterId}");
 
         _ = Task.Run(
@@ -280,27 +284,34 @@ public sealed class ServiceDiscovery : IDisposable
             return;
         }
 
-        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? srvName.Trim();
+        var clusterId = options.GetValueOrDefault(ClusterIdOption) ?? srvName.Trim();
         var intervalMs = DnsSrvDiscovery.ReadIntervalMs(options);
         var maxTargets = DnsSrvDiscovery.ReadMaxTargets(options);
         var dnsServer = options.GetValueOrDefault("discovery.dnsServer");
         PlusLog.Info(context,
             $"Plus Discovery: DNS SRV {srvName.Trim()} every {intervalMs}ms (cap {maxTargets}) → cluster {clusterId}");
         _ = Task.Run(
-            () => RunDnsSrvAsync(context, options, srvName.Trim(), clusterId, maxTargets, dnsServer, intervalMs, _cts.Token),
+            () => RunDnsSrvAsync(
+                context,
+                options,
+                new DnsSrvLoop(srvName.Trim(), clusterId, maxTargets, dnsServer, intervalMs),
+                _cts.Token),
             _cts.Token);
     }
+
+    private readonly record struct DnsSrvLoop(string SrvName, string ClusterId, int MaxTargets, string? DnsServer, int IntervalMs);
 
     private async Task RunDnsSrvAsync(
         PlusActivationContext context,
         IReadOnlyDictionary<string, string> options,
-        string srvName,
-        string clusterId,
-        int maxTargets,
-        string? dnsServer,
-        int intervalMs,
+        DnsSrvLoop loop,
         CancellationToken cancellationToken)
     {
+        var srvName = loop.SrvName;
+        var clusterId = loop.ClusterId;
+        var maxTargets = loop.MaxTargets;
+        var dnsServer = loop.DnsServer;
+        var intervalMs = loop.IntervalMs;
         var backoffSettings = ReadBackoff(options);
         var backoff = new DiscoveryBackoff(backoffSettings.MinMs, backoffSettings.MaxMs);
         while (!cancellationToken.IsCancellationRequested)
@@ -355,7 +366,7 @@ public sealed class ServiceDiscovery : IDisposable
 
         var settings = new ConsulSettings(
             uri,
-            options.GetValueOrDefault("discovery.clusterId") ?? "consul",
+            options.GetValueOrDefault(ClusterIdOption) ?? "consul",
             ReadInt(options, "discovery.intervalMs", 15000, 100, 3_600_000),
             ReadInt(options, "discovery.consulWaitSeconds", 30, 1, 600),
             !string.Equals(options.GetValueOrDefault("discovery.consulPassing"), "false", StringComparison.OrdinalIgnoreCase),
@@ -839,7 +850,7 @@ public sealed class ServiceDiscovery : IDisposable
         var settings = new KubernetesSettings(
             listUrl,
             selectors.Count == 0 ? null : string.Join(',', selectors),
-            options.GetValueOrDefault("discovery.clusterId") ?? "k8s",
+            options.GetValueOrDefault(ClusterIdOption) ?? "k8s",
             options.GetValueOrDefault("discovery.k8sPortName"),
             ReadInt(options, "discovery.intervalMs", 15000, 100, 3_600_000),
             ReadInt(options, "discovery.k8sWatchTimeoutSeconds", 300, 1, 3600),

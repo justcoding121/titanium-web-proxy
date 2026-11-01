@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy;
 public partial class ProxyServer
 {
     /// <summary>Which protocol legs participate in bridge response compression.</summary>
-    internal readonly record struct BridgeCompressionShape(bool OriginIsHttp1, bool ClientIsHttp2, bool ClientIsHttp3);
+    internal readonly record struct BridgeCompressionShape(bool OriginLegIsHttp1, bool ClientIsHttp2, bool ClientIsHttp3);
 
     /// <summary>
     ///     Buffered gzip / Brotli / zstd for reverse-proxy bridges (H2/H3 origins and HTTP/3 clients).
@@ -25,31 +25,11 @@ public partial class ProxyServer
 
         var request = args.HttpClient.Request;
         var response = args.HttpClient.Response;
-
-        if (response.Locked || response.IsSynthetic || response.Http3RawBodyDrain != null)
-            return;
-
-        if (response.StreamBodyWriter != null && knownBody is null)
-            return;
-
-        if (!shape.OriginIsHttp1 && response.HttpVersion.Major >= 2 && !response.OriginalHasBody
-            && !response.HasBody && knownBody is null)
-            return;
-
-        if (shape.ClientIsHttp3 && request.HttpVersion.Major < 3)
-            return;
-
-        if (!shape.ClientIsHttp3 && request.HttpVersion.Major >= 3)
-            return;
-
-        if (ShouldCallBeforeResponseBodyWrite())
-            return;
-
-        if (ResponseCompressionPolicy.IsRouteOff(args.MatchedRoute))
+        if (!IsBufferedBridgeCandidate(args, shape, knownBody))
             return;
 
         var selectResponse = response;
-        if (!shape.OriginIsHttp1 && response.OriginalHasBody)
+        if (!shape.OriginLegIsHttp1 && response.OriginalHasBody)
         {
             selectResponse = SnapshotForSelection(response);
         }
@@ -57,23 +37,8 @@ public partial class ProxyServer
         if (!policy.TrySelect(request, selectResponse, out var algorithm))
             return;
 
-        byte[] body;
-        if (knownBody is not null)
-        {
-            body = knownBody;
-        }
-        else if (response.IsBodyRead || response.BodyAvailable)
-        {
-            body = response.Body;
-        }
-        else
-        {
-            var budget = args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes;
-            if (budget > 0 && selectResponse.ContentLength > budget)
-                return;
-
-            body = await args.GetResponseBody(args.CancellationToken).ConfigureAwait(false);
-        }
+        if (await ReadCompressionBodyAsync(args, response, selectResponse, knownBody).ConfigureAwait(false) is not { } body)
+            return;
 
         var compressed = policy.Compress(algorithm, body);
         if (compressed.Length >= body.Length)
@@ -94,36 +59,72 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var response = args.HttpClient.Response;
 
-        if (response.IsBodyRead || response.IsSynthetic
-            || response.Http3RawBodyDrain != null || !response.OriginalHasBody && !response.HasBody)
+        if (!IsStreamingBridgeCandidate(args, shape))
             return null;
 
-        if (!shape.ClientIsHttp2 && !shape.ClientIsHttp3 && request.HttpVersion == HttpHeader.Version10)
-            return null;
-
-        if (shape.ClientIsHttp3 && request.HttpVersion.Major < 3)
-            return null;
-
-        if (!shape.ClientIsHttp3 && request.HttpVersion.Major >= 3)
-            return null;
-
-        if (ShouldCallBeforeResponseBodyWrite())
-            return null;
-
-        if (ResponseCompressionPolicy.IsRouteOff(args.MatchedRoute))
-            return null;
-
-        var selectResponse = shape.OriginIsHttp1 ? response : SnapshotForSelection(response);
+        var selectResponse = shape.OriginLegIsHttp1 ? response : SnapshotForSelection(response);
         if (!policy.TrySelectStreaming(request, selectResponse, out var algorithm))
             return null;
 
-        var originChunked = shape.OriginIsHttp1 ? response.IsChunked : response.OriginalIsChunked;
-        var originLength = shape.OriginIsHttp1 ? response.ContentLength : response.OriginalContentLength;
+        var originChunked = shape.OriginLegIsHttp1 ? response.IsChunked : response.OriginalIsChunked;
+        var originLength = shape.OriginLegIsHttp1 ? response.ContentLength : response.OriginalContentLength;
         var plan = new StreamingCompressionPlan(algorithm, originChunked, originLength);
         ResponseCompressionPolicy.ApplyStreaming(response, algorithm);
         if (shape.ClientIsHttp2 || shape.ClientIsHttp3)
             response.IsChunked = false;
         return plan;
+    }
+
+    private bool IsBufferedBridgeCandidate(SessionEventArgs args, BridgeCompressionShape shape, byte[]? knownBody)
+    {
+        var response = args.HttpClient.Response;
+        if (response.Locked || response.IsSynthetic || response.Http3RawBodyDrain != null)
+            return false;
+
+        if (response.StreamBodyWriter != null && knownBody is null)
+            return false;
+
+        if (!shape.OriginLegIsHttp1 && response.HttpVersion.Major >= 2 && !response.OriginalHasBody
+            && !response.HasBody && knownBody is null)
+            return false;
+
+        if (!ClientLegAcceptsCompression(args.HttpClient.Request, shape))
+            return false;
+
+        if (ShouldCallBeforeResponseBodyWrite())
+            return false;
+
+        return !ResponseCompressionPolicy.IsRouteOff(args.MatchedRoute);
+    }
+
+    private bool IsStreamingBridgeCandidate(SessionEventArgs args, BridgeCompressionShape shape)
+    {
+        var request = args.HttpClient.Request;
+        var response = args.HttpClient.Response;
+        if (response.IsBodyRead || response.IsSynthetic || response.Http3RawBodyDrain != null)
+            return false;
+
+        if (!response.OriginalHasBody && !response.HasBody)
+            return false;
+
+        if (!shape.ClientIsHttp2 && !shape.ClientIsHttp3 && request.HttpVersion == HttpHeader.Version10)
+            return false;
+
+        if (!ClientLegAcceptsCompression(request, shape))
+            return false;
+
+        if (ShouldCallBeforeResponseBodyWrite())
+            return false;
+
+        return !ResponseCompressionPolicy.IsRouteOff(args.MatchedRoute);
+    }
+
+    private static bool ClientLegAcceptsCompression(Request request, BridgeCompressionShape shape)
+    {
+        if (shape.ClientIsHttp3 && request.HttpVersion.Major < 3)
+            return false;
+
+        return shape.ClientIsHttp3 || request.HttpVersion.Major < 3;
     }
 
     /// <summary>
@@ -203,7 +204,7 @@ public partial class ProxyServer
         if (response.Locked)
             return;
 
-        var shape = new BridgeCompressionShape(OriginIsHttp1: false, ClientIsHttp2: false, ClientIsHttp3: false);
+        var shape = new BridgeCompressionShape(OriginLegIsHttp1: false, ClientIsHttp2: false, ClientIsHttp3: false);
         if (CompressionPolicy is { Streaming: false })
             return;
 
@@ -211,7 +212,7 @@ public partial class ProxyServer
         if (plan is null)
             return;
 
-        var policy = CompressionPolicy!;
+        var policy = CompressionPolicy;
         var originWriter = response.StreamBodyWriter;
         response.StreamBodyWriter = async (sink, ct) =>
         {
@@ -241,6 +242,22 @@ public partial class ProxyServer
         args.HttpClient.HasRecordedOriginHttpVersion
             ? args.HttpClient.OriginHttpVersion.Major == 1
             : args.HttpClient.Response.HttpVersion.Major == 1;
+
+    private async Task<byte[]?> ReadCompressionBodyAsync(
+        SessionEventArgs args, Response response, Response selectResponse, byte[]? knownBody)
+    {
+        if (knownBody is not null)
+            return knownBody;
+
+        if (response.IsBodyRead || response.BodyAvailable)
+            return response.Body;
+
+        var budget = args.MaxBufferedBodyBytes ?? MaxBufferedBodyBytes;
+        if (budget > 0 && selectResponse.ContentLength > budget)
+            return null;
+
+        return await args.GetResponseBody(args.CancellationToken).ConfigureAwait(false);
+    }
 }
 
 /// <summary>Reads a response by draining <see cref="Response.StreamBodyWriter" /> into sequential reads.</summary>
@@ -328,9 +345,10 @@ internal sealed class StreamBodyWriterPumpStream : Stream
 
     private sealed class ChannelWriteStream : Stream
     {
-        private readonly System.Threading.Channels.ChannelWriter<byte[]> _writer;
+        private readonly System.Threading.Channels.ChannelWriter<byte[]> _channelWriter;
 
-        internal ChannelWriteStream(System.Threading.Channels.ChannelWriter<byte[]> writer) => _writer = writer;
+        internal ChannelWriteStream(System.Threading.Channels.ChannelWriter<byte[]> channelWriter) =>
+            _channelWriter = channelWriter;
 
         public override bool CanRead => false;
         public override bool CanSeek => false;
@@ -347,12 +365,12 @@ internal sealed class StreamBodyWriterPumpStream : Stream
         public override void SetLength(long value) => throw new NotSupportedException();
 
         public override void Write(byte[] buffer, int offset, int count) =>
-            _writer.TryWrite(buffer.AsSpan(offset, count).ToArray());
+            _channelWriter.TryWrite(buffer.AsSpan(offset, count).ToArray());
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
             var copy = buffer.ToArray();
-            return _writer.WriteAsync(copy, cancellationToken);
+            return _channelWriter.WriteAsync(copy, cancellationToken);
         }
     }
 }

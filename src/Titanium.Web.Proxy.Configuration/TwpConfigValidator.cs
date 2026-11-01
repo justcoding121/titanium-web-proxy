@@ -34,6 +34,7 @@ public static class TwpConfigValidator
         "Http", "Socks4", "Socks5",
     };
 
+    private const string AllowValue = "allow";
     private const string LocalhostHostName = "localhost";
     private const string LoopbackIPv4 = "127.0.0.1";
     private const string LoopbackIPv6 = "::1";
@@ -490,13 +491,9 @@ public static class TwpConfigValidator
             }
 
             anyZoneAware = true;
-            foreach (var dest in cluster.Destinations)
+            if (cluster.Destinations.Any(static dest => !string.IsNullOrWhiteSpace(dest.Zone)))
             {
-                if (!string.IsNullOrWhiteSpace(dest.Zone))
-                {
-                    anyZonedDestination = true;
-                    break;
-                }
+                anyZonedDestination = true;
             }
         }
 
@@ -524,49 +521,56 @@ public static class TwpConfigValidator
     {
         var hasCerts = (config.Certificates?.Items is { Count: > 0 } items && items.Any(i => !string.IsNullOrWhiteSpace(i.Path)))
                        || !string.IsNullOrWhiteSpace(config.Certificates?.AcmeDomain);
-        foreach (var listener in config.Listeners ?? [])
+        foreach (var listener in (config.Listeners ?? []).Where(static listener => listener.TerminateTls))
         {
-            if (!listener.TerminateTls)
-            {
-                continue;
-            }
+            ValidateTerminateTlsListener(listener, hasCerts, errors);
+        }
+    }
 
-            var prefix = $"Listener port {listener.Port}:";
-            if (!listener.Passthrough)
-            {
-                errors.Add($"{prefix} terminateTls requires passthrough: true.");
-            }
+    private static void ValidateTerminateTlsListener(ListenerConfig listener, bool hasCerts, List<string> errors)
+    {
+        var prefix = $"Listener port {listener.Port}:";
+        if (!listener.Passthrough)
+        {
+            errors.Add($"{prefix} terminateTls requires passthrough: true.");
+        }
 
-            if (listener.DecryptSsl)
-            {
-                errors.Add($"{prefix} terminateTls and decryptSsl: true are mutually exclusive.");
-            }
+        if (listener.DecryptSsl)
+        {
+            errors.Add($"{prefix} terminateTls and decryptSsl: true are mutually exclusive.");
+        }
 
-            if (listener.TlsHandshakeTimeoutSeconds is < 1 or > 60)
-            {
-                errors.Add($"{prefix} tlsHandshakeTimeoutSeconds must be between 1 and 60.");
-            }
+        if (listener.TlsHandshakeTimeoutSeconds is < 1 or > 60)
+        {
+            errors.Add($"{prefix} tlsHandshakeTimeoutSeconds must be between 1 and 60.");
+        }
 
-            if (listener.MaxConcurrentHandshakes is < 1)
-            {
-                errors.Add($"{prefix} maxConcurrentHandshakes must be at least 1.");
-            }
+        if (listener.MaxConcurrentHandshakes is < 1)
+        {
+            errors.Add($"{prefix} maxConcurrentHandshakes must be at least 1.");
+        }
 
-            if (listener.Alpn is { Count: > 0 })
-            {
-                for (var i = 0; i < listener.Alpn.Count; i++)
-                {
-                    var name = listener.Alpn[i];
-                    if (string.IsNullOrEmpty(name) || name.Length > 255)
-                    {
-                        errors.Add($"{prefix} alpn[{i}] must be 1 to 255 bytes.");
-                    }
-                }
-            }
+        ValidateAlpnNames(listener, prefix, errors);
 
-            if (!hasCerts)
+        if (!hasCerts)
+        {
+            errors.Add($"{prefix} terminateTls needs a certificate (certificates.items or ACME).");
+        }
+    }
+
+    private static void ValidateAlpnNames(ListenerConfig listener, string prefix, List<string> errors)
+    {
+        if (listener.Alpn is not { Count: > 0 })
+        {
+            return;
+        }
+
+        for (var i = 0; i < listener.Alpn.Count; i++)
+        {
+            var name = listener.Alpn[i];
+            if (string.IsNullOrEmpty(name) || name.Length > 255)
             {
-                errors.Add($"{prefix} terminateTls needs a certificate (certificates.items or ACME).");
+                errors.Add($"{prefix} alpn[{i}] must be 1 to 255 bytes.");
             }
         }
     }
@@ -913,7 +917,7 @@ public static class TwpConfigValidator
                     errors.Add($"Policy '{name}' (ipAllowDeny) needs allow or deny.");
                 }
 
-                ValidatePrefixList(name, "allow", policy.Allow, errors);
+                ValidatePrefixList(name, AllowValue, policy.Allow, errors);
                 ValidatePrefixList(name, "deny", policy.Deny, errors);
                 break;
             case "geo":
@@ -922,7 +926,7 @@ public static class TwpConfigValidator
                     errors.Add($"Policy '{name}' (geo) needs allow or deny.");
                 }
 
-                ValidateCountryList(name, "allow", policy.Allow, errors);
+                ValidateCountryList(name, AllowValue, policy.Allow, errors);
                 ValidateCountryList(name, "deny", policy.Deny, errors);
                 break;
             case "extAuth":
@@ -1341,18 +1345,8 @@ public static class TwpConfigValidator
         }
     }
 
-    private static bool IsHeaderToken(string value)
-    {
-        foreach (var c in value)
-        {
-            if (!(char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c, StringComparison.Ordinal)))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private static bool IsHeaderToken(string value) =>
+        value.All(static c => char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c, StringComparison.Ordinal));
 
     private static void ValidatePrefixList(string name, string field, string? csv, List<string> errors)
     {
@@ -1361,12 +1355,10 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                     .Where(static part => !CidrPrefix.TryParse(part, out _)))
         {
-            if (!CidrPrefix.TryParse(part, out _))
-            {
-                errors.Add($"Policy '{name}' {field} entry '{part}' is not an address or CIDR prefix.");
-            }
+            errors.Add($"Policy '{name}' {field} entry '{part}' is not an address or CIDR prefix.");
         }
     }
 
@@ -2004,15 +1996,7 @@ public static class TwpConfigValidator
             return false;
         }
 
-        foreach (var ch in host)
-        {
-            if (!(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.'))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return host.All(static ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.');
     }
 
     private static void ValidateMasqueListener(ListenerConfig listener, List<string> errors)
@@ -2093,7 +2077,7 @@ public static class TwpConfigValidator
     {
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateMode)
             && !listener.ClientCertificateMode.Equals("none", StringComparison.OrdinalIgnoreCase)
-            && !listener.ClientCertificateMode.Equals("allow", StringComparison.OrdinalIgnoreCase)
+            && !listener.ClientCertificateMode.Equals(AllowValue, StringComparison.OrdinalIgnoreCase)
             && !listener.ClientCertificateMode.Equals("require", StringComparison.OrdinalIgnoreCase))
         {
             errors.Add(
@@ -2113,7 +2097,7 @@ public static class TwpConfigValidator
             return;
         }
 
-        if (!string.Equals(listener.ClientCertificateMode, "allow", StringComparison.OrdinalIgnoreCase)
+        if (!string.Equals(listener.ClientCertificateMode, AllowValue, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(listener.ClientCertificateMode, "require", StringComparison.OrdinalIgnoreCase))
         {
             errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
@@ -2146,12 +2130,9 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var source in sources)
+        foreach (var source in sources.Where(static source => !CidrPrefix.TryParse(source, out _)))
         {
-            if (!CidrPrefix.TryParse(source, out _))
-            {
-                errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
-            }
+            errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
         }
     }
 
@@ -2834,12 +2815,9 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var name in tls.CipherSuites)
+        foreach (var name in tls.CipherSuites.Where(static name => !TlsPolicyParser.TryParseCipherSuite(name, out _)))
         {
-            if (!TlsPolicyParser.TryParseCipherSuite(name, out _))
-            {
-                errors.Add($"server.tls.cipherSuites '{name}' is not a TlsCipherSuite name.");
-            }
+            errors.Add($"server.tls.cipherSuites '{name}' is not a TlsCipherSuite name.");
         }
     }
 
@@ -2874,10 +2852,10 @@ public static class TwpConfigValidator
     private static void RejectUnknownProtocols(IList<string>? names, string path, List<string> errors)
     {
         if (names is null) return;
-        foreach (var name in names)
+        foreach (var name in names.Where(static name =>
+                     string.IsNullOrWhiteSpace(name) || !Enum.TryParse<SslProtocols>(name.Trim(), ignoreCase: true, out _)))
         {
-            if (string.IsNullOrWhiteSpace(name) || !Enum.TryParse<SslProtocols>(name.Trim(), ignoreCase: true, out _))
-                errors.Add($"{path} '{name}' is not an SslProtocols name.");
+            errors.Add($"{path} '{name}' is not an SslProtocols name.");
         }
     }
 

@@ -11,27 +11,10 @@ internal sealed class ClusterRuntime
     {
         Cluster = cluster;
         LocalZone = localZone;
-        var destinations = new DestinationConfig[cluster.Destinations.Count];
-        for (var i = 0; i < destinations.Length; i++)
-        {
-            var dest = cluster.Destinations[i];
-            destinations[i] = dest;
-            if (dest.MaxConcurrentRequests is not null)
-            {
-                HasLimits = true;
-            }
-
-            if (dest.Priority != 0 || dest.Backup)
-            {
-                HasPriorities = true;
-            }
-
-            if (dest.SlowStartSeconds > 0)
-            {
-                SlowStartSeconds = dest.SlowStartSeconds;
-            }
-        }
-
+        var scan = ScanDestinations(cluster);
+        HasLimits = scan.HasLimits;
+        HasPriorities = scan.HasPriorities;
+        SlowStartSeconds = scan.SlowStartSeconds;
         if (cluster.SlowStartSeconds > 0 && SlowStartSeconds == 0)
         {
             SlowStartSeconds = cluster.SlowStartSeconds;
@@ -47,14 +30,51 @@ internal sealed class ClusterRuntime
             ZoneAwareActive = true;
             MinLocalHealthyPercent = zoneAware.MinLocalHealthyPercent;
             MinLocalEndpoints = zoneAware.MinLocalEndpoints;
-            for (var i = 0; i < cluster.Destinations.Count; i++)
+            LocalDestinationCount = CountLocalDestinations(cluster, localZone);
+        }
+    }
+
+    private readonly record struct DestinationScan(bool HasLimits, bool HasPriorities, int SlowStartSeconds);
+
+    private static DestinationScan ScanDestinations(ClusterConfig cluster)
+    {
+        var hasLimits = false;
+        var hasPriorities = false;
+        var slowStartSeconds = 0;
+        for (var i = 0; i < cluster.Destinations.Count; i++)
+        {
+            var dest = cluster.Destinations[i];
+            if (dest.MaxConcurrentRequests is not null)
             {
-                if (string.Equals(cluster.Destinations[i].Zone, localZone, StringComparison.Ordinal))
-                {
-                    LocalDestinationCount++;
-                }
+                hasLimits = true;
+            }
+
+            if (dest.Priority != 0 || dest.Backup)
+            {
+                hasPriorities = true;
+            }
+
+            if (dest.SlowStartSeconds > 0)
+            {
+                slowStartSeconds = dest.SlowStartSeconds;
             }
         }
+
+        return new DestinationScan(hasLimits, hasPriorities, slowStartSeconds);
+    }
+
+    private static int CountLocalDestinations(ClusterConfig cluster, string localZone)
+    {
+        var count = 0;
+        for (var i = 0; i < cluster.Destinations.Count; i++)
+        {
+            if (string.Equals(cluster.Destinations[i].Zone, localZone, StringComparison.Ordinal))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     public ClusterConfig Cluster { get; }

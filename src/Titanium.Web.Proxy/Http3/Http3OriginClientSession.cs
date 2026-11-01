@@ -88,6 +88,7 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
         var originStream = await _connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken);
         var maxFrame = resourceLimits.MaxHttp3FramePayloadBytes;
+        var handedOff = false;
 
         try
         {
@@ -98,19 +99,24 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
             var response = await ReadExtendedConnectResponseAsync(originStream, maxFrame, cancellationToken);
             if (response.StatusCode is < 200 or >= 300)
             {
+                handedOff = true;
                 await originStream.DisposeAsync();
                 return new Http3OriginTunnelResult(response, null);
             }
 
+            handedOff = true;
             var tunnelStream = new Http3TunnelStream(originStream, maxFrame, onTunnelDisposed);
             return new Http3OriginTunnelResult(response, tunnelStream);
         }
         catch
         {
-            try { await originStream.DisposeAsync(); }
-            catch
+            if (!handedOff)
             {
-                // best-effort
+                try { await originStream.DisposeAsync(); }
+                catch
+                {
+                    // best-effort
+                }
             }
 
             throw;

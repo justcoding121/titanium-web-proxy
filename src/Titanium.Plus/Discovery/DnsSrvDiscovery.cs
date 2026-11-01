@@ -83,7 +83,7 @@ internal static class DnsSrvDiscovery
         {
             var target = record.Target.Value.TrimEnd('.');
             rows.Add(new SrvRow(target, record.Port, record.Priority, record.Weight));
-            ttl = Math.Min(ttl, (int)record.InitialTimeToLive);
+            ttl = Math.Min(ttl, record.InitialTimeToLive);
             if (rows.Count >= maxTargets * 4)
             {
                 break;

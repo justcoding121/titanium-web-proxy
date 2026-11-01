@@ -560,7 +560,7 @@ internal sealed partial class TranslationPass
                         Zone = e.Zone,
                     })
                     .ToList(),
-                ZoneAware = clusters.Endpoints.IsZoneAwareService(service) ? new ZoneAwareConfig() : null,
+                ZoneAware = ClusterEndpoints.IsZoneAwareService(service) ? new ZoneAwareConfig() : null,
             });
         }
 

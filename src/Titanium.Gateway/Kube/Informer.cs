@@ -277,5 +277,5 @@ public sealed class Informer<T> where T : class
         return ns is null ? name : ns + "/" + name;
     }
 
-    private sealed class OptionalResourceMissingException : Exception;
+    public sealed class OptionalResourceMissingException : Exception;
 }

@@ -106,9 +106,8 @@ internal static class WebSocketUpgradeRequest
 
         static string? Find(IReadOnlyList<HttpHeader> list, string name)
         {
-            foreach (var h in list)
-                if (string.Equals(h.Name, name, StringComparison.OrdinalIgnoreCase))
-                    return h.Value;
+            foreach (var h in list.Where(h => string.Equals(h.Name, name, StringComparison.OrdinalIgnoreCase)))
+                return h.Value;
             return null;
         }
 

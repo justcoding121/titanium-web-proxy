@@ -58,7 +58,7 @@ internal sealed class ListenerOutcome
     /// <summary>True when the listener will be rendered into the data-plane config.</summary>
     public bool Programmable =>
         Accepted && !Conflicted && KindsValid &&
-        (IsHttpFamily ? !IsHttps || Certificates.Count > 0 : true) &&
+        (!IsHttpFamily || !IsHttps || Certificates.Count > 0) &&
         (!IsTlsTerminate || Certificates.Count > 0);
 
     public bool IsHttpFamily => IsHttp || IsHttps;
@@ -330,33 +330,42 @@ internal sealed partial class TranslationPass
             var kept = new List<ListenerOutcome>();
             foreach (var candidate in group)
             {
-                var clash = kept.FirstOrDefault(k =>
-                    k.Listener.Protocol != candidate.Listener.Protocol ||
-                    (!k.IsTlsPassthrough && !candidate.IsTlsPassthrough &&
-                     ReferenceEquals(k.Owner, candidate.Owner) &&
-                     string.Equals(
-                         Hostnames.Normalize(k.Listener.Hostname),
-                         Hostnames.Normalize(candidate.Listener.Hostname),
-                         StringComparison.Ordinal)));
+                var clash = kept.FirstOrDefault(k => ListenersClash(k, candidate));
                 if (clash is null)
                 {
                     kept.Add(candidate);
                     continue;
                 }
 
-                var protocolClash = clash.Listener.Protocol != candidate.Listener.Protocol;
-                candidate.Conflicted = true;
-                candidate.ConflictReason = protocolClash ? "ProtocolConflict" : "HostnameConflict";
-                candidate.ConflictMessage = protocolClash
-                    ? $"Port {candidate.Listener.Port} is already used by a {clash.Listener.Protocol} listener."
-                    : $"Port {candidate.Listener.Port} already has a listener for hostname '{candidate.Listener.Hostname ?? "*"}'.";
-                candidate.Accepted = false;
-                candidate.AcceptedReason = candidate.ConflictReason;
-                candidate.AcceptedMessage = candidate.ConflictMessage;
-                candidate.InvalidReason = candidate.ConflictReason;
+                MarkConflict(candidate, clash);
             }
         }
     }
 
     private static string Transport(ListenerOutcome listener) => listener.IsUdp ? "udp" : "tcp";
+
+    private static bool ListenersClash(ListenerOutcome existing, ListenerOutcome candidate) =>
+        existing.Listener.Protocol != candidate.Listener.Protocol || HostnamesClash(existing, candidate);
+
+    private static bool HostnamesClash(ListenerOutcome existing, ListenerOutcome candidate) =>
+        !existing.IsTlsPassthrough && !candidate.IsTlsPassthrough &&
+        ReferenceEquals(existing.Owner, candidate.Owner) &&
+        string.Equals(
+            Hostnames.Normalize(existing.Listener.Hostname),
+            Hostnames.Normalize(candidate.Listener.Hostname),
+            StringComparison.Ordinal);
+
+    private static void MarkConflict(ListenerOutcome candidate, ListenerOutcome clash)
+    {
+        var protocolClash = clash.Listener.Protocol != candidate.Listener.Protocol;
+        candidate.Conflicted = true;
+        candidate.ConflictReason = protocolClash ? "ProtocolConflict" : "HostnameConflict";
+        candidate.ConflictMessage = protocolClash
+            ? $"Port {candidate.Listener.Port} is already used by a {clash.Listener.Protocol} listener."
+            : $"Port {candidate.Listener.Port} already has a listener for hostname '{candidate.Listener.Hostname ?? "*"}'.";
+        candidate.Accepted = false;
+        candidate.AcceptedReason = candidate.ConflictReason;
+        candidate.AcceptedMessage = candidate.ConflictMessage;
+        candidate.InvalidReason = candidate.ConflictReason;
+    }
 }

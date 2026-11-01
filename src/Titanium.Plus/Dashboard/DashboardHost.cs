@@ -84,6 +84,8 @@ public sealed class DashboardHost : IDisposable
     private const int MaxLoginBodyBytes = 4096;
     private const string PlainTextUtf8 = "text/plain; charset=utf-8";
     private const string LoginPath = "/login";
+    private const string EditPrefix = "/edit/";
+    private const string NotFoundText = "not found";
 
     private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -307,7 +309,7 @@ public sealed class DashboardHost : IDisposable
             return Api(path["/api/".Length..]);
         }
 
-        if (path.StartsWith("/edit/", StringComparison.Ordinal))
+        if (path.StartsWith(EditPrefix, StringComparison.Ordinal))
         {
             return EditPage(path, caller);
         }
@@ -315,7 +317,7 @@ public sealed class DashboardHost : IDisposable
         var page = Array.Find(DashboardViews.Navigation, n => n.Path == path);
         if (page.Path is null)
         {
-            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
         }
 
         // A script that opens a page with the secret header is a login; a cookie session was audited at sign-in.
@@ -367,7 +369,7 @@ public sealed class DashboardHost : IDisposable
             e.Result,
         }).ToList()),
         "snapshot" => SnapshotResponse(),
-        _ => ControlHttpResponse.Text(404, PlainTextUtf8, "not found"),
+        _ => ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText),
     };
 
     private DashboardOverview Overview() => _options.Metrics?.GetOverview() ?? new DashboardOverview
@@ -426,7 +428,7 @@ public sealed class DashboardHost : IDisposable
 
     private async Task<ControlHttpResponse> PostAsync(ControlHttpRequest request, string path, Caller caller, string? remote) // NOSONAR S3776 -- POST actions share CSRF, role checks, and audit in one path.
     {
-        if (path.StartsWith("/edit/", StringComparison.Ordinal) || path.Equals("/clear-overlay", StringComparison.Ordinal)
+        if (path.StartsWith(EditPrefix, StringComparison.Ordinal) || path.Equals("/clear-overlay", StringComparison.Ordinal)
             || path.StartsWith("/clear-overlay/", StringComparison.Ordinal))
         {
             return await EditPostAsync(request, path, caller, remote).ConfigureAwait(false);
@@ -439,7 +441,7 @@ public sealed class DashboardHost : IDisposable
         var isLogout = path.Equals("/logout", StringComparison.Ordinal);
         if (!isDrain && !isHealthy && !isReload && !isLogout)
         {
-            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
         }
 
         string action;
@@ -559,7 +561,7 @@ public sealed class DashboardHost : IDisposable
     /// <summary>Route and cluster editing is on when the host supplied an editor and the operator turned it on.</summary>
     private bool EditingEnabled => _options.DashboardEditing && _options.ConfigEditor is not null;
 
-    private IReadOnlyList<ClusterConfig> CurrentClusters() =>
+    private List<ClusterConfig> CurrentClusters() =>
         (_clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty).Clusters.Values.ToList();
 
     private string EditPanel()
@@ -582,7 +584,7 @@ public sealed class DashboardHost : IDisposable
     {
         if (!EditingEnabled)
         {
-            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
         }
 
         if (caller.Role != DashboardRole.Operator)
@@ -590,12 +592,12 @@ public sealed class DashboardHost : IDisposable
             return ControlHttpResponse.Text(403, PlainTextUtf8, "operator role required");
         }
 
-        var parts = path["/edit/".Length..].Split('/', 2);
+        var parts = path[EditPrefix.Length..].Split('/', 2);
         var kind = parts[0];
         var id = parts.Length > 1 && parts[1].Length > 0 ? Uri.UnescapeDataString(parts[1]) : null;
         if (!DashboardEditing.IsKind(kind))
         {
-            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
         }
 
         string json;
@@ -608,7 +610,7 @@ public sealed class DashboardHost : IDisposable
             var route = CopyRoutes().FirstOrDefault(r => r.Id == id);
             if (route is null)
             {
-                return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+                return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
             }
 
             json = DashboardEditing.ToEditableJson(route);
@@ -618,7 +620,7 @@ public sealed class DashboardHost : IDisposable
             var cluster = CurrentClusters().FirstOrDefault(c => c.Id == id);
             if (cluster is null)
             {
-                return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+                return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
             }
 
             json = DashboardEditing.ToEditableJson(cluster);
@@ -638,10 +640,10 @@ public sealed class DashboardHost : IDisposable
         var action = isClear ? AuditActions.OverlayClear : AuditActions.ConfigEdit;
         if (!EditingEnabled)
         {
-            return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
+            return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
         }
 
-        var parts = isClear ? [] : path["/edit/".Length..].Split('/', 3);
+        var parts = isClear ? [] : path[EditPrefix.Length..].Split('/', 3);
         var target = isClear ? "-" : string.Join('/', parts.Where(p => p.Length > 0).Select(Uri.UnescapeDataString));
         if (caller.Session is { } session && !DashboardSessionStore.CsrfMatches(session, request.Header(CsrfHeader)))
         {
@@ -658,40 +660,53 @@ public sealed class DashboardHost : IDisposable
         var editor = _options.ConfigEditor!;
         try
         {
-            if (isClear)
-            {
-                var cleared = await DashboardEditing.ClearOverlayAsync(editor, caller.Actor, CancellationToken.None).ConfigureAwait(false);
-                Audit.Record(caller.Actor, remote, action, target, cleared.Status == 200 ? AuditResults.Ok : AuditResults.Rejected);
-                return ControlHttpResponse.Text(cleared.Status, "application/json", cleared.Json);
-            }
-
-            if (parts.Length < 2 || !DashboardEditing.IsKind(parts[0])
-                || !Enum.TryParse<DashboardEditAction>(parts[1], ignoreCase: true, out var editAction))
-            {
-                return ControlHttpResponse.Text(404, PlainTextUtf8, "not found");
-            }
-
-            if (request.Body.Length > DashboardEditing.MaxBodyBytes)
-            {
-                return ControlHttpResponse.Text(413, PlainTextUtf8, "request too large");
-            }
-
-            var existingId = parts.Length > 2 && parts[2].Length > 0 ? Uri.UnescapeDataString(parts[2]) : null;
-            var outcome = await DashboardEditing.RunAsync(
-                editor, parts[0], editAction, existingId, request.BodyText(), CopyRoutes(), CurrentClusters(),
-                caller.Actor, CancellationToken.None).ConfigureAwait(false);
-            if (editAction != DashboardEditAction.Validate)
-            {
-                Audit.Record(caller.Actor, remote, action, target, outcome.Status == 200 ? AuditResults.Ok : AuditResults.Rejected);
-            }
-
-            return ControlHttpResponse.Text(outcome.Status, "application/json", outcome.Json);
+            return await ApplyEditPostAsync(request, editor, isClear, parts, (action, target, caller, remote)).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Audit.Record(caller.Actor, remote, action, target, AuditResults.Error);
             return ControlHttpResponse.Text(500, PlainTextUtf8, "edit failed");
         }
+    }
+
+    private async Task<ControlHttpResponse> ApplyEditPostAsync(
+        ControlHttpRequest request,
+        IConfigEditor editor,
+        bool isClear,
+        string[] parts,
+        (string Action, string Target, Caller Caller, string? Remote) audit)
+    {
+        var (action, target, caller, remote) = audit;
+        if (isClear)
+        {
+            var cleared = await DashboardEditing.ClearOverlayAsync(editor, caller.Actor, CancellationToken.None).ConfigureAwait(false);
+            Audit.Record(caller.Actor, remote, action, target, cleared.Status == 200 ? AuditResults.Ok : AuditResults.Rejected);
+            return ControlHttpResponse.Text(cleared.Status, "application/json", cleared.Json);
+        }
+
+        if (parts.Length < 2 || !DashboardEditing.IsKind(parts[0])
+            || !Enum.TryParse<DashboardEditAction>(parts[1], ignoreCase: true, out var editAction))
+        {
+            return ControlHttpResponse.Text(404, PlainTextUtf8, NotFoundText);
+        }
+
+        if (request.Body.Length > DashboardEditing.MaxBodyBytes)
+        {
+            return ControlHttpResponse.Text(413, PlainTextUtf8, "request too large");
+        }
+
+        var existingId = parts.Length > 2 && parts[2].Length > 0 ? Uri.UnescapeDataString(parts[2]) : null;
+        var outcome = await DashboardEditing.RunAsync(
+            new DashboardEditRequest(
+                editor, parts[0], editAction, existingId, request.BodyText(), CopyRoutes(), CurrentClusters()),
+            caller.Actor,
+            CancellationToken.None).ConfigureAwait(false);
+        if (editAction != DashboardEditAction.Validate)
+        {
+            Audit.Record(caller.Actor, remote, action, target, outcome.Status == 200 ? AuditResults.Ok : AuditResults.Rejected);
+        }
+
+        return ControlHttpResponse.Text(outcome.Status, "application/json", outcome.Json);
     }
 
     private ControlHttpResponse LoginPage(ControlHttpRequest request)
