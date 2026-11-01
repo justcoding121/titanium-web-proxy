@@ -119,6 +119,25 @@ if (-not $SkipBuild) {
         Write-Host 'Building Titanium.Cli Release...' -ForegroundColor Cyan
         & dotnet build -c Release $cliProj --warnaserror
         if ($LASTEXITCODE -ne 0) { throw 'Titanium.Cli build failed' }
+
+        # Script edition arms need Lua + Wasmtime natives beside titanium.dll (same as E2E CI).
+        $needsScriptNatives = $Mode -eq 'compare-editions' -or $Mode -match 'twp-cli-script-'
+        if ($needsScriptNatives) {
+            $cliDll = Get-ChildItem -Recurse -Filter titanium.dll (Join-Path $repoRoot 'src/Titanium.Cli/bin/Release') |
+                Select-Object -First 1
+            if (-not $cliDll) { throw 'titanium.dll not found after CLI build' }
+            $rid = if ($IsWindows) { 'win-x64' }
+                elseif ($IsMacOS) {
+                    if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' }
+                }
+                else {
+                    if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' }
+                }
+            $bundle = Join-Path $repoRoot 'tools/packaging/bundle-scripting-native.ps1'
+            Write-Host "Bundling scripting natives ($rid) beside CLI..." -ForegroundColor Cyan
+            & pwsh $bundle -Rid $rid -PublishDir $cliDll.DirectoryName -Strict
+            if ($LASTEXITCODE -ne 0) { throw 'bundle-scripting-native.ps1 failed' }
+        }
     }
 
     $needsPlus = $Mode -match '^(compare-editions|twp-cli-plus-)'

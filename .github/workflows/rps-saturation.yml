@@ -290,6 +290,33 @@ jobs:
           dotnet-version: |
             10.0.x
 
+      # compare-editions script arms need Lua (gcc build) + Wasmtime beside the CLI.
+      # run-rps.ps1 calls bundle-scripting-native.ps1; cache the download/build tree like E2E.
+      - name: Install C toolchain for Lua shim (Linux editions)
+        if: runner.os == 'Linux' && (env.RPS_MODE == 'compare-editions' || startsWith(env.RPS_MODE, 'twp-cli-script-'))
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Detect scripting RID (editions)
+        if: env.RPS_MODE == 'compare-editions' || startsWith(env.RPS_MODE, 'twp-cli-script-')
+        id: scripting-rid
+        shell: pwsh
+        run: |
+          $rid = if ($IsWindows) { 'win-x64' }
+            elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+            else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+          "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "scripting RID=$rid"
+
+      - name: Cache scripting natives (editions)
+        if: env.RPS_MODE == 'compare-editions' || startsWith(env.RPS_MODE, 'twp-cli-script-')
+        uses: actions/cache@v4
+        with:
+          path: tools/packaging/.cache/scripting-natives
+          key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.scripting-rid.outputs.rid }}
+
       - name: Log runner shape (Linux)
         if: runner.os == 'Linux'
         run: |
