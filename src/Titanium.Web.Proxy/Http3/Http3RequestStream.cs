@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
+using System.Net;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -90,11 +91,26 @@ internal static class Http3RequestStream
                     headersFrame.Payload, qpackContext, cancellationToken);
                 headersFrame.ReturnPayload();
                 qpackContext?.EnqueueSectionAck(stream.Id);
-                var (method, scheme, authority, path, regularHeaders) = ExtractPseudoHeaders(decodedHeaders);
+                var (method, scheme, authority, path, protocol, regularHeaders) =
+                    ExtractPseudoHeaders(decodedHeaders);
 
                 if (method is null || authority is null)
                     throw new Http3StreamException(Http3ErrorCode.MessageError,
                         "Mandatory pseudo-headers :method or :authority are missing.");
+
+                if (protocol is not null)
+                {
+                    if (method != "CONNECT")
+                        throw new Http3StreamException(Http3ErrorCode.MessageError,
+                            ":protocol is only valid on CONNECT requests.");
+                    if (!server.EnableRfc8441)
+                        throw new Http3StreamException(Http3ErrorCode.MessageError,
+                            ":protocol requires SETTINGS_ENABLE_CONNECT_PROTOCOL to be advertised.");
+                    if (string.IsNullOrEmpty(scheme) || string.IsNullOrEmpty(path) ||
+                        string.IsNullOrEmpty(authority))
+                        throw new Http3StreamException(Http3ErrorCode.MessageError,
+                            "Extended CONNECT requires non-empty :scheme, :path, and :authority.");
+                }
 
                 // 3. Build a Request; reuse the connection-scoped QuicClientConnection so multiplexed
                 // streams share one ClientConnectionId (caller owns dispose).
@@ -106,10 +122,13 @@ internal static class Http3RequestStream
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
                 var isConnect = method == "CONNECT";
+                var isWsTunnel = protocol is not null &&
+                                 string.Equals(protocol, "websocket", StringComparison.OrdinalIgnoreCase);
+                var isUnsupportedEcProtocol = protocol is not null && !isWsTunnel;
                 if (!isConnect && path is null)
                     throw new Http3StreamException(Http3ErrorCode.MessageError,
                         "RFC 9114 §4.3.1: non-CONNECT requests must include :path.");
-                var normalizedPath = isConnect ? string.Empty : path!;
+                var normalizedPath = isConnect && protocol is null ? string.Empty : path!;
                 if (!isConnect && !normalizedPath.StartsWith('/'))
                     normalizedPath = "/" + normalizedPath; // NOSONAR S1075 -- Slash is the HTTP origin-form delimiter, not a filesystem path.
 
@@ -159,6 +178,9 @@ internal static class Http3RequestStream
 
                 foreach (var (name, value) in regularHeaders)
                     request.Headers.AddHeader(new HttpHeader(name, value));
+
+                if (isWsTunnel)
+                    request.ExtendedConnectProtocol = "websocket";
 
                 // Fast path when the server-wide interception gate is off: skip InterceptionContext
                 // alloc (hostname/port parse) — ShouldIntercept would always return false.
@@ -296,16 +318,27 @@ internal static class Http3RequestStream
                 // unchanged-lite / IsFastPath). Adding Via before the unchanged check would
                 // dirtied MutationCount and defeat the lite finish.
                 var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
-                var mitmUnchangedH3H1 = !routeAnswered && TryMitmUnchangedH3ToH1Lite(
+                if (isUnsupportedEcProtocol && !sessionArgs.HttpClient.HasResponse)
+                {
+                    sessionArgs.GenericResponse(
+                        $"RFC 9220 extended CONNECT (protocol: {protocol ?? "unknown"}) " +
+                        "is not supported by this proxy. Only 'websocket' is implemented.",
+                        HttpStatusCode.NotImplemented);
+                }
+
+                var mitmUnchangedH3H1 = !routeAnswered && !isWsTunnel && TryMitmUnchangedH3ToH1Lite(
                     sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                     capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
-                var mitmUnchangedH3H3 = !routeAnswered && !mitmUnchangedH3H1 && TryMitmUnchangedH3ToH3Lite(
-                    sessionArgs, authArgs, request, requestHeaderRelayBaseline,
-                    capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+                var mitmUnchangedH3H3 = !routeAnswered && !mitmUnchangedH3H1 && !isWsTunnel
+                                        && TryMitmUnchangedH3ToH3Lite(
+                                            sessionArgs, authArgs, request, requestHeaderRelayBaseline,
+                                            capturedRequestMethod, capturedRequestPath, capturedRequestAuthority,
+                                            method);
                 var mitmUnchangedH3H2 = !routeAnswered && !mitmUnchangedH3H1 && !mitmUnchangedH3H3
-                    && TryMitmUnchangedH3ToH2Lite(
-                        sessionArgs, authArgs, request, requestHeaderRelayBaseline,
-                        capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
+                                        && !isWsTunnel && TryMitmUnchangedH3ToH2Lite(
+                                            sessionArgs, authArgs, request, requestHeaderRelayBaseline,
+                                            capturedRequestMethod, capturedRequestPath, capturedRequestAuthority,
+                                            method);
 
                 if (!mitmUnchangedH3H1 && !mitmUnchangedH3H3 && !mitmUnchangedH3H2
                                        && !sessionArgs.IsFastPath
@@ -330,6 +363,15 @@ internal static class Http3RequestStream
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                }
+                else if (isWsTunnel)
+                {
+                    sessionArgs.HttpClient.Request.Locked = true;
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+
+                    await Http3ExtendedConnectTunnel.RunAsync(stream, sessionArgs, server, logger, qpackContext,
+                        streamState, onBeforeResponse, cancellationToken);
                 }
                 else if (mitmUnchangedH3H1 || mitmUnchangedH3H3 || mitmUnchangedH3H2)
                 {
@@ -1511,11 +1553,11 @@ internal static class Http3RequestStream
     ///     Extracts HTTP/3 pseudo-headers from the decoded field section and returns them alongside
     ///     the remaining regular headers.
     /// </summary>
-    private static (string? Method, string? Scheme, string? Authority, string? Path,
+    private static (string? Method, string? Scheme, string? Authority, string? Path, string? Protocol,
         List<(string Name, string Value)> Regular)
         ExtractPseudoHeaders(List<(string Name, string Value)> fields)
     {
-        string? method = null, scheme = null, authority = null, path = null;
+        string? method = null, scheme = null, authority = null, path = null, protocol = null;
         var regular = new List<(string, string)>(fields.Count);
 
         foreach (var (name, value) in fields)
@@ -1526,14 +1568,28 @@ internal static class Http3RequestStream
                 case ":scheme": scheme = value; break;
                 case ":authority": authority = value; break;
                 case ":path": path = value; break;
+                case ":protocol":
+                    if (protocol != null)
+                        throw new Http3StreamException(Http3ErrorCode.MessageError,
+                            "Duplicate :protocol pseudo-header.");
+                    protocol = value;
+                    break;
                 default:
                     if (!name.StartsWith(':')) regular.Add((name, value));
                     break;
             }
         }
 
-        return (method, scheme, authority, path, regular);
+        return (method, scheme, authority, path, protocol, regular);
     }
+
+    internal static Task SendSimpleStatusForTunnelAsync(
+        QuicStream stream, int statusCode, QpackContext? qpackContext, CancellationToken ct) =>
+        SendSimpleStatusResponseAsync(stream, statusCode, qpackContext, ct);
+
+    internal static Task SendResponseForTunnelAsync(
+        QuicStream stream, Response response, QpackContext? qpackContext, CancellationToken ct) =>
+        SendResponseAsync(stream, response, qpackContext, ct);
 
 }
 #pragma warning restore CA1416

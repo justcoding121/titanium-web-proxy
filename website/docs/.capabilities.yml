@@ -612,12 +612,12 @@ rows:
     note: 'Opt-in listener type. It relays datagrams opaquely, with authentication, tunnel caps, and a private-target block.'
   - area: 'Protocols'
     capability: 'WebSocket over HTTP/3'
-    status: 'not supported'
-    keys: []
-    schema: 'n/a'
+    status: 'supported'
+    keys:
+      - 'server.enableRfc8441'
     docs: '/docs/protocol-support'
     docsLabel: 'Protocol support'
-    note: 'RFC 9220 extended CONNECT over HTTP/3 is not implemented. WebSocket works over HTTP/1.1 and HTTP/2.'
+    note: 'RFC 9220 to HTTP/1.1 origins. Extended CONNECT when enableRfc8441 is on.'
   - area: 'Protocols'
     capability: 'Explicit-proxy h2c Upgrade'
     status: 'not supported'

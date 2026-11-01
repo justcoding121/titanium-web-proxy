@@ -146,7 +146,7 @@
 | gRPC and JSON transcoding | supported | `plus.options: grpc.transcode.enabled` | REST and JSON to gRPC through a descriptor set (Plus). | [gRPC-JSON transcoding](https://titaniumproxy.com/docs/grpc-json-transcoding) |
 | PROXY protocol from a load balancer | supported | `listeners[].acceptProxyProtocol`, `listeners[].trustedProxyProtocolSources` | Reads the preamble only from the sources you trust. | [Configuration](https://titaniumproxy.com/docs/configuration#routes-clusters) |
 | CONNECT-UDP relay (MASQUE) | supported | `listeners[].masque` | Opt-in listener type. It relays datagrams opaquely, with authentication, tunnel caps, and a private-target block. | [Listeners](https://titaniumproxy.com/docs/configuration#listeners) |
-| WebSocket over HTTP/3 | not supported | — | RFC 9220 extended CONNECT over HTTP/3 is not implemented. WebSocket works over HTTP/1.1 and HTTP/2. | [Protocol support](https://titaniumproxy.com/docs/protocol-support) |
+| WebSocket over HTTP/3 | supported | `server.enableRfc8441` | RFC 9220 to HTTP/1.1 origins. Extended CONNECT when enableRfc8441 is on. | [Protocol support](https://titaniumproxy.com/docs/protocol-support) |
 | Explicit-proxy h2c Upgrade | not supported | — | Upgrade: h2c is not handled. Cleartext HTTP/2 works with prior knowledge only. | [Protocol support](https://titaniumproxy.com/docs/protocol-support) |
 | Decrypting QUIC inside CONNECT-UDP | not supported | — | The relay forwards each datagram as it came, so the payload stays encrypted end to end. There is no switch to decrypt it. | [Listeners](https://titaniumproxy.com/docs/configuration#listeners) |
 
