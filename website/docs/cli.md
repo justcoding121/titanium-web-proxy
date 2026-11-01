@@ -30,6 +30,7 @@ Path-based routing and load balancing: [Configuration](/docs/configuration).
 ```text
 titanium run -c <config> [-v|--verbose] [--watch] [--service]
 titanium reload -c <config>
+titanium restart -c <config>      # Linux hot restart, needs server.hotRestart
 titanium test -c <config>
 titanium healthcheck (-c <config> | --url <url>) [--timeout <seconds>]
 titanium service install|uninstall|start|stop|restart|status
@@ -224,6 +225,10 @@ titanium reload -c twp.yaml
 **Needs a process restart:** listeners (bind/port), certificates / ACME, TLS material, enabling or disabling Plus plugins, static files root, access-log path.
 
 Unlike a typical YARP process recycle, Titanium keeps the process and in-flight sessions on the previous cluster snapshot until they finish.
+
+### Restart without dropping connections (Linux)
+
+Listener, certificate and plugin changes need a new process. With `server.hotRestart` on (see [Hot restart](/docs/configuration#hot-restart-linux)), `titanium restart -c twp.yaml` starts the new process beside the running one, waits until it is ready and owns the pid file, and reports. The old process then closes its TCP listeners, finishes what it accepted, and exits. If the new process fails to start, the old one keeps serving and the command exits `1` with the tail of `<pidFile>.log`. HTTP/3 and UDP listeners bind once the old process has exited.
 
 ## See also
 

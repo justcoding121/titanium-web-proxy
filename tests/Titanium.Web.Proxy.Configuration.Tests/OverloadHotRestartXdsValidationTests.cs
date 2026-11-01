@@ -80,7 +80,7 @@ public class OverloadHotRestartXdsValidationTests
     }
 
     [TestMethod]
-    public void HotRestart_RejectsListenersThatNeedAUdpPort()
+    public void HotRestart_AllowsUdpAndHttp3Listeners_BecauseTheirBindIsDeferred()
     {
         var config = WithServer(s => s.HotRestart = new HotRestartConfig
         {
@@ -94,8 +94,8 @@ public class OverloadHotRestartXdsValidationTests
         ];
 
         var errors = Errors(config);
-        StringAssert.Contains(errors, "supports TCP listeners only: listener on port 8443");
-        StringAssert.Contains(errors, "supports TCP listeners only: listener on port 8444");
+        Assert.IsFalse(errors.Contains("listeners only"), errors);
+        Assert.IsFalse(errors.Contains("UDP port"), errors);
     }
 
     [TestMethod]

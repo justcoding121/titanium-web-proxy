@@ -213,6 +213,19 @@ internal static class RunCommand
         var reusePort = loaded.Config.Server?.HotRestart?.Enabled == true;
         var runningListeners = new Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>();
         var udpListeners = new List<ListenerConfig>();
+
+        // server.hotRestart (Linux): the coordinator only touches the pid file. When a live previous process exists it
+        // still owns the UDP ports, so quic, masque, udp listeners and the HTTP/3 side of decrypting listeners are
+        // collected in deferredBinds and bound after it exits (see HotRestartDeferredBind).
+        var hotRestartConfig = loaded.Config.Server?.HotRestart;
+        IHotRestartPlatform? hotRestartPlatform = hotRestartConfig is { Enabled: true } && OperatingSystem.IsLinux()
+            ? new LinuxHotRestartPlatform()
+            : null;
+        HotRestartCoordinator? hotRestart = hotRestartPlatform is not null && hotRestartConfig!.PidFile is { Length: > 0 } pidFile
+            ? new HotRestartCoordinator(pidFile, hotRestartPlatform, Environment.ProcessId)
+            : null;
+        var previousProcess = hotRestart?.PeekLivePrevious();
+        var deferredBinds = new List<Action>();
         foreach (var listener in loaded.Config.Listeners)
         {
             if (IsUdpListener(listener))
@@ -221,7 +234,22 @@ internal static class RunCommand
                 continue;
             }
 
-            var endPoint = AddListener(proxy, listener, () => pluginHost, reusePort);
+            if (previousProcess is not null && ResolveListenerKind(listener) is "quic" or "masque")
+            {
+                var deferred = listener;
+                deferredBinds.Add(() =>
+                {
+                    var bound = AddListener(proxy, deferred, () => pluginHost, reusePort);
+                    lock (runningListeners)
+                    {
+                        runningListeners[ListenerKey.From(deferred)] = (CloneListener(deferred), bound);
+                    }
+                });
+                continue;
+            }
+
+            var endPoint = AddListener(
+                proxy, listener, () => pluginHost, reusePort, previousProcess is null ? null : deferredBinds.Add);
             runningListeners[ListenerKey.From(listener)] = (CloneListener(listener), endPoint);
         }
 
@@ -411,12 +439,6 @@ internal static class RunCommand
                 stoppingToken);
         }
 
-        // server.hotRestart (Linux, TCP only): null unless enabled. The coordinator only touches the pid file.
-        var hotRestartConfig = loaded.Config.Server?.HotRestart;
-        HotRestartCoordinator? hotRestart = hotRestartConfig is { Enabled: true, PidFile: { Length: > 0 } pidFile }
-                                            && OperatingSystem.IsLinux()
-            ? new HotRestartCoordinator(pidFile, new LinuxHotRestartPlatform(), Environment.ProcessId)
-            : null;
         using var handoverCts = new CancellationTokenSource();
         try
         {
@@ -430,6 +452,13 @@ internal static class RunCommand
             proxy.Start();
             overloadHost.Apply(loaded.Config.Server?.Overload);
 
+            if (previousProcess is not null && udpListeners.Count > 0)
+            {
+                var deferredUdp = udpListeners.ToList();
+                udpListeners.Clear();
+                deferredBinds.Add(() => StartUdpRelays(deferredUdp, udpRelays, clusterManager, loadBalancer));
+            }
+
             StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
             readiness.MarkListenersBound();
 
@@ -438,6 +467,10 @@ internal static class RunCommand
             if (hotRestart is not null)
             {
                 TakeOverFromPreviousProcess(hotRestart, hotRestartConfig!);
+                if (previousProcess is { } previousPid && deferredBinds.Count > 0)
+                {
+                    StartDeferredBinds(previousPid, hotRestartPlatform!, deferredBinds, hotRestartConfig!, stoppingToken);
+                }
             }
 
             StartAcmeIfConfigured(proxy, loaded.Config);
@@ -468,14 +501,21 @@ internal static class RunCommand
                     onStopRequested: () =>
                     {
                         readiness.BeginDrain();
-                        foreach (var relay in udpRelays)
+                        foreach (var relay in SnapshotRelays(udpRelays))
                         {
                             relay.BeginDrain();
                         }
                     },
                     extraWatchPaths: secretFiles,
                     loadedConfigHash: configHash,
-                    onHandoverSignal: hotRestart is null ? null : () => handoverCts.Cancel()).ConfigureAwait(false);
+                    onHandoverSignal: hotRestart is null
+                        ? null
+                        : () =>
+                        {
+                            handoverCts.Cancel();
+                            // The successor already listens: stop receiving new connections right away.
+                            proxy.CloseTcpListeners();
+                        }).ConfigureAwait(false);
             }
             finally
             {
@@ -485,7 +525,7 @@ internal static class RunCommand
             // /readyz is already 503 (flipped by the signal). Keep serving for the pre-stop delay so the
             // load balancer removes this instance before the proxy stops accepting.
             await readiness.BeginDrainAsync(
-                TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
+                handoverCts.IsCancellationRequested ? TimeSpan.Zero : TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
                 CancellationToken.None).ConfigureAwait(false);
             // After a hot-restart handover the old process serves its accepted connections for up to
             // handoverTimeoutSeconds, then exits; otherwise the normal drain timeout applies.
@@ -494,13 +534,13 @@ internal static class RunCommand
                     ? hotRestartConfig?.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds
                     : ResolveDrainTimeoutSeconds(loaded.Config.Server));
             await proxy.DrainAsync(drainTimeout).ConfigureAwait(false);
-            await Task.WhenAll(udpRelays.Select(relay => relay.DrainAsync(drainTimeout))).ConfigureAwait(false);
+            await Task.WhenAll(SnapshotRelays(udpRelays).Select(relay => relay.DrainAsync(drainTimeout))).ConfigureAwait(false);
             await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         finally
         {
-            foreach (var relay in udpRelays)
+            foreach (var relay in SnapshotRelays(udpRelays))
             {
                 await relay.DisposeAsync().ConfigureAwait(false);
             }
@@ -520,6 +560,36 @@ internal static class RunCommand
     }
 
     internal const int DefaultHandoverTimeoutSeconds = 60;
+
+    /// <summary>A copy of the started relays: a hot-restart deferred bind may still be adding to the list.</summary>
+    private static UdpRelayListener[] SnapshotRelays(List<UdpRelayListener> relays)
+    {
+        lock (relays)
+        {
+            return relays.ToArray();
+        }
+    }
+
+    private static void StartDeferredBinds(
+        int previousPid,
+        IHotRestartPlatform platform,
+        List<Action> binds,
+        HotRestartConfig config,
+        CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromSeconds(config.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds);
+        var pending = binds.ToArray();
+        _ = Task.Run(async () =>
+        {
+            var ok = await HotRestartDeferredBind.RunAsync(
+                previousPid, platform, pending, timeout, TimeSpan.FromMilliseconds(250), AsyncConsole.WriteError,
+                cancellationToken).ConfigureAwait(false);
+            if (ok)
+            {
+                AsyncConsole.WriteLine($"Hot restart: process {previousPid} exited; UDP and HTTP/3 listeners are up.");
+            }
+        }, CancellationToken.None);
+    }
 
     private static void TakeOverFromPreviousProcess(HotRestartCoordinator coordinator, HotRestartConfig config)
     {
@@ -1577,7 +1647,11 @@ internal static class RunCommand
         {
             var options = BuildUdpOptions(listener);
             var relay = new UdpRelayListener(options, clusterManager, loadBalancer);
-            started.Add(relay);
+            lock (started)
+            {
+                started.Add(relay);
+            }
+
             relay.Start();
             var target = string.IsNullOrWhiteSpace(options.ClusterId)
                 ? $"{options.ForwardHost}:{options.ForwardPort}"
@@ -1629,7 +1703,8 @@ internal static class RunCommand
         ProxyServer proxy,
         ListenerConfig listener,
         Func<PluginHost?>? currentPlugins = null,
-        bool reusePort = false)
+        bool reusePort = false,
+        Action<Action>? deferHttp3 = null)
     {
         var host = listener.Host ?? DefaultBindHost;
         var ip = host is DefaultBindHost or "*"
@@ -1649,11 +1724,12 @@ internal static class RunCommand
 
         endPoint.ReusePort = reusePort;
         ApplyListenerOverrides(endPoint, listener);
-        if (reusePort && endPoint is TransparentProxyEndPoint { EnableHttp3: true } withHttp3)
+        if (deferHttp3 is not null && endPoint is TransparentProxyEndPoint { EnableHttp3: true } withHttp3)
         {
-            // Hot restart is TCP only: the old and the new process cannot both bind the same UDP port, so a
-            // decrypting listener does not open its QUIC side while server.hotRestart is on.
+            // Hot restart successor: the previous process still owns the UDP port. Bind TCP now and the QUIC side
+            // once that process has exited (the caller runs the deferred action).
             withHttp3.EnableHttp3 = false;
+            deferHttp3(() => proxy.StartHttp3Listener(withHttp3));
         }
 
         ApplyStreamFilters(endPoint, listener, currentPlugins);

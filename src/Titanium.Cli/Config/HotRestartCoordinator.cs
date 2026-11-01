@@ -35,7 +35,7 @@ internal enum HotRestartHandover
 }
 
 /// <summary>
-///     Pid-file side of <c>server.hotRestart</c> (Linux, TCP only). The new process binds with SO_REUSEPORT and becomes
+///     Pid-file side of <c>server.hotRestart</c> (Linux). The new process binds with SO_REUSEPORT and becomes
 ///     ready first, then calls <see cref="TakeOver" />: it signals the old process with SIGUSR2 and writes its own pid.
 ///     The old process drains and exits on its own. This process never kills the old one. Two simultaneous restarts are
 ///     serialized by an exclusive lock on <c>&lt;pidFile&gt;.lock</c>.
@@ -90,6 +90,18 @@ internal sealed class HotRestartCoordinator
         }
 
         return outcome;
+    }
+
+    /// <summary>
+    ///     The pid of a live process of the same program named by the pid file, or null. Read-only (no lock, no
+    ///     signal): used at startup to decide whether UDP and HTTP/3 binds must wait for that process to exit.
+    /// </summary>
+    public int? PeekLivePrevious()
+    {
+        var pid = ReadPid();
+        return pid is { } other && other != _ownPid && _platform.IsProcessAlive(other) && _platform.IsSameProgram(other)
+            ? other
+            : null;
     }
 
     /// <summary>Deletes the pid file only when it still names this process (a successor may already own it).</summary>
@@ -155,6 +167,67 @@ internal sealed class HotRestartCoordinator
                 throw new IOException($"Another hot restart holds {_pidFile}.lock: {ex.Message}", ex);
             }
         }
+    }
+}
+
+/// <summary>
+///     UDP and HTTP/3 binds for a hot-restart successor. The old process owns those UDP ports until it exits, so the
+///     binds wait: poll every <c>poll</c> until the previous process is gone, then run each bind. If it never exits
+///     within <c>timeout</c> the binds are skipped (the successor keeps serving TCP) and an error is logged. The
+///     previous process is never killed.
+/// </summary>
+internal static class HotRestartDeferredBind
+{
+    public static async Task<bool> RunAsync(
+        int previousPid,
+        IHotRestartPlatform platform,
+        IReadOnlyList<Action> binds,
+        TimeSpan timeout,
+        TimeSpan poll,
+        Action<string> logError,
+        CancellationToken cancellationToken)
+    {
+        if (binds.Count == 0)
+        {
+            return true;
+        }
+
+        var deadline = DateTime.UtcNow + timeout;
+        try
+        {
+            while (platform.IsProcessAlive(previousPid))
+            {
+                if (DateTime.UtcNow >= deadline)
+                {
+                    logError(
+                        $"Hot restart: process {previousPid} did not exit within {timeout.TotalSeconds:0}s; " +
+                        "UDP and HTTP/3 listeners stay off (TCP keeps serving).");
+                    return false;
+                }
+
+                await Task.Delay(poll, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+
+        var allBound = true;
+        foreach (var bind in binds)
+        {
+            try
+            {
+                bind();
+            }
+            catch (Exception ex)
+            {
+                allBound = false;
+                logError("Hot restart: deferred listener failed to bind: " + ex.Message);
+            }
+        }
+
+        return allBound;
     }
 }
 

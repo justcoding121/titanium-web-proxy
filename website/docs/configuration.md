@@ -757,7 +757,7 @@ server:
       rejectNewRequests: true
       readyzFailsOnCritical: true
     retryAfterSeconds: 1
-  hotRestart:                  # Linux, TCP listeners only (see below)
+  hotRestart:                  # Linux only (see below)
     enabled: false
     pidFile: null              # required when enabled; its directory must exist
     handoverTimeoutSeconds: 60 # 5..3600: how long the old process drains after the handover signal
@@ -778,14 +778,17 @@ HTTP interception is not a YAML knob: the CLI turns it on automatically when the
 - Observability: `twp.overload.level` (gauge, 0 to 2) and `twp.overload.actions` (counter by `action`: `disable_keep_alive`, `reject`, `stop_accepting`).
 - Leave it off unless you need process-local shedding.
 
-### Hot restart (Linux, TCP only)
+### Hot restart (Linux)
 
-`server.hotRestart.enabled: true` binds every listener with `SO_REUSEPORT`, so a new process can listen on the same ports as the old one. After the new process has bound its listeners and is ready it reads `pidFile`; if that names a live process of the same program it sends `SIGUSR2`, then writes its own pid to the file. The old process stops accepting, serves its accepted connections for up to `handoverTimeoutSeconds`, and exits. The new process never kills the old one, a stale or foreign pid is ignored, and two simultaneous restarts are serialized by an exclusive lock on `<pidFile>.lock`.
+`server.hotRestart.enabled: true` binds every listener with `SO_REUSEPORT`, so a new process can listen on the same ports as the old one. After the new process has bound its listeners and is ready it reads `pidFile`; if that names a live process of the same program it sends `SIGUSR2`, then writes its own pid to the file. The old process closes its TCP listening sockets at once (so the kernel sends it no new connections), serves the connections it already accepted for up to `handoverTimeoutSeconds`, and exits. The new process never kills the old one, a stale or foreign pid is ignored, and two simultaneous restarts are serialized by an exclusive lock on `<pidFile>.lock`.
 
-- Validation rejects the section on non-Linux hosts and on configs with `quic`, `masque`, or `udp` listeners or `enableHttp3: true`: the old and the new process cannot share a UDP port. Decrypting listeners do not open their QUIC side while hot restart is on.
+- Validation rejects the section on non-Linux hosts, without a `pidFile`, or with a `handoverTimeoutSeconds` outside 5 to 3600.
+- UDP ports cannot be shared. A successor that finds a live previous process binds its TCP listeners at once and **defers** the HTTP/3 side of decrypting listeners, `quic`, `masque` and `udp` listeners until the old process has exited (it polls every 250 ms for up to `handoverTimeoutSeconds`). HTTP/3 and UDP traffic is therefore unavailable for that gap, and clients fall back to TCP. If the old process does not exit in time, an error is logged and those listeners stay off; the old process is never killed.
+- A successor that fails before it is ready (bad config, crash) never signals the old process, which keeps serving.
+- `titanium restart -c <config>` starts a new `titanium run` with the same arguments (its output goes to `<pidFile>.log`), waits until the pid file names it, and prints the outcome. It exits non-zero, with the tail of the log, if the new process dies or does not take over within `handoverTimeoutSeconds`.
 - `SO_REUSEPORT` also lets a different process of the same user bind the port. That is why the feature is opt-in and the pid file is checked.
 - The supervisor must tolerate two processes during the handover (systemd: start the new process as a transient unit with `systemd-run`, or use `KillMode=process`).
-- Not shipped yet: a `titanium restart` helper command and the deferred HTTP/3 and UDP bind.
+- A connection that sits in the old socket
 
 ### Listener TLS policy (`server.tls`)
 

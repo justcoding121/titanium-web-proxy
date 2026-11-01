@@ -143,21 +143,6 @@ public static class TwpConfigValidator
         {
             errors.Add($"{prefix}.handoverTimeoutSeconds must be between 5 and 3600.");
         }
-
-        foreach (var listener in config.Listeners ?? [])
-        {
-            var type = listener?.Type?.Trim();
-            if (listener is not null
-                && (listener.EnableHttp3 == true
-                    || string.Equals(type, "quic", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(type, "masque", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(type, "udp", StringComparison.OrdinalIgnoreCase)))
-            {
-                errors.Add(
-                    $"{prefix} supports TCP listeners only: listener on port {listener.Port} needs a UDP port " +
-                    "(quic, masque, udp, or enableHttp3: true).");
-            }
-        }
     }
 
     /// <summary>Checks <c>xds</c>: a control-plane address and a sane initial-fetch timeout.</summary>

@@ -572,3 +572,5 @@ Titanium.Web.Proxy.Resilience.OverloadMonitor.Next(System.Collections.Generic.IR
 Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled.get -> bool
 Titanium.Web.Proxy.ProxyServer.OverloadLevel.get -> int
 Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(bool enabled, int level, bool stopAccepting, bool disableKeepAlive, bool rejectNewRequests, int retryAfterSeconds) -> void
+Titanium.Web.Proxy.ProxyServer.StartHttp3Listener(Titanium.Web.Proxy.Models.TransparentProxyEndPoint! endPoint) -> void
+Titanium.Web.Proxy.ProxyServer.CloseTcpListeners() -> void
