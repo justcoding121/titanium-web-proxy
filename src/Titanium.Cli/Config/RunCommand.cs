@@ -59,6 +59,7 @@ internal static class RunCommand
         var verbose = ParseVerbose(args);
         var serviceMode = ParseServiceMode(args);
         var watch = ParseWatch(args);
+        var zoneOverride = ParseZone(args);
         var serviceName = ParseServiceName(args) ?? Service.ServiceDefaults.DefaultServiceName;
 
         if (serviceMode && OperatingSystem.IsWindows())
@@ -67,7 +68,7 @@ internal static class RunCommand
                 .ConfigureAwait(false);
         }
 
-        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch)
+        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch, zoneOverride)
             .ConfigureAwait(false);
     }
 
@@ -77,7 +78,8 @@ internal static class RunCommand
         bool verbose,
         bool serviceMode,
         CancellationToken stoppingToken,
-        bool watch = false)
+        bool watch = false,
+        string? zoneOverride = null)
     {
         // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
         // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
@@ -154,7 +156,10 @@ internal static class RunCommand
             AsyncConsole.WriteLine(Telemetry.TelemetryHost.Describe(telemetry.Options));
         }
 
-        var clusterManager = new ClusterManager();
+        var clusterManager = new ClusterManager
+        {
+            LocalZone = ResolveLocalZone(loaded.Config.Server, zoneOverride),
+        };
         var readiness = new ReadinessState(
             TimeProvider.System,
             adminSetup?.RequireHealthyClusters ?? false,
@@ -503,6 +508,7 @@ internal static class RunCommand
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
+        clusterManager.LocalZone = ResolveLocalZone(loaded.Config.Server, zoneOverride: null);
         var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
         host.RememberAppliedClusters(clusterManager.Snapshot.Clusters.Values.ToList());
 
@@ -1441,6 +1447,17 @@ internal static class RunCommand
         }
 
         ep.Passthrough = listener.Passthrough;
+        if (listener.TerminateTls)
+        {
+            ep.TerminateTls = true;
+            ep.TlsHandshakeTimeout = TimeSpan.FromSeconds(listener.TlsHandshakeTimeoutSeconds ?? 10);
+            ep.MaxConcurrentTlsHandshakes = listener.MaxConcurrentHandshakes ?? 256;
+            if (listener.Alpn is { Count: > 0 })
+            {
+                ep.TerminateTlsAlpn = listener.Alpn.ToList();
+            }
+        }
+
         ApplyPassthroughSni(ep, listener);
         ep.ClientCertificateMode = listener.ClientCertificateMode?.ToLowerInvariant() switch
         {
@@ -1828,5 +1845,39 @@ internal static class RunCommand
             AsyncConsole.WriteError("warning: " + warning);
         foreach (var warning in TwpConfigValidator.CollectWarnings(loaded.Config))
             AsyncConsole.WriteError("warning: " + warning);
+    }
+
+    internal static string? ResolveLocalZone(ServerConfig? server, string? zoneOverride)
+    {
+        if (!string.IsNullOrWhiteSpace(zoneOverride))
+        {
+            return zoneOverride.Trim();
+        }
+
+        var env = Environment.GetEnvironmentVariable("TITANIUM_ZONE");
+        if (!string.IsNullOrWhiteSpace(env))
+        {
+            return env.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(server?.LocalZone) ? null : server.LocalZone.Trim();
+    }
+
+    private static string? ParseZone(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i].Equals("--zone", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                return args[i + 1];
+            }
+
+            if (args[i].StartsWith("--zone=", StringComparison.OrdinalIgnoreCase))
+            {
+                return args[i]["--zone=".Length..];
+            }
+        }
+
+        return null;
     }
 }

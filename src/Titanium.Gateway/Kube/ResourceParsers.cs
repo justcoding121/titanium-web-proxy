@@ -51,7 +51,17 @@ internal static class ResourceParsers
             .OfType<ServiceAddress>()
             .ToList();
 
-        return new ServiceInfo(ns, name, element.GetString("spec", "type"), element.GetString("spec", "clusterIP"), ports, addresses);
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal);
+        var annotationElement = element.Get("metadata", "annotations");
+        if (annotationElement is { ValueKind: JsonValueKind.Object })
+        {
+            foreach (var pair in annotationElement.Value.EnumerateObject())
+            {
+                annotations[pair.Name] = pair.Value.GetString() ?? string.Empty;
+            }
+        }
+
+        return new ServiceInfo(ns, name, element.GetString("spec", "type"), element.GetString("spec", "clusterIP"), ports, addresses, annotations);
     }
 
     private static ServicePortInfo? ParseServicePort(JsonElement port)
@@ -112,7 +122,8 @@ internal static class ResourceParsers
             .Select(e => new EndpointInfo(
                 e.GetArray("addresses").Select(a => a.GetString() ?? string.Empty).Where(a => a.Length > 0).ToList(),
                 e.GetBool("conditions", "ready"),
-                e.GetString("targetRef", "kind") == "Pod" ? e.GetString("targetRef", "name") : null))
+                e.GetString("targetRef", "kind") == "Pod" ? e.GetString("targetRef", "name") : null,
+                e.GetString("zone")))
             .ToList();
         return new EndpointSliceInfo(ns, name, service, element.GetString("addressType"), ports, endpoints);
     }

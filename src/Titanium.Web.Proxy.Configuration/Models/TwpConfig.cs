@@ -131,6 +131,21 @@ public sealed class ListenerConfig
     public bool Passthrough { get; set; }
 
     /// <summary>
+    ///     Passthrough only. Terminates inbound TLS and relays plaintext (or originates TLS upstream when
+    ///     <c>useHttps</c> is set). Requires a listener certificate and <see cref="DecryptSsl"/> false.
+    /// </summary>
+    public bool TerminateTls { get; set; }
+
+    /// <summary>Passthrough with <see cref="TerminateTls"/>: inbound handshake timeout in seconds (1-60, default 10).</summary>
+    public int? TlsHandshakeTimeoutSeconds { get; set; }
+
+    /// <summary>Passthrough with <see cref="TerminateTls"/>: ALPN protocol names offered to the client.</summary>
+    public IList<string>? Alpn { get; set; }
+
+    /// <summary>Passthrough with <see cref="TerminateTls"/>: max concurrent inbound TLS handshakes (default 256).</summary>
+    public int? MaxConcurrentHandshakes { get; set; }
+
+    /// <summary>
     /// Passthrough only. Sends a connection to a cluster by the TLS server name in the ClientHello.
     /// Requires <see cref="Passthrough"/> true and <see cref="DecryptSsl"/> false.
     /// </summary>

@@ -143,6 +143,8 @@ Titanium.Web.Proxy.Clusters.ClusterManager.ClusterManager() -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState(string! destinationId) -> Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
 Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState state) -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState expected, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState next) -> bool
+Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone.get -> string?
+Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone.set -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.DestinationHealthTracker() -> void
@@ -358,6 +360,14 @@ Titanium.Web.Proxy.Models.SniCertificateBinding.SniCertificateBinding() -> void
 Titanium.Web.Proxy.Certificates.SniCertificateSelector
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.get -> bool
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls.get -> bool
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes.get -> int
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout.get -> System.TimeSpan
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout.set -> void
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn.set -> void
 Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate.init -> void
 Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate.get -> System.Security.Cryptography.X509Certificates.X509Certificate2!
 Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts.init -> void

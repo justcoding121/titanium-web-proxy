@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 
@@ -6,9 +7,10 @@ namespace Titanium.Web.Proxy.Clusters;
 /// <summary>Derived cluster data built once per snapshot and reused across state-only swaps.</summary>
 internal sealed class ClusterRuntime
 {
-    public ClusterRuntime(ClusterConfig cluster)
+    public ClusterRuntime(ClusterConfig cluster, string? localZone)
     {
         Cluster = cluster;
+        LocalZone = localZone;
         var destinations = new DestinationConfig[cluster.Destinations.Count];
         for (var i = 0; i < destinations.Length; i++)
         {
@@ -39,9 +41,28 @@ internal sealed class ClusterRuntime
         HasAffinity = cluster.AffinityCookie is not null || cluster.AffinityHeader is not null;
         Passive = cluster.HealthCheck?.Passive;
         Active = cluster.HealthCheck?.Active is { Enabled: true } active ? active : null;
+
+        if (cluster.ZoneAware is { } zoneAware && !string.IsNullOrEmpty(localZone))
+        {
+            ZoneAwareActive = true;
+            MinLocalHealthyPercent = zoneAware.MinLocalHealthyPercent;
+            MinLocalEndpoints = zoneAware.MinLocalEndpoints;
+            for (var i = 0; i < cluster.Destinations.Count; i++)
+            {
+                if (string.Equals(cluster.Destinations[i].Zone, localZone, StringComparison.Ordinal))
+                {
+                    LocalDestinationCount++;
+                }
+            }
+        }
     }
 
     public ClusterConfig Cluster { get; }
+    public string? LocalZone { get; }
+    public bool ZoneAwareActive { get; }
+    public int MinLocalHealthyPercent { get; }
+    public int MinLocalEndpoints { get; }
+    public int LocalDestinationCount { get; }
     public bool HasLimits { get; }
     public bool HasPriorities { get; }
     public int SlowStartSeconds { get; }

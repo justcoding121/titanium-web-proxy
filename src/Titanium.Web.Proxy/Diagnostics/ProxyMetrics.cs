@@ -407,6 +407,18 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.passthrough.bytes", "By",
             "Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client).");
 
+    private static readonly Counter<long> ZoneSelections =
+        Meter.CreateCounter<long>("twp.loadbalancer.zone.selections", "{pick}",
+            "Load-balancer zone-aware picks: local (stayed in zone) or spill (used all zones).");
+
+    public static void RecordZoneSelection(string scope)
+    {
+        if (ZoneSelections.Enabled)
+        {
+            ZoneSelections.Add(1, new KeyValuePair<string, object?>("scope", scope));
+        }
+    }
+
     public static void RecordPassthrough(string route, string result, long bytesIn, long bytesOut)
     {
         if (PassthroughConnections.Enabled)

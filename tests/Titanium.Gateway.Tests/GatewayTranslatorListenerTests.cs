@@ -287,7 +287,7 @@ public class GatewayTranslatorListenerTests
     {
         var b = StateBuilder.Basic();
         b.Services.RemoveAll(s => s.Name == "titanium-data");
-        b.Services.Add(new ServiceInfo("titanium-system", "titanium-data", "ClusterIP", "10.96.0.9", [], []));
+        b.Services.Add(new ServiceInfo("titanium-system", "titanium-data", "ClusterIP", "10.96.0.9", [], [], StateBuilder.NoServiceAnnotations));
 
         Assert.AreEqual("10.96.0.9", GatewayPatch(b.Render()).Addresses!.Single().Value);
     }

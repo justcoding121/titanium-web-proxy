@@ -1136,6 +1136,10 @@ public sealed class ServiceDiscovery : IDisposable
                 continue;
             }
 
+            var zone = endpoint.TryGetProperty("zone", out var zoneElement) && zoneElement.ValueKind == JsonValueKind.String
+                ? zoneElement.GetString()
+                : null;
+
             foreach (var element in addresses.EnumerateArray())
             {
                 var address = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
@@ -1149,6 +1153,7 @@ public sealed class ServiceDiscovery : IDisposable
                     Id = $"k8s-{address}-{port}",
                     Address = address,
                     Port = port,
+                    Zone = zone,
                 });
             }
         }

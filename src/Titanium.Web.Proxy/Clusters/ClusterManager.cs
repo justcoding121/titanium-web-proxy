@@ -23,6 +23,14 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
     private readonly List<ClusterHealthProber> _probers = new();
     private readonly ConcurrentDictionary<string, IPAddress> _resolved = new(StringComparer.Ordinal);
     private readonly TimeProvider _time;
+    private string? _localZone;
+
+    /// <summary>Data-plane availability zone for zone-aware clusters. Empty disables zone filtering.</summary>
+    public string? LocalZone
+    {
+        get => Volatile.Read(ref _localZone);
+        set => Volatile.Write(ref _localZone, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+    }
 
     public ClusterManager()
         : this(TimeProvider.System)
@@ -119,7 +127,7 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         while (true)
         {
             var current = Volatile.Read(ref _snapshot);
-            var next = BuildSnapshot(current, clusters, out var restoredHealthy);
+            var next = BuildSnapshot(current, clusters, LocalZone, out var restoredHealthy);
             if (ReferenceEquals(Interlocked.CompareExchange(ref _snapshot, next, current), current))
             {
                 foreach (var id in restoredHealthy)
@@ -245,6 +253,7 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
     private static ImmutableClusterSnapshot BuildSnapshot(
         ImmutableClusterSnapshot current,
         IReadOnlyList<ClusterConfig> clusters,
+        string? localZone,
         out List<string> restoredHealthy)
     {
         var map = new Dictionary<string, ClusterConfig>(StringComparer.Ordinal);
@@ -275,7 +284,7 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         var runtimes = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var pair in map)
         {
-            runtimes[pair.Key] = ReuseRuntime(current, pair.Key, pair.Value);
+            runtimes[pair.Key] = ReuseRuntime(current, pair.Key, pair.Value, localZone);
         }
 
         return new ImmutableClusterSnapshot(
@@ -308,16 +317,21 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         return DestinationState.Healthy;
     }
 
-    private static ClusterRuntime ReuseRuntime(ImmutableClusterSnapshot current, string clusterId, ClusterConfig cluster)
+    private static ClusterRuntime ReuseRuntime(
+        ImmutableClusterSnapshot current,
+        string clusterId,
+        ClusterConfig cluster,
+        string? localZone)
     {
         if (current.Runtimes.TryGetValue(clusterId, out var existing) &&
             existing is ClusterRuntime previous &&
-            ReferenceEquals(previous.Cluster, cluster))
+            ReferenceEquals(previous.Cluster, cluster) &&
+            string.Equals(previous.LocalZone, localZone, StringComparison.Ordinal))
         {
             return previous;
         }
 
-        return new ClusterRuntime(cluster);
+        return new ClusterRuntime(cluster, localZone);
     }
 
     private void ReconcileProbers(IReadOnlyList<ClusterConfig> clusters)

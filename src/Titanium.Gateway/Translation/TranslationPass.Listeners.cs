@@ -27,6 +27,8 @@ internal sealed class ListenerOutcome
 
     public bool IsTlsPassthrough => IsTls && string.Equals(Listener.Tls?.Mode, "Passthrough", StringComparison.Ordinal);
 
+    public bool IsTlsTerminate => IsTls && string.Equals(Listener.Tls?.Mode, "Terminate", StringComparison.OrdinalIgnoreCase);
+
     public int MappedPort { get; set; }
 
     public bool Accepted { get; set; } = true;
@@ -55,7 +57,9 @@ internal sealed class ListenerOutcome
 
     /// <summary>True when the listener will be rendered into the data-plane config.</summary>
     public bool Programmable =>
-        Accepted && !Conflicted && KindsValid && (IsHttpFamily ? !IsHttps || Certificates.Count > 0 : true);
+        Accepted && !Conflicted && KindsValid &&
+        (IsHttpFamily ? !IsHttps || Certificates.Count > 0 : true) &&
+        (!IsTlsTerminate || Certificates.Count > 0);
 
     public bool IsHttpFamily => IsHttp || IsHttps;
 
@@ -127,11 +131,15 @@ internal sealed partial class TranslationPass
                 return;
         }
 
-        if (item.IsTls && !string.Equals(listener.Tls?.Mode, "Passthrough", StringComparison.Ordinal))
+        if (item.IsTlsTerminate)
+        {
+            EvaluateTlsTerminate(item);
+        }
+        else if (item.IsTls && !item.IsTlsPassthrough)
         {
             item.Accepted = false;
             item.AcceptedReason = "UnsupportedProtocol";
-            item.AcceptedMessage = "TLS Terminate is not supported; use Passthrough.";
+            item.AcceptedMessage = "TLS listeners support tls.mode Passthrough or Terminate.";
             item.InvalidReason = "UnsupportedProtocol";
             return;
         }
@@ -215,6 +223,8 @@ internal sealed partial class TranslationPass
             item.InvalidReason = "InvalidRouteKinds";
         }
     }
+
+    private void EvaluateTlsTerminate(ListenerOutcome item) => EvaluateHttpsTls(item);
 
     private void EvaluateHttpsTls(ListenerOutcome item)
     {

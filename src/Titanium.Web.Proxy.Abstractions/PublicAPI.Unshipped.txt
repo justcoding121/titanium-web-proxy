@@ -79,6 +79,16 @@ Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.ReactivateAfterSeco
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Zone.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Zone.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.ZoneAwareConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalEndpoints.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalEndpoints.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalHealthyPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalHealthyPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.ZoneAware.get -> Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.ZoneAware.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.UseDestinationHost.get -> bool
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.UseDestinationHost.set -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationState

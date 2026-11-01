@@ -52,6 +52,8 @@ public static class TwpConfigValidator
         ValidateListeners(config.Listeners ?? [], clusterIds, errors);
         ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
+        ValidateZoneAware(config, errors);
+        ValidateTcpTlsListeners(config, errors);
         ValidatePlusSecrets(config.Plus, errors);
         return errors;
     }
@@ -338,9 +340,123 @@ public static class TwpConfigValidator
             ValidateRetry($"clusters.{cluster.Id}.retry", cluster.Retry, errors);
             ValidateClusterProxyProtocol(cluster, errors);
             ValidateActiveHealth(cluster, errors);
+            ValidateClusterZoneAware(cluster, errors);
         }
 
         return clusterIds;
+    }
+
+    private static void ValidateClusterZoneAware(ClusterConfig cluster, List<string> errors)
+    {
+        var zoneAware = cluster.ZoneAware;
+        if (zoneAware is null)
+        {
+            return;
+        }
+
+        if (zoneAware.MinLocalHealthyPercent is < 1 or > 100)
+        {
+            errors.Add($"Cluster '{cluster.Id}' zoneAware.minLocalHealthyPercent must be between 1 and 100.");
+        }
+
+        if (zoneAware.MinLocalEndpoints < 1)
+        {
+            errors.Add($"Cluster '{cluster.Id}' zoneAware.minLocalEndpoints must be at least 1.");
+        }
+    }
+
+    private static void ValidateZoneAware(TwpConfig config, List<string> errors)
+    {
+        var localZone = config.Server?.LocalZone?.Trim();
+        var anyZoneAware = false;
+        var anyZonedDestination = false;
+        foreach (var cluster in config.Clusters ?? [])
+        {
+            if (cluster.ZoneAware is null)
+            {
+                continue;
+            }
+
+            anyZoneAware = true;
+            foreach (var dest in cluster.Destinations)
+            {
+                if (!string.IsNullOrWhiteSpace(dest.Zone))
+                {
+                    anyZonedDestination = true;
+                    break;
+                }
+            }
+        }
+
+        if (!anyZoneAware)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(localZone))
+        {
+            errors.Add("zoneAware on a cluster requires server.localZone (or TITANIUM_ZONE / --zone at runtime).");
+        }
+        else if (localZone.Length is < 1 or > 63)
+        {
+            errors.Add("server.localZone must be between 1 and 63 characters.");
+        }
+
+        if (!anyZonedDestination)
+        {
+            errors.Add("zoneAware requires at least one destination with a zone.");
+        }
+    }
+
+    private static void ValidateTcpTlsListeners(TwpConfig config, List<string> errors)
+    {
+        var hasCerts = (config.Certificates?.Items is { Count: > 0 } items && items.Any(i => !string.IsNullOrWhiteSpace(i.Path)))
+                       || !string.IsNullOrWhiteSpace(config.Certificates?.AcmeDomain);
+        foreach (var listener in config.Listeners ?? [])
+        {
+            if (!listener.TerminateTls)
+            {
+                continue;
+            }
+
+            var prefix = $"Listener port {listener.Port}:";
+            if (!listener.Passthrough)
+            {
+                errors.Add($"{prefix} terminateTls requires passthrough: true.");
+            }
+
+            if (listener.DecryptSsl)
+            {
+                errors.Add($"{prefix} terminateTls and decryptSsl: true are mutually exclusive.");
+            }
+
+            if (listener.TlsHandshakeTimeoutSeconds is < 1 or > 60)
+            {
+                errors.Add($"{prefix} tlsHandshakeTimeoutSeconds must be between 1 and 60.");
+            }
+
+            if (listener.MaxConcurrentHandshakes is < 1)
+            {
+                errors.Add($"{prefix} maxConcurrentHandshakes must be at least 1.");
+            }
+
+            if (listener.Alpn is { Count: > 0 })
+            {
+                for (var i = 0; i < listener.Alpn.Count; i++)
+                {
+                    var name = listener.Alpn[i];
+                    if (string.IsNullOrEmpty(name) || name.Length > 255)
+                    {
+                        errors.Add($"{prefix} alpn[{i}] must be 1 to 255 bytes.");
+                    }
+                }
+            }
+
+            if (!hasCerts)
+            {
+                errors.Add($"{prefix} terminateTls needs a certificate (certificates.items or ACME).");
+            }
+        }
     }
 
     private static void ValidateActiveHealth(ClusterConfig cluster, List<string> errors)
@@ -567,6 +683,11 @@ public static class TwpConfigValidator
         if (dest.Weight < 1)
         {
             errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
+        }
+
+        if (dest.Zone is { Length: > 63 })
+        {
+            errors.Add($"Destination '{dest.Id}' zone must be at most 63 characters.");
         }
     }
 
@@ -1681,6 +1802,11 @@ public static class TwpConfigValidator
         var routes = listener.SniRoutes ?? [];
         var hasDefault = !string.IsNullOrWhiteSpace(listener.SniDefaultClusterId);
         var usesSni = routes.Count > 0 || hasDefault;
+
+        if (listener.TerminateTls && listener.DecryptSsl)
+        {
+            errors.Add($"{prefix} terminateTls and decryptSsl: true are mutually exclusive.");
+        }
 
         if (usesSni)
         {

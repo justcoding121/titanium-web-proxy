@@ -97,6 +97,12 @@ public sealed class ServerConfig
     /// </summary>
     public string? GeoIpDatabasePath { get; set; }
 
+    /// <summary>
+    ///     Availability zone of this data plane for zone-aware load balancing. Overridden by the
+    ///     <c>TITANIUM_ZONE</c> environment variable and the <c>--zone</c> CLI flag.
+    /// </summary>
+    public string? LocalZone { get; set; }
+
     /// <summary>Seconds to wait for in-flight clients on SIGTERM, SIGINT, or Ctrl+C. Default is 10.</summary>
     public int? DrainTimeoutSeconds { get; set; }
 

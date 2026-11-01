@@ -52,6 +52,8 @@ internal sealed class PortListenerPlan
     public string? UdpClusterId { get; set; }
 
     public L4RouteOutcome? OwnerRoute { get; set; }
+
+    public bool TerminateTls { get; set; }
 }
 
 internal sealed partial class TranslationPass
@@ -107,7 +109,7 @@ internal sealed partial class TranslationPass
             };
             foreach (var reference in route.Spec.ParentRefs ?? [])
             {
-                AttachL4Parent(route.Metadata, reference, outcome, listener => listener.IsTcp, null);
+                AttachL4Parent(route.Metadata, reference, outcome, listener => listener.IsTcp || listener.IsTlsTerminate, null);
             }
 
             if (outcome.Parents.Count > 0)
@@ -298,12 +300,17 @@ internal sealed partial class TranslationPass
             {
                 foreach (var (listener, hostname) in parent.Attached)
                 {
-                    var kind = listener.IsTlsPassthrough ? "tls" : listener.IsTcp ? "tcp" : "udp";
+                    var kind = listener.IsTlsPassthrough || listener.IsTlsTerminate ? "tls" : listener.IsTcp ? "tcp" : "udp";
                     var key = (listener.MappedPort, kind);
                     if (!plans.TryGetValue(key, out var plan))
                     {
                         plan = new PortListenerPlan { MappedPort = listener.MappedPort, Kind = kind };
                         plans[key] = plan;
+                    }
+
+                    if (listener.IsTlsTerminate)
+                    {
+                        plan.TerminateTls = true;
                     }
 
                     plan.Sources.Add(listener);
@@ -315,6 +322,10 @@ internal sealed partial class TranslationPass
                     if (kind == "tls" && route.RouteKind == GatewayApiNames.TlsRouteKind)
                     {
                         ApplyTlsRoute(plan, route, hostname, listener, clusters);
+                    }
+                    else if (kind == "tls" && plan.TerminateTls && route.RouteKind == GatewayApiNames.TcpRouteKind)
+                    {
+                        ApplyTcpRoute(plan, route, listener);
                     }
                     else if (kind == "tcp" && route.RouteKind == GatewayApiNames.TcpRouteKind)
                     {
@@ -504,8 +515,15 @@ internal sealed partial class TranslationPass
                 Id = id,
                 Algorithm = LoadBalanceAlgorithm.RoundRobin,
                 Destinations = endpoints
-                    .Select(e => new DestinationConfig { Id = $"{id}/{e.Address}:{e.Port}", Address = e.Address, Port = e.Port })
+                    .Select(e => new DestinationConfig
+                    {
+                        Id = $"{id}/{e.Address}:{e.Port}",
+                        Address = e.Address,
+                        Port = e.Port,
+                        Zone = e.Zone,
+                    })
                     .ToList(),
+                ZoneAware = clusters.Endpoints.IsZoneAwareService(service) ? new ZoneAwareConfig() : null,
             });
         }
 
@@ -528,6 +546,7 @@ internal sealed partial class TranslationPass
                         Type = "transparent",
                         Passthrough = true,
                         DecryptSsl = false,
+                        TerminateTls = plan.TerminateTls,
                         SniRoutes = plan.SniRoutes.Count > 0 ? plan.SniRoutes.ToList() : new List<SniRouteConfig>(),
                         SniDefaultClusterId = plan.SniDefaultClusterId,
                     });

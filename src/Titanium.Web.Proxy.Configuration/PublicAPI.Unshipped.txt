@@ -499,6 +499,16 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.get -
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TerminateTls.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TerminateTls.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TlsHandshakeTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TlsHandshakeTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Alpn.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Alpn.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxConcurrentHandshakes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxConcurrentHandshakes.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.LocalZone.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.LocalZone.set -> void
 Titanium.Web.Proxy.Configuration.Models.AltSvcConfig
 Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.AltSvcConfig() -> void
 Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.Enabled.get -> bool?

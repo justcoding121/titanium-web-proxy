@@ -143,6 +143,10 @@ dataPlane:
   podAnnotations: {}
   podLabels: {}
 
+  # When true, sets TITANIUM_ZONE from the pod topology.kubernetes.io/zone label for zone-aware clusters.
+  zoneAware:
+    enabled: false
+
   # Must be longer than the pre-stop delay in the bootstrap config (5s) plus the time in-flight requests need.
   terminationGracePeriodSeconds: 60
 

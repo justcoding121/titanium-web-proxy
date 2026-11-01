@@ -71,10 +71,14 @@ internal sealed class ClusterEndpoints
     public ServiceInfo? FindService(string ns, string name) =>
         _state.Services.FirstOrDefault(s => s.Namespace == ns && s.Name == name);
 
+    internal bool IsZoneAwareService(ServiceInfo service) =>
+        service.Annotations.TryGetValue("titanium.io/zone-aware", out var value) &&
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Ready addresses for one Service port, taken from every slice of the Service.</summary>
-    public List<(string Address, int Port)> ReadyEndpoints(ServiceInfo service, ServicePortInfo port, string protocol = "TCP") // NOSONAR S3776 -- Endpoint slice merge deduplicates addresses in one pass.
+    public List<(string Address, int Port, string? Zone)> ReadyEndpoints(ServiceInfo service, ServicePortInfo port, string protocol = "TCP") // NOSONAR S3776 -- Endpoint slice merge deduplicates addresses in one pass.
     {
-        var found = new List<(string, int)>();
+        var found = new List<(string, int, string?)>();
         var seen = new HashSet<(string, int)>();
         foreach (var slice in _state.EndpointSlices.Where(s => s.Namespace == service.Namespace && s.ServiceName == service.Name))
         {
@@ -95,7 +99,7 @@ internal sealed class ClusterEndpoints
             {
                 foreach (var address in endpoint.Addresses.Where(a => seen.Add((a, slicePort.Port))))
                 {
-                    found.Add((address, slicePort.Port));
+                    found.Add((address, slicePort.Port, endpoint.Zone));
                 }
             }
         }
@@ -520,8 +524,10 @@ internal sealed partial class TranslationPass
                         Id = $"{id}/{e.Address}:{e.Port}",
                         Address = e.Address,
                         Port = e.Port,
+                        Zone = e.Zone,
                     })
                     .ToList(),
+                ZoneAware = clusters.Endpoints.IsZoneAwareService(service) ? new ZoneAwareConfig() : null,
             });
         }
 

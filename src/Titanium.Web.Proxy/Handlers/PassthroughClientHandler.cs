@@ -27,6 +27,12 @@ public partial class ProxyServer
     private async Task HandlePassthroughClientAsync( // NOSONAR S3776 -- Passthrough path shares socket state across destination attempts.
         Socket client, TransparentBaseProxyEndPoint endPoint, CancellationToken cancellationToken)
     {
+        if (endPoint.TerminateTls)
+        {
+            await HandleTlsTerminateClientAsync(client, endPoint, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         var route = "forward";
         var result = "ok";
         long bytesIn = 0;

@@ -4,7 +4,7 @@ Run Titanium as a [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) imp
 
 **Next:** [install the chart](#install) → apply a [Gateway and an HTTPRoute](#quick-start) → read [what is not supported](#what-is-not-supported) before you migrate real routes.
 
-> Gateway API support covers the **standard channel** bundle **v1.7.0** (HTTPRoute, GRPCRoute, TLSRoute, TCPRoute, UDPRoute, BackendTLSPolicy, and ReferenceGrant v1). TLS listener **Terminate** mode is not supported until L4 TLS termination ships. The same controller also serves `networking.k8s.io/v1` `Ingress` resources and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
+> Gateway API support covers the **standard channel** bundle **v1.7.0** (HTTPRoute, GRPCRoute, TLSRoute, TCPRoute, UDPRoute, BackendTLSPolicy, and ReferenceGrant v1), including TLS listener **Terminate** mode (L4 TLS termination on the data plane). The same controller also serves `networking.k8s.io/v1` `Ingress` resources and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
 
 ## Install
 
