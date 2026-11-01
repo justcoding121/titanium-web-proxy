@@ -417,9 +417,10 @@ String values under `plus.options` (examples):
 
 | Key | Role |
 |-----|------|
-| `discovery.mode` | `file`, `dns`, `consul`, or `k8s` |
+| `discovery.mode` | `file`, `dns`, `dnsSrv`, `consul`, or `k8s` |
 | `discovery.file` | Path for `mode=file` |
-| `discovery.dnsName` / `discovery.dnsPort` | DNS discovery target |
+| `discovery.dnsName` / `discovery.dnsPort` | DNS A/AAAA discovery target |
+| `discovery.srvName` / `discovery.srvMaxTargets` / `discovery.dnsServer` | DNS SRV name (for example `_http._tcp.api.svc.cluster.local`), cap on targets (default `64`, max `256`), optional resolver `host[:port]` |
 | `discovery.consulUrl` | Consul service endpoint, for example `http://consul:8500/v1/health/service/web` |
 | `discovery.consulWaitSeconds` / `discovery.consulPassing` / `discovery.consulToken` | Blocking-query wait (default `30`), passing-only filter (default `true`), ACL token |
 | `discovery.k8sUrl` | API server URL. Optional in a pod: `KUBERNETES_SERVICE_HOST` is used. A URL with a path (or without a selector) is used as the exact EndpointSlice collection to watch; a single Endpoints object there is polled every `discovery.intervalMs` |

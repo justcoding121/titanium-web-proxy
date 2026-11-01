@@ -1,0 +1,3 @@
+DnsClient (https://github.com/MichaCo/DnsClient.NET)
+  License: Apache License 2.0
+  Used by: Titanium.Plus (DNS SRV service discovery, dnsSrv mode only)

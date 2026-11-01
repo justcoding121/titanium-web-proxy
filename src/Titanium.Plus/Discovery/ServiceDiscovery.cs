@@ -14,7 +14,7 @@ namespace Titanium.Plus.Discovery;
 
 /// <summary>
 /// Service discovery → <see cref="IClusterManager.ApplyAsync"/>.
-/// Modes: <c>file</c> and <c>dns</c> (timer based), <c>consul</c> (blocking queries), and <c>k8s</c>
+/// Modes: <c>file</c>, <c>dns</c>, and <c>dnsSrv</c> (timer based), <c>consul</c> (blocking queries), and <c>k8s</c>
 /// (EndpointSlice list-then-watch). Remote modes back off exponentially with jitter and keep the last
 /// known good destinations on every error; an empty or failed result is never applied.
 /// </summary>
@@ -38,6 +38,9 @@ public sealed class ServiceDiscovery : IDisposable
 
     /// <summary>0 idle, 1 apply scheduled, 2 another change arrived while one was scheduled.</summary>
     private int _fileWatchState;
+    private readonly DiscoveryApplyState _dnsApplyState = new();
+    private readonly DiscoveryApplyState _dnsSrvApplyState = new();
+    private int _dnsSrvTruncateLogged;
 
     public static ServiceDiscovery? TryStart(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
@@ -55,6 +58,11 @@ public sealed class ServiceDiscovery : IDisposable
                 break;
             case "dns":
                 discovery.StartDnsLoop(context, options);
+                break;
+            case "dnssrv":
+            case "dns-srv":
+            case "dns_srv":
+                discovery.StartDnsSrvLoop(context, options);
                 break;
             case "consul":
                 discovery.StartConsul(context, options);
@@ -185,11 +193,77 @@ public sealed class ServiceDiscovery : IDisposable
 
         _ = Task.Run(
             () => RunPeriodicAsync(
-                ct => ApplyDnsAsync(context, dnsName, port, clusterId, ct),
+                ct => ApplyDnsAsync(context, dnsName, port, clusterId, _dnsApplyState, ct),
                 intervalMs,
                 "Plus Discovery: DNS apply failed",
                 context),
             _cts.Token);
+    }
+
+    private void StartDnsSrvLoop(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("discovery.srvName", out var srvName) || string.IsNullOrWhiteSpace(srvName))
+        {
+            PlusLog.Warn(context, "Plus Discovery: mode=dnsSrv requires discovery.srvName");
+            return;
+        }
+
+        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? srvName.Trim();
+        var intervalMs = DnsSrvDiscovery.ReadIntervalMs(options);
+        var maxTargets = DnsSrvDiscovery.ReadMaxTargets(options);
+        var dnsServer = options.GetValueOrDefault("discovery.dnsServer");
+        PlusLog.Info(context,
+            $"Plus Discovery: DNS SRV {srvName.Trim()} every {intervalMs}ms (cap {maxTargets}) → cluster {clusterId}");
+        _ = Task.Run(
+            () => RunDnsSrvAsync(context, options, srvName.Trim(), clusterId, maxTargets, dnsServer, intervalMs, _cts.Token),
+            _cts.Token);
+    }
+
+    private async Task RunDnsSrvAsync(
+        PlusActivationContext context,
+        IReadOnlyDictionary<string, string> options,
+        string srvName,
+        string clusterId,
+        int maxTargets,
+        string? dnsServer,
+        int intervalMs,
+        CancellationToken cancellationToken)
+    {
+        var backoffSettings = ReadBackoff(options);
+        var backoff = new DiscoveryBackoff(backoffSettings.MinMs, backoffSettings.MaxMs);
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var (destinations, ttlSeconds, truncated) = await DnsSrvDiscovery.QueryAsync(
+                    srvName,
+                    clusterId,
+                    maxTargets,
+                    dnsServer,
+                    cancellationToken).ConfigureAwait(false);
+                if (truncated && Interlocked.Exchange(ref _dnsSrvTruncateLogged, 1) == 0)
+                {
+                    PlusLog.Warn(context, $"Plus Discovery: DNS SRV {srvName} returned more targets than srvMaxTargets ({maxTargets}); list was truncated.");
+                }
+
+                await ApplyDestinationsIfChangedAsync(context, clusterId, destinations, _dnsSrvApplyState, cancellationToken)
+                    .ConfigureAwait(false);
+                backoff.Reset();
+                var delayMs = Math.Max(intervalMs, ttlSeconds > 0 ? ttlSeconds * 1000 : 0);
+                await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                var delay = backoff.Next();
+                PlusLog.Warn(context,
+                    $"Plus Discovery: DNS SRV query failed ({ex.Message}); keeping last known destinations, retry in {(int)delay.TotalMilliseconds}ms");
+                await DelayAsync(delay, cancellationToken);
+            }
+        }
     }
 
     private void StartConsul(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -419,10 +493,8 @@ public sealed class ServiceDiscovery : IDisposable
             return false;
         }
 
-        await context.ClusterManager.ApplyAsync(
-        [
-            new ClusterConfig { Id = clusterId, Destinations = destinations },
-        ], cancellationToken);
+        var cluster = DiscoveryClusterMerge.WithDestinations(context.ClusterManager, clusterId, destinations);
+        await context.ClusterManager.ApplyAsync([cluster], cancellationToken);
         state.Signature = signature;
         context.RefreshReverseProxy?.Invoke();
         PlusLog.Info(context, $"Plus Discovery: applied {destinations.Count} destination(s) to cluster {clusterId}");
@@ -448,6 +520,7 @@ public sealed class ServiceDiscovery : IDisposable
         string dnsName,
         int port,
         string clusterId,
+        DiscoveryApplyState state,
         CancellationToken cancellationToken)
     {
         if (context.ClusterManager is null)
@@ -468,16 +541,7 @@ public sealed class ServiceDiscovery : IDisposable
             });
         }
 
-        if (destinations.Count == 0)
-        {
-            return;
-        }
-
-        await context.ClusterManager.ApplyAsync(
-        [
-            new ClusterConfig { Id = clusterId, Destinations = destinations },
-        ], cancellationToken);
-        context.RefreshReverseProxy?.Invoke();
+        await ApplyDestinationsIfChangedAsync(context, clusterId, destinations, state, cancellationToken);
     }
 
     internal static List<ClusterConfig>? ParseClustersDocument(string json)
