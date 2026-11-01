@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "7.1",
+  "listeners": [
+    {
+      "host": "127.0.0.1",
+      "port": 8080,
+      "decryptSsl": false,
+      "forwardHost": "example.com",
+      "forwardPort": 80,
+      "acceptProxyProtocol": false,
+      "trustedProxyProtocolSources": [],
+      "passthrough": false,
+      "sniRoutes": []
+    }
+  ],
+  "routes": [
+    {
+      "id": "r1",
+      "clusterId": "c1",
+      "match": {
+        "path": "/",
+        "pathKind": "prefix",
+        "pathCaseSensitive": true
+      },
+      "order": 0,
+      "grpcWeb": false
+    }
+  ],
+  "clusters": [
+    {
+      "id": "c1",
+      "destinations": [
+        {
+          "id": "d1",
+          "address": "example.com",
+          "port": 80,
+          "useHttps": false,
+          "weight": 1,
+          "useDestinationHost": false,
+          "dnsRefreshSeconds": 0,
+          "priority": 0,
+          "backup": false,
+          "slowStartSeconds": 0
+        }
+      ],
+      "algorithm": "roundRobin",
+      "slowStartSeconds": 0
+    }
+  ],
+  "policies": []
+}
