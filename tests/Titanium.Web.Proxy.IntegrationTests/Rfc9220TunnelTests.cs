@@ -469,6 +469,186 @@ public class Rfc9220TunnelTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH3Origin_EchoesText()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate)
+        {
+            AdvertiseEnableConnectProtocol = true
+        };
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, origin.Port, UpstreamHttpProtocol.Http3);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{origin.Port}", "/ws", "websocket",
+                extraHeaders: [("sec-websocket-version", "13")]);
+            Assert.AreEqual(200, tunnel.Status);
+            Assert.IsTrue(origin.ExtendedConnectAcceptCount > 0);
+
+            var frame = BuildMaskedTextFrame(Ascii.GetBytes("hello-h3-to-h3"));
+            await tunnel.SendAsync(frame);
+            CollectionAssert.AreEqual(frame, await tunnel.ReceiveAsync());
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH3Origin_WithoutSetting8_FallsBackToHttp11()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        using var tcpEcho = new TcpWebSocketEchoOnPort(origin.Port);
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, origin.Port, UpstreamHttpProtocol.Http3);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{origin.Port}", "/ws", "websocket",
+                extraHeaders: [("sec-websocket-version", "13")], scheme: "http");
+            Assert.AreEqual(200, tunnel.Status);
+            Assert.AreEqual(0, origin.ExtendedConnectAcceptCount,
+                "Without ENABLE_CONNECT_PROTOCOL the proxy must not open an H3 extended CONNECT.");
+            Assert.IsTrue(tcpEcho.ConnectionsAccepted > 0,
+                "The proxy must fall back to HTTP/1.1 WebSocket upgrade on TCP.");
+
+            var frame = BuildMaskedTextFrame(Ascii.GetBytes("fallback-h3-h3"));
+            await tunnel.SendAsync(frame);
+            CollectionAssert.AreEqual(frame, await tunnel.ReceiveAsync());
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH3Origin_OriginRejectsExtendedConnect_RelaysStatus()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate)
+        {
+            AdvertiseEnableConnectProtocol = true,
+            ExtendedConnectHandler = async ctx =>
+            {
+                await ctx.RespondAsync(403);
+            }
+        };
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, origin.Port, UpstreamHttpProtocol.Http3);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{origin.Port}", "/ws", "websocket");
+            Assert.AreEqual(403, tunnel.Status);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH3Origin_OriginReset_AbortsWithConnectError()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate)
+        {
+            AdvertiseEnableConnectProtocol = true,
+            ExtendedConnectHandler = ctx => ResetOriginOnFirstDataAsync(ctx)
+        };
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, origin.Port, UpstreamHttpProtocol.Http3);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{origin.Port}", "/ws", "websocket");
+            Assert.AreEqual(200, tunnel.Status);
+
+            await tunnel.SendAsync(BuildMaskedTextFrame(Ascii.GetBytes("reset-me")));
+
+            var ex = await Assert.ThrowsExactlyAsync<QuicException>(async () =>
+                _ = await tunnel.ReceiveAsync());
+            Assert.AreEqual((long)Http3ErrorCode.ConnectError, ex.ApplicationErrorCode);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH3Origin_OriginFin_ClosesCleanly()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate)
+        {
+            AdvertiseEnableConnectProtocol = true,
+            ExtendedConnectHandler = async ctx =>
+            {
+                await ctx.RespondAsync(200);
+                var frame = await Http3Frame.ReadAsync(ctx.Stream, maxPayloadBytes: 0, CancellationToken.None);
+                frame?.ReturnPayload();
+                ctx.Stream.CompleteWrites();
+            }
+        };
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, origin.Port, UpstreamHttpProtocol.Http3);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{origin.Port}", "/ws", "websocket");
+            Assert.AreEqual(200, tunnel.Status);
+
+            await tunnel.SendAsync(BuildMaskedTextFrame(Ascii.GetBytes("fin-me")));
+            var echoed = await tunnel.ReceiveAsync();
+            Assert.AreEqual(0, echoed.Length);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task WebSocket_BeforeRequestDeny_ClientSeesDenyResponse_OriginNeverContacted()
     {
         RequireQuic();
@@ -505,6 +685,14 @@ public class Rfc9220TunnelTests
         }
     }
 
+    private static async Task ResetOriginOnFirstDataAsync(QuicHttp3ExtendedConnectContext ctx)
+    {
+        await ctx.RespondAsync(200);
+        var frame = await Http3Frame.ReadAsync(ctx.Stream, maxPayloadBytes: 0, CancellationToken.None);
+        frame?.ReturnPayload();
+        ctx.Stream.Abort(QuicAbortDirection.Both, (long)Http3ErrorCode.ConnectError);
+    }
+
     private static async Task<string> ReadRequestHeadersAsync(ConnectionContext context)
     {
         var accumulated = string.Empty;
@@ -527,6 +715,96 @@ public class Rfc9220TunnelTests
         for (var i = 0; i < payload.Length; i++)
             frame.Add((byte)(payload[i] ^ maskKey[i % 4]));
         return frame.ToArray();
+    }
+
+    /// <summary>Plain TCP WebSocket echo on a fixed port (pairs with a QUIC origin on the same port).</summary>
+    private sealed class TcpWebSocketEchoOnPort : IDisposable
+    {
+        private readonly TcpListener listener;
+        private bool disposed;
+
+        public TcpWebSocketEchoOnPort(int port)
+        {
+            listener = new TcpListener(IPAddress.Loopback, port);
+            listener.Start();
+            _ = AcceptLoopAsync();
+        }
+
+        public int ConnectionsAccepted { get; private set; }
+
+        private async Task AcceptLoopAsync()
+        {
+            while (!disposed)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await listener.AcceptTcpClientAsync();
+                }
+                catch
+                {
+                    return;
+                }
+
+                ConnectionsAccepted++;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await using var stream = client.GetStream();
+                        var upgradeRequest = await ReadUntilDoubleCrLfAsync(stream);
+                        var keyLine = upgradeRequest.Split(Separator, StringSplitOptions.RemoveEmptyEntries)
+                            .Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
+                        var wsKey = keyLine[(keyLine.IndexOf(':') + 1)..].Trim();
+                        var wsAccept = Convert.ToBase64String(SHA1.HashData(
+                            Ascii.GetBytes(wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+
+                        await stream.WriteAsync(Ascii.GetBytes(
+                            "HTTP/1.1 101 Switching Protocols\r\n" +
+                            "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+                            $"Sec-WebSocket-Accept: {wsAccept}\r\n\r\n"));
+                        await stream.FlushAsync();
+
+                        var buffer = new byte[4096];
+                        while (true)
+                        {
+                            var read = await stream.ReadAsync(buffer);
+                            if (read <= 0) break;
+                            await stream.WriteAsync(buffer.AsMemory(0, read));
+                            await stream.FlushAsync();
+                        }
+                    }
+                    catch
+                    {
+                        // test asserts
+                    }
+                    finally
+                    {
+                        client.Dispose();
+                    }
+                });
+            }
+        }
+
+        private static async Task<string> ReadUntilDoubleCrLfAsync(Stream stream)
+        {
+            var accumulated = new StringBuilder();
+            var buffer = new byte[1024];
+            while (!accumulated.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var read = await stream.ReadAsync(buffer);
+                if (read <= 0) break;
+                accumulated.Append(Ascii.GetString(buffer, 0, read));
+            }
+
+            return accumulated.ToString();
+        }
+
+        public void Dispose()
+        {
+            disposed = true;
+            listener.Stop();
+        }
     }
 
     /// <summary>

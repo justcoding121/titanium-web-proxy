@@ -120,6 +120,22 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
 
     public int AcceptedConnectionCount => Volatile.Read(ref acceptedConnectionCount);
 
+    /// <summary>
+    ///     When true, the origin SETTINGS frame includes <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c>.
+    /// </summary>
+    public bool AdvertiseEnableConnectProtocol { get; set; }
+
+    /// <summary>Number of extended CONNECT streams accepted (CONNECT with <c>:protocol</c>).</summary>
+    public int ExtendedConnectAcceptCount => Volatile.Read(ref extendedConnectAcceptCount);
+
+    private int extendedConnectAcceptCount;
+
+    /// <summary>
+    ///     Optional handler for extended CONNECT. When null and connect protocol is advertised, the
+    ///     origin responds with 200 and echoes DATA frames.
+    /// </summary>
+    public Func<QuicHttp3ExtendedConnectContext, Task>? ExtendedConnectHandler { get; set; }
+
     public void HandleRequest(Func<QuicHttp3Request, Task<QuicHttp3Response>> requestHandler)
         => handler = requestHandler;
 
@@ -155,6 +171,8 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                 var settings = new Http3Settings();
                 settings.SetQpackMaxTableCapacity(0);
                 settings.SetQpackBlockedStreams(0);
+                if (AdvertiseEnableConnectProtocol)
+                    settings.SetEnableConnectProtocol(true);
                 await Http3Frame.WriteAsync(control, Http3FrameType.Settings, settings.Serialize(), cts.Token);
 
                 while (!cts.IsCancellationRequested)
@@ -194,7 +212,7 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                     return;
 
                 var decoded = QpackDecoder.Decode(headersFrame.Payload.Span);
-                string method = "GET", path = "/", authority = "localhost";
+                string method = "GET", path = "/", authority = "localhost", protocol = "";
                 foreach (var (name, value) in decoded)
                 {
                     switch (name)
@@ -202,7 +220,16 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                         case ":method": method = value; break;
                         case ":path": path = value; break;
                         case ":authority": authority = value; break;
+                        case ":protocol": protocol = value; break;
                     }
+                }
+
+                if (string.Equals(method, "CONNECT", StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrEmpty(protocol))
+                {
+                    Interlocked.Increment(ref extendedConnectAcceptCount);
+                    await HandleExtendedConnectStreamAsync(stream, protocol);
+                    return;
                 }
 
                 var body = new List<byte>();
@@ -251,6 +278,36 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
             catch (QuicException) { }
             catch (Http3ConnectionException) { }
             catch (Http3StreamException) { }
+        }
+    }
+
+    private async Task HandleExtendedConnectStreamAsync(QuicStream stream, string protocol)
+    {
+        if (ExtendedConnectHandler != null)
+        {
+            await ExtendedConnectHandler(new QuicHttp3ExtendedConnectContext(stream, protocol));
+            return;
+        }
+
+        var responseHeaders = QpackEncoder.Encode(new[]
+        {
+            (":status", "200")
+        });
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, responseHeaders, cts.Token);
+
+        while (!cts.IsCancellationRequested)
+        {
+            var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, cts.Token);
+            if (frame is null) break;
+            try
+            {
+                if (frame.Type == Http3FrameType.Data && !frame.Payload.IsEmpty)
+                    await Http3Frame.WriteAsync(stream, Http3FrameType.Data, frame.Payload, cts.Token);
+            }
+            finally
+            {
+                frame.ReturnPayload();
+            }
         }
     }
 
@@ -586,6 +643,42 @@ internal sealed class H3Tunnel : IAsyncDisposable
 
 internal readonly record struct QuicHttp3Request(
     string Method, string Path, string Authority, byte[] Body, int DataFrameCount = 0);
+
+internal sealed class QuicHttp3ExtendedConnectContext
+{
+    internal QuicHttp3ExtendedConnectContext(QuicStream stream, string protocol)
+    {
+        Stream = stream;
+        Protocol = protocol;
+    }
+
+    internal QuicStream Stream { get; }
+    internal string Protocol { get; }
+
+    internal async Task RespondAsync(int statusCode, CancellationToken cancellationToken = default)
+    {
+        var responseHeaders = QpackEncoder.Encode(new[] { (":status", statusCode.ToString()) });
+        await Http3Frame.WriteAsync(Stream, Http3FrameType.Headers, responseHeaders, cancellationToken);
+    }
+
+    internal async Task EchoDataAsync(CancellationToken cancellationToken = default)
+    {
+        while (true)
+        {
+            var frame = await Http3Frame.ReadAsync(Stream, maxPayloadBytes: 0, cancellationToken);
+            if (frame is null) break;
+            try
+            {
+                if (frame.Type == Http3FrameType.Data && !frame.Payload.IsEmpty)
+                    await Http3Frame.WriteAsync(Stream, Http3FrameType.Data, frame.Payload, cancellationToken);
+            }
+            finally
+            {
+                frame.ReturnPayload();
+            }
+        }
+    }
+}
 
 internal sealed class QuicHttp3Response
 {

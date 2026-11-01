@@ -137,7 +137,8 @@ handlers to synthesize their own response before the fallback fires).
 ### HTTP/3 (RFC 9220)
 
 The same `ProxyServer.EnableRfc8441` switch advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL` (id `0x08`) on
-HTTP/3 control streams and implements extended CONNECT to **HTTP/1.1** WebSocket origins only
-(`Http3ExtendedConnectTunnel`: upgrade handshake, then bidirectional DATA relay). There is no idle timer on
-the tunnel in v1 (same as the HTTP/2 h2→h1 path). HTTP/2 and HTTP/3 origins are out of scope until later
-work items.
+HTTP/3 control streams and implements extended CONNECT from HTTP/3 clients to **HTTP/1.1**, **HTTP/2**, and
+**HTTP/3** WebSocket origins (`Http3ExtendedConnectTunnel`: RFC 8441-style extended CONNECT or HTTP/1.1
+upgrade on the origin leg, then bidirectional DATA relay). When a forced or discovered HTTP/3 origin does
+not advertise `0x08=1` within two seconds, the proxy falls back to HTTP/1.1 WebSocket upgrade on TCP (same
+as the h2 origin leg). There is no idle timer on the tunnel in v1 (same as the HTTP/2 h2→h1 path).

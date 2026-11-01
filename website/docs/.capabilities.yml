@@ -617,7 +617,7 @@ rows:
       - 'server.enableRfc8441'
     docs: '/docs/protocol-support'
     docsLabel: 'Protocol support'
-    note: 'RFC 9220 to HTTP/1.1 origins. Extended CONNECT when enableRfc8441 is on.'
+    note: 'RFC 9220. HTTP/3 clients reach HTTP/1.1, HTTP/2 and HTTP/3 origins.'
   - area: 'Protocols'
     capability: 'Explicit-proxy h2c Upgrade'
     status: 'not supported'

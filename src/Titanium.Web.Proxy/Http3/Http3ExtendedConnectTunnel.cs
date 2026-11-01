@@ -21,12 +21,13 @@ using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
 namespace Titanium.Web.Proxy.Http3;
 
 /// <summary>
-///     RFC 9220 extended CONNECT (WebSocket) from an HTTP/3 client to HTTP/1.1 or HTTP/2 origins.
+///     RFC 9220 extended CONNECT (WebSocket) from an HTTP/3 client to HTTP/1.1, HTTP/2, or HTTP/3 origins.
 /// </summary>
 internal static class Http3ExtendedConnectTunnel
 {
@@ -48,6 +49,7 @@ internal static class Http3ExtendedConnectTunnel
         CancellationToken cancellationToken)
     {
         Http2OriginConnection? h2Connection = null;
+        QuicServerConnection? quicConnection = null;
         string? h2PoolKey = null;
         var abnormalEnd = false;
 
@@ -85,10 +87,9 @@ internal static class Http3ExtendedConnectTunnel
                         connectPort, h2PoolKey, prePickedH2, cancellationToken);
                     break;
                 case OriginLeg.Http3:
-                    await Http3RequestStream.SendSimpleStatusForTunnelAsync(stream, 501, qpackContext,
-                        cancellationToken);
-                    streamState.RequestClosed = true;
-                    streamState.ResponseClosed = true;
+                    (abnormalEnd, quicConnection) = await RunHttp3LegAsync(stream, sessionArgs, server, logger,
+                        qpackContext, streamState, onBeforeResponse, remoteHostName, remotePort, connectHost,
+                        connectPort, cancellationToken);
                     break;
             }
         }
@@ -116,6 +117,9 @@ internal static class Http3ExtendedConnectTunnel
         {
             if (h2Connection != null && h2PoolKey != null && sessionArgs.HttpClient.CloseServerConnection)
                 server.Http2OriginConnectionPool.Invalidate(h2PoolKey, h2Connection);
+
+            if (quicConnection != null && sessionArgs.HttpClient.CloseServerConnection)
+                await server.QuicConnectionPool.InvalidateAsync(quicConnection);
 
             if (abnormalEnd)
             {
@@ -345,6 +349,190 @@ internal static class Http3ExtendedConnectTunnel
         streamState.RequestClosed = true;
 
         return (relayAbnormal, h2Connection);
+    }
+
+    private static async Task<(bool AbnormalEnd, QuicServerConnection? QuicConnection)> RunHttp3LegAsync(
+        QuicStream stream,
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        ILogger logger,
+        QpackContext? qpackContext,
+        Http3StreamState streamState,
+        Func<SessionEventArgs, Task> onBeforeResponse,
+        string remoteHostName,
+        int remotePort,
+        string? connectHost,
+        int? connectPort,
+        CancellationToken cancellationToken)
+    {
+        QuicServerConnection? quicConn = null;
+        var relayAbnormal = false;
+
+        try
+        {
+            quicConn = await OpenHttp3OriginAsync(server, sessionArgs, logger, remoteHostName, remotePort,
+                connectHost, connectPort, cancellationToken);
+            await quicConn.StartHttp3ClientSessionAsync(cancellationToken);
+
+            var h3Session = quicConn.Http3ClientSession;
+            if (h3Session == null || !await h3Session.OriginAdvertisesConnectProtocolAsync(cancellationToken))
+            {
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+                quicConn = null;
+                var fallbackAbnormal = await RunHttp11LegAsync(stream, sessionArgs, server, logger, qpackContext,
+                    streamState, onBeforeResponse, remoteHostName, remotePort, connectHost, connectPort,
+                    sessionArgs.HttpClient.Request.IsHttps, cancellationToken);
+                return (fallbackAbnormal, null);
+            }
+
+            var request = sessionArgs.HttpClient.Request;
+            if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardCleartext: true })
+                request.IsHttps = false;
+
+            PrepareWebSocketForHttp2Origin(request);
+
+            var sniHost = remoteHostName;
+            Http3OriginTunnelResult tunnelResult;
+            var pooledConn = quicConn;
+            try
+            {
+                tunnelResult = await h3Session.OpenExtendedConnectAsync(request, sniHost,
+                    server.ResourceLimits, () => _ = QuicConnectionPool.ReleaseAsync(pooledConn),
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Http3StreamException
+                                       && ex is not OperationCanceledException)
+            {
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+                quicConn = null;
+                if (ex is InvalidOperationException)
+                {
+                    var fallbackAbnormal = await RunHttp11LegAsync(stream, sessionArgs, server, logger,
+                        qpackContext, streamState, onBeforeResponse, remoteHostName, remotePort, connectHost,
+                        connectPort, sessionArgs.HttpClient.Request.IsHttps, cancellationToken);
+                    return (fallbackAbnormal, null);
+                }
+
+                OriginFailureResponses.Apply(sessionArgs, ex);
+                await onBeforeResponse(sessionArgs);
+                await Http3RequestStream.SendResponseForTunnelAsync(stream, sessionArgs.HttpClient.Response,
+                    qpackContext, cancellationToken);
+                streamState.RequestClosed = true;
+                streamState.ResponseClosed = true;
+                return (true, null);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+                quicConn = null;
+                OriginFailureResponses.Apply(sessionArgs, ex);
+                await onBeforeResponse(sessionArgs);
+                await Http3RequestStream.SendResponseForTunnelAsync(stream, sessionArgs.HttpClient.Response,
+                    qpackContext, cancellationToken);
+                streamState.RequestClosed = true;
+                streamState.ResponseClosed = true;
+                return (true, null);
+            }
+
+            if (!tunnelResult.IsEstablished || tunnelResult.Stream == null)
+            {
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+                quicConn = null;
+                var rejected = tunnelResult.Response;
+                var failResponse = new Response
+                {
+                    HttpVersion = HttpHeader.Version30,
+                    StatusCode = rejected.StatusCode is >= 100 and <= 999 ? rejected.StatusCode : 502,
+                    StatusDescription = rejected.StatusDescription
+                };
+                sessionArgs.HttpClient.Response = failResponse;
+                await onBeforeResponse(sessionArgs);
+                await Http3RequestStream.SendResponseForTunnelAsync(stream, failResponse, qpackContext,
+                    cancellationToken);
+                streamState.RequestClosed = true;
+                streamState.ResponseClosed = true;
+                return (false, null);
+            }
+
+            var response200 = BuildEstablishedTunnelResponse(tunnelResult.Response.Headers);
+            sessionArgs.HttpClient.Response = response200;
+            await onBeforeResponse(sessionArgs);
+            var intercepted = sessionArgs.HttpClient.Response;
+            if (!ReferenceEquals(intercepted, response200) ||
+                intercepted.StatusCode is < 200 or >= 300)
+            {
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+                quicConn = null;
+                await Http3RequestStream.SendResponseForTunnelAsync(stream, intercepted, qpackContext,
+                    cancellationToken);
+                streamState.RequestClosed = true;
+                streamState.ResponseClosed = true;
+                return (false, null);
+            }
+
+            using var tunnelStream = tunnelResult.Stream;
+            sessionArgs.RespondStreaming(response200, async (bodyStream, ct) =>
+            {
+                relayAbnormal = await RelayEstablishedTunnelAsync(stream, tunnelStream, bodyStream, server,
+                    sessionArgs, ct, cancellationToken, closeOriginOnEnd: false);
+            });
+
+            await Http3RequestStream.SendResponseForTunnelAsync(stream, sessionArgs.HttpClient.Response, qpackContext,
+                cancellationToken);
+            streamState.RequestClosed = true;
+
+            return (relayAbnormal, quicConn);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (quicConn != null)
+            {
+                await QuicConnectionPool.ReleaseAsync(quicConn);
+                quicConn = null;
+            }
+
+            OriginFailureResponses.Apply(sessionArgs, ex);
+            await onBeforeResponse(sessionArgs);
+            await Http3RequestStream.SendResponseForTunnelAsync(stream, sessionArgs.HttpClient.Response,
+                qpackContext, cancellationToken);
+            streamState.RequestClosed = true;
+            streamState.ResponseClosed = true;
+            return (true, null);
+        }
+    }
+
+    private static async Task<QuicServerConnection> OpenHttp3OriginAsync(
+        ProxyServer server,
+        SessionEventArgs sessionArgs,
+        ILogger logger,
+        string remoteHostName,
+        int remotePort,
+        string? connectHost,
+        int? connectPort,
+        CancellationToken cancellationToken)
+    {
+        var connectHostResolved = connectHost ?? remoteHostName;
+        var port = connectPort ?? remotePort;
+        var sniHost = remoteHostName;
+        var upStreamEndPoint = sessionArgs.HttpClient.UpStreamEndPoint ?? server.UpStreamEndPoint;
+        var upstreamProxy = sessionArgs.CustomUpStreamProxyUsed ?? server.UpStreamHttpsProxy;
+
+        try
+        {
+            return await server.QuicConnectionPool.GetOrCreateAsync(
+                connectHostResolved, port, upStreamEndPoint, upstreamProxy,
+                (sender, certificate, chain, errors) =>
+                    server.ValidateServerCertificate(sender, sessionArgs, certificate, chain, errors),
+                cancellationToken,
+                sniHost: sniHost,
+                failFastHandshake: false);
+        }
+        catch (Exception ex)
+        {
+            throw new ProxyHttpException(
+                $"Failed to establish the HTTP/3 origin connection to '{remoteHostName}:{remotePort}' for the " +
+                "HTTP/3 extended CONNECT tunnel.", ex, sessionArgs);
+        }
     }
 
     private static Response BuildEstablishedTunnelResponse(IEnumerable<HttpHeader> originHeaders)
