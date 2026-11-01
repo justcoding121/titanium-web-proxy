@@ -405,14 +405,17 @@ public class Rfc9220TunnelTests
             Assert.AreEqual(200, warm.StatusCode);
             Assert.AreEqual("get-ok", warm.TextBody);
 
-            await using var tunnel = await client.OpenExtendedConnectAsync(
-                $"localhost:{rawOrigin.Port}", "/ws", "websocket");
-            Assert.AreEqual(200, tunnel.Status);
-            var frame = BuildMaskedTextFrame(Ascii.GetBytes("pool-survives"));
-            await tunnel.SendAsync(frame);
-            CollectionAssert.AreEqual(frame, await tunnel.ReceiveAsync());
-            // The raw origin handler is serial: finish the CONNECT stream so it can accept the next GET.
-            tunnel.Finish();
+            // Dispose the tunnel before the follow-up GET: the raw origin handler is serial and
+            // stays in the CONNECT DATA loop until the stream ends.
+            {
+                await using var tunnel = await client.OpenExtendedConnectAsync(
+                    $"localhost:{rawOrigin.Port}", "/ws", "websocket");
+                Assert.AreEqual(200, tunnel.Status);
+                var frame = BuildMaskedTextFrame(Ascii.GetBytes("pool-survives"));
+                await tunnel.SendAsync(frame);
+                CollectionAssert.AreEqual(frame, await tunnel.ReceiveAsync());
+                tunnel.Finish();
+            }
 
             var after = await client.SendAsync("GET", $"localhost:{rawOrigin.Port}", "/");
             Assert.AreEqual(200, after.StatusCode);
@@ -458,7 +461,8 @@ public class Rfc9220TunnelTests
                 {
                     if (frame.Payload.Length > 0)
                         await originConn.WriteFrameAsync(Http2FrameType.Data, streamId, 0, frame.Payload);
-                    if ((frame.Flags & Http2FrameFlag.EndStream) != 0)
+                    // End of client writes, or first echoed frame is enough for this serial test helper.
+                    if ((frame.Flags & Http2FrameFlag.EndStream) != 0 || frame.Payload.Length > 0)
                         break;
                 }
                 else if (frame.Type is Http2FrameType.RstStream or Http2FrameType.GoAway)
