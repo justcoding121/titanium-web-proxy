@@ -34,7 +34,7 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var response = args.HttpClient.Response;
 
-        if (response.IsBodyRead || response.IsSynthetic || response.StreamBodyWriter != null
+        if (response.IsBodyRead || response.IsSynthetic
             || response.Http3RawBodyDrain != null || !response.OriginalHasBody
             || response.HttpVersion.Major != 1 || request.HttpVersion.Major >= 3)
             return null;

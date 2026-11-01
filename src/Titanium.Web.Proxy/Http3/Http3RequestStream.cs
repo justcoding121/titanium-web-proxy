@@ -359,6 +359,7 @@ internal static class Http3RequestStream
                     }
 
                     await onBeforeResponse(sessionArgs);
+                    await server.ApplyHttp3ClientResponseCompressionAsync(sessionArgs);
                     if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
@@ -441,6 +442,7 @@ internal static class Http3RequestStream
                             sessionArgs.HttpClient.Response = fwd.Response
                                                               ?? sessionArgs.HttpClient.Response;
                             await onBeforeResponse(sessionArgs);
+                            await server.ApplyHttp3ClientResponseCompressionAsync(sessionArgs);
                             await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext,
                                 cancellationToken);
                         }
@@ -515,6 +517,7 @@ internal static class Http3RequestStream
                         streamState.RequestClosed = true;
 
                     await onBeforeResponse(sessionArgs);
+                    await server.ApplyHttp3ClientResponseCompressionAsync(sessionArgs);
 
                     // Inject Via header on the response (RFC 9110 §7.6.3). Skip on fast path.
                     if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym))
@@ -942,6 +945,7 @@ internal static class Http3RequestStream
         var respWriter = response.StreamBodyWriter;
 
         await onBeforeResponse(sessionArgs);
+        await server.ApplyHttp3ClientResponseCompressionAsync(sessionArgs);
 
         var respHeaderRelayBaseline = response.Headers.TakeMitmRelayBaseline();
         var responseBodyUnchanged = response.StatusCode == respStatusBaseline
