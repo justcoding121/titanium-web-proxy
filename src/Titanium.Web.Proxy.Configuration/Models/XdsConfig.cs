@@ -1,6 +1,6 @@
 namespace Titanium.Web.Proxy.Configuration.Models;
 
-/// <summary>Envoy xDS ADS client settings. Loaded only when this section is present.</summary>
+/// <summary>xDS ADS client settings. Loaded only when this section is present.</summary>
 public sealed class XdsConfig
 {
     public string? Server { get; set; }

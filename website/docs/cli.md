@@ -87,7 +87,7 @@ With `-c`, the host and port come from `server.admin`; a wildcard bind is probed
 
 ### `service` {#service}
 
-Register the same `titanium run` binary with the OS so it starts at boot and restarts on failure (Windows Service, Linux systemd, or macOS launchd) — the same split nginx uses: one process, the OS supervises it.
+Register the same `titanium run` binary with the OS so it starts at boot and restarts on failure (Windows Service, Linux systemd, or macOS launchd): one process, the OS supervises it.
 
 ```text
 titanium service install -c <config> [--name titanium] [--user] [--no-start]

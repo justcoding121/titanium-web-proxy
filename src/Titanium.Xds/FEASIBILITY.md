@@ -4,7 +4,7 @@ Decision: **go**. This note fixes the v1 field list and records build proof.
 
 ## Proto / build proof
 
-- Trimmed Envoy v3 protos under `protos/envoy/` compile with **Grpc.Tools** 2.67.0 and **Google.Protobuf** 3.31.1.
+- Trimmed xDS v3 protos under `protos/envoy/` compile with **Grpc.Tools** 2.67.0 and **Google.Protobuf** 3.31.1.
 - Google `protobuf/*` well-known types come from the Grpc.Tools include path (not duplicated in-repo).
 - Release build of `Titanium.Xds` succeeds; ADS client uses generated `AggregatedDiscoveryService` stub.
 

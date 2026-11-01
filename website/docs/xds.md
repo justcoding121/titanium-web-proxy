@@ -1,8 +1,8 @@
-# xDS (Envoy ADS client)
+# xDS (ADS client)
 
-> CLI-only, lazily loaded. Configure an `xds:` section to pull listeners, routes, clusters, endpoints, and secrets from an Envoy-compatible control plane over **ADS**.
+> CLI-only, lazily loaded. Configure an `xds:` section to pull listeners, routes, clusters, endpoints, and secrets from an xDS **ADS** control plane.
 
-Titanium ships **no xDS server**. This is a dataplane client that translates a supported Envoy v3 subset into native `twp.yaml` shape and applies it through the same validator and atomic reload path as file config.
+Titanium ships **no xDS server**. This is a dataplane client that translates a supported xDS v3 subset into native `twp.yaml` shape and applies it through the same validator and atomic reload path as file config.
 
 ## Configuration
 
@@ -28,7 +28,7 @@ clusters: []
 |-----|---------|
 | `xds.server` | ADS gRPC endpoint (`host:port` or `http://…`) |
 | `xds.tls.*` | Optional mTLS to the control plane (CA + client cert) |
-| `xds.node.*` | Envoy `Node` identity sent on discovery requests |
+| `xds.node.*` | Node identity sent on discovery requests |
 | `xds.failOpen` | When true, start from file config if the plane is down at boot |
 | `server.reloadListeners` | Reconcile listeners on reload (`AddEndPoint` / `RemoveEndPoint`); default **false** for file-only |
 

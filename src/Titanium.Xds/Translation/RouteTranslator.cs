@@ -1,7 +1,7 @@
 using Envoy.Config.Route.V3;
 using Titanium.Web.Proxy.Abstractions.Routing;
-using EnvoyRoute = Envoy.Config.Route.V3.Route;
-using EnvoyRouteMatch = Envoy.Config.Route.V3.RouteMatch;
+using XdsRoute = Envoy.Config.Route.V3.Route;
+using XdsRouteMatch = Envoy.Config.Route.V3.RouteMatch;
 
 namespace Titanium.Xds.Translation;
 
@@ -41,7 +41,7 @@ public static class RouteTranslator
                 RouteConfig config;
                 switch (route.ActionCase)
                 {
-                    case EnvoyRoute.ActionOneofCase.RouteAction:
+                    case XdsRoute.ActionOneofCase.RouteAction:
                         config = new RouteConfig
                         {
                             Id = id,
@@ -50,7 +50,7 @@ public static class RouteTranslator
                             ClusterId = route.RouteAction.Cluster,
                         };
                         break;
-                    case EnvoyRoute.ActionOneofCase.DirectResponse:
+                    case XdsRoute.ActionOneofCase.DirectResponse:
                         config = new RouteConfig
                         {
                             Id = id,
@@ -60,7 +60,7 @@ public static class RouteTranslator
                             DirectResponse = new DirectResponseConfig { Status = (int)route.DirectResponse.Status },
                         };
                         break;
-                    case EnvoyRoute.ActionOneofCase.Redirect:
+                    case XdsRoute.ActionOneofCase.Redirect:
                         return TranslationResult<IReadOnlyList<RouteConfig>>.Fail(new TranslationError
                         {
                             ResourceName = routeConfiguration.Name,
@@ -83,17 +83,17 @@ public static class RouteTranslator
         return TranslationResult<IReadOnlyList<RouteConfig>>.Ok(routes);
     }
 
-    private static Titanium.Web.Proxy.Abstractions.Routing.RouteMatch BuildMatch(EnvoyRouteMatch routeMatch, VirtualHost vhost)
+    private static Titanium.Web.Proxy.Abstractions.Routing.RouteMatch BuildMatch(XdsRouteMatch routeMatch, VirtualHost vhost)
     {
         string? path;
         PathMatchKind pathKind;
         switch (routeMatch.PathSpecifierCase)
         {
-            case EnvoyRouteMatch.PathSpecifierOneofCase.Prefix:
+            case XdsRouteMatch.PathSpecifierOneofCase.Prefix:
                 path = routeMatch.Prefix;
                 pathKind = PathMatchKind.Prefix;
                 break;
-            case EnvoyRouteMatch.PathSpecifierOneofCase.Path:
+            case XdsRouteMatch.PathSpecifierOneofCase.Path:
                 path = routeMatch.Path;
                 pathKind = PathMatchKind.Exact;
                 break;

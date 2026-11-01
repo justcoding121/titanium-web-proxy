@@ -849,7 +849,7 @@ rows:
       - 'routes[].middleware'
     docs: '/docs/scripting#webassembly-plugins'
     docsLabel: 'Scripting'
-    note: 'proxy-wasm ABI 0.1.0, 0.2.0, and 0.2.1 on Wasmtime, with the Envoy attribute set and a WASI subset. A module is built and started before it replaces the running one. Needs the wasmtime native.'
+    note: 'proxy-wasm ABI 0.1.0, 0.2.0, and 0.2.1 on Wasmtime, with the proxy-wasm ABI attribute set and a WASI subset. A module is built and started before it replaces the running one. Needs the wasmtime native.'
   - area: 'Extensibility'
     capability: 'WASM memory, fuel, and deadline limits'
     status: 'supported'

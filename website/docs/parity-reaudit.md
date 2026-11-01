@@ -41,7 +41,7 @@
 
 1. **Dashboard editing** — forms are a JSON editor per route or cluster; there is no field-by-field form, and listeners, certificates and `server.*` stay file-only.
 2. **Hot restart** — the successor takes over TCP with no listener gap. HTTP/3 and UDP cannot be shared between processes, so they are unavailable until the old process exits. The two-process test (`CliHotRestartE2ETests`) is Linux only and was not run by the author on Windows; read the CI result before relying on it.
-3. **xDS proto fidelity** — trimmed Envoy subsets; replace with pinned full upstream files when expanding the field list.
+3. **xDS proto fidelity** — trimmed xDS API subsets; replace with pinned full upstream files when expanding the field list.
 4. **Delta xDS** — state-of-the-world only in v1.
 5. **Checkpoint A/B** — C0–C6 RPS compare-spot against `BASELINE_SHA` must be linked in the Draft PR before merge (not run in this local pass).
 

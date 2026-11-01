@@ -1,10 +1,10 @@
 # Titanium.Xds
 
-Lazy-loaded CLI assembly for Envoy **ADS** (Aggregated Discovery Service) xDS v3.
+Lazy-loaded CLI assembly for Titanium's **ADS** (Aggregated Discovery Service) xDS v3 client.
 
 ## Vendored protos (Apache-2.0)
 
-Minimal `.proto` subsets under `protos/envoy/` are derived from the Envoy [data-plane-api](https://github.com/envoyproxy/data-plane-api) tree. Google well-known types ship with `Grpc.Tools` (not vendored here).
+Minimal `.proto` subsets under `protos/envoy/` are derived from the Apache-2.0 [data-plane-api](https://github.com/envoyproxy/data-plane-api) tree (wire package paths retained for ADS interop). See [NOTICE](NOTICE). Google well-known types ship with `Grpc.Tools` (not vendored here).
 
 | Area | Upstream path (reference) | Notes |
 |------|---------------------------|--------|
@@ -16,12 +16,12 @@ Minimal `.proto` subsets under `protos/envoy/` are derived from the Envoy [data-
 | Secret (SDS) | `envoy/extensions/transport_sockets/tls/v3/secret.proto` | trimmed fields |
 | HCM / TCP proxy filters | `envoy/extensions/filters/network/...` | trimmed typed_config targets |
 
-License: Apache-2.0 (same as upstream Envoy APIs).
+License: Apache-2.0 (same as upstream data-plane API).
 
 ## Deviations
 
 - Field numbers and messages are **trimmed** for the supported subset; this is not a full data-plane-api vendoring yet.
-- Wire interop with every Envoy control plane is the goal; today tests use a **fake ADS** server with the same trimmed messages.
+- Wire interop with standard ADS control planes is the goal; today tests use a **fake ADS** server with the same trimmed messages.
 - See `FEASIBILITY.md` for the supported-field contract and follow-up to import full upstream files via `Grpc.Tools`.
 
 ## Build size (informational)
