@@ -21,6 +21,9 @@ internal static class PlusLoader
 
         try
         {
+            // Preload satellites the xDS copy may already share into the default ALC. Loading the same
+            // path into the Plus collectible ALC fails on macOS (0x80131509).
+            PreloadSharedHostDependencies();
             var alc = new AssemblyLoadContext("Titanium.Plus", isCollectible: true);
             alc.Resolving += ResolveBesideExecutable;
             return FindModule(alc.LoadFromAssemblyPath(dllPath), ref warning);
@@ -61,9 +64,40 @@ internal static class PlusLoader
         return LoadDependency(context, candidate);
     }
 
+    private static void PreloadSharedHostDependencies()
+    {
+        foreach (var name in new[]
+                 {
+                     "Google.Protobuf", "Google.Api.CommonProtos", "Grpc.Core.Api", "Grpc.Net.Common",
+                     "Grpc.Net.Client", "DnsClient",
+                 })
+        {
+            if (AssemblyLoadContext.Default.Assemblies.Any(a =>
+                    string.Equals(a.GetName().Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var candidate = Path.Combine(AppContext.BaseDirectory, name + ".dll");
+            if (!File.Exists(candidate))
+            {
+                continue;
+            }
+
+            try
+            {
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(candidate);
+            }
+            catch (Exception ex) when (IsTransientAssemblyLoad(ex) || ex is BadImageFormatException or FileLoadException)
+            {
+                // Best-effort; Resolving still retries per dependency.
+            }
+        }
+    }
+
     private static bool IsSharedHostDependency(string? simpleName) =>
-        simpleName is "Google.Protobuf" or "Grpc.Net.Client" or "Grpc.Net.Common" or "Grpc.Core.Api"
-            or "Grpc.Net.Client.Web";
+        simpleName is "Google.Protobuf" or "Google.Api.CommonProtos"
+            or "Grpc.Net.Client" or "Grpc.Net.Common" or "Grpc.Core.Api" or "Grpc.Net.Client.Web";
 
     /// <summary>
     ///     <see cref="AssemblyLoadContext.LoadFromAssemblyPath"/> is the supported call from

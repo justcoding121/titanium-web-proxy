@@ -56,6 +56,7 @@ public class PrometheusAppenderTests
         var exporter = new PrometheusMetricsExporter(manager, null);
         using var stop = new CancellationTokenSource();
 
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var scraper = Task.Run(() =>
         {
             var scrapes = 0;
@@ -66,17 +67,22 @@ public class PrometheusAppenderTests
                 var states = sb.ToString().Split('\n').Count(line => line.StartsWith("titanium_destination_state{", StringComparison.Ordinal));
                 Assert.AreEqual(1, states, "each snapshot has exactly one destination");
                 scrapes++;
+                if (scrapes == 1)
+                {
+                    started.TrySetResult();
+                }
             }
 
             return scrapes;
         });
 
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         for (var i = 1; i <= 200; i++)
         {
             await manager.ApplyAsync([Cluster("d" + i)]);
         }
 
-        stop.Cancel();
+        await stop.CancelAsync();
         Assert.IsTrue(await scraper > 0);
     }
 }

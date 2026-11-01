@@ -1809,10 +1809,9 @@ public partial class ProxyServer : IDisposable
             // that wraps Start, so the process used to exit before it was ready).
             if (endPoint.ReusePort && OperatingSystem.IsLinux())
             {
-                endPoint.Listener.Server.SetRawSocketOption(
-                    (int)SocketOptionLevel.Socket,
-                    15,
-                    BitConverter.GetBytes(1));
+                // Linux SOL_SOCKET is 1. Casting SocketOptionLevel.Socket yields the Windows value 65535
+                // and the kernel rejects it; SetSocketOption maps levels, SetRawSocketOption does not.
+                endPoint.Listener.Server.SetRawSocketOption(1, 15, BitConverter.GetBytes(1));
             }
 
             endPoint.Listener.Start(ListenerBackLog);
