@@ -73,7 +73,7 @@ public sealed class OverloadMonitor
                 continue;
             }
 
-            desired = Max(desired, LevelForReading(reading, thresholds, name));
+            desired = Max(desired, LevelForReading(reading, thresholds));
         }
 
         if (desired > _level)
@@ -94,12 +94,8 @@ public sealed class OverloadMonitor
         return _level;
     }
 
-    private OverloadLevel LevelForReading(
-        double reading,
-        OverloadSignalThresholds thresholds,
-        string name)
+    private static OverloadLevel LevelForReading(double reading, OverloadSignalThresholds thresholds)
     {
-        _ = name;
         if (reading >= thresholds.CriticalAt)
         {
             return OverloadLevel.Critical;

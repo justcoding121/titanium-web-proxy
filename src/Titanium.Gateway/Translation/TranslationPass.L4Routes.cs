@@ -60,6 +60,8 @@ internal sealed partial class TranslationPass
 {
     private readonly List<L4RouteOutcome> _l4Routes = [];
 
+    private const string BackendNotFound = "BackendNotFound";
+
     private void AttachL4Routes()
     {
         AttachTlsRoutes();
@@ -173,28 +175,7 @@ internal sealed partial class TranslationPass
 
         foreach (var candidate in candidates.Where(l => l.Programmable))
         {
-            if (!NamespaceAllowedForRoute(routeMeta.Namespace ?? "default", candidate))
-            {
-                continue;
-            }
-
-            if (hostnames is not null)
-            {
-                var hosts = hostnames(candidate);
-                if (hosts.Count == 0)
-                {
-                    continue;
-                }
-
-                foreach (var host in hosts)
-                {
-                    parent.Attached.Add((candidate, host));
-                }
-            }
-            else
-            {
-                parent.Attached.Add((candidate, null));
-            }
+            TryAttachL4Candidate(routeMeta, parent, candidate, hostnames);
         }
 
         if (parent.Attached.Count > 0)
@@ -210,6 +191,29 @@ internal sealed partial class TranslationPass
         }
 
         outcome.Parents.Add(parent);
+    }
+
+    private void TryAttachL4Candidate(
+        ObjectMeta routeMeta,
+        ParentOutcome parent,
+        ListenerOutcome candidate,
+        Func<ListenerOutcome, List<string?>>? hostnames)
+    {
+        if (!NamespaceAllowedForRoute(routeMeta.Namespace ?? "default", candidate))
+        {
+            return;
+        }
+
+        if (hostnames is null)
+        {
+            parent.Attached.Add((candidate, null));
+            return;
+        }
+
+        foreach (var host in hostnames(candidate))
+        {
+            parent.Attached.Add((candidate, host));
+        }
     }
 
     private GatewayOutcome? FindGatewayForParent(ObjectMeta routeMeta, ParentReference reference)
@@ -300,41 +304,7 @@ internal sealed partial class TranslationPass
             {
                 foreach (var (listener, hostname) in parent.Attached)
                 {
-                    var kind = listener.IsTlsPassthrough || listener.IsTlsTerminate ? "tls" : listener.IsTcp ? "tcp" : "udp";
-                    var key = (listener.MappedPort, kind);
-                    if (!plans.TryGetValue(key, out var plan))
-                    {
-                        plan = new PortListenerPlan { MappedPort = listener.MappedPort, Kind = kind };
-                        plans[key] = plan;
-                    }
-
-                    if (listener.IsTlsTerminate)
-                    {
-                        plan.TerminateTls = true;
-                    }
-
-                    plan.Sources.Add(listener);
-                    if (route.RefsReason is not null)
-                    {
-                        continue;
-                    }
-
-                    if (kind == "tls" && route.RouteKind == GatewayApiNames.TlsRouteKind)
-                    {
-                        ApplyTlsRoute(plan, route, hostname, listener, clusters);
-                    }
-                    else if (kind == "tls" && plan.TerminateTls && route.RouteKind == GatewayApiNames.TcpRouteKind)
-                    {
-                        ApplyTcpRoute(plan, route, listener);
-                    }
-                    else if (kind == "tcp" && route.RouteKind == GatewayApiNames.TcpRouteKind)
-                    {
-                        ApplyTcpRoute(plan, route, listener);
-                    }
-                    else if (kind == "udp" && route.RouteKind == GatewayApiNames.UdpRouteKind)
-                    {
-                        ApplyUdpRoute(plan, route, listener);
-                    }
+                    AddL4Attachment(plans, route, listener, hostname);
                 }
             }
         }
@@ -344,7 +314,74 @@ internal sealed partial class TranslationPass
 
     private List<PortListenerPlan> _portPlans = [];
 
-    private void ApplyTlsRoute(PortListenerPlan plan, L4RouteOutcome route, string? hostname, ListenerOutcome listener, ClusterRegistry clusters)
+    private static void AddL4Attachment(
+        Dictionary<(int Port, string Kind), PortListenerPlan> plans,
+        L4RouteOutcome route,
+        ListenerOutcome listener,
+        string? hostname)
+    {
+        var kind = L4ListenerKind(listener);
+        var key = (listener.MappedPort, kind);
+        if (!plans.TryGetValue(key, out var plan))
+        {
+            plan = new PortListenerPlan { MappedPort = listener.MappedPort, Kind = kind };
+            plans[key] = plan;
+        }
+
+        if (listener.IsTlsTerminate)
+        {
+            plan.TerminateTls = true;
+        }
+
+        plan.Sources.Add(listener);
+        if (route.RefsReason is null)
+        {
+            ApplyPlannedL4Route(plan, route, listener, hostname, kind);
+        }
+    }
+
+    private static string L4ListenerKind(ListenerOutcome listener)
+    {
+        if (listener.IsTlsPassthrough || listener.IsTlsTerminate)
+        {
+            return "tls";
+        }
+
+        return listener.IsTcp ? "tcp" : "udp";
+    }
+
+    private static void ApplyPlannedL4Route(
+        PortListenerPlan plan,
+        L4RouteOutcome route,
+        ListenerOutcome listener,
+        string? hostname,
+        string kind)
+    {
+        if (kind == "tls" && route.RouteKind == GatewayApiNames.TlsRouteKind)
+        {
+            ApplyTlsRoute(plan, route, hostname, listener);
+            return;
+        }
+
+        if (kind == "tls" && plan.TerminateTls && route.RouteKind == GatewayApiNames.TcpRouteKind)
+        {
+            ApplyTcpRoute(plan, route);
+            return;
+        }
+
+        if (kind == "tcp" && route.RouteKind == GatewayApiNames.TcpRouteKind)
+        {
+            ApplyTcpRoute(plan, route);
+            return;
+        }
+
+        if (kind == "udp" && route.RouteKind == GatewayApiNames.UdpRouteKind)
+        {
+            ApplyUdpRoute(plan, route);
+        }
+    }
+
+    private static void ApplyTlsRoute(PortListenerPlan plan, L4RouteOutcome route, string? hostname, ListenerOutcome listener)
     {
         var clusterId = route.PrimaryCluster;
         if (clusterId is null)
@@ -364,7 +401,7 @@ internal sealed partial class TranslationPass
         }
     }
 
-    private void ApplyTcpRoute(PortListenerPlan plan, L4RouteOutcome route, ListenerOutcome listener)
+    private static void ApplyTcpRoute(PortListenerPlan plan, L4RouteOutcome route)
     {
         if (plan.OwnerRoute is not null)
         {
@@ -381,7 +418,7 @@ internal sealed partial class TranslationPass
         plan.SniDefaultClusterId = route.PrimaryCluster;
     }
 
-    private void ApplyUdpRoute(PortListenerPlan plan, L4RouteOutcome route, ListenerOutcome listener)
+    private static void ApplyUdpRoute(PortListenerPlan plan, L4RouteOutcome route)
     {
         if (plan.OwnerRoute is not null)
         {
@@ -421,7 +458,7 @@ internal sealed partial class TranslationPass
         var backends = rules?.SelectMany(r => r.BackendRefs ?? []).ToList() ?? [];
         if (backends.Count == 0)
         {
-            route.AddRefIssue("BackendNotFound", "The route has no backendRefs.");
+            route.AddRefIssue(BackendNotFound, "The route has no backendRefs.");
             return;
         }
 
@@ -448,7 +485,7 @@ internal sealed partial class TranslationPass
 
         if (usable.Count == 0)
         {
-            route.AddRefIssue("BackendNotFound", "No backend could be resolved.");
+            route.AddRefIssue(BackendNotFound, "No backend could be resolved.");
             return;
         }
 
@@ -485,19 +522,19 @@ internal sealed partial class TranslationPass
 
         if (reference.Port is not { } portNumber)
         {
-            return Failed("BackendNotFound", $"backendRef {ns}/{reference.Name} must name a port.");
+            return Failed(BackendNotFound, $"backendRef {ns}/{reference.Name} must name a port.");
         }
 
         var service = clusters.Endpoints.FindService(ns, reference.Name);
         if (service is null)
         {
-            return Failed("BackendNotFound", $"Service {ns}/{reference.Name} was not found.");
+            return Failed(BackendNotFound, $"Service {ns}/{reference.Name} was not found.");
         }
 
         var servicePort = service.Ports.FirstOrDefault(p => p.Port == portNumber);
         if (servicePort is null)
         {
-            return Failed("BackendNotFound", $"Service {ns}/{reference.Name} has no port {portNumber}.");
+            return Failed(BackendNotFound, $"Service {ns}/{reference.Name} has no port {portNumber}.");
         }
 
         var protocol = route.RouteKind == GatewayApiNames.UdpRouteKind ? "UDP" : "TCP";

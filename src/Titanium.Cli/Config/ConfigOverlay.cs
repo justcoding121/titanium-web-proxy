@@ -72,26 +72,20 @@ public static class ConfigOverlay
         var routes = baseConfig.Routes.ToDictionary(static r => r.Id, StringComparer.Ordinal);
         var clusters = baseConfig.Clusters.ToDictionary(static c => c.Id, StringComparer.Ordinal);
 
-        foreach (var id in overlay.Clusters.Remove.Distinct(StringComparer.Ordinal))
-        {
-            if (!clusters.Remove(id))
-            {
-                orphans.Add($"cluster remove '{id}'");
-            }
-        }
+        orphans.AddRange(overlay.Clusters.Remove
+            .Distinct(StringComparer.Ordinal)
+            .Where(id => !clusters.Remove(id))
+            .Select(id => $"cluster remove '{id}'"));
 
         foreach (var cluster in overlay.Clusters.Upsert)
         {
             clusters[cluster.Id] = cluster;
         }
 
-        foreach (var id in overlay.Routes.Remove.Distinct(StringComparer.Ordinal))
-        {
-            if (!routes.Remove(id))
-            {
-                orphans.Add($"route remove '{id}'");
-            }
-        }
+        orphans.AddRange(overlay.Routes.Remove
+            .Distinct(StringComparer.Ordinal)
+            .Where(id => !routes.Remove(id))
+            .Select(id => $"route remove '{id}'"));
 
         foreach (var route in overlay.Routes.Upsert)
         {

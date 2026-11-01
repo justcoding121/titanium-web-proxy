@@ -38,6 +38,10 @@ public class HotRestartCoordinatorTests
     public void Cleanup() => Directory.Delete(_dir, recursive: true);
 
     private static readonly TimeSpan Wait = TimeSpan.FromSeconds(2);
+    private static readonly int[] Pid100 = [100];
+    private static readonly string[] OrderH3Udp = ["h3", "udp"];
+    private static readonly string[] OrderH3 = ["h3"];
+    private static readonly string[] OrderUdp = ["udp"];
 
     [TestMethod]
     public void NoPidFile_WritesOwnPid_AndSignalsNobody()
@@ -62,7 +66,7 @@ public class HotRestartCoordinatorTests
 
         Assert.AreEqual(HotRestartHandover.SignaledPrevious, coordinator.TakeOver(Wait));
 
-        CollectionAssert.AreEqual(new[] { 100 }, platform.Signaled);
+        CollectionAssert.AreEqual(Pid100, platform.Signaled);
         Assert.AreEqual(100, coordinator.PreviousPid);
         Assert.AreEqual("200", File.ReadAllText(PidFile));
     }
@@ -163,7 +167,7 @@ public class HotRestartCoordinatorTests
 
         platform.Alive.Remove(100);
         Assert.IsTrue(await run);
-        CollectionAssert.AreEqual(new[] { "h3", "udp" }, order);
+        CollectionAssert.AreEqual(OrderH3Udp, order);
         Assert.AreEqual(0, errors.Count);
     }
 
@@ -176,7 +180,7 @@ public class HotRestartCoordinatorTests
             TimeSpan.FromSeconds(5), TimeSpan.FromMilliseconds(10), _ => { }, CancellationToken.None);
 
         Assert.IsTrue(ok);
-        CollectionAssert.AreEqual(new[] { "h3" }, order);
+        CollectionAssert.AreEqual(OrderH3, order);
     }
 
     [TestMethod]
@@ -210,7 +214,7 @@ public class HotRestartCoordinatorTests
             TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10), errors.Add, CancellationToken.None);
 
         Assert.IsFalse(ok);
-        CollectionAssert.AreEqual(new[] { "udp" }, order);
+        CollectionAssert.AreEqual(OrderUdp, order);
         StringAssert.Contains(errors.Single(), "address in use");
     }
 

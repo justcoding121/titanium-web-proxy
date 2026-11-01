@@ -170,7 +170,7 @@ internal static class GrpcHealthProbe
             var wire = tag & 0x07;
             if (field == 1 && wire == 0)
             {
-                if (!TryReadVarint(message[offset..], out var value, out var valueLength))
+                if (!TryReadVarint(message[offset..], out var value, out _))
                 {
                     return false;
                 }

@@ -41,12 +41,10 @@ internal static class PlusLoader
         // Google.Protobuf; loading that same path into the Plus collectible ALC fails on macOS with
         // "An operation is not legal in the current state" (0x80131509). Collectible contexts may
         // reference default-context assemblies.
-        foreach (var loaded in AssemblyLoadContext.Default.Assemblies)
+        foreach (var loaded in AssemblyLoadContext.Default.Assemblies.Where(loaded =>
+                     string.Equals(loaded.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            if (string.Equals(loaded.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase))
-            {
-                return loaded;
-            }
+            return loaded;
         }
 
         var candidate = Path.Combine(AppContext.BaseDirectory, name.Name + ".dll");

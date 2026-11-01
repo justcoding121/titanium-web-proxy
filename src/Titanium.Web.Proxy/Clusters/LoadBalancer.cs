@@ -54,29 +54,14 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             return null;
         }
 
-        if (!string.IsNullOrEmpty(context.AffinityKey))
+        if (TrySelectAffinity(cluster, snapshot, passive, eligible, context, out var affinityMatch))
         {
-            // A pinned client may stay on a destination outside the local zone. Only a zone-aware cluster needs the
-            // unfiltered pool; every other cluster reuses the list it already built (no second walk, no allocation).
-            var affinityPool = ClusterRuntime.Find(snapshot, cluster.Id)?.ZoneAwareActive == true
-                ? Collect(cluster, snapshot, passive, applyZoneFilter: false)
-                : eligible;
-            var affinityMatch = affinityPool.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
-            if (affinityMatch is not null)
-            {
-                return affinityMatch;
-            }
+            return affinityMatch;
         }
 
-        if (!string.IsNullOrEmpty(cluster.LoadBalancingPolicy) && Policies is { Count: > 0 } policies)
+        if (TrySelectPolicy(cluster, eligible, context, out var policyPick))
         {
-            for (var i = 0; i < policies.Count; i++)
-            {
-                if (string.Equals(policies[i].Name, cluster.LoadBalancingPolicy, StringComparison.Ordinal))
-                {
-                    return policies[i].Pick(cluster, eligible, context);
-                }
-            }
+            return policyPick;
         }
 
         if (eligible.Count == 1)
@@ -85,7 +70,61 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             return eligible[0];
         }
 
-        return cluster.Algorithm switch
+        return SelectByAlgorithm(cluster, eligible, context);
+    }
+
+    private bool TrySelectAffinity(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        PassiveHealthConfig? passive,
+        List<DestinationConfig> eligible,
+        LoadBalanceContext context,
+        out DestinationConfig? match)
+    {
+        match = null;
+        if (string.IsNullOrEmpty(context.AffinityKey))
+        {
+            return false;
+        }
+
+        // A pinned client may stay on a destination outside the local zone. Only a zone-aware cluster needs the
+        // unfiltered pool; every other cluster reuses the list it already built (no second walk, no allocation).
+        var affinityPool = ClusterRuntime.Find(snapshot, cluster.Id)?.ZoneAwareActive == true
+            ? Collect(cluster, snapshot, passive, applyZoneFilter: false)
+            : eligible;
+        match = affinityPool.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
+        return match is not null;
+    }
+
+    private bool TrySelectPolicy(
+        ClusterConfig cluster,
+        List<DestinationConfig> eligible,
+        LoadBalanceContext context,
+        out DestinationConfig? pick)
+    {
+        pick = null;
+        if (string.IsNullOrEmpty(cluster.LoadBalancingPolicy) || Policies is not { Count: > 0 } policies)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < policies.Count; i++)
+        {
+            if (string.Equals(policies[i].Name, cluster.LoadBalancingPolicy, StringComparison.Ordinal))
+            {
+                pick = policies[i].Pick(cluster, eligible, context);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private DestinationConfig SelectByAlgorithm(
+        ClusterConfig cluster,
+        List<DestinationConfig> eligible,
+        LoadBalanceContext context) =>
+        cluster.Algorithm switch
         {
             LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible, cluster.SlowStartSeconds),
             LoadBalanceAlgorithm.LeastRequests => SelectLeastRequests(eligible),
@@ -95,7 +134,6 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.HashInput ?? context.AffinityKey ?? cluster.Id),
             _ => SelectWeightedRoundRobin(cluster.Id, eligible, cluster.SlowStartSeconds),
         };
-    }
 
     internal DestinationConfig? SelectFirstUntried(
         ClusterConfig cluster,
