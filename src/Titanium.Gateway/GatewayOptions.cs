@@ -196,33 +196,7 @@ public sealed class GatewayOptions
         var udp = new Dictionary<int, int>();
         foreach (var entry in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var parts = entry.Split('=');
-            if (parts.Length != 2)
-            {
-                throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080 or 53/udp=5353.");
-            }
-
-            var left = parts[0];
-            var protocol = "tcp";
-            var slash = left.IndexOf('/', StringComparison.Ordinal);
-            if (slash >= 0)
-            {
-                protocol = left[(slash + 1)..].ToLowerInvariant();
-                left = left[..slash];
-            }
-
-            if (protocol is not ("tcp" or "udp"))
-            {
-                throw new ArgumentException($"--port-map entry '{entry}' uses unsupported protocol '{protocol}'.");
-            }
-
-            if (!int.TryParse(left, NumberStyles.None, CultureInfo.InvariantCulture, out var gateway) ||
-                !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var dataPlane) ||
-                gateway is < 1 or > 65535 || dataPlane is < 1 or > 65535)
-            {
-                throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080 or 53/udp=5353.");
-            }
-
+            var (protocol, gateway, dataPlane) = ParsePortMapEntry(entry);
             var map = protocol == "udp" ? udp : tcp;
             if (map.ContainsKey(gateway)) // NOSONAR S2583 -- map accumulates across loop iterations.
             {
@@ -233,6 +207,38 @@ public sealed class GatewayOptions
         }
 
         return (tcp, udp);
+    }
+
+    private static (string Protocol, int Gateway, int DataPlane) ParsePortMapEntry(string entry)
+    {
+        var parts = entry.Split('=');
+        if (parts.Length != 2)
+        {
+            throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080 or 53/udp=5353.");
+        }
+
+        var left = parts[0];
+        var protocol = "tcp";
+        var slash = left.IndexOf('/', StringComparison.Ordinal);
+        if (slash >= 0)
+        {
+            protocol = left[(slash + 1)..].ToLowerInvariant();
+            left = left[..slash];
+        }
+
+        if (protocol is not ("tcp" or "udp"))
+        {
+            throw new ArgumentException($"--port-map entry '{entry}' uses unsupported protocol '{protocol}'.");
+        }
+
+        if (!int.TryParse(left, NumberStyles.None, CultureInfo.InvariantCulture, out var gateway) ||
+            !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var dataPlane) ||
+            gateway is < 1 or > 65535 || dataPlane is < 1 or > 65535)
+        {
+            throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080 or 53/udp=5353.");
+        }
+
+        return (protocol, gateway, dataPlane);
     }
 
     public GatewayControllerOptions ToControllerOptions() => new()

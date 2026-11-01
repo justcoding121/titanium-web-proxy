@@ -190,20 +190,21 @@ internal sealed partial class TranslationPass
             return true;
         }
 
-        var type = method.Type ?? "Exact";
-        if (type == "Exact" && method.Service is { } service && method.Method is { } name)
+        const string exact = "Exact";
+        var type = method.Type ?? exact;
+        if (type == exact && method.Service is { } service && method.Method is { } name)
         {
-            httpMatch.Path = new HttpPathMatch { Type = "Exact", Value = $"/{service}/{name}" };
+            httpMatch.Path = new HttpPathMatch { Type = exact, Value = $"/{service}/{name}" };
             return true;
         }
 
-        if (type == "Exact" && method.Service is { } svcOnly && method.Method is null)
+        if (type == exact && method.Service is { } svcOnly && method.Method is null)
         {
             httpMatch.Path = new HttpPathMatch { Type = "PathPrefix", Value = $"/{svcOnly}/" };
             return true;
         }
 
-        if (type == "Exact" && method.Service is null && method.Method is { } methodOnly)
+        if (type == exact && method.Service is null && method.Method is { } methodOnly)
         {
             var escaped = Regex.Escape(methodOnly);
             httpMatch.Path = new HttpPathMatch { Type = "RegularExpression", Value = $"^/[^/]+/{escaped}$" };

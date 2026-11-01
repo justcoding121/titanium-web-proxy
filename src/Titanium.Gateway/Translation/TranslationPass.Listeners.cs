@@ -77,6 +77,8 @@ internal sealed class ListenerOutcome
 internal sealed partial class TranslationPass
 {
     private const string InvalidCertificateRefReason = "InvalidCertificateRef";
+    private const string UnsupportedProtocolReason = "UnsupportedProtocol";
+    private const string UnsupportedValueReason = "UnsupportedValue";
 
     private void EvaluateGateways(HashSet<string> ownedClassNames)
     {
@@ -125,9 +127,9 @@ internal sealed partial class TranslationPass
                 break;
             default:
                 item.Accepted = false;
-                item.AcceptedReason = "UnsupportedProtocol";
+                item.AcceptedReason = UnsupportedProtocolReason;
                 item.AcceptedMessage = $"Protocol '{protocol}' is not supported.";
-                item.InvalidReason = "UnsupportedProtocol";
+                item.InvalidReason = UnsupportedProtocolReason;
                 return;
         }
 
@@ -138,18 +140,18 @@ internal sealed partial class TranslationPass
         else if (item.IsTls && !item.IsTlsPassthrough)
         {
             item.Accepted = false;
-            item.AcceptedReason = "UnsupportedProtocol";
+            item.AcceptedReason = UnsupportedProtocolReason;
             item.AcceptedMessage = "TLS listeners support tls.mode Passthrough or Terminate.";
-            item.InvalidReason = "UnsupportedProtocol";
+            item.InvalidReason = UnsupportedProtocolReason;
             return;
         }
 
         if ((item.IsTcp || item.IsUdp) && !string.IsNullOrEmpty(listener.Hostname))
         {
             item.Accepted = false;
-            item.AcceptedReason = "UnsupportedValue";
+            item.AcceptedReason = UnsupportedValueReason;
             item.AcceptedMessage = "TCP and UDP listeners must not set hostname.";
-            item.InvalidReason = "UnsupportedValue";
+            item.InvalidReason = UnsupportedValueReason;
             return;
         }
 
@@ -233,9 +235,9 @@ internal sealed partial class TranslationPass
         if (string.Equals(listener.Tls?.Mode, "Passthrough", StringComparison.Ordinal))
         {
             item.Accepted = false;
-            item.AcceptedReason = "UnsupportedValue";
+            item.AcceptedReason = UnsupportedValueReason;
             item.AcceptedMessage = "HTTPS listeners support tls.mode Terminate only.";
-            item.InvalidReason = "UnsupportedValue";
+            item.InvalidReason = UnsupportedValueReason;
             return;
         }
 
