@@ -204,6 +204,57 @@ internal sealed class Http2OriginConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Returns an already-pooled origin connection that advertised
+    ///     <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c>, without opening a new TCP session. Used by
+    ///     HTTP/3 extended CONNECT Auto leg selection (RFC 9220 → RFC 8441).
+    /// </summary>
+    internal Http2OriginConnection? TryRentExistingConnectCapable(string poolKey)
+    {
+        if (!pool.TryGetValue(poolKey, out var entry))
+            return null;
+
+        var snapshot = SnapshotMembers(entry);
+        var limits = proxyServer.ResourceLimits;
+        Http2OriginConnection? best = null;
+        var bestActive = int.MaxValue;
+        foreach (var c in snapshot)
+        {
+            if (!c.IsUsable || c.IsNearStreamIdExhaustion || !c.EnableConnectProtocol)
+                continue;
+
+            var active = c.ActiveStreamCount;
+            if (active >= c.SoftStreamCapacity)
+                continue;
+
+            if (active < bestActive)
+            {
+                best = c;
+                bestActive = active;
+            }
+        }
+
+        if (best == null)
+        {
+            foreach (var c in snapshot)
+            {
+                if (!c.IsUsable || c.IsNearStreamIdExhaustion || !c.EnableConnectProtocol)
+                    continue;
+
+                var active = c.ActiveStreamCount;
+                if (active < bestActive)
+                {
+                    best = c;
+                    bestActive = active;
+                }
+            }
+        }
+
+        best?.Touch();
+        _ = limits;
+        return best;
+    }
+
+    /// <summary>
     ///     True when this authority already holds at least one pooled origin connection.
     /// </summary>
     internal bool HasAny(string poolKey)

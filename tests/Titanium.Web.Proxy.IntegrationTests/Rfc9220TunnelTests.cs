@@ -3,16 +3,23 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Quic;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Connections;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
@@ -45,7 +52,7 @@ public class Rfc9220TunnelTests
     private static (ProxyServer Proxy, TransparentQuicProxyEndPoint Ep) StartProxy(
         TestSuite testSuite,
         int forwardPort,
-        bool httpsOrigin = false,
+        UpstreamHttpProtocol upstream = UpstreamHttpProtocol.Http11,
         Action<BeforeQuicAuthenticateEventArgs>? configureAuth = null)
     {
         var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
@@ -55,7 +62,7 @@ public class Rfc9220TunnelTests
         };
         quicEp.BeforeQuicAuthenticate += (_, args) =>
         {
-            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            args.UpstreamHttpProtocol = upstream;
             args.AllowHttpProtocolTranslation = true;
             configureAuth?.Invoke(args);
             return Task.CompletedTask;
@@ -200,6 +207,268 @@ public class Rfc9220TunnelTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH2Origin_EchoesText()
+    {
+        RequireQuic();
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            await originConn.SendInitialSettingsWithConnectProtocolAsync();
+            var (reqStreamId, reqHeaders, endStream) = await originConn.ReadHeaderBlockAsync();
+            Assert.AreEqual("CONNECT", reqHeaders.Single(h => h.Name == ":method").Value);
+            Assert.AreEqual("websocket", reqHeaders.Single(h => h.Name == ":protocol").Value);
+            Assert.IsFalse(endStream);
+            Assert.IsFalse(reqHeaders.Any(h =>
+                string.Equals(h.Name, "sec-websocket-key", StringComparison.OrdinalIgnoreCase)));
+
+            var resp200 = originConn.EncodeHeaders(new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await originConn.WriteHeaderBlockAsync(reqStreamId, resp200, false);
+
+            while (true)
+            {
+                var frame = await originConn.ReadFrameAsync();
+                if (frame.Type == Http2FrameType.Data && frame.StreamId == reqStreamId)
+                {
+                    if (frame.Payload.Length > 0)
+                        await originConn.WriteFrameAsync(Http2FrameType.Data, reqStreamId, 0, frame.Payload);
+                    if ((frame.Flags & Http2FrameFlag.EndStream) != 0)
+                        break;
+                }
+                else if (frame.Type is Http2FrameType.RstStream or Http2FrameType.GoAway)
+                {
+                    break;
+                }
+            }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, rawOrigin.Port, UpstreamHttpProtocol.Http2);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{rawOrigin.Port}", "/ws", "websocket",
+                extraHeaders: [("sec-websocket-version", "13")]);
+            Assert.AreEqual(200, tunnel.Status);
+
+            var frame = BuildMaskedTextFrame(Ascii.GetBytes("hello-h3-to-h2"));
+            await tunnel.SendAsync(frame);
+            var echoed = await tunnel.ReceiveAsync();
+            CollectionAssert.AreEqual(frame, echoed);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH2Origin_WithoutSetting8_FallsBackToHttp11()
+    {
+        RequireQuic();
+        using var dualOrigin = new DualAlpnWebSocketOrigin(TestCertificateAuthority.ServerCertificate);
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, dualOrigin.Port, UpstreamHttpProtocol.Http2);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{dualOrigin.Port}", "/ws", "websocket",
+                extraHeaders: [("sec-websocket-version", "13")]);
+            Assert.AreEqual(200, tunnel.Status);
+
+            Assert.IsTrue(dualOrigin.Http2ConnectionsAccepted > 0,
+                "Forced HTTP/2 upstream must still open the h2 origin connection.");
+            Assert.IsTrue(dualOrigin.Http11ConnectionsAccepted > 0,
+                "Without ENABLE_CONNECT_PROTOCOL the proxy must fall back to HTTP/1.1 for the WebSocket upgrade.");
+
+            var frame = BuildMaskedTextFrame(Ascii.GetBytes("fallback-h3"));
+            await tunnel.SendAsync(frame);
+            var echoed = await tunnel.ReceiveAsync();
+            CollectionAssert.AreEqual(frame, echoed);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH2Origin_OriginRejectsExtendedConnect_RelaysStatus()
+    {
+        RequireQuic();
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            await originConn.SendInitialSettingsWithConnectProtocolAsync();
+            var (reqStreamId, _, _) = await originConn.ReadHeaderBlockAsync();
+            var resp403 = originConn.EncodeHeaders(new[] { (":status", "403") },
+                Array.Empty<(string, string)>());
+            await originConn.WriteHeaderBlockAsync(reqStreamId, resp403, true);
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, rawOrigin.Port, UpstreamHttpProtocol.Http2);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{rawOrigin.Port}", "/ws", "websocket");
+            Assert.AreEqual(403, tunnel.Status);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH2Origin_OriginReset_AbortsWithConnectError()
+    {
+        RequireQuic();
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            await originConn.SendInitialSettingsWithConnectProtocolAsync();
+            var (reqStreamId, _, _) = await originConn.ReadHeaderBlockAsync();
+            var resp200 = originConn.EncodeHeaders(new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await originConn.WriteHeaderBlockAsync(reqStreamId, resp200, false);
+
+            var frame = await originConn.ReadFrameAsync();
+            if (frame.Type == Http2FrameType.Data && frame.StreamId == reqStreamId)
+            {
+                await originConn.WriteFrameAsync(Http2FrameType.RstStream, reqStreamId, 0,
+                    new byte[] { 0, 0, 0, (byte)Http2ErrorCode.ConnectError });
+            }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, rawOrigin.Port, UpstreamHttpProtocol.Http2);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{rawOrigin.Port}", "/ws", "websocket");
+            Assert.AreEqual(200, tunnel.Status);
+
+            await tunnel.SendAsync(BuildMaskedTextFrame(Ascii.GetBytes("reset-me")));
+
+            var ex = await Assert.ThrowsExactlyAsync<QuicException>(async () =>
+                _ = await tunnel.ReceiveAsync());
+            Assert.AreEqual((long)Http3ErrorCode.ConnectError, ex.ApplicationErrorCode);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task WebSocket_H3ClientToH2Origin_PooledConnectionSurvivesTunnel()
+    {
+        RequireQuic();
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(HandlePooledGetAndWebSocketEchoAsync);
+
+        using var testSuite = new TestSuite(sharedServer);
+        var (proxy, quicEp) = StartProxy(testSuite, rawOrigin.Port, UpstreamHttpProtocol.Http2);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+
+            var warm = await client.SendAsync("GET", $"localhost:{rawOrigin.Port}", "/");
+            Assert.AreEqual(200, warm.StatusCode);
+            Assert.AreEqual("get-ok", warm.TextBody);
+
+            await using var tunnel = await client.OpenExtendedConnectAsync(
+                $"localhost:{rawOrigin.Port}", "/ws", "websocket");
+            Assert.AreEqual(200, tunnel.Status);
+            var frame = BuildMaskedTextFrame(Ascii.GetBytes("pool-survives"));
+            await tunnel.SendAsync(frame);
+            CollectionAssert.AreEqual(frame, await tunnel.ReceiveAsync());
+
+            var after = await client.SendAsync("GET", $"localhost:{rawOrigin.Port}", "/");
+            Assert.AreEqual(200, after.StatusCode);
+            Assert.AreEqual("get-ok", after.TextBody);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    private static async Task HandlePooledGetAndWebSocketEchoAsync(Http2RawFrame.Connection originConn)
+    {
+        await originConn.SendInitialSettingsWithConnectProtocolAsync();
+        while (true)
+        {
+            var (streamId, reqHeaders, endStream) = await originConn.ReadHeaderBlockAsync();
+            var method = reqHeaders.Single(h => h.Name == ":method").Value;
+            if (method == "GET")
+            {
+                var body = Ascii.GetBytes("get-ok");
+                var resp = originConn.EncodeHeaders(
+                    new[] { (":status", "200"), ("content-length", body.Length.ToString()) },
+                    Array.Empty<(string, string)>());
+                await originConn.WriteHeaderBlockAsync(streamId, resp, false);
+                await originConn.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream, body);
+                continue;
+            }
+
+            if (method != "CONNECT")
+                continue;
+
+            Assert.AreEqual("websocket", reqHeaders.Single(h => h.Name == ":protocol").Value);
+            var resp200 = originConn.EncodeHeaders(new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await originConn.WriteHeaderBlockAsync(streamId, resp200, false);
+
+            while (!endStream)
+            {
+                var frame = await originConn.ReadFrameAsync();
+                if (frame.Type == Http2FrameType.Data && frame.StreamId == streamId)
+                {
+                    if (frame.Payload.Length > 0)
+                        await originConn.WriteFrameAsync(Http2FrameType.Data, streamId, 0, frame.Payload);
+                    if ((frame.Flags & Http2FrameFlag.EndStream) != 0)
+                        break;
+                }
+                else if (frame.Type is Http2FrameType.RstStream or Http2FrameType.GoAway)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task WebSocket_BeforeRequestDeny_ClientSeesDenyResponse_OriginNeverContacted()
     {
         RequireQuic();
@@ -258,6 +527,137 @@ public class Rfc9220TunnelTests
         for (var i = 0; i < payload.Length; i++)
             frame.Add((byte)(payload[i] ^ maskKey[i % 4]));
         return frame.ToArray();
+    }
+
+    /// <summary>
+    ///     TLS origin with both h2 (no ENABLE_CONNECT_PROTOCOL) and http/1.1 WebSocket echo.
+    /// </summary>
+    private sealed class DualAlpnWebSocketOrigin : IDisposable
+    {
+        private readonly TcpListener listener;
+        private readonly X509Certificate2 certificate;
+        private bool disposed;
+
+        public DualAlpnWebSocketOrigin(X509Certificate2 certificate)
+        {
+            this.certificate = certificate;
+            listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            _ = AcceptLoopAsync();
+        }
+
+        public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
+        public int Http2ConnectionsAccepted { get; private set; }
+        public int Http11ConnectionsAccepted { get; private set; }
+
+        private async Task AcceptLoopAsync()
+        {
+            while (!disposed)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await listener.AcceptTcpClientAsync();
+                }
+                catch
+                {
+                    return;
+                }
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await using var ssl = new SslStream(client.GetStream(), false);
+                        await ssl.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+                        {
+                            ServerCertificate = certificate,
+                            ApplicationProtocols = new List<SslApplicationProtocol>
+                            {
+                                SslApplicationProtocol.Http2,
+                                SslApplicationProtocol.Http11
+                            },
+                            EnabledSslProtocols = System.Security.Authentication.SslProtocols.None
+                        });
+
+                        if (ssl.NegotiatedApplicationProtocol.Equals(SslApplicationProtocol.Http2))
+                        {
+                            Http2ConnectionsAccepted++;
+                            var preface = new byte[Http2Helper.ConnectionPreface.Length];
+                            await Http2RawFrame.ReadExactAsync(ssl, preface, 0, preface.Length);
+                            var conn = new Http2RawFrame.Connection(ssl);
+                            await conn.SendInitialSettingsAsync();
+                            try
+                            {
+                                while (true) _ = await conn.ReadFrameAsync();
+                            }
+                            catch
+                            {
+                                // closed
+                            }
+                        }
+                        else
+                        {
+                            Http11ConnectionsAccepted++;
+                            await HandleHttp11WebSocketAsync(ssl);
+                        }
+                    }
+                    catch
+                    {
+                        // test asserts
+                    }
+                    finally
+                    {
+                        client.Dispose();
+                    }
+                });
+            }
+        }
+
+        private static async Task HandleHttp11WebSocketAsync(Stream stream)
+        {
+            var upgradeRequest = await ReadUntilDoubleCrLfAsync(stream);
+            var keyLine = upgradeRequest.Split(Separator, StringSplitOptions.RemoveEmptyEntries)
+                .Single(line => line.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase));
+            var wsKey = keyLine[(keyLine.IndexOf(':') + 1)..].Trim();
+            var wsAccept = Convert.ToBase64String(SHA1.HashData(
+                Ascii.GetBytes(wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")));
+
+            await stream.WriteAsync(Ascii.GetBytes(
+                "HTTP/1.1 101 Switching Protocols\r\n" +
+                "Upgrade: websocket\r\nConnection: Upgrade\r\n" +
+                $"Sec-WebSocket-Accept: {wsAccept}\r\n\r\n"));
+            await stream.FlushAsync();
+
+            var buffer = new byte[4096];
+            while (true)
+            {
+                var read = await stream.ReadAsync(buffer);
+                if (read <= 0) break;
+                await stream.WriteAsync(buffer.AsMemory(0, read));
+                await stream.FlushAsync();
+            }
+        }
+
+        private static async Task<string> ReadUntilDoubleCrLfAsync(Stream stream)
+        {
+            var accumulated = new StringBuilder();
+            var buffer = new byte[1024];
+            while (!accumulated.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var read = await stream.ReadAsync(buffer);
+                if (read <= 0) break;
+                accumulated.Append(Ascii.GetString(buffer, 0, read));
+            }
+
+            return accumulated.ToString();
+        }
+
+        public void Dispose()
+        {
+            disposed = true;
+            listener.Stop();
+        }
     }
 }
 
