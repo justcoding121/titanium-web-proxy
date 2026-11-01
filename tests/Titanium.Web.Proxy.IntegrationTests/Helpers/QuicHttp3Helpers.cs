@@ -174,6 +174,7 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                 if (AdvertiseEnableConnectProtocol)
                     settings.SetEnableConnectProtocol(true);
                 await Http3Frame.WriteAsync(control, Http3FrameType.Settings, settings.Serialize(), cts.Token);
+                await control.FlushAsync(cts.Token);
 
                 while (!cts.IsCancellationRequested)
                 {

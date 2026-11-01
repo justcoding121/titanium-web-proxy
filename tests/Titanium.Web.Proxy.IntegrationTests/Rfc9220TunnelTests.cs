@@ -411,6 +411,8 @@ public class Rfc9220TunnelTests
             var frame = BuildMaskedTextFrame(Ascii.GetBytes("pool-survives"));
             await tunnel.SendAsync(frame);
             CollectionAssert.AreEqual(frame, await tunnel.ReceiveAsync());
+            // The raw origin handler is serial: finish the CONNECT stream so it can accept the next GET.
+            tunnel.Finish();
 
             var after = await client.SendAsync("GET", $"localhost:{rawOrigin.Port}", "/");
             Assert.AreEqual(200, after.StatusCode);

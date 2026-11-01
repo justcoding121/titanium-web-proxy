@@ -294,12 +294,9 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
                 if (streamType.Value == Http3StreamType.Control)
                 {
-                    var peerSettings = await ProcessPeerControlStreamAsync(stream, ct);
-                    if (peerSettings != null)
-                    {
-                        _peerSettings = peerSettings;
-                        _peerSettingsReceived.TrySetResult();
-                    }
+                    // Signal SETTINGS as soon as they are parsed — the peer keeps the control stream
+                    // open, so waiting for EOF would block OriginAdvertisesConnectProtocolAsync forever.
+                    await ProcessPeerControlStreamAsync(stream, ct);
                     return;
                 }
 
@@ -323,14 +320,13 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         }
     }
 
-    private static async Task<Http3Settings?> ProcessPeerControlStreamAsync(QuicStream stream, CancellationToken ct)
+    private async Task ProcessPeerControlStreamAsync(QuicStream stream, CancellationToken ct)
     {
         var receivedSettings = false;
-        Http3Settings? settings = null;
         while (!ct.IsCancellationRequested)
         {
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 16 * 1024, ct);
-            if (frame is null) return settings;
+            if (frame is null) return;
 
             try
             {
@@ -339,8 +335,9 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
                     if (frame.Type != Http3FrameType.Settings)
                         throw new Http3ConnectionException(Http3ErrorCode.MissingSettings,
                             "RFC 9114 §6.2.2: first frame on the control stream must be SETTINGS.");
-                    settings = Http3Settings.Parse(frame.Payload.Span);
+                    _peerSettings = Http3Settings.Parse(frame.Payload.Span);
                     receivedSettings = true;
+                    _peerSettingsReceived.TrySetResult();
                     continue;
                 }
 
@@ -354,8 +351,6 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
                 frame.ReturnPayload();
             }
         }
-
-        return settings;
     }
 
 
