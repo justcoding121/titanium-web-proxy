@@ -104,12 +104,8 @@ internal static class WebSocketUpgradeRequest
     {
         if (status != 101) return false;
 
-        static string? Find(IReadOnlyList<HttpHeader> list, string name)
-        {
-            foreach (var h in list.Where(h => string.Equals(h.Name, name, StringComparison.OrdinalIgnoreCase)))
-                return h.Value;
-            return null;
-        }
+        static string? Find(IReadOnlyList<HttpHeader> list, string name) =>
+            list.FirstOrDefault(h => string.Equals(h.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
 
         var upgrade = Find(headers, "Upgrade");
         var connection = Find(headers, "Connection");
