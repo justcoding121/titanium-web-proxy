@@ -359,9 +359,9 @@ Median of **3 repeats** on `macos-15` (Apple Silicon M1, 3-core / 7 GB). Bare re
 
 ## Editions (CLI / Plus / Intercept)
 
-**Note:** `twp-reverse-http1` and other library rows use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows use `titanium run -c twp.yaml` **product defaults** — prefer the ÷baseline ratio column over absolute RPS. Inspector GUI is not spawnable in the harness; session-path overhead is `twp-cli-intercept-http1` (route `RequestHeaderSet` transform). Pre-origin Plus middleware (CIDR/WAF deny-list/JWT/rate-limit/cache) runs on H1 terminate-lite without `SessionEventArgs`; a cache hit skips the origin. WAF screening (`waf.mode` `detect` or `block`, the default once `waf.enabled` is set) reads headers, cookies, and small bodies, so it uses the session path and lands near the intercept row. The `twp-cli-plus-waf-http1` row below was measured with the deny-list only; re-measure it with screening on before quoting it. JWT caches successful bearer validations. CORS only adds response headers on the way out, so it stays on terminate-lite. Circuit breaker and idempotent retry have to see the request or the status code, so they stay on the session path and should land near the intercept row. Maintainer gate thresholds live under [Maintainer notes](#user-content-maintainer-notes).
+**Note:** `twp-reverse-http1` and other library rows use Core with **probe-tuned** settings (no logging, no Via header, probe-warmed certs). Edition rows use `titanium run -c twp.yaml` **product defaults** — prefer the ÷baseline ratio column over absolute RPS. Inspector GUI is not spawnable in the harness; session-path overhead is `twp-cli-intercept-http1` (route `RequestHeaderSet` transform). Pre-origin Plus middleware (CIDR/WAF deny-list/JWT/rate-limit/cache) runs on H1 terminate-lite without `SessionEventArgs`; a cache hit skips the origin. WAF is split into two rows: `twp-cli-plus-waf-http1` is deny-list only (`waf.mode=off`, denyPaths that miss `/`); `twp-cli-plus-waf-screen-http1` turns screening on (`waf.mode=detect`, no denyPaths) so headers/cookies/small bodies force the session path. `twp-cli-extauth-http1` pays one allow subrequest per request. `twp-cli-plugin-dotnet-noop-http1` is route middleware whose .NET `PassthroughPlugin` only calls `next`. JWT caches successful bearer validations. CORS only adds response headers on the way out, so it stays on terminate-lite. Circuit breaker and idempotent retry have to see the request or the status code, so they stay on the session path and should land near the intercept row. Maintainer gate thresholds live under [Maintainer notes](#user-content-maintainer-notes).
 
-Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-measured @ `e0c98136` (Actions [41268478603](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41268478603)). Every edition row in the table was re-measured in that run. Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. **RPS cells** show sustain; `<sub>` holds peak (when higher) plus `(MiB / CPU%)`. The Gate column is that script's floor.
+Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-measured @ `6a664370` (Actions [41305391588](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41305391588)). Other edition rows stay @ `e0c98136`. Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. **RPS cells** show sustain; `<sub>` holds peak (when higher) plus `(MiB / CPU%)`. The Gate column is that script's floor.
 
 | Arm | Linux | Lin÷ | Gate |
 |---|---:|---:|---|
@@ -372,6 +372,7 @@ Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-mea
 | `twp-cli-plus-cache-http1` (cold) vs CLI | **31,861**<br><sub>(178 MiB / 52.8% CPU · 66.3 µs CPU/req)</sub> | **0.87×** | ≥ **0.50×** |
 | `twp-cli-intercept-http1` vs CLI | **25,892**<br><sub>(189 MiB / 52.1% CPU · 80.5 µs CPU/req)</sub> | **0.70×** | ≥ **0.50×** |
 | `twp-cli-plus-waf-http1` vs CLI | **26,235**<br><sub>(247 MiB / 53.5% CPU · 81.6 µs CPU/req)</sub> | **0.72×** | ≥ **0.50×** |
+| `twp-cli-plus-waf-screen-http1` vs CLI | **26,054**<br><sub>(244 MiB / 53.1% CPU · 81.6 µs CPU/req)</sub> | **0.71×** | ≥ **0.50×** |
 | `twp-cli-plus-cidr-http1` vs CLI | **35,261**<br><sub>(178 MiB / 49.1% CPU · 55.7 µs CPU/req)</sub> | **0.98×** | ≥ **0.50×** |
 | `twp-cli-plus-jwt-http1` vs CLI | **32,617**<br><sub>(199 MiB / 48.6% CPU · 59.6 µs CPU/req)</sub> | **0.90×** | ≥ **0.50×** |
 | `twp-cli-plus-ratelimit-http1` vs CLI | **57,197**<br><sub>(245 MiB / 46.2% CPU · 32.3 µs CPU/req)</sub> | **0.96×** | ≥ **0.50×** |
@@ -384,6 +385,7 @@ Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-mea
 | `twp-cli-plus-cors-http1` vs CLI | **48,803**<br><sub>(179 MiB / 48.1% CPU · 39.4 µs CPU/req)</sub> | **0.94×** | ≥ **0.50×** |
 | `twp-cli-plus-circuit-http1` vs CLI | **28,010**<br><sub>(186 MiB / 51.6% CPU · 73.7 µs CPU/req)</sub> | **0.76×** | ≥ **0.50×** |
 | `twp-cli-plus-retry-http1` vs CLI | **28,108**<br><sub>(184 MiB / 51.0% CPU · 72.6 µs CPU/req)</sub> | **0.79×** | ≥ **0.50×** |
+| `twp-cli-extauth-http1` vs CLI | **18,623**<br><sub>(190 MiB / 53.0% CPU · 113.8 µs CPU/req)</sub> | **0.51×** | ≥ **0.50×** |
 | `twp-cli-static-http1` vs CLI | **55,859**<br><sub>(172 MiB / 50.4% CPU · 36.1 µs CPU/req)</sub> | **1.55×** | ≥ **0.50×** |
 | `twp-cli-logging-http1` vs CLI | **36,533**<br><sub>(173 MiB / 48.4% CPU · 53.0 µs CPU/req)</sub> | **0.99×** | ≥ **0.50×** |
 | `twp-cli-lb-leasttime-http1` vs route | **33,426**<br><sub>(213 MiB / 69.9% CPU · 83.7 µs CPU/req)</sub> | **0.92×** | ≥ **0.50×** |
@@ -393,6 +395,7 @@ Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-mea
 | `twp-cli-script-wasm-noop-http1` vs route | **23,778**<br><sub>(198 MiB / 55.1% CPU · 92.7 µs CPU/req)</sub> | **0.66×** | ≥ **0.50×** |
 | `twp-cli-script-lua-slow-upstream-http1` vs slow upstream | **3,032**<br><sub>(224 MiB / 27.8% CPU · 366.5 µs CPU/req)</sub> | **0.99×** | ≥ **0.50×** |
 | `twp-cli-script-1in50-http1` vs route | **38,148**<br><sub>(192 MiB / 50.9% CPU · 53.4 µs CPU/req)</sub> | **0.75×** | ≥ **0.50×** |
+| `twp-cli-plugin-dotnet-noop-http1` vs route | **25,785**<br><sub>(189 MiB / 52.9% CPU · 82.1 µs CPU/req)</sub> | **0.70×** | ≥ **0.50×** |
 
 `validate-edition-gates.ps1` floors are **0.50×**. Each ÷ column uses the two arms from the same job. Circuit breaker and idempotent retry stay on the session path, so a ratio near intercept is expected. Laptop smoke ratios stay on [Performance Local Lab — Editions](Performance-Local-Lab#user-content-editions-cli--plus-stress).
 
