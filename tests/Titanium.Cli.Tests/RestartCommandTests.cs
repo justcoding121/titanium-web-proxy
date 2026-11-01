@@ -7,12 +7,13 @@ namespace Titanium.Cli.Tests;
 public class RestartCommandTests
 {
     private static readonly TimeSpan Poll = TimeSpan.FromMilliseconds(5);
+    private static readonly string[] RunArgsWatch = ["run", "-c", "a.json", "--watch"];
 
     [TestMethod]
     public void RunArguments_AreRunPlusEverythingAfterRestart()
     {
         CollectionAssert.AreEqual(
-            new[] { "run", "-c", "a.json", "--watch" },
+            RunArgsWatch,
             RestartCommand.BuildRunArguments(["restart", "-c", "a.json", "--watch"]).ToArray());
     }
 

@@ -334,16 +334,29 @@ public class WafV2Tests
     [TestMethod]
     public void Paranoia_SelectsRuleSubsets()
     {
+        // Reuse one engine so pack compile/warmup is paid once; empty matches with RuleTimeouts>0 used to flake
+        // when NonBacktracking rules shared the 5 ms backtracking budget under CI load.
+        var p1Engine = new WafEngine(BlockOptions(1));
+        var p2Engine = new WafEngine(BlockOptions(2));
+        var p3Engine = new WafEngine(BlockOptions(3));
+
         const string target = "/s?q=select+a+shirt+from+the+store";
-        Assert.AreEqual(0, Run(target, BlockOptions(1)).Matches.Count, "p1");
-        Assert.IsTrue(Run(target, BlockOptions(2)).Matches.Any(m => m.RuleId == "TW-SQLI-008"), "p2");
+        var p1 = Run(target, engine: p1Engine);
+        Assert.AreEqual(0, p1.Matches.Count, "p1");
+        Assert.AreEqual(0, p1.RuleTimeouts, "p1 timeouts");
+        var p2 = Run(target, engine: p2Engine);
+        Assert.AreEqual(0, p2.RuleTimeouts, "p2 timeouts");
+        Assert.IsTrue(p2.Matches.Any(m => m.RuleId == "TW-SQLI-008"), "p2");
 
         const string drop = "/s?q=please+drop+me+a+line";
-        Assert.AreEqual(0, Run(drop, BlockOptions(2)).Matches.Count, "p2 drop");
-        Assert.IsTrue(Run(drop, BlockOptions(3)).Matches.Any(m => m.RuleId == "TW-SQLI-010"), "p3");
+        var p2Drop = Run(drop, engine: p2Engine);
+        Assert.AreEqual(0, p2Drop.Matches.Count, "p2 drop");
+        Assert.AreEqual(0, p2Drop.RuleTimeouts, "p2 drop timeouts");
+        var p3 = Run(drop, engine: p3Engine);
+        Assert.AreEqual(0, p3.RuleTimeouts, "p3 timeouts");
+        Assert.IsTrue(p3.Matches.Any(m => m.RuleId == "TW-SQLI-010"), "p3");
 
-        var engine = new WafEngine(BlockOptions(2));
-        Assert.IsTrue(engine.DefaultProfile.RuleSet.All.All(r => r.Paranoia <= 2));
+        Assert.IsTrue(p2Engine.DefaultProfile.RuleSet.All.All(r => r.Paranoia <= 2));
     }
 
     [TestMethod]

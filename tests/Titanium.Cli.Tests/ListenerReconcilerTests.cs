@@ -9,6 +9,9 @@ namespace Titanium.Cli.Tests;
 [TestClass]
 public class ListenerReconcilerTests
 {
+    private static readonly string[] Add9090Remove8080 = ["add:9090", "remove:8080"];
+    private static readonly int[] Removed9090 = [9090];
+
     [TestMethod]
     public void Plan_AddRemoveReplace_IdentifiesActions()
     {
@@ -67,7 +70,7 @@ public class ListenerReconcilerTests
             },
             e => calls.Add("remove:" + e.Port));
 
-        CollectionAssert.AreEqual(new[] { "add:9090", "remove:8080" }, calls);
+        CollectionAssert.AreEqual(Add9090Remove8080, calls);
         Assert.AreEqual(1, running.Count);
         Assert.IsTrue(running.ContainsKey(ListenerKey.From(desired[0])));
         Assert.IsNotNull(oldEndpoint);
@@ -96,7 +99,7 @@ public class ListenerReconcilerTests
         // The old listener was never touched, the endpoint that did bind is undone.
         Assert.AreEqual(1, running.Count);
         Assert.AreSame(oldEndpoint, running[ListenerKey.From(keep)].Endpoint);
-        CollectionAssert.AreEqual(new[] { 9090 }, removed);
+        CollectionAssert.AreEqual(Removed9090, removed);
     }
 
     [TestMethod]

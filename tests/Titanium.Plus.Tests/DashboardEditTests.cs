@@ -24,6 +24,7 @@ public partial class DashboardEditTests
     private const string Secret = "operator-secret-value";
     private const string ViewerSecret = "viewer-secret-value";
     private const string RouteJson = """{"id":"r2","clusterId":"c1","match":{"hosts":["b.test"]}}""";
+    private static readonly string[] RouteIdsR1R2 = ["r1", "r2"];
 
     [TestMethod]
     public async Task RoutesPage_ShowsEditLinksAndOverlayBanner_ToAnOperatorWhenEditingIsOn()
@@ -139,7 +140,7 @@ public partial class DashboardEditTests
         StringAssert.Contains(response.Text, "is not a cluster");
         Assert.AreEqual(0, rig.Editor.Applied.Count);
         Assert.IsFalse(rig.Audit().Any(e => e.Action == AuditActions.ConfigEdit), "a dry run is not an edit");
-        CollectionAssert.AreEquivalent(new[] { "r1", "r2" }, rig.Editor.LastValidatedRouteIds!.ToArray());
+        CollectionAssert.AreEquivalent(RouteIdsR1R2, rig.Editor.LastValidatedRouteIds!.ToArray());
     }
 
     [TestMethod]

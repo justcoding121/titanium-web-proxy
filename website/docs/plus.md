@@ -399,7 +399,7 @@ The earlier deny-list file (`{"denyPaths": [...]}`) is still read by the deny-li
 
 ### Regular-expression safety
 
-A pattern runs on attacker-chosen input, so every pattern is checked when the rules load. Empty patterns, patterns over 1024 characters, patterns that match the empty string, and patterns that nest an unbounded repeat inside an unbounded repeat are rejected. Patterns compile with `RegexOptions.NonBacktracking`, which cannot backtrack catastrophically; a pattern that needs lookarounds or backreferences falls back to the backtracking engine with a 5 ms match timeout. A timed-out rule counts as no match and is counted in `titanium_waf_rule_timeouts_total`; it does not add to the score. The test suite runs every pack rule against one-mebibyte adversarial inputs under a time budget.
+A pattern runs on attacker-chosen input, so every pattern is checked when the rules load. Empty patterns, patterns over 1024 characters, patterns that match the empty string, and patterns that nest an unbounded repeat inside an unbounded repeat are rejected. Patterns compile with `RegexOptions.NonBacktracking`, which cannot backtrack catastrophically, with a 50 ms match timeout (first-hit latency under load can exceed a few milliseconds even without backtracking). A pattern that needs lookarounds or backreferences falls back to the backtracking engine with a 5 ms match timeout. A timed-out rule counts as no match and is counted in `titanium_waf_rule_timeouts_total`; it does not add to the score. The test suite runs every pack rule against one-mebibyte adversarial inputs under a time budget.
 
 ### Cost and the fast path
 

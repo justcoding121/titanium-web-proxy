@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Security;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -39,6 +40,7 @@ public sealed class ServiceDiscovery : IDisposable
     private Timer? _filePollTimer;
     private DateTime _lastAppliedWriteUtc = DateTime.MinValue;
     private long _lastAppliedLength = -1;
+    private byte[] _lastAppliedContentHash = [];
 
     /// <summary>0 idle, 1 apply scheduled, 2 another change arrived while one was scheduled.</summary>
     private int _fileWatchState;
@@ -148,7 +150,11 @@ public sealed class ServiceDiscovery : IDisposable
                     }
 
                     var info = new FileInfo(full);
-                    if (info.LastWriteTimeUtc == _lastAppliedWriteUtc && info.Length == _lastAppliedLength)
+                    // mtime can share a one-second bucket across overwrite, and same-length JSON swaps
+                    // (dA→dB) look identical by length alone — content hash is the reliable backstop.
+                    if (info.LastWriteTimeUtc == _lastAppliedWriteUtc &&
+                        info.Length == _lastAppliedLength &&
+                        ContentHashEquals(full, _lastAppliedContentHash))
                     {
                         return;
                     }
@@ -243,6 +249,7 @@ public sealed class ServiceDiscovery : IDisposable
             var info = new FileInfo(full);
             _lastAppliedWriteUtc = info.LastWriteTimeUtc;
             _lastAppliedLength = info.Length;
+            _lastAppliedContentHash = SHA256.HashData(File.ReadAllBytes(full));
         }
         catch (IOException)
         {
@@ -251,6 +258,27 @@ public sealed class ServiceDiscovery : IDisposable
         catch (UnauthorizedAccessException)
         {
             // Leave prior stamp so the poll retries.
+        }
+    }
+
+    private static bool ContentHashEquals(string full, byte[] previous)
+    {
+        if (previous.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return previous.AsSpan().SequenceEqual(SHA256.HashData(File.ReadAllBytes(full)));
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
