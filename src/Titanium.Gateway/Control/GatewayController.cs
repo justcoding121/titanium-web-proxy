@@ -206,6 +206,11 @@ public sealed class GatewayController
             }
         }
 
+        foreach (var pair in render.InlineTlsFiles)
+        {
+            files[pair.Key] = pair.Value;
+        }
+
         var wrote = await _output.ApplyAsync(bytes, files, OutputWriter.SignatureOf(render.Config.Listeners), cancellationToken).ConfigureAwait(false);
         if (wrote && _log.IsEnabled(LogLevel.Information))
         {
