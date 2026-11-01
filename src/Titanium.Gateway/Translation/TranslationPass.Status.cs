@@ -32,6 +32,16 @@ internal sealed partial class TranslationPass
             patches.Add(BuildRoutePatch(route));
         }
 
+        foreach (var route in _l4Routes)
+        {
+            patches.Add(BuildL4RoutePatch(route));
+        }
+
+        foreach (var route in _grpcRoutes)
+        {
+            patches.Add(BuildGrpcRoutePatch(route));
+        }
+
         foreach (var ingress in _ingresses)
         {
             patches.Add(BuildIngressPatch(ingress, addresses));
@@ -141,7 +151,23 @@ internal sealed partial class TranslationPass
         };
         if (listener.KindsValid)
         {
-            status.SupportedKinds.Add(new RouteGroupKind { Group = GatewayApiNames.Group, Kind = HttpRouteGroupKind });
+            if (listener.IsHttp || listener.IsHttps)
+            {
+                status.SupportedKinds.Add(new RouteGroupKind { Group = GatewayApiNames.Group, Kind = HttpRouteGroupKind });
+                status.SupportedKinds.Add(new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.GrpcRouteKind });
+            }
+            else if (listener.IsTlsPassthrough)
+            {
+                status.SupportedKinds.Add(new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.TlsRouteKind });
+            }
+            else if (listener.IsTcp)
+            {
+                status.SupportedKinds.Add(new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.TcpRouteKind });
+            }
+            else if (listener.IsUdp)
+            {
+                status.SupportedKinds.Add(new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.UdpRouteKind });
+            }
         }
 
         status.Conditions.Add(Conditions.Make(Conditions.Accepted, listener.Accepted, listener.AcceptedReason, listener.AcceptedMessage, generation));
@@ -195,11 +221,47 @@ internal sealed partial class TranslationPass
         }
     }
 
-    private StatusPatch BuildRoutePatch(RouteOutcome route)
+    private StatusPatch BuildL4RoutePatch(L4RouteOutcome route)
     {
-        var generation = route.Route.Metadata.Generation;
+        var kind = route.RouteKind switch
+        {
+            GatewayApiNames.TlsRouteKind => StatusKind.TlsRoute,
+            GatewayApiNames.TcpRouteKind => StatusKind.TcpRoute,
+            GatewayApiNames.UdpRouteKind => StatusKind.UdpRoute,
+            _ => StatusKind.TlsRoute,
+        };
+        return BuildGenericRoutePatch(kind, route.Metadata, route.Parents, route.RefsReason, route.RefsMessage, []);
+    }
+
+    private StatusPatch BuildGrpcRoutePatch(GrpcRouteOutcome route) =>
+        BuildGenericRoutePatch(
+            StatusKind.GrpcRoute,
+            route.Route.Metadata,
+            route.Parents,
+            route.RefsReason,
+            route.RefsMessage,
+            route.Unsupported);
+
+    private StatusPatch BuildRoutePatch(RouteOutcome route) =>
+        BuildGenericRoutePatch(
+            StatusKind.HttpRoute,
+            route.Route.Metadata,
+            route.Parents,
+            route.RefsReason,
+            route.RefsMessage,
+            route.Unsupported);
+
+    private StatusPatch BuildGenericRoutePatch(
+        StatusKind kind,
+        ObjectMeta metadata,
+        IReadOnlyList<ParentOutcome> parentOutcomes,
+        string? refsReason,
+        string? refsMessage,
+        IReadOnlyList<string> unsupported)
+    {
+        var generation = metadata.Generation;
         var parents = new List<RouteParentStatus>();
-        foreach (var parent in route.Parents)
+        foreach (var parent in parentOutcomes)
         {
             var status = new RouteParentStatus
             {
@@ -207,16 +269,16 @@ internal sealed partial class TranslationPass
                 ControllerName = _options.ControllerName,
             };
             status.Conditions.Add(Conditions.Make(Conditions.Accepted, parent.Accepted, parent.Reason, parent.Message, generation));
-            status.Conditions.Add(route.RefsReason is null
+            status.Conditions.Add(refsReason is null
                 ? Conditions.Make(Conditions.ResolvedRefs, true, "ResolvedRefs", "All references resolved", generation)
-                : Conditions.Make(Conditions.ResolvedRefs, false, route.RefsReason, route.RefsMessage ?? string.Empty, generation));
-            if (route.Unsupported.Count > 0)
+                : Conditions.Make(Conditions.ResolvedRefs, false, refsReason, refsMessage ?? string.Empty, generation));
+            if (unsupported.Count > 0)
             {
                 status.Conditions.Add(Conditions.Make(
                     Conditions.PartiallyInvalid,
                     true,
                     "UnsupportedValue",
-                    "Answered with 500: " + string.Join("; ", route.Unsupported),
+                    "Answered with 500: " + string.Join("; ", unsupported),
                     generation));
             }
 
@@ -224,9 +286,9 @@ internal sealed partial class TranslationPass
         }
 
         return new StatusPatch(
-            StatusKind.HttpRoute,
-            route.Route.Metadata.Namespace,
-            route.Route.Metadata.Name,
+            kind,
+            metadata.Namespace,
+            metadata.Name,
             generation,
             [],
             Parents: parents);

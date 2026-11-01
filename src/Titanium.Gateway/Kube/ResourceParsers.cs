@@ -136,6 +136,27 @@ internal static class ResourceParsers
             Decode(element.GetString("data", "ca.crt")));
     }
 
+    public static ConfigMapInfo? ConfigMap(JsonElement element)
+    {
+        var name = element.GetString(MetadataKey, "name");
+        var ns = element.GetString(MetadataKey, "namespace");
+        if (name is null || ns is null)
+        {
+            return null;
+        }
+
+        var data = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (element.Get("data") is { ValueKind: JsonValueKind.Object } json)
+        {
+            foreach (var property in json.EnumerateObject())
+            {
+                data[property.Name] = property.Value.GetString() ?? string.Empty;
+            }
+        }
+
+        return new ConfigMapInfo(ns, name, data);
+    }
+
     private static byte[]? Decode(string? base64)
     {
         if (string.IsNullOrEmpty(base64))

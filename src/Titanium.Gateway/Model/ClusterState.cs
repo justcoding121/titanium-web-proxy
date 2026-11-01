@@ -1,5 +1,8 @@
 namespace Titanium.Gateway.Model;
 
+/// <summary>A ConfigMap the controller may read for BackendTLSPolicy CA bundles.</summary>
+public sealed record ConfigMapInfo(string Namespace, string Name, IReadOnlyDictionary<string, string> Data);
+
 /// <summary>A Namespace, reduced to its labels (for <c>allowedRoutes.namespaces.selector</c>).</summary>
 public sealed record NamespaceInfo(string Name, IReadOnlyDictionary<string, string> Labels);
 
@@ -55,6 +58,18 @@ public sealed class ClusterState
     public IReadOnlyList<GatewayResource> Gateways { get; init; } = [];
 
     public IReadOnlyList<HttpRoute> HttpRoutes { get; init; } = [];
+
+    public IReadOnlyList<TlsRoute> TlsRoutes { get; init; } = [];
+
+    public IReadOnlyList<TcpRoute> TcpRoutes { get; init; } = [];
+
+    public IReadOnlyList<UdpRoute> UdpRoutes { get; init; } = [];
+
+    public IReadOnlyList<GrpcRoute> GrpcRoutes { get; init; } = [];
+
+    public IReadOnlyList<BackendTlsPolicy> BackendTlsPolicies { get; init; } = [];
+
+    public IReadOnlyList<ConfigMapInfo> ConfigMaps { get; init; } = [];
 
     public IReadOnlyList<ReferenceGrant> ReferenceGrants { get; init; } = [];
 

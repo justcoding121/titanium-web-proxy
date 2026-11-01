@@ -75,13 +75,24 @@ public class GatewayTranslatorListenerTests
     public void UnsupportedProtocol_IsRejected()
     {
         var b = StateBuilder.Basic();
-        b.Gateways[0].Spec.Listeners = [new GatewayListener { Name = "tcp", Port = 80, Protocol = "TCP" }];
+        b.Gateways[0].Spec.Listeners = [new GatewayListener { Name = "quic", Port = 80, Protocol = "QUIC" }];
         var result = b.Render();
 
         var gateway = GatewayPatch(result);
         Assert.AreEqual("UnsupportedProtocol", Cond(gateway.Listeners![0].Conditions, "Accepted").Reason);
         Assert.AreEqual("False", Cond(gateway.Conditions, "Accepted").Status);
         Assert.AreEqual(0, result.Config.Listeners.Count);
+    }
+
+    [TestMethod]
+    public void TcpListener_IsAccepted()
+    {
+        var b = StateBuilder.Basic();
+        b.Gateways[0].Spec.Listeners = [new GatewayListener { Name = "tcp", Port = 80, Protocol = "TCP" }];
+        var result = b.Render();
+
+        var gateway = GatewayPatch(result);
+        Assert.AreEqual("True", Cond(gateway.Listeners![0].Conditions, "Accepted").Status);
     }
 
     [TestMethod]

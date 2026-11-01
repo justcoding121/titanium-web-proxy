@@ -87,6 +87,15 @@ public sealed class StatusWriter
             case StatusKind.Ingress:
                 return TryBuildIngressWrite(patch, current, out desired, out path);
 
+            case StatusKind.TlsRoute:
+            case StatusKind.TcpRoute:
+            case StatusKind.UdpRoute:
+            case StatusKind.GrpcRoute:
+                return TryBuildGatewayRouteWrite(patch, current, out desired, out path);
+
+            case StatusKind.BackendTlsPolicy:
+                return TryBuildBackendTlsPolicyWrite(patch, current, out desired, out path);
+
             default:
                 return TryBuildHttpRouteWrite(patch, current, out desired, out path);
         }
@@ -170,6 +179,36 @@ public sealed class StatusWriter
         return true;
     }
 
+    private bool TryBuildGatewayRouteWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        var plural = patch.Kind switch
+        {
+            StatusKind.TlsRoute => "tlsroutes",
+            StatusKind.TcpRoute => "tcproutes",
+            StatusKind.UdpRoute => "udproutes",
+            StatusKind.GrpcRoute => "grpcroutes",
+            _ => "httproutes",
+        };
+
+        var existingParents = patch.Kind switch
+        {
+            StatusKind.TlsRoute => current.TlsRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name)?.Status?.Parents,
+            StatusKind.TcpRoute => current.TcpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name)?.Status?.Parents,
+            StatusKind.UdpRoute => current.UdpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name)?.Status?.Parents,
+            StatusKind.GrpcRoute => current.GrpcRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name)?.Status?.Parents,
+            _ => current.HttpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name)?.Status?.Parents,
+        };
+
+        if (existingParents is null && patch.Kind != StatusKind.HttpRoute)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        return TryBuildRouteParentsWrite(patch, existingParents ?? [], plural, out desired, out path);
+    }
+
     private bool TryBuildHttpRouteWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
     {
         var existing = current.HttpRoutes.FirstOrDefault(r => r.Metadata.Namespace == patch.Namespace && r.Metadata.Name == patch.Name);
@@ -180,7 +219,16 @@ public sealed class StatusWriter
             return false;
         }
 
-        var previous = existing.Status?.Parents ?? [];
+        return TryBuildRouteParentsWrite(patch, existing.Status?.Parents ?? [], "httproutes", out desired, out path);
+    }
+
+    private bool TryBuildRouteParentsWrite(
+        StatusPatch patch,
+        IReadOnlyList<RouteParentStatus> previous,
+        string plural,
+        out object desired,
+        out string path)
+    {
         var others = previous.Where(p => !string.Equals(p.ControllerName, _controllerName, StringComparison.Ordinal)).ToList();
         var ours = previous.Where(p => string.Equals(p.ControllerName, _controllerName, StringComparison.Ordinal)).ToList();
         var parents = (patch.Parents ?? []).Select(p => StampParent(p, ours)).ToList();
@@ -192,7 +240,30 @@ public sealed class StatusWriter
         }
 
         desired = new { parents = others.Concat(parents).ToList() };
-        path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/httproutes/{Uri.EscapeDataString(patch.Name)}/status";
+        path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/{plural}/{Uri.EscapeDataString(patch.Name)}/status";
+        return true;
+    }
+
+    private static bool TryBuildBackendTlsPolicyWrite(StatusPatch patch, ClusterState current, out object desired, out string path)
+    {
+        var existing = current.BackendTlsPolicies.FirstOrDefault(p => p.Metadata.Namespace == patch.Namespace && p.Metadata.Name == patch.Name);
+        if (existing is null)
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        var ancestors = (patch.Ancestors ?? []).ToList();
+        if (Json(ancestors) == Json(existing.Status?.Ancestors ?? []))
+        {
+            desired = null!;
+            path = null!;
+            return false;
+        }
+
+        desired = new { ancestors };
+        path = $"/apis/{Group}/v1/namespaces/{Uri.EscapeDataString(patch.Namespace!)}/backendtlspolicies/{Uri.EscapeDataString(patch.Name)}/status";
         return true;
     }
 
