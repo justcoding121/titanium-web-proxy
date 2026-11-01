@@ -1802,13 +1802,19 @@ public partial class ProxyServer : IDisposable
         if (ReuseSocket && RunTime.IsSocketReuseAvailable())
             endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
-        if (endPoint.ReusePort && OperatingSystem.IsLinux())
-        {
-            endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, (SocketOptionName)15, 1);
-        }
-
         try
         {
+            // SO_REUSEPORT = 15. SetRawSocketOption talks to the kernel directly: SetSocketOption(ReusePort)
+            // throws SocketException "Operation not supported" on some Linux hosts (the option is outside the try
+            // that wraps Start, so the process used to exit before it was ready).
+            if (endPoint.ReusePort && OperatingSystem.IsLinux())
+            {
+                endPoint.Listener.Server.SetRawSocketOption(
+                    (int)SocketOptionLevel.Socket,
+                    15,
+                    BitConverter.GetBytes(1));
+            }
+
             endPoint.Listener.Start(ListenerBackLog);
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;

@@ -515,7 +515,8 @@ internal static class RunCommand
                             handoverCts.Cancel();
                             // The successor already listens: stop receiving new connections right away.
                             proxy.CloseTcpListeners();
-                        }).ConfigureAwait(false);
+                        },
+                    hotRestartPidFile: hotRestartConfig?.PidFile).ConfigureAwait(false);
             }
             finally
             {
@@ -1205,7 +1206,8 @@ internal static class RunCommand
         Action? onStopRequested = null,
         IReadOnlyList<string>? extraWatchPaths = null,
         string? loadedConfigHash = null,
-        Action? onHandoverSignal = null)
+        Action? onHandoverSignal = null,
+        string? hotRestartPidFile = null)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1230,7 +1232,7 @@ internal static class RunCommand
         PosixSignalRegistration? sigTerm = null;
         PosixSignalRegistration? sigInt = null;
         PosixSignalRegistration? sigHup = null;
-        PosixSignalRegistration? sigHandover = null;
+        HotRestartHandoverWatch? handoverWatch = null;
         EventWaitHandle? winReload = null;
         RegisteredWaitHandle? winReloadWait = null;
         ContentWatcher? contentWatcher = null;
@@ -1248,15 +1250,18 @@ internal static class RunCommand
                     ctx.Cancel = true;
                     RequestStop();
                 });
-                if (onHandoverSignal is not null && OperatingSystem.IsLinux())
+                if (onHandoverSignal is not null && OperatingSystem.IsLinux()
+                    && !string.IsNullOrWhiteSpace(hotRestartPidFile))
                 {
-                    // server.hotRestart: SIGUSR2 from the new process means stop accepting and drain, then exit.
-                    sigHandover = PosixSignalRegistration.Create((PosixSignal)LinuxHotRestartPlatform.SigUsr2, ctx =>
-                    {
-                        ctx.Cancel = true;
-                        onHandoverSignal();
-                        RequestStop();
-                    });
+                    // PosixSignalRegistration cannot register SIGUSR2 (throws "Operation not supported").
+                    // Watch the pid file: when a successor takes over it, stop accepting and drain.
+                    handoverWatch = HotRestartHandoverWatch.Start(
+                        hotRestartPidFile, Environment.ProcessId, new LinuxHotRestartPlatform(),
+                        () =>
+                        {
+                            onHandoverSignal();
+                            RequestStop();
+                        });
                 }
                 if (onReload is not null)
                 {
@@ -1351,7 +1356,7 @@ internal static class RunCommand
             sigTerm?.Dispose();
             sigInt?.Dispose();
             sigHup?.Dispose();
-            sigHandover?.Dispose();
+            handoverWatch?.Dispose();
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
             contentWatcher?.Dispose();

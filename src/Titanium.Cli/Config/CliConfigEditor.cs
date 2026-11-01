@@ -16,7 +16,7 @@ internal sealed class CliConfigEditor : IConfigEditor
     private readonly Func<TwpConfig?> _getLastApplied;
     private readonly Action<TwpConfig> _setLastApplied;
     private readonly Func<TwpConfig, CancellationToken, Task> _applyLiveAsync;
-    private readonly Action<string, IReadOnlyList<string>?> _setOverlayBanner;
+    private readonly Action<string?, IReadOnlyList<string>?> _setOverlayBanner;
 
     private bool _suspended;
     private IReadOnlyList<string>? _suspendedReasons;
@@ -29,7 +29,7 @@ internal sealed class CliConfigEditor : IConfigEditor
         Func<TwpConfig?> getLastApplied,
         Action<TwpConfig> setLastApplied,
         Func<TwpConfig, CancellationToken, Task> applyLiveAsync,
-        Action<string, IReadOnlyList<string>?> setOverlayBanner)
+        Action<string?, IReadOnlyList<string>?> setOverlayBanner)
     {
         _configPath = configPath;
         _overlayStore = overlayStore;

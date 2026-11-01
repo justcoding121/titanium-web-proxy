@@ -231,6 +231,41 @@ public class HotRestartCoordinatorTests
     }
 
     [TestMethod]
+    public async Task HandoverWatch_FiresWhenThePidFileNamesALiveSuccessor()
+    {
+        File.WriteAllText(PidFile, "100");
+        var platform = new FakePlatform();
+        platform.Alive.Add(100);
+        platform.Alive.Add(200);
+        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var watch = HotRestartHandoverWatch.Start(PidFile, ownPid: 100, platform, () => fired.TrySetResult());
+        Assert.IsFalse(fired.Task.IsCompleted, "own pid must not be treated as a handover");
+
+        await File.WriteAllTextAsync(PidFile, "200");
+        await fired.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+
+    [TestMethod]
+    public async Task HandoverWatch_IgnoresAStaleOrForeignPidInTheFile()
+    {
+        File.WriteAllText(PidFile, "100");
+        var platform = new FakePlatform();
+        platform.Alive.Add(100);
+        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var watch = HotRestartHandoverWatch.Start(PidFile, ownPid: 100, platform, () => fired.TrySetResult());
+        await File.WriteAllTextAsync(PidFile, "300"); // dead
+        await Task.Delay(400);
+        Assert.IsFalse(fired.Task.IsCompleted);
+
+        platform.Alive.Add(300);
+        platform.OtherPrograms.Add(300); // live but another program
+        await Task.Delay(400);
+        Assert.IsFalse(fired.Task.IsCompleted);
+    }
+
+    [TestMethod]
     public void HeldLock_BlocksASecondRestart_ThenTimesOut()
     {
         using var held = new FileStream(PidFile + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);

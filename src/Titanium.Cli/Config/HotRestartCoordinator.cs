@@ -234,7 +234,7 @@ internal static class HotRestartDeferredBind
 /// <summary>Linux implementation: <c>/proc</c> for liveness and program identity, libc <c>kill</c> for SIGUSR2.</summary>
 internal sealed partial class LinuxHotRestartPlatform : IHotRestartPlatform
 {
-    /// <summary>The raw Linux number of SIGUSR2, accepted by <see cref="PosixSignalRegistration" /> as a cast.</summary>
+    /// <summary>Linux SIGUSR2. <see cref="PosixSignalRegistration" /> does not accept it (throws "Operation not supported").</summary>
     internal const int SigUsr2 = 12;
 
     public bool IsProcessAlive(int pid) => Directory.Exists("/proc/" + pid.ToString(CultureInfo.InvariantCulture));
@@ -258,4 +258,115 @@ internal sealed partial class LinuxHotRestartPlatform : IHotRestartPlatform
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int Kill(int pid, int signal);
+}
+
+/// <summary>
+///     Watches for a hot-restart handover on the predecessor. <see cref="PosixSignalRegistration" /> cannot register
+///     SIGUSR2 (it throws), so this polls the pid file: when it names a different live process of the same program the
+///     successor has taken over. SIGUSR2 from the successor still wakes the poll early when the libc handler is armed.
+/// </summary>
+internal sealed partial class HotRestartHandoverWatch : IDisposable
+{
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Task _loop;
+
+    private HotRestartHandoverWatch(string pidFile, int ownPid, IHotRestartPlatform platform, Action onHandover)
+    {
+        _loop = Task.Run(() => PollAsync(pidFile, ownPid, platform, onHandover, _cts.Token));
+        TryArmSigUsr2Wakeup();
+    }
+
+    /// <summary>Starts watching. Dispose to stop.</summary>
+    public static HotRestartHandoverWatch Start(
+        string pidFile, int ownPid, IHotRestartPlatform platform, Action onHandover) =>
+        new(pidFile, ownPid, platform, onHandover);
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        try
+        {
+            _loop.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch (AggregateException)
+        {
+            // Cancelled.
+        }
+
+        _cts.Dispose();
+        TryDisarmSigUsr2Wakeup();
+    }
+
+    private static async Task PollAsync(
+        string pidFile,
+        int ownPid,
+        IHotRestartPlatform platform,
+        Action onHandover,
+        CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (File.Exists(pidFile)
+                    && int.TryParse((await File.ReadAllTextAsync(pidFile, cancellationToken).ConfigureAwait(false)).Trim(), out var pid)
+                    && pid > 0
+                    && pid != ownPid
+                    && platform.IsProcessAlive(pid)
+                    && platform.IsSameProgram(pid))
+                {
+                    onHandover();
+                    return;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+            {
+                if (ex is OperationCanceledException)
+                {
+                    return;
+                }
+            }
+
+            try
+            {
+                await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
+    }
+
+    // SIGUSR2 is not in PosixSignalRegistration. A no-op libc handler still lets kill(SIGUSR2) interrupt a sleep on
+    // some hosts; the pid-file poll is the source of truth either way.
+    private static void TryArmSigUsr2Wakeup()
+    {
+        try
+        {
+            _ = Signal(LinuxHotRestartPlatform.SigUsr2, SigIgn);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Non-glibc; the pid-file poll alone is enough.
+        }
+    }
+
+    private static void TryDisarmSigUsr2Wakeup()
+    {
+        try
+        {
+            _ = Signal(LinuxHotRestartPlatform.SigUsr2, SigDfl);
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // Ignore.
+        }
+    }
+
+    private static readonly IntPtr SigIgn = new(1); // SIG_IGN
+    private static readonly IntPtr SigDfl = IntPtr.Zero; // SIG_DFL
+
+    [LibraryImport("libc", EntryPoint = "signal", SetLastError = true)]
+    private static partial IntPtr Signal(int signum, IntPtr handler);
 }
