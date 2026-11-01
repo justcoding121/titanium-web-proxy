@@ -56,6 +56,12 @@ public sealed class DashboardOptions
 
     /// <summary>Host reload callback (same path as SIGHUP). Null hides the Config reload button.</summary>
     public Func<CancellationToken, Task<PlusReloadResult>>? RequestReload { get; init; }
+
+    /// <summary>Route/cluster edit service from the CLI host. Null hides edit actions.</summary>
+    public IConfigEditor? ConfigEditor { get; init; }
+
+    /// <summary>When true with <see cref="ConfigEditor"/>, operators see route and cluster edit links.</summary>
+    public bool DashboardEditing { get; init; }
 }
 
 /// <summary>

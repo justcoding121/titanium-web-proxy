@@ -152,6 +152,58 @@ public sealed class ServerConfig
     ///     never on a proxy listener. Null or <c>enabled: false</c> = off (zero cost).
     /// </summary>
     public AdminConfig? Admin { get; set; }
+
+    /// <summary>Process-wide overload protection. Off unless <see cref="OverloadConfig.Enabled"/> is true.</summary>
+    public OverloadConfig? Overload { get; set; }
+
+    /// <summary>Linux TCP hot restart with <c>SO_REUSEPORT</c>. Off unless enabled.</summary>
+    public HotRestartConfig? HotRestart { get; set; }
+}
+
+/// <summary>Overload protection under <c>server.overload</c>.</summary>
+public sealed class OverloadConfig
+{
+    public bool Enabled { get; set; }
+
+    public int? IntervalMs { get; set; }
+
+    public OverloadSignalConfig? HeapPercent { get; set; }
+
+    public OverloadSignalConfig? ThreadPoolQueue { get; set; }
+
+    public OverloadSignalConfig? ActiveConnections { get; set; }
+
+    public OverloadActionsConfig? Actions { get; set; }
+
+    public int? RetryAfterSeconds { get; set; }
+}
+
+public sealed class OverloadSignalConfig
+{
+    public int Elevated { get; set; }
+
+    public int Critical { get; set; }
+}
+
+public sealed class OverloadActionsConfig
+{
+    public bool DisableKeepAlive { get; set; } = true;
+
+    public bool StopAccepting { get; set; } = true;
+
+    public bool RejectNewRequests { get; set; } = true;
+
+    public bool ReadyzFailsOnCritical { get; set; } = true;
+}
+
+/// <summary>Hot restart under <c>server.hotRestart</c> (Linux TCP only).</summary>
+public sealed class HotRestartConfig
+{
+    public bool Enabled { get; set; }
+
+    public string? PidFile { get; set; }
+
+    public int? HandoverTimeoutSeconds { get; set; }
 }
 
 /// <summary>Admin listener under <c>server.admin</c>. Off unless <see cref="Enabled"/> is true.</summary>

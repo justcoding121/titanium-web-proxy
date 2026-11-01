@@ -1,13 +1,22 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Titanium.Plus.Audit;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
-
 namespace Titanium.Plus.ControlPlane;
+
+/// <summary>Snapshot PUT validation strictness for the control plane.</summary>
+public enum SnapshotValidationMode
+{
+    Off,
+    Warn,
+    Enforce,
+}
 
 /// <summary>
 /// Loopback-default control plane with shared-secret header auth (GET/PUT snapshot, cache purge).
@@ -39,6 +48,9 @@ public sealed class ControlPlaneServer : IDisposable
     private readonly string _sharedSecret;
     private readonly ControlPlaneTlsOptions? _tls;
     private readonly bool _allowInsecureNonLoopback;
+    private readonly IConfigEditor? _configEditor;
+    private readonly SnapshotValidationMode _snapshotValidation;
+    private readonly ILogger? _logger;
     private ControlHttpServer? _server;
 
     public ControlPlaneServer(IClusterManager? clusters, string host, int port, string sharedSecret)
@@ -56,7 +68,10 @@ public sealed class ControlPlaneServer : IDisposable
         IHttpResponseCache? responseCache = null,
         ControlPlaneSecurity? security = null,
         ControlPlaneTlsOptions? tls = null,
-        bool allowInsecureNonLoopback = false)
+        bool allowInsecureNonLoopback = false,
+        IConfigEditor? configEditor = null,
+        SnapshotValidationMode snapshotValidation = SnapshotValidationMode.Warn,
+        ILogger? logger = null)
     {
         _clusters = clusters;
         _host = host;
@@ -67,6 +82,9 @@ public sealed class ControlPlaneServer : IDisposable
         _responseCache = responseCache;
         _tls = tls;
         _allowInsecureNonLoopback = allowInsecureNonLoopback;
+        _configEditor = configEditor;
+        _snapshotValidation = snapshotValidation;
+        _logger = logger;
         Security = security ?? new ControlPlaneSecurity();
     }
 
@@ -202,6 +220,9 @@ public sealed class ControlPlaneServer : IDisposable
     private static ControlHttpResponse Json(int status, string json) =>
         ControlHttpResponse.Text(status, "application/json", json);
 
+    private static ControlHttpResponse JsonWithHeader(int status, string json, string headerName, string headerValue) =>
+        ControlHttpResponse.Text(status, "application/json", json, new KeyValuePair<string, string>(headerName, headerValue));
+
     private ControlHttpResponse HandleGetSnapshot()
     {
         var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
@@ -240,6 +261,26 @@ public sealed class ControlPlaneServer : IDisposable
                 return (Json(400, JsonSerializer.Serialize(new { error }, JsonOptions)), AuditResults.Rejected);
             }
 
+            IReadOnlyList<string>? validationWarnings = null;
+            if (_snapshotValidation != SnapshotValidationMode.Off && _configEditor is not null)
+            {
+                var validationErrors = _configEditor.ValidateCandidate(routes, clusters);
+                if (validationErrors.Count > 0)
+                {
+                    if (_snapshotValidation == SnapshotValidationMode.Enforce)
+                    {
+                        return (Json(422, JsonSerializer.Serialize(new { error = "validation failed", errors = validationErrors }, JsonOptions)),
+                            AuditResults.Rejected);
+                    }
+
+                    validationWarnings = validationErrors;
+                    foreach (var message in validationErrors)
+                    {
+                        _logger?.LogWarning("Snapshot PUT validation: {Message}", message);
+                    }
+                }
+            }
+
             if (clusters is not null)
             {
                 if (_clusters is null)
@@ -265,12 +306,19 @@ public sealed class ControlPlaneServer : IDisposable
             }
 
             _refresh?.Invoke();
-            return (Json(200, JsonSerializer.Serialize(new
+            var responseBody = JsonSerializer.Serialize(new
             {
                 status = "applied",
                 clusters = clusters?.Count,
                 routes = routes?.Count,
-            }, JsonOptions)), AuditResults.Ok);
+                warnings = validationWarnings,
+            }, JsonOptions);
+            if (validationWarnings is { Count: > 0 })
+            {
+                return (JsonWithHeader(200, responseBody, "X-Titanium-Validation", "failed"), AuditResults.Ok);
+            }
+
+            return (Json(200, responseBody), AuditResults.Ok);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -43,6 +43,12 @@ internal static class ReverseProxySessionDispatch
 
     public static RouteDispatchResult Apply(ProxyServer server, SessionEventArgsBase session)
     {
+        if (server.TryGetOverloadRejectionStatus() is 503 && session is SessionEventArgs overloadSession)
+        {
+            server.StageOverloadRejection(overloadSession);
+            return RouteDispatchResult.Handled;
+        }
+
         var finished = Begin(server, session, out var options, out var resolution, out var destination, out var route);
         return BeginUpstreamIfForwarded(server, session,
             finished ?? Finish(server, session, options!, resolution, destination, route));

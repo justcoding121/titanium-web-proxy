@@ -106,6 +106,19 @@ internal static class RunCommand
             Directory.SetCurrentDirectory(configDir);
         }
 
+        var overlayStore = new ConfigOverlayStore(ResolveOverlayPath(loaded.Config, configDir));
+        var effectiveConfig = CliConfigEditor.ResolveEffectiveConfig(configPath, overlayStore, editor: null);
+        if (!ReferenceEquals(effectiveConfig, loaded.Config))
+        {
+            loaded = new LoadedConfig
+            {
+                Config = effectiveConfig,
+                Path = loaded.Path,
+                Dialect = loaded.Dialect,
+                UnknownKeys = loaded.UnknownKeys,
+            };
+        }
+
         // Relative *File paths resolve against the config directory (the working directory set above).
         var secretFiles = SecretResolver.SecretFiles(loaded.Config);
         var secretErrors = SecretResolver.Resolve(loaded.Config);
@@ -228,6 +241,10 @@ internal static class RunCommand
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         ResolvePlusRelativePaths(plusOptions, configDir);
 
+        var configEditGate = new SemaphoreSlim(1, 1);
+        TwpConfig? lastAppliedConfig = loaded.Config;
+        CliConfigEditor? configEditor = null;
+
         var cacheOptions = ParseResponseCacheOptions(plusOptions, AsyncConsole.WriteError);
         var responseCache = new MemoryHttpResponseCache(cacheOptions.MaxBytes, cacheOptions.Entry.MaxEntryBytes);
 
@@ -275,6 +292,7 @@ internal static class RunCommand
                     // Dropping the token needs a restart: the bind address is not re-applied here.
                     onApplied: applied =>
                     {
+                        lastAppliedConfig = applied;
                         if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
                         {
                             adminServer?.SetAuthToken(rotated);
@@ -282,6 +300,9 @@ internal static class RunCommand
 
                         hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
                     },
+                    overlayStore: overlayStore,
+                    configEditor: configEditor,
+                    configEditGate: configEditGate,
                     getPlugins: () => pluginHost,
                     setPlugins: next => pluginHost = next,
                     scriptPipeline: scriptPipeline,
@@ -313,6 +334,16 @@ internal static class RunCommand
             ? new CliManagedConfigApplier(configPath, PerformReloadAsync)
             : null;
 
+        configEditor = new CliConfigEditor(
+            configPath,
+            overlayStore,
+            configEditGate,
+            () => lastAppliedConfig,
+            applied => lastAppliedConfig = applied,
+            (config, ct) => ApplyRoutesClustersLiveAsync(
+                config, proxy, clusterManager, routes, RefreshReverseProxy, ct),
+            (_, _) => { });
+
         plusContext = new PlusActivationContext
         {
             HostStatus = hostStatus,
@@ -331,6 +362,7 @@ internal static class RunCommand
             Logger = proxy.Logger,
             ConfigApplier = configApplier,
             StateDirectory = managerStateDir,
+            ConfigEditor = configEditor,
         };
         var plusActive = await TryActivatePlusAsync(loaded.Config, plusContext).ConfigureAwait(false);
         grpcJsonTranscoder = plusContext.GrpcJsonTranscoder;
@@ -487,9 +519,26 @@ internal static class RunCommand
         Func<PluginHost?>? getPlugins = null,
         Action<PluginHost>? setPlugins = null,
         List<string>? scriptPipeline = null,
-        CancellationToken stoppingToken = default)
+        CancellationToken stoppingToken = default,
+        ConfigOverlayStore? overlayStore = null,
+        CliConfigEditor? configEditor = null,
+        SemaphoreSlim? configEditGate = null)
     {
+        if (configEditGate is not null)
+        {
+            await configEditGate.WaitAsync(stoppingToken).ConfigureAwait(false);
+        }
+
+        try
+        {
         var loaded = ConfigLoader.Load(configPath);
+        loaded = new LoadedConfig
+        {
+            Path = loaded.Path,
+            Dialect = loaded.Dialect,
+            UnknownKeys = loaded.UnknownKeys,
+            Config = CliConfigEditor.ResolveEffectiveConfig(configPath, overlayStore, configEditor),
+        };
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
         {
@@ -595,6 +644,49 @@ internal static class RunCommand
         _ = plusOptions;
         _ = getGrpc;
         _ = setGrpc;
+        }
+        finally
+        {
+            configEditGate?.Release();
+        }
+    }
+
+    internal static async Task ApplyRoutesClustersLiveAsync(
+        TwpConfig config,
+        ProxyServer proxy,
+        ClusterManager clusterManager,
+        List<RouteConfig> routes,
+        Action refreshReverseProxy,
+        CancellationToken cancellationToken)
+    {
+        var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
+        var snapshot = new Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot
+        {
+            Routes = config.Routes.ToList(),
+            Clusters = config.Clusters.ToList(),
+        };
+        await host.ApplyAsync(snapshot, clusterManager, options =>
+        {
+            ReplaceRoutes(routes, options.Routes ?? []);
+            refreshReverseProxy();
+        }, cancellationToken).ConfigureAwait(false);
+        _ = proxy;
+    }
+
+    private static string ResolveOverlayPath(TwpConfig config, string? configDir)
+    {
+        var explicitPath = config.Plus?.ControlPlane?.OverlayPath;
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+        {
+            return Path.IsPathRooted(explicitPath)
+                ? explicitPath
+                : Path.Combine(configDir ?? Environment.CurrentDirectory, explicitPath);
+        }
+
+        var stateDir = config.Plus?.Options?.GetValueOrDefault("manager.stateDir")
+                       ?? config.Plus?.Options?.GetValueOrDefault("manager.stateDirectory")
+                       ?? Path.Combine(configDir ?? Environment.CurrentDirectory, "state");
+        return Path.Combine(stateDir, "overlay.json");
     }
 
     internal static int ResolveDrainTimeoutSeconds(ServerConfig? server)
@@ -1726,6 +1818,21 @@ internal static class RunCommand
             if (plus.ControlPlane.AllowInsecureNonLoopback)
             {
                 options["controlPlane.allowInsecureNonLoopback"] = "true";
+            }
+
+            if (plus.ControlPlane.SnapshotValidation is { } validation)
+            {
+                options["controlPlane.snapshotValidation"] = validation.ToString().ToLowerInvariant();
+            }
+
+            if (plus.ControlPlane.DashboardEditing is { } editing)
+            {
+                options["controlPlane.dashboardEditing"] = editing ? "true" : "false";
+            }
+
+            if (!string.IsNullOrWhiteSpace(plus.ControlPlane.OverlayPath))
+            {
+                options["controlPlane.overlayPath"] = plus.ControlPlane.OverlayPath;
             }
 
             if (plus.ControlPlane.Tls is { } tls)

@@ -338,6 +338,15 @@ public sealed class ControlPlaneConfig
     /// encrypt and isolate the traffic (for example a service mesh or a restricted pod network).
     /// </summary>
     public bool AllowInsecureNonLoopback { get; set; }
+
+    /// <summary>How snapshot PUT bodies are validated against the running config. Default <see cref="SnapshotValidationMode.Warn"/>.</summary>
+    public SnapshotValidationMode? SnapshotValidation { get; set; }
+
+    /// <summary>When true, operators may edit routes and clusters in the dashboard (overlay semantics).</summary>
+    public bool? DashboardEditing { get; set; }
+
+    /// <summary>Path to the persisted config overlay file. Default is under the Plus state directory.</summary>
+    public string? OverlayPath { get; set; }
 }
 
 /// <summary>PEM certificate and key served by the control plane and dashboard.</summary>

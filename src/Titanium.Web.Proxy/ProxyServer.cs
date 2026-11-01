@@ -1802,6 +1802,11 @@ public partial class ProxyServer : IDisposable
         if (ReuseSocket && RunTime.IsSocketReuseAvailable())
             endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
 
+        if (endPoint.ReusePort && OperatingSystem.IsLinux())
+        {
+            endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, (SocketOptionName)15, 1);
+        }
+
         try
         {
             endPoint.Listener.Start(ListenerBackLog);
@@ -1921,7 +1926,7 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (!ProxyRunning || _stopAccepting)
+            if (!ProxyRunning || _stopAccepting || ShouldOverloadStopAccepting)
             {
                 // Unread bytes make Linux answer close() with RST. Drain them so the client sees a FIN.
                 CloseAcceptedSocketWithoutResponse(tcpClient);
