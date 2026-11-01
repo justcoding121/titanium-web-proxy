@@ -66,7 +66,7 @@ Safety rules for xDS snapshots:
 - Applies run under the same lock as file reloads and dashboard edits, so they never interleave. A snapshot that fails validation or apply is logged and the running config stays in force.
 - A snapshot with **no listeners** while listeners are running is refused for the listener step ("no listener data yet", for example an LDS response that has not arrived). Routes and clusters still apply. To remove every listener, change the file config and reload.
 - Process-level `server.*` settings (including `hotRestart`) come from the file config; the snapshot only carries xDS resources.
-- Secrets (SDS) are translated and written to the state directory, but are not yet wired to listener certificates.
+- Secrets (SDS): a `tls_certificate` secret is written to the state directory (mode 0600) and bound as an SNI certificate on every listener that decrypts TLS or terminates TLS, for the host names in its subject alternative names (or its common name, or every host when it has neither). A secret with a broken key pair is NACKed. A `validation_context` secret is written to the state directory only; it is not bound to a listener.
 
 With `reloadListeners: false`, file reload **warns** and leaves listeners unchanged if the listener set would change.
 

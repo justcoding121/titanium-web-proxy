@@ -47,7 +47,8 @@ public static class EndpointTranslator
                     });
                 }
 
-                var weight = lb.LoadBalancingWeight == 0 ? 1 : lb.LoadBalancingWeight;
+                // The wrapper is null when the control plane leaves the weight out: that means weight 1, not a crash.
+                var weight = lb.LoadBalancingWeight.GetValueOrDefault() == 0 ? 1u : lb.LoadBalancingWeight!.Value;
                 destinations.Add(new DestinationConfig
                 {
                     Id = $"{assignment.ClusterName}-{index}",

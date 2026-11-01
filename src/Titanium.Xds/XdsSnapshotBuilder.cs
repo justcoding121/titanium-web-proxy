@@ -60,15 +60,7 @@ public static class XdsSnapshotBuilder
                     };
                 }
 
-                clusters[assignment.ClusterName] = new ClusterConfig
-                {
-                    Id = cluster.Id,
-                    Destinations = translated.Value!.ToList(),
-                    Algorithm = cluster.Algorithm,
-                    HttpClient = cluster.HttpClient,
-                    HealthCheck = cluster.HealthCheck,
-                    Retry = cluster.Retry,
-                };
+                clusters[assignment.ClusterName] = WithDestinations(cluster, translated.Value!.ToList());
             }
         }
 
@@ -104,6 +96,7 @@ public static class XdsSnapshotBuilder
             }
         }
 
+        var certificateItems = new List<CertificateFileConfig>();
         if (store.TryGetAll(XdsTypeUrls.Secret, out var secretResources))
         {
             foreach (var (_, any) in secretResources)
@@ -115,7 +108,16 @@ public static class XdsSnapshotBuilder
                     return new XdsSnapshotBuildResult { Error = translated.Error };
                 }
 
-                _ = translated.Value;
+                // A TLS certificate secret becomes an SNI-selected certificate on the decrypting and TLS-terminating
+                // listeners. Validation contexts (trusted CAs) are written to the state directory only.
+                if (translated.Value!.PfxPath is { } pfxPath)
+                {
+                    certificateItems.Add(new CertificateFileConfig
+                    {
+                        Path = pfxPath,
+                        Hosts = translated.Value.Hosts.ToList(),
+                    });
+                }
             }
         }
 
@@ -129,7 +131,57 @@ public static class XdsSnapshotBuilder
                 Listeners = listeners,
                 Routes = routes,
                 Clusters = clusters.Values.ToList(),
+                Certificates = MergeCertificates(bootstrap.Certificates, certificateItems),
             },
         };
     }
+
+    /// <summary>Keeps the file's certificate settings and adds the SDS certificates after the file's own items.</summary>
+    private static CertificatesConfig? MergeCertificates(CertificatesConfig? bootstrap, List<CertificateFileConfig> sds)
+    {
+        if (sds.Count == 0)
+        {
+            return bootstrap;
+        }
+
+        var merged = new CertificatesConfig
+        {
+            CertificatePath = bootstrap?.CertificatePath,
+            PrivateKeyPath = bootstrap?.PrivateKeyPath,
+            AcmeEmail = bootstrap?.AcmeEmail,
+            AcmeDomain = bootstrap?.AcmeDomain,
+            AcmeDirectory = bootstrap?.AcmeDirectory,
+        };
+        foreach (var item in bootstrap?.Items ?? [])
+        {
+            merged.Items.Add(item);
+        }
+
+        foreach (var item in sds)
+        {
+            merged.Items.Add(item);
+        }
+
+        return merged;
+    }
+
+    /// <summary>Copy of <paramref name="cluster" /> with new destinations and every other setting kept (EDS only supplies endpoints).</summary>
+    private static ClusterConfig WithDestinations(ClusterConfig cluster, IReadOnlyList<DestinationConfig> destinations) => new()
+    {
+        Id = cluster.Id,
+        Destinations = destinations,
+        Algorithm = cluster.Algorithm,
+        AffinityCookie = cluster.AffinityCookie,
+        AffinityHeader = cluster.AffinityHeader,
+        HealthCheck = cluster.HealthCheck,
+        Retry = cluster.Retry,
+        SlowStartSeconds = cluster.SlowStartSeconds,
+        Queue = cluster.Queue,
+        HttpClient = cluster.HttpClient,
+        SessionAffinity = cluster.SessionAffinity,
+        HashKey = cluster.HashKey,
+        LoadBalancingPolicy = cluster.LoadBalancingPolicy,
+        SendProxyProtocol = cluster.SendProxyProtocol,
+        ZoneAware = cluster.ZoneAware,
+    };
 }

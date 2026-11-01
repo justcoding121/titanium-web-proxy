@@ -807,6 +807,9 @@ internal static class RunCommand
         await ApplyRoutesClustersLiveAsync(
             config, proxy, clusterManager, routes, refreshReverseProxy, cancellationToken).ConfigureAwait(false);
         ReconcileListeners(proxy, config, desiredHttpListeners, runningListeners, getPlugins);
+
+        // SDS certificates (and the file's own SNI items) go onto the listeners that now exist.
+        CertificateBootstrap.ApplySniItems(proxy, config.Certificates);
     }
 
     /// <summary>
