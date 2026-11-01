@@ -8,7 +8,6 @@ namespace Titanium.Xds;
 
 public sealed class XdsControlPlaneHost : IAsyncDisposable
 {
-    private readonly XdsConfig _config;
     private readonly TwpConfig _bootstrap;
     private readonly string _stateDirectory;
     private readonly Action<TwpConfig> _onConfigReady;
@@ -17,7 +16,6 @@ public sealed class XdsControlPlaneHost : IAsyncDisposable
 
     public XdsControlPlaneHost(XdsConfig config, TwpConfig bootstrap, string stateDirectory, Action<TwpConfig> onConfigReady)
     {
-        _config = config;
         _bootstrap = bootstrap;
         _stateDirectory = stateDirectory;
         _onConfigReady = onConfigReady;
@@ -45,7 +43,10 @@ public sealed class XdsControlPlaneHost : IAsyncDisposable
             throw new InvalidOperationException("xds.server is required");
         }
 
-        return server.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? server : $"http://{server}";
+        // Mesh control planes commonly speak cleartext ADS; callers may still pass https:// explicitly.
+        return server.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+            ? server
+            : $"http://{server}"; // NOSONAR S5332 -- xDS ADS default is cleartext inside the mesh.
     }
 
     private static Node BuildNode(XdsConfig config) => new()

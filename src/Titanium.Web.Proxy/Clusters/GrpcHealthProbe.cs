@@ -73,40 +73,28 @@ internal static class GrpcHealthProbe
             return false;
         }
 
-        var offset = 0;
-        while (offset < body.Length)
+        // gRPC health CheckResponse is a single length-prefixed protobuf message.
+        if (body.Length < 5 || body[0] != 0)
         {
-            if (offset + 5 > body.Length)
-            {
-                return false;
-            }
-
-            if (body[offset] != 0)
-            {
-                return false;
-            }
-
-            var length = BinaryPrimitives.ReadUInt32BigEndian(body[(offset + 1)..]);
-            offset += 5;
-            if (length > body.Length - offset || length > MaxBodyBytes)
-            {
-                return false;
-            }
-
-            var message = body.Slice(offset, (int)length);
-            offset += (int)length;
-            if (!TryParseHealthCheckResponse(message, out var status))
-            {
-                return false;
-            }
-
-            if (status == StatusServing)
-            {
-                serving = true;
-                return true;
-            }
-
             return false;
+        }
+
+        var length = BinaryPrimitives.ReadUInt32BigEndian(body[1..]);
+        if (length > body.Length - 5 || length > MaxBodyBytes)
+        {
+            return false;
+        }
+
+        var message = body.Slice(5, (int)length);
+        if (!TryParseHealthCheckResponse(message, out var status))
+        {
+            return false;
+        }
+
+        if (status == StatusServing)
+        {
+            serving = true;
+            return true;
         }
 
         return false;
@@ -155,7 +143,7 @@ internal static class GrpcHealthProbe
                 return false;
             }
 
-            ms.Write(buffer, 0, read);
+            await ms.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
         }
 
         var trailers = response.TrailingHeaders;

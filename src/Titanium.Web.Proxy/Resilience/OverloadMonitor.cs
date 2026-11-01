@@ -73,7 +73,7 @@ public sealed class OverloadMonitor
                 continue;
             }
 
-            desired = Max(desired, LevelForReading(reading, thresholds, name, readings, now));
+            desired = Max(desired, LevelForReading(reading, thresholds, name));
         }
 
         if (desired > _level)
@@ -83,14 +83,12 @@ public sealed class OverloadMonitor
             return _level;
         }
 
-        if (desired < _level)
+        if (desired < _level &&
+            now - _levelSince >= MinDwellFor(_level) &&
+            CanExitTo(desired, readings, now))
         {
-            if (now - _levelSince >= MinDwellFor(_level) &&
-                CanExitTo(desired, readings, now))
-            {
-                _level = desired;
-                _levelSince = now;
-            }
+            _level = desired;
+            _levelSince = now;
         }
 
         return _level;
@@ -99,12 +97,9 @@ public sealed class OverloadMonitor
     private OverloadLevel LevelForReading(
         double reading,
         OverloadSignalThresholds thresholds,
-        string name,
-        IReadOnlyDictionary<string, double?> readings,
-        DateTimeOffset now)
+        string name)
     {
-        _ = readings;
-        _ = now;
+        _ = name;
         if (reading >= thresholds.CriticalAt)
         {
             return OverloadLevel.Critical;

@@ -418,13 +418,17 @@ internal static class ProxyMetrics
             "Overload shedding actions taken: disable_keep_alive, reject, or stop_accepting.");
 
     // Observable: sampled by the exporter at scrape time, so the hot path never touches it.
+    // Kept as a field so the callback stays registered for the meter lifetime.
     private static readonly ObservableGauge<int> OverloadLevelGauge =
         Meter.CreateObservableGauge("twp.overload.level",
             () => System.Threading.Volatile.Read(ref _overloadLevelValue), "{level}",
             "Overload level: 0 normal, 1 elevated, 2 critical.");
 
-    public static void SetOverloadLevel(int level) =>
+    public static void SetOverloadLevel(int level)
+    {
+        _ = OverloadLevelGauge; // keep observable registration reachable for analyzers
         System.Threading.Volatile.Write(ref _overloadLevelValue, level);
+    }
 
     public static void RecordOverloadAction(string action)
     {

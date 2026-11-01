@@ -30,7 +30,6 @@ public sealed class ClusterCache
     private readonly IKubeApi _api;
     private readonly ILogger _log;
     private readonly TimeProvider _time;
-    private readonly ClusterCacheOptions _options;
     private readonly GatewayApiDiscovery _discovery;
 
     private readonly Informer<GatewayClass> _classes;
@@ -60,7 +59,6 @@ public sealed class ClusterCache
     public ClusterCache(IKubeApi api, ClusterCacheOptions options, ILogger log, TimeProvider? time = null, GatewayApiVersions? initialVersions = null)
     {
         _api = api;
-        _options = options;
         _log = log;
         _time = time ?? TimeProvider.System;
         _discovery = new GatewayApiDiscovery(api, log);
@@ -233,13 +231,17 @@ public sealed class ClusterCache
                 if (!SameVersions(discovered, _versions))
                 {
                     _versions = discovered;
-                    _log.LogInformation(
-                        "Gateway API discovery: tls={Tls} tcp={Tcp} udp={Udp} grpc={Grpc} backendTls={BackendTls}",
-                        discovered.TlsRoutes ?? "absent",
-                        discovered.TcpRoutes ?? "absent",
-                        discovered.UdpRoutes ?? "absent",
-                        discovered.GrpcRoutes ?? "absent",
-                        discovered.BackendTlsPolicies ?? "absent");
+                    if (_log.IsEnabled(LogLevel.Information))
+                    {
+                        const string absent = "absent";
+                        _log.LogInformation(
+                            "Gateway API discovery: tls={Tls} tcp={Tcp} udp={Udp} grpc={Grpc} backendTls={BackendTls}",
+                            discovered.TlsRoutes ?? absent,
+                            discovered.TcpRoutes ?? absent,
+                            discovered.UdpRoutes ?? absent,
+                            discovered.GrpcRoutes ?? absent,
+                            discovered.BackendTlsPolicies ?? absent);
+                    }
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)

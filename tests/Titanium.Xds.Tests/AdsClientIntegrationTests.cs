@@ -34,6 +34,13 @@ public class AdsClientIntegrationTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         client.Start(cts.Token);
         await acked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        Assert.IsTrue(client.Store.TryGetAll(Titanium.Xds.XdsTypeUrls.Cluster, out var clusters));
+        Assert.IsTrue(clusters.Count > 0);
+
+        var synced = SpinWait.SpinUntil(
+            () => client.State == AdsConnectionState.Synced,
+            TimeSpan.FromSeconds(5));
+        Assert.IsTrue(synced, $"Expected Synced after ACK settle; was {client.State}");
     }
 
     [TestMethod]

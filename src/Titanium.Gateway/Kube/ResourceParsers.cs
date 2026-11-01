@@ -10,6 +10,7 @@ internal sealed record SecretData(string Namespace, string Name, string? Type, s
 internal static class ResourceParsers
 {
     private const string MetadataKey = "metadata";
+    private const string NamespaceKey = "namespace";
 
     public static T? Typed<T>(JsonElement element) where T : class => element.Deserialize<T>(GatewayJson.Options);
 
@@ -36,7 +37,7 @@ internal static class ResourceParsers
     public static ServiceInfo? Service(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         if (name is null || ns is null)
         {
             return null;
@@ -107,7 +108,7 @@ internal static class ResourceParsers
     public static EndpointSliceInfo? EndpointSlice(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         var service = element.GetString(MetadataKey, "labels", "kubernetes.io/service-name");
         if (name is null || ns is null || service is null)
         {
@@ -131,7 +132,7 @@ internal static class ResourceParsers
     public static SecretData? Secret(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         if (name is null || ns is null)
         {
             return null;
@@ -150,7 +151,7 @@ internal static class ResourceParsers
     public static ConfigMapInfo? ConfigMap(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         if (name is null || ns is null)
         {
             return null;

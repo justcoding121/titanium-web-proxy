@@ -5,13 +5,8 @@ namespace Titanium.Cli.Xds;
 internal sealed class XdsHostHandle : IAsyncDisposable
 {
     private readonly object _host;
-    private readonly Action<TwpConfig> _onConfigReady;
 
-    private XdsHostHandle(object host, Action<TwpConfig> onConfigReady)
-    {
-        _host = host;
-        _onConfigReady = onConfigReady;
-    }
+    private XdsHostHandle(object host) => _host = host;
 
     public static XdsHostHandle? TryStart(
         XdsConfig config,
@@ -26,7 +21,7 @@ internal sealed class XdsHostHandle : IAsyncDisposable
             return null;
         }
 
-        var handle = new XdsHostHandle(host, onConfigReady);
+        var handle = new XdsHostHandle(host);
         host.GetType().GetMethod("Start")!.Invoke(host, [cancellationToken]);
         return handle;
     }

@@ -224,7 +224,7 @@ public sealed class GatewayOptions
             }
 
             var map = protocol == "udp" ? udp : tcp;
-            if (map.ContainsKey(gateway))
+            if (map.ContainsKey(gateway)) // NOSONAR S2583 -- map accumulates across loop iterations.
             {
                 throw new ArgumentException($"--port-map maps port {gateway}/{protocol} more than once.");
             }

@@ -272,7 +272,7 @@ internal sealed partial class HotRestartHandoverWatch : IDisposable
 
     private HotRestartHandoverWatch(string pidFile, int ownPid, IHotRestartPlatform platform, Action onHandover)
     {
-        _loop = Task.Run(() => PollAsync(pidFile, ownPid, platform, onHandover, _cts.Token));
+        _loop = Task.Run(() => PollAsync(pidFile, ownPid, platform, onHandover, _cts.Token), _cts.Token);
         TryArmSigUsr2Wakeup();
     }
 
@@ -286,7 +286,7 @@ internal sealed partial class HotRestartHandoverWatch : IDisposable
         _cts.Cancel();
         try
         {
-            _loop.Wait(TimeSpan.FromSeconds(2));
+            _loop.Wait(TimeSpan.FromSeconds(2), CancellationToken.None);
         }
         catch (AggregateException)
         {

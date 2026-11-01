@@ -8,9 +8,19 @@ internal readonly record struct ListenerKey(string Type, string Host, int Port)
 {
     public static ListenerKey From(ListenerConfig listener)
     {
-        var type = string.IsNullOrWhiteSpace(listener.Type)
-            ? string.IsNullOrEmpty(listener.ForwardHost) ? "explicit" : "transparent"
-            : listener.Type.Trim().ToLowerInvariant();
+        string type;
+        if (!string.IsNullOrWhiteSpace(listener.Type))
+        {
+            type = listener.Type.Trim().ToLowerInvariant();
+        }
+        else if (string.IsNullOrEmpty(listener.ForwardHost))
+        {
+            type = "explicit";
+        }
+        else
+        {
+            type = "transparent";
+        }
         var host = listener.Host ?? "0.0.0.0";
         return new ListenerKey(type, host, listener.Port);
     }
@@ -107,12 +117,12 @@ internal static class ListenerReconciler
                 Bind(entry, running, added, addListener);
             }
 
-            foreach (var entry in plan.Where(static p => p.Action is ListenerPlanAction.Remove))
+            foreach (var key in plan.Where(static p => p.Action is ListenerPlanAction.Remove).Select(static entry => entry.Key))
             {
-                if (running.TryGetValue(entry.Key, out var existing))
+                if (running.TryGetValue(key, out var existing))
                 {
                     removeEndpoint(existing.Endpoint);
-                    running.Remove(entry.Key);
+                    running.Remove(key);
                 }
             }
         }

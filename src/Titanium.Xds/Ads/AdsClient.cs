@@ -55,6 +55,7 @@ public sealed class AdsClient : IAsyncDisposable
 
     public void Start(CancellationToken cancellationToken)
     {
+        _runCts?.Dispose();
         _runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _runTask = RunAsync(_runCts.Token);
     }
@@ -63,7 +64,7 @@ public sealed class AdsClient : IAsyncDisposable
     {
         if (_runCts is not null)
         {
-            await _runCts.CancelAsync();
+            await _runCts.CancelAsync().ConfigureAwait(false);
         }
 
         if (_runTask is not null)
@@ -74,12 +75,16 @@ public sealed class AdsClient : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
+                // Expected when StopAsync cancels the run loop.
             }
         }
 
         _channel?.Dispose();
         _channel = null;
         _client = null;
+        _runCts?.Dispose();
+        _runCts = null;
+        _runTask = null;
     }
 
     public async ValueTask DisposeAsync() => await StopAsync();
@@ -125,12 +130,14 @@ public sealed class AdsClient : IAsyncDisposable
 
         foreach (var typeUrl in _options.ResourceTypeOrder)
         {
-            await call.RequestStream.WriteAsync(new DiscoveryRequest
-            {
-                TypeUrl = typeUrl,
-                VersionInfo = versions[typeUrl],
-                Node = _options.Node,
-            }).ConfigureAwait(false);
+            await call.RequestStream.WriteAsync(
+                new DiscoveryRequest
+                {
+                    TypeUrl = typeUrl,
+                    VersionInfo = versions[typeUrl],
+                    Node = _options.Node,
+                },
+                cancellationToken).ConfigureAwait(false);
         }
 
         while (await call.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
@@ -138,7 +145,8 @@ public sealed class AdsClient : IAsyncDisposable
             var response = call.ResponseStream.Current;
             if (response.Resources.Count > _options.MaxResourcesPerType)
             {
-                await NackAsync(call, response, versions, _options.Node, "too many resources").ConfigureAwait(false);
+                await NackAsync(call, response, versions, _options.Node, "too many resources", cancellationToken)
+                    .ConfigureAwait(false);
                 continue;
             }
 
@@ -149,20 +157,29 @@ public sealed class AdsClient : IAsyncDisposable
 
             if (!decision.Ack)
             {
-                await NackAsync(call, response, versions, _options.Node, decision.ErrorDetail ?? "validation failed").ConfigureAwait(false);
+                await NackAsync(
+                        call,
+                        response,
+                        versions,
+                        _options.Node,
+                        decision.ErrorDetail ?? "validation failed",
+                        cancellationToken)
+                    .ConfigureAwait(false);
                 _store.ClearType(response.TypeUrl);
                 continue;
             }
 
             versions[response.TypeUrl] = response.VersionInfo;
             nonces[response.TypeUrl] = response.Nonce;
-            await call.RequestStream.WriteAsync(new DiscoveryRequest
-            {
-                TypeUrl = response.TypeUrl,
-                VersionInfo = response.VersionInfo,
-                ResponseNonce = response.Nonce,
-                Node = _options.Node,
-            }).ConfigureAwait(false);
+            await call.RequestStream.WriteAsync(
+                new DiscoveryRequest
+                {
+                    TypeUrl = response.TypeUrl,
+                    VersionInfo = response.VersionInfo,
+                    ResponseNonce = response.Nonce,
+                    Node = _options.Node,
+                },
+                cancellationToken).ConfigureAwait(false);
 
             if (_options.ResourceTypeOrder.All(t => !string.IsNullOrEmpty(versions[t])))
             {
@@ -190,15 +207,18 @@ public sealed class AdsClient : IAsyncDisposable
         DiscoveryResponse response,
         Dictionary<string, string> versions,
         Node node,
-        string detail)
+        string detail,
+        CancellationToken cancellationToken)
     {
-        await call.RequestStream.WriteAsync(new DiscoveryRequest
-        {
-            TypeUrl = response.TypeUrl,
-            VersionInfo = versions.GetValueOrDefault(response.TypeUrl) ?? string.Empty,
-            ResponseNonce = response.Nonce,
-            ErrorDetail = detail,
-            Node = node,
-        }).ConfigureAwait(false);
+        await call.RequestStream.WriteAsync(
+            new DiscoveryRequest
+            {
+                TypeUrl = response.TypeUrl,
+                VersionInfo = versions.GetValueOrDefault(response.TypeUrl) ?? string.Empty,
+                ResponseNonce = response.Nonce,
+                ErrorDetail = detail,
+                Node = node,
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 }
