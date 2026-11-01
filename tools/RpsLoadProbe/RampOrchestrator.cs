@@ -260,8 +260,10 @@ internal enum ProbeMode
     TwpCliPlusCacheHttp1,
     /// <summary>CLI + route RequestHeaderSet transform (forces session / intercept path).</summary>
     TwpCliInterceptHttp1,
-    /// <summary>CLI + Plus WAF defaults (detect-mode screening) and denyPaths that do not match probe traffic.</summary>
+    /// <summary>CLI + Plus WAF deny-list only (<c>waf.mode=off</c>) with denyPaths that do not match probe traffic.</summary>
     TwpCliPlusWafHttp1,
+    /// <summary>CLI + Plus WAF screening (<c>waf.mode=detect</c>, no denyPaths) on the session path.</summary>
+    TwpCliPlusWafScreenHttp1,
     /// <summary>CLI + Plus CIDR allow 127.0.0.0/8.</summary>
     TwpCliPlusCidrHttp1,
     /// <summary>CLI + Plus JWT (RS256 JWKS) with Authorization Bearer on every request.</summary>
@@ -322,7 +324,9 @@ internal enum ProbeMode
     /// <summary>CLI no-op Lua plugin in front of the 20 ms origin (latency must stay flat).</summary>
     TwpCliScriptLuaSlowUpstreamHttp1,
     /// <summary>CLI with a Lua plugin on one of fifty routes while the load hits a plugin-free route.</summary>
-    TwpCliScript1In50Http1
+    TwpCliScript1In50Http1,
+    /// <summary>CLI route middleware: .NET PassthroughPlugin that only calls next.</summary>
+    TwpCliPluginDotNetNoopHttp1
 }
 
 internal sealed class RampOptions
@@ -1392,6 +1396,8 @@ internal static class RampOrchestrator
                 [new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)],
             ProbeMode.TwpCliPlusWafHttp1 =>
                 [new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null)],
+            ProbeMode.TwpCliPlusWafScreenHttp1 =>
+                [new("twp-cli-plus-waf-screen-http1", ProbeMode.TwpCliPlusWafScreenHttp1, null)],
             ProbeMode.TwpCliPlusCidrHttp1 =>
                 [new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null)],
             ProbeMode.TwpCliPlusJwtHttp1 =>
@@ -1451,6 +1457,8 @@ internal static class RampOrchestrator
                 [new("twp-cli-script-lua-slow-upstream-http1", ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1, null)],
             ProbeMode.TwpCliScript1In50Http1 =>
                 [new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null)],
+            ProbeMode.TwpCliPluginDotNetNoopHttp1 =>
+                [new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
@@ -1806,6 +1814,7 @@ internal static class RampOrchestrator
         new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null),
         new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null),
         new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null),
+        new("twp-cli-plus-waf-screen-http1", ProbeMode.TwpCliPlusWafScreenHttp1, null),
         new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null),
         new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null),
         new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null),
@@ -1835,7 +1844,8 @@ internal static class RampOrchestrator
         new("twp-cli-script-wasm-noop-http1", ProbeMode.TwpCliScriptWasmNoopHttp1, null),
         new("twp-cli-slow-upstream-http1", ProbeMode.TwpCliSlowUpstreamHttp1, null),
         new("twp-cli-script-lua-slow-upstream-http1", ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1, null),
-        new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null)
+        new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null),
+        new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,

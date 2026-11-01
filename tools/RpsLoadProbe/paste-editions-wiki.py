@@ -24,6 +24,7 @@ ROWS = [
     ("`twp-cli-plus-cache-http1` (cold) vs CLI", "twp-cli-plus-cache-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-intercept-http1` vs CLI", "twp-cli-intercept-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-waf-http1` vs CLI", "twp-cli-plus-waf-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-plus-waf-screen-http1` vs CLI", "twp-cli-plus-waf-screen-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-cidr-http1` vs CLI", "twp-cli-plus-cidr-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-jwt-http1` vs CLI", "twp-cli-plus-jwt-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-ratelimit-http1` vs CLI", "twp-cli-plus-ratelimit-http1", "twp-cli-reverse-http1"),
@@ -36,6 +37,7 @@ ROWS = [
     ("`twp-cli-plus-cors-http1` vs CLI", "twp-cli-plus-cors-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-circuit-http1` vs CLI", "twp-cli-plus-circuit-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-retry-http1` vs CLI", "twp-cli-plus-retry-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-extauth-http1` vs CLI", "twp-cli-extauth-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-static-http1` vs CLI", "twp-cli-static-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-logging-http1` vs CLI", "twp-cli-logging-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-lb-leasttime-http1` vs route", "twp-cli-lb-leasttime-http1", "twp-cli-reverse-http1-route"),
@@ -45,6 +47,7 @@ ROWS = [
     ("`twp-cli-script-wasm-noop-http1` vs route", "twp-cli-script-wasm-noop-http1", "twp-cli-reverse-http1-route"),
     ("`twp-cli-script-lua-slow-upstream-http1` vs slow upstream", "twp-cli-script-lua-slow-upstream-http1", "twp-cli-slow-upstream-http1"),
     ("`twp-cli-script-1in50-http1` vs route", "twp-cli-script-1in50-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-plugin-dotnet-noop-http1` vs route", "twp-cli-plugin-dotnet-noop-http1", "twp-cli-reverse-http1-route"),
 ]
 
 

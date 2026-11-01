@@ -117,6 +117,14 @@ public sealed class SilentPlugin : IProxyMiddleware
         ValueTask.CompletedTask;
 }
 
+/// <summary>Calls <c>next</c> and does nothing else — true passthrough for RPS / wiring baselines.</summary>
+[ProxyPlugin(1)]
+public sealed class PassthroughPlugin : IProxyMiddleware
+{
+    public ValueTask InvokeAsync(ProxyMiddlewareContext context, ProxyMiddlewareDelegate next, CancellationToken cancellationToken) =>
+        next(context, cancellationToken);
+}
+
 /// <summary>Declares a contract version no host supports yet.</summary>
 [ProxyPlugin(99)]
 public sealed class FutureContractPlugin : IProxyMiddleware

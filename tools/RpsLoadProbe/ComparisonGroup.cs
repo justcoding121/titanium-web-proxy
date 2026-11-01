@@ -220,6 +220,7 @@ internal static class ComparisonGroup
         ("edition-plus-cache", ["twp-cli-plus-cache-http1", "twp-cli-plus-cache-hit-http1", "twp-cli-reverse-http1"]),
         ("edition-intercept", ["twp-cli-intercept-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-waf", ["twp-cli-plus-waf-http1", "twp-cli-reverse-http1"]),
+        ("edition-plus-waf-screen", ["twp-cli-plus-waf-screen-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-cidr", ["twp-cli-plus-cidr-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-jwt", ["twp-cli-plus-jwt-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-ratelimit", ["twp-cli-plus-ratelimit-http1", "twp-cli-reverse-http1"]),
@@ -235,6 +236,7 @@ internal static class ComparisonGroup
         ("edition-plus-cors", ["twp-cli-plus-cors-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-circuit", ["twp-cli-plus-circuit-http1", "twp-cli-reverse-http1"]),
         ("edition-plus-retry", ["twp-cli-plus-retry-http1", "twp-cli-reverse-http1"]),
+        ("edition-extauth", ["twp-cli-extauth-http1", "twp-cli-reverse-http1"]),
         // Scripting (S9). A script arm is a route with middleware, so the route arm is the baseline. The slow-upstream
         // script arm is compared with its own no-script slow origin, so latency (not CPU) is what could drop the ratio.
         // The scripting natives (lua54 / wasmtime) must sit beside the CLI or the arm fails to start.
@@ -243,6 +245,7 @@ internal static class ComparisonGroup
         ("edition-script-wasm-noop", ["twp-cli-script-wasm-noop-http1", "twp-cli-reverse-http1-route"]),
         ("edition-script-slow-upstream", ["twp-cli-script-lua-slow-upstream-http1", "twp-cli-slow-upstream-http1"]),
         ("edition-script-1in50", ["twp-cli-script-1in50-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-plugin-dotnet-noop", ["twp-cli-plugin-dotnet-noop-http1", "twp-cli-reverse-http1-route"]),
     ];
 
     public static IReadOnlyList<(string Key, int ArmCount)> ListEditionGroups() =>

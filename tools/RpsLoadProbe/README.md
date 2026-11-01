@@ -206,7 +206,8 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-plus-base-http1` | Plus ALC + control plane (no options) |
 | `twp-cli-plus-cache-http1` | Plus + `cache.enable` (cold) |
 | `twp-cli-intercept-http1` | Route `RequestHeaderSet` transform → session path |
-| `twp-cli-plus-waf-http1` | WAF defaults (detect-mode screening on the session path) plus denyPaths that do not match `/` |
+| `twp-cli-plus-waf-http1` | WAF deny-list only (`waf.mode=off`) plus denyPaths that do not match `/` |
+| `twp-cli-plus-waf-screen-http1` | WAF screening (`waf.mode=detect`, no denyPaths) on the session path |
 | `twp-cli-plus-cidr-http1` | `security.allowCidrs=127.0.0.0/8` |
 | `twp-cli-plus-jwt-http1` | RS256 JWT + JWKS mini-server; Bearer on every request |
 | `twp-cli-plus-ratelimit-http1` | `state.mode=memory` + very high rate limit |
@@ -226,6 +227,8 @@ pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath tools/RpsLoadProbe/r
 | `twp-cli-slow-upstream-http1` | Route to a 20 ms origin, no script (baseline for the next arm) |
 | `twp-cli-script-lua-slow-upstream-http1` | No-op Lua plugin in front of the 20 ms origin |
 | `twp-cli-script-1in50-http1` | One of fifty routes carries a Lua plugin; the load hits a plugin-free route |
+| `twp-cli-extauth-http1` | extAuth policy; auth service allows every request (one subrequest each) |
+| `twp-cli-plugin-dotnet-noop-http1` | Route middleware: .NET `PassthroughPlugin` that only calls `next` |
 | `twp-cli-dialect-twp-http1` | `.twp` `listen`/`forward` site-file |
 
 Plus arms allocate an explicit `controlPlane.dashboardPort` (separate from the control-plane port). Prometheus `/metrics` lives on the **dashboard** listener, not `controlPort + 1`. The metrics-scrape arm polls control `/v1/snapshot` and dashboard `/metrics` every 10s via the CLI host’s `DashboardUrl`.

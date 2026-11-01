@@ -738,6 +738,9 @@ internal static class Cli
             case "twp-cli-plus-waf-http1":
                 mode = ProbeMode.TwpCliPlusWafHttp1;
                 return true;
+            case "twp-cli-plus-waf-screen-http1":
+                mode = ProbeMode.TwpCliPlusWafScreenHttp1;
+                return true;
             case "twp-cli-plus-cidr-http1":
                 mode = ProbeMode.TwpCliPlusCidrHttp1;
                 return true;
@@ -821,6 +824,9 @@ internal static class Cli
                 return true;
             case "twp-cli-script-1in50-http1":
                 mode = ProbeMode.TwpCliScript1In50Http1;
+                return true;
+            case "twp-cli-plugin-dotnet-noop-http1":
+                mode = ProbeMode.TwpCliPluginDotNetNoopHttp1;
                 return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;

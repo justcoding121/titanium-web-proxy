@@ -146,6 +146,7 @@ $pairs = @(
     @{ Label = 'CLI+Plus-cache ÷ CLI'; Num = 'twp-cli-plus-cache-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusCacheGate },
     @{ Label = 'CLI+Intercept ÷ CLI'; Num = 'twp-cli-intercept-http1'; Den = 'twp-cli-reverse-http1'; Gate = $InterceptGate },
     @{ Label = 'CLI+Plus-waf ÷ CLI'; Num = 'twp-cli-plus-waf-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusWafGate },
+    @{ Label = 'CLI+Plus-waf-screen ÷ CLI'; Num = 'twp-cli-plus-waf-screen-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
     @{ Label = 'CLI+Plus-cidr ÷ CLI'; Num = 'twp-cli-plus-cidr-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusCidrGate },
     @{ Label = 'CLI+Plus-jwt ÷ CLI'; Num = 'twp-cli-plus-jwt-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusJwtGate },
     @{ Label = 'CLI+Plus-ratelimit ÷ CLI'; Num = 'twp-cli-plus-ratelimit-http1'; Den = 'twp-cli-reverse-http1'; Gate = $PlusRateLimitGate },
@@ -163,11 +164,13 @@ $pairs = @(
     @{ Label = 'CLI+Plus-cors ÷ CLI'; Num = 'twp-cli-plus-cors-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
     @{ Label = 'CLI+Plus-circuit ÷ CLI'; Num = 'twp-cli-plus-circuit-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
     @{ Label = 'CLI+Plus-retry ÷ CLI'; Num = 'twp-cli-plus-retry-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
+    @{ Label = 'CLI+extAuth ÷ CLI'; Num = 'twp-cli-extauth-http1'; Den = 'twp-cli-reverse-http1'; Gate = 0.50 },
     @{ Label = 'CLI script lua-noop ÷ CLI route'; Num = 'twp-cli-script-lua-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptLuaNoopGate },
     @{ Label = 'CLI script lua-header ÷ CLI route'; Num = 'twp-cli-script-lua-header-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptLuaHeaderGate },
     @{ Label = 'CLI script wasm-noop ÷ CLI route'; Num = 'twp-cli-script-wasm-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptWasmNoopGate },
     @{ Label = 'CLI script lua slow-upstream ÷ CLI slow-upstream'; Num = 'twp-cli-script-lua-slow-upstream-http1'; Den = 'twp-cli-slow-upstream-http1'; Gate = $ScriptSlowUpstreamGate },
-    @{ Label = 'CLI script 1-in-50 ÷ CLI route'; Num = 'twp-cli-script-1in50-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptOneInFiftyGate }
+    @{ Label = 'CLI script 1-in-50 ÷ CLI route'; Num = 'twp-cli-script-1in50-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptOneInFiftyGate },
+    @{ Label = 'CLI plugin .NET noop ÷ CLI route'; Num = 'twp-cli-plugin-dotnet-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 }
 )
 
 # A floor below 0.50 is a mistake, not a tuning knob.

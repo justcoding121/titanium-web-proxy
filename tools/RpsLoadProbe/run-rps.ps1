@@ -59,13 +59,14 @@ param(
         'reverse-http3-to-h2c', 'yarp-reverse-http3-to-h2c', 'yarp-reverse-http3-to-http3',
         'twp-cli-reverse-http1', 'twp-cli-reverse-http1-tls', 'twp-cli-reverse-http1-route',
         'twp-cli-plus-base-http1', 'twp-cli-plus-cache-http1', 'twp-cli-intercept-http1',
-        'twp-cli-plus-waf-http1', 'twp-cli-plus-cidr-http1', 'twp-cli-plus-jwt-http1',
+        'twp-cli-plus-waf-http1', 'twp-cli-plus-waf-screen-http1', 'twp-cli-plus-cidr-http1', 'twp-cli-plus-jwt-http1',
         'twp-cli-plus-ratelimit-http1', 'twp-cli-plus-fleet-ratelimit-http1', 'twp-cli-plus-resilience-http1',
         'twp-cli-plus-discovery-file-http1', 'twp-cli-plus-metrics-scrape-http1',
         'twp-cli-plus-cache-hit-http1', 'twp-cli-static-http1', 'twp-cli-logging-http1',
-        'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1',
+        'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1', 'twp-cli-extauth-http1',
         'twp-cli-script-lua-noop-http1', 'twp-cli-script-lua-header-http1', 'twp-cli-script-wasm-noop-http1',
         'twp-cli-slow-upstream-http1', 'twp-cli-script-lua-slow-upstream-http1', 'twp-cli-script-1in50-http1',
+        'twp-cli-plugin-dotnet-noop-http1',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 

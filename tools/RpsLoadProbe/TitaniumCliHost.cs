@@ -74,6 +74,8 @@ internal sealed class TitaniumCliHost : IDisposable
         PlusCache,
         InterceptTransform,
         PlusWaf,
+        /// <summary>Plus WAF screening on (<c>waf.mode=detect</c>), no denyPaths — session-path cost.</summary>
+        PlusWafScreen,
         PlusCidr,
         PlusJwt,
         PlusRateLimit,
@@ -114,7 +116,10 @@ internal sealed class TitaniumCliHost : IDisposable
         ScriptLuaSlowUpstream,
 
         /// <summary>One route of fifty carries a Lua plugin; the load hits a plugin-free route (B3 cliff).</summary>
-        ScriptOneInFifty
+        ScriptOneInFifty,
+
+        /// <summary>Route middleware: .NET <c>PassthroughPlugin</c> that only calls <c>next</c>.</summary>
+        PluginDotNetNoop
     }
 
     /// <summary>Per-request delay of the slow origin used by the slow-upstream arms.</summary>
@@ -130,7 +135,8 @@ internal sealed class TitaniumCliHost : IDisposable
     public static bool UsesSlowOrigin(CliArmKind kind) => kind is CliArmKind.SlowUpstream or CliArmKind.ScriptLuaSlowUpstream;
 
     public static bool NeedsPlusDll(CliArmKind kind) => kind is
-        CliArmKind.PlusBase or CliArmKind.PlusCache or CliArmKind.PlusWaf or CliArmKind.PlusCidr
+        CliArmKind.PlusBase or CliArmKind.PlusCache or CliArmKind.PlusWaf or CliArmKind.PlusWafScreen
+        or CliArmKind.PlusCidr
         or CliArmKind.PlusJwt or CliArmKind.PlusRateLimit or CliArmKind.PlusFleetRateLimit
         or CliArmKind.PlusManagerAgent
         or CliArmKind.PlusResilience
@@ -145,7 +151,8 @@ internal sealed class TitaniumCliHost : IDisposable
         or CliArmKind.Policies or CliArmKind.PlusFleetRateLimit or CliArmKind.Mirror or CliArmKind.ClusterClient
         or CliArmKind.StatusRetry or CliArmKind.ConnCap or CliArmKind.ExtAuth
         or CliArmKind.ScriptLuaNoop or CliArmKind.ScriptLuaHeader or CliArmKind.ScriptWasmNoop
-        or CliArmKind.SlowUpstream or CliArmKind.ScriptLuaSlowUpstream or CliArmKind.ScriptOneInFifty;
+        or CliArmKind.SlowUpstream or CliArmKind.ScriptLuaSlowUpstream or CliArmKind.ScriptOneInFifty
+        or CliArmKind.PluginDotNetNoop;
 
     public static async Task<TitaniumCliHost> StartAsync(int originHttpPort, CliArmKind kind,
         CancellationToken cancellationToken = default)
@@ -226,6 +233,10 @@ internal sealed class TitaniumCliHost : IDisposable
         if (IsScriptArm(kind))
             scriptPath = await WriteScriptFileAsync(workDir, kind, cancellationToken);
 
+        string? pluginAssemblyPath = null;
+        if (kind == CliArmKind.PluginDotNetNoop)
+            pluginAssemblyPath = StageDotNetPluginAssembly(workDir);
+
         if (kind == CliArmKind.PlusDiscoveryFile)
         {
             discoveryFile = Path.Combine(workDir, "discovery-clusters.json");
@@ -245,7 +256,7 @@ internal sealed class TitaniumCliHost : IDisposable
             configPath = Path.Combine(workDir, "twp.json");
             await File.WriteAllTextAsync(configPath,
                 BuildJson(kind, port, upstreamPort, controlPlanePort, secondOriginPort, discoveryFile,
-                    dashboardPort, scriptPath),
+                    dashboardPort, scriptPath, pluginAssemblyPath),
                 Encoding.UTF8, cancellationToken);
         }
         else
@@ -512,8 +523,34 @@ internal sealed class TitaniumCliHost : IDisposable
         return path;
     }
 
-    private static string PluginsJson(CliArmKind kind, string? scriptPath)
+    private static string StageDotNetPluginAssembly(string workDir)
     {
+        const string dllName = "Titanium.Web.Proxy.TestPlugins.dll";
+        var src = Path.Combine(AppContext.BaseDirectory, dllName);
+        if (!File.Exists(src))
+        {
+            throw new FileNotFoundException(
+                $"{dllName} not found beside RpsLoadProbe. Build RpsLoadProbe (ProjectReference to TestPlugins) first.",
+                src);
+        }
+
+        var dest = Path.Combine(workDir, dllName);
+        File.Copy(src, dest, overwrite: true);
+        return dest;
+    }
+
+    private static string PluginsJson(CliArmKind kind, string? scriptPath, string? pluginAssemblyPath)
+    {
+        if (kind == CliArmKind.PluginDotNetNoop)
+        {
+            if (pluginAssemblyPath is null)
+                return "";
+            var assembly = pluginAssemblyPath.Replace("\\", "/", StringComparison.Ordinal);
+            return ", \"plugins\": [ { \"name\": \"noop\", \"kind\": \"dotnet\", \"assembly\": \"" + assembly +
+                   "\", \"typeName\": \"Titanium.Web.Proxy.TestPlugins.PassthroughPlugin\", " +
+                   "\"failMode\": \"closed\", \"timeoutMs\": 1000 } ]";
+        }
+
         if (!IsScriptArm(kind) || scriptPath is null)
             return "";
         var engine = kind == CliArmKind.ScriptWasmNoop ? "wasm" : "lua";
@@ -547,7 +584,8 @@ internal sealed class TitaniumCliHost : IDisposable
         $"forward 127.0.0.1:{originPort}\nlisten 127.0.0.1:{listenPort}\n";
 
     internal static string BuildJson(CliArmKind kind, int listenPort, int originPort, int controlPlanePort = 0,
-        int? secondOriginPort = null, string? discoveryFile = null, int dashboardPort = 0, string? scriptPath = null)
+        int? secondOriginPort = null, string? discoveryFile = null, int dashboardPort = 0, string? scriptPath = null,
+        string? pluginAssemblyPath = null)
     {
         var algorithm = kind == CliArmKind.LbLeastTime ? "LeastTime" : "RoundRobin";
         var destinations = kind == CliArmKind.LbLeastTime && secondOriginPort is int p2
@@ -569,6 +607,7 @@ internal sealed class TitaniumCliHost : IDisposable
             CliArmKind.StatusRetry => "\"retry\": { \"attempts\": 1 },",
             CliArmKind.ScriptLuaNoop or CliArmKind.ScriptLuaHeader or CliArmKind.ScriptWasmNoop
                 or CliArmKind.ScriptLuaSlowUpstream => "\"middleware\": [ \"script\" ],",
+            CliArmKind.PluginDotNetNoop => "\"middleware\": [ \"noop\" ],",
             _ => "",
         };
         var routeBody =
@@ -578,7 +617,7 @@ internal sealed class TitaniumCliHost : IDisposable
             (routeExtras.Length == 0 ? "" : routeExtras + "\n") +
             "\"match\": { \"path\": \"/\", \"pathKind\": \"Prefix\" }";
         var routesJson = kind == CliArmKind.ScriptOneInFifty ? OneInFiftyRoutes() : "{\n" + routeBody + "\n}";
-        var pluginsBlockJson = PluginsJson(kind, scriptPath);
+        var pluginsBlockJson = PluginsJson(kind, scriptPath, pluginAssemblyPath);
         var httpClient = kind switch
         {
             CliArmKind.ClusterClient =>
@@ -769,11 +808,22 @@ internal sealed class TitaniumCliHost : IDisposable
                 }, dashboardPort);
                 break;
             case CliArmKind.PlusWaf:
+                // Deny-list only: pin mode=off so product default detect does not force the session path.
                 AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
                 AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
                 {
                     ["waf.enabled"] = "true",
+                    ["waf.mode"] = "off",
                     ["waf.denyPaths"] = "^/admin"
+                }, dashboardPort);
+                break;
+            case CliArmKind.PlusWafScreen:
+                // Screening on (detect): headers/cookies/small bodies → session path; no denyPaths.
+                AppendForwardHostListener(sb, listenPort, originPort, decryptSsl: false);
+                AppendPlus(sb, controlPlanePort, new Dictionary<string, string>
+                {
+                    ["waf.enabled"] = "true",
+                    ["waf.mode"] = "detect"
                 }, dashboardPort);
                 break;
             case CliArmKind.PlusCidr:
