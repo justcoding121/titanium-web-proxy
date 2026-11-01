@@ -32,7 +32,8 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _disposed;
 
-    private static readonly TimeSpan ConnectProtocolSettingsWait = TimeSpan.FromSeconds(2);
+    // CI runners can stall briefly between AcceptInboundStream and the peer control SETTINGS frame.
+    private static readonly TimeSpan ConnectProtocolSettingsWait = TimeSpan.FromSeconds(5);
 
     // Connection-scoped reuse of identical bodiless reverse QPACK request blocks (probe tiny-GET).
     // Published as one immutable slot so fingerprint and bytes cannot tear under c=64.

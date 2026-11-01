@@ -571,7 +571,8 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
             headers.AddRange(extraHeaders);
 
         await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, QpackEncoder.Encode(headers), cancellationToken);
-        stream.CompleteWrites();
+        // Do not CompleteWrites here: RFC 9220 tunnels send WebSocket DATA on this stream after the
+        // response HEADERS. Callers use H3Tunnel.Finish() when the client is done writing.
 
         var headersFrame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 64 * 1024, cancellationToken);
         if (headersFrame is null || headersFrame.Type != Http3FrameType.Headers)

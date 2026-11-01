@@ -683,6 +683,14 @@ internal static class Http3ExtendedConnectTunnel
             return (routedHost, port, routedHost, port, request.IsHttps);
         }
 
+        // Transparent reverse listeners pin the connect target via ForwardHost (same rule as
+        // Http3OriginBridge); :authority stays the SNI / Host value from the client CONNECT.
+        if (sessionArgs.ProxyEndPoint is TransparentBaseProxyEndPoint { ForwardHost.Length: > 0 } transparent)
+        {
+            var forwardPort = transparent.ForwardPort ?? (request.IsHttps ? 443 : 80);
+            return (transparent.ForwardHost, forwardPort, transparent.ForwardHost, forwardPort, request.IsHttps);
+        }
+
         var authority = request.Authority.Length > 0 ? request.Authority.GetString()! : "localhost";
         var host = authority;
         var portDefault = request.IsHttps ? 443 : 80;
