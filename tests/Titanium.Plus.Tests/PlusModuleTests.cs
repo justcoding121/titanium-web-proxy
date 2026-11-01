@@ -390,6 +390,18 @@ public class PlusModuleTests
                 "File discovery should apply clusters from the watched JSON within a few seconds.");
             Assert.AreEqual("10.0.0.9", manager.Snapshot.Clusters["from-file"].Destinations[0].Address);
             Assert.IsTrue(refreshed >= 1);
+
+            await File.WriteAllTextAsync(path, """
+                {"clusters":[{"id":"from-file","destinations":[{"id":"fd2","address":"10.0.0.10","port":9001}]}]}
+                """);
+            for (var i = 0; i < 100 && manager.Snapshot.Clusters["from-file"].Destinations[0].Id != "fd2"; i++)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.AreEqual("fd2", manager.Snapshot.Clusters["from-file"].Destinations[0].Id,
+                "File discovery should pick up an overwrite via watcher or poll within a few seconds.");
+            Assert.AreEqual("10.0.0.10", manager.Snapshot.Clusters["from-file"].Destinations[0].Address);
         }
         finally
         {

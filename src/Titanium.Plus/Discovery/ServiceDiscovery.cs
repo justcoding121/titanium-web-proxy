@@ -35,6 +35,9 @@ public sealed class ServiceDiscovery : IDisposable
 
     private readonly CancellationTokenSource _cts = new();
     private FileSystemWatcher? _watcher;
+    private Timer? _filePollTimer;
+    private DateTime _lastAppliedWriteUtc = DateTime.MinValue;
+    private long _lastAppliedLength = -1;
 
     /// <summary>0 idle, 1 apply scheduled, 2 another change arrived while one was scheduled.</summary>
     private int _fileWatchState;
@@ -106,9 +109,9 @@ public sealed class ServiceDiscovery : IDisposable
     {
         try
         {
-            if (File.Exists(full))
+            if (File.Exists(full) && await ApplyFileAsync(context, full, _cts.Token))
             {
-                await ApplyFileAsync(context, full, _cts.Token);
+                StampAppliedFile(full);
             }
         }
         catch (Exception ex)
@@ -125,25 +128,59 @@ public sealed class ServiceDiscovery : IDisposable
         };
         // Dropping a change that arrives while one apply is scheduled loses the real write:
         // macOS FSEvents fires once when WriteAllText truncates the file and again when the new bytes land.
-        void OnChange(object _, FileSystemEventArgs __)
-        {
-            var previous = Interlocked.CompareExchange(ref _fileWatchState, 1, 0);
-            if (previous == 0)
-            {
-                QueueDebouncedFileApply(context, full);
-                return;
-            }
-
-            if (previous == 1)
-            {
-                Interlocked.CompareExchange(ref _fileWatchState, 2, 1);
-            }
-        }
+        void OnChange(object _, FileSystemEventArgs __) => ScheduleFileApply(context, full);
 
         _watcher.Changed += OnChange;
         _watcher.Created += OnChange;
         _watcher.Renamed += OnChange;
         _watcher.EnableRaisingEvents = true;
+
+        // FileSystemWatcher misses some overwrite patterns (especially on macOS). Poll mtime/size as a backstop.
+        _filePollTimer = new Timer(
+            _ =>
+            {
+                try
+                {
+                    if (!File.Exists(full))
+                    {
+                        return;
+                    }
+
+                    var info = new FileInfo(full);
+                    if (info.LastWriteTimeUtc == _lastAppliedWriteUtc && info.Length == _lastAppliedLength)
+                    {
+                        return;
+                    }
+
+                    ScheduleFileApply(context, full);
+                }
+                catch (IOException)
+                {
+                    // Mid-write; the next tick retries.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Mid-write; the next tick retries.
+                }
+            },
+            null,
+            dueTime: 500,
+            period: 500);
+    }
+
+    private void ScheduleFileApply(PlusActivationContext context, string full)
+    {
+        var previous = Interlocked.CompareExchange(ref _fileWatchState, 1, 0);
+        if (previous == 0)
+        {
+            QueueDebouncedFileApply(context, full);
+            return;
+        }
+
+        if (previous == 1)
+        {
+            Interlocked.CompareExchange(ref _fileWatchState, 2, 1);
+        }
     }
 
     private void QueueDebouncedFileApply(PlusActivationContext context, string full)
@@ -157,7 +194,24 @@ public sealed class ServiceDiscovery : IDisposable
                 while (!_cts.IsCancellationRequested)
                 {
                     await Task.Delay(200, _cts.Token);
-                    await ApplyFileAsync(context, full, _cts.Token);
+                    if (!await ApplyFileAsync(context, full, _cts.Token))
+                    {
+                        // Truncate-then-write often yields one empty read before the bytes land.
+                        for (var retry = 0; retry < 5 && !_cts.IsCancellationRequested; retry++)
+                        {
+                            await Task.Delay(100, _cts.Token);
+                            if (await ApplyFileAsync(context, full, _cts.Token))
+                            {
+                                StampAppliedFile(full);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        StampAppliedFile(full);
+                    }
+
                     if (Interlocked.Exchange(ref _fileWatchState, 0) != 2)
                     {
                         return;
@@ -176,6 +230,24 @@ public sealed class ServiceDiscovery : IDisposable
                 Interlocked.Exchange(ref _fileWatchState, 0);
             }
         }, _cts.Token);
+    }
+
+    private void StampAppliedFile(string full)
+    {
+        try
+        {
+            var info = new FileInfo(full);
+            _lastAppliedWriteUtc = info.LastWriteTimeUtc;
+            _lastAppliedLength = info.Length;
+        }
+        catch (IOException)
+        {
+            // Leave prior stamp so the poll retries.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Leave prior stamp so the poll retries.
+        }
     }
 
     private void StartDnsLoop(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -501,18 +573,45 @@ public sealed class ServiceDiscovery : IDisposable
         return true;
     }
 
-    internal static async Task ApplyFileAsync(PlusActivationContext context, string path, CancellationToken cancellationToken)
+    /// <returns><see langword="true"/> when clusters were parsed and applied; <see langword="false"/> on empty/invalid JSON.</returns>
+    internal static async Task<bool> ApplyFileAsync(PlusActivationContext context, string path, CancellationToken cancellationToken)
     {
-        var json = await File.ReadAllTextAsync(path, cancellationToken);
-        var clusters = ParseClustersDocument(json);
+        string json;
+        try
+        {
+            json = await File.ReadAllTextAsync(path, cancellationToken);
+        }
+        catch (IOException)
+        {
+            // Truncate/replace in flight.
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return false;
+        }
+
+        List<ClusterConfig>? clusters;
+        try
+        {
+            clusters = ParseClustersDocument(json);
+        }
+        catch (JsonException)
+        {
+            // Partial write between truncate and flush.
+            return false;
+        }
+
         if (clusters is null || context.ClusterManager is null)
         {
-            return;
+            return false;
         }
 
         await context.ClusterManager.ApplyAsync(clusters, cancellationToken);
         context.RefreshReverseProxy?.Invoke();
         PlusLog.Info(context, $"Plus Discovery: applied {clusters.Count} cluster(s) from {path}");
+        return true;
     }
 
     internal static async Task ApplyDnsAsync(
@@ -1265,6 +1364,7 @@ public sealed class ServiceDiscovery : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
+        _filePollTimer?.Dispose();
         _watcher?.Dispose();
         _cts.Dispose();
     }
