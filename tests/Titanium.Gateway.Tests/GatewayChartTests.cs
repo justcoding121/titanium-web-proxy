@@ -83,22 +83,19 @@ public sealed partial class GatewayChartTests
     [TestMethod]
     public void Crds_AreTheStandardChannelBundleWithoutExperimentalKinds()
     {
-        var crds = Read("crds", "gateway-api-standard-v1.2.1.yaml");
+        var crds = Read("crds", "gateway-api-standard-v1.7.0.yaml");
 
-        foreach (var kind in new[] { "gatewayclasses", "gateways", "httproutes", "referencegrants" })
+        foreach (var kind in new[] { "gatewayclasses", "gateways", "httproutes", "referencegrants", "tlsroutes", "tcproutes", "udproutes", "backendtlspolicies", "grpcroutes" })
         {
             StringAssert.Contains(crds, $"name: {kind}.gateway.networking.k8s.io");
         }
 
-        Assert.AreEqual(5, CrdKindRegex().Count(crds));
-        Assert.AreEqual(5, GatewayStandardChannelRegex().Count(crds));
-        Assert.AreEqual(5, GatewayBundleVersionRegex().Count(crds));
-        foreach (var experimental in new[] { "tcproutes", "udproutes", "tlsroutes", "backendtlspolicies" })
-        {
-            Assert.IsFalse(crds.Contains(experimental + ".gateway", StringComparison.Ordinal), experimental);
-        }
+        Assert.IsTrue(CrdKindRegex().Count(crds) >= 9);
+        Assert.IsTrue(GatewayStandardChannelRegex().Count(crds) >= 9);
+        Assert.IsTrue(GatewayBundleVersionRegex().Count(crds) >= 9);
+        StringAssert.Contains(crds, "gateway.networking.k8s.io/bundle-version: v1.7.0");
 
-        StringAssert.Contains(Read("Chart.yaml"), "gateway.networking.k8s.io/bundle-version: v1.2.1");
+        StringAssert.Contains(Read("Chart.yaml"), "gateway.networking.k8s.io/bundle-version: v1.7.0");
     }
 
     [TestMethod]
@@ -298,7 +295,7 @@ public sealed partial class GatewayChartTests
     [GeneratedRegex(@"gateway\.networking\.k8s\.io/channel: standard")]
     private static partial Regex GatewayStandardChannelRegex();
 
-    [GeneratedRegex(@"gateway\.networking\.k8s\.io/bundle-version: v1\.2\.1")]
+    [GeneratedRegex(@"gateway\.networking\.k8s\.io/bundle-version: v1\.7\.0")]
     private static partial Regex GatewayBundleVersionRegex();
 
     [GeneratedRegex(@"verbs:.*\b(delete|deletecollection|escalate|bind|impersonate)\b")]

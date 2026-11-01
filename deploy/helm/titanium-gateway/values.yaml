@@ -2,7 +2,7 @@
 # configures. The controller renders Gateway, HTTPRoute and ReferenceGrant resources into the data plane's twp.yaml
 # (a ConfigMap) and certificates (a Secret), and writes status back to the Gateway API resources.
 #
-# The standard-channel Gateway API CRDs (v1.2.1) are in crds/. Helm installs them with the first `helm install` and does
+# The standard-channel Gateway API CRDs (v1.7.0) are in crds/. Helm installs them with the first `helm install` and does
 # not upgrade them: to move to another Gateway API release, apply that release's CRDs yourself (see the docs).
 
 nameOverride: ""
@@ -21,6 +21,10 @@ ingressClass:
   create: true
   name: titanium
   default: false
+
+# When true, the controller watches ConfigMaps for BackendTLSPolicy CA bundles (extra RBAC).
+backendTLSPolicy:
+  enabled: false
 
 controller:
   replicaCount: 2
@@ -111,6 +115,10 @@ dataPlane:
       servicePort: 443
       containerPort: 8443
       protocol: TCP
+    # - name: dns-udp
+    #   servicePort: 53
+    #   containerPort: 5353
+    #   protocol: UDP
 
   # The Service Gateway.status.addresses is read from. Use type LoadBalancer for an external address.
   service:

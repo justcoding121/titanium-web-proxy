@@ -14,5 +14,5 @@ keywords:
   - titanium
 annotations:
   # The Gateway API standard-channel CRDs in crds/ are this release, unmodified.
-  gateway.networking.k8s.io/bundle-version: v1.2.1
+  gateway.networking.k8s.io/bundle-version: v1.7.0
   gateway.networking.k8s.io/channel: standard
