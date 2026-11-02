@@ -688,11 +688,11 @@ internal static class RunCommand
         Func<PluginHost?>? getPlugins = null,
         Action<PluginHost>? setPlugins = null,
         List<string>? scriptPipeline = null,
-        CancellationToken stoppingToken = default,
         ConfigOverlayStore? overlayStore = null,
         CliConfigEditor? configEditor = null,
         SemaphoreSlim? configEditGate = null,
-        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>? runningListeners = null)
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>? runningListeners = null,
+        CancellationToken stoppingToken = default)
     {
         if (configEditGate is not null)
         {

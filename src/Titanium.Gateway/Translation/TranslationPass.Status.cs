@@ -257,7 +257,7 @@ internal sealed partial class TranslationPass
         IReadOnlyList<ParentOutcome> parentOutcomes,
         string? refsReason,
         string? refsMessage,
-        IReadOnlyList<string> unsupported)
+        List<string> unsupported)
     {
         var generation = metadata.Generation;
         var parents = new List<RouteParentStatus>();

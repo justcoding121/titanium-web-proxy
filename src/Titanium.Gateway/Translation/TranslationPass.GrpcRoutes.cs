@@ -99,26 +99,7 @@ internal sealed partial class TranslationPass
 
         foreach (var candidate in candidates)
         {
-            if (!NamespaceAllowedForRoute(route.Metadata.Namespace ?? "default", candidate))
-            {
-                continue;
-            }
-
-            if (!RouteAllowed(candidate, GatewayApiNames.GrpcRouteKind))
-            {
-                continue;
-            }
-
-            var hosts = EffectiveHostnames(route.Spec.Hostnames, candidate.Listener.Hostname);
-            if (hosts.Count == 0)
-            {
-                continue;
-            }
-
-            foreach (var host in hosts)
-            {
-                parent.Attached.Add((candidate, host));
-            }
+            AttachGrpcCandidate(route, parent, candidate);
         }
 
         if (parent.Attached.Count > 0)
@@ -131,6 +112,20 @@ internal sealed partial class TranslationPass
         {
             parent.Reason = "NotAllowedByListeners";
             parent.Message = "No programmable listener matches the parentRef.";
+        }
+    }
+
+    private void AttachGrpcCandidate(GrpcRoute route, ParentOutcome parent, ListenerOutcome candidate)
+    {
+        if (!NamespaceAllowedForRoute(route.Metadata.Namespace ?? "default", candidate) ||
+            !RouteAllowed(candidate, GatewayApiNames.GrpcRouteKind))
+        {
+            return;
+        }
+
+        foreach (var host in EffectiveHostnames(route.Spec.Hostnames, candidate.Listener.Hostname))
+        {
+            parent.Attached.Add((candidate, host));
         }
     }
 

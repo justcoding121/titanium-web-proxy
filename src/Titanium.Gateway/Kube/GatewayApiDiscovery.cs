@@ -62,6 +62,23 @@ public sealed class GatewayApiDiscovery
             return GatewayApiVersions.Absent;
         }
 
+        var served = await CollectServedVersionsAsync(versions, cancellationToken).ConfigureAwait(false);
+
+        string? Pick(string plural) =>
+            ServedVersionPicker.Pick(plural, served.TryGetValue(plural, out var set) ? set : []);
+
+        return new GatewayApiVersions(
+            Pick("tlsroutes"),
+            Pick("tcproutes"),
+            Pick("udproutes"),
+            Pick("grpcroutes"),
+            Pick("backendtlspolicies"));
+    }
+
+    private async Task<Dictionary<string, HashSet<string>>> CollectServedVersionsAsync(
+        List<string> versions,
+        CancellationToken cancellationToken)
+    {
         var served = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var version in versions)
         {
@@ -95,14 +112,6 @@ public sealed class GatewayApiDiscovery
             }
         }
 
-        string? Pick(string plural) =>
-            ServedVersionPicker.Pick(plural, served.TryGetValue(plural, out var set) ? set : []);
-
-        return new GatewayApiVersions(
-            Pick("tlsroutes"),
-            Pick("tcproutes"),
-            Pick("udproutes"),
-            Pick("grpcroutes"),
-            Pick("backendtlspolicies"));
+        return served;
     }
 }
