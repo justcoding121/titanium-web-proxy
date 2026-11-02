@@ -248,18 +248,13 @@ public class CliPlusFeaturesE2ETests
         await harness.StartRunAsync(cfg, DevEnv());
         try
         {
-            using var handler = new HttpClientHandler
-            {
-                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
-                UseProxy = true,
-            };
-            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            using var http = DirectToListener(listen);
             using var direct = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             await WaitControlPlaneAsync(direct, control);
 
             Assert.AreEqual(
                 HttpStatusCode.Unauthorized,
-                (await http.GetAsync("http://example.invalid/nojwt")).StatusCode);
+                (await http.GetAsync($"http://127.0.0.1:{listen}/nojwt")).StatusCode);
 
             var token = CreateSignedJwt(rsa, DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(), authority, "api");
             // The first validation loads JWKS and fails closed if that fetch is not ready yet.
@@ -268,7 +263,7 @@ public class CliPlusFeaturesE2ETests
             var jwtDeadline = DateTime.UtcNow.AddSeconds(10);
             while (true)
             {
-                using var ok = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt");
+                using var ok = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/jwt");
                 ok.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
                 using var resp = await http.SendAsync(ok);
                 jwtStatus = resp.StatusCode;
@@ -283,7 +278,7 @@ public class CliPlusFeaturesE2ETests
 
             Assert.AreEqual(HttpStatusCode.OK, jwtStatus, jwtBody);
 
-            using (var bad = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt"))
+            using (var bad = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/jwt"))
             {
                 bad.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "not.a.jwt");
                 Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.SendAsync(bad)).StatusCode);
