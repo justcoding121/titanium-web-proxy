@@ -505,6 +505,13 @@ internal static class RunCommand
                         {
                             relay.BeginDrain();
                         }
+
+                        // With no pre-stop delay, stop admitting on the signal thread so a probe
+                        // that races DrainAsync is closed without a response (not fully proxied).
+                        if ((adminSetup?.PreStopDelaySeconds ?? 0) <= 0)
+                        {
+                            proxy.StopAcceptingNewConnections();
+                        }
                     },
                     extraWatchPaths: secretFiles,
                     loadedConfigHash: configHash,
