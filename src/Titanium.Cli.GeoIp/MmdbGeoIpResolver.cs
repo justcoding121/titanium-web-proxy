@@ -16,7 +16,15 @@ public sealed class MmdbGeoIpResolver : IGeoIpResolver, IDisposable
 
     public MmdbGeoIpResolver(string path)
     {
-        _reader = new Reader(path, FileAccessMode.MemoryMapped);
+        // Memory-mapped open fails on some valid test databases. A normal read still works.
+        try
+        {
+            _reader = new Reader(path, FileAccessMode.MemoryMapped);
+        }
+        catch (Exception ex) when (ex is InvalidDatabaseException or IOException or UnauthorizedAccessException)
+        {
+            _reader = new Reader(path);
+        }
     }
 
     public bool TryGetCountry(IPAddress address, out string countryIsoCode)

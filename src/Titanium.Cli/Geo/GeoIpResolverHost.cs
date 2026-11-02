@@ -75,7 +75,11 @@ internal sealed class GeoIpResolverHost : IDisposable
         {
             if (startup)
             {
-                throw new InvalidOperationException($"GeoIP database is corrupt or unreadable: {databasePath}", ex);
+                var detail = ex;
+                while (detail.InnerException is not null)
+                    detail = detail.InnerException;
+                throw new InvalidOperationException(
+                    $"GeoIP database is corrupt or unreadable: {databasePath} ({detail.GetType().Name}: {detail.Message})", ex);
             }
 
             warn?.Invoke($"GeoIP reload failed for '{databasePath}' ({ex.Message}). Keeping the previous resolver.");

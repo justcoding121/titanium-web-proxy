@@ -13,6 +13,16 @@ namespace Titanium.E2E.Tests.UiPlusDashboard;
 [TestClass]
 public class CliHostedPlusDashboardPlaywrightTests : PageTest
 {
+    /// <summary>
+    ///     The dashboard CSP is <c>default-src 'self'</c>. Axe is injected by the test, so this
+    ///     context bypasses that policy. The product response is unchanged.
+    /// </summary>
+    public override BrowserNewContextOptions ContextOptions() =>
+        new()
+        {
+            BypassCSP = true,
+        };
+
     private const string Secret = "pw-cli-dashboard-secret";
     private const string ViewerSecret = "pw-cli-dashboard-viewer-secret";
 
