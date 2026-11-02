@@ -149,6 +149,7 @@ public class SecretReferenceValidationTests
     {
         var plus = new PlusConfig
         {
+            Enabled = true,
             Options = new Dictionary<string, string> { ["cache.enable"] = "true", ["cache.enableEnv"] = "x" },
         };
 

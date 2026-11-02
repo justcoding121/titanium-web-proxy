@@ -32,7 +32,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 | Capability | Status | Config key | Notes | Docs |
 |------------|--------|------------|-------|------|
 | Passive ejection | supported | `clusters[].healthCheck.passive` | Treats 502, 503, and 504 as failures by default, caps the share ejected, and sends one trial after reactivateAfterSeconds. | [Configuration](/docs/configuration#routes-clusters) |
-| Active probes | supported | `clusters[].healthCheck.active` | Probes run on a background timer and only restore destinations that a probe marked unhealthy. | [Configuration](/docs/configuration#routes-clusters) |
+| Active probes | supported | `clusters[].healthCheck.active` | Requires plus.enabled. Prefer plus.options resilience.activeHealth for the full Plus resilience path; titanium test rejects healthCheck.active without Plus. | [Plus](/docs/plus#resilience) |
 | Probe endpoints for orchestrators | supported | `server.admin` | /healthz and /readyz on a port no proxy listener shares. Readiness turns 503 on SIGTERM before the drain starts. | [Admin listener](/docs/configuration#admin-listener-server-admin) |
 | Drain and maintenance states | supported | `plus.controlPlane` | An operator drains a destination from the dashboard or the control-plane API (Plus). | [Plus](/docs/plus#sign-in-and-roles) |
 
@@ -60,7 +60,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 |------------|--------|------------|-------|------|
 | Request rate limit per key | supported | `policies[].key`, `policies[].algorithm`, `policies[].limit`, `policies[].windowSeconds`, `policies[].burst` | Fixed window or token bucket, keyed by client, forwarded client, header, cookie, or route. Answers 429 with Retry-After. | [Configuration](/docs/configuration#routes-clusters) |
 | Concurrent connection caps | supported | `listeners[].maxConcurrentClients`, `server.limits.maxConcurrentClients` | Admission control per listener or for the whole server. | [Limits](/docs/limits#reference) |
-| Rate limit shared across instances | supported | `policies[].scope`, `policies[].fleetFailMode`, `policies[].localShare`, `plus.options: state.mode`, `plus.options: state.redis` | Leased fleet token bucket over Redis; the request path stays sync. Default scope node is unchanged. | [Configuration](/docs/configuration#fleet-rate-limit) |
+| Rate limit shared across instances | supported | `policies[].scope`, `policies[].fleetFailMode`, `policies[].localShare`, `plus.options: state.mode`, `plus.options: state.redis` | Requires plus.enabled. Leased fleet token bucket over Redis; the request path stays sync. Default scope node is unchanged. | [Configuration](/docs/configuration#fleet-rate-limit) |
 
 ## Auth methods
 
@@ -96,7 +96,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 
 | Capability | Status | Config key | Notes | Docs |
 |------------|--------|------------|-------|------|
-| Shared response cache | supported | `plus.options: cache.enable`, `plus.options: cache.maxBytes` | In-memory RFC 9111 subset with Vary, revalidation, size limits, and request collapsing (Plus). | [Response cache](/docs/configuration#response-cache) |
+| Shared response cache | supported | `plus.options: cache.enable`, `plus.options: cache.maxBytes` | Requires plus.enabled with cache.enable. In-memory RFC 9111 subset with Vary, revalidation, size limits, and request collapsing. | [Response cache](/docs/configuration#response-cache) |
 | Cache purge | supported | `plus.controlPlane` | By exact key or prefix through the control plane at /v1/cache/purge (Plus). | [Response cache](/docs/configuration#response-cache) |
 
 ## Compression
@@ -112,7 +112,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 |------------|--------|------------|-------|------|
 | Signature screening with detect mode and anomaly scoring | supported | `policies[].mode`, `policies[].paranoiaLevel`, `policies[].blockThreshold` | Built-in rule pack, per-route override, and an operator deny-list (Plus). | [Request screening](/docs/configuration#request-screening-route-policy-waf-plus) |
 | Custom rules | supported | `plus.options: waf.rulesFile` | Your own YAML rules next to the built-in pack. | [Plus](/docs/plus#custom-rules-waf-rulesfile) |
-| Geo country allow and deny | supported | `policies[].kind`, `policies[].allow`, `policies[].deny`, `server.geoIpDatabasePath` | Country codes from an operator-supplied MaxMind DB. Unknown countries fail closed on allow lists and pass on deny-only lists. | [Geo route policy](/docs/configuration#geo-route-policy-geo) |
+| Geo country allow and deny | supported | `policies[].kind`, `policies[].allow`, `policies[].deny`, `server.geoIpDatabasePath` | Requires plus.enabled. Country codes from an operator-supplied MaxMind DB. Unknown countries fail closed on allow lists and pass on deny-only lists. | [Geo route policy](/docs/configuration#geo-route-policy-geo) |
 
 ## Observability
 
@@ -172,7 +172,7 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 | Embedding the engine in .NET | supported | `ProxyServer events` | The same engine with event handlers, synthetic responses, and stream hooks. | [Library](/docs/library) |
 | Programmatic route and cluster swap | supported | `PUT /v1/snapshot` | Plus control-plane call. File reload needs no Plus. | [Graceful reload](/docs/configuration#graceful-reload) |
 | Managed fleet control plane | supported | `plus.options: manager.url`, `titanium-manager` | titanium-manager publishes YAML revisions; Plus agents long-poll, ack or nack, and keep a last-known-good file. Not an xDS client. | [Manager](/docs/manager) |
-| xDS control plane | supported | `xds.server`, `xds.node.id`, `xds.failOpen`, `server.reloadListeners` | Client only; no server. Listeners, routes, clusters, endpoints, and secrets are dynamic via ADS; see the supported-field table. | [xDS](/docs/xds) |
+| xDS control plane | supported | `xds.server`, `xds.node.id`, `xds.failOpen`, `server.reloadListeners` | Requires plus.enabled and a loaded Plus module. Client only; no server. Listeners, routes, clusters, endpoints, and secrets are dynamic via ADS; see the supported-field table. | [xDS](/docs/xds) |
 | Lua scripting | supported | `plugins[].kind`, `plugins[].file`, `plugins[].settings`, `plugins[].bodyMode`, `routes[].middleware` | Lua 5.4 in sandboxed states, named in a route middleware list. A file runs the request-headers and buffered request-body phases; every phase runs when a .NET host sets the script pipeline. Needs the lua54 native. | [Scripting](/docs/scripting#lua-plugins) |
 | Lua sandbox, limits, and failure mode | supported | `plugins[].failMode`, `plugins[].timeoutMs`, `plugins[].limits.memoryMb`, `plugins[].limits.maxInstructions`, `plugins[].limits.epochDeadlineMs`, `plugins[].limits.poolSize` | No io, require, load, or bytecode. Memory, instruction, and CPU-time limits hold inside the engine even when the script catches errors. A failed call answers 503, or passes the request with failMode open. | [Scripting](/docs/scripting#lua-limits) |
 | Lua libraries, shared dictionaries, and JWT verification | supported | `plugins[].settings`, `plugins[].limits.sharedDataBytes` | json, base64, hex, url, crypto, linear-time regex, cidr, uuid, timers, metrics, process-wide shared dictionaries with TTL and eviction, and JWKS-based jwt.verify. | [Scripting](/docs/scripting#libraries) |

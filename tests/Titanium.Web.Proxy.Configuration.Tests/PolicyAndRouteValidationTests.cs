@@ -262,6 +262,7 @@ public class PolicyAndRouteValidationTests
     {
         var config = new TwpConfig
         {
+            Plus = new PlusConfig { Enabled = true },
             Clusters = [Cluster("c")],
             Policies =
             [
@@ -276,6 +277,21 @@ public class PolicyAndRouteValidationTests
         };
 
         Assert.AreEqual(string.Empty, Errors(config));
+    }
+
+    [TestMethod]
+    public void RateLimitFleet_WithoutPlus_IsRejected()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "p6", Kind = "rateLimit", Scope = "fleet", FleetFailMode = "local", LocalShare = 0.5 },
+            ],
+        };
+
+        StringAssert.Contains(Errors(config), "scope fleet needs plus.enabled: true");
     }
 
     [TestMethod]

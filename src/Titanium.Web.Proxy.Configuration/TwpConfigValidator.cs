@@ -47,7 +47,11 @@ public static class TwpConfigValidator
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateOidcNeedsPlus(config, errors);
         ValidateWafNeedsPlus(config, errors);
+        ValidateGeoNeedsPlus(config, errors);
         ValidateGeoNeedsDatabase(config, errors);
+        ValidateFleetNeedsPlus(config, errors);
+        ValidateCacheNeedsPlus(config, errors);
+        ValidateActiveHealthNeedsPlus(config, errors);
         var pluginNames = ValidatePlugins(config.Plugins, errors);
         ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners ?? [], clusterIds, errors);
@@ -57,6 +61,7 @@ public static class TwpConfigValidator
         ValidateTcpTlsListeners(config, errors);
         ValidateOverload(config.Server?.Overload, errors);
         ValidateHotRestart(config, errors);
+        ValidateXdsNeedsPlus(config, errors);
         ValidateXds(config.Xds, errors);
         ValidatePlusSecrets(config.Plus, errors);
         return errors;
@@ -147,6 +152,16 @@ public static class TwpConfigValidator
     }
 
     /// <summary>Checks <c>xds</c>: a control-plane address and a sane initial-fetch timeout.</summary>
+    private static void ValidateXdsNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Xds is null || config.Plus?.Enabled == true)
+        {
+            return;
+        }
+
+        errors.Add("xds needs plus.enabled: true. The ADS client is part of Titanium Plus.");
+    }
+
     private static void ValidateXds(XdsConfig? xds, List<string> errors)
     {
         if (xds is null)
@@ -1031,6 +1046,35 @@ public static class TwpConfigValidator
         "Transfer-Encoding", "Upgrade", "Content-Length", "Host", "Cookie", "Set-Cookie", "Authorization",
     };
 
+    /// <summary>GeoIP lookup and <c>geo</c> policies are Plus. Without <c>plus.enabled</c> the MMDB never loads.</summary>
+    private static void ValidateGeoNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Plus?.Enabled == true)
+        {
+            return;
+        }
+
+        var hasGeoPolicy = config.Policies is { Count: > 0 } policies
+            && policies.Any(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal));
+        var hasDatabasePath = !string.IsNullOrWhiteSpace(config.Server?.GeoIpDatabasePath);
+        if (!hasGeoPolicy && !hasDatabasePath)
+        {
+            return;
+        }
+
+        if (hasGeoPolicy)
+        {
+            foreach (var policy in config.Policies!.Where(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal)))
+            {
+                errors.Add($"Policy '{policy.Name}' (geo) needs plus.enabled: true. Country lookup is part of Titanium Plus.");
+            }
+        }
+        else
+        {
+            errors.Add("server.geoIpDatabasePath needs plus.enabled: true. Country lookup is part of Titanium Plus.");
+        }
+    }
+
     /// <summary>The login is enforced by the Plus module. Without it the policy would refuse every request.</summary>
     private static void ValidateGeoNeedsDatabase(TwpConfig config, List<string> errors)
     {
@@ -1047,6 +1091,58 @@ public static class TwpConfigValidator
         if (string.IsNullOrWhiteSpace(config.Server?.GeoIpDatabasePath))
         {
             errors.Add("A geo policy requires server.geoIpDatabasePath.");
+        }
+    }
+
+    /// <summary>Fleet rate-limit leases need the Plus Redis store; without Plus the scope would silently fall back.</summary>
+    private static void ValidateFleetNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Plus?.Enabled == true || config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        foreach (var policy in policies.Where(static policy =>
+                     string.Equals(policy.Kind, "rateLimit", StringComparison.Ordinal)
+                     && string.Equals(policy.Scope, "fleet", StringComparison.OrdinalIgnoreCase)))
+        {
+            errors.Add($"Policy '{policy.Name}' (rateLimit) scope fleet needs plus.enabled: true. Fleet leases are part of Titanium Plus.");
+        }
+    }
+
+    /// <summary>Response cache is a Plus option; <c>cache.enable</c> without <c>plus.enabled</c> must not pass <c>titanium test</c>.</summary>
+    private static void ValidateCacheNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Plus?.Enabled == true || config.Plus?.Options is not { Count: > 0 } options)
+        {
+            return;
+        }
+
+        if (!options.Any(static pair =>
+                string.Equals(pair.Key, "cache.enable", StringComparison.OrdinalIgnoreCase)
+                && (string.Equals(pair.Value, "true", StringComparison.OrdinalIgnoreCase) || pair.Value == "1")))
+        {
+            return;
+        }
+
+        errors.Add("plus.options cache.enable needs plus.enabled: true. The response cache is part of Titanium Plus.");
+    }
+
+    /// <summary>
+    ///     Active cluster probes are a Plus resilience feature. Passive <c>healthCheck.active</c> without Plus;
+    ///     use <c>plus.options resilience.activeHealth</c> when Plus is on for the full resilience path.
+    /// </summary>
+    private static void ValidateActiveHealthNeedsPlus(TwpConfig config, List<string> errors)
+    {
+        if (config.Plus?.Enabled == true || config.Clusters is not { Count: > 0 } clusters)
+        {
+            return;
+        }
+
+        foreach (var cluster in clusters.Where(static cluster => cluster.HealthCheck?.Active is { Enabled: true }))
+        {
+            errors.Add(
+                $"Cluster '{cluster.Id}' healthCheck.active needs plus.enabled: true. Active probes are part of Titanium Plus (see plus.options resilience.activeHealth).");
         }
     }
 

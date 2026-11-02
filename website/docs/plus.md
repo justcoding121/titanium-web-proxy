@@ -17,10 +17,12 @@ Optional ops plugin for the CLI (and Inspector panels). For operators who want a
 | Managed fleet | Optional agent that long-polls [titanium-manager](/docs/manager) (`manager.url`); see [Managed fleet agent](#managed-fleet-agent) |
 | Operations | Drain / healthy / maintenance destination states; dashboard reload of the local file |
 | Discovery | File watch, DNS poll; Consul blocking queries; Kubernetes EndpointSlice list-then-watch with backoff |
-| State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`); fleet `rateLimit` leases over Redis ([Configuration](/docs/configuration#fleet-rate-limit)) |
-| Resilience | Active HTTP/TCP health probes, circuit outlier ejection, bounded idempotent connection retries |
+| State | Fixed-window per-IP rate limit (`state.mode=memory` or `state.redis`); fleet `rateLimit` leases over Redis (`scope: fleet` needs `plus.enabled`; [Configuration](/docs/configuration#fleet-rate-limit)) |
+| Resilience | Active HTTP/TCP health probes, circuit outlier ejection, bounded idempotent connection retries — see [Resilience](#resilience) |
 | CORS | Opt-in preflight + `Access-Control-*` response headers |
-| Cache | In-memory RFC 9111 response cache with Vary, revalidation, size limits and request collapsing (`cache.enable`; see [Configuration](/docs/configuration#response-cache)) |
+| Cache | In-memory RFC 9111 response cache with Vary, revalidation, size limits and request collapsing (`cache.enable` needs `plus.enabled`; see [Configuration](/docs/configuration#response-cache)) |
+| GeoIP | Country allow/deny route policies from an operator-supplied MaxMind DB (`server.geoIpDatabasePath`; needs `plus.enabled`) |
+| xDS | ADS dataplane client for listeners, routes, clusters, endpoints, and secrets ([guide](/docs/xds); needs `plus.enabled`) |
 | gRPC-JSON transcoding | REST/JSON ↔ gRPC (unary + multi-frame streaming; optional gzip) via FileDescriptorSet + `google.api.http` ([guide](/docs/grpc-json-transcoding)) |
 
 File-based route/cluster reload (`titanium reload` / SIGHUP / `run --watch`) does **not** require Plus — use the control plane when you want programmatic snapshot updates or discovery watches.
@@ -473,6 +475,12 @@ String values under `plus.options` (examples):
 | `grpc.transcode.preserveProtoFieldNames` | Use proto field names in JSON (default false) |
 | `grpc.transcode.alwaysPrintPrimitiveFields` | Always emit primitive defaults in JSON (default false) |
 | `grpc.transcode.compression` | `true` or `gzip` to gzip framed payloads |
+
+## Resilience {#resilience}
+
+Active cluster probes, circuit ejection, and bounded connection retries are Plus. Set `plus.enabled: true` and prefer `plus.options resilience.activeHealth: "true"` for the full Plus resilience controller. `clusters[].healthCheck.active` is the same operator-facing feature at config time — `titanium test` rejects it without Plus. Passive health (`healthCheck.passive`) stays in the MIT CLI.
+
+Probe, circuit, and retry knobs are listed under [`plus.options` keys](#plusoptions-keys-reference).
 
 ## Managed fleet agent {#managed-fleet-agent}
 
