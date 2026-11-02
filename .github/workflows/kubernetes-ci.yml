@@ -280,11 +280,13 @@ jobs:
       - name: kubeconform
         run: |
           set -euo pipefail
-          for values in "" "-f deploy/helm/titanium/ci/full-values.yaml" "-f deploy/helm/titanium/ci/smoke-values.yaml"; do
-            helm template rel deploy/helm/titanium $values \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
-                  -schema-location default \
-                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          for version in 1.27.0 1.31.0; do
+            for values in "" "-f deploy/helm/titanium/ci/full-values.yaml" "-f deploy/helm/titanium/ci/smoke-values.yaml"; do
+              helm template rel deploy/helm/titanium $values \
+                | kubeconform -strict -summary -kubernetes-version "$version" \
+                    -schema-location default \
+                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+            done
           done
 
       # Renders the chart and loads the rendered twp.yaml with the CLI's own loader and validator.
@@ -302,11 +304,13 @@ jobs:
       - name: titanium-gateway chart kubeconform
         run: |
           set -euo pipefail
-          for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
-            helm template rel deploy/helm/titanium-gateway --namespace gateway-system  \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
-                  -schema-location default \
-                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          for version in 1.27.0 1.31.0; do
+            for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
+              helm template rel deploy/helm/titanium-gateway --namespace gateway-system $values \
+                | kubeconform -strict -summary -kubernetes-version "$version" \
+                    -schema-location default \
+                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+            done
           done
 
       - name: titanium-gateway chart tests
@@ -321,10 +325,12 @@ jobs:
       - name: titanium-manager chart kubeconform
         run: |
           set -euo pipefail
-          for values in "" "-f deploy/helm/titanium-manager/ci/smoke-values.yaml"; do
-            helm template rel deploy/helm/titanium-manager $values \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
-                  -schema-location default -
+          for version in 1.27.0 1.31.0; do
+            for values in "" "-f deploy/helm/titanium-manager/ci/smoke-values.yaml"; do
+              helm template rel deploy/helm/titanium-manager $values \
+                | kubeconform -strict -summary -kubernetes-version "$version" \
+                    -schema-location default -
+            done
           done
 
       - name: titanium-manager chart tests

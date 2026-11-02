@@ -30,6 +30,26 @@ public class HelmChartTests
     }
 
     [TestMethod]
+    public void ValuesSchema_CoversTheThreeCharts()
+    {
+        AssertSchema("titanium", "replicaCount", minimum: 1, maximum: null);
+        AssertSchema("titanium-manager", "replicaCount", minimum: 1, maximum: 1);
+        var gateway = File.ReadAllText(Path.Combine(RepoRoot, "deploy", "helm", "titanium-gateway", "values.schema.json"));
+        using var doc = System.Text.Json.JsonDocument.Parse(gateway);
+        Assert.IsTrue(doc.RootElement.GetProperty("properties").TryGetProperty("controller", out _));
+    }
+
+    private static void AssertSchema(string chart, string property, int minimum, int? maximum)
+    {
+        var path = Path.Combine(RepoRoot, "deploy", "helm", chart, "values.schema.json");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+        var node = doc.RootElement.GetProperty("properties").GetProperty(property);
+        Assert.AreEqual(minimum, node.GetProperty("minimum").GetInt32());
+        if (maximum is int max)
+            Assert.AreEqual(max, node.GetProperty("maximum").GetInt32());
+    }
+
+    [TestMethod]
     public void Dockerfile_KeepsItsHardeningAndContract()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "packaging", "docker", "Dockerfile"));

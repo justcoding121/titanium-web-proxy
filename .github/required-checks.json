@@ -1,0 +1,5 @@
+{
+  "branches": ["develop", "beta", "stable"],
+  "checks": ["build", "cli-e2e", "ui-portable", "redis-fleet"],
+  "note": "Branch protection is not changed by CI. A maintainer turns these on and disables admin bypass. This file is what the required-checks workflow compares."
+}

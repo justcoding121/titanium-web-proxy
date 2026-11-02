@@ -139,6 +139,28 @@ public class ParserCorpusRunnerTests
     }
 
     [TestMethod]
+    [TestCategory("Fuzz-Nightly")]
+    public void Http1Corpus_ExtraSeed_MutationsNeverCrash()
+    {
+        var failures = new List<string>();
+        var random = new Random(20261102);
+        var executed = 0;
+        foreach (var seed in FuzzCorpus.Load("http1-request", ".case"))
+        {
+            foreach (var input in Mutations(seed.Bytes, random))
+            {
+                executed++;
+                var outcome = ParserFuzzTarget.ParseHttp1Request(input);
+                if (outcome.Violations.Count > 0)
+                    failures.Add($"{seed.Name}: {string.Join("; ", outcome.Violations)}");
+            }
+        }
+
+        Assert.IsTrue(executed > 2000, $"nightly mutation pass ran only {executed} inputs");
+        Assert.AreEqual(0, failures.Count, string.Join(Environment.NewLine, failures.Take(MaxReportedFailures)));
+    }
+
+    [TestMethod]
     public void EntryPoints_AcceptWellFormedInputAndSwallowDocumentedRejections()
     {
         ParserFuzzTarget.Http1Request(Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: a\r\n\r\n"));
