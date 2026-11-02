@@ -1,0 +1,535 @@
+---
+# Source: titanium-gateway/templates/controller-deployment.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium-gateway
+      app.kubernetes.io/instance: rel
+      app.kubernetes.io/component: controller
+---
+# Source: titanium-gateway/templates/dataplane.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rel-titanium-gateway-data
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium-gateway
+      app.kubernetes.io/instance: rel
+      app.kubernetes.io/component: data-plane
+---
+# Source: titanium-gateway/templates/rbac.yaml
+# The controller's service account. It reads the cluster, writes status on Gateway API resources, and writes only the
+# objects the data plane reads (named below) in this release's namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: controller
+---
+# Source: titanium-gateway/templates/rbac.yaml
+# The data plane never talks to the Kubernetes API.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rel-titanium-gateway-data
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: data-plane
+automountServiceAccountToken: false
+---
+# Source: titanium-gateway/templates/bootstrap.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rel-titanium-gateway-data-tls
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: data-plane
+  annotations:
+    helm.sh/resource-policy: keep
+type: Opaque
+---
+# Source: titanium-gateway/templates/bootstrap.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rel-titanium-gateway-admin
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+data:
+  admin-token: "MEpZajJRMXNMNmo0ckRhTzV5TnhyMWtQekFOdmkzaTc3RnVkOEozVg=="
+---
+# Source: titanium-gateway/templates/bootstrap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-titanium-gateway-data
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: data-plane
+  annotations:
+    helm.sh/resource-policy: keep
+data:
+  twp.yaml: |
+    {"schemaVersion":"7.1","listeners":[],"routes":[{"id":"titanium-gateway-no-match","clusterId":"titanium-gateway-none","match":{"path":"/","pathKind":"prefix","pathCaseSensitive":true},"order":1,"directResponse":{"status":404},"grpcWeb":false}],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5}}}
+---
+# Source: titanium-gateway/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tlsroutes", "tcproutes", "udproutes", "backendtlspolicies", "referencegrants"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses/status", "gateways/status", "httproutes/status", "grpcroutes/status", "tlsroutes/status", "tcproutes/status", "udproutes/status", "backendtlspolicies/status"]
+    verbs: ["get", "patch", "update"]
+  # Ingress: the classes and Ingresses to serve, and the address written to an Ingress's status.
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses/status"]
+    verbs: ["get", "patch", "update"]
+  # A rejected Ingress rule or an unknown annotation is reported as a Warning event on the Ingress.
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: [""]
+    resources: ["namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  # TLS Secrets referenced by Gateway listeners, in every namespace. Set controller.secretNamespaces to narrow this.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+# Source: titanium-gateway/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: rel-titanium-gateway-controller
+subjects:
+  - kind: ServiceAccount
+    name: rel-titanium-gateway-controller
+    namespace: default
+---
+# Source: titanium-gateway/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+rules:
+  # Leader election.
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    resourceNames: ["rel-titanium-gateway-controller"]
+    verbs: ["get", "update", "patch"]
+  # What the data plane reads. Both objects are created by this chart, so the controller only updates them.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["rel-titanium-gateway-data"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["rel-titanium-gateway-data-tls"]
+    verbs: ["get", "update", "patch"]
+  # A mounted ConfigMap reaches a pod after the next kubelet sync, up to a minute. The controller annotates the
+  # data-plane pods after a write so the kubelet refreshes the volume at once. Pod names are not known ahead.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["patch"]
+  # Listeners bind at start, so a change of listener set rolls the data plane.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["rel-titanium-gateway-data"]
+    verbs: ["get", "patch"]
+---
+# Source: titanium-gateway/templates/rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rel-titanium-gateway-controller
+subjects:
+  - kind: ServiceAccount
+    name: rel-titanium-gateway-controller
+    namespace: default
+---
+# Source: titanium-gateway/templates/dataplane.yaml
+# The Service the Gateway status address comes from, and the one whose ready EndpointSlice endpoints the controller polls.
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-titanium-gateway-data
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: data-plane
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: data-plane
+---
+# Source: titanium-gateway/templates/controller-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rel-titanium-gateway-controller
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium-gateway
+      app.kubernetes.io/instance: rel
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: titanium-gateway-0.1.0
+        app.kubernetes.io/part-of: titanium-gateway
+        app.kubernetes.io/version: "7.0.27"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: titanium-gateway
+        app.kubernetes.io/instance: rel
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: rel-titanium-gateway-controller
+      # Service-link variables (TITANIUM_GATEWAY_DATA_PORT and friends) would share the TITANIUM_GATEWAY_ option prefix.
+      enableServiceLinks: false
+      securityContext:
+        runAsGroup: 1654
+        runAsNonRoot: true
+        runAsUser: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: "ghcr.io/justcoding121/titanium-gateway:7.0.27"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          ports:
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: TITANIUM_GATEWAY_CONTROLLER_NAME
+              value: "titaniumproxy.com/gateway-controller"
+            - name: TITANIUM_GATEWAY_DATA_PLANE_NAMESPACE
+              value: "default"
+            - name: TITANIUM_GATEWAY_DATA_PLANE_SERVICE
+              value: "rel-titanium-gateway-data"
+            - name: TITANIUM_GATEWAY_DATA_PLANE_DEPLOYMENT
+              value: "rel-titanium-gateway-data"
+            - name: TITANIUM_GATEWAY_CONFIG_MAP
+              value: "rel-titanium-gateway-data"
+            - name: TITANIUM_GATEWAY_TLS_SECRET
+              value: "rel-titanium-gateway-data-tls"
+            - name: TITANIUM_GATEWAY_LEASE_NAME
+              value: "rel-titanium-gateway-controller"
+            - name: TITANIUM_GATEWAY_PORT_MAP
+              value: "80=8080,443=8443"
+            - name: TITANIUM_GATEWAY_ADMIN_PORT
+              value: "9901"
+            - name: TITANIUM_GATEWAY_HEALTH_PORT
+              value: "8081"
+            - name: TITANIUM_GATEWAY_INGRESS_CONTROLLER_NAME
+              value: "titanium.io/ingress-controller"
+            - name: TITANIUM_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rel-titanium-gateway-admin
+                  key: admin-token
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            limits:
+              memory: 384Mi
+            requests:
+              cpu: 50m
+              memory: 96Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 32Mi
+---
+# Source: titanium-gateway/templates/dataplane.yaml
+# The data plane: the Titanium proxy image running `titanium run --config /etc/titanium/twp.yaml --watch`. The controller
+# owns the ConfigMap and the Secret mounted here; the pods reload routes, clusters and certificates when they change.
+# Listeners are bound at start, so the controller rolls this Deployment when the set of listeners changes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rel-titanium-gateway-data
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: titanium-gateway
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/component: data-plane
+spec:
+  replicas: 2
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium-gateway
+      app.kubernetes.io/instance: rel
+      app.kubernetes.io/component: data-plane
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: titanium-gateway-0.1.0
+        app.kubernetes.io/part-of: titanium-gateway
+        app.kubernetes.io/version: "7.0.27"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: titanium-gateway
+        app.kubernetes.io/instance: rel
+        app.kubernetes.io/component: data-plane
+    spec:
+      serviceAccountName: rel-titanium-gateway-data
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        fsGroup: 1654
+        runAsGroup: 1654
+        runAsNonRoot: true
+        runAsUser: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: titanium
+          image: "ghcr.io/justcoding121/titanium-web-proxy:7.0.27"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          # The image ENTRYPOINT is `titanium run --config /etc/titanium/twp.yaml`; this adds --watch.
+          args:
+            - --watch
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: admin
+              containerPort: 9901
+              protocol: TCP
+          env:
+            - name: TITANIUM_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rel-titanium-gateway-admin
+                  key: admin-token
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: admin
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          resources:
+            limits:
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            # One directory holds twp.yaml and the generated certificates, so a change to either swaps the ..data
+            # symlink that --watch follows. Mount the directory, never single files: that would hide the swap.
+            - name: config
+              mountPath: /etc/titanium
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          projected:
+            sources:
+              - configMap:
+                  name: rel-titanium-gateway-data
+              - secret:
+                  name: rel-titanium-gateway-data-tls
+                  optional: true
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+# Source: titanium-gateway/templates/ingressclass.yaml
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: titanium
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  controller: titanium.io/ingress-controller
+---
+# Source: titanium-gateway/templates/gatewayclass.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: titanium
+  labels:
+    helm.sh/chart: titanium-gateway-0.1.0
+    app.kubernetes.io/part-of: titanium-gateway
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  controllerName: titaniumproxy.com/gateway-controller
+  description: "Titanium Web Proxy"

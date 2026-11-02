@@ -36,6 +36,12 @@
     <ProjectReference Include="..\..\tools\InspectorDesktopProbe\Shared\Titanium.Inspector.DesktopProbe.Shared.csproj" />
     <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="InspectorDecryptWindowE2ETests.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+  </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

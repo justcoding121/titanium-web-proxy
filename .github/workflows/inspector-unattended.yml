@@ -32,7 +32,7 @@ jobs:
       - name: System proxy and browser tests
         shell: pwsh
         run: |
-          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --filter "FullyQualifiedName~InspectorWindowsSystemProxy|FullyQualifiedName~InspectorChromeSystemProxy|FullyQualifiedName~InspectorFirefoxSystemProxy" --blame-hang --blame-hang-timeout 5m
+          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --filter "TestCategory=Inspector-Unattended|FullyQualifiedName~InspectorWindowsSystemProxy|FullyQualifiedName~InspectorChromeSystemProxy|FullyQualifiedName~InspectorFirefoxSystemProxy" --blame-hang --blame-hang-timeout 5m
       - name: Remove machine trust
         if: always()
         shell: pwsh
