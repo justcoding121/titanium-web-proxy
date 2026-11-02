@@ -91,6 +91,18 @@ public sealed class ServerConfig
     /// <summary>DNS resolver for HTTPS/SVCB discovery, e.g. <c>8.8.8.8:53</c>.</summary>
     public string? DnsServerEndPoint { get; set; }
 
+    /// <summary>
+    ///     Path to a MaxMind DB (MMDB) country database for <c>geo</c> route policies. Operator-supplied; not shipped
+    ///     with Titanium. Required when any policy uses kind <c>geo</c>.
+    /// </summary>
+    public string? GeoIpDatabasePath { get; set; }
+
+    /// <summary>
+    ///     Availability zone of this data plane for zone-aware load balancing. Overridden by the
+    ///     <c>TITANIUM_ZONE</c> environment variable and the <c>--zone</c> CLI flag.
+    /// </summary>
+    public string? LocalZone { get; set; }
+
     /// <summary>Seconds to wait for in-flight clients on SIGTERM, SIGINT, or Ctrl+C. Default is 10.</summary>
     public int? DrainTimeoutSeconds { get; set; }
 
@@ -140,6 +152,64 @@ public sealed class ServerConfig
     ///     never on a proxy listener. Null or <c>enabled: false</c> = off (zero cost).
     /// </summary>
     public AdminConfig? Admin { get; set; }
+
+    /// <summary>Process-wide overload protection. Off unless <see cref="OverloadConfig.Enabled"/> is true.</summary>
+    public OverloadConfig? Overload { get; set; }
+
+    /// <summary>Linux TCP hot restart with <c>SO_REUSEPORT</c>. Off unless enabled.</summary>
+    public HotRestartConfig? HotRestart { get; set; }
+
+    /// <summary>
+    ///     When true, file reload reconciles listeners through <c>AddEndPoint</c>/<c>RemoveEndPoint</c>.
+    ///     Default false keeps today's restart-required behavior. xDS forces this on.
+    /// </summary>
+    public bool? ReloadListeners { get; set; }
+}
+
+/// <summary>Overload protection under <c>server.overload</c>.</summary>
+public sealed class OverloadConfig
+{
+    public bool Enabled { get; set; }
+
+    public int? IntervalMs { get; set; }
+
+    public OverloadSignalConfig? HeapPercent { get; set; }
+
+    public OverloadSignalConfig? ThreadPoolQueue { get; set; }
+
+    public OverloadSignalConfig? ActiveConnections { get; set; }
+
+    public OverloadActionsConfig? Actions { get; set; }
+
+    public int? RetryAfterSeconds { get; set; }
+}
+
+public sealed class OverloadSignalConfig
+{
+    public int Elevated { get; set; }
+
+    public int Critical { get; set; }
+}
+
+public sealed class OverloadActionsConfig
+{
+    public bool DisableKeepAlive { get; set; } = true;
+
+    public bool StopAccepting { get; set; } = true;
+
+    public bool RejectNewRequests { get; set; } = true;
+
+    public bool ReadyzFailsOnCritical { get; set; } = true;
+}
+
+/// <summary>Hot restart under <c>server.hotRestart</c> (Linux TCP only).</summary>
+public sealed class HotRestartConfig
+{
+    public bool Enabled { get; set; }
+
+    public string? PidFile { get; set; }
+
+    public int? HandoverTimeoutSeconds { get; set; }
 }
 
 /// <summary>Admin listener under <c>server.admin</c>. Off unless <see cref="Enabled"/> is true.</summary>

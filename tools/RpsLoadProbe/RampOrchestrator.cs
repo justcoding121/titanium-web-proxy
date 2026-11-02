@@ -326,7 +326,27 @@ internal enum ProbeMode
     /// <summary>CLI with a Lua plugin on one of fifty routes while the load hits a plugin-free route.</summary>
     TwpCliScript1In50Http1,
     /// <summary>CLI route middleware: .NET PassthroughPlugin that only calls next.</summary>
-    TwpCliPluginDotNetNoopHttp1
+    TwpCliPluginDotNetNoopHttp1,
+    /// <summary>Leftover placeholder (F01): geo policy arm; same config as reverse-http1-route until P3.</summary>
+    TwpCliGeoHttp1,
+    /// <summary>Leftover placeholder (F01): H2-to-H2 compression; same as reverse-http1-route until P4.</summary>
+    TwpCliCompressH2H2,
+    /// <summary>Leftover placeholder (F01): H3 compression; same as reverse-http1-route until P4.</summary>
+    TwpCliCompressH3,
+    /// <summary>Leftover placeholder (F01): gRPC health probe; same as reverse-http1-route until P5a.</summary>
+    TwpCliHealthGrpcHttp1,
+    /// <summary>Leftover placeholder (F01): zone-aware LB; same as reverse-http1-route until P7.</summary>
+    TwpCliZoneAwareHttp1,
+    /// <summary>Leftover placeholder (F01): TCP TLS terminate; same as reverse-http1-route until P6.</summary>
+    TwpCliTcpTlsTerm,
+    /// <summary>Leftover placeholder (F01): WebSocket over HTTP/3; same as reverse-http1-route until P1.</summary>
+    TwpWsH3,
+    /// <summary>Leftover placeholder (F01): zstd compression; same as reverse-http1-route until P4.5.</summary>
+    TwpCliCompressZstdHttp1,
+    /// <summary>Leftover placeholder (F01): overload protection; same as reverse-http1-route until P12.</summary>
+    TwpCliOverloadHttp1,
+    /// <summary>Leftover placeholder (F01): hot restart; same as reverse-http1-route until P11.</summary>
+    TwpCliHotRestartHttp1
 }
 
 internal sealed class RampOptions
@@ -1459,6 +1479,26 @@ internal static class RampOrchestrator
                 [new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null)],
             ProbeMode.TwpCliPluginDotNetNoopHttp1 =>
                 [new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null)],
+            ProbeMode.TwpCliGeoHttp1 =>
+                [new("twp-cli-geo-http1", ProbeMode.TwpCliGeoHttp1, null)],
+            ProbeMode.TwpCliCompressH2H2 =>
+                [new("twp-cli-compress-h2-h2", ProbeMode.TwpCliCompressH2H2, null)],
+            ProbeMode.TwpCliCompressH3 =>
+                [new("twp-cli-compress-h3", ProbeMode.TwpCliCompressH3, null)],
+            ProbeMode.TwpCliHealthGrpcHttp1 =>
+                [new("twp-cli-health-grpc-http1", ProbeMode.TwpCliHealthGrpcHttp1, null)],
+            ProbeMode.TwpCliZoneAwareHttp1 =>
+                [new("twp-cli-zoneaware-http1", ProbeMode.TwpCliZoneAwareHttp1, null)],
+            ProbeMode.TwpCliTcpTlsTerm =>
+                [new("twp-cli-tcp-tlsterm", ProbeMode.TwpCliTcpTlsTerm, null)],
+            ProbeMode.TwpWsH3 =>
+                [new("twp-ws-h3", ProbeMode.TwpWsH3, null)],
+            ProbeMode.TwpCliCompressZstdHttp1 =>
+                [new("twp-cli-compress-zstd-http1", ProbeMode.TwpCliCompressZstdHttp1, null)],
+            ProbeMode.TwpCliOverloadHttp1 =>
+                [new("twp-cli-overload-http1", ProbeMode.TwpCliOverloadHttp1, null)],
+            ProbeMode.TwpCliHotRestartHttp1 =>
+                [new("twp-cli-hotrestart-http1", ProbeMode.TwpCliHotRestartHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
@@ -1845,7 +1885,17 @@ internal static class RampOrchestrator
         new("twp-cli-slow-upstream-http1", ProbeMode.TwpCliSlowUpstreamHttp1, null),
         new("twp-cli-script-lua-slow-upstream-http1", ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1, null),
         new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null),
-        new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null)
+        new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null),
+        new("twp-cli-geo-http1", ProbeMode.TwpCliGeoHttp1, null),
+        new("twp-cli-compress-h2-h2", ProbeMode.TwpCliCompressH2H2, null),
+        new("twp-cli-compress-h3", ProbeMode.TwpCliCompressH3, null),
+        new("twp-cli-health-grpc-http1", ProbeMode.TwpCliHealthGrpcHttp1, null),
+        new("twp-cli-zoneaware-http1", ProbeMode.TwpCliZoneAwareHttp1, null),
+        new("twp-cli-tcp-tlsterm", ProbeMode.TwpCliTcpTlsTerm, null),
+        new("twp-ws-h3", ProbeMode.TwpWsH3, null),
+        new("twp-cli-compress-zstd-http1", ProbeMode.TwpCliCompressZstdHttp1, null),
+        new("twp-cli-overload-http1", ProbeMode.TwpCliOverloadHttp1, null),
+        new("twp-cli-hotrestart-http1", ProbeMode.TwpCliHotRestartHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,

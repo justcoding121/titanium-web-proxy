@@ -133,3 +133,12 @@ Only `:protocol = websocket` is supported in this release. Non-WebSocket extende
 (gRPC bidirectional, WebTransport, etc.) is deferred. Unsupported `:protocol` values cause the
 proxy to return a synthetic `501 Not Implemented` response after running `BeforeRequest` (allowing
 handlers to synthesize their own response before the fallback fires).
+
+### HTTP/3 (RFC 9220)
+
+The same `ProxyServer.EnableRfc8441` switch advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL` (id `0x08`) on
+HTTP/3 control streams and implements extended CONNECT from HTTP/3 clients to **HTTP/1.1**, **HTTP/2**, and
+**HTTP/3** WebSocket origins (`Http3ExtendedConnectTunnel`: RFC 8441-style extended CONNECT or HTTP/1.1
+upgrade on the origin leg, then bidirectional DATA relay). When a forced or discovered HTTP/3 origin does
+not advertise `0x08=1` within two seconds, the proxy falls back to HTTP/1.1 WebSocket upgrade on TCP (same
+as the h2 origin leg). There is no idle timer on the tunnel in v1 (same as the HTTP/2 h2→h1 path).

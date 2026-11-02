@@ -309,6 +309,8 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.get -> Sys
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DecryptSkipHosts.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.get -> string?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.DnsServerEndPoint.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.GeoIpDatabasePath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.GeoIpDatabasePath.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Enable100ContinueBehaviour.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.Enable100ContinueBehaviour.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableHttp2.get -> bool?
@@ -497,6 +499,16 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.get -
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TerminateTls.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TerminateTls.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TlsHandshakeTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TlsHandshakeTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Alpn.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Alpn.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxConcurrentHandshakes.get -> int?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.MaxConcurrentHandshakes.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.LocalZone.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.LocalZone.set -> void
 Titanium.Web.Proxy.Configuration.Models.AltSvcConfig
 Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.AltSvcConfig() -> void
 Titanium.Web.Proxy.Configuration.Models.AltSvcConfig.Enabled.get -> bool?
@@ -676,3 +688,95 @@ Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plugins.get -> System.Collecti
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.Plugins.set -> void
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.ScriptPipeline.get -> System.Collections.Generic.IList<string!>?
 Titanium.Web.Proxy.Configuration.Models.TwpConfig.ScriptPipeline.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.XdsConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.Server.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.Server.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.Tls.get -> Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig?
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.Tls.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.Node.get -> Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig?
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.Node.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.ResourceTypes.get -> System.Collections.Generic.IList<string!>?
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.ResourceTypes.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.InitialFetchTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.InitialFetchTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.FailOpen.get -> bool
+Titanium.Web.Proxy.Configuration.Models.XdsConfig.FailOpen.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.XdsTlsConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.CaPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.CaPath.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.ClientCertPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.ClientCertPath.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.ClientKeyPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsTlsConfig.ClientKeyPath.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.XdsNodeConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.Id.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.Id.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.Cluster.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.Cluster.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.Locality.get -> Titanium.Web.Proxy.Configuration.Models.XdsLocalityConfig?
+Titanium.Web.Proxy.Configuration.Models.XdsNodeConfig.Locality.set -> void
+Titanium.Web.Proxy.Configuration.Models.XdsLocalityConfig
+Titanium.Web.Proxy.Configuration.Models.XdsLocalityConfig.XdsLocalityConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.XdsLocalityConfig.Zone.get -> string?
+Titanium.Web.Proxy.Configuration.Models.XdsLocalityConfig.Zone.set -> void
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Xds.get -> Titanium.Web.Proxy.Configuration.Models.XdsConfig?
+Titanium.Web.Proxy.Configuration.Models.TwpConfig.Xds.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ReloadListeners.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.ReloadListeners.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Overload.get -> Titanium.Web.Proxy.Configuration.Models.OverloadConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.Overload.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.HotRestart.get -> Titanium.Web.Proxy.Configuration.Models.HotRestartConfig?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.HotRestart.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.OverloadConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.IntervalMs.get -> int?
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.IntervalMs.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.HeapPercent.get -> Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig?
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.HeapPercent.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.ThreadPoolQueue.get -> Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig?
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.ThreadPoolQueue.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.ActiveConnections.get -> Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig?
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.ActiveConnections.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.Actions.get -> Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig?
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.Actions.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.RetryAfterSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.OverloadConfig.RetryAfterSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig
+Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig.OverloadSignalConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig.Elevated.get -> int
+Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig.Elevated.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig.Critical.get -> int
+Titanium.Web.Proxy.Configuration.Models.OverloadSignalConfig.Critical.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.OverloadActionsConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.DisableKeepAlive.get -> bool
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.DisableKeepAlive.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.StopAccepting.get -> bool
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.StopAccepting.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.RejectNewRequests.get -> bool
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.RejectNewRequests.set -> void
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.ReadyzFailsOnCritical.get -> bool
+Titanium.Web.Proxy.Configuration.Models.OverloadActionsConfig.ReadyzFailsOnCritical.set -> void
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.HotRestartConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.Enabled.get -> bool
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.Enabled.set -> void
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.PidFile.get -> string?
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.PidFile.set -> void
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.HandoverTimeoutSeconds.get -> int?
+Titanium.Web.Proxy.Configuration.Models.HotRestartConfig.HandoverTimeoutSeconds.set -> void
+Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
+Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode.Off = 0 -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
+Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode.Warn = 1 -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
+Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode.Enforce = 2 -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardEditing.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.DashboardEditing.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.OverlayPath.get -> string?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.OverlayPath.set -> void
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SnapshotValidation.get -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode?
+Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SnapshotValidation.set -> void

@@ -450,9 +450,8 @@ public class PolicyAndRouteValidationTests
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
         var warning = TwpConfigValidator.CollectWarnings(config)
             .Single(w => w.Contains("responseCompression", StringComparison.Ordinal));
-        StringAssert.Contains(warning, "HTTP/2-to-HTTP/2");
         StringAssert.Contains(warning, "HTTP/3");
-        StringAssert.Contains(warning, "HTTP/1.1-to-HTTP/2");
+        StringAssert.Contains(warning, "Fast-path passthrough stays identity");
     }
 
     [TestMethod]
@@ -469,7 +468,7 @@ public class PolicyAndRouteValidationTests
         var config = WithCompression(new ResponseCompressionConfig
         {
             Enabled = true,
-            Algorithms = ["br", "zstd"],
+            Algorithms = ["br", "deflate"],
             MinBytes = 0,
             MaxBytes = 2_000_000,
             Level = "ludicrous",
@@ -477,7 +476,7 @@ public class PolicyAndRouteValidationTests
         });
 
         var errors = Errors(config);
-        StringAssert.Contains(errors, "server.responseCompression.algorithms entry 'zstd'");
+        StringAssert.Contains(errors, "server.responseCompression.algorithms entry 'deflate'");
         StringAssert.Contains(errors, "server.responseCompression.minBytes");
         StringAssert.Contains(errors, "server.responseCompression.maxBytes");
         StringAssert.Contains(errors, "server.responseCompression.level 'ludicrous'");

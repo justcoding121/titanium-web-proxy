@@ -122,6 +122,12 @@ internal static class QpackEncoder
         EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":path",
             path.Length > 0 ? path : "/");
 
+        if (request.ExtendedConnectProtocol != null)
+        {
+            EncodeOne(body, outboundTable, ref maxRequiredInsertCount, ":protocol",
+                request.ExtendedConnectProtocol);
+        }
+
         foreach (var header in request.Headers.GetAllHeaders())
         {
             var name = header.Name;

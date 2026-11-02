@@ -154,7 +154,8 @@ internal sealed class Http3Connection
             // Open our outbound control stream and send SETTINGS.
             _serverControlStream = await _connection.OpenOutboundStreamAsync(
                 QuicStreamType.Unidirectional, _connectionCts.Token);
-            await SendServerSettingsAsync(_serverControlStream, _qpackContext, _connectionCts.Token);
+            await SendServerSettingsAsync(_serverControlStream, _qpackContext, _server.EnableRfc8441,
+                _connectionCts.Token);
 
             // When dynamic table is enabled, open outbound QPACK encoder and decoder streams and
             // start their background loops.
@@ -281,7 +282,8 @@ internal sealed class Http3Connection
     /// <summary>
     ///     Opens the server-side outbound control stream and sends the SETTINGS frame.
     /// </summary>
-    private static async Task SendServerSettingsAsync(QuicStream controlStream, QpackContext? qpackContext, CancellationToken ct)
+    private static async Task SendServerSettingsAsync(QuicStream controlStream, QpackContext? qpackContext,
+        bool enableConnectProtocol, CancellationToken ct)
     {
         // Write the stream type byte (0x00 = control stream).
         var streamTypeBuf = new byte[1];
@@ -297,6 +299,8 @@ internal sealed class Http3Connection
             settings.SetQpackMaxTableCapacity(4096);
             settings.SetQpackBlockedStreams(0); // we don't block
         }
+
+        settings.SetEnableConnectProtocol(enableConnectProtocol);
 
         var payload = settings.Serialize();
         await Http3Frame.WriteAsync(controlStream, Http3FrameType.Settings, payload, ct);

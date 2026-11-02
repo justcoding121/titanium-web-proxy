@@ -280,6 +280,13 @@ public partial class ProxyServer : IDisposable
     /// </summary>
     private bool ClientHandlersRunning => AdmittedClientConnectionCount > 0 || Http3ClientConnectionCount > 0;
 
+    /// <summary>
+    ///     Stops admitting new TCP clients while in-flight handlers keep running.
+    ///     The CLI calls this from the SIGTERM path when there is no pre-stop delay so new
+    ///     connections are closed without a response before <see cref="DrainAsync" /> is scheduled.
+    /// </summary>
+    public void StopAcceptingNewConnections() => _stopAccepting = true;
+
     /// <summary>Stops admitting clients, waits for in-flight work, then stops.</summary>
     public async Task DrainAsync(TimeSpan timeout)
     {

@@ -89,28 +89,9 @@ public class CliSigtermDrainE2ETests
         await origin.WaitForRequestAsync();
         var signalled = DateTime.UtcNow;
         running.SendSigterm();
-        // The origin holds the first request open, so the listener is still in the drain window.
-        await Task.Delay(200);
-
-        using (var probe = new TcpClient())
-        {
-            await probe.ConnectAsync(IPAddress.Loopback, listen);
-            var sent = Encoding.ASCII.GetBytes("GET /after HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-            await probe.GetStream().WriteAsync(sent);
-            var buffer = new byte[64];
-            int read;
-            try
-            {
-                read = await probe.GetStream().ReadAsync(buffer);
-            }
-            catch (IOException ex)
-            {
-                Assert.Fail("a connection accepted during drain was reset: " + ex.Message);
-                throw;
-            }
-
-            Assert.AreEqual(0, read, "a connection accepted during drain must be closed without a response");
-        }
+        // SIGTERM delivery and the stop-accepting flip are asynchronous. Poll until a new
+        // connection is accepted and closed without a response (or the listen socket is gone).
+        await WaitUntilDrainRefuses(listen, running);
 
         using var response = await inflight;
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
@@ -148,6 +129,66 @@ public class CliSigtermDrainE2ETests
         }
 
         Assert.Fail($"port {port} never accepted. " + harness.StdOut + harness.StdErr);
+    }
+
+    /// <summary>
+    ///     After SIGTERM with no pre-stop delay, either the accept loop closes the socket with no
+    ///     HTTP response, or the listen socket is already gone. A full response means the signal
+    ///     has not taken effect yet — retry until the drain window is observed.
+    /// </summary>
+    private static async Task WaitUntilDrainRefuses(int port, CliProcessHarness harness)
+    {
+        var request = Encoding.ASCII.GetBytes("GET /after HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (harness.ExitCode is not null)
+            {
+                Assert.Fail(
+                    "CLI exited before a drain refuse was observed. " + harness.StdOut + harness.StdErr);
+            }
+
+            try
+            {
+                using var probe = new TcpClient();
+                await probe.ConnectAsync(IPAddress.Loopback, port);
+                await probe.GetStream().WriteAsync(request);
+                var buffer = new byte[64];
+                int read;
+                try
+                {
+                    using var readCts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+                    read = await probe.GetStream().ReadAsync(buffer, readCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Still being held by a pre-drain handler — try again.
+                    await Task.Delay(50);
+                    continue;
+                }
+                catch (IOException ex)
+                {
+                    Assert.Fail("a connection accepted during drain was reset: " + ex.Message);
+                    throw;
+                }
+
+                if (read == 0)
+                {
+                    return;
+                }
+
+                // Signal not applied yet; the proxy still answered. Probe again.
+                await Task.Delay(50);
+            }
+            catch (SocketException)
+            {
+                // Listen socket closed after drain finished waiting — also means new work is refused.
+                return;
+            }
+        }
+
+        Assert.Fail(
+            "drain never closed a new connection without a response. " + harness.StdOut + harness.StdErr);
     }
 
     private static bool AddressInUse(InvalidOperationException ex)

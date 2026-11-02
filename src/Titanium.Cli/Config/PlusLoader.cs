@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Linq;
 using System.Runtime.Loader;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
@@ -21,6 +22,9 @@ internal static class PlusLoader
 
         try
         {
+            // Preload satellites the xDS copy may already share into the default ALC. Loading the same
+            // path into the Plus collectible ALC fails on macOS (0x80131509).
+            PreloadSharedHostDependencies();
             var alc = new AssemblyLoadContext("Titanium.Plus", isCollectible: true);
             alc.Resolving += ResolveBesideExecutable;
             return FindModule(alc.LoadFromAssemblyPath(dllPath), ref warning);
@@ -34,32 +38,106 @@ internal static class PlusLoader
 
     private static Assembly? ResolveBesideExecutable(AssemblyLoadContext context, AssemblyName name)
     {
+        // Prefer an assembly already in the default context. Titanium.Xds is copied beside the CLI with
+        // Google.Protobuf; loading that same path into the Plus collectible ALC fails on macOS with
+        // "An operation is not legal in the current state" (0x80131509). Collectible contexts may
+        // reference default-context assemblies.
+        var alreadyLoaded = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(loaded =>
+            string.Equals(loaded.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase));
+        if (alreadyLoaded is not null)
+        {
+            return alreadyLoaded;
+        }
+
         var candidate = Path.Combine(AppContext.BaseDirectory, name.Name + ".dll");
-        return File.Exists(candidate) ? LoadDependency(context, candidate) : null;
+        if (!File.Exists(candidate))
+        {
+            return null;
+        }
+
+        // Shared host satellites (xDS) must stay in the default context so Plus and Xds see one copy.
+        if (IsSharedHostDependency(name.Name))
+        {
+            return AssemblyLoadContext.Default.LoadFromAssemblyPath(candidate);
+        }
+
+        return LoadDependency(context, candidate);
     }
+
+    private static void PreloadSharedHostDependencies()
+    {
+        foreach (var name in new[]
+                 {
+                     "Google.Protobuf", "Google.Api.CommonProtos", "Grpc.Core.Api", "Grpc.Net.Common",
+                     "Grpc.Net.Client", "DnsClient",
+                 })
+        {
+            if (AssemblyLoadContext.Default.Assemblies.Any(a =>
+                    string.Equals(a.GetName().Name, name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var candidate = Path.Combine(AppContext.BaseDirectory, name + ".dll");
+            if (!File.Exists(candidate))
+            {
+                continue;
+            }
+
+            try
+            {
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(candidate);
+            }
+            catch (Exception ex) when (IsTransientAssemblyLoad(ex) || ex is BadImageFormatException or FileLoadException)
+            {
+                // Best-effort; Resolving still retries per dependency.
+            }
+        }
+    }
+
+    private static bool IsSharedHostDependency(string? simpleName) =>
+        simpleName is "Google.Protobuf" or "Google.Api.CommonProtos"
+            or "Grpc.Net.Client" or "Grpc.Net.Common" or "Grpc.Core.Api" or "Grpc.Net.Client.Web";
 
     /// <summary>
     ///     <see cref="AssemblyLoadContext.LoadFromAssemblyPath"/> is the supported call from
     ///     <see cref="AssemblyLoadContext.Resolving"/>. <c>LoadFromStream</c> there throws
     ///     "An operation is not legal in the current state". Retry that same message: on macOS
-    ///     several CLI processes mapping one dependency can fail it transiently.
+    ///     several CLI processes mapping one dependency can fail it transiently. If the collectible
+    ///     load keeps failing, fall back to the default context (same path the xDS satellite uses).
     /// </summary>
     private static Assembly LoadDependency(AssemblyLoadContext context, string candidate)
     {
         const int attempts = 5;
+        Exception? last = null;
         for (var attempt = 1; attempt <= attempts; attempt++)
         {
             try
             {
                 return context.LoadFromAssemblyPath(candidate);
             }
-            catch (Exception ex) when (attempt < attempts && IsTransientAssemblyLoad(ex))
+            catch (Exception ex) when (IsTransientAssemblyLoad(ex))
             {
-                Thread.Sleep(50 * attempt);
+                last = ex;
+                if (attempt < attempts)
+                {
+                    Thread.Sleep(50 * attempt);
+                    continue;
+                }
+
+                try
+                {
+                    return AssemblyLoadContext.Default.LoadFromAssemblyPath(candidate);
+                }
+                catch (Exception fallback)
+                {
+                    throw new InvalidOperationException(
+                        "Plus dependency was not loaded: " + candidate, fallback);
+                }
             }
         }
 
-        throw new InvalidOperationException("Plus dependency was not loaded: " + candidate);
+        throw new InvalidOperationException("Plus dependency was not loaded: " + candidate, last);
     }
 
     private static ITitaniumPlusModule? FindModule(Assembly asm, ref string? warning)

@@ -4,7 +4,7 @@ Run Titanium as a [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) imp
 
 **Next:** [install the chart](#install) → apply a [Gateway and an HTTPRoute](#quick-start) → read [what is not supported](#what-is-not-supported) before you migrate real routes.
 
-> Gateway API support covers the HTTP core of the **standard channel** (v1.2.1). The same controller also serves `networking.k8s.io/v1` `Ingress` resources and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
+> Gateway API support covers the **standard channel** bundle **v1.7.0** (HTTPRoute, GRPCRoute, TLSRoute, TCPRoute, UDPRoute, BackendTLSPolicy, and ReferenceGrant v1), including TLS listener **Terminate** mode (L4 TLS termination on the data plane). The same controller also serves `networking.k8s.io/v1` `Ingress` resources and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
 
 ## Install
 
@@ -17,7 +17,7 @@ The chart installs, in one release:
 
 | Piece | What it is |
 |-------|------------|
-| Gateway API CRDs | The standard channel, bundle `v1.2.1`, unmodified, from the chart's `crds/` directory |
+| Gateway API CRDs | The standard channel, bundle `v1.7.0`, unmodified, from the chart's `crds/` directory. Clusters need Kubernetes **1.31+** for TLSRoute v1 CEL validation. Upgrade CRDs with `kubectl apply --server-side -f` on the bundle before `helm upgrade`; Helm does not replace CRDs on upgrade. |
 | `GatewayClass` `titanium` | Owned by the controller (`titaniumproxy.com/gateway-controller`) |
 | Controller Deployment | `ghcr.io/justcoding121/titanium-gateway`, 2 replicas, one leader at a time |
 | Data-plane Deployment and Service | The `titanium` proxy image running `titanium run --config /etc/titanium/twp.yaml --watch`, 2 replicas |

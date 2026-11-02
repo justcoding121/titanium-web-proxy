@@ -25,6 +25,7 @@ internal sealed class ReadinessState : IReadinessProbe
     public const string ReasonConfigNotLoaded = "config_not_loaded";
     public const string ReasonListenersNotBound = "listeners_not_bound";
     public const string ReasonDraining = "draining";
+    public const string ReasonOverloadCritical = "overload_critical";
     public const string ReasonClusterPrefix = "cluster_unhealthy:";
 
     private readonly TimeProvider _time;
@@ -47,6 +48,12 @@ internal sealed class ReadinessState : IReadinessProbe
     }
 
     public bool RequireHealthyClusters { get; }
+
+    /// <summary>
+    ///     Returns true while overload protection is critical and asks readiness to fail. Unlike draining this is not
+    ///     one-way: <c>/readyz</c> recovers when the level drops. Set once at startup; null means no overload hook.
+    /// </summary>
+    public Func<bool>? OverloadCriticalProbe { get; set; }
 
     public bool IsDraining => Volatile.Read(ref _draining) == 1;
 
@@ -86,6 +93,12 @@ internal sealed class ReadinessState : IReadinessProbe
         if (IsDraining)
         {
             reasons.Add(ReasonDraining);
+        }
+
+        // server.overload actions.readyzFailsOnCritical: the probe is a bool read; null when overload is off.
+        if (OverloadCriticalProbe?.Invoke() == true)
+        {
+            reasons.Add(ReasonOverloadCritical);
         }
 
         if (RequireHealthyClusters && _clusters?.Invoke() is { } view)

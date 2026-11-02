@@ -1,13 +1,21 @@
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Titanium.Plus.Audit;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
-
 namespace Titanium.Plus.ControlPlane;
+
+/// <summary>Snapshot PUT validation strictness for the control plane.</summary>
+public enum SnapshotValidationMode
+{
+    Off,
+    Warn,
+    Enforce,
+}
 
 /// <summary>
 /// Loopback-default control plane with shared-secret header auth (GET/PUT snapshot, cache purge).
@@ -19,7 +27,7 @@ public sealed class ControlPlaneServer : IDisposable
 {
     public const string SharedSecretHeader = "X-Titanium-Control-Secret";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -39,6 +47,9 @@ public sealed class ControlPlaneServer : IDisposable
     private readonly string _sharedSecret;
     private readonly ControlPlaneTlsOptions? _tls;
     private readonly bool _allowInsecureNonLoopback;
+    private readonly IConfigEditor? _configEditor;
+    private readonly SnapshotValidationMode _snapshotValidation;
+    private readonly ILogger? _logger;
     private ControlHttpServer? _server;
 
     public ControlPlaneServer(IClusterManager? clusters, string host, int port, string sharedSecret)
@@ -56,7 +67,10 @@ public sealed class ControlPlaneServer : IDisposable
         IHttpResponseCache? responseCache = null,
         ControlPlaneSecurity? security = null,
         ControlPlaneTlsOptions? tls = null,
-        bool allowInsecureNonLoopback = false)
+        bool allowInsecureNonLoopback = false,
+        IConfigEditor? configEditor = null,
+        SnapshotValidationMode snapshotValidation = SnapshotValidationMode.Warn,
+        ILogger? logger = null)
     {
         _clusters = clusters;
         _host = host;
@@ -67,6 +81,9 @@ public sealed class ControlPlaneServer : IDisposable
         _responseCache = responseCache;
         _tls = tls;
         _allowInsecureNonLoopback = allowInsecureNonLoopback;
+        _configEditor = configEditor;
+        _snapshotValidation = snapshotValidation;
+        _logger = logger;
         Security = security ?? new ControlPlaneSecurity();
     }
 
@@ -202,6 +219,9 @@ public sealed class ControlPlaneServer : IDisposable
     private static ControlHttpResponse Json(int status, string json) =>
         ControlHttpResponse.Text(status, "application/json", json);
 
+    private static ControlHttpResponse JsonWithHeader(int status, string json, string headerName, string headerValue) =>
+        ControlHttpResponse.Text(status, "application/json", json, new KeyValuePair<string, string>(headerName, headerValue));
+
     private ControlHttpResponse HandleGetSnapshot()
     {
         var snap = _clusters?.Snapshot ?? ImmutableClusterSnapshot.Empty;
@@ -240,42 +260,111 @@ public sealed class ControlPlaneServer : IDisposable
                 return (Json(400, JsonSerializer.Serialize(new { error }, JsonOptions)), AuditResults.Rejected);
             }
 
-            if (clusters is not null)
+            if (TryRejectSnapshotValidation(routes, clusters, out var validationWarnings, out var rejected))
             {
-                if (_clusters is null)
-                {
-                    return (Json(503, "{\"error\":\"no cluster manager\"}"), AuditResults.Unavailable);
-                }
-
-                await _clusters.ApplyAsync(clusters, cancellationToken).ConfigureAwait(false);
+                return rejected;
             }
 
-            if (routes is not null)
+            var applyFailure = await ApplySnapshotAsync(clusters, routes, cancellationToken).ConfigureAwait(false);
+            if (applyFailure is not null)
             {
-                if (_routes is null)
-                {
-                    return (Json(503, "{\"error\":\"no routes list\"}"), AuditResults.Unavailable);
-                }
-
-                _routes.Clear();
-                foreach (var route in routes)
-                {
-                    _routes.Add(route);
-                }
+                return applyFailure.Value;
             }
 
             _refresh?.Invoke();
-            return (Json(200, JsonSerializer.Serialize(new
-            {
-                status = "applied",
-                clusters = clusters?.Count,
-                routes = routes?.Count,
-            }, JsonOptions)), AuditResults.Ok);
+            return SnapshotApplied(clusters, routes, validationWarnings);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return (Json(400, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions)), AuditResults.Error);
         }
+    }
+
+    private bool TryRejectSnapshotValidation(
+        List<RouteConfig>? routes,
+        List<ClusterConfig>? clusters,
+        out IReadOnlyList<string>? validationWarnings,
+        out (ControlHttpResponse Response, string Result) rejected)
+    {
+        validationWarnings = null;
+        rejected = default;
+        if (_snapshotValidation == SnapshotValidationMode.Off || _configEditor is null)
+        {
+            return false;
+        }
+
+        var validationErrors = _configEditor.ValidateCandidate(routes, clusters);
+        if (validationErrors.Count == 0)
+        {
+            return false;
+        }
+
+        if (_snapshotValidation == SnapshotValidationMode.Enforce)
+        {
+            rejected = (Json(422, JsonSerializer.Serialize(new { error = "validation failed", errors = validationErrors }, JsonOptions)),
+                AuditResults.Rejected);
+            return true;
+        }
+
+        validationWarnings = validationErrors;
+        foreach (var message in validationErrors)
+        {
+            _logger?.LogWarning("Snapshot PUT validation: {Message}", message);
+        }
+
+        return false;
+    }
+
+    private async Task<(ControlHttpResponse Response, string Result)?> ApplySnapshotAsync(
+        List<ClusterConfig>? clusters,
+        List<RouteConfig>? routes,
+        CancellationToken cancellationToken)
+    {
+        if (clusters is not null)
+        {
+            if (_clusters is null)
+            {
+                return (Json(503, "{\"error\":\"no cluster manager\"}"), AuditResults.Unavailable);
+            }
+
+            await _clusters.ApplyAsync(clusters, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (routes is not null)
+        {
+            if (_routes is null)
+            {
+                return (Json(503, "{\"error\":\"no routes list\"}"), AuditResults.Unavailable);
+            }
+
+            _routes.Clear();
+            foreach (var route in routes)
+            {
+                _routes.Add(route);
+            }
+        }
+
+        return null;
+    }
+
+    private static (ControlHttpResponse Response, string Result) SnapshotApplied(
+        List<ClusterConfig>? clusters,
+        List<RouteConfig>? routes,
+        IReadOnlyList<string>? validationWarnings)
+    {
+        var responseBody = JsonSerializer.Serialize(new
+        {
+            status = "applied",
+            clusters = clusters?.Count,
+            routes = routes?.Count,
+            warnings = validationWarnings,
+        }, JsonOptions);
+        if (validationWarnings is { Count: > 0 })
+        {
+            return (JsonWithHeader(200, responseBody, "X-Titanium-Validation", "failed"), AuditResults.Ok);
+        }
+
+        return (Json(200, responseBody), AuditResults.Ok);
     }
 
     private (ControlHttpResponse Response, string Result) HandleCachePurge(string? prefix)

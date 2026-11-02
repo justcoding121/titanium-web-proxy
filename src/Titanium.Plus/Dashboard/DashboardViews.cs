@@ -7,6 +7,15 @@ namespace Titanium.Plus.Dashboard;
 /// <summary>Which sign-in controls the login page shows.</summary>
 internal sealed record DashboardLoginFeatures(bool ShowSecret, bool ShowLocalUsers, bool ShowOidc);
 
+/// <summary>Overlay state for the edit panel (null-free so the view never branches on null lists).</summary>
+internal sealed record OverlayStatusView(
+    bool HasOverlay,
+    bool Suspended,
+    IReadOnlyList<string> SuspendedReasons,
+    int EditCount,
+    string? LastEdit,
+    IReadOnlyList<string> Orphans);
+
 /// <summary>The dashboard's views, and the one place that turns values into HTML text.</summary>
 internal enum DashboardView
 {
@@ -16,6 +25,9 @@ internal enum DashboardView
     Config,
     Certificates,
     Audit,
+
+    /// <summary>The route or cluster edit page. Not in the navigation: it is reached from the Routes view.</summary>
+    Edit,
 }
 
 /// <summary>
@@ -107,7 +119,9 @@ internal static class DashboardViews
 
     public static string Page(DashboardView view, string role, string csrfToken, string body)
     {
-        var current = Array.Find(Navigation, n => n.View == view);
+        var current = view == DashboardView.Edit
+            ? (View: DashboardView.Edit, Path: "/routes", Slug: "edit", Title: "Edit configuration")
+            : Array.Find(Navigation, n => n.View == view);
         var sb = new StringBuilder()
             .Append("<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"/>")
             .Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>")
@@ -216,6 +230,79 @@ internal static class DashboardViews
         }
 
         return sb.Append(TableBodyClose).ToString();
+    }
+
+    /// <summary>
+    ///     The operator's edit panel on the Routes view: overlay state, a link per route and cluster, and add links. It is
+    ///     rendered once per page load (the polled tables above are not touched), so a new item shows after a reload.
+    /// </summary>
+    public static string EditPanel(IReadOnlyList<string> routeIds, IReadOnlyList<string> clusterIds, OverlayStatusView overlay)
+    {
+        var sb = new StringBuilder("<section data-testid=\"edit-panel\"><h2>Edit configuration</h2>");
+        if (overlay.Suspended)
+        {
+            sb.Append("<p class=\"banner warn\" role=\"status\" data-testid=\"overlay-suspended\">The saved overlay is not applied: ")
+                .Append(Enc(string.Join("; ", overlay.SuspendedReasons))).Append("</p>");
+        }
+
+        if (overlay.HasOverlay)
+        {
+            sb.Append("<p class=\"banner warn\" role=\"status\" data-testid=\"overlay-active\">").Append(overlay.EditCount)
+                .Append(" dashboard edit(s) are layered over the config file")
+                .Append(overlay.LastEdit is { Length: > 0 } last ? " (last " + Enc(last) + ")" : "")
+                .Append(". A file reload keeps them; clear them to return to the file as written.</p>")
+                .Append("<p><button type=\"button\" data-act=\"clear-overlay\" data-id=\"-\" data-testid=\"btn-clear-overlay\">")
+                .Append("Clear dashboard edits</button></p>");
+        }
+
+        if (overlay.Orphans.Count > 0)
+        {
+            sb.Append("<p class=\"banner warn\" data-testid=\"overlay-orphans\">Edits that no longer match the file: ")
+                .Append(Enc(string.Join("; ", overlay.Orphans))).Append("</p>");
+        }
+
+        EditLinks(sb, "route", "Routes", routeIds);
+        EditLinks(sb, "cluster", "Clusters", clusterIds);
+        return sb.Append("</section>").ToString();
+    }
+
+    private static void EditLinks(StringBuilder sb, string kind, string title, IReadOnlyList<string> ids)
+    {
+        sb.Append("<h3>").Append(title).Append("</h3><ul data-testid=\"edit-").Append(kind).Append("-list\">");
+        foreach (var id in ids)
+        {
+            sb.Append("<li><a data-testid=\"edit-").Append(kind).Append('-').Append(Enc(id)).Append("\" href=\"/edit/").Append(kind)
+                .Append('/').Append(Uri.EscapeDataString(id)).Append("\">").Append(Enc(id)).Append("</a></li>");
+        }
+
+        sb.Append("<li><a data-testid=\"add-").Append(kind).Append("\" href=\"/edit/").Append(kind).Append("\">Add ").Append(kind)
+            .Append("</a></li></ul>");
+    }
+
+    /// <summary>
+    ///     The edit page for one item: a JSON editor (the same shape the snapshot PUT takes) with Validate, Save and, for an
+    ///     existing item, Delete. <c>/assets/dashboard.js</c> posts it; there is no inline script.
+    /// </summary>
+    public static string EditForm(string kind, string? id, string json)
+    {
+        var sb = new StringBuilder("<h2>")
+            .Append(id is null ? "Add " : "Edit ").Append(Enc(kind)).Append(id is null ? "" : " " + Enc(id)).Append("</h2>")
+            .Append("<form data-testid=\"edit-form\" data-kind=\"").Append(Enc(kind)).Append("\" data-id=\"").Append(Enc(id))
+            .Append("\">")
+            .Append("<p class=\"hint\">JSON, as in the config file's ").Append(kind == "route" ? "routes" : "clusters")
+            .Append(" list. Validate checks it against the same rules as a reload. Save applies it at once and keeps it in the ")
+            .Append("dashboard overlay beside the config file.</p>")
+            .Append("<textarea id=\"edit-json\" name=\"json\" rows=\"24\" spellcheck=\"false\" data-testid=\"edit-json\">")
+            .Append(Enc(json)).Append("</textarea>")
+            .Append("<p><button type=\"button\" data-edit=\"validate\" data-testid=\"edit-validate\">Validate</button> ")
+            .Append("<button type=\"button\" data-edit=\"save\" data-testid=\"edit-save\">Save</button> ");
+        if (id is not null)
+        {
+            sb.Append("<button type=\"button\" data-edit=\"delete\" data-testid=\"edit-delete\">Delete</button> ");
+        }
+
+        return sb.Append("<a href=\"/routes\" data-testid=\"edit-cancel\">Back to routes</a></p>")
+            .Append("<pre id=\"edit-result\" role=\"status\" data-testid=\"edit-result\"></pre></form>").ToString();
     }
 
     public static string Health(IReadOnlyList<HealthEventView> events)

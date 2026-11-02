@@ -10,6 +10,7 @@ using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
+using Titanium.Web.Proxy.Compression;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
@@ -376,7 +377,11 @@ public partial class ProxyServer
             MaybeInjectClientAltSvc(sessionArgs);
 
             if (!sessionArgs.IsFastPath && !sessionArgs.HttpClient.Response.Locked)
-                await OnBeforeResponse(sessionArgs);
+                await OnBeforeResponse(sessionArgs, mayCompress: true);
+
+            // Compression is off by default: skip the async state machine entirely on the common path.
+            if (CompressionPolicy is not null)
+                await ApplyH2ToH2DispatchResponseCompressionAsync(sessionArgs, exchange);
 
             await PrepareHttp2DispatchResponseForEmitAsync(sessionArgs, clientHttpVersion);
 
@@ -505,6 +510,47 @@ public partial class ProxyServer
         }
 
         sessionArgs.HttpClient.Response = response;
+    }
+
+    private async Task ApplyH2ToH2DispatchResponseCompressionAsync(SessionEventArgs sessionArgs,
+        Http2OriginExchange exchange)
+    {
+        if (CompressionPolicy is null || sessionArgs.IsFastPath)
+            return;
+
+        var response = sessionArgs.HttpClient.Response;
+        if (response.Locked)
+            return;
+
+        var shape = new BridgeCompressionShape(OriginLegIsHttp1: false, ClientIsHttp2: true, ClientIsHttp3: false);
+        if (CompressionPolicy is { Streaming: false })
+        {
+            var body = response.IsBodyRead ? response.Body : exchange.Body;
+            if (body.Length > 0 || response.IsBodyRead)
+                await TryCompressBridgeBufferedResponseAsync(sessionArgs, shape, body).ConfigureAwait(false);
+            return;
+        }
+
+        var plan = TryBeginBridgeStreamingCompression(sessionArgs, shape);
+        if (plan is null || response.StreamBodyWriter is not { } originWriter)
+            return;
+
+        var policy = CompressionPolicy;
+        response.StreamBodyWriter = async (sink, ct) =>
+        {
+            await using var origin = new StreamBodyWriterPumpStream(originWriter, ct);
+            var buffer = BufferPool.GetBuffer(StreamingResponseRelay.ReadBufferBytes);
+            try
+            {
+                await Compression.StreamingResponseRelay.RelayAsync(origin, sink, plan.Value.Algorithm, policy.Level,
+                    buffer, plan.Value.OriginChunked ? -1 : plan.Value.OriginLength, sessionArgs.OnDataReceived, null,
+                    ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                BufferPool.ReturnBuffer(buffer);
+            }
+        };
     }
 
     private async Task PrepareHttp2DispatchResponseForEmitAsync(SessionEventArgs sessionArgs, Version clientHttpVersion)

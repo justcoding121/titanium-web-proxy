@@ -47,6 +47,10 @@ public sealed class GatewayOptions
 
     public IReadOnlyDictionary<int, int> PortMap { get; private set; } = new Dictionary<int, int> { [80] = 8080, [443] = 8443 };
 
+    public IReadOnlyDictionary<int, int> UdpPortMap { get; private set; } = new Dictionary<int, int>();
+
+    public bool BackendTlsPolicyEnabled { get; private set; }
+
     public IReadOnlyList<string> SecretNamespaces { get; private set; } = [];
 
     /// <summary><c>IngressClass.spec.controller</c> this controller owns.</summary>
@@ -71,7 +75,7 @@ public sealed class GatewayOptions
         "controller-name", "data-plane-namespace", "data-plane-service", "data-plane-deployment", "config-map", "tls-secret",
         "config-key", "lease-name", "lease-namespace", "identity", "no-leader-election", "admin-port", "admin-token-env",
         "health-port", "tls-mount-path", "port-map", "secret-namespaces", "min-reconcile-ms", "verbose", "pod-namespace", "pod-name",
-        "ingress-controller-name", "watch-legacy-annotation",
+        "ingress-controller-name", "watch-legacy-annotation", "enable-backend-tls-policy",
     };
 
     private static string KnownList => string.Join(", ", Known.Order(StringComparer.Ordinal));
@@ -115,7 +119,7 @@ public sealed class GatewayOptions
                 continue;
             }
 
-            if (name is "verbose" or "no-leader-election" or "watch-legacy-annotation")
+            if (name is "verbose" or "no-leader-election" or "watch-legacy-annotation" or "enable-backend-tls-policy")
             {
                 values[name] = "true";
                 i++;
@@ -169,8 +173,12 @@ public sealed class GatewayOptions
         options.WatchLegacyAnnotation = Get("watch-legacy-annotation") is "true";
         if (Get("port-map") is { } map)
         {
-            options.PortMap = ParsePortMap(map);
+            var parsed = ParsePortMap(map);
+            options.PortMap = parsed.Tcp;
+            options.UdpPortMap = parsed.Udp;
         }
+
+        options.BackendTlsPolicyEnabled = Get("enable-backend-tls-policy") is "true";
 
         if (Get("secret-namespaces") is { } namespaces)
         {
@@ -181,25 +189,56 @@ public sealed class GatewayOptions
         return options;
     }
 
-    /// <summary>Parses <c>80=8080,443=8443</c>.</summary>
-    public static IReadOnlyDictionary<int, int> ParsePortMap(string text)
+    /// <summary>Parses <c>80=8080,443=8443,53/udp=5353</c>.</summary>
+    public static (IReadOnlyDictionary<int, int> Tcp, IReadOnlyDictionary<int, int> Udp) ParsePortMap(string text)
     {
-        var map = new Dictionary<int, int>();
+        var tcp = new Dictionary<int, int>();
+        var udp = new Dictionary<int, int>();
         foreach (var entry in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            var parts = entry.Split('=');
-            if (parts.Length != 2 ||
-                !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var gateway) ||
-                !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var dataPlane) ||
-                gateway is < 1 or > 65535 || dataPlane is < 1 or > 65535)
+            var (protocol, gateway, dataPlane) = ParsePortMapEntry(entry);
+            var map = protocol == "udp" ? udp : tcp;
+            if (map.ContainsKey(gateway)) // NOSONAR S2583 -- map accumulates across loop iterations.
             {
-                throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080.");
+                throw new ArgumentException($"--port-map maps port {gateway}/{protocol} more than once.");
             }
 
             map[gateway] = dataPlane;
         }
 
-        return map;
+        return (tcp, udp);
+    }
+
+    private static (string Protocol, int Gateway, int DataPlane) ParsePortMapEntry(string entry)
+    {
+        var parts = entry.Split('=');
+        if (parts.Length != 2)
+        {
+            throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080 or 53/udp=5353.");
+        }
+
+        var left = parts[0];
+        var protocol = "tcp";
+        var slash = left.IndexOf('/', StringComparison.Ordinal);
+        if (slash >= 0)
+        {
+            protocol = left[(slash + 1)..].ToLowerInvariant();
+            left = left[..slash];
+        }
+
+        if (protocol is not ("tcp" or "udp"))
+        {
+            throw new ArgumentException($"--port-map entry '{entry}' uses unsupported protocol '{protocol}'.");
+        }
+
+        if (!int.TryParse(left, NumberStyles.None, CultureInfo.InvariantCulture, out var gateway) ||
+            !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var dataPlane) ||
+            gateway is < 1 or > 65535 || dataPlane is < 1 or > 65535)
+        {
+            throw new ArgumentException($"--port-map entry '{entry}' must look like 80=8080 or 53/udp=5353.");
+        }
+
+        return (protocol, gateway, dataPlane);
     }
 
     public GatewayControllerOptions ToControllerOptions() => new()
@@ -208,6 +247,8 @@ public sealed class GatewayOptions
         {
             ControllerName = ControllerName,
             ListenerPortMap = PortMap,
+            UdpListenerPortMap = UdpPortMap,
+            BackendTlsPolicyEnabled = BackendTlsPolicyEnabled,
             AdminPort = AdminPort,
             AdminTokenEnv = AdminTokenEnv,
             TlsMountPath = TlsMountPath,
@@ -234,7 +275,11 @@ public sealed class GatewayOptions
         Identity = Identity,
     };
 
-    public ClusterCacheOptions ToCacheOptions() => new() { SecretNamespaces = SecretNamespaces };
+    public ClusterCacheOptions ToCacheOptions() => new()
+    {
+        SecretNamespaces = SecretNamespaces,
+        BackendTlsPolicyEnabled = BackendTlsPolicyEnabled,
+    };
 
     private void Validate()
     {

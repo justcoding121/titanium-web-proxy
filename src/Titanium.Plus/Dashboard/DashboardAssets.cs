@@ -165,9 +165,39 @@ internal static class DashboardAssets
             }).catch(function () { say('Request failed.'); });
           }
 
+          function edit(mode) {
+            var form = document.querySelector('form[data-kind]');
+            var area = document.getElementById('edit-json');
+            var out = document.getElementById('edit-result');
+            if (!form || !area || !out) { return; }
+            var kind = form.getAttribute('data-kind');
+            var id = form.getAttribute('data-id');
+            if (mode === 'delete' && !window.confirm('Delete ' + kind + ' ' + id + '?')) { return; }
+            out.textContent = 'Working...';
+            fetch('/edit/' + kind + '/' + mode + (id ? '/' + encodeURIComponent(id) : ''), {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'X-Titanium-Csrf': csrf, 'Content-Type': 'application/json' },
+              body: mode === 'delete' ? '' : area.value
+            }).then(function (r) {
+              return r.text().then(function (text) {
+                var d = null;
+                try { d = JSON.parse(text); } catch (x) { d = null; }
+                if (r.ok && d && d.ok) {
+                  out.textContent = mode === 'validate' ? 'Valid.' : mode === 'delete' ? 'Deleted.' : 'Saved.';
+                  if (mode !== 'validate') { window.setTimeout(function () { window.location.href = '/routes'; }, 600); }
+                } else {
+                  out.textContent = d && d.errors && d.errors.length ? d.errors.join('\n') : 'Refused (' + r.status + '): ' + text;
+                }
+              });
+            }).catch(function () { out.textContent = 'Request failed.'; });
+          }
+
           document.addEventListener('click', function (event) {
             var target = event.target;
             if (!target || !target.closest) { return; }
+            var editButton = target.closest('button[data-edit]');
+            if (editButton) { edit(editButton.getAttribute('data-edit')); return; }
             var b = target.closest('button[data-act]');
             if (b && !b.disabled) {
               var act = b.getAttribute('data-act');
@@ -175,8 +205,10 @@ internal static class DashboardAssets
               post('/' + act + '/' + encodeURIComponent(id), function (r, text) {
                 var okMsg = act === 'drain' ? 'Draining ' + id
                   : act === 'reload' ? 'Reload ' + text
+                  : act === 'clear-overlay' ? 'Dashboard edits cleared'
                   : 'Marked healthy: ' + id;
                 say(r.ok ? okMsg : 'Refused (' + r.status + '): ' + text);
+                if (r.ok && act === 'clear-overlay') { window.location.reload(); }
                 tick();
               });
               return;
@@ -217,5 +249,7 @@ internal static class DashboardAssets
         .error { color: var(--bad); }
         button { cursor: pointer; }
         button:disabled { cursor: not-allowed; }
+        textarea#edit-json { width: 100%; box-sizing: border-box; font-family: ui-monospace, monospace; }
+        #edit-result { white-space: pre-wrap; min-height: 1.2rem; }
         """;
 }

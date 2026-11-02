@@ -76,6 +76,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "titanium-gateway.adminSecretName" . }}
                   key: {{ .Values.dataPlane.admin.token.key }}
+            {{- if .Values.dataPlane.zoneAware.enabled }}
+            - name: TITANIUM_ZONE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['topology.kubernetes.io/zone']
+            {{- end }}
             {{- with .Values.dataPlane.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

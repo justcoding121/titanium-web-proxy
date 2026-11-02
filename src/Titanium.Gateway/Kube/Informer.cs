@@ -19,11 +19,19 @@ public sealed class Informer<T> where T : class
     private readonly Func<JsonElement, T?> _parse;
     private readonly ILogger _log;
     private readonly TimeProvider _time;
+    private readonly bool _optional;
     private readonly object _gate = new();
     private readonly Dictionary<string, T> _items = new(StringComparer.Ordinal);
     private IReadOnlyList<T>? _snapshot = [];
 
-    public Informer(IKubeApi api, string path, string? fieldSelector, Func<JsonElement, T?> parse, ILogger log, TimeProvider? time = null)
+    public Informer(
+        IKubeApi api,
+        string path,
+        string? fieldSelector,
+        Func<JsonElement, T?> parse,
+        ILogger log,
+        TimeProvider? time = null,
+        bool optional = false)
     {
         _api = api;
         _path = path;
@@ -31,6 +39,7 @@ public sealed class Informer<T> where T : class
         _parse = parse;
         _log = log;
         _time = time ?? TimeProvider.System;
+        _optional = optional;
     }
 
     public string Path => _path;
@@ -67,6 +76,17 @@ public sealed class Informer<T> where T : class
             {
                 return;
             }
+            catch (OptionalResourceMissingException)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(60), _time, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
             catch (Exception ex)
             {
                 _log.LogWarning(ex, "Informer {Path} failed: {Message}. Retrying in {Seconds}s.", _path, ex.Message, (int)backoff.TotalSeconds);
@@ -101,6 +121,19 @@ public sealed class Informer<T> where T : class
             var response = await _api.SendAsync(HttpMethod.Get, Url(query), null, null, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccess)
             {
+                if (_optional && response.IsNotFound)
+                {
+                    lock (_gate)
+                    {
+                        _items.Clear();
+                        _snapshot = null;
+                    }
+
+                    HasSynced = true;
+                    Changed?.Invoke();
+                    throw new OptionalResourceMissingException();
+                }
+
                 throw new KubeApiException(response.Status, response.Body);
             }
 
@@ -243,4 +276,6 @@ public sealed class Informer<T> where T : class
         var ns = element.GetString(MetadataKey, "namespace");
         return ns is null ? name : ns + "/" + name;
     }
+
+    public sealed class OptionalResourceMissingException : Exception;
 }

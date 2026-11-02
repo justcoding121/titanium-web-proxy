@@ -1,10 +1,15 @@
 #pragma warning disable CA1416
 using System;
+using System.Collections.Generic;
 using System.Net.Quic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
+using Titanium.Web.Proxy.Http3.Qpack;
+using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.Http3;
 
@@ -23,7 +28,12 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
     private Task? _acceptLoop;
     private QuicStream? _controlStream;
     private Http3Settings? _peerSettings;
+    private readonly TaskCompletionSource _peerSettingsReceived =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _disposed;
+
+    // CI runners can stall briefly between AcceptInboundStream and the peer control SETTINGS frame.
+    private static readonly TimeSpan ConnectProtocolSettingsWait = TimeSpan.FromSeconds(5);
 
     // Connection-scoped reuse of identical bodiless reverse QPACK request blocks (probe tiny-GET).
     // Published as one immutable slot so fingerprint and bytes cannot tear under c=64.
@@ -37,6 +47,142 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
     /// <summary>Peer SETTINGS when received; otherwise <see langword="null"/>.</summary>
     internal Http3Settings? PeerSettings => _peerSettings;
+
+    /// <summary>
+    ///     True when the origin advertised <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> within
+    ///     <see cref="ConnectProtocolSettingsWait"/> after the session started.
+    /// </summary>
+    internal async Task<bool> OriginAdvertisesConnectProtocolAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _peerSettingsReceived.Task.WaitAsync(ConnectProtocolSettingsWait, cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+
+        return _peerSettings?.EnableConnectProtocol == true;
+    }
+
+    /// <summary>
+    ///     Opens an RFC 9220 extended CONNECT tunnel on a fresh bidirectional stream. The request must
+    ///     already have <c>Method = CONNECT</c> and <see cref="Request.ExtendedConnectProtocol" /> set.
+    ///     Throws <see cref="InvalidOperationException" /> when the origin did not advertise connect
+    ///     protocol support.
+    /// </summary>
+    internal async Task<Http3OriginTunnelResult> OpenExtendedConnectAsync(
+        Request request,
+        string authorityHost,
+        ProxyResourceLimits resourceLimits,
+        Func<ValueTask> onTunnelDisposed,
+        CancellationToken cancellationToken)
+    {
+        if (!await OriginAdvertisesConnectProtocolAsync(cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "The origin did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL=1; " +
+                "extended CONNECT cannot be opened on this HTTP/3 connection.");
+        }
+
+        var originStream = await _connection.OpenOutboundStreamAsync(QuicStreamType.Bidirectional, cancellationToken);
+        var maxFrame = resourceLimits.MaxHttp3FramePayloadBytes;
+        var handedOff = false;
+
+        try
+        {
+            var encodedHeaders = QpackEncoder.EncodeRequest(request, authorityHost);
+            await Http3Frame.WriteAsync(originStream, Http3FrameType.Headers, encodedHeaders, cancellationToken);
+            await originStream.FlushAsync(cancellationToken);
+
+            var response = await ReadExtendedConnectResponseAsync(originStream, maxFrame, cancellationToken);
+            if (response.StatusCode is < 200 or >= 300)
+            {
+                handedOff = true;
+                await originStream.DisposeAsync();
+                return new Http3OriginTunnelResult(response, null);
+            }
+
+            handedOff = true;
+            var tunnelStream = new Http3TunnelStream(originStream, maxFrame, onTunnelDisposed);
+            return new Http3OriginTunnelResult(response, tunnelStream);
+        }
+        catch
+        {
+            if (!handedOff)
+            {
+                try { await originStream.DisposeAsync(); }
+                catch
+                {
+                    // best-effort
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task<Response> ReadExtendedConnectResponseAsync(
+        QuicStream originStream,
+        long maxFramePayloadBytes,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var frame = await Http3Frame.ReadAsync(originStream, maxFramePayloadBytes, cancellationToken);
+            if (frame is null)
+            {
+                return new Response
+                {
+                    HttpVersion = HttpHeader.Version30,
+                    StatusCode = 502,
+                    StatusDescription = "Bad Gateway"
+                };
+            }
+
+            try
+            {
+                if (frame.Type != Http3FrameType.Headers)
+                {
+                    if (frame.Type == Http3FrameType.Data)
+                    {
+                        throw new Http3StreamException(Http3ErrorCode.FrameUnexpected,
+                            "DATA frame received before response HEADERS on extended CONNECT.");
+                    }
+
+                    continue;
+                }
+
+                var decoded = QpackDecoder.Decode(frame.Payload.Span);
+                return BuildResponseFromDecodedHeaders(decoded);
+            }
+            finally
+            {
+                frame.ReturnPayload();
+            }
+        }
+    }
+
+    private static Response BuildResponseFromDecodedHeaders(List<(string Name, string Value)> headers)
+    {
+        var response = new Response { HttpVersion = HttpHeader.Version30 };
+        foreach (var (name, value) in headers)
+        {
+            if (name == ":status" && int.TryParse(value, out var statusCode))
+                response.StatusCode = statusCode;
+            else if (!name.StartsWith(':'))
+                response.Headers.AddHeader(new HttpHeader(name, value));
+        }
+
+        if (response.StatusCode is < 100 or > 599)
+        {
+            response.StatusCode = 502;
+            response.StatusDescription = "Bad Gateway";
+        }
+
+        return response;
+    }
 
     /// <summary>
     ///     Sends client SETTINGS, then starts the inbound uni-stream drain loop.
@@ -154,9 +300,9 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
 
                 if (streamType.Value == Http3StreamType.Control)
                 {
-                    var peerSettings = await ProcessPeerControlStreamAsync(stream, ct);
-                    if (peerSettings != null)
-                        _peerSettings = peerSettings;
+                    // Signal SETTINGS as soon as they are parsed — the peer keeps the control stream
+                    // open, so waiting for EOF would block OriginAdvertisesConnectProtocolAsync forever.
+                    await ProcessPeerControlStreamAsync(stream, ct);
                     return;
                 }
 
@@ -180,14 +326,13 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         }
     }
 
-    private static async Task<Http3Settings?> ProcessPeerControlStreamAsync(QuicStream stream, CancellationToken ct)
+    private async Task ProcessPeerControlStreamAsync(QuicStream stream, CancellationToken ct)
     {
         var receivedSettings = false;
-        Http3Settings? settings = null;
         while (!ct.IsCancellationRequested)
         {
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 16 * 1024, ct);
-            if (frame is null) return settings;
+            if (frame is null) return;
 
             try
             {
@@ -196,8 +341,9 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
                     if (frame.Type != Http3FrameType.Settings)
                         throw new Http3ConnectionException(Http3ErrorCode.MissingSettings,
                             "RFC 9114 §6.2.2: first frame on the control stream must be SETTINGS.");
-                    settings = Http3Settings.Parse(frame.Payload.Span);
+                    _peerSettings = Http3Settings.Parse(frame.Payload.Span);
                     receivedSettings = true;
+                    _peerSettingsReceived.TrySetResult();
                     continue;
                 }
 
@@ -211,8 +357,6 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
                 frame.ReturnPayload();
             }
         }
-
-        return settings;
     }
 
 

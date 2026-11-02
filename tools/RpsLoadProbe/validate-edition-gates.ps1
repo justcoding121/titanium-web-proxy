@@ -170,7 +170,17 @@ $pairs = @(
     @{ Label = 'CLI script wasm-noop ÷ CLI route'; Num = 'twp-cli-script-wasm-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptWasmNoopGate },
     @{ Label = 'CLI script lua slow-upstream ÷ CLI slow-upstream'; Num = 'twp-cli-script-lua-slow-upstream-http1'; Den = 'twp-cli-slow-upstream-http1'; Gate = $ScriptSlowUpstreamGate },
     @{ Label = 'CLI script 1-in-50 ÷ CLI route'; Num = 'twp-cli-script-1in50-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = $ScriptOneInFiftyGate },
-    @{ Label = 'CLI plugin .NET noop ÷ CLI route'; Num = 'twp-cli-plugin-dotnet-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 }
+    @{ Label = 'CLI plugin .NET noop ÷ CLI route'; Num = 'twp-cli-plugin-dotnet-noop-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI geo ÷ CLI route'; Num = 'twp-cli-geo-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI compress H2-H2 ÷ CLI route'; Num = 'twp-cli-compress-h2-h2'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI compress H3 ÷ CLI route'; Num = 'twp-cli-compress-h3'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI health gRPC ÷ CLI route'; Num = 'twp-cli-health-grpc-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI zone-aware ÷ CLI route'; Num = 'twp-cli-zoneaware-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI TCP TLS term ÷ CLI route'; Num = 'twp-cli-tcp-tlsterm'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI WS H3 ÷ CLI route'; Num = 'twp-ws-h3'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI compress zstd ÷ CLI route'; Num = 'twp-cli-compress-zstd-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI overload ÷ CLI route'; Num = 'twp-cli-overload-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 },
+    @{ Label = 'CLI hot restart ÷ CLI route'; Num = 'twp-cli-hotrestart-http1'; Den = 'twp-cli-reverse-http1-route'; Gate = 0.50 }
 )
 
 # A floor below 0.50 is a mistake, not a tuning knob.

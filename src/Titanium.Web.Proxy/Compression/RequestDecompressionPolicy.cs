@@ -64,6 +64,7 @@ internal sealed class RequestDecompressionPolicy
         {
             "gzip" or "x-gzip" => HttpCompression.Gzip,
             "br" => HttpCompression.Brotli,
+            "zstd" when Abstractions.Compression.ContentCodecs.IsRegistered("zstd") => HttpCompression.Zstd,
             _ => HttpCompression.Unsupported,
         };
         return encoding != HttpCompression.Unsupported;
@@ -134,7 +135,8 @@ internal sealed class RequestDecompressionPolicy
 
             // GZipStream ends silently on a stream cut short, so check the member's ISIZE field (the last four
             // bytes: the uncompressed length mod 2^32) to refuse a truncated body instead of forwarding it.
-            if (compressed.Length > 0
+            if (encoding == HttpCompression.Gzip
+                && compressed.Length > 0
                 && (compressed.Length < 18
                     || BinaryPrimitives.ReadUInt32LittleEndian(compressed.AsSpan(compressed.Length - 4))
                     != (uint)total))

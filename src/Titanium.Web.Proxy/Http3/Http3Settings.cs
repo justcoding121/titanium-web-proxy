@@ -34,6 +34,9 @@ internal static class Http3SettingsId
 
     /// <summary>QPACK: maximum number of blocked streams. Default 0.</summary>
     public const ulong QpackBlockedStreams = 0x7;
+
+    /// <summary>RFC 9220 / RFC 8441: SETTINGS_ENABLE_CONNECT_PROTOCOL.</summary>
+    public const ulong EnableConnectProtocol = 0x8;
 }
 
 /// <summary>
@@ -57,6 +60,9 @@ internal sealed class Http3Settings
     /// <summary>SETTINGS_QPACK_BLOCKED_STREAMS (0x7). 0 means no blocked streams (default).</summary>
     public uint QpackBlockedStreams { get; private set; }
 
+    /// <summary>SETTINGS_ENABLE_CONNECT_PROTOCOL (0x8). False when absent or zero.</summary>
+    public bool EnableConnectProtocol { get; private set; }
+
     public void Add(ulong id, ulong value)
     {
         _parameters.Add((id, value));
@@ -66,6 +72,8 @@ internal sealed class Http3Settings
             QpackMaxTableCapacity = (uint)Math.Min(value, uint.MaxValue);
         else if (id == Http3SettingsId.QpackBlockedStreams)
             QpackBlockedStreams = (uint)Math.Min(value, uint.MaxValue);
+        else if (id == Http3SettingsId.EnableConnectProtocol)
+            EnableConnectProtocol = value == 1;
     }
 
     /// <summary>Adds SETTINGS_QPACK_MAX_TABLE_CAPACITY to this settings object.</summary>
@@ -73,6 +81,13 @@ internal sealed class Http3Settings
 
     /// <summary>Adds SETTINGS_QPACK_BLOCKED_STREAMS to this settings object.</summary>
     public void SetQpackBlockedStreams(uint count) => Add(Http3SettingsId.QpackBlockedStreams, count);
+
+    /// <summary>Adds SETTINGS_ENABLE_CONNECT_PROTOCOL (0x08) when enabled.</summary>
+    public void SetEnableConnectProtocol(bool enabled)
+    {
+        if (enabled)
+            Add(Http3SettingsId.EnableConnectProtocol, 1);
+    }
 
     /// <summary>
     ///     Parses a SETTINGS frame payload.

@@ -505,6 +505,10 @@ public partial class ProxyServer
         // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
         ReverseProxySessionDispatch.ApplyResponseTransforms(args);
 
+        // server.overload disableKeepAlive: one volatile bool read when overload protection is off.
+        if (_overloadEnabled)
+            ApplyOverloadConnectionCloseIfNeeded(args);
+
         // Listener-wide script phases (response headers, buffered body, trailers). Null host: one check, nothing else.
         if (ReverseProxy?.ScriptPipeline is { } scriptHost)
             await ScriptPhaseDispatch.RunResponseAsync(scriptHost, args).ConfigureAwait(false);

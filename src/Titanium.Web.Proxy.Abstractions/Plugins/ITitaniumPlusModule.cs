@@ -75,6 +75,9 @@ public sealed class PlusActivationContext
     /// when the agent starts, or <c>manager.stateDir</c> from options.
     /// </summary>
     public string? StateDirectory { get; init; }
+
+    /// <summary>Route/cluster validation and overlay edits from the dashboard. Null when editing is unavailable.</summary>
+    public IConfigEditor? ConfigEditor { get; init; }
 }
 
 /// <summary>

@@ -51,6 +51,12 @@ public sealed class ReverseProxyOptions
     public Routing.IFleetRateStore? FleetRateStore { get; init; }
 
     /// <summary>
+    /// Optional GeoIP country lookup for <c>geo</c> route policies. Null (default) is zero-cost on routes that do not
+    /// list a <c>geo</c> policy. The CLI supplies an MMDB-backed resolver when <c>server.geoIpDatabasePath</c> is set.
+    /// </summary>
+    public Routing.IGeoIpResolver? GeoIpResolver { get; init; }
+
+    /// <summary>
     /// Listener-wide script hook set (Lua or WASM host). Null (default) costs one null check per seam. When set, requests
     /// leave H1 terminate-lite and take the full session path, because the host may edit headers and bodies.
     /// </summary>
@@ -93,6 +99,25 @@ public sealed class ReverseProxyOptions
     private int grpcWebState;
     private int sessionOnlyMiddlewareState;
     private int routePluginState;
+    private int geoPolicyState;
+
+    /// <summary>
+    /// True when a route lists a <c>geo</c> policy. Computed once per options instance so unrelated routes pay one switch case only.
+    /// </summary>
+    internal bool HasGeoPolicies
+    {
+        get
+        {
+            var state = Volatile.Read(ref geoPolicyState);
+            if (state == 0)
+            {
+                state = AnyReferencedPolicyKind("geo") ? 2 : 1;
+                Volatile.Write(ref geoPolicyState, state);
+            }
+
+            return state == 2;
+        }
+    }
 
     /// <summary>
     /// True when a registered middleware implements <see cref="IRequiresSessionPathMiddleware"/> (the Plus WAF). Computed
@@ -237,6 +262,36 @@ public sealed class ReverseProxyOptions
                 {
                     if (string.Equals(policies[p].Name, names[n], StringComparison.Ordinal) &&
                         (handledOnly ? PolicyKinds.IsHandled(policies[p].Kind) : PolicyKinds.AwaitsService(policies[p].Kind)))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private bool AnyReferencedPolicyKind(string kind)
+    {
+        if (Policies is not { Count: > 0 } policies || Routes is not { Count: > 0 } routes)
+        {
+            return false;
+        }
+
+        for (var r = 0; r < routes.Count; r++)
+        {
+            if (routes[r].Policies is not { Count: > 0 } names)
+            {
+                continue;
+            }
+
+            for (var n = 0; n < names.Count; n++)
+            {
+                for (var p = 0; p < policies.Count; p++)
+                {
+                    if (string.Equals(policies[p].Name, names[n], StringComparison.Ordinal) &&
+                        string.Equals(policies[p].Kind, kind, StringComparison.Ordinal))
                     {
                         return true;
                     }

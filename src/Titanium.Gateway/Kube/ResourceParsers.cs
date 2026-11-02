@@ -10,6 +10,7 @@ internal sealed record SecretData(string Namespace, string Name, string? Type, s
 internal static class ResourceParsers
 {
     private const string MetadataKey = "metadata";
+    private const string NamespaceKey = "namespace";
 
     public static T? Typed<T>(JsonElement element) where T : class => element.Deserialize<T>(GatewayJson.Options);
 
@@ -36,7 +37,7 @@ internal static class ResourceParsers
     public static ServiceInfo? Service(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         if (name is null || ns is null)
         {
             return null;
@@ -51,7 +52,17 @@ internal static class ResourceParsers
             .OfType<ServiceAddress>()
             .ToList();
 
-        return new ServiceInfo(ns, name, element.GetString("spec", "type"), element.GetString("spec", "clusterIP"), ports, addresses);
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal);
+        var annotationElement = element.Get("metadata", "annotations");
+        if (annotationElement is { ValueKind: JsonValueKind.Object })
+        {
+            foreach (var pair in annotationElement.Value.EnumerateObject())
+            {
+                annotations[pair.Name] = pair.Value.GetString() ?? string.Empty;
+            }
+        }
+
+        return new ServiceInfo(ns, name, element.GetString("spec", "type"), element.GetString("spec", "clusterIP"), ports, addresses, annotations);
     }
 
     private static ServicePortInfo? ParseServicePort(JsonElement port)
@@ -97,7 +108,7 @@ internal static class ResourceParsers
     public static EndpointSliceInfo? EndpointSlice(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         var service = element.GetString(MetadataKey, "labels", "kubernetes.io/service-name");
         if (name is null || ns is null || service is null)
         {
@@ -112,7 +123,8 @@ internal static class ResourceParsers
             .Select(e => new EndpointInfo(
                 e.GetArray("addresses").Select(a => a.GetString() ?? string.Empty).Where(a => a.Length > 0).ToList(),
                 e.GetBool("conditions", "ready"),
-                e.GetString("targetRef", "kind") == "Pod" ? e.GetString("targetRef", "name") : null))
+                e.GetString("targetRef", "kind") == "Pod" ? e.GetString("targetRef", "name") : null,
+                e.GetString("zone")))
             .ToList();
         return new EndpointSliceInfo(ns, name, service, element.GetString("addressType"), ports, endpoints);
     }
@@ -120,7 +132,7 @@ internal static class ResourceParsers
     public static SecretData? Secret(JsonElement element)
     {
         var name = element.GetString(MetadataKey, "name");
-        var ns = element.GetString(MetadataKey, "namespace");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
         if (name is null || ns is null)
         {
             return null;
@@ -134,6 +146,27 @@ internal static class ResourceParsers
             Decode(element.GetString("data", "tls.crt")),
             Decode(element.GetString("data", "tls.key")),
             Decode(element.GetString("data", "ca.crt")));
+    }
+
+    public static ConfigMapInfo? ConfigMap(JsonElement element)
+    {
+        var name = element.GetString(MetadataKey, "name");
+        var ns = element.GetString(MetadataKey, NamespaceKey);
+        if (name is null || ns is null)
+        {
+            return null;
+        }
+
+        var data = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (element.Get("data") is { ValueKind: JsonValueKind.Object } json)
+        {
+            foreach (var property in json.EnumerateObject())
+            {
+                data[property.Name] = property.Value.GetString() ?? string.Empty;
+            }
+        }
+
+        return new ConfigMapInfo(ns, name, data);
     }
 
     private static byte[]? Decode(string? base64)

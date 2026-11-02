@@ -310,7 +310,7 @@ internal static class CertificateBootstrap
         IReadOnlyList<SniCertificateBinding> frozen = bindings;
         foreach (var endPoint in proxy.ProxyEndPoints)
         {
-            if (endPoint.DecryptSsl)
+            if (endPoint.DecryptSsl || endPoint is TransparentBaseProxyEndPoint { TerminateTls: true })
             {
                 endPoint.SniCertificates = frozen;
             }

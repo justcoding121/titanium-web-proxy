@@ -85,7 +85,7 @@ public class GatewayTranslatorBackendTests
     {
         var b = Basic();
         b.Services.RemoveAll(s => s.Name == "web");
-        b.Services.Add(new ServiceInfo("default", "web", "ClusterIP", "10.96.1.1", [new ServicePortInfo("http", 80, null, "web")], []));
+        b.Services.Add(new ServiceInfo("default", "web", "ClusterIP", "10.96.1.1", [new ServicePortInfo("http", 80, null, "web")], [], StateBuilder.NoServiceAnnotations));
         b.Slices[0] = b.Slices[0] with
         {
             Ports = [new EndpointPortInfo("http", 9090, "TCP")],

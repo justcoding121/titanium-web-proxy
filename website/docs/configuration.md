@@ -325,6 +325,28 @@ Match fields typically include host, path (`Exact` / `Prefix` / `Template`), met
 
 A `rateLimit` policy counts requests per key and answers 429 with `Retry-After` (whole seconds until the window ends or a token is back) when the limit is spent. `key` picks what is counted: `client` (default, the socket address), `forwardedClient` (the rightmost `X-Forwarded-For` entry that is not in `server.forwardedHeaders.trustedProxies`, used only when the peer itself is trusted, otherwise the socket address), `header:<Name>`, `cookie:<Name>`, or `route`. A header or cookie value is stored as a 16-byte SHA-256 prefix, and a request without it is counted by client address. `algorithm` is `fixedWindow` (default, `limit` requests per `windowSeconds`) or `tokenBucket` (refills `limit` tokens per `windowSeconds` up to `burst`, which defaults to `limit`). `maxKeys` (1000 to 10000000, default 100000) bounds the counters kept per policy: when full, expired counters are dropped, and any further new key shares one overflow counter, so a client that rotates header values cannot grow memory or dodge the limit. `emitHeaders` (default false) adds `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` to the 429. With the default keys and algorithm, counting is unchanged. The default `scope` is `node`: counters stay in process memory per proxy instance.
 
+### Geo (route policy `geo`) {#geo-route-policy-geo}
+
+A route can allow or deny clients by country using an operator-supplied MaxMind DB (MMDB) country database. Set `server.geoIpDatabasePath` to the file path, then attach a `geo` policy to the route. The policy reuses the same `allow` and `deny` fields as `ipAllowDeny`, but values are comma-separated two-letter ISO 3166-1 country codes (for example `US, CA, GB`).
+
+```yaml twp-fragment
+server:
+  geoIpDatabasePath: /etc/titanium/GeoLite2-Country.mmdb
+policies:
+  - name: us-only
+    kind: geo
+    allow: US
+routes:
+  - id: app
+    clusterId: web
+    match: { path: /, pathKind: Prefix }
+    policies: [us-only]
+```
+
+When the country is unknown (private address, missing from the database, or no resolver at runtime), an **allow** list denies the request (`403`); a **deny-only** list lets it through. Titanium does not ship a GeoIP database. You are responsible for the database license. On config reload, the CLI swaps in a new MMDB when the path or file timestamp changes and keeps the previous reader for 30 seconds so in-flight lookups finish.
+
+Library hosts set `ReverseProxyOptions.GeoIpResolver` to any `IGeoIpResolver` implementation (the CLI uses MaxMind.Db when `geoIpDatabasePath` is configured).
+
 ### Fleet rate limit {#fleet-rate-limit}
 
 Set `scope: fleet` on a `rateLimit` policy (Plus) to share one token bucket across instances through Redis (`plus.options` `state.redis`, or `state.mode` / `state.redis` as for the older per-IP window). Each node keeps a small local reserve and refills it with a background lease; the request path never awaits Redis. Overshoot across N nodes is bounded by `limit + burst + N * leaseSize` (a node may hold an unused lease). Lease size shrinks toward 1 when `limit` is small, so a single node cannot drain a low fleet budget — accuracy at low limits prefers smaller leases over perfect fairness. When Redis is down or the store is not started, `fleetFailMode` applies: `local` (default) falls back to a per-node bucket at `limit * localShare` (default `0.25`), `open` allows traffic, and `closed` answers 429. `fleetFailMode` and `localShare` are valid only with `scope: fleet`.
@@ -724,11 +746,49 @@ server:
     rootCertificateIssuerName: null
     saveFakeCertificates: true
     disableWildCardCertificates: false
+  overload:                    # opt-in pressure shedding (see below)
+    enabled: false
+    intervalMs: 500
+    heapPercent: { elevated: 85, critical: 95 }
+    threadPoolQueue: { elevated: 1000, critical: 10000 }
+    actions:
+      disableKeepAlive: true
+      stopAccepting: true
+      rejectNewRequests: true
+      readyzFailsOnCritical: true
+    retryAfterSeconds: 1
+  hotRestart:                  # Linux only (see below)
+    enabled: false
+    pidFile: null              # required when enabled; its directory must exist
+    handoverTimeoutSeconds: 60 # 5..3600: how long the old process drains after the handover signal
+  reloadListeners: false       # true reconciles listeners on reload; xDS forces on
 ```
 
 Listener-level `enableHttp2: false` still forces HTTP/2 off after `server.enableHttp2`. Listener-level `enableHttp3: false` (or `server.enableHttp3: false`) disables HTTP/3.
 
 HTTP interception is not a YAML knob: the CLI turns it on automatically when the config needs the session path (transforms, static files, ACME, access logs, response compression, request decompression, or gRPC-JSON). Request timing capture is not a YAML knob either: it is enabled automatically when any cluster uses `LeastTime` (and when access logs are enabled).
+
+### Overload protection
+
+`server.overload` is off unless `enabled: true`. A background sampler (not the request hot path) reads heap percent, thread-pool queue depth, and active connections, then advances a hysteresis state machine (`Normal` → `Elevated` → `Critical`). At elevated levels the proxy can close HTTP/1 keep-alives; at critical it can stop accepting and answer new requests with `503` plus `Retry-After`. `/healthz` stays up; while the level is critical `/readyz` answers `503` with the reason `overload_critical` when `actions.readyzFailsOnCritical` is true, and recovers when the level drops.
+
+- A missing `heapPercent` or `threadPoolQueue` section uses the default thresholds shown above. `activeConnections` has no default and is off unless you set it. Setting a signal to `{ elevated: 0, critical: 0 }` turns it off. Validation requires `1 <= elevated < critical`, `heapPercent` values of at most 100, and `intervalMs` of 100 to 10000.
+- A config reload re-applies the section on the running sampler: enabling it starts the sampler, changing thresholds swaps them (the level restarts from `Normal` and converges within one dwell), and disabling it clears every action.
+- `disableKeepAlive` sends `Connection: close` on HTTP/1.1 responses that pass through the session path. The terminate-lite fast path does not run response hooks, so it is not covered; `stopAccepting` and `rejectNewRequests` still apply there.
+- Observability: `twp.overload.level` (gauge, 0 to 2) and `twp.overload.actions` (counter by `action`: `disable_keep_alive`, `reject`, `stop_accepting`).
+- Leave it off unless you need process-local shedding.
+
+### Hot restart (Linux)
+
+`server.hotRestart.enabled: true` binds every listener with `SO_REUSEPORT`, so a new process can listen on the same ports as the old one. After the new process has bound its listeners and is ready it reads `pidFile`; if that names a live process of the same program it sends `SIGUSR2`, then writes its own pid to the file. The old process closes its TCP listening sockets at once (so the kernel sends it no new connections), serves the connections it already accepted for up to `handoverTimeoutSeconds`, and exits. The new process never kills the old one, a stale or foreign pid is ignored, and two simultaneous restarts are serialized by an exclusive lock on `<pidFile>.lock`.
+
+- Validation rejects the section on non-Linux hosts, without a `pidFile`, or with a `handoverTimeoutSeconds` outside 5 to 3600.
+- UDP ports cannot be shared. A successor that finds a live previous process binds its TCP listeners at once and **defers** the HTTP/3 side of decrypting listeners, `quic`, `masque` and `udp` listeners until the old process has exited (it polls every 250 ms for up to `handoverTimeoutSeconds`). HTTP/3 and UDP traffic is therefore unavailable for that gap, and clients fall back to TCP. If the old process does not exit in time, an error is logged and those listeners stay off; the old process is never killed.
+- A successor that fails before it is ready (bad config, crash) never signals the old process, which keeps serving.
+- `titanium restart -c <config>` starts a new `titanium run` with the same arguments (its output goes to `<pidFile>.log`), waits until the pid file names it, and prints the outcome. It exits non-zero, with the tail of the log, if the new process dies or does not take over within `handoverTimeoutSeconds`.
+- `SO_REUSEPORT` also lets a different process of the same user bind the port. That is why the feature is opt-in and the pid file is checked.
+- The supervisor must tolerate two processes during the handover (systemd: start the new process as a transient unit with `systemd-run`, or use `KillMode=process`).
+- A connection that sits in the old socket
 
 ### Listener TLS policy (`server.tls`)
 

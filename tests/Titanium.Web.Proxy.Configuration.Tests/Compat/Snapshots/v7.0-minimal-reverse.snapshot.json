@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "7.0",
+  "listeners": [
+    {
+      "host": "127.0.0.1",
+      "port": 8000,
+      "decryptSsl": false,
+      "forwardHost": "127.0.0.1",
+      "forwardPort": 8080,
+      "acceptProxyProtocol": false,
+      "trustedProxyProtocolSources": [],
+      "passthrough": false,
+      "terminateTls": false,
+      "sniRoutes": []
+    }
+  ],
+  "routes": [],
+  "clusters": [],
+  "policies": []
+}

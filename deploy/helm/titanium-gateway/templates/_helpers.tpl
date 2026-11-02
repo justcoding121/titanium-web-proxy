@@ -68,7 +68,11 @@ app.kubernetes.io/component: data-plane
 {{- define "titanium-gateway.portMap" -}}
 {{- $pairs := list -}}
 {{- range .Values.dataPlane.ports -}}
+{{- if eq (default "TCP" .protocol) "UDP" -}}
+{{- $pairs = append $pairs (printf "%d/udp=%d" (int .servicePort) (int .containerPort)) -}}
+{{- else -}}
 {{- $pairs = append $pairs (printf "%d=%d" (int .servicePort) (int .containerPort)) -}}
+{{- end -}}
 {{- end -}}
 {{- join "," $pairs -}}
 {{- end }}

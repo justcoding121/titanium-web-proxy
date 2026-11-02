@@ -79,6 +79,16 @@ Titanium.Web.Proxy.Abstractions.Clusters.PassiveHealthConfig.ReactivateAfterSeco
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.UseHttps.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.get -> int
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Weight.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Zone.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.DestinationConfig.Zone.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.ZoneAwareConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalEndpoints.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalEndpoints.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalHealthyPercent.get -> int
+Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig.MinLocalHealthyPercent.init -> void
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.ZoneAware.get -> Titanium.Web.Proxy.Abstractions.Clusters.ZoneAwareConfig?
+Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.ZoneAware.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.UseDestinationHost.get -> bool
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.UseDestinationHost.set -> void
 Titanium.Web.Proxy.Abstractions.Clusters.DestinationState
@@ -352,6 +362,9 @@ Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.UnhealthyThreshold.i
 Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
 Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Http = 0 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
 Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Tcp = 1 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind.Grpc = 2 -> Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthKind
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.GrpcService.get -> string?
+Titanium.Web.Proxy.Abstractions.Clusters.ActiveHealthConfig.GrpcService.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Queue.get -> Titanium.Web.Proxy.Abstractions.Clusters.QueueConfig?
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Queue.init -> void
 Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig.Retry.get -> Titanium.Web.Proxy.Abstractions.Clusters.RetryConfig?
@@ -716,6 +729,14 @@ Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MimeTypes.init
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MinBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.MinBytes.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.ResponseCompressionConfig() -> void
+Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.IsRegistered(string! name) -> bool
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.Register(Titanium.Web.Proxy.Abstractions.Compression.IContentCodec! codec) -> void
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.TryGet(string! name, out Titanium.Web.Proxy.Abstractions.Compression.IContentCodec? codec) -> bool
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec.CreateCompressor(System.IO.Stream! sink, System.IO.Compression.CompressionLevel level, bool leaveOpen = true) -> System.IO.Stream!
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec.CreateDecompressor(System.IO.Stream! source, bool leaveOpen = true) -> System.IO.Stream!
+Titanium.Web.Proxy.Abstractions.Compression.IContentCodec.Name.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Compression.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.Compression.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteConfig.GrpcWeb.get -> bool
@@ -1089,6 +1110,8 @@ static readonly Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult.Cont
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult.Pause -> Titanium.Web.Proxy.Abstractions.Scripting.ScriptPhaseResult!
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult.Continue -> Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!
 static readonly Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult.Deny -> Titanium.Web.Proxy.Abstractions.Scripting.StreamFilterResult!
+Titanium.Web.Proxy.Abstractions.Routing.IGeoIpResolver
+Titanium.Web.Proxy.Abstractions.Routing.IGeoIpResolver.TryGetCountry(System.Net.IPAddress! address, out string! countryIsoCode) -> bool
 Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore
 Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore.LeaseAsync(string! key, int want, Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec spec, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult>
 Titanium.Web.Proxy.Abstractions.Routing.FleetRateSpec
@@ -1109,6 +1132,8 @@ Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.StoreAvailable.get -> b
 Titanium.Web.Proxy.Abstractions.Routing.FleetLeaseResult.StoreAvailable.init -> void
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.FleetRateStore.get -> Titanium.Web.Proxy.Abstractions.Routing.IFleetRateStore?
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.FleetRateStore.init -> void
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GeoIpResolver.get -> Titanium.Web.Proxy.Abstractions.Routing.IGeoIpResolver?
+Titanium.Web.Proxy.Abstractions.ReverseProxyOptions.GeoIpResolver.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scope.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Scope.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.FleetFailMode.get -> string?
@@ -1132,3 +1157,50 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigApplier.get 
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigApplier.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.StateDirectory.get -> string?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.StateDirectory.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Cluster.get -> Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Cluster.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.ConfigEdit() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Id.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Id.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Kind.get -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Route.get -> Titanium.Web.Proxy.Abstractions.Routing.RouteConfig?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit.Route.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind.RemoveCluster = 3 -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind.RemoveRoute = 1 -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind.UpsertCluster = 2 -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind.UpsertRoute = 0 -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditKind
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Applied.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Applied.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.ConfigEditResult() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Errors.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Errors.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.OverlayDigest.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.OverlayDigest.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigEditor
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigEditor.ApplyEditAsync(Titanium.Web.Proxy.Abstractions.Plugins.ConfigEdit! edit, string! actor, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult!>!
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigEditor.ClearOverlayAsync(string! actor, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult!>!
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigEditor.GetOverlayStatus() -> Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus!
+Titanium.Web.Proxy.Abstractions.Plugins.IConfigEditor.ValidateCandidate(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>? routes, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>? clusters) -> System.Collections.Generic.IReadOnlyList<string!>!
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.EditCount.get -> int
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.EditCount.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.HasOverlay.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.HasOverlay.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.LastEditUtc.get -> System.DateTimeOffset?
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.LastEditUtc.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.Orphans.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.Orphans.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.OverlayStatus() -> void
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.Suspended.get -> bool
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.Suspended.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.SuspendedReasons.get -> System.Collections.Generic.IReadOnlyList<string!>?
+Titanium.Web.Proxy.Abstractions.Plugins.OverlayStatus.SuspendedReasons.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigEditor.get -> Titanium.Web.Proxy.Abstractions.Plugins.IConfigEditor?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigEditor.init -> void
+static Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Ok(string? overlayDigest = null) -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult!
+static Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Rejected(System.Collections.Generic.IReadOnlyList<string!>! errors) -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult!
+static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.Unregister(string! name) -> bool
