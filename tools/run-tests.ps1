@@ -84,7 +84,6 @@ try {
                 if ($LASTEXITCODE -eq 0) { $ok = $true; break }
                 if ($i -eq $attempts) { $failed = $true }
             }
-            if (-not $ok) { break }
         }
     }
     finally {
