@@ -76,7 +76,9 @@ try {
                     '--logger', 'console;verbosity=normal',
                     '--results-directory', (Join-Path $results $key)
                 )
-                if ($Filter) { $args += @('--filter', $Filter) }
+                $effectiveFilter = $Filter
+                if ([string]::IsNullOrWhiteSpace($effectiveFilter)) { $effectiveFilter = 'TestCategory!=Fuzz-Nightly' }
+                $args += @('--filter', $effectiveFilter)
                 Write-Host "=== $key attempt $i/$attempts ==="
                 & dotnet @args
                 if ($LASTEXITCODE -eq 0) { $ok = $true; break }

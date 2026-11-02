@@ -111,6 +111,20 @@ public class CliCommandE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
+    public void StartRun_RejectsAWildcardListenerHost()
+    {
+        var path = Path.Combine(_tempDir, "wildcard.yaml");
+        File.WriteAllText(path, """
+            listeners:
+              - host: "0.0.0.0"
+                port: 9
+            """);
+        var error = Assert.ThrowsExactly<InvalidOperationException>(() => CliProcessHarness.AssertLoopbackConfig(path));
+        StringAssert.Contains(error.Message, "127.0.0.1");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
     public async Task TestCommand_InvalidConfig_ExitNonZero()
     {
         var cfg = ConfigFixtures.WriteInvalid(_tempDir);

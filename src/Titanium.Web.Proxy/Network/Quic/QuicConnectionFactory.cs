@@ -90,9 +90,17 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
             // Do not bind LocalEndPoint from UpStreamEndPoint here: QuicConnection resolves via
             // Happy Eyeballs, and an IPv4-only local bind fails against IPv6-first hosts (Google).
             // TCP uses UpStreamEndPointSelector after DNS; QUIC lacks an equivalent hook today.
+            // Loopback is the exception: an unbound UDP connect is reported as :: / 0.0.0.0 and
+            // prompts Windows Defender Firewall. Pin both ends to the same loopback family.
             MaxInboundBidirectionalStreams = 0,
             MaxInboundUnidirectionalStreams = 3  // control, QPACK encoder, QPACK decoder
         };
+
+        if (TryLoopbackBind(connectHost, port, out var loopbackRemote, out var loopbackLocal))
+        {
+            clientOptions.RemoteEndPoint = loopbackRemote;
+            clientOptions.LocalEndPoint = loopbackLocal;
+        }
 
         if (tlsMaterial?.ClientCertificate is { } clientCertificate)
         {
@@ -123,6 +131,39 @@ internal sealed class QuicConnectionFactory : IQuicConnectionFactory
         }
 
         return serverConnection;
+    }
+
+    /// <summary>
+    ///     Loopback QUIC must bind the client socket to <c>127.0.0.1</c> or <c>::1</c> before connect.
+    ///     An unbound UDP socket is an inbound listen on <c>0.0.0.0</c> or <c>::</c>, which prompts the firewall.
+    ///     <c>localhost</c> uses <c>::1</c>, matching the origin helper that listens on both families.
+    ///     Any other host stays a <see cref="DnsEndPoint"/> so address selection is unchanged.
+    /// </summary>
+    internal static bool TryLoopbackBind(string connectHost, int port, out IPEndPoint remote, out IPEndPoint local)
+    {
+        IPAddress? address = null;
+        if (IPAddress.TryParse(connectHost, out var parsed) && IPAddress.IsLoopback(parsed))
+        {
+            address = parsed;
+        }
+        else if (string.Equals(connectHost, "localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            address = IPAddress.IPv6Loopback;
+        }
+
+        if (address is null)
+        {
+            remote = new IPEndPoint(IPAddress.None, 0);
+            local = remote;
+            return false;
+        }
+
+        var localAddress = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+            ? IPAddress.IPv6Loopback
+            : IPAddress.Loopback;
+        remote = new IPEndPoint(address, port);
+        local = new IPEndPoint(localAddress, 0);
+        return true;
     }
 
     private bool DefaultValidationCallback(object sender, X509Certificate? certificate,

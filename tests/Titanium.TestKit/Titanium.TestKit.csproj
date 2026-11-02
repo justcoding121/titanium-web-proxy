@@ -10,6 +10,7 @@
   <ItemGroup>
     <!-- Linked into each test assembly by tests/Directory.Build.props. TestKit does not reference the proxy assembly. -->
     <Compile Remove="Shared\SuppressRootStoreUiModuleInit.cs" />
+    <Compile Remove="Shared\TwpStoreLeakGuard.cs" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

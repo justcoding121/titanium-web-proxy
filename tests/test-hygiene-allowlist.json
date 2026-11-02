@@ -1,0 +1,44 @@
+{
+  "entries": [
+    {
+      "file": "tests/Titanium.Web.Proxy.UnitTests/Udp/UdpRelayListenerTests.cs",
+      "contains": "IPAddress.IPv6Any",
+      "reason": "A dual-mode UDP socket is only observable on IPv6Any. The test is inconclusive unless TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1."
+    },
+    {
+      "file": "tests/Titanium.E2E.Tests/CliAdminE2ETests.cs",
+      "contains": "0.0.0.0",
+      "reason": "The admin host is rejected before the process binds. The CLI exits 1."
+    },
+    {
+      "file": "tests/Titanium.E2E.Tests/CliCommandE2ETests.cs",
+      "contains": "0.0.0.0",
+      "reason": "AssertLoopbackConfig rejects this host before a process starts. Nothing binds."
+    },
+    {
+      "file": "tests/Titanium.Cli.Tests/HealthcheckCommandTests.cs",
+      "contains": "0.0.0.0",
+      "reason": "Asserts the healthcheck URL rewrite for a wildcard admin host. Nothing binds."
+    },
+    {
+      "file": "tests/Titanium.Cli.Tests/HealthcheckCommandTests.cs",
+      "contains": "::",
+      "reason": "Asserts the healthcheck URL rewrite for an IPv6 wildcard admin host. Nothing binds."
+    },
+    {
+      "file": "tests/Titanium.Web.Proxy.Configuration.Tests/TwpConfigLoaderTests.cs",
+      "contains": "0.0.0.0",
+      "reason": "Loader fixture. The test does not start a listener."
+    },
+    {
+      "file": "tests/Titanium.Web.Proxy.Configuration.Tests/ControlPlaneTransportValidationTests.cs",
+      "contains": "0.0.0.0",
+      "reason": "Validator fixture for a non-loopback control plane. Nothing binds."
+    },
+    {
+      "file": "tests/Titanium.Web.Proxy.Configuration.Tests/UdpListenerValidationTests.cs",
+      "contains": "0.0.0.0",
+      "reason": "Validator fixture. Nothing binds."
+    }
+  ]
+}
