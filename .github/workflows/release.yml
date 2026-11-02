@@ -338,6 +338,18 @@ jobs:
             Push-Location $out
             try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
           }
+      - name: Smoke the CLI zip
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'cli-zip-smoke'
+          Expand-Archive -Path "Titanium.Cli-win-x64.zip" -DestinationPath $dir -Force
+          Get-ChildItem -LiteralPath $dir -Recurse -File | Unblock-File
+          $exe = Join-Path $dir 'titanium.exe'
+          & $exe version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $exe healthcheck --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Winget symlink smoke (win-x64)
         # winget portable installs create WinGet\Links symlinks to titanium.exe and twp.exe.
         # A multi-file publish fails there; this gate runs before any GitHub Release is published.
@@ -1164,8 +1176,56 @@ jobs:
             choco push $_.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
           }
 
+  publish-charts:
+    needs: [resolve-version, publish-release]
+    if: needs.publish-release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+      - name: Package the charts onto the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve-version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p charts
+          helm package deploy/helm/titanium -d charts
+          helm package deploy/helm/titanium-gateway -d charts
+          helm package deploy/helm/titanium-manager -d charts
+          gh release upload "$TAG" charts/*.tgz --clobber
+
+  image-scan:
+    needs: [resolve-version, publish-image, publish-gateway-image, publish-manager-image]
+    if: needs.publish-image.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ghcr.io/justcoding121/titanium-web-proxy
+          - ghcr.io/justcoding121/titanium-gateway
+          - ghcr.io/justcoding121/titanium-manager
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ matrix.image }}:${{ needs.resolve-version.outputs.version }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
   yank-failed-release:
-    needs: [resolve-version, publish-release, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey]
+    needs: [resolve-version, publish-release, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey, publish-charts, image-scan]
     if: failure() && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

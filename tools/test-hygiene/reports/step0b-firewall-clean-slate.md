@@ -1,6 +1,6 @@
 # Step 0b firewall clean slate
 
-Dry run on 2026-11-02 listed **110** candidates and **0** needs-review rules: testhost 68, rpsloadprobe 16, examples.basic 10, wpf 4, dotnet 4, titaniuminspector 2, quic-bind-repro 2, windowsservice 2, titanium.exe 2.
+Dry run on 2026-11-02 listed **116** candidates and **0** needs-review rules: testhost 72, rpsloadprobe 16, examples.basic 10, wpf 4, dotnet 4, quic-bind-repro 2, q.exe 2, titaniuminspector 2, windowsservice 2, titanium.exe 2. The four extra testhost rules and the q.exe rules are Block rules from Cancel clicks during the audit.
 
 `-Apply` without elevation exits 2. No `.wfw` backup was written. Profiles stayed Enabled, inbound Block, `NotifyOnListen` True. Stock groups and third-party rules were not touched.
 

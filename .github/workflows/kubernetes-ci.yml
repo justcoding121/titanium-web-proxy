@@ -269,6 +269,14 @@ jobs:
             | tar xz -C /usr/local/bin kubeconform
           kubeconform -v
 
+      - name: rendered manifests match the snapshots
+        run: |
+          set -euo pipefail
+          diff -u deploy/helm/titanium/ci/rendered-default.yaml <(helm template rel deploy/helm/titanium)
+          diff -u deploy/helm/titanium/ci/rendered-full.yaml <(helm template rel deploy/helm/titanium -f deploy/helm/titanium/ci/full-values.yaml)
+          diff -u deploy/helm/titanium-gateway/ci/rendered-default.yaml <(helm template rel deploy/helm/titanium-gateway --namespace gateway-system)
+          diff -u deploy/helm/titanium-manager/ci/rendered-default.yaml <(helm template rel deploy/helm/titanium-manager)
+
       - name: helm lint
         run: |
           set -euo pipefail

@@ -39,6 +39,22 @@ public class HelmChartTests
         Assert.IsTrue(doc.RootElement.GetProperty("properties").TryGetProperty("controller", out _));
     }
 
+    [TestMethod]
+    public void RenderedSnapshots_ContainADeployment()
+    {
+        foreach (var relative in new[]
+        {
+            Path.Combine("deploy", "helm", "titanium", "ci", "rendered-default.yaml"),
+            Path.Combine("deploy", "helm", "titanium", "ci", "rendered-full.yaml"),
+            Path.Combine("deploy", "helm", "titanium-gateway", "ci", "rendered-default.yaml"),
+            Path.Combine("deploy", "helm", "titanium-manager", "ci", "rendered-default.yaml"),
+        })
+        {
+            var text = File.ReadAllText(Path.Combine(RepoRoot, relative));
+            StringAssert.Contains(text, "kind: Deployment", relative);
+        }
+    }
+
     private static void AssertSchema(string chart, string property, int minimum, int? maximum)
     {
         var path = Path.Combine(RepoRoot, "deploy", "helm", chart, "values.schema.json");
