@@ -2,10 +2,12 @@ using System;
 using System.Runtime.CompilerServices;
 using Titanium.Web.Proxy.Network;
 
-namespace Titanium.Cli.Tests;
+namespace Titanium.TestKit.Shared;
 
 /// <summary>
-///     Prevent Windows CryptUI Root Store Yes/No dialogs from hanging local/CI test runs.
+///     Stops Windows CryptUI, macOS Keychain, and Linux polkit root-store dialogs from hanging
+///     a local or CI test run. Compiled into every test assembly. The environment variable stays
+///     set even if a test clears <see cref="CertificateManager.SuppressInteractiveRootStoreMutations"/>.
 /// </summary>
 internal static class SuppressRootStoreUiModuleInit
 {

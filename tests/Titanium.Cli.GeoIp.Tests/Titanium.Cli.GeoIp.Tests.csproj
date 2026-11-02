@@ -13,6 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Cli.GeoIp\Titanium.Cli.GeoIp.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Titanium.Cli.Tests\Geo\MmdbTestWriter.cs" Link="MmdbTestWriter.cs" />
