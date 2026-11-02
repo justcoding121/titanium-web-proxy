@@ -364,6 +364,11 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         catch (Exception ex)
         {
             _logger?.LogDebug(ex, "Plus Security: JWT validation failed");
+            if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1", StringComparison.Ordinal))
+            {
+                _logger?.LogWarning("Plus Security: JWT validation failed: {Type}: {Message}", ex.GetType().Name, ex.Message);
+            }
+
             _validUntilUnix.TryRemove(token, out _);
             return false;
         }

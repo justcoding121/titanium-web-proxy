@@ -245,7 +245,7 @@ public class CliPlusFeaturesE2ETests
             useRoutes: true);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
-        await harness.StartRunAsync(cfg, DevEnv());
+        await harness.StartRunAsync(cfg, DevEnv(), verbose: true);
         try
         {
             using var http = DirectToListener(listen);
@@ -276,7 +276,13 @@ public class CliPlusFeaturesE2ETests
                 await Task.Delay(250);
             }
 
-            Assert.AreEqual(HttpStatusCode.OK, jwtStatus, jwtBody);
+            var cliLog = harness.StdOut + harness.StdErr;
+            if (cliLog.Length > 1500)
+            {
+                cliLog = cliLog[^1500..];
+            }
+
+            Assert.AreEqual(HttpStatusCode.OK, jwtStatus, jwtBody + " | " + cliLog);
 
             using (var bad = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/jwt"))
             {
