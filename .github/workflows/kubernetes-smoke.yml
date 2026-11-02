@@ -122,6 +122,16 @@ jobs:
             || { kubectl -n "$NS" logs loader || true; exit 1; }
           kubectl -n "$NS" logs loader | tail -n 3
 
+      - name: helm rollback restores probes
+        run: |
+          set -euo pipefail
+          helm rollback "$REL" 1 -n "$NS" --wait --timeout 180s
+          helm history "$REL" -n "$NS"
+          kubectl -n "$NS" port-forward "svc/${REL}-titanium-admin" 19911:9901 &
+          sleep 3
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:19911/healthz)" = "200"
+          kill %1 || true
+
       - name: Diagnostics
         if: failure()
         run: |

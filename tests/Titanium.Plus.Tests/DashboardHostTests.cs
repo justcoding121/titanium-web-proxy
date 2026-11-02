@@ -81,6 +81,26 @@ public class DashboardHostTests
         Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.SendAsync(drainUnauth)).StatusCode);
     }
 
+    [TestMethod]
+    public async Task Dashboard_UnauthenticatedProbes_DoNotLeakAStack()
+    {
+        Environment.SetEnvironmentVariable("TITANIUM_PLUS_ALLOW_DEV_SECRET", "1");
+        var manager = new ClusterManager();
+        using var control = StartControlPlaneOrRetry(manager, "dashboard-test-secret");
+        using var dash = new DashboardHost(control, new DrainOperations(manager), new PrometheusMetricsExporter(manager, null), manager);
+        dash.Start();
+        using var http = new HttpClient();
+        foreach (var path in new[] { "api/snapshot", "api/no-such", "routes", "%00" })
+        {
+            var response = await http.GetAsync(dash.Prefix + path);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.IsFalse(
+                System.Text.RegularExpressions.Regex.IsMatch(body, @"at Titanium\.|StackTrace|System\.Exception"),
+                path + " leaked " + body);
+            Assert.AreNotEqual(HttpStatusCode.InternalServerError, response.StatusCode, path);
+        }
+    }
+
     private static ControlPlaneServer StartControlPlaneOrRetry(
         IClusterManager manager, string secret, int maxAttempts = 8)
     {

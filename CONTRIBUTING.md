@@ -19,6 +19,7 @@ See [CLA.md](CLA.md) and [README.md](README.md) Editions section.
 4. Do not introduce third-party product names of other proxies or traffic debuggers into source, tests, CLI help, or docs.
 5. Keep hot-path changes minimal; preserve `ForwardHost` terminate-lite eligibility when routes are unset or equivalent to a single sticky destination.
 6. A `yaml` example in `website/docs/*.md` or `wiki/*.md` that is a whole `twp.yaml` is tagged <code>```yaml twp</code>, and `dotnet test tests/Titanium.Web.Proxy.Configuration.Tests` loads, validates, and schema-checks it. A snippet that only makes sense inside a larger file is tagged <code>```yaml twp-fragment</code> and skipped. A wiki page does not start with a `#` heading that repeats its file name.
+7. A behavior change lands with the automated test that fails if the behavior is reverted. Run `tools/run-tests.ps1 -Project <name> -Verify` on Windows so a certificate prompt or firewall alert fails the run instead of waiting. Do not write Titanium certificates into the real user or machine store.
 
 ### Local QA tooling (maintainers)
 

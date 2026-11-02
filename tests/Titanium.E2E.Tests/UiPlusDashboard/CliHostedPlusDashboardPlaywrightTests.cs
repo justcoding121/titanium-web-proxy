@@ -170,6 +170,46 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         StringAssert.Contains(metricsBody, "titanium_destination_state");
     }
 
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_ApiSnapshot_HasTheStableShape()
+    {
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, Secret);
+        using var doc = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync(_prefix + "api/snapshot"));
+        var names = doc.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        CollectionAssert.AreEqual(new[] { "clusters", "destinationStates" }, names);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_Views_HaveNoSeriousAccessibilityViolations()
+    {
+        await LoginAsync(Secret);
+        foreach (var path in new[] { "", "routes" })
+        {
+            await Page.GotoAsync(_prefix + path);
+            await Page.AddScriptTagAsync(new PageAddScriptTagOptions
+            {
+                Url = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js",
+            });
+            var json = await Page.EvaluateAsync<string>(
+                "async () => JSON.stringify(await axe.run(document, { resultTypes: ['violations'] }))");
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var serious = doc.RootElement.GetProperty("violations").EnumerateArray()
+                .Where(violation =>
+                {
+                    var impact = violation.TryGetProperty("impact", out var value) ? value.GetString() : "";
+                    return impact is "serious" or "critical";
+                })
+                .Select(violation => violation.GetProperty("id").GetString())
+                .ToArray();
+            Assert.AreEqual(0, serious.Length, path + ": " + string.Join(", ", serious));
+        }
+    }
+
     private async Task LoginAsync(string secret)
     {
         await Page.GotoAsync(_prefix);

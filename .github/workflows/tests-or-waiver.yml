@@ -1,0 +1,33 @@
+name: tests-or-waiver
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: A src change needs a test or a waiver
+        env:
+          BASE: ${{ github.base_ref }}
+          WAIVER: ${{ contains(github.event.pull_request.labels.*.name, 'qa-waiver') }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "origin/${BASE}...HEAD" > changed.txt
+          src=$(grep -E '^src/' changed.txt || true)
+          tests=$(grep -E '^tests/' changed.txt || true)
+          if [[ -n "$src" && -z "$tests" ]]; then
+            if [[ "$WAIVER" == "true" ]]; then
+              echo "qa-waiver label covers this pull request."
+              exit 0
+            fi
+            echo "::error::src changed and tests did not. Add a test, or the qa-waiver label with a one-line reason."
+            exit 1
+          fi
+          echo "Test files accompany the src change, or src did not change."

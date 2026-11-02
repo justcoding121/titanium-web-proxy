@@ -5,7 +5,7 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 
 /// <summary>
 ///     Keeps <c>tests/smoke-matrix.yml</c> readable and nudges contributors when a supported capability has no smoke yet.
-///     Missing entries are logged only; a missing or unreadable matrix file fails the build.
+///     A missing or unreadable matrix file fails the build, and so does any entry whose status is missing.
 /// </summary>
 [TestClass]
 public class SmokeMatrixCoverageTests
@@ -21,17 +21,9 @@ public class SmokeMatrixCoverageTests
         Assert.IsTrue(entries.Count > 0, "smoke-matrix.yml must list at least one entry.");
 
         var missing = entries.Where(e => e.Status.Equals("missing", StringComparison.OrdinalIgnoreCase)).ToList();
-        if (missing.Count == 0)
-        {
-            return;
-        }
-
-        // Advisory only: log gaps; covered rows are enforced in SmokeMatrix_CoveredEntries_ReferenceNonEmptyTests.
-        Console.WriteLine($"smoke-matrix.yml: {missing.Count} entr{(missing.Count == 1 ? "y" : "ies")} still missing automated smoke:");
-        foreach (var entry in missing)
-        {
-            Console.WriteLine($"  - {entry.Id}: {entry.Capability}");
-        }
+        Assert.AreEqual(0, missing.Count,
+            "smoke-matrix.yml status: missing is a failed gate. " +
+            string.Join("; ", missing.Select(e => $"{e.Id}: {e.Capability}")));
     }
 
     [TestMethod]

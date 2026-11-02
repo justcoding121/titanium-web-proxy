@@ -1,0 +1,48 @@
+name: prompt-canary
+
+# Answers a fixture dialog and a wildcard UDP bind. A hosted runner has no interactive desktop, so the
+# fixture is the required check. A real firewall dialog, when Windows shows one, must be recorded.
+
+on:
+  pull_request:
+    paths:
+      - 'tools/PromptGuard/**'
+      - 'tests/Titanium.Web.Proxy.UnitTests/PromptGuardTests.cs'
+      - '.github/workflows/prompt-canary.yml'
+  schedule:
+    - cron: '11 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Loopback firewall rules for this runner
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Initialize-TestMachine.ps1 -Ci
+      - name: PromptGuard fixture
+        shell: pwsh
+        env:
+          TITANIUM_EPHEMERAL_VM: '1'
+          TITANIUM_SKIP_ROOT_STORE_UI: '1'
+          TITANIUM_NO_ELEVATE: '1'
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj -c Release --filter "FullyQualifiedName~PromptGuardTests" --nologo
+      - name: Wildcard bind is answered or silent
+        shell: pwsh
+        env:
+          TITANIUM_EPHEMERAL_VM: '1'
+        run: |
+          dotnet build tools/PromptGuard/PromptGuard.csproj -c Release --nologo
+          $log = "TestResults/prompt-guard.json"
+          $guard = Start-Process dotnet -ArgumentList @('run','--project','tools/PromptGuard/PromptGuard.csproj','-c','Release','--no-build','--','--seconds','8','--log',$log) -PassThru -NoNewWindow
+          dotnet run --project tools/PromptGuard/PromptGuard.csproj -c Release --no-build -- bind --seconds 5
+          if (-not $guard.HasExited) { Wait-Process -Id $guard.Id -Timeout 20 -ErrorAction SilentlyContinue }
+          if (Test-Path $log) { Get-Content $log }

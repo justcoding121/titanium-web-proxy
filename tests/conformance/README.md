@@ -31,8 +31,8 @@ Not duplicated here:
 - If the external tool cannot be fetched (h2spec download, Docker image pull), the job prints a `::notice::` and ends
   green. Nothing silently passes: the skipped steps show as skipped.
 - They report from the first run on, but only fail the workflow once the repository variable `CONFORMANCE_ENFORCE`
-  is `true` (the same pattern as `gateway-conformance.yml`). Flip it after the first nightly baselines are recorded in
-  the allow-lists.
+  is `true` (the same pattern as `gateway-conformance.yml` and `GATEWAY_CONFORMANCE_ENFORCE`). Leave both unset until
+  a maintainer has seen one green nightly and chooses to turn them on. CI does not change repository variables.
 - None of these jobs has been run on a GitHub runner yet. The first scheduled or dispatched run is the check of the
   recipe; expect to adjust the allow-lists and perhaps a flag.
 
