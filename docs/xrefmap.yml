@@ -508,6 +508,19 @@ references:
   commentId: E:Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent
   fullName: Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent
   nameWithType: ClusterManager.HealthEvent
+- uid: Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone
+  name: LocalZone
+  href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_LocalZone
+  commentId: P:Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone
+  fullName: Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone
+  nameWithType: ClusterManager.LocalZone
+- uid: Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone*
+  name: LocalZone
+  href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_LocalZone_
+  commentId: Overload:Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone
+  nameWithType: ClusterManager.LocalZone
 - uid: Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent)
   name: ReportHealthEvent(DestinationHealthEvent)
   href: api/Titanium.Web.Proxy.Clusters.ClusterManager.html#Titanium_Web_Proxy_Clusters_ClusterManager_ReportHealthEvent_Titanium_Web_Proxy_Abstractions_Plugins_DestinationHealthEvent_
@@ -7357,6 +7370,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.Port
   nameWithType: ProxyEndPoint.Port
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort
+  name: ReusePort
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ReusePort
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort
+  nameWithType: ProxyEndPoint.ReusePort
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort*
+  name: ReusePort
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ReusePort_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ReusePort
+  nameWithType: ProxyEndPoint.ReusePort
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.SniCertificates
   name: SniCertificates
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_SniCertificates
@@ -7579,6 +7605,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.GenericCertificateName
   nameWithType: TransparentBaseProxyEndPoint.GenericCertificateName
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
+  name: MaxConcurrentTlsHandshakes
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_MaxConcurrentTlsHandshakes
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
+  nameWithType: TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes*
+  name: MaxConcurrentTlsHandshakes
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_MaxConcurrentTlsHandshakes_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
+  nameWithType: TransparentBaseProxyEndPoint.MaxConcurrentTlsHandshakes
 - uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough
   name: Passthrough
   href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_Passthrough
@@ -7670,6 +7709,45 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.StreamFilters
   nameWithType: TransparentBaseProxyEndPoint.StreamFilters
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls
+  name: TerminateTls
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_TerminateTls
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls
+  nameWithType: TransparentBaseProxyEndPoint.TerminateTls
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls*
+  name: TerminateTls
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_TerminateTls_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls
+  nameWithType: TransparentBaseProxyEndPoint.TerminateTls
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn
+  name: TerminateTlsAlpn
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_TerminateTlsAlpn
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn
+  nameWithType: TransparentBaseProxyEndPoint.TerminateTlsAlpn
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn*
+  name: TerminateTlsAlpn
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_TerminateTlsAlpn_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTlsAlpn
+  nameWithType: TransparentBaseProxyEndPoint.TerminateTlsAlpn
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout
+  name: TlsHandshakeTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_TlsHandshakeTimeout
+  commentId: P:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout
+  nameWithType: TransparentBaseProxyEndPoint.TlsHandshakeTimeout
+- uid: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout*
+  name: TlsHandshakeTimeout
+  href: api/Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.html#Titanium_Web_Proxy_Models_TransparentBaseProxyEndPoint_TlsHandshakeTimeout_
+  commentId: Overload:Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TlsHandshakeTimeout
+  nameWithType: TransparentBaseProxyEndPoint.TlsHandshakeTimeout
 - uid: Titanium.Web.Proxy.Models.TransparentProxyEndPoint
   name: TransparentProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.TransparentProxyEndPoint.html
@@ -10995,6 +11073,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.ClientHeaderTimeoutSeconds
   nameWithType: ProxyServer.ClientHeaderTimeoutSeconds
+- uid: Titanium.Web.Proxy.ProxyServer.CloseTcpListeners
+  name: CloseTcpListeners()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_CloseTcpListeners
+  commentId: M:Titanium.Web.Proxy.ProxyServer.CloseTcpListeners
+  fullName: Titanium.Web.Proxy.ProxyServer.CloseTcpListeners()
+  nameWithType: ProxyServer.CloseTcpListeners()
+- uid: Titanium.Web.Proxy.ProxyServer.CloseTcpListeners*
+  name: CloseTcpListeners
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_CloseTcpListeners_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.CloseTcpListeners
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.CloseTcpListeners
+  nameWithType: ProxyServer.CloseTcpListeners
 - uid: Titanium.Web.Proxy.ProxyServer.CompatibilityMode100Continue
   name: CompatibilityMode100Continue
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_CompatibilityMode100Continue
@@ -11783,6 +11874,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.OriginHttpVersionPolicy
   nameWithType: ProxyServer.OriginHttpVersionPolicy
+- uid: Titanium.Web.Proxy.ProxyServer.OverloadLevel
+  name: OverloadLevel
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OverloadLevel
+  commentId: P:Titanium.Web.Proxy.ProxyServer.OverloadLevel
+  fullName: Titanium.Web.Proxy.ProxyServer.OverloadLevel
+  nameWithType: ProxyServer.OverloadLevel
+- uid: Titanium.Web.Proxy.ProxyServer.OverloadLevel*
+  name: OverloadLevel
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OverloadLevel_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.OverloadLevel
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.OverloadLevel
+  nameWithType: ProxyServer.OverloadLevel
+- uid: Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled
+  name: OverloadProtectionEnabled
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OverloadProtectionEnabled
+  commentId: P:Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled
+  fullName: Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled
+  nameWithType: ProxyServer.OverloadProtectionEnabled
+- uid: Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled*
+  name: OverloadProtectionEnabled
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_OverloadProtectionEnabled_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.OverloadProtectionEnabled
+  nameWithType: ProxyServer.OverloadProtectionEnabled
 - uid: Titanium.Web.Proxy.ProxyServer.PolicyModes
   name: PolicyModes
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_PolicyModes
@@ -12160,6 +12277,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.SetHttp3Enabled
   nameWithType: ProxyServer.SetHttp3Enabled
+- uid: Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(System.Boolean,System.Int32,System.Boolean,System.Boolean,System.Boolean,System.Int32)
+  name: SetOverloadRuntime(bool, int, bool, bool, bool, int)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetOverloadRuntime_System_Boolean_System_Int32_System_Boolean_System_Boolean_System_Boolean_System_Int32_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(System.Boolean,System.Int32,System.Boolean,System.Boolean,System.Boolean,System.Int32)
+  name.vb: SetOverloadRuntime(Boolean, Integer, Boolean, Boolean, Boolean, Integer)
+  fullName: Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(bool, int, bool, bool, bool, int)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(Boolean, Integer, Boolean, Boolean, Boolean, Integer)
+  nameWithType: ProxyServer.SetOverloadRuntime(bool, int, bool, bool, bool, int)
+  nameWithType.vb: ProxyServer.SetOverloadRuntime(Boolean, Integer, Boolean, Boolean, Boolean, Integer)
+- uid: Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime*
+  name: SetOverloadRuntime
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_SetOverloadRuntime_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime
+  nameWithType: ProxyServer.SetOverloadRuntime
 - uid: Titanium.Web.Proxy.ProxyServer.ShouldBypassDecryptForLearnedHost(System.String)
   name: ShouldBypassDecryptForLearnedHost(string?)
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_ShouldBypassDecryptForLearnedHost_System_String_
@@ -12205,6 +12338,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Start
   nameWithType: ProxyServer.Start
+- uid: Titanium.Web.Proxy.ProxyServer.StartHttp3Listener(Titanium.Web.Proxy.Models.TransparentProxyEndPoint)
+  name: StartHttp3Listener(TransparentProxyEndPoint)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_StartHttp3Listener_Titanium_Web_Proxy_Models_TransparentProxyEndPoint_
+  commentId: M:Titanium.Web.Proxy.ProxyServer.StartHttp3Listener(Titanium.Web.Proxy.Models.TransparentProxyEndPoint)
+  fullName: Titanium.Web.Proxy.ProxyServer.StartHttp3Listener(Titanium.Web.Proxy.Models.TransparentProxyEndPoint)
+  nameWithType: ProxyServer.StartHttp3Listener(TransparentProxyEndPoint)
+- uid: Titanium.Web.Proxy.ProxyServer.StartHttp3Listener*
+  name: StartHttp3Listener
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_StartHttp3Listener_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.StartHttp3Listener
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.StartHttp3Listener
+  nameWithType: ProxyServer.StartHttp3Listener
 - uid: Titanium.Web.Proxy.ProxyServer.Stop
   name: Stop()
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_Stop
@@ -12218,6 +12364,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Stop
   nameWithType: ProxyServer.Stop
+- uid: Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections
+  name: StopAcceptingNewConnections()
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_StopAcceptingNewConnections
+  commentId: M:Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections
+  fullName: Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections()
+  nameWithType: ProxyServer.StopAcceptingNewConnections()
+- uid: Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections*
+  name: StopAcceptingNewConnections
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_StopAcceptingNewConnections_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections
+  nameWithType: ProxyServer.StopAcceptingNewConnections
 - uid: Titanium.Web.Proxy.ProxyServer.StopAsync(System.Nullable{System.TimeSpan})
   name: StopAsync(TimeSpan?)
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_StopAsync_System_Nullable_System_TimeSpan__
@@ -12481,6 +12640,193 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.WinAuthCredentialsProvider
   nameWithType: ProxyServer.WinAuthCredentialsProvider
+- uid: Titanium.Web.Proxy.Resilience
+  name: Titanium.Web.Proxy.Resilience
+  href: api/Titanium.Web.Proxy.Resilience.html
+  commentId: N:Titanium.Web.Proxy.Resilience
+  fullName: Titanium.Web.Proxy.Resilience
+  nameWithType: Titanium.Web.Proxy.Resilience
+- uid: Titanium.Web.Proxy.Resilience.OverloadLevel
+  name: OverloadLevel
+  href: api/Titanium.Web.Proxy.Resilience.OverloadLevel.html
+  commentId: T:Titanium.Web.Proxy.Resilience.OverloadLevel
+  fullName: Titanium.Web.Proxy.Resilience.OverloadLevel
+  nameWithType: OverloadLevel
+- uid: Titanium.Web.Proxy.Resilience.OverloadLevel.Critical
+  name: Critical
+  href: api/Titanium.Web.Proxy.Resilience.OverloadLevel.html#Titanium_Web_Proxy_Resilience_OverloadLevel_Critical
+  commentId: F:Titanium.Web.Proxy.Resilience.OverloadLevel.Critical
+  fullName: Titanium.Web.Proxy.Resilience.OverloadLevel.Critical
+  nameWithType: OverloadLevel.Critical
+- uid: Titanium.Web.Proxy.Resilience.OverloadLevel.Elevated
+  name: Elevated
+  href: api/Titanium.Web.Proxy.Resilience.OverloadLevel.html#Titanium_Web_Proxy_Resilience_OverloadLevel_Elevated
+  commentId: F:Titanium.Web.Proxy.Resilience.OverloadLevel.Elevated
+  fullName: Titanium.Web.Proxy.Resilience.OverloadLevel.Elevated
+  nameWithType: OverloadLevel.Elevated
+- uid: Titanium.Web.Proxy.Resilience.OverloadLevel.Normal
+  name: Normal
+  href: api/Titanium.Web.Proxy.Resilience.OverloadLevel.html#Titanium_Web_Proxy_Resilience_OverloadLevel_Normal
+  commentId: F:Titanium.Web.Proxy.Resilience.OverloadLevel.Normal
+  fullName: Titanium.Web.Proxy.Resilience.OverloadLevel.Normal
+  nameWithType: OverloadLevel.Normal
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor
+  name: OverloadMonitor
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html
+  commentId: T:Titanium.Web.Proxy.Resilience.OverloadMonitor
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor
+  nameWithType: OverloadMonitor
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor.#ctor(Titanium.Web.Proxy.Resilience.OverloadMonitorConfig)
+  name: OverloadMonitor(OverloadMonitorConfig)
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html#Titanium_Web_Proxy_Resilience_OverloadMonitor__ctor_Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_
+  commentId: M:Titanium.Web.Proxy.Resilience.OverloadMonitor.#ctor(Titanium.Web.Proxy.Resilience.OverloadMonitorConfig)
+  name.vb: New(OverloadMonitorConfig)
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor.OverloadMonitor(Titanium.Web.Proxy.Resilience.OverloadMonitorConfig)
+  fullName.vb: Titanium.Web.Proxy.Resilience.OverloadMonitor.New(Titanium.Web.Proxy.Resilience.OverloadMonitorConfig)
+  nameWithType: OverloadMonitor.OverloadMonitor(OverloadMonitorConfig)
+  nameWithType.vb: OverloadMonitor.New(OverloadMonitorConfig)
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor.#ctor*
+  name: OverloadMonitor
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html#Titanium_Web_Proxy_Resilience_OverloadMonitor__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadMonitor.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor.OverloadMonitor
+  fullName.vb: Titanium.Web.Proxy.Resilience.OverloadMonitor.New
+  nameWithType: OverloadMonitor.OverloadMonitor
+  nameWithType.vb: OverloadMonitor.New
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor.Level
+  name: Level
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html#Titanium_Web_Proxy_Resilience_OverloadMonitor_Level
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadMonitor.Level
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor.Level
+  nameWithType: OverloadMonitor.Level
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor.Level*
+  name: Level
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html#Titanium_Web_Proxy_Resilience_OverloadMonitor_Level_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadMonitor.Level
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor.Level
+  nameWithType: OverloadMonitor.Level
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor.Next(System.Collections.Generic.IReadOnlyDictionary{System.String,System.Nullable{System.Double}},System.DateTimeOffset)
+  name: Next(IReadOnlyDictionary<string, double?>, DateTimeOffset)
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html#Titanium_Web_Proxy_Resilience_OverloadMonitor_Next_System_Collections_Generic_IReadOnlyDictionary_System_String_System_Nullable_System_Double___System_DateTimeOffset_
+  commentId: M:Titanium.Web.Proxy.Resilience.OverloadMonitor.Next(System.Collections.Generic.IReadOnlyDictionary{System.String,System.Nullable{System.Double}},System.DateTimeOffset)
+  name.vb: Next(IReadOnlyDictionary(Of String, Double?), DateTimeOffset)
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor.Next(System.Collections.Generic.IReadOnlyDictionary<string, double?>, System.DateTimeOffset)
+  fullName.vb: Titanium.Web.Proxy.Resilience.OverloadMonitor.Next(System.Collections.Generic.IReadOnlyDictionary(Of String, Double?), System.DateTimeOffset)
+  nameWithType: OverloadMonitor.Next(IReadOnlyDictionary<string, double?>, DateTimeOffset)
+  nameWithType.vb: OverloadMonitor.Next(IReadOnlyDictionary(Of String, Double?), DateTimeOffset)
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitor.Next*
+  name: Next
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitor.html#Titanium_Web_Proxy_Resilience_OverloadMonitor_Next_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadMonitor.Next
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitor.Next
+  nameWithType: OverloadMonitor.Next
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig
+  name: OverloadMonitorConfig
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html
+  commentId: T:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig
+  nameWithType: OverloadMonitorConfig
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections
+  name: ActiveConnections
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html#Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_ActiveConnections
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections
+  nameWithType: OverloadMonitorConfig.ActiveConnections
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections*
+  name: ActiveConnections
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html#Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_ActiveConnections_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ActiveConnections
+  nameWithType: OverloadMonitorConfig.ActiveConnections
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent
+  name: HeapPercent
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html#Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_HeapPercent
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent
+  nameWithType: OverloadMonitorConfig.HeapPercent
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent*
+  name: HeapPercent
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html#Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_HeapPercent_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.HeapPercent
+  nameWithType: OverloadMonitorConfig.HeapPercent
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue
+  name: ThreadPoolQueue
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html#Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_ThreadPoolQueue
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue
+  nameWithType: OverloadMonitorConfig.ThreadPoolQueue
+- uid: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue*
+  name: ThreadPoolQueue
+  href: api/Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.html#Titanium_Web_Proxy_Resilience_OverloadMonitorConfig_ThreadPoolQueue_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadMonitorConfig.ThreadPoolQueue
+  nameWithType: OverloadMonitorConfig.ThreadPoolQueue
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds
+  name: OverloadSignalThresholds
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html
+  commentId: T:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds
+  nameWithType: OverloadSignalThresholds
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt
+  name: CriticalAt
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_CriticalAt
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt
+  nameWithType: OverloadSignalThresholds.CriticalAt
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt*
+  name: CriticalAt
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_CriticalAt_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.CriticalAt
+  nameWithType: OverloadSignalThresholds.CriticalAt
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt
+  name: ElevatedAt
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_ElevatedAt
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt
+  nameWithType: OverloadSignalThresholds.ElevatedAt
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt*
+  name: ElevatedAt
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_ElevatedAt_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.ElevatedAt
+  nameWithType: OverloadSignalThresholds.ElevatedAt
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction
+  name: HysteresisFraction
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_HysteresisFraction
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction
+  nameWithType: OverloadSignalThresholds.HysteresisFraction
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction*
+  name: HysteresisFraction
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_HysteresisFraction_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.HysteresisFraction
+  nameWithType: OverloadSignalThresholds.HysteresisFraction
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell
+  name: MinDwell
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_MinDwell
+  commentId: P:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell
+  nameWithType: OverloadSignalThresholds.MinDwell
+- uid: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell*
+  name: MinDwell
+  href: api/Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.html#Titanium_Web_Proxy_Resilience_OverloadSignalThresholds_MinDwell_
+  commentId: Overload:Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Resilience.OverloadSignalThresholds.MinDwell
+  nameWithType: OverloadSignalThresholds.MinDwell
 - uid: Titanium.Web.Proxy.Routing
   name: Titanium.Web.Proxy.Routing
   href: api/Titanium.Web.Proxy.Routing.html
