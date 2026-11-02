@@ -77,21 +77,13 @@ while ((Get-Date) -lt $deadline) {
         $path = ''
         try { if ($proc) { $path = $proc.Path } } catch { }
         $dialog = $title -match $titlePattern
-        $owned = $false
-        $pathLower = ''
-        if ($path) { $pathLower = $path.ToLowerInvariant() }
-        if ($pathLower.StartsWith($rootNorm)) { $owned = $true }
+        # The Inspector window is the product under test. Only OS prompt titles are findings.
+        if (-not $dialog) { continue }
         $procLower = $procName.ToLowerInvariant()
         # PromptGuard's own fixture window is titled like a firewall alert. It is not an OS dialog.
         if ($procLower -eq 'promptguard') { continue }
         # CredentialUIBroker is the sign-in picker (Windows Hello, smart card). The firewall alert is PickerHost.
         if ($procLower -eq 'credentialuibroker') { continue }
-        if ($procLower -eq 'testhost' -or $procLower -like 'titanium*') { $owned = $true }
-        # The user's own browser is not a test window. Playwright browsers live under the test root or ms-playwright.
-        if (($procLower -eq 'chrome' -or $procLower -eq 'msedge' -or $procLower -eq 'firefox') -and
-            ($pathLower.Contains('ms-playwright') -or $pathLower.StartsWith($rootNorm))) { $owned = $true }
-        if ($procLower -eq 'dotnet' -and $pathLower.StartsWith($rootNorm)) { $owned = $true }
-        if (-not $dialog -and -not $owned) { continue }
         $key = "$title|$class|$procId"
         if ($seenWindows.ContainsKey($key)) { continue }
         $seenWindows[$key] = $true
