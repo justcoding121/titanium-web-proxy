@@ -628,7 +628,11 @@ public class CliPlusFeaturesE2ETests
     private static HttpClient DirectToListener(int listenPort)
     {
         // ForwardHost / route listeners that accept absolute-form on the listen port.
-        return new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        // Ignore the machine proxy. An earlier test may have turned it on, and these calls are to 127.0.0.1.
+        return new HttpClient(new HttpClientHandler { UseProxy = false })
+        {
+            Timeout = TimeSpan.FromSeconds(20),
+        };
     }
 
     private static async Task WaitControlPlaneAsync(HttpClient http, int controlPort)
