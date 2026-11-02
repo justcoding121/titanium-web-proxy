@@ -38,6 +38,7 @@ public static class TwpConfigValidator
     private const string LocalhostHostName = "localhost";
     private const string LoopbackIPv4 = "127.0.0.1";
     private const string LoopbackIPv6 = "::1";
+    private const string RateLimitPolicyKind = "rateLimit";
 
     public static IReadOnlyList<string> Validate(TwpConfig config)
     {
@@ -824,7 +825,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", RateLimitPolicyKind, "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf",
     };
 
     private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
@@ -909,7 +910,7 @@ public static class TwpConfigValidator
             case "timeout" when policy.TimeoutSeconds is not > 0:
                 errors.Add($"Policy '{name}' (timeout) needs timeoutSeconds > 0.");
                 break;
-            case "rateLimit" or "connectionLimit":
+            case RateLimitPolicyKind or "connectionLimit":
                 if (policy.Limit is < 1)
                 {
                     errors.Add($"Policy '{name}' limit must be >= 1.");
@@ -920,7 +921,7 @@ public static class TwpConfigValidator
                     errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
                 }
 
-                if (policy.Kind == "rateLimit")
+                if (policy.Kind == RateLimitPolicyKind)
                 {
                     ValidateRateLimit(policy, errors);
                 }
@@ -1054,22 +1055,22 @@ public static class TwpConfigValidator
             return;
         }
 
-        var hasGeoPolicy = config.Policies is { Count: > 0 } policies
-            && policies.Any(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal));
-        var hasDatabasePath = !string.IsNullOrWhiteSpace(config.Server?.GeoIpDatabasePath);
-        if (!hasGeoPolicy && !hasDatabasePath)
+        if (config.Policies is { Count: > 0 } policies)
         {
-            return;
-        }
-
-        if (hasGeoPolicy)
-        {
-            foreach (var policy in config.Policies!.Where(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal)))
+            var anyGeo = false;
+            foreach (var policy in policies.Where(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal)))
             {
+                anyGeo = true;
                 errors.Add($"Policy '{policy.Name}' (geo) needs plus.enabled: true. Country lookup is part of Titanium Plus.");
             }
+
+            if (anyGeo)
+            {
+                return;
+            }
         }
-        else
+
+        if (!string.IsNullOrWhiteSpace(config.Server?.GeoIpDatabasePath))
         {
             errors.Add("server.geoIpDatabasePath needs plus.enabled: true. Country lookup is part of Titanium Plus.");
         }
@@ -1103,7 +1104,7 @@ public static class TwpConfigValidator
         }
 
         foreach (var policy in policies.Where(static policy =>
-                     string.Equals(policy.Kind, "rateLimit", StringComparison.Ordinal)
+                     string.Equals(policy.Kind, RateLimitPolicyKind, StringComparison.Ordinal)
                      && string.Equals(policy.Scope, "fleet", StringComparison.OrdinalIgnoreCase)))
         {
             errors.Add($"Policy '{policy.Name}' (rateLimit) scope fleet needs plus.enabled: true. Fleet leases are part of Titanium Plus.");
