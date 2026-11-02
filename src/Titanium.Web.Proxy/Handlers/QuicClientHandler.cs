@@ -34,6 +34,9 @@ public partial class ProxyServer
     /// </summary>
     private void ListenQuic(IQuicInboundEndPoint endPoint)
     {
+        // Before the try: a test host stops the test as inconclusive, and that exception must not be wrapped.
+        QuicListenPolicy.EnsureAllowed();
+
         if (!QuicListener.IsSupported)
             throw new PlatformNotSupportedException(
                 "HTTP/3 (QUIC) requires the MsQuic native library and a supported OS. " +

@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Network.Quic;
 
 namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 
@@ -84,6 +85,8 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
 
     private QuicListener Listen(IPEndPoint endPoint)
     {
+        QuicListenPolicy.EnsureAllowed();
+
         var options = new QuicListenerOptions
         {
             ListenEndPoint = endPoint,
