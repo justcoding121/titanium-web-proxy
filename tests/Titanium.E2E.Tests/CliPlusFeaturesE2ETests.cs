@@ -262,12 +262,26 @@ public class CliPlusFeaturesE2ETests
                 (await http.GetAsync("http://example.invalid/nojwt")).StatusCode);
 
             var token = CreateSignedJwt(rsa, DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(), authority, "api");
-            using (var ok = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt"))
+            // The first validation loads JWKS and fails closed if that fetch is not ready yet.
+            HttpStatusCode jwtStatus = 0;
+            var jwtBody = "";
+            var jwtDeadline = DateTime.UtcNow.AddSeconds(10);
+            while (true)
             {
+                using var ok = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt");
                 ok.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                var resp = await http.SendAsync(ok);
-                Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode, await resp.Content.ReadAsStringAsync());
+                using var resp = await http.SendAsync(ok);
+                jwtStatus = resp.StatusCode;
+                jwtBody = await resp.Content.ReadAsStringAsync();
+                if (jwtStatus == HttpStatusCode.OK || DateTime.UtcNow >= jwtDeadline)
+                {
+                    break;
+                }
+
+                await Task.Delay(250);
             }
+
+            Assert.AreEqual(HttpStatusCode.OK, jwtStatus, jwtBody);
 
             using (var bad = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt"))
             {
