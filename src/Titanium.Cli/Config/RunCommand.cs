@@ -151,9 +151,19 @@ internal static class RunCommand
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
         using var geoIpHost = new GeoIpResolverHost();
+        var plusEnabled = loaded.Config.Plus?.Enabled == true;
+        if (!string.IsNullOrWhiteSpace(loaded.Config.Server?.GeoIpDatabasePath) && !plusEnabled)
+        {
+            AsyncConsole.WriteError("server.geoIpDatabasePath requires plus.enabled: true.");
+            return 1;
+        }
+
         try
         {
-            geoIpHost.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: true);
+            if (plusEnabled)
+            {
+                geoIpHost.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: true);
+            }
         }
         catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException)
         {
@@ -284,7 +294,7 @@ internal static class RunCommand
         var cacheOptions = ParseResponseCacheOptions(plusOptions, AsyncConsole.WriteError);
         var responseCache = new MemoryHttpResponseCache(cacheOptions.MaxBytes, cacheOptions.Entry.MaxEntryBytes);
 
-        ConfigureResponseCache(middleware, responseCache, plusOptions, cacheOptions.Entry);
+        ConfigureResponseCache(middleware, responseCache, plusOptions, cacheOptions.Entry, plusEnabled);
 
         IGrpcJsonTranscoder? grpcJsonTranscoder = null;
 
@@ -419,6 +429,13 @@ internal static class RunCommand
         XdsHostHandle? xdsHost = null;
         if (loaded.Config.Xds?.Server is not null)
         {
+            if (!plusActive)
+            {
+                AsyncConsole.WriteError(
+                    "xds requires plus.enabled: true and a loaded Plus module (titanium update --plus).");
+                return 1;
+            }
+
             loaded.Config.Server ??= new ServerConfig();
             loaded.Config.Server.ReloadListeners = true;
             var xdsStateDir = Path.Combine(managerStateDir, "xds");
@@ -742,7 +759,14 @@ internal static class RunCommand
 
         ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
-        geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
+        if (loaded.Config.Plus?.Enabled == true)
+        {
+            geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
+        }
+        else
+        {
+            geoIpHost?.Apply(null, startup: false, warn: AsyncConsole.WriteError);
+        }
         clusterManager.LocalZone = ResolveLocalZone(loaded.Config.Server, zoneOverride: null);
         var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
         host.RememberAppliedClusters(clusterManager.Snapshot.Clusters.Values.ToList());
@@ -1512,9 +1536,10 @@ internal static class RunCommand
         List<IProxyMiddleware> middleware,
         MemoryHttpResponseCache responseCache,
         IReadOnlyDictionary<string, string> plusOptions,
-        ResponseCacheOptions cacheOptions)
+        ResponseCacheOptions cacheOptions,
+        bool plusEnabled)
     {
-        if (!IsTruthy(plusOptions, "cache.enable"))
+        if (!plusEnabled || !IsTruthy(plusOptions, "cache.enable"))
         {
             return;
         }

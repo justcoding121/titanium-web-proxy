@@ -103,6 +103,7 @@ public class OverloadHotRestartXdsValidationTests
     {
         var errors = Errors(new TwpConfig
         {
+            Plus = new PlusConfig { Enabled = true },
             Xds = new XdsConfig
             {
                 InitialFetchTimeoutSeconds = 0,
@@ -118,6 +119,20 @@ public class OverloadHotRestartXdsValidationTests
     [TestMethod]
     public void Xds_WithServer_IsValid()
     {
-        Assert.AreEqual(string.Empty, Errors(new TwpConfig { Xds = new XdsConfig { Server = "xds.local:18000" } }));
+        Assert.AreEqual(
+            string.Empty,
+            Errors(new TwpConfig
+            {
+                Plus = new PlusConfig { Enabled = true },
+                Xds = new XdsConfig { Server = "xds.local:18000" },
+            }));
+    }
+
+    [TestMethod]
+    public void Xds_WithoutPlus_IsRejected()
+    {
+        StringAssert.Contains(
+            Errors(new TwpConfig { Xds = new XdsConfig { Server = "xds.local:18000" } }),
+            "needs plus.enabled: true");
     }
 }

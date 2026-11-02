@@ -11,8 +11,9 @@ public class GeoPolicyValidationTests
 {
     private static string Errors(TwpConfig config) => string.Join("; ", TwpConfigValidator.Validate(config));
 
-    private static TwpConfig BaseConfig(RoutePolicyConfig policy) => new()
+    private static TwpConfig BaseConfig(RoutePolicyConfig policy, bool plus = true) => new()
     {
+        Plus = plus ? new PlusConfig { Enabled = true } : null,
         Clusters = [new ClusterConfig { Id = "c", Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 80 }] }],
         Policies = [policy],
         Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = new RouteMatch { Path = "/" }, Policies = [policy.Name] }],
@@ -25,6 +26,14 @@ public class GeoPolicyValidationTests
         var config = BaseConfig(policy);
         config.Server = new ServerConfig { GeoIpDatabasePath = "/data/GeoLite2-Country.mmdb" };
         Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count, Errors(config));
+    }
+
+    [TestMethod]
+    public void GeoPolicy_WithoutPlus_IsRejected()
+    {
+        var config = BaseConfig(new RoutePolicyConfig { Name = "geo", Kind = "geo", Deny = "XX" }, plus: false);
+        config.Server = new ServerConfig { GeoIpDatabasePath = "/data/country.mmdb" };
+        StringAssert.Contains(Errors(config), "needs plus.enabled: true");
     }
 
     [TestMethod]

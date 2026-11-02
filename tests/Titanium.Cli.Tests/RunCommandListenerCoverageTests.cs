@@ -182,14 +182,19 @@ public class RunCommandListenerCoverageTests
             {
                 ["cache.enable"] = "true",
                 ["cache.maxEntries"] = "16",
-            }, new Titanium.Web.Proxy.Caching.ResponseCacheOptions());
+            }, new Titanium.Web.Proxy.Caching.ResponseCacheOptions(), true);
         Assert.AreEqual(1, middleware.Count);
         Assert.IsInstanceOfType<Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware>(middleware[0]);
         var disabled = new List<IProxyMiddleware>();
         Invoke("ConfigureResponseCache", disabled, new MemoryHttpResponseCache(),
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            new Titanium.Web.Proxy.Caching.ResponseCacheOptions());
+            new Titanium.Web.Proxy.Caching.ResponseCacheOptions(), true);
         Assert.AreEqual(0, disabled.Count);
+        var plusOff = new List<IProxyMiddleware>();
+        Invoke("ConfigureResponseCache", plusOff, new MemoryHttpResponseCache(),
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["cache.enable"] = "true" },
+            new Titanium.Web.Proxy.Caching.ResponseCacheOptions(), false);
+        Assert.AreEqual(0, plusOff.Count);
 
         RunCommand.ConfigureProxyFlags(proxy, new TwpConfig
         {
