@@ -43,6 +43,9 @@ public sealed class TwpConfig
 
     /// <summary>Optional <c>ProxyServer</c> knobs (profile, timeouts, TLS, limits, upstream, …).</summary>
     public ServerConfig? Server { get; set; }
+
+    /// <summary>Optional xDS ADS client. When set, the CLI loads <c>Titanium.Xds</c> lazily.</summary>
+    public XdsConfig? Xds { get; set; }
 }
 
 /// <summary>Built-in async console/file logging options for CLI <c>ProxyServer</c>.</summary>
@@ -129,6 +132,21 @@ public sealed class ListenerConfig
 
     /// <summary>Copy accepted bytes to <see cref="ForwardHost"/> without parsing HTTP.</summary>
     public bool Passthrough { get; set; }
+
+    /// <summary>
+    ///     Passthrough only. Terminates inbound TLS and relays plaintext (or originates TLS upstream when
+    ///     <c>useHttps</c> is set). Requires a listener certificate and <see cref="DecryptSsl"/> false.
+    /// </summary>
+    public bool TerminateTls { get; set; }
+
+    /// <summary>Passthrough with <see cref="TerminateTls"/>: inbound handshake timeout in seconds (1-60, default 10).</summary>
+    public int? TlsHandshakeTimeoutSeconds { get; set; }
+
+    /// <summary>Passthrough with <see cref="TerminateTls"/>: ALPN protocol names offered to the client.</summary>
+    public IList<string>? Alpn { get; set; }
+
+    /// <summary>Passthrough with <see cref="TerminateTls"/>: max concurrent inbound TLS handshakes (default 256).</summary>
+    public int? MaxConcurrentHandshakes { get; set; }
 
     /// <summary>
     /// Passthrough only. Sends a connection to a cluster by the TLS server name in the ClientHello.
@@ -323,6 +341,15 @@ public sealed class ControlPlaneConfig
     /// encrypt and isolate the traffic (for example a service mesh or a restricted pod network).
     /// </summary>
     public bool AllowInsecureNonLoopback { get; set; }
+
+    /// <summary>How snapshot PUT bodies are validated against the running config. Default <see cref="SnapshotValidationMode.Warn"/>.</summary>
+    public SnapshotValidationMode? SnapshotValidation { get; set; }
+
+    /// <summary>When true, operators may edit routes and clusters in the dashboard (overlay semantics).</summary>
+    public bool? DashboardEditing { get; set; }
+
+    /// <summary>Path to the persisted config overlay file. Default is under the Plus state directory.</summary>
+    public string? OverlayPath { get; set; }
 }
 
 /// <summary>PEM certificate and key served by the control plane and dashboard.</summary>

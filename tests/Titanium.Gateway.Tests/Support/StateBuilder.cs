@@ -6,6 +6,9 @@ namespace Titanium.Gateway.Tests.Support;
 /// <summary>Builds a small, valid cluster by default; each test then bends one thing.</summary>
 internal sealed class StateBuilder
 {
+    public static readonly IReadOnlyDictionary<string, string> NoServiceAnnotations =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     public const string Controller = GatewayTranslatorOptions.DefaultControllerName;
 
     public static readonly DateTimeOffset T0 = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -50,7 +53,8 @@ internal sealed class StateBuilder
             "LoadBalancer",
             "10.96.0.9",
             [new ServicePortInfo("http", 80, 8080, null)],
-            [new ServiceAddress("203.0.113.10", false)]));
+            [new ServiceAddress("203.0.113.10", false)],
+            NoServiceAnnotations));
         return b;
     }
 
@@ -110,7 +114,7 @@ internal sealed class StateBuilder
     public void AddService(string ns, string name, int port, params string[] readyAddresses)
     {
         Services.RemoveAll(s => s.Namespace == ns && s.Name == name);
-        Services.Add(new ServiceInfo(ns, name, "ClusterIP", "10.96.1.1", [new ServicePortInfo(null, port, port, null)], []));
+        Services.Add(new ServiceInfo(ns, name, "ClusterIP", "10.96.1.1", [new ServicePortInfo(null, port, port, null)], [], NoServiceAnnotations));
         Slices.RemoveAll(s => s.Namespace == ns && s.ServiceName == name);
         Slices.Add(new EndpointSliceInfo(
             ns,
@@ -150,7 +154,8 @@ internal sealed class StateBuilder
             "LoadBalancer",
             "10.96.0.9",
             [new ServicePortInfo("http", 80, 8080, null)],
-            [new ServiceAddress("203.0.113.10", false)]));
+            [new ServiceAddress("203.0.113.10", false)],
+            NoServiceAnnotations));
         return b;
     }
 

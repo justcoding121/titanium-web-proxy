@@ -49,8 +49,11 @@ Not supported:
 
 - `Upgrade: h2c` (prior-knowledge only). Explicit-proxy inbound h2c is not implemented.
 - Mid-connection HTTP/2 → HTTP/3 on an already-open H2↔H2 MITM session.
-- WebSocket over HTTP/3 (RFC 9220).
 - Explicit QUIC proxying (inbound HTTP/3 is `TransparentQuicProxyEndPoint` only).
+
+WebSocket over HTTP/3 (RFC 9220) to HTTP/1.1 origins is supported when `EnableRfc8441 = true` (same switch as
+RFC 8441). The proxy advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL` on HTTP/3 and relays extended CONNECT
+WebSocket DATA to an HTTP/1.1 upgrade on the origin. HTTP/2 and HTTP/3 origins are planned separately.
 
 WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (plus a native h2↔h2 DATA
 tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
@@ -135,7 +138,7 @@ origin cannot be sent again.
 | `Expect: 100-continue` | Yes | Yes | N/A (no equivalent frame flow) | N/A | `ProxyServer.Enable100ContinueBehaviour`. Set `CompatibilityMode100Continue = true` to emit a synthetic `100 Continue` to clients that block on it when `Enable100ContinueBehaviour = false`. |
 | Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | Yes | Yes | Relayed for all protocol versions. HTTP/3: `Http3OriginBridge` loops on 1xx responses from the origin (up to 20 per request) and forwards each interim HEADERS frame to the client before the final response. |
 | HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (no CONTINUATION frames); multi-frame header blocks do not exist in HTTP/3. |
-| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | N/A | HTTP/3 uses extended CONNECT (RFC 9220) for WebSocket — not yet implemented. |
+| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | RFC 9220 | HTTP/3 uses extended CONNECT for WebSocket when `EnableRfc8441 = true`; HTTP/1.1 origins only in this release. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | No | HTTP/3 transparent endpoint only; no explicit QUIC proxy yet (see [HTTP-3](HTTP-3) §Why no explicit endpoint). |
 | CONNECT-UDP (MASQUE, RFC 9298) | No | Opt-in `Upgrade: connect-udp` when `allowHttp11Upgrade` is true | Capsules on a `type: masque` listener | No | A decrypting hairpin is not implemented. Existing listener types still return 501 for `:protocol connect-udp`. See [MASQUE](MASQUE). |
 | ALPN-based protocol routing | N/A | N/A | Yes | Yes | HTTP/3 negotiates `h3` via QUIC TLS 1.3; the QUIC listener only accepts connections with `h3` ALPN. |

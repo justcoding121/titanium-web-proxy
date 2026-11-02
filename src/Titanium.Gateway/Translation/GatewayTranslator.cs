@@ -57,6 +57,8 @@ internal sealed partial class TranslationPass
         EvaluateGateways(ownedClassNames);
         DetectConflicts();
         AttachRoutes();
+        AttachL4Routes();
+        AttachGrpcRoutes();
         var drafts = new List<RouteDraft>();
         var clusters = new ClusterRegistry(_state);
         foreach (var route in _routes)
@@ -64,10 +66,13 @@ internal sealed partial class TranslationPass
             TranslateRoute(route, clusters, drafts);
         }
 
+        TranslateGrpcRoutes(clusters, drafts);
+        PlanL4Listeners(clusters);
+        ApplyBackendTlsPolicies(clusters);
         PlanIngresses(clusters, drafts);
         var config = BuildConfig(drafts, clusters, out var tlsFiles);
         CollectNotes();
-        return new RenderResult(config, tlsFiles, _notes, BuildPatches, _ingressEvents);
+        return new RenderResult(config, tlsFiles, _inlineCaFiles, _notes, BuildPatches, _ingressEvents);
     }
 
     private HashSet<string> SelectClasses()
@@ -115,6 +120,8 @@ internal sealed partial class TranslationPass
                 DecryptSsl = decrypt,
             });
         }
+
+        AppendL4Listeners(config);
 
         var sortedDrafts = SortDrafts(drafts);
         for (var i = 0; i < sortedDrafts.Count; i++)

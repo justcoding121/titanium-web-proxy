@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package envoy.config.core.v3;
+
+message Address {
+  oneof address {
+    SocketAddress socket_address = 1;
+  }
+}
+
+message SocketAddress {
+  string address = 1;
+  oneof port_specifier {
+    uint32 port_value = 2;
+  }
+}
+
+message Metadata {
+}
+
+message Locality {
+  string region = 1;
+  string zone = 2;
+  string sub_zone = 3;
+}

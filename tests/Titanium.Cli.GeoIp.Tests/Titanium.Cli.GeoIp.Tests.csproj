@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="MSTest.TestAdapter" Version="3.9.3" />
+    <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
+    <PackageReference Include="MaxMind.Db" Version="5.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Titanium.Cli.GeoIp\Titanium.Cli.GeoIp.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Titanium.Cli.Tests\Geo\MmdbTestWriter.cs" Link="MmdbTestWriter.cs" />
+  </ItemGroup>
+</Project>

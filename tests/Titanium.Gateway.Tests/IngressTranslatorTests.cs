@@ -438,7 +438,7 @@ public class IngressTranslatorTests
         var b = IngressOnly();
         b.Services.RemoveAll(s => s.Name == "web");
         b.Slices.RemoveAll(s => s.ServiceName == "web");
-        b.Services.Add(new ServiceInfo("default", "web", "ClusterIP", "10.96.1.1", [new ServicePortInfo("http", 80, 8080, null)], []));
+        b.Services.Add(new ServiceInfo("default", "web", "ClusterIP", "10.96.1.1", [new ServicePortInfo("http", 80, 8080, null)], [], StateBuilder.NoServiceAnnotations));
         b.Slices.Add(new EndpointSliceInfo("default", "web-a", "web", "IPv4", [new EndpointPortInfo("http", 8080, "TCP")], [new EndpointInfo(["10.0.0.5"], true)]));
         var ingress = Ingress("ing", "titanium",
         [
@@ -592,7 +592,7 @@ public class IngressTranslatorTests
     {
         var b = IngressOnly();
         b.Services.RemoveAll(s => s.Name == "titanium-data");
-        b.Services.Add(new ServiceInfo("titanium-system", "titanium-data", "LoadBalancer", "10.96.0.9", [], [new ServiceAddress("lb.example.com", true)]));
+        b.Services.Add(new ServiceInfo("titanium-system", "titanium-data", "LoadBalancer", "10.96.0.9", [], [new ServiceAddress("lb.example.com", true)], StateBuilder.NoServiceAnnotations));
         b.Ingresses.Add(Ingress("ing", "titanium", [IRule(Host, IPath("/", "Prefix"))]));
 
         var address = Render(b).StatusPatches.Single(p => p.Kind == StatusKind.Ingress).Addresses!.Single();

@@ -1,5 +1,8 @@
 namespace Titanium.Gateway.Model;
 
+/// <summary>A ConfigMap the controller may read for BackendTLSPolicy CA bundles.</summary>
+public sealed record ConfigMapInfo(string Namespace, string Name, IReadOnlyDictionary<string, string> Data);
+
 /// <summary>A Namespace, reduced to its labels (for <c>allowedRoutes.namespaces.selector</c>).</summary>
 public sealed record NamespaceInfo(string Name, IReadOnlyDictionary<string, string> Labels);
 
@@ -18,7 +21,8 @@ public sealed record ServiceInfo(
     string? Type,
     string? ClusterIp,
     IReadOnlyList<ServicePortInfo> Ports,
-    IReadOnlyList<ServiceAddress> LoadBalancerAddresses);
+    IReadOnlyList<ServiceAddress> LoadBalancerAddresses,
+    IReadOnlyDictionary<string, string> Annotations);
 
 /// <summary>An address a Service is reachable at.</summary>
 public sealed record ServiceAddress(string Value, bool IsHostname);
@@ -26,7 +30,11 @@ public sealed record ServiceAddress(string Value, bool IsHostname);
 /// <summary>One endpoint of an EndpointSlice.</summary>
 /// <param name="Ready">The <c>conditions.ready</c> value. Null means ready, as the API defines it.</param>
 /// <param name="PodName">The <c>targetRef</c> Pod name, when the endpoint is a pod.</param>
-public sealed record EndpointInfo(IReadOnlyList<string> Addresses, bool? Ready, string? PodName = null);
+public sealed record EndpointInfo(
+    IReadOnlyList<string> Addresses,
+    bool? Ready,
+    string? PodName = null,
+    string? Zone = null);
 
 /// <summary>One named port of an EndpointSlice.</summary>
 public sealed record EndpointPortInfo(string? Name, int Port, string? Protocol);
@@ -55,6 +63,18 @@ public sealed class ClusterState
     public IReadOnlyList<GatewayResource> Gateways { get; init; } = [];
 
     public IReadOnlyList<HttpRoute> HttpRoutes { get; init; } = [];
+
+    public IReadOnlyList<TlsRoute> TlsRoutes { get; init; } = [];
+
+    public IReadOnlyList<TcpRoute> TcpRoutes { get; init; } = [];
+
+    public IReadOnlyList<UdpRoute> UdpRoutes { get; init; } = [];
+
+    public IReadOnlyList<GrpcRoute> GrpcRoutes { get; init; } = [];
+
+    public IReadOnlyList<BackendTlsPolicy> BackendTlsPolicies { get; init; } = [];
+
+    public IReadOnlyList<ConfigMapInfo> ConfigMaps { get; init; } = [];
 
     public IReadOnlyList<ReferenceGrant> ReferenceGrants { get; init; } = [];
 

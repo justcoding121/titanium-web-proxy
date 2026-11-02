@@ -246,6 +246,17 @@ internal static class ComparisonGroup
         ("edition-script-slow-upstream", ["twp-cli-script-lua-slow-upstream-http1", "twp-cli-slow-upstream-http1"]),
         ("edition-script-1in50", ["twp-cli-script-1in50-http1", "twp-cli-reverse-http1-route"]),
         ("edition-plugin-dotnet-noop", ["twp-cli-plugin-dotnet-noop-http1", "twp-cli-reverse-http1-route"]),
+        // Leftover placeholders (F01): each feature later edits only its arm's config.
+        ("edition-geo", ["twp-cli-geo-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-compress-h2-h2", ["twp-cli-compress-h2-h2", "twp-cli-reverse-http1-route"]),
+        ("edition-compress-h3", ["twp-cli-compress-h3", "twp-cli-reverse-http1-route"]),
+        ("edition-health-grpc", ["twp-cli-health-grpc-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-zoneaware", ["twp-cli-zoneaware-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-tcp-tlsterm", ["twp-cli-tcp-tlsterm", "twp-cli-reverse-http1-route"]),
+        ("edition-ws-h3", ["twp-ws-h3", "twp-cli-reverse-http1-route"]),
+        ("edition-compress-zstd", ["twp-cli-compress-zstd-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-overload", ["twp-cli-overload-http1", "twp-cli-reverse-http1-route"]),
+        ("edition-hotrestart", ["twp-cli-hotrestart-http1", "twp-cli-reverse-http1-route"]),
     ];
 
     public static IReadOnlyList<(string Key, int ArmCount)> ListEditionGroups() =>

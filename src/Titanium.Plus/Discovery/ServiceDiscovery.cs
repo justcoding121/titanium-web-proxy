@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Security;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,13 +15,14 @@ namespace Titanium.Plus.Discovery;
 
 /// <summary>
 /// Service discovery → <see cref="IClusterManager.ApplyAsync"/>.
-/// Modes: <c>file</c> and <c>dns</c> (timer based), <c>consul</c> (blocking queries), and <c>k8s</c>
+/// Modes: <c>file</c>, <c>dns</c>, and <c>dnsSrv</c> (timer based), <c>consul</c> (blocking queries), and <c>k8s</c>
 /// (EndpointSlice list-then-watch). Remote modes back off exponentially with jitter and keep the last
 /// known good destinations on every error; an empty or failed result is never applied.
 /// </summary>
 public sealed class ServiceDiscovery : IDisposable
 {
     private const string LabelSelectorQueryKey = "labelSelector";
+    private const string ClusterIdOption = "discovery.clusterId";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -35,9 +37,16 @@ public sealed class ServiceDiscovery : IDisposable
 
     private readonly CancellationTokenSource _cts = new();
     private FileSystemWatcher? _watcher;
+    private Timer? _filePollTimer;
+    private DateTime _lastAppliedWriteUtc = DateTime.MinValue;
+    private long _lastAppliedLength = -1;
+    private byte[] _lastAppliedContentHash = [];
 
     /// <summary>0 idle, 1 apply scheduled, 2 another change arrived while one was scheduled.</summary>
     private int _fileWatchState;
+    private readonly DiscoveryApplyState _dnsApplyState = new();
+    private readonly DiscoveryApplyState _dnsSrvApplyState = new();
+    private int _dnsSrvTruncateLogged;
 
     public static ServiceDiscovery? TryStart(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
@@ -55,6 +64,11 @@ public sealed class ServiceDiscovery : IDisposable
                 break;
             case "dns":
                 discovery.StartDnsLoop(context, options);
+                break;
+            case "dnssrv":
+            case "dns-srv":
+            case "dns_srv":
+                discovery.StartDnsSrvLoop(context, options);
                 break;
             case "consul":
                 discovery.StartConsul(context, options);
@@ -98,9 +112,9 @@ public sealed class ServiceDiscovery : IDisposable
     {
         try
         {
-            if (File.Exists(full))
+            if (File.Exists(full) && await ApplyFileAsync(context, full, _cts.Token))
             {
-                await ApplyFileAsync(context, full, _cts.Token);
+                StampAppliedFile(full);
             }
         }
         catch (Exception ex)
@@ -117,25 +131,63 @@ public sealed class ServiceDiscovery : IDisposable
         };
         // Dropping a change that arrives while one apply is scheduled loses the real write:
         // macOS FSEvents fires once when WriteAllText truncates the file and again when the new bytes land.
-        void OnChange(object _, FileSystemEventArgs __)
-        {
-            var previous = Interlocked.CompareExchange(ref _fileWatchState, 1, 0);
-            if (previous == 0)
-            {
-                QueueDebouncedFileApply(context, full);
-                return;
-            }
-
-            if (previous == 1)
-            {
-                Interlocked.CompareExchange(ref _fileWatchState, 2, 1);
-            }
-        }
+        void OnChange(object _, FileSystemEventArgs __) => ScheduleFileApply(context, full);
 
         _watcher.Changed += OnChange;
         _watcher.Created += OnChange;
         _watcher.Renamed += OnChange;
         _watcher.EnableRaisingEvents = true;
+
+        // FileSystemWatcher misses some overwrite patterns (especially on macOS). Poll mtime/size as a backstop.
+        _filePollTimer = new Timer(
+            _ =>
+            {
+                try
+                {
+                    if (!File.Exists(full))
+                    {
+                        return;
+                    }
+
+                    var info = new FileInfo(full);
+                    // mtime can share a one-second bucket across overwrite, and same-length JSON swaps
+                    // (dA→dB) look identical by length alone — content hash is the reliable backstop.
+                    if (info.LastWriteTimeUtc == _lastAppliedWriteUtc &&
+                        info.Length == _lastAppliedLength &&
+                        ContentHashEquals(full, _lastAppliedContentHash))
+                    {
+                        return;
+                    }
+
+                    ScheduleFileApply(context, full);
+                }
+                catch (IOException)
+                {
+                    // Mid-write; the next tick retries.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Mid-write; the next tick retries.
+                }
+            },
+            null,
+            dueTime: 500,
+            period: 500);
+    }
+
+    private void ScheduleFileApply(PlusActivationContext context, string full)
+    {
+        var previous = Interlocked.CompareExchange(ref _fileWatchState, 1, 0);
+        if (previous == 0)
+        {
+            QueueDebouncedFileApply(context, full);
+            return;
+        }
+
+        if (previous == 1)
+        {
+            Interlocked.CompareExchange(ref _fileWatchState, 2, 1);
+        }
     }
 
     private void QueueDebouncedFileApply(PlusActivationContext context, string full)
@@ -149,7 +201,7 @@ public sealed class ServiceDiscovery : IDisposable
                 while (!_cts.IsCancellationRequested)
                 {
                     await Task.Delay(200, _cts.Token);
-                    await ApplyFileAsync(context, full, _cts.Token);
+                    await ApplyDebouncedFileOnceAsync(context, full);
                     if (Interlocked.Exchange(ref _fileWatchState, 0) != 2)
                     {
                         return;
@@ -170,6 +222,66 @@ public sealed class ServiceDiscovery : IDisposable
         }, _cts.Token);
     }
 
+    private async Task ApplyDebouncedFileOnceAsync(PlusActivationContext context, string full)
+    {
+        if (await ApplyFileAsync(context, full, _cts.Token))
+        {
+            StampAppliedFile(full);
+            return;
+        }
+
+        // Truncate-then-write often yields one empty read before the bytes land.
+        for (var retry = 0; retry < 5 && !_cts.IsCancellationRequested; retry++)
+        {
+            await Task.Delay(100, _cts.Token);
+            if (await ApplyFileAsync(context, full, _cts.Token))
+            {
+                StampAppliedFile(full);
+                return;
+            }
+        }
+    }
+
+    private void StampAppliedFile(string full)
+    {
+        try
+        {
+            var info = new FileInfo(full);
+            _lastAppliedWriteUtc = info.LastWriteTimeUtc;
+            _lastAppliedLength = info.Length;
+            _lastAppliedContentHash = SHA256.HashData(File.ReadAllBytes(full));
+        }
+        catch (IOException)
+        {
+            // Leave prior stamp so the poll retries.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Leave prior stamp so the poll retries.
+        }
+    }
+
+    private static bool ContentHashEquals(string full, byte[] previous)
+    {
+        if (previous.Length == 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            return previous.AsSpan().SequenceEqual(SHA256.HashData(File.ReadAllBytes(full)));
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private void StartDnsLoop(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
         if (!options.TryGetValue("discovery.dnsName", out var dnsName) || string.IsNullOrWhiteSpace(dnsName))
@@ -180,16 +292,89 @@ public sealed class ServiceDiscovery : IDisposable
 
         var port = int.TryParse(options.GetValueOrDefault("discovery.dnsPort"), out var p) ? p : 80;
         var intervalMs = int.TryParse(options.GetValueOrDefault("discovery.intervalMs"), out var ms) ? ms : 15000;
-        var clusterId = options.GetValueOrDefault("discovery.clusterId") ?? dnsName;
+        var clusterId = options.GetValueOrDefault(ClusterIdOption) ?? dnsName;
         PlusLog.Info(context, $"Plus Discovery: DNS {dnsName}:{port} every {intervalMs}ms → cluster {clusterId}");
 
         _ = Task.Run(
             () => RunPeriodicAsync(
-                ct => ApplyDnsAsync(context, dnsName, port, clusterId, ct),
+                ct => ApplyDnsAsync(context, dnsName, port, clusterId, _dnsApplyState, ct),
                 intervalMs,
                 "Plus Discovery: DNS apply failed",
                 context),
             _cts.Token);
+    }
+
+    private void StartDnsSrvLoop(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
+    {
+        if (!options.TryGetValue("discovery.srvName", out var srvName) || string.IsNullOrWhiteSpace(srvName))
+        {
+            PlusLog.Warn(context, "Plus Discovery: mode=dnsSrv requires discovery.srvName");
+            return;
+        }
+
+        var clusterId = options.GetValueOrDefault(ClusterIdOption) ?? srvName.Trim();
+        var intervalMs = DnsSrvDiscovery.ReadIntervalMs(options);
+        var maxTargets = DnsSrvDiscovery.ReadMaxTargets(options);
+        var dnsServer = options.GetValueOrDefault("discovery.dnsServer");
+        PlusLog.Info(context,
+            $"Plus Discovery: DNS SRV {srvName.Trim()} every {intervalMs}ms (cap {maxTargets}) → cluster {clusterId}");
+        _ = Task.Run(
+            () => RunDnsSrvAsync(
+                context,
+                options,
+                new DnsSrvLoop(srvName.Trim(), clusterId, maxTargets, dnsServer, intervalMs),
+                _cts.Token),
+            _cts.Token);
+    }
+
+    private readonly record struct DnsSrvLoop(string SrvName, string ClusterId, int MaxTargets, string? DnsServer, int IntervalMs);
+
+    private async Task RunDnsSrvAsync(
+        PlusActivationContext context,
+        IReadOnlyDictionary<string, string> options,
+        DnsSrvLoop loop,
+        CancellationToken cancellationToken)
+    {
+        var srvName = loop.SrvName;
+        var clusterId = loop.ClusterId;
+        var maxTargets = loop.MaxTargets;
+        var dnsServer = loop.DnsServer;
+        var intervalMs = loop.IntervalMs;
+        var backoffSettings = ReadBackoff(options);
+        var backoff = new DiscoveryBackoff(backoffSettings.MinMs, backoffSettings.MaxMs);
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                var (destinations, ttlSeconds, truncated) = await DnsSrvDiscovery.QueryAsync(
+                    srvName,
+                    clusterId,
+                    maxTargets,
+                    dnsServer,
+                    cancellationToken).ConfigureAwait(false);
+                if (truncated && Interlocked.Exchange(ref _dnsSrvTruncateLogged, 1) == 0)
+                {
+                    PlusLog.Warn(context, $"Plus Discovery: DNS SRV {srvName} returned more targets than srvMaxTargets ({maxTargets}); list was truncated.");
+                }
+
+                await ApplyDestinationsIfChangedAsync(context, clusterId, destinations, _dnsSrvApplyState, cancellationToken)
+                    .ConfigureAwait(false);
+                backoff.Reset();
+                var delayMs = Math.Max(intervalMs, ttlSeconds > 0 ? ttlSeconds * 1000 : 0);
+                await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                var delay = backoff.Next();
+                PlusLog.Warn(context,
+                    $"Plus Discovery: DNS SRV query failed ({ex.Message}); keeping last known destinations, retry in {(int)delay.TotalMilliseconds}ms");
+                await DelayAsync(delay, cancellationToken);
+            }
+        }
     }
 
     private void StartConsul(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
@@ -209,7 +394,7 @@ public sealed class ServiceDiscovery : IDisposable
 
         var settings = new ConsulSettings(
             uri,
-            options.GetValueOrDefault("discovery.clusterId") ?? "consul",
+            options.GetValueOrDefault(ClusterIdOption) ?? "consul",
             ReadInt(options, "discovery.intervalMs", 15000, 100, 3_600_000),
             ReadInt(options, "discovery.consulWaitSeconds", 30, 1, 600),
             !string.Equals(options.GetValueOrDefault("discovery.consulPassing"), "false", StringComparison.OrdinalIgnoreCase),
@@ -419,28 +604,53 @@ public sealed class ServiceDiscovery : IDisposable
             return false;
         }
 
-        await context.ClusterManager.ApplyAsync(
-        [
-            new ClusterConfig { Id = clusterId, Destinations = destinations },
-        ], cancellationToken);
+        var cluster = DiscoveryClusterMerge.WithDestinations(context.ClusterManager, clusterId, destinations);
+        await context.ClusterManager.ApplyAsync([cluster], cancellationToken);
         state.Signature = signature;
         context.RefreshReverseProxy?.Invoke();
         PlusLog.Info(context, $"Plus Discovery: applied {destinations.Count} destination(s) to cluster {clusterId}");
         return true;
     }
 
-    internal static async Task ApplyFileAsync(PlusActivationContext context, string path, CancellationToken cancellationToken)
+    /// <returns><see langword="true"/> when clusters were parsed and applied; <see langword="false"/> on empty/invalid JSON.</returns>
+    internal static async Task<bool> ApplyFileAsync(PlusActivationContext context, string path, CancellationToken cancellationToken)
     {
-        var json = await File.ReadAllTextAsync(path, cancellationToken);
-        var clusters = ParseClustersDocument(json);
+        string json;
+        try
+        {
+            json = await File.ReadAllTextAsync(path, cancellationToken);
+        }
+        catch (IOException)
+        {
+            // Truncate/replace in flight.
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return false;
+        }
+
+        List<ClusterConfig>? clusters;
+        try
+        {
+            clusters = ParseClustersDocument(json);
+        }
+        catch (JsonException)
+        {
+            // Partial write between truncate and flush.
+            return false;
+        }
+
         if (clusters is null || context.ClusterManager is null)
         {
-            return;
+            return false;
         }
 
         await context.ClusterManager.ApplyAsync(clusters, cancellationToken);
         context.RefreshReverseProxy?.Invoke();
         PlusLog.Info(context, $"Plus Discovery: applied {clusters.Count} cluster(s) from {path}");
+        return true;
     }
 
     internal static async Task ApplyDnsAsync(
@@ -448,6 +658,7 @@ public sealed class ServiceDiscovery : IDisposable
         string dnsName,
         int port,
         string clusterId,
+        DiscoveryApplyState state,
         CancellationToken cancellationToken)
     {
         if (context.ClusterManager is null)
@@ -468,16 +679,7 @@ public sealed class ServiceDiscovery : IDisposable
             });
         }
 
-        if (destinations.Count == 0)
-        {
-            return;
-        }
-
-        await context.ClusterManager.ApplyAsync(
-        [
-            new ClusterConfig { Id = clusterId, Destinations = destinations },
-        ], cancellationToken);
-        context.RefreshReverseProxy?.Invoke();
+        await ApplyDestinationsIfChangedAsync(context, clusterId, destinations, state, cancellationToken);
     }
 
     internal static List<ClusterConfig>? ParseClustersDocument(string json)
@@ -676,7 +878,7 @@ public sealed class ServiceDiscovery : IDisposable
         var settings = new KubernetesSettings(
             listUrl,
             selectors.Count == 0 ? null : string.Join(',', selectors),
-            options.GetValueOrDefault("discovery.clusterId") ?? "k8s",
+            options.GetValueOrDefault(ClusterIdOption) ?? "k8s",
             options.GetValueOrDefault("discovery.k8sPortName"),
             ReadInt(options, "discovery.intervalMs", 15000, 100, 3_600_000),
             ReadInt(options, "discovery.k8sWatchTimeoutSeconds", 300, 1, 3600),
@@ -1072,6 +1274,10 @@ public sealed class ServiceDiscovery : IDisposable
                 continue;
             }
 
+            var zone = endpoint.TryGetProperty("zone", out var zoneElement) && zoneElement.ValueKind == JsonValueKind.String
+                ? zoneElement.GetString()
+                : null;
+
             foreach (var element in addresses.EnumerateArray())
             {
                 var address = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
@@ -1085,6 +1291,7 @@ public sealed class ServiceDiscovery : IDisposable
                     Id = $"k8s-{address}-{port}",
                     Address = address,
                     Port = port,
+                    Zone = zone,
                 });
             }
         }
@@ -1196,6 +1403,7 @@ public sealed class ServiceDiscovery : IDisposable
     public void Dispose()
     {
         _cts.Cancel();
+        _filePollTimer?.Dispose();
         _watcher?.Dispose();
         _cts.Dispose();
     }

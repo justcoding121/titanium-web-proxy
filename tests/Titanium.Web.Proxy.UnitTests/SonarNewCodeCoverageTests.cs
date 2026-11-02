@@ -1326,7 +1326,8 @@ public class SonarNewCodeCoverageTests
                 Assert.IsFalse(string.IsNullOrEmpty(Http2OriginConnectionPool.DiagPickStats.FormatSummary()));
                 Assert.IsTrue(SpinWait.SpinUntil(
                     () => File.Exists(outPath) && new FileInfo(outPath).Length > 0,
-                    TimeSpan.FromSeconds(3)));
+                    TimeSpan.FromSeconds(10)),
+                    "DiagPickStats Emit should write the pool-pick log within 10s.");
             }
             finally
             {

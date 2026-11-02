@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 
@@ -53,24 +54,14 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             return null;
         }
 
-        if (!string.IsNullOrEmpty(context.AffinityKey))
+        if (TrySelectAffinity(cluster, snapshot, passive, eligible, context, out var affinityMatch))
         {
-            var affinityMatch = eligible.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
-            if (affinityMatch is not null)
-            {
-                return affinityMatch;
-            }
+            return affinityMatch;
         }
 
-        if (!string.IsNullOrEmpty(cluster.LoadBalancingPolicy) && Policies is { Count: > 0 } policies)
+        if (TrySelectPolicy(cluster, eligible, context, out var policyPick))
         {
-            for (var i = 0; i < policies.Count; i++)
-            {
-                if (string.Equals(policies[i].Name, cluster.LoadBalancingPolicy, StringComparison.Ordinal))
-                {
-                    return policies[i].Pick(cluster, eligible, context);
-                }
-            }
+            return policyPick;
         }
 
         if (eligible.Count == 1)
@@ -79,7 +70,61 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             return eligible[0];
         }
 
-        return cluster.Algorithm switch
+        return SelectByAlgorithm(cluster, eligible, context);
+    }
+
+    private bool TrySelectAffinity(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        PassiveHealthConfig? passive,
+        List<DestinationConfig> eligible,
+        LoadBalanceContext context,
+        out DestinationConfig? match)
+    {
+        match = null;
+        if (string.IsNullOrEmpty(context.AffinityKey))
+        {
+            return false;
+        }
+
+        // A pinned client may stay on a destination outside the local zone. Only a zone-aware cluster needs the
+        // unfiltered pool; every other cluster reuses the list it already built (no second walk, no allocation).
+        var affinityPool = ClusterRuntime.Find(snapshot, cluster.Id)?.ZoneAwareActive == true
+            ? Collect(cluster, snapshot, passive, applyZoneFilter: false)
+            : eligible;
+        match = affinityPool.FirstOrDefault(dest => AffinityPins.Matches(cluster, dest, context.AffinityKey));
+        return match is not null;
+    }
+
+    private bool TrySelectPolicy(
+        ClusterConfig cluster,
+        List<DestinationConfig> eligible,
+        LoadBalanceContext context,
+        out DestinationConfig? pick)
+    {
+        pick = null;
+        if (string.IsNullOrEmpty(cluster.LoadBalancingPolicy) || Policies is not { Count: > 0 } policies)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < policies.Count; i++)
+        {
+            if (string.Equals(policies[i].Name, cluster.LoadBalancingPolicy, StringComparison.Ordinal))
+            {
+                pick = policies[i].Pick(cluster, eligible, context);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private DestinationConfig SelectByAlgorithm(
+        ClusterConfig cluster,
+        List<DestinationConfig> eligible,
+        LoadBalanceContext context) =>
+        cluster.Algorithm switch
         {
             LoadBalanceAlgorithm.Random => SelectWeightedRandom(eligible, cluster.SlowStartSeconds),
             LoadBalanceAlgorithm.LeastRequests => SelectLeastRequests(eligible),
@@ -89,7 +134,6 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             LoadBalanceAlgorithm.ConsistentHash => SelectHash(eligible, context.HashInput ?? context.AffinityKey ?? cluster.Id),
             _ => SelectWeightedRoundRobin(cluster.Id, eligible, cluster.SlowStartSeconds),
         };
-    }
 
     internal DestinationConfig? SelectFirstUntried(
         ClusterConfig cluster,
@@ -225,7 +269,11 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
         return expanded[Random.Shared.Next(expanded.Count)];
     }
 
-    private List<DestinationConfig> Collect(ClusterConfig cluster, ImmutableClusterSnapshot snapshot, PassiveHealthConfig? passive)
+    private List<DestinationConfig> Collect(
+        ClusterConfig cluster,
+        ImmutableClusterSnapshot snapshot,
+        PassiveHealthConfig? passive,
+        bool applyZoneFilter = true)
     {
         var eligible = new List<DestinationConfig>();
         var tiered = false;
@@ -245,23 +293,67 @@ public sealed class LoadBalancer : ILoadBalancer, ILatencyRecorder
             eligible.Add(dest);
         }
 
+        if (applyZoneFilter)
+        {
+            var runtime = ClusterRuntime.Find(snapshot, cluster.Id);
+            if (runtime?.ZoneAwareActive == true)
+            {
+                ApplyZoneFilter(eligible, runtime);
+            }
+        }
+
         if (!tiered || eligible.Count <= 1)
         {
             return eligible;
         }
 
+        KeepBestPriorityTier(eligible);
+        return eligible;
+    }
+
+    private static int DestinationRank(DestinationConfig dest) =>
+        dest.Backup ? int.MaxValue : dest.Priority;
+
+    private static void KeepBestPriorityTier(List<DestinationConfig> eligible)
+    {
         var best = int.MaxValue;
         for (var i = 0; i < eligible.Count; i++)
         {
-            var rank = eligible[i].Backup ? int.MaxValue : eligible[i].Priority;
+            var rank = DestinationRank(eligible[i]);
             if (rank < best)
             {
                 best = rank;
             }
         }
 
-        eligible.RemoveAll(dest => (dest.Backup ? int.MaxValue : dest.Priority) != best);
-        return eligible;
+        eligible.RemoveAll(dest => DestinationRank(dest) != best);
+    }
+
+    private static void ApplyZoneFilter(List<DestinationConfig> eligible, ClusterRuntime runtime)
+    {
+        var localTotal = runtime.LocalDestinationCount;
+        if (localTotal == 0)
+        {
+            return;
+        }
+
+        var localEligible = 0;
+        for (var i = 0; i < eligible.Count; i++)
+        {
+            if (string.Equals(eligible[i].Zone, runtime.LocalZone, StringComparison.Ordinal))
+            {
+                localEligible++;
+            }
+        }
+
+        // Never filter down to an empty pool: with no eligible local destination every zone is used.
+        var keepLocal = localEligible > 0 && localEligible >= runtime.MinLocalEndpoints &&
+                        localEligible * 100 >= localTotal * runtime.MinLocalHealthyPercent;
+        ProxyMetrics.RecordZoneSelection(keepLocal ? "local" : "spill");
+        if (keepLocal)
+        {
+            eligible.RemoveAll(dest => !string.Equals(dest.Zone, runtime.LocalZone, StringComparison.Ordinal));
+        }
     }
 
     private bool Accept(DestinationConfig dest, DestinationState state, PassiveHealthConfig? passive)

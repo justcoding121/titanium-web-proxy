@@ -580,16 +580,17 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2:
+    ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2 and RFC 9220
+    ///     WebSocket-over-HTTP/3 (HTTP/1.1 origins only for HTTP/3 in this release):
     ///     <list type="bullet">
     ///       <item>
     ///         <description>
-    ///           Accepts extended CONNECT (<c>:protocol = websocket</c>) from h2 clients and
+    ///           Accepts extended CONNECT (<c>:protocol = websocket</c>) from h2 and h3 clients and
     ///           advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to them. Per origin: if the
     ///           origin is HTTP/2 and advertises RFC 8441 support, DATA frames are relayed directly;
     ///           if the origin is HTTP/2 and does not, the stream is reset with
-    ///           <c>REFUSED_STREAM</c>; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge
-    ///           is used.
+    ///           <c>REFUSED_STREAM</c>; if the origin is HTTP/1.1, the h2→h1 or h3→h1 WebSocket
+    ///           upgrade bridge is used.
     ///         </description>
     ///       </item>
     ///       <item>
@@ -1803,6 +1804,16 @@ public partial class ProxyServer : IDisposable
 
         try
         {
+            // SO_REUSEPORT = 15. SetRawSocketOption talks to the kernel directly: SetSocketOption(ReusePort)
+            // throws SocketException "Operation not supported" on some Linux hosts (the option is outside the try
+            // that wraps Start, so the process used to exit before it was ready).
+            if (endPoint.ReusePort && OperatingSystem.IsLinux())
+            {
+                // Linux SOL_SOCKET is 1. Casting SocketOptionLevel.Socket yields the Windows value 65535
+                // and the kernel rejects it; SetSocketOption maps levels, SetRawSocketOption does not.
+                endPoint.Listener.Server.SetRawSocketOption(1, 15, BitConverter.GetBytes(1));
+            }
+
             endPoint.Listener.Start(ListenerBackLog);
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
@@ -1920,8 +1931,13 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (!ProxyRunning || _stopAccepting)
+            if (!ProxyRunning || _stopAccepting || ShouldOverloadStopAccepting)
             {
+                if (ProxyRunning && !_stopAccepting)
+                {
+                    Diagnostics.ProxyMetrics.RecordOverloadAction("stop_accepting");
+                }
+
                 // Unread bytes make Linux answer close() with RST. Drain them so the client sees a FIN.
                 CloseAcceptedSocketWithoutResponse(tcpClient);
                 if (!ProxyRunning)

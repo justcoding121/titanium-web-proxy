@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.IO;
 using System.IO.Compression;
+using Titanium.Web.Proxy.Abstractions.Compression;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -80,8 +81,37 @@ internal sealed class ResponseCompressionPolicy
     private static bool IsStreamingMode(string? mode) => TryParseMode(mode, out var streaming) && streaming;
 
     /// <summary>Null (off) unless the config is present and enabled.</summary>
-    internal static ResponseCompressionPolicy? Create(ResponseCompressionConfig? config) =>
-        config is { Enabled: true } ? new ResponseCompressionPolicy(config) : null;
+    internal static ResponseCompressionPolicy? Create(ResponseCompressionConfig? config)
+    {
+        if (config is not { Enabled: true })
+            return null;
+
+        ValidateConfiguredCodecs(config);
+        return new ResponseCompressionPolicy(config);
+    }
+
+    /// <summary>
+    ///     Ensures every configured algorithm that needs a registered codec (for example <c>zstd</c>) is present.
+    /// </summary>
+    internal static void ValidateConfiguredCodecs(ResponseCompressionConfig config)
+    {
+        if (config.Algorithms is not { Count: > 0 } list)
+            return;
+
+        foreach (var raw in list)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                continue;
+            if (raw.Trim().Equals("zstd", StringComparison.OrdinalIgnoreCase)
+                && !ContentCodecs.IsRegistered("zstd"))
+            {
+                throw new InvalidOperationException(
+                    "server.responseCompression lists zstd but no zstd codec is registered. " +
+                    "Register one through ContentCodecs (the CLI does this when zstd is configured) " +
+                    "or remove zstd from algorithms.");
+            }
+        }
+    }
 
     /// <summary>True when the matched route opted out with <c>compression: off</c>.</summary>
     internal static bool IsRouteOff(RouteConfig? route) =>
@@ -118,13 +148,9 @@ internal sealed class ResponseCompressionPolicy
         var result = new List<HttpCompression>(2);
         foreach (var name in configured)
         {
-            var algorithm = name.Trim().ToLowerInvariant() switch
-            {
-                "br" => HttpCompression.Brotli,
-                "gzip" => HttpCompression.Gzip,
-                _ => HttpCompression.Unsupported
-            };
-            if (algorithm != HttpCompression.Unsupported && !result.Contains(algorithm))
+            if (!HttpCompressionNames.TryParse(name, out var algorithm))
+                continue;
+            if (!result.Contains(algorithm))
                 result.Add(algorithm);
         }
 
@@ -196,7 +222,11 @@ internal sealed class ResponseCompressionPolicy
         var best = 0d;
         foreach (var candidate in algorithms)
         {
-            var weight = Weight(accept, candidate == HttpCompression.Brotli ? "br" : "gzip");
+            var token = HttpCompressionNames.WireToken(candidate);
+            if (token.Length == 0)
+                continue;
+
+            var weight = Weight(accept, token);
             if (weight > best)
             {
                 best = weight;
@@ -250,7 +280,7 @@ internal sealed class ResponseCompressionPolicy
     private static void RewriteHeaders(Response response, HttpCompression algorithm)
     {
         response.Headers.SetOrAddHeaderValue(KnownHeaders.ContentEncoding,
-            algorithm == HttpCompression.Brotli ? KnownHeaders.ContentEncodingBrotli : KnownHeaders.ContentEncodingGzip);
+            HttpCompressionNames.WireToken(algorithm));
 
         if (!HasToken(response.Headers.GetHeaders("Vary"), "accept-encoding")
             && !HasToken(response.Headers.GetHeaders("Vary"), "*"))

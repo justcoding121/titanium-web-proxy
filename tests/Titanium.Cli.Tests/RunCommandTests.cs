@@ -234,6 +234,27 @@ public class RunCommandTests
     }
 
     [TestMethod]
+    public void BuildReverseProxyOptions_CarriesGeoIpResolver_WhenProvided()
+    {
+        var manager = new Titanium.Web.Proxy.Clusters.ClusterManager();
+        var balancer = new Titanium.Web.Proxy.Clusters.LoadBalancer();
+        IGeoIpResolver resolver = new FakeGeoIpResolver();
+
+        var options = RunCommand.BuildReverseProxyOptions([], manager, balancer, [], null, null, [], geoIpResolver: resolver);
+
+        Assert.AreSame(resolver, options.GeoIpResolver);
+    }
+
+    private sealed class FakeGeoIpResolver : IGeoIpResolver
+    {
+        public bool TryGetCountry(System.Net.IPAddress address, out string countryIsoCode)
+        {
+            countryIsoCode = string.Empty;
+            return false;
+        }
+    }
+
+    [TestMethod]
     public void BuildReverseProxyOptions_CarriesThePolicyHandlers_OnlyWhenThereAreSome()
     {
         var manager = new Titanium.Web.Proxy.Clusters.ClusterManager();

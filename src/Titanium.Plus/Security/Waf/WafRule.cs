@@ -17,8 +17,15 @@ public sealed class WafRuleException : InvalidOperationException
 /// </summary>
 public sealed class WafRule
 {
-    /// <summary>Longest a single rule match may run. A rule that exceeds it is counted and ignored for that value.</summary>
+    /// <summary>
+    /// Longest a backtracking-engine match may run. Non-backtracking rules use
+    /// <see cref="NonBacktrackingMatchTimeout"/> instead (they cannot explode, but first-hit latency under load can
+    /// exceed a few milliseconds).
+    /// </summary>
     public static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(5);
+
+    /// <summary>Match budget for <see cref="RegexOptions.NonBacktracking"/> rules.</summary>
+    public static readonly TimeSpan NonBacktrackingMatchTimeout = TimeSpan.FromMilliseconds(50);
 
     private readonly Regex? _regex;
     private readonly SearchValues<string>? _needles;
@@ -334,7 +341,7 @@ public static class WafPatternLinter
         var options = RegexOptions.CultureInvariant | (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None);
         try
         {
-            return new Regex(pattern, options | RegexOptions.NonBacktracking, WafRule.MatchTimeout);
+            return new Regex(pattern, options | RegexOptions.NonBacktracking, WafRule.NonBacktrackingMatchTimeout);
         }
         catch (NotSupportedException)
         {

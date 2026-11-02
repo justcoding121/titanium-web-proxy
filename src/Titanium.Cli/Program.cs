@@ -38,6 +38,7 @@ internal static class Program
                 {
                     "run" => await RunCommand.ExecuteAsync(args),
                     "reload" => await ReloadCommand.ExecuteAsync(args),
+                    "restart" => await RestartCommand.ExecuteAsync(args),
                     "test" => await TestCommand.ExecuteAsync(args),
                     "healthcheck" => await HealthcheckCommand.ExecuteAsync(args),
                     "version" => await VersionCommand.ExecuteAsync(args),
@@ -70,6 +71,7 @@ internal static class Program
             Usage:
               titanium run -c <config> [-v|--verbose] [--service] [--watch]
               titanium reload -c <config>
+              titanium restart -c <config>   (Linux hot restart)
               titanium test -c <config>
               titanium healthcheck (-c <config> | --url <url>)
               titanium version [--check] [--plus] [--channel beta]

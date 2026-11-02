@@ -14,7 +14,13 @@ public static class GatewayApiNames
     public const string GatewayClassKind = "GatewayClass";
     public const string GatewayKind = "Gateway";
     public const string HttpRouteKind = "HTTPRoute";
+    public const string TlsRouteKind = "TLSRoute";
+    public const string TcpRouteKind = "TCPRoute";
+    public const string UdpRouteKind = "UDPRoute";
+    public const string GrpcRouteKind = "GRPCRoute";
+    public const string BackendTlsPolicyKind = "BackendTLSPolicy";
     public const string ReferenceGrantKind = "ReferenceGrant";
+    public const string ConfigMapKind = "ConfigMap";
     public const string ServiceKind = "Service";
     public const string SecretKind = "Secret";
     public const string NamespaceKind = "Namespace";
@@ -439,4 +445,174 @@ public sealed class ReferenceGrantTo
     public string Kind { get; set; } = string.Empty;
 
     public string? Name { get; set; }
+}
+
+// ---- TLSRoute, TCPRoute, UDPRoute ----
+
+public sealed class TlsRoute
+{
+    public ObjectMeta Metadata { get; set; } = new();
+
+    public L4RouteSpec Spec { get; set; } = new();
+
+    public HttpRouteStatus? Status { get; set; }
+}
+
+public sealed class TcpRoute
+{
+    public ObjectMeta Metadata { get; set; } = new();
+
+    public TcpUdpRouteSpec Spec { get; set; } = new();
+
+    public HttpRouteStatus? Status { get; set; }
+}
+
+public sealed class UdpRoute
+{
+    public ObjectMeta Metadata { get; set; } = new();
+
+    public TcpUdpRouteSpec Spec { get; set; } = new();
+
+    public HttpRouteStatus? Status { get; set; }
+}
+
+public sealed class L4RouteSpec
+{
+    public List<ParentReference>? ParentRefs { get; set; }
+
+    public List<string>? Hostnames { get; set; }
+
+    public List<L4RouteRule>? Rules { get; set; }
+}
+
+public sealed class TcpUdpRouteSpec
+{
+    public List<ParentReference>? ParentRefs { get; set; }
+
+    public List<L4RouteRule>? Rules { get; set; }
+}
+
+public sealed class L4RouteRule
+{
+    public List<HttpBackendRef>? BackendRefs { get; set; }
+}
+
+// ---- GRPCRoute ----
+
+public sealed class GrpcRoute
+{
+    public ObjectMeta Metadata { get; set; } = new();
+
+    public GrpcRouteSpec Spec { get; set; } = new();
+
+    public HttpRouteStatus? Status { get; set; }
+}
+
+public sealed class GrpcRouteSpec
+{
+    public List<ParentReference>? ParentRefs { get; set; }
+
+    public List<string>? Hostnames { get; set; }
+
+    public List<GrpcRouteRule>? Rules { get; set; }
+}
+
+public sealed class GrpcRouteRule
+{
+    public List<GrpcRouteMatch>? Matches { get; set; }
+
+    public List<GrpcRouteFilter>? Filters { get; set; }
+
+    public List<HttpBackendRef>? BackendRefs { get; set; }
+}
+
+public sealed class GrpcRouteMatch
+{
+    public GrpcMethodMatch? Method { get; set; }
+
+    public List<HttpHeaderMatch>? Headers { get; set; }
+}
+
+public sealed class GrpcMethodMatch
+{
+    /// <summary><c>Exact</c> or <c>RegularExpression</c>.</summary>
+    public string? Type { get; set; }
+
+    public string? Service { get; set; }
+
+    public string? Method { get; set; }
+}
+
+public sealed class GrpcRouteFilter
+{
+    public string Type { get; set; } = string.Empty;
+
+    public HttpHeaderFilter? RequestHeaderModifier { get; set; }
+
+    public HttpHeaderFilter? ResponseHeaderModifier { get; set; }
+
+    public HttpRequestMirror? RequestMirror { get; set; }
+}
+
+// ---- BackendTLSPolicy ----
+
+public sealed class BackendTlsPolicy
+{
+    public ObjectMeta Metadata { get; set; } = new();
+
+    public BackendTlsPolicySpec Spec { get; set; } = new();
+
+    public BackendTlsPolicyStatus? Status { get; set; }
+}
+
+public sealed class BackendTlsPolicySpec
+{
+    public List<BackendTlsTargetRef>? TargetRefs { get; set; }
+
+    public BackendTlsValidation? Validation { get; set; }
+}
+
+public sealed class BackendTlsTargetRef
+{
+    public string? Group { get; set; }
+
+    public string? Kind { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+
+    public string? SectionName { get; set; }
+}
+
+public sealed class BackendTlsValidation
+{
+    public List<CaCertificateRef>? CaCertificateRefs { get; set; }
+
+    public string? WellKnownCACertificates { get; set; }
+
+    public string? Hostname { get; set; }
+
+    public List<string>? SubjectAltNames { get; set; }
+}
+
+public sealed class CaCertificateRef
+{
+    public string? Group { get; set; }
+
+    public string? Kind { get; set; }
+
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class BackendTlsPolicyStatus
+{
+    public List<PolicyAncestorStatus>? Ancestors { get; set; }
+}
+
+public sealed class PolicyAncestorStatus
+{
+    public ParentReference AncestorRef { get; set; } = new();
+
+    public string ControllerName { get; set; } = string.Empty;
+
+    public List<Condition> Conditions { get; set; } = [];
 }

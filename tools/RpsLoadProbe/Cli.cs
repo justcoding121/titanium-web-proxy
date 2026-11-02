@@ -828,6 +828,36 @@ internal static class Cli
             case "twp-cli-plugin-dotnet-noop-http1":
                 mode = ProbeMode.TwpCliPluginDotNetNoopHttp1;
                 return true;
+            case "twp-cli-geo-http1":
+                mode = ProbeMode.TwpCliGeoHttp1;
+                return true;
+            case "twp-cli-compress-h2-h2":
+                mode = ProbeMode.TwpCliCompressH2H2;
+                return true;
+            case "twp-cli-compress-h3":
+                mode = ProbeMode.TwpCliCompressH3;
+                return true;
+            case "twp-cli-health-grpc-http1":
+                mode = ProbeMode.TwpCliHealthGrpcHttp1;
+                return true;
+            case "twp-cli-zoneaware-http1":
+                mode = ProbeMode.TwpCliZoneAwareHttp1;
+                return true;
+            case "twp-cli-tcp-tlsterm":
+                mode = ProbeMode.TwpCliTcpTlsTerm;
+                return true;
+            case "twp-ws-h3":
+                mode = ProbeMode.TwpWsH3;
+                return true;
+            case "twp-cli-compress-zstd-http1":
+                mode = ProbeMode.TwpCliCompressZstdHttp1;
+                return true;
+            case "twp-cli-overload-http1":
+                mode = ProbeMode.TwpCliOverloadHttp1;
+                return true;
+            case "twp-cli-hotrestart-http1":
+                mode = ProbeMode.TwpCliHotRestartHttp1;
+                return true;
             case "origin-direct":
                 mode = ProbeMode.OriginDirect;
                 return true;

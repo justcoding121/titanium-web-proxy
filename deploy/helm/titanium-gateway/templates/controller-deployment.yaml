@@ -89,6 +89,10 @@ spec:
             - name: TITANIUM_GATEWAY_WATCH_LEGACY_ANNOTATION
               value: "true"
             {{- end }}
+            {{- if .Values.backendTLSPolicy.enabled }}
+            - name: TITANIUM_GATEWAY_ENABLE_BACKEND_TLS_POLICY
+              value: "true"
+            {{- end }}
             {{- with .Values.controller.secretNamespaces }}
             - name: TITANIUM_GATEWAY_SECRET_NAMESPACES
               value: {{ join "," . | quote }}

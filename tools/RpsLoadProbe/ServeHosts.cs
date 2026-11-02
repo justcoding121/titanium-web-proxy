@@ -232,6 +232,16 @@ internal static class ServeProxyHost
             case ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1:
             case ProbeMode.TwpCliScript1In50Http1:
             case ProbeMode.TwpCliPluginDotNetNoopHttp1:
+            case ProbeMode.TwpCliGeoHttp1:
+            case ProbeMode.TwpCliCompressH2H2:
+            case ProbeMode.TwpCliCompressH3:
+            case ProbeMode.TwpCliHealthGrpcHttp1:
+            case ProbeMode.TwpCliZoneAwareHttp1:
+            case ProbeMode.TwpCliTcpTlsTerm:
+            case ProbeMode.TwpWsH3:
+            case ProbeMode.TwpCliCompressZstdHttp1:
+            case ProbeMode.TwpCliOverloadHttp1:
+            case ProbeMode.TwpCliHotRestartHttp1:
             {
                 if (originHttpPort <= 0) throw new ArgumentException("origin-http-port required");
                 var kind = mode switch
@@ -272,6 +282,17 @@ internal static class ServeProxyHost
                     ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 => TitaniumCliHost.CliArmKind.ScriptLuaSlowUpstream,
                     ProbeMode.TwpCliScript1In50Http1 => TitaniumCliHost.CliArmKind.ScriptOneInFifty,
                     ProbeMode.TwpCliPluginDotNetNoopHttp1 => TitaniumCliHost.CliArmKind.PluginDotNetNoop,
+                    // F01 leftovers placeholders: same config as reverse-http1-route until their feature lands.
+                    ProbeMode.TwpCliGeoHttp1 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliCompressH2H2 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliCompressH3 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliHealthGrpcHttp1 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliZoneAwareHttp1 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliTcpTlsTerm => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpWsH3 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliCompressZstdHttp1 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliOverloadHttp1 => TitaniumCliHost.CliArmKind.SingleRoute,
+                    ProbeMode.TwpCliHotRestartHttp1 => TitaniumCliHost.CliArmKind.SingleRoute,
                     _ => TitaniumCliHost.CliArmKind.ForwardHost
                 };
                 var cli = await TitaniumCliHost.StartAsync(originHttpPort, kind, cancellationToken);
@@ -1316,6 +1337,16 @@ internal static class ServeProxyHost
         ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 => "twp-cli-script-lua-slow-upstream-http1",
         ProbeMode.TwpCliScript1In50Http1 => "twp-cli-script-1in50-http1",
         ProbeMode.TwpCliPluginDotNetNoopHttp1 => "twp-cli-plugin-dotnet-noop-http1",
+        ProbeMode.TwpCliGeoHttp1 => "twp-cli-geo-http1",
+        ProbeMode.TwpCliCompressH2H2 => "twp-cli-compress-h2-h2",
+        ProbeMode.TwpCliCompressH3 => "twp-cli-compress-h3",
+        ProbeMode.TwpCliHealthGrpcHttp1 => "twp-cli-health-grpc-http1",
+        ProbeMode.TwpCliZoneAwareHttp1 => "twp-cli-zoneaware-http1",
+        ProbeMode.TwpCliTcpTlsTerm => "twp-cli-tcp-tlsterm",
+        ProbeMode.TwpWsH3 => "twp-ws-h3",
+        ProbeMode.TwpCliCompressZstdHttp1 => "twp-cli-compress-zstd-http1",
+        ProbeMode.TwpCliOverloadHttp1 => "twp-cli-overload-http1",
+        ProbeMode.TwpCliHotRestartHttp1 => "twp-cli-hotrestart-http1",
         ProbeMode.OriginDirect => "origin-direct",
         ProbeMode.ExplicitPoolSweep => "explicit-pool-sweep",
         _ => mode.ToString()

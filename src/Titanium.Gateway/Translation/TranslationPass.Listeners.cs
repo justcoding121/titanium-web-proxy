@@ -19,6 +19,16 @@ internal sealed class ListenerOutcome
 
     public bool IsHttps => string.Equals(Listener.Protocol, "HTTPS", StringComparison.Ordinal);
 
+    public bool IsTls => string.Equals(Listener.Protocol, "TLS", StringComparison.Ordinal);
+
+    public bool IsTcp => string.Equals(Listener.Protocol, "TCP", StringComparison.Ordinal);
+
+    public bool IsUdp => string.Equals(Listener.Protocol, "UDP", StringComparison.Ordinal);
+
+    public bool IsTlsPassthrough => IsTls && string.Equals(Listener.Tls?.Mode, "Passthrough", StringComparison.Ordinal);
+
+    public bool IsTlsTerminate => IsTls && string.Equals(Listener.Tls?.Mode, "Terminate", StringComparison.OrdinalIgnoreCase);
+
     public int MappedPort { get; set; }
 
     public bool Accepted { get; set; } = true;
@@ -47,7 +57,13 @@ internal sealed class ListenerOutcome
 
     /// <summary>True when the listener will be rendered into the data-plane config.</summary>
     public bool Programmable =>
-        Accepted && !Conflicted && KindsValid && (!IsHttps || Certificates.Count > 0);
+        Accepted && !Conflicted && KindsValid &&
+        (!IsHttpFamily || !IsHttps || Certificates.Count > 0) &&
+        (!IsTlsTerminate || Certificates.Count > 0);
+
+    public bool IsHttpFamily => IsHttp || IsHttps;
+
+    public bool IsHttp => string.Equals(Listener.Protocol, "HTTP", StringComparison.Ordinal);
 
     /// <summary>
     ///     True when the listener is valid except for an HTTPS certificate that did not resolve: routes still attach
@@ -61,6 +77,8 @@ internal sealed class ListenerOutcome
 internal sealed partial class TranslationPass
 {
     private const string InvalidCertificateRefReason = "InvalidCertificateRef";
+    private const string UnsupportedProtocolReason = "UnsupportedProtocol";
+    private const string UnsupportedValueReason = "UnsupportedValue";
 
     private void EvaluateGateways(HashSet<string> ownedClassNames)
     {
@@ -91,74 +109,135 @@ internal sealed partial class TranslationPass
     {
         var listener = item.Listener;
         var protocol = listener.Protocol;
-        if (protocol is not ("HTTP" or "HTTPS"))
+        switch (protocol)
+        {
+            case "HTTP" or "HTTPS" or "TLS" or "TCP":
+                if (!_options.ListenerPortMap.TryGetValue(listener.Port, out var mapped))
+                {
+                    RejectPort(item);
+                    return;
+                }
+
+                item.MappedPort = mapped;
+                break;
+            case "UDP":
+                item.MappedPort = _options.UdpListenerPortMap.TryGetValue(listener.Port, out var udpMapped)
+                    ? udpMapped
+                    : listener.Port;
+                break;
+            default:
+                item.Accepted = false;
+                item.AcceptedReason = UnsupportedProtocolReason;
+                item.AcceptedMessage = $"Protocol '{protocol}' is not supported.";
+                item.InvalidReason = UnsupportedProtocolReason;
+                return;
+        }
+
+        if (item.IsTlsTerminate)
+        {
+            EvaluateTlsTerminate(item);
+        }
+        else if (item.IsTls && !item.IsTlsPassthrough)
         {
             item.Accepted = false;
-            item.AcceptedReason = "UnsupportedProtocol";
-            item.AcceptedMessage = $"Protocol '{protocol}' is not supported; use HTTP or HTTPS.";
-            item.InvalidReason = "UnsupportedProtocol";
+            item.AcceptedReason = UnsupportedProtocolReason;
+            item.AcceptedMessage = "TLS listeners support tls.mode Passthrough or Terminate.";
+            item.InvalidReason = UnsupportedProtocolReason;
             return;
         }
 
-        if (!_options.ListenerPortMap.TryGetValue(listener.Port, out var mapped))
+        if ((item.IsTcp || item.IsUdp) && !string.IsNullOrEmpty(listener.Hostname))
         {
             item.Accepted = false;
-            item.AcceptedReason = "PortUnavailable";
-            item.AcceptedMessage =
-                $"Port {listener.Port} is not served by the data plane. Available ports: {string.Join(", ", _options.ListenerPortMap.Keys.OrderBy(k => k))}.";
-            item.InvalidReason = "PortUnavailable";
+            item.AcceptedReason = UnsupportedValueReason;
+            item.AcceptedMessage = "TCP and UDP listeners must not set hostname.";
+            item.InvalidReason = UnsupportedValueReason;
             return;
         }
 
-        item.MappedPort = mapped;
         EvaluateAllowedKinds(item);
         if (item.IsHttps)
         {
-            EvaluateTls(item);
+            EvaluateHttpsTls(item);
         }
     }
 
-    private static bool IsHttpRoute(RouteGroupKind kind) =>
-        kind.Kind == HttpRouteGroupKind && (string.IsNullOrEmpty(kind.Group) || kind.Group == GatewayApiNames.Group);
+    private void RejectPort(ListenerOutcome item)
+    {
+        item.Accepted = false;
+        item.AcceptedReason = "PortUnavailable";
+        item.AcceptedMessage =
+            $"Port {item.Listener.Port} is not served by the data plane. Available ports: {string.Join(", ", _options.ListenerPortMap.Keys.OrderBy(k => k))}.";
+        item.InvalidReason = "PortUnavailable";
+    }
+
+    private static bool IsAllowedRouteKind(GatewayListener listener, RouteGroupKind kind)
+    {
+        var name = kind.Kind;
+        var group = string.IsNullOrEmpty(kind.Group) ? GatewayApiNames.Group : kind.Group;
+        if (group != GatewayApiNames.Group)
+        {
+            return false;
+        }
+
+        return listener.Protocol switch
+        {
+            "HTTP" or "HTTPS" => name is HttpRouteGroupKind or GatewayApiNames.GrpcRouteKind,
+            "TLS" => name == GatewayApiNames.TlsRouteKind,
+            "TCP" => name == GatewayApiNames.TcpRouteKind,
+            "UDP" => name == GatewayApiNames.UdpRouteKind,
+            _ => false,
+        };
+    }
+
+    private static IReadOnlyList<RouteGroupKind> DefaultAllowedKinds(GatewayListener listener) =>
+        listener.Protocol switch
+        {
+            "HTTP" or "HTTPS" =>
+            [
+                new RouteGroupKind { Group = GatewayApiNames.Group, Kind = HttpRouteGroupKind },
+                new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.GrpcRouteKind },
+            ],
+            "TLS" => [new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.TlsRouteKind }],
+            "TCP" => [new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.TcpRouteKind }],
+            "UDP" => [new RouteGroupKind { Group = GatewayApiNames.Group, Kind = GatewayApiNames.UdpRouteKind }],
+            _ => [],
+        };
 
     private static void EvaluateAllowedKinds(ListenerOutcome item)
     {
         var kinds = item.Listener.AllowedRoutes?.Kinds;
-        if (kinds is not { Count: > 0 })
+        var effective = kinds is { Count: > 0 } ? kinds : DefaultAllowedKinds(item.Listener);
+        var supported = effective.Where(k => IsAllowedRouteKind(item.Listener, k)).ToList();
+        if (supported.Count > 0 && supported.Count != effective.Count)
         {
-            return;
-        }
-
-        var supported = kinds.Any(k => IsHttpRoute(k));
-        if (supported && !kinds.All(IsHttpRoute))
-        {
-            // The listener still serves the kinds it supports; ResolvedRefs reports the rest.
             item.RefsResolved = false;
             item.RefsReason = "InvalidRouteKinds";
-            item.RefsMessage = "allowedRoutes.kinds also lists kinds this controller does not support; only HTTPRoute is served.";
-            return;
+            item.RefsMessage = "allowedRoutes.kinds also lists kinds this controller does not support on this protocol.";
         }
 
-        if (!supported)
+        if (supported.Count == 0)
         {
             item.KindsValid = false;
             item.RefsResolved = false;
             item.RefsReason = "InvalidRouteKinds";
-            item.RefsMessage = "allowedRoutes.kinds lists no kind this controller supports (HTTPRoute).";
+            item.RefsMessage = "allowedRoutes.kinds lists no kind this controller supports for this listener protocol.";
             item.InvalidReason = "InvalidRouteKinds";
         }
     }
 
-    private void EvaluateTls(ListenerOutcome item)
+    private void EvaluateTlsTerminate(ListenerOutcome item) => EvaluateHttpsTls(item);
+
+    private void EvaluateHttpsTls(ListenerOutcome item)
     {
         var listener = item.Listener;
         var gatewayNamespace = item.Owner.Gateway.Metadata.Namespace ?? "default";
         if (string.Equals(listener.Tls?.Mode, "Passthrough", StringComparison.Ordinal))
         {
             item.Accepted = false;
-            item.AcceptedReason = "UnsupportedValue";
+            item.AcceptedReason = UnsupportedValueReason;
             item.AcceptedMessage = "HTTPS listeners support tls.mode Terminate only.";
-            item.InvalidReason = "UnsupportedValue";
+            item.InvalidReason = UnsupportedValueReason;
             return;
         }
 
@@ -248,35 +327,47 @@ internal sealed partial class TranslationPass
         foreach (var group in _gateways
                      .SelectMany(g => g.Listeners)
                      .Where(l => l.MappedPort != 0 && l.Accepted)
-                     .GroupBy(l => l.Listener.Port))
+                     .GroupBy(l => (l.Listener.Port, Transport(l))))
         {
             var kept = new List<ListenerOutcome>();
             foreach (var candidate in group)
             {
-                var clash = kept.FirstOrDefault(k =>
-                    k.Listener.Protocol != candidate.Listener.Protocol ||
-                    (ReferenceEquals(k.Owner, candidate.Owner) &&
-                     string.Equals(
-                         Hostnames.Normalize(k.Listener.Hostname),
-                         Hostnames.Normalize(candidate.Listener.Hostname),
-                         StringComparison.Ordinal)));
+                var clash = kept.FirstOrDefault(k => ListenersClash(k, candidate));
                 if (clash is null)
                 {
                     kept.Add(candidate);
                     continue;
                 }
 
-                var protocolClash = clash.Listener.Protocol != candidate.Listener.Protocol;
-                candidate.Conflicted = true;
-                candidate.ConflictReason = protocolClash ? "ProtocolConflict" : "HostnameConflict";
-                candidate.ConflictMessage = protocolClash
-                    ? $"Port {candidate.Listener.Port} is already used by a {clash.Listener.Protocol} listener."
-                    : $"Port {candidate.Listener.Port} already has a listener for hostname '{candidate.Listener.Hostname ?? "*"}'.";
-                candidate.Accepted = false;
-                candidate.AcceptedReason = candidate.ConflictReason;
-                candidate.AcceptedMessage = candidate.ConflictMessage;
-                candidate.InvalidReason = candidate.ConflictReason;
+                MarkConflict(candidate, clash);
             }
         }
+    }
+
+    private static string Transport(ListenerOutcome listener) => listener.IsUdp ? "udp" : "tcp";
+
+    private static bool ListenersClash(ListenerOutcome existing, ListenerOutcome candidate) =>
+        existing.Listener.Protocol != candidate.Listener.Protocol || HostnamesClash(existing, candidate);
+
+    private static bool HostnamesClash(ListenerOutcome existing, ListenerOutcome candidate) =>
+        !existing.IsTlsPassthrough && !candidate.IsTlsPassthrough &&
+        ReferenceEquals(existing.Owner, candidate.Owner) &&
+        string.Equals(
+            Hostnames.Normalize(existing.Listener.Hostname),
+            Hostnames.Normalize(candidate.Listener.Hostname),
+            StringComparison.Ordinal);
+
+    private static void MarkConflict(ListenerOutcome candidate, ListenerOutcome clash)
+    {
+        var protocolClash = clash.Listener.Protocol != candidate.Listener.Protocol;
+        candidate.Conflicted = true;
+        candidate.ConflictReason = protocolClash ? "ProtocolConflict" : "HostnameConflict";
+        candidate.ConflictMessage = protocolClash
+            ? $"Port {candidate.Listener.Port} is already used by a {clash.Listener.Protocol} listener."
+            : $"Port {candidate.Listener.Port} already has a listener for hostname '{candidate.Listener.Hostname ?? "*"}'.";
+        candidate.Accepted = false;
+        candidate.AcceptedReason = candidate.ConflictReason;
+        candidate.AcceptedMessage = candidate.ConflictMessage;
+        candidate.InvalidReason = candidate.ConflictReason;
     }
 }

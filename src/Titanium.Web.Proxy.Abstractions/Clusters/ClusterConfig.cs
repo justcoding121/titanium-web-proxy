@@ -60,6 +60,19 @@ public sealed class DestinationConfig
 
     /// <summary>Opaque pin. Null means the destination id is the pin.</summary>
     public string? AffinityKey { get; init; }
+
+    /// <summary>Availability zone for zone-aware load balancing. Null means unknown.</summary>
+    public string? Zone { get; init; }
+}
+
+/// <summary>Prefer local-zone destinations until too few are healthy, then spill to all zones.</summary>
+public sealed class ZoneAwareConfig
+{
+    /// <summary>Minimum share of local-zone destinations that must be eligible before traffic stays local (1-100). Default 70.</summary>
+    public int MinLocalHealthyPercent { get; init; } = 70;
+
+    /// <summary>Minimum count of eligible local destinations required to stay local. Default 1.</summary>
+    public int MinLocalEndpoints { get; init; } = 1;
 }
 
 /// <summary>Cluster of destinations with LB settings.</summary>
@@ -106,6 +119,9 @@ public sealed class ClusterConfig
     ///     A TCP active health probe sends a v2 LOCAL header when this is <c>v2</c>.
     /// </summary>
     public string? SendProxyProtocol { get; init; }
+
+    /// <summary>Zone-aware routing. Null is off. Requires <c>server.localZone</c> at runtime.</summary>
+    public ZoneAwareConfig? ZoneAware { get; init; }
 }
 
 /// <summary>How a sticky pin is read.</summary>
@@ -232,6 +248,7 @@ public enum ActiveHealthKind
 {
     Http = 0,
     Tcp = 1,
+    Grpc = 2,
 }
 
 /// <summary>Active probe policy. Disabled unless <see cref="Enabled"/> is true.</summary>
@@ -243,6 +260,8 @@ public sealed class ActiveHealthConfig
     public int TimeoutSeconds { get; init; } = 5;
     public ActiveHealthKind Kind { get; init; } = ActiveHealthKind.Http;
     public string Path { get; init; } = "/";
+    /// <summary>grpc.health.v1 service name. Empty checks the whole server (grpc probes only).</summary>
+    public string? GrpcService { get; init; }
     public string? Query { get; init; }
     public IReadOnlyList<int>? ExpectedStatus { get; init; }
     public int HealthyThreshold { get; init; } = 2;

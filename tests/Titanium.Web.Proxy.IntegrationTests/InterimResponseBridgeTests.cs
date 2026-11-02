@@ -123,24 +123,44 @@ public class InterimResponseBridgeTests
             Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
                 $"Request {i + 1}: expected HTTP/1.1 200 but got: '{statusLine}'.");
 
-            var contentLength = 0;
+            var contentLength = -1;
             string? headerLine;
             while (!string.IsNullOrEmpty(headerLine = await reader.ReadLineAsync()))
                 if (headerLine.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                     contentLength = int.Parse(headerLine.Substring("Content-Length:".Length).Trim());
 
-            // Read exactly contentLength chars (ASCII: 1 byte = 1 char).
-            var bodyChars = new char[contentLength];
-            var bodyRead = 0;
-            while (bodyRead < contentLength)
+            string body;
+            if (contentLength >= 0)
             {
-                var n = await reader.ReadAsync(bodyChars.AsMemory(bodyRead, contentLength - bodyRead));
-                if (n == 0) break;
-                bodyRead += n;
+                // Read exactly contentLength chars (ASCII: 1 byte = 1 char).
+                var bodyChars = new char[contentLength];
+                var bodyRead = 0;
+                while (bodyRead < contentLength)
+                {
+                    var n = await reader.ReadAsync(bodyChars.AsMemory(bodyRead, contentLength - bodyRead));
+                    if (n == 0) break;
+                    bodyRead += n;
+                }
+
+                body = new string(bodyChars, 0, bodyRead);
+            }
+            else
+            {
+                // No Content-Length (chunked / connection-close): read until we have the expected body.
+                var acc = new System.Text.StringBuilder();
+                var deadline = DateTime.UtcNow.AddSeconds(5);
+                while (acc.Length < 4 && DateTime.UtcNow < deadline)
+                {
+                    var buf = new char[16];
+                    var n = await reader.ReadAsync(buf.AsMemory());
+                    if (n == 0) break;
+                    acc.Append(buf, 0, n);
+                }
+
+                body = acc.ToString();
             }
 
-            Assert.AreEqual("pong", new string(bodyChars, 0, bodyRead),
-                $"Request {i + 1}: unexpected body.");
+            Assert.AreEqual("pong", body, $"Request {i + 1}: unexpected body.");
         }
     }
 

@@ -32,11 +32,16 @@ metadata:
     {{- include "titanium-gateway.commonLabels" . | nindent 4 }}
 rules:
   - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["gatewayclasses", "gateways", "httproutes", "referencegrants"]
+    resources: ["gatewayclasses", "gateways", "httproutes", "grpcroutes", "tlsroutes", "tcproutes", "udproutes", "backendtlspolicies", "referencegrants"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["gateway.networking.k8s.io"]
-    resources: ["gatewayclasses/status", "gateways/status", "httproutes/status"]
+    resources: ["gatewayclasses/status", "gateways/status", "httproutes/status", "grpcroutes/status", "tlsroutes/status", "tcproutes/status", "udproutes/status", "backendtlspolicies/status"]
     verbs: ["get", "patch", "update"]
+  {{- if .Values.backendTLSPolicy.enabled }}
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
   # Ingress: the classes and Ingresses to serve, and the address written to an Ingress's status.
   - apiGroups: ["networking.k8s.io"]
     resources: ["ingresses", "ingressclasses"]

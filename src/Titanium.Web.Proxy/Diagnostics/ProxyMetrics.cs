@@ -407,6 +407,45 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.passthrough.bytes", "By",
             "Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client).");
 
+    private static readonly Counter<long> ZoneSelections =
+        Meter.CreateCounter<long>("twp.loadbalancer.zone.selections", "{pick}",
+            "Load-balancer zone-aware picks: local (stayed in zone) or spill (used all zones).");
+
+    private static int _overloadLevelValue;
+
+    private static readonly Counter<long> OverloadActions =
+        Meter.CreateCounter<long>("twp.overload.actions", "{action}",
+            "Overload shedding actions taken: disable_keep_alive, reject, or stop_accepting.");
+
+    // Observable: sampled by the exporter at scrape time, so the hot path never touches it.
+    // Kept as a field so the callback stays registered for the meter lifetime.
+    private static readonly ObservableGauge<int> OverloadLevelGauge =
+        Meter.CreateObservableGauge("twp.overload.level",
+            () => System.Threading.Volatile.Read(ref _overloadLevelValue), "{level}",
+            "Overload level: 0 normal, 1 elevated, 2 critical.");
+
+    public static void SetOverloadLevel(int level)
+    {
+        _ = OverloadLevelGauge; // keep observable registration reachable for analyzers
+        System.Threading.Volatile.Write(ref _overloadLevelValue, level);
+    }
+
+    public static void RecordOverloadAction(string action)
+    {
+        if (OverloadActions.Enabled)
+        {
+            OverloadActions.Add(1, new KeyValuePair<string, object?>("action", action));
+        }
+    }
+
+    public static void RecordZoneSelection(string scope)
+    {
+        if (ZoneSelections.Enabled)
+        {
+            ZoneSelections.Add(1, new KeyValuePair<string, object?>("scope", scope));
+        }
+    }
+
     public static void RecordPassthrough(string route, string result, long bytesIn, long bytesOut)
     {
         if (PassthroughConnections.Enabled)

@@ -28,16 +28,10 @@ public class CapabilityCoverageTests
     // One entry per capability that is deliberately not offered. The data file must list each, with a reason.
     private static readonly string[] RequiredNotSupported =
     [
-        "WebSocket over HTTP/3",
         "h2c Upgrade",
         "Decrypting QUIC inside CONNECT-UDP",
         "0-RTT",
-        "TLSRoute",
-        "xDS",
         "OpenResty",
-        "route editing",
-        "Hot binary upgrade",
-        "Geo-IP",
     ];
 
     private static string DataPath => Path.Combine(DocsRepository.WebsiteDocs, ".capabilities.yml");

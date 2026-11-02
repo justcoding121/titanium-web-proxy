@@ -19,6 +19,12 @@ public sealed record GatewayTranslatorOptions
     public IReadOnlyDictionary<int, int> ListenerPortMap { get; init; } =
         new Dictionary<int, int> { [80] = 8080, [443] = 8443 };
 
+    /// <summary>UDP listener port to data-plane container port. Unmapped ports keep the same number.</summary>
+    public IReadOnlyDictionary<int, int> UdpListenerPortMap { get; init; } = new Dictionary<int, int>();
+
+    /// <summary>When true, BackendTLSPolicy objects are translated onto cluster TLS settings.</summary>
+    public bool BackendTlsPolicyEnabled { get; init; }
+
     /// <summary>Admin listener port (<c>/readyz</c>, <c>/version</c>) the data-plane config opens.</summary>
     public int AdminPort { get; init; } = 9901;
 
@@ -55,6 +61,11 @@ public enum StatusKind
     GatewayClass,
     Gateway,
     HttpRoute,
+    TlsRoute,
+    TcpRoute,
+    UdpRoute,
+    GrpcRoute,
+    BackendTlsPolicy,
 
     /// <summary>An Ingress. Only <see cref="StatusPatch.Addresses"/> (the load balancer) is written.</summary>
     Ingress,
@@ -69,7 +80,8 @@ public sealed record StatusPatch(
     IReadOnlyList<Condition> Conditions,
     IReadOnlyList<GatewayStatusAddress>? Addresses = null,
     IReadOnlyList<ListenerStatus>? Listeners = null,
-    IReadOnlyList<RouteParentStatus>? Parents = null)
+    IReadOnlyList<RouteParentStatus>? Parents = null,
+    IReadOnlyList<PolicyAncestorStatus>? Ancestors = null)
 {
     public string Key => Namespace is null ? $"{Kind}/{Name}" : $"{Kind}/{Namespace}/{Name}";
 }
@@ -109,16 +121,21 @@ public sealed class RenderResult
     internal RenderResult(
         TwpConfig config,
         IReadOnlyList<TlsFile> tlsFiles,
+        IReadOnlyDictionary<string, byte[]> inlineTlsFiles,
         IReadOnlyList<string> notes,
         Func<bool, IReadOnlyList<StatusPatch>> patches,
         IReadOnlyList<IngressEvent>? events = null)
     {
         Config = config;
         TlsFiles = tlsFiles;
+        InlineTlsFiles = inlineTlsFiles;
         Notes = notes;
         _patches = patches;
         Events = events ?? [];
     }
+
+    /// <summary>Generated TLS material not sourced from a Secret (for example BackendTLSPolicy CA bundles).</summary>
+    public IReadOnlyDictionary<string, byte[]> InlineTlsFiles { get; }
 
     /// <summary>Events for Ingresses (rejected rules, unknown or invalid annotations). The controller posts each once.</summary>
     public IReadOnlyList<IngressEvent> Events { get; }

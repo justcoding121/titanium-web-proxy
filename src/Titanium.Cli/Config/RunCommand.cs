@@ -1,9 +1,13 @@
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Titanium.Cli.AccessLog;
 using Titanium.Cli.Admin;
+using Titanium.Cli.Compression;
 using Titanium.Cli.Certificates;
+using Titanium.Cli.Geo;
+using Titanium.Cli.Xds;
 using Titanium.Cli.Parsers;
 using Titanium.Cli.StaticFiles;
 using Titanium.Web.Proxy;
@@ -57,6 +61,7 @@ internal static class RunCommand
         var verbose = ParseVerbose(args);
         var serviceMode = ParseServiceMode(args);
         var watch = ParseWatch(args);
+        var zoneOverride = ParseZone(args);
         var serviceName = ParseServiceName(args) ?? Service.ServiceDefaults.DefaultServiceName;
 
         if (serviceMode && OperatingSystem.IsWindows())
@@ -65,7 +70,7 @@ internal static class RunCommand
                 .ConfigureAwait(false);
         }
 
-        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch)
+        return await ExecuteCoreAsync(configPath, verbose, serviceMode, CancellationToken.None, watch, zoneOverride)
             .ConfigureAwait(false);
     }
 
@@ -75,7 +80,8 @@ internal static class RunCommand
         bool verbose,
         bool serviceMode,
         CancellationToken stoppingToken,
-        bool watch = false)
+        bool watch = false,
+        string? zoneOverride = null)
     {
         // Hashed before the load: if the file is replaced in between (a ConfigMap swap while the pod starts), the run
         // loads the newer content but reports the older hash, and the check after the watcher starts reloads it.
@@ -100,6 +106,19 @@ internal static class RunCommand
         if (!string.IsNullOrEmpty(configDir))
         {
             Directory.SetCurrentDirectory(configDir);
+        }
+
+        var overlayStore = new ConfigOverlayStore(ResolveOverlayPath(loaded.Config, configDir));
+        var effectiveConfig = CliConfigEditor.ResolveEffectiveConfig(configPath, overlayStore, editor: null);
+        if (!ReferenceEquals(effectiveConfig, loaded.Config))
+        {
+            loaded = new LoadedConfig
+            {
+                Config = effectiveConfig,
+                Path = loaded.Path,
+                Dialect = loaded.Dialect,
+                UnknownKeys = loaded.UnknownKeys,
+            };
         }
 
         // Relative *File paths resolve against the config directory (the working directory set above).
@@ -129,7 +148,19 @@ internal static class RunCommand
 
         // Fast leaf cold-start before server.certificateManager overlays (which may override engine/algo).
         proxy.CertificateManager.ApplyFastColdStartLeafSettings();
+        ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        using var geoIpHost = new GeoIpResolverHost();
+        try
+        {
+            geoIpHost.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: true);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException)
+        {
+            AsyncConsole.WriteError(ex.Message);
+            return 1;
+        }
+
         ConfigureProxyFlags(proxy, loaded.Config, requiresSessionPath);
 
         // Spans and metrics leave through OTLP; the host is disposed after the drain so the last spans are flushed.
@@ -140,7 +171,10 @@ internal static class RunCommand
             AsyncConsole.WriteLine(Telemetry.TelemetryHost.Describe(telemetry.Options));
         }
 
-        var clusterManager = new ClusterManager();
+        var clusterManager = new ClusterManager
+        {
+            LocalZone = ResolveLocalZone(loaded.Config.Server, zoneOverride),
+        };
         var readiness = new ReadinessState(
             TimeProvider.System,
             adminSetup?.RequireHealthyClusters ?? false,
@@ -176,7 +210,22 @@ internal static class RunCommand
         }
 
         // A udp listener is a datagram relay that never touches the HTTP server, so it is started on its own below.
+        var reusePort = loaded.Config.Server?.HotRestart?.Enabled == true;
+        var runningListeners = new Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>();
         var udpListeners = new List<ListenerConfig>();
+
+        // server.hotRestart (Linux): the coordinator only touches the pid file. When a live previous process exists it
+        // still owns the UDP ports, so quic, masque, udp listeners and the HTTP/3 side of decrypting listeners are
+        // collected in deferredBinds and bound after it exits (see HotRestartDeferredBind).
+        var hotRestartConfig = loaded.Config.Server?.HotRestart;
+        IHotRestartPlatform? hotRestartPlatform = hotRestartConfig is { Enabled: true } && OperatingSystem.IsLinux()
+            ? new LinuxHotRestartPlatform()
+            : null;
+        HotRestartCoordinator? hotRestart = hotRestartPlatform is not null && hotRestartConfig!.PidFile is { Length: > 0 } pidFile
+            ? new HotRestartCoordinator(pidFile, hotRestartPlatform, Environment.ProcessId)
+            : null;
+        var previousProcess = hotRestart?.PeekLivePrevious();
+        var deferredBinds = new List<Action>();
         foreach (var listener in loaded.Config.Listeners)
         {
             if (IsUdpListener(listener))
@@ -185,14 +234,33 @@ internal static class RunCommand
                 continue;
             }
 
-            AddListener(proxy, listener, () => pluginHost);
+            if (previousProcess is not null && ResolveListenerKind(listener) is "quic" or "masque")
+            {
+                var deferred = listener;
+                deferredBinds.Add(() =>
+                {
+                    var bound = AddListener(proxy, deferred, () => pluginHost, reusePort);
+                    lock (runningListeners)
+                    {
+                        runningListeners[ListenerKey.From(deferred)] = (CloneListener(deferred), bound);
+                    }
+                });
+                continue;
+            }
+
+            var endPoint = AddListener(
+                proxy, listener, () => pluginHost, reusePort, previousProcess is null ? null : deferredBinds.Add);
+            runningListeners[ListenerKey.From(listener)] = (CloneListener(listener), endPoint);
         }
 
         ServerConfigApplier.ApplyIgnoreServerCertificateErrorsAfterListeners(proxy, loaded.Config.Server);
 
         if (loaded.Config.Listeners.Count == 0)
         {
-            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, false));
+            var fallback = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, false) { ReusePort = reusePort };
+            proxy.AddEndPoint(fallback);
+            var fallbackConfig = new ListenerConfig { Host = "127.0.0.1", Port = 8000 };
+            runningListeners[ListenerKey.From(fallbackConfig)] = (fallbackConfig, fallback);
         }
 
         CertificateBootstrap.Apply(proxy, loaded.Config.Certificates);
@@ -208,6 +276,10 @@ internal static class RunCommand
             ? BuildPlusOptions(loaded.Config.Plus)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         ResolvePlusRelativePaths(plusOptions, configDir);
+
+        var configEditGate = new SemaphoreSlim(1, 1);
+        TwpConfig? lastAppliedConfig = loaded.Config;
+        CliConfigEditor? configEditor = null;
 
         var cacheOptions = ParseResponseCacheOptions(plusOptions, AsyncConsole.WriteError);
         var responseCache = new MemoryHttpResponseCache(cacheOptions.MaxBytes, cacheOptions.Entry.MaxEntryBytes);
@@ -229,10 +301,17 @@ internal static class RunCommand
         {
             proxy.ReverseProxy = BuildReverseProxyOptions(
                 routes, clusterManager, loadBalancer, middleware, grpcJsonTranscoder, policies, policyHandlers,
-                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline), plusContext?.FleetRateStore);
+                pluginHost.Plugins, BuildScriptPipeline(pluginHost, scriptPipeline), plusContext?.FleetRateStore,
+                geoIpHost.Resolver);
         }
 
         AdminServer? adminServer = null;
+
+        // One host for the whole run: no timer or thread exists until server.overload.enabled is true, and a
+        // reload re-applies the section (start, swap thresholds, or stop).
+        var overloadHost = new OverloadProtectionHost(proxy, AsyncConsole.WriteError);
+        readiness.OverloadCriticalProbe = () => overloadHost.ReadyzShouldFail;
+
         async Task<PlusReloadResult> PerformReloadAsync(CancellationToken ct) // NOSONAR S3776 -- Reload callback keeps proxy wiring in one closure.
         {
             try
@@ -250,10 +329,13 @@ internal static class RunCommand
                     t => grpcJsonTranscoder = t,
                     RefreshReverseProxy,
                     policies,
+                    geoIpHost,
                     // A rotated Secret takes effect for /metrics and /version without a restart.
                     // Dropping the token needs a restart: the bind address is not re-applied here.
                     onApplied: applied =>
                     {
+                        lastAppliedConfig = applied;
+                        overloadHost.Apply(applied.Server?.Overload);
                         if (applied.Server?.Admin?.AuthToken is { Length: > 0 } rotated)
                         {
                             adminServer?.SetAuthToken(rotated);
@@ -261,10 +343,14 @@ internal static class RunCommand
 
                         hostStatus.MarkReloaded(applied, AdminHost.ComputeConfigHash(configPath));
                     },
+                    overlayStore: overlayStore,
+                    configEditor: configEditor,
+                    configEditGate: configEditGate,
                     getPlugins: () => pluginHost,
                     setPlugins: next => pluginHost = next,
                     scriptPipeline: scriptPipeline,
-                    stoppingToken: ct).ConfigureAwait(false);
+                    stoppingToken: ct,
+                    runningListeners: runningListeners).ConfigureAwait(false);
                 configHash = AdminHost.ComputeConfigHash(configPath);
                 AsyncConsole.WriteLine("Config reloaded.");
                 await AsyncConsole.FlushAsync().ConfigureAwait(false);
@@ -292,6 +378,16 @@ internal static class RunCommand
             ? new CliManagedConfigApplier(configPath, PerformReloadAsync)
             : null;
 
+        configEditor = new CliConfigEditor(
+            configPath,
+            overlayStore,
+            configEditGate,
+            () => lastAppliedConfig,
+            applied => lastAppliedConfig = applied,
+            (config, ct) => ApplyRoutesClustersLiveAsync(
+                config, proxy, clusterManager, routes, RefreshReverseProxy, ct),
+            (_, _) => { });
+
         plusContext = new PlusActivationContext
         {
             HostStatus = hostStatus,
@@ -310,6 +406,7 @@ internal static class RunCommand
             Logger = proxy.Logger,
             ConfigApplier = configApplier,
             StateDirectory = managerStateDir,
+            ConfigEditor = configEditor,
         };
         var plusActive = await TryActivatePlusAsync(loaded.Config, plusContext).ConfigureAwait(false);
         grpcJsonTranscoder = plusContext.GrpcJsonTranscoder;
@@ -319,6 +416,30 @@ internal static class RunCommand
         JsonAccessLogWriter? accessLog = null;
         MetricsHttpEndpoint? metricsEndpoint = null;
         var udpRelays = new List<UdpRelayListener>();
+        XdsHostHandle? xdsHost = null;
+        if (loaded.Config.Xds?.Server is not null)
+        {
+            loaded.Config.Server ??= new ServerConfig();
+            loaded.Config.Server.ReloadListeners = true;
+            var xdsStateDir = Path.Combine(managerStateDir, "xds");
+            Directory.CreateDirectory(xdsStateDir);
+            xdsHost = XdsHostHandle.TryStart(
+                loaded.Config.Xds,
+                loaded.Config,
+                xdsStateDir,
+                cfg =>
+                {
+                    // The snapshot only carries xDS resources; process-level server settings stay as configured.
+                    cfg.Server ??= new ServerConfig();
+                    cfg.Server.HotRestart ??= loaded.Config.Server?.HotRestart;
+                    _ = ApplyXdsConfigGuardedAsync(
+                        new XdsApplyTarget(cfg, proxy, clusterManager, routes, RefreshReverseProxy, runningListeners, () => pluginHost),
+                        configEditGate, stoppingToken);
+                },
+                stoppingToken);
+        }
+
+        using var handoverCts = new CancellationTokenSource();
         try
         {
             // The admin port opens before the proxy binds, so /healthz answers and /readyz says 503
@@ -329,8 +450,29 @@ internal static class RunCommand
                 metricsExposition,
                 () => AdminHost.BuildVersionInfo(configHash, plusActive));
             proxy.Start();
+            overloadHost.Apply(loaded.Config.Server?.Overload);
+
+            if (previousProcess is not null && udpListeners.Count > 0)
+            {
+                var deferredUdp = udpListeners.ToList();
+                udpListeners.Clear();
+                deferredBinds.Add(() => StartUdpRelays(deferredUdp, udpRelays, clusterManager, loadBalancer));
+            }
+
             StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
             readiness.MarkListenersBound();
+
+            // Bound and ready: only now is the previous process asked to drain, so a start that fails earlier
+            // never takes the old process out of service.
+            if (hotRestart is not null)
+            {
+                TakeOverFromPreviousProcess(hotRestart, hotRestartConfig!);
+                if (previousProcess is { } previousPid && deferredBinds.Count > 0)
+                {
+                    StartDeferredBinds(previousPid, hotRestartPlatform!, deferredBinds, hotRestartConfig!, stoppingToken);
+                }
+            }
+
             StartAcmeIfConfigured(proxy, loaded.Config);
 
             accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
@@ -359,13 +501,29 @@ internal static class RunCommand
                     onStopRequested: () =>
                     {
                         readiness.BeginDrain();
-                        foreach (var relay in udpRelays)
+                        foreach (var relay in SnapshotRelays(udpRelays))
                         {
                             relay.BeginDrain();
                         }
+
+                        // With no pre-stop delay, stop admitting on the signal thread so a probe
+                        // that races DrainAsync is closed without a response (not fully proxied).
+                        if ((adminSetup?.PreStopDelaySeconds ?? 0) <= 0)
+                        {
+                            proxy.StopAcceptingNewConnections();
+                        }
                     },
                     extraWatchPaths: secretFiles,
-                    loadedConfigHash: configHash).ConfigureAwait(false);
+                    loadedConfigHash: configHash,
+                    onHandoverSignal: hotRestart is null
+                        ? null
+                        : () =>
+                        {
+                            handoverCts.Cancel();
+                            // The successor already listens: stop receiving new connections right away.
+                            proxy.CloseTcpListeners();
+                        },
+                    hotRestartPidFile: hotRestartConfig?.PidFile).ConfigureAwait(false);
             }
             finally
             {
@@ -375,17 +533,22 @@ internal static class RunCommand
             // /readyz is already 503 (flipped by the signal). Keep serving for the pre-stop delay so the
             // load balancer removes this instance before the proxy stops accepting.
             await readiness.BeginDrainAsync(
-                TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
+                handoverCts.IsCancellationRequested ? TimeSpan.Zero : TimeSpan.FromSeconds(adminSetup?.PreStopDelaySeconds ?? 0),
                 CancellationToken.None).ConfigureAwait(false);
-            var drainTimeout = TimeSpan.FromSeconds(ResolveDrainTimeoutSeconds(loaded.Config.Server));
+            // After a hot-restart handover the old process serves its accepted connections for up to
+            // handoverTimeoutSeconds, then exits; otherwise the normal drain timeout applies.
+            var drainTimeout = TimeSpan.FromSeconds(
+                handoverCts.IsCancellationRequested
+                    ? hotRestartConfig?.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds
+                    : ResolveDrainTimeoutSeconds(loaded.Config.Server));
             await proxy.DrainAsync(drainTimeout).ConfigureAwait(false);
-            await Task.WhenAll(udpRelays.Select(relay => relay.DrainAsync(drainTimeout))).ConfigureAwait(false);
+            await Task.WhenAll(SnapshotRelays(udpRelays).Select(relay => relay.DrainAsync(drainTimeout))).ConfigureAwait(false);
             await clusterManager.DisposeAsync().ConfigureAwait(false);
             return 0;
         }
         finally
         {
-            foreach (var relay in udpRelays)
+            foreach (var relay in SnapshotRelays(udpRelays))
             {
                 await relay.DisposeAsync().ConfigureAwait(false);
             }
@@ -393,7 +556,73 @@ internal static class RunCommand
             adminServer?.Dispose();
             metricsEndpoint?.Dispose();
             accessLog?.Dispose();
+            await overloadHost.DisposeAsync().ConfigureAwait(false);
+            hotRestart?.ReleasePidFile();
+
             pluginHost.Dispose();
+            if (xdsHost is not null)
+            {
+                await xdsHost.DisposeAsync();
+            }
+        }
+    }
+
+    internal const int DefaultHandoverTimeoutSeconds = 60;
+
+    /// <summary>A copy of the started relays: a hot-restart deferred bind may still be adding to the list.</summary>
+    private static UdpRelayListener[] SnapshotRelays(List<UdpRelayListener> relays)
+    {
+        lock (relays)
+        {
+            return relays.ToArray();
+        }
+    }
+
+    private static void StartDeferredBinds(
+        int previousPid,
+        IHotRestartPlatform platform,
+        List<Action> binds,
+        HotRestartConfig config,
+        CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromSeconds(config.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds);
+        var pending = binds.ToArray();
+        _ = Task.Run(async () =>
+        {
+            var ok = await HotRestartDeferredBind.RunAsync(
+                previousPid, platform, pending, timeout, TimeSpan.FromMilliseconds(250), AsyncConsole.WriteError,
+                cancellationToken).ConfigureAwait(false);
+            if (ok)
+            {
+                AsyncConsole.WriteLine($"Hot restart: process {previousPid} exited; UDP and HTTP/3 listeners are up.");
+            }
+        }, CancellationToken.None);
+    }
+
+    private static void TakeOverFromPreviousProcess(HotRestartCoordinator coordinator, HotRestartConfig config)
+    {
+        try
+        {
+            var outcome = coordinator.TakeOver(TimeSpan.FromSeconds(Math.Min(config.HandoverTimeoutSeconds ?? DefaultHandoverTimeoutSeconds, 10)));
+            switch (outcome)
+            {
+                case HotRestartHandover.SignaledPrevious:
+                    AsyncConsole.WriteLine(
+                        $"Hot restart: asked process {coordinator.PreviousPid} to drain and exit; this process owns {config.PidFile}.");
+                    break;
+                case HotRestartHandover.StalePidFile:
+                    AsyncConsole.WriteLine($"Hot restart: ignored a stale {config.PidFile}; no previous process to hand over from.");
+                    break;
+                case HotRestartHandover.SignalFailed:
+                    AsyncConsole.WriteError(
+                        $"Hot restart: the previous process is alive but SIGUSR2 could not be delivered; both processes are serving. {config.PidFile} now names this process.");
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The proxy is already serving; a pid file problem must not take it down.
+            AsyncConsole.WriteError("Hot restart handover failed: " + ex.Message);
         }
     }
 
@@ -461,13 +690,32 @@ internal static class RunCommand
         Action<IGrpcJsonTranscoder?> setGrpc,
         Action refreshReverseProxy,
         List<RoutePolicyConfig>? policies = null,
+        GeoIpResolverHost? geoIpHost = null,
         Action<TwpConfig>? onApplied = null,
         Func<PluginHost?>? getPlugins = null,
         Action<PluginHost>? setPlugins = null,
         List<string>? scriptPipeline = null,
+        ConfigOverlayStore? overlayStore = null,
+        CliConfigEditor? configEditor = null,
+        SemaphoreSlim? configEditGate = null,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)>? runningListeners = null,
         CancellationToken stoppingToken = default)
     {
+        if (configEditGate is not null)
+        {
+            await configEditGate.WaitAsync(stoppingToken).ConfigureAwait(false);
+        }
+
+        try
+        {
         var loaded = ConfigLoader.Load(configPath);
+        loaded = new LoadedConfig
+        {
+            Path = loaded.Path,
+            Dialect = loaded.Dialect,
+            UnknownKeys = loaded.UnknownKeys,
+            Config = CliConfigEditor.ResolveEffectiveConfig(configPath, overlayStore, configEditor),
+        };
         var errors = TwpConfigValidator.Validate(loaded.Config);
         if (errors.Count > 0)
         {
@@ -483,7 +731,19 @@ internal static class RunCommand
 
         WriteConfigWarnings(loaded);
 
+        var desiredHttpListeners = loaded.Config.Listeners.Where(l => !IsUdpListener(l)).ToList();
+        if (runningListeners is not null && loaded.Config.Server?.ReloadListeners != true
+            && ListenerReconciler.DetectListenerChangeWithoutReload(
+                runningListeners.ToDictionary(static k => k.Key, static k => k.Value.Config), desiredHttpListeners))
+        {
+            AsyncConsole.WriteError(
+                "Listener definitions changed but server.reloadListeners is false; restart the process to apply listener changes.");
+        }
+
+        ZstdCodecRegistration.RegisterIfConfigured(loaded.Config.Server?.ResponseCompression);
         ServerConfigApplier.Apply(proxy, loaded.Config.Server);
+        geoIpHost?.Apply(loaded.Config.Server?.GeoIpDatabasePath, startup: false, warn: AsyncConsole.WriteError);
+        clusterManager.LocalZone = ResolveLocalZone(loaded.Config.Server, zoneOverride: null);
         var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
         host.RememberAppliedClusters(clusterManager.Snapshot.Clusters.Values.ToList());
 
@@ -563,6 +823,14 @@ internal static class RunCommand
         // Calls in flight finish on the old plugins; the last one out disposes them and unloads their contexts.
         previousPlugins?.Retire();
         CertificateBootstrap.ApplySniItems(proxy, loaded.Config.Certificates);
+
+        // Listeners last (clusters and routes first, listeners after): a new listener never receives traffic for a
+        // route that is not installed yet. A failed bind is rolled back inside the reconciler and fails the reload.
+        if (runningListeners is not null && loaded.Config.Server?.ReloadListeners == true)
+        {
+            ReconcileListeners(proxy, loaded.Config, desiredHttpListeners, runningListeners, getPlugins);
+        }
+
         onApplied?.Invoke(loaded.Config);
         _ = middleware;
         _ = loadBalancer;
@@ -570,6 +838,144 @@ internal static class RunCommand
         _ = plusOptions;
         _ = getGrpc;
         _ = setGrpc;
+        }
+        finally
+        {
+            configEditGate?.Release();
+        }
+    }
+
+    internal static async Task ApplyRoutesClustersLiveAsync(
+        TwpConfig config,
+        ProxyServer proxy,
+        ClusterManager clusterManager,
+        List<RouteConfig> routes,
+        Action refreshReverseProxy,
+        CancellationToken cancellationToken)
+    {
+        var host = ConfigHosts.GetValue(clusterManager, static _ => new ProxyConfigHost());
+        var snapshot = new Titanium.Web.Proxy.Abstractions.Configuration.ProxyConfigSnapshot
+        {
+            Routes = config.Routes.ToList(),
+            Clusters = config.Clusters.ToList(),
+        };
+        await host.ApplyAsync(snapshot, clusterManager, options =>
+        {
+            ReplaceRoutes(routes, options.Routes ?? []);
+            refreshReverseProxy();
+        }, cancellationToken).ConfigureAwait(false);
+        _ = proxy;
+    }
+
+    /// <summary>
+    ///     Makes the running listeners match <paramref name="desired" />. An empty desired list while listeners are
+    ///     running is refused: it means "no listener data yet" (an xDS server that has not sent LDS, a half-edited file),
+    ///     and acting on it would take the proxy off the network.
+    /// </summary>
+    private static void ReconcileListeners(
+        ProxyServer proxy,
+        TwpConfig config,
+        List<ListenerConfig> desired,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> running,
+        Func<PluginHost?>? getPlugins)
+    {
+        if (desired.Count == 0 && running.Count > 0)
+        {
+            AsyncConsole.WriteError(
+                "Listener reconcile skipped: the new config has no listeners, keeping the running ones.");
+            return;
+        }
+
+        var reusePort = config.Server?.HotRestart?.Enabled == true;
+        ListenerReconciler.Apply(
+            desired,
+            running,
+            listener => AddListener(proxy, listener, getPlugins, reusePort),
+            proxy.RemoveEndPoint);
+    }
+
+    private readonly record struct XdsApplyTarget(
+        TwpConfig Config,
+        ProxyServer Proxy,
+        ClusterManager ClusterManager,
+        List<RouteConfig> Routes,
+        Action RefreshReverseProxy,
+        Dictionary<ListenerKey, (ListenerConfig Config, ProxyEndPoint Endpoint)> RunningListeners,
+        Func<PluginHost?> GetPlugins);
+
+    private static async Task ApplyAcceptedXdsAsync(XdsApplyTarget target, CancellationToken cancellationToken)
+    {
+        target.Config.Server ??= new ServerConfig();
+        target.Config.Server.ReloadListeners = true;
+        var desiredHttpListeners = target.Config.Listeners.Where(l => !IsUdpListener(l)).ToList();
+
+        // Clusters and routes first, listeners last (xDS order CDS, EDS, RDS, then LDS).
+        await ApplyRoutesClustersLiveAsync(
+            target.Config, target.Proxy, target.ClusterManager, target.Routes, target.RefreshReverseProxy,
+            cancellationToken).ConfigureAwait(false);
+        ReconcileListeners(
+            target.Proxy, target.Config, desiredHttpListeners, target.RunningListeners, target.GetPlugins);
+
+        // SDS certificates (and the file's own SNI items) go onto the listeners that now exist.
+        CertificateBootstrap.ApplySniItems(target.Proxy, target.Config.Certificates);
+    }
+
+    /// <summary>
+    ///     Applies an xDS snapshot under the config edit gate, so it cannot interleave with a file reload or a dashboard
+    ///     edit, and never lets an exception escape (the callback is fire-and-forget).
+    /// </summary>
+    private static async Task ApplyXdsConfigGuardedAsync(
+        XdsApplyTarget target,
+        SemaphoreSlim configEditGate,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await configEditGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var errors = TwpConfigValidator.Validate(target.Config);
+                if (errors.Count > 0)
+                {
+                    AsyncConsole.WriteError("xDS snapshot rejected: " + string.Join("; ", errors));
+                    return;
+                }
+
+                await ApplyAcceptedXdsAsync(target, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                configEditGate.Release();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutting down.
+        }
+        catch (Exception ex)
+        {
+            AsyncConsole.WriteError("xDS snapshot apply failed: " + ex.Message);
+        }
+    }
+
+    private static ListenerConfig CloneListener(ListenerConfig listener) =>
+        JsonSerializer.Deserialize<ListenerConfig>(ListenerReconciler.CanonicalJson(listener))
+        ?? new ListenerConfig { Host = listener.Host, Port = listener.Port, Type = listener.Type };
+
+    private static string ResolveOverlayPath(TwpConfig config, string? configDir)
+    {
+        var explicitPath = config.Plus?.ControlPlane?.OverlayPath;
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+        {
+            return Path.IsPathRooted(explicitPath)
+                ? explicitPath
+                : Path.Combine(configDir ?? Environment.CurrentDirectory, explicitPath);
+        }
+
+        var stateDir = config.Plus?.Options?.GetValueOrDefault("manager.stateDir")
+                       ?? config.Plus?.Options?.GetValueOrDefault("manager.stateDirectory")
+                       ?? Path.Combine(configDir ?? Environment.CurrentDirectory, "state");
+        return Path.Combine(stateDir, "overlay.json");
     }
 
     internal static int ResolveDrainTimeoutSeconds(ServerConfig? server)
@@ -588,7 +994,8 @@ internal static class RunCommand
         IReadOnlyCollection<IRoutePolicyHandler>? policyHandlers = null,
         IReadOnlyDictionary<string, IProxyMiddleware>? routePlugins = null,
         IScriptPhaseHost? scriptPipeline = null,
-        IFleetRateStore? fleetRateStore = null)
+        IFleetRateStore? fleetRateStore = null,
+        IGeoIpResolver? geoIpResolver = null)
     {
         var snapClusters = clusterManager.Snapshot.Clusters;
         return new ReverseProxyOptions
@@ -607,6 +1014,7 @@ internal static class RunCommand
             RoutePlugins = routePlugins is { Count: > 0 } ? routePlugins : null,
             ScriptPipeline = scriptPipeline,
             FleetRateStore = fleetRateStore,
+            GeoIpResolver = geoIpResolver,
         };
     }
 
@@ -799,7 +1207,9 @@ internal static class RunCommand
         Func<Task>? onReload,
         Action? onStopRequested = null,
         IReadOnlyList<string>? extraWatchPaths = null,
-        string? loadedConfigHash = null)
+        string? loadedConfigHash = null,
+        Action? onHandoverSignal = null,
+        string? hotRestartPidFile = null)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -824,6 +1234,7 @@ internal static class RunCommand
         PosixSignalRegistration? sigTerm = null;
         PosixSignalRegistration? sigInt = null;
         PosixSignalRegistration? sigHup = null;
+        HotRestartHandoverWatch? handoverWatch = null;
         EventWaitHandle? winReload = null;
         RegisteredWaitHandle? winReloadWait = null;
         ContentWatcher? contentWatcher = null;
@@ -841,6 +1252,19 @@ internal static class RunCommand
                     ctx.Cancel = true;
                     RequestStop();
                 });
+                if (onHandoverSignal is not null && OperatingSystem.IsLinux()
+                    && !string.IsNullOrWhiteSpace(hotRestartPidFile))
+                {
+                    // PosixSignalRegistration cannot register SIGUSR2 (throws "Operation not supported").
+                    // Watch the pid file: when a successor takes over it, stop accepting and drain.
+                    handoverWatch = HotRestartHandoverWatch.Start(
+                        hotRestartPidFile, Environment.ProcessId, new LinuxHotRestartPlatform(),
+                        () =>
+                        {
+                            onHandoverSignal();
+                            RequestStop();
+                        });
+                }
                 if (onReload is not null)
                 {
                     sigHup = PosixSignalRegistration.Create(PosixSignal.SIGHUP, ctx =>
@@ -934,6 +1358,7 @@ internal static class RunCommand
             sigTerm?.Dispose();
             sigInt?.Dispose();
             sigHup?.Dispose();
+            handoverWatch?.Dispose();
             winReloadWait?.Unregister(null);
             winReload?.Dispose();
             contentWatcher?.Dispose();
@@ -1223,13 +1648,17 @@ internal static class RunCommand
         string.Equals(listener.Type?.Trim(), "udp", StringComparison.OrdinalIgnoreCase);
 
     private static void StartUdpRelays(
-        IReadOnlyList<ListenerConfig> configs, List<UdpRelayListener> started, ClusterManager clusterManager, LoadBalancer loadBalancer)
+        List<ListenerConfig> configs, List<UdpRelayListener> started, ClusterManager clusterManager, LoadBalancer loadBalancer)
     {
         foreach (var listener in configs)
         {
             var options = BuildUdpOptions(listener);
             var relay = new UdpRelayListener(options, clusterManager, loadBalancer);
-            started.Add(relay);
+            lock (started)
+            {
+                started.Add(relay);
+            }
+
             relay.Start();
             var target = string.IsNullOrWhiteSpace(options.ClusterId)
                 ? $"{options.ForwardHost}:{options.ForwardPort}"
@@ -1277,7 +1706,12 @@ internal static class RunCommand
         return options;
     }
 
-    private static void AddListener(ProxyServer proxy, ListenerConfig listener, Func<PluginHost?>? currentPlugins = null)
+    private static ProxyEndPoint AddListener(
+        ProxyServer proxy,
+        ListenerConfig listener,
+        Func<PluginHost?>? currentPlugins = null,
+        bool reusePort = false,
+        Action<Action>? deferHttp3 = null)
     {
         var host = listener.Host ?? DefaultBindHost;
         var ip = host is DefaultBindHost or "*"
@@ -1295,7 +1729,16 @@ internal static class RunCommand
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
 
+        endPoint.ReusePort = reusePort;
         ApplyListenerOverrides(endPoint, listener);
+        if (deferHttp3 is not null && endPoint is TransparentProxyEndPoint { EnableHttp3: true } withHttp3)
+        {
+            // Hot restart successor: the previous process still owns the UDP port. Bind TCP now and the QUIC side
+            // once that process has exited (the caller runs the deferred action).
+            withHttp3.EnableHttp3 = false;
+            deferHttp3(() => proxy.StartHttp3Listener(withHttp3));
+        }
+
         ApplyStreamFilters(endPoint, listener, currentPlugins);
         proxy.AddEndPoint(endPoint);
 
@@ -1309,6 +1752,8 @@ internal static class RunCommand
         {
             AsyncConsole.WriteLine($"Listener {host}:{listener.Port} {kind} decryptSsl={listener.DecryptSsl}");
         }
+
+        return endPoint;
     }
 
     private static string ResolveListenerKind(ListenerConfig listener)
@@ -1420,6 +1865,17 @@ internal static class RunCommand
         }
 
         ep.Passthrough = listener.Passthrough;
+        if (listener.TerminateTls)
+        {
+            ep.TerminateTls = true;
+            ep.TlsHandshakeTimeout = TimeSpan.FromSeconds(listener.TlsHandshakeTimeoutSeconds ?? 10);
+            ep.MaxConcurrentTlsHandshakes = listener.MaxConcurrentHandshakes ?? 256;
+            if (listener.Alpn is { Count: > 0 })
+            {
+                ep.TerminateTlsAlpn = listener.Alpn.ToList();
+            }
+        }
+
         ApplyPassthroughSni(ep, listener);
         ep.ClientCertificateMode = listener.ClientCertificateMode?.ToLowerInvariant() switch
         {
@@ -1690,6 +2146,21 @@ internal static class RunCommand
                 options["controlPlane.allowInsecureNonLoopback"] = "true";
             }
 
+            if (plus.ControlPlane.SnapshotValidation is { } validation)
+            {
+                options["controlPlane.snapshotValidation"] = validation.ToString().ToLowerInvariant();
+            }
+
+            if (plus.ControlPlane.DashboardEditing is { } editing)
+            {
+                options["controlPlane.dashboardEditing"] = editing ? "true" : "false";
+            }
+
+            if (!string.IsNullOrWhiteSpace(plus.ControlPlane.OverlayPath))
+            {
+                options["controlPlane.overlayPath"] = plus.ControlPlane.OverlayPath;
+            }
+
             if (plus.ControlPlane.Tls is { } tls)
             {
                 if (!string.IsNullOrWhiteSpace(tls.CertificatePath))
@@ -1807,5 +2278,39 @@ internal static class RunCommand
             AsyncConsole.WriteError("warning: " + warning);
         foreach (var warning in TwpConfigValidator.CollectWarnings(loaded.Config))
             AsyncConsole.WriteError("warning: " + warning);
+    }
+
+    internal static string? ResolveLocalZone(ServerConfig? server, string? zoneOverride)
+    {
+        if (!string.IsNullOrWhiteSpace(zoneOverride))
+        {
+            return zoneOverride.Trim();
+        }
+
+        var env = Environment.GetEnvironmentVariable("TITANIUM_ZONE");
+        if (!string.IsNullOrWhiteSpace(env))
+        {
+            return env.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(server?.LocalZone) ? null : server.LocalZone.Trim();
+    }
+
+    private static string? ParseZone(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i].Equals("--zone", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                return args[i + 1];
+            }
+
+            if (args[i].StartsWith("--zone=", StringComparison.OrdinalIgnoreCase))
+            {
+                return args[i]["--zone=".Length..];
+            }
+        }
+
+        return null;
     }
 }

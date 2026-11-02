@@ -900,9 +900,12 @@ public partial class ProxyServer
         // Response object, and the origin concurrency gate / lease would never be released.
         var originStreamBody = response.StreamBodyWriter;
 
-        if (!response.Locked) await OnBeforeResponse(args);
+        if (!response.Locked) await OnBeforeResponse(args, mayCompress: true);
 
         response = args.HttpClient.Response;
+
+        if (CompressionPolicy is not null && !response.Locked)
+            await ApplyH1ToH2BridgeResponseCompressionAsync(args, exchange, cancellationToken).ConfigureAwait(false);
 
         if (!ReferenceEquals(response, exchange.Response) && originStreamBody != null)
         {

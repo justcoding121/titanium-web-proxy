@@ -11,7 +11,6 @@ using Titanium.Plus.Security;
 using Titanium.Plus.Security.Oidc;
 using Titanium.Plus.State;
 using Titanium.Web.Proxy.Abstractions.Plugins;
-
 namespace Titanium.Plus;
 
 /// <summary>
@@ -63,6 +62,7 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
             PlusLog.Info(context, $"Plus audit log: {audit.FilePath}");
         }
 
+        var snapshotValidation = ParseSnapshotValidation(options);
         var controlPlane = new ControlPlaneServer(
             context.ClusterManager,
             host,
@@ -73,7 +73,10 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
             context.ResponseCache,
             new ControlPlaneSecurity(audit),
             tls,
-            allowInsecure);
+            allowInsecure,
+            context.ConfigEditor,
+            snapshotValidation,
+            context.Logger);
         controlPlane.Start();
         if (!controlPlane.IsTls && !ControlPlaneServer.IsLoopbackHost(host))
         {
@@ -101,6 +104,8 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
                 UsersFile = usersFile,
                 Oidc = oidc,
                 RequestReload = context.RequestReload,
+                ConfigEditor = context.ConfigEditor,
+                DashboardEditing = IsTrue(options.GetValueOrDefault("controlPlane.dashboardEditing")),
             });
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");
@@ -246,4 +251,17 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
         value is not null &&
         (value.Equals("false", StringComparison.OrdinalIgnoreCase) || value == "0" ||
          value.Equals("no", StringComparison.OrdinalIgnoreCase));
+
+    private static ControlPlane.SnapshotValidationMode ParseSnapshotValidation(IReadOnlyDictionary<string, string> options)
+    {
+        var raw = First(options, "controlPlane.snapshotValidation");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return ControlPlane.SnapshotValidationMode.Warn;
+        }
+
+        return Enum.TryParse<ControlPlane.SnapshotValidationMode>(raw, ignoreCase: true, out var mode)
+            ? mode
+            : ControlPlane.SnapshotValidationMode.Warn;
+    }
 }

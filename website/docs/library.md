@@ -47,6 +47,8 @@ proxyServer.Start();
 
 Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so active health probes shut down. `DrainAsync` stops admitting new clients and then stops the proxy. Hosts that use dependency injection can call `AddTitaniumReverseProxy` from the hosting package. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
 
+For `geo` route policies, assign `ReverseProxyOptions.GeoIpResolver` (`IGeoIpResolver` in **Titanium.Web.Proxy.Abstractions**). The CLI loads an MMDB from `server.geoIpDatabasePath`; embedders supply their own resolver (any database or lookup service).
+
 ## API reference
 
 - [ProxyServer](/api/Titanium.Web.Proxy.ProxyServer.html){target="_blank" rel="noreferrer"}

@@ -24,6 +24,8 @@ public static class AuditActions
     public const string LoginFailed = "login-failed";
     public const string Logout = "logout";
     public const string Reload = "reload";
+    public const string ConfigEdit = "config-edit";
+    public const string OverlayClear = "overlay-clear";
 }
 
 /// <summary>Result values written to the audit log.</summary>

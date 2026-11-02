@@ -11,13 +11,13 @@ namespace Titanium.Web.Proxy.UnitTests;
 [TestClass]
 public class Http3RequestStreamCoverageTests
 {
-    private static (string? Method, string? Scheme, string? Authority, string? Path,
+    private static (string? Method, string? Scheme, string? Authority, string? Path, string? Protocol,
         List<(string Name, string Value)> Regular) Extract(List<(string Name, string Value)> fields)
     {
         var method = typeof(Http3RequestStream).GetMethod("ExtractPseudoHeaders",
             BindingFlags.NonPublic | BindingFlags.Static);
         Assert.IsNotNull(method);
-        return ((string?, string?, string?, string?, List<(string, string)>))
+        return ((string?, string?, string?, string?, string?, List<(string, string)>))
             method.Invoke(null, [fields])!;
     }
 

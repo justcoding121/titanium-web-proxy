@@ -34,6 +34,7 @@ public static class TwpConfigValidator
         "Http", "Socks4", "Socks5",
     };
 
+    private const string AllowValue = "allow";
     private const string LocalhostHostName = "localhost";
     private const string LoopbackIPv4 = "127.0.0.1";
     private const string LoopbackIPv6 = "::1";
@@ -46,13 +47,128 @@ public static class TwpConfigValidator
         var policyNames = ValidatePolicies(config.Policies, errors);
         ValidateOidcNeedsPlus(config, errors);
         ValidateWafNeedsPlus(config, errors);
+        ValidateGeoNeedsDatabase(config, errors);
         var pluginNames = ValidatePlugins(config.Plugins, errors);
         ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners ?? [], clusterIds, errors);
         ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
+        ValidateZoneAware(config, errors);
+        ValidateTcpTlsListeners(config, errors);
+        ValidateOverload(config.Server?.Overload, errors);
+        ValidateHotRestart(config, errors);
+        ValidateXds(config.Xds, errors);
         ValidatePlusSecrets(config.Plus, errors);
         return errors;
+    }
+
+    /// <summary>Checks <c>server.overload</c>: sampling interval, retry hint, and ordered thresholds per signal.</summary>
+    private static void ValidateOverload(OverloadConfig? overload, List<string> errors)
+    {
+        if (overload is null)
+        {
+            return;
+        }
+
+        const string prefix = "server.overload";
+        if (overload.IntervalMs is { } interval && interval is < 100 or > 10_000)
+        {
+            errors.Add($"{prefix}.intervalMs must be between 100 and 10000.");
+        }
+
+        if (overload.RetryAfterSeconds is { } retry && retry is < 1 or > 3600)
+        {
+            errors.Add($"{prefix}.retryAfterSeconds must be between 1 and 3600.");
+        }
+
+        ValidateOverloadSignal($"{prefix}.heapPercent", overload.HeapPercent, 100, errors);
+        ValidateOverloadSignal($"{prefix}.threadPoolQueue", overload.ThreadPoolQueue, null, errors);
+        ValidateOverloadSignal($"{prefix}.activeConnections", overload.ActiveConnections, null, errors);
+    }
+
+    private static void ValidateOverloadSignal(string path, OverloadSignalConfig? signal, int? max, List<string> errors)
+    {
+        // 0/0 means "signal off". Anything else needs 1 <= elevated < critical (and <= max when the signal is a percent).
+        if (signal is null || signal is { Elevated: 0, Critical: 0 })
+        {
+            return;
+        }
+
+        if (signal.Elevated < 1 || signal.Critical < 1)
+        {
+            errors.Add($"{path}.elevated and {path}.critical must be positive (use 0 and 0 to turn the signal off).");
+        }
+        else if (signal.Elevated >= signal.Critical)
+        {
+            errors.Add($"{path}.elevated must be lower than {path}.critical.");
+        }
+
+        if (max is { } ceiling && (signal.Elevated > ceiling || signal.Critical > ceiling))
+        {
+            errors.Add($"{path} values must be at most {ceiling}.");
+        }
+    }
+
+    /// <summary>
+    ///     Checks <c>server.hotRestart</c>: Linux only (SO_REUSEPORT plus SIGUSR2), a pid file in an existing directory,
+    ///     a sane handover timeout, and no listener that needs a UDP port (the old and new process cannot share one).
+    /// </summary>
+    private static void ValidateHotRestart(TwpConfig config, List<string> errors)
+    {
+        var hotRestart = config.Server?.HotRestart;
+        if (hotRestart is not { Enabled: true })
+        {
+            return;
+        }
+
+        const string prefix = "server.hotRestart";
+        if (!OperatingSystem.IsLinux())
+        {
+            errors.Add($"{prefix} is supported on Linux only.");
+        }
+
+        if (string.IsNullOrWhiteSpace(hotRestart.PidFile))
+        {
+            errors.Add($"{prefix}.pidFile is required when {prefix}.enabled is true.");
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            var directory = Path.GetDirectoryName(Path.GetFullPath(hotRestart.PidFile));
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                errors.Add($"{prefix}.pidFile directory '{directory}' does not exist.");
+            }
+        }
+
+        if (hotRestart.HandoverTimeoutSeconds is { } timeout && timeout is < 5 or > 3600)
+        {
+            errors.Add($"{prefix}.handoverTimeoutSeconds must be between 5 and 3600.");
+        }
+    }
+
+    /// <summary>Checks <c>xds</c>: a control-plane address and a sane initial-fetch timeout.</summary>
+    private static void ValidateXds(XdsConfig? xds, List<string> errors)
+    {
+        if (xds is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(xds.Server))
+        {
+            errors.Add("xds.server is required when the xds section is present (host:port of the ADS server).");
+        }
+
+        if (xds.InitialFetchTimeoutSeconds is { } timeout && timeout is < 1 or > 3600)
+        {
+            errors.Add("xds.initialFetchTimeoutSeconds must be between 1 and 3600.");
+        }
+
+        if (xds.Tls is { } tls
+            && (string.IsNullOrWhiteSpace(tls.ClientCertPath) != string.IsNullOrWhiteSpace(tls.ClientKeyPath)))
+        {
+            errors.Add("xds.tls.clientCertPath and xds.tls.clientKeyPath must be set together.");
+        }
     }
 
     /// <summary>
@@ -336,9 +452,146 @@ public static class TwpConfigValidator
             ValidateHttpClient(cluster.Id, cluster.HttpClient, errors);
             ValidateRetry($"clusters.{cluster.Id}.retry", cluster.Retry, errors);
             ValidateClusterProxyProtocol(cluster, errors);
+            ValidateActiveHealth(cluster, errors);
+            ValidateClusterZoneAware(cluster, errors);
         }
 
         return clusterIds;
+    }
+
+    private static void ValidateClusterZoneAware(ClusterConfig cluster, List<string> errors)
+    {
+        var zoneAware = cluster.ZoneAware;
+        if (zoneAware is null)
+        {
+            return;
+        }
+
+        if (zoneAware.MinLocalHealthyPercent is < 1 or > 100)
+        {
+            errors.Add($"Cluster '{cluster.Id}' zoneAware.minLocalHealthyPercent must be between 1 and 100.");
+        }
+
+        if (zoneAware.MinLocalEndpoints < 1)
+        {
+            errors.Add($"Cluster '{cluster.Id}' zoneAware.minLocalEndpoints must be at least 1.");
+        }
+    }
+
+    private static void ValidateZoneAware(TwpConfig config, List<string> errors)
+    {
+        var localZone = config.Server?.LocalZone?.Trim();
+        var anyZoneAware = false;
+        var anyZonedDestination = false;
+        foreach (var cluster in config.Clusters ?? [])
+        {
+            if (cluster.ZoneAware is null)
+            {
+                continue;
+            }
+
+            anyZoneAware = true;
+            if (cluster.Destinations.Any(static dest => !string.IsNullOrWhiteSpace(dest.Zone)))
+            {
+                anyZonedDestination = true;
+            }
+        }
+
+        if (!anyZoneAware)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(localZone))
+        {
+            errors.Add("zoneAware on a cluster requires server.localZone (or TITANIUM_ZONE / --zone at runtime).");
+        }
+        else if (localZone.Length is < 1 or > 63)
+        {
+            errors.Add("server.localZone must be between 1 and 63 characters.");
+        }
+
+        if (!anyZonedDestination)
+        {
+            errors.Add("zoneAware requires at least one destination with a zone.");
+        }
+    }
+
+    private static void ValidateTcpTlsListeners(TwpConfig config, List<string> errors)
+    {
+        var hasCerts = (config.Certificates?.Items is { Count: > 0 } items && items.Any(i => !string.IsNullOrWhiteSpace(i.Path)))
+                       || !string.IsNullOrWhiteSpace(config.Certificates?.AcmeDomain);
+        foreach (var listener in (config.Listeners ?? []).Where(static listener => listener.TerminateTls))
+        {
+            ValidateTerminateTlsListener(listener, hasCerts, errors);
+        }
+    }
+
+    private static void ValidateTerminateTlsListener(ListenerConfig listener, bool hasCerts, List<string> errors)
+    {
+        var prefix = $"Listener port {listener.Port}:";
+        if (!listener.Passthrough)
+        {
+            errors.Add($"{prefix} terminateTls requires passthrough: true.");
+        }
+
+        if (listener.DecryptSsl)
+        {
+            errors.Add($"{prefix} terminateTls and decryptSsl: true are mutually exclusive.");
+        }
+
+        if (listener.TlsHandshakeTimeoutSeconds is < 1 or > 60)
+        {
+            errors.Add($"{prefix} tlsHandshakeTimeoutSeconds must be between 1 and 60.");
+        }
+
+        if (listener.MaxConcurrentHandshakes is < 1)
+        {
+            errors.Add($"{prefix} maxConcurrentHandshakes must be at least 1.");
+        }
+
+        ValidateAlpnNames(listener, prefix, errors);
+
+        if (!hasCerts)
+        {
+            errors.Add($"{prefix} terminateTls needs a certificate (certificates.items or ACME).");
+        }
+    }
+
+    private static void ValidateAlpnNames(ListenerConfig listener, string prefix, List<string> errors)
+    {
+        if (listener.Alpn is not { Count: > 0 })
+        {
+            return;
+        }
+
+        for (var i = 0; i < listener.Alpn.Count; i++)
+        {
+            var name = listener.Alpn[i];
+            if (string.IsNullOrEmpty(name) || name.Length > 255)
+            {
+                errors.Add($"{prefix} alpn[{i}] must be 1 to 255 bytes.");
+            }
+        }
+    }
+
+    private static void ValidateActiveHealth(ClusterConfig cluster, List<string> errors)
+    {
+        var active = cluster.HealthCheck?.Active;
+        if (active is not { Enabled: true })
+        {
+            return;
+        }
+
+        if (active.Kind == ActiveHealthKind.Grpc)
+        {
+            return;
+        }
+
+        if (active.Kind is not (ActiveHealthKind.Http or ActiveHealthKind.Tcp))
+        {
+            errors.Add($"Cluster '{cluster.Id}' healthCheck.active.kind '{active.Kind}' is not http, tcp, or grpc.");
+        }
     }
 
     private static void ValidateClusterProxyProtocol(ClusterConfig cluster, List<string> errors)
@@ -547,11 +800,16 @@ public static class TwpConfigValidator
         {
             errors.Add($"Destination '{dest.Id}' weight must be >= 1.");
         }
+
+        if (dest.Zone is { Length: > 63 })
+        {
+            errors.Add($"Destination '{dest.Id}' zone must be at most 63 characters.");
+        }
     }
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "extAuth", "oidc", "waf",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", "rateLimit", "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf",
     };
 
     private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
@@ -659,8 +917,17 @@ public static class TwpConfigValidator
                     errors.Add($"Policy '{name}' (ipAllowDeny) needs allow or deny.");
                 }
 
-                ValidatePrefixList(name, "allow", policy.Allow, errors);
+                ValidatePrefixList(name, AllowValue, policy.Allow, errors);
                 ValidatePrefixList(name, "deny", policy.Deny, errors);
+                break;
+            case "geo":
+                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
+                {
+                    errors.Add($"Policy '{name}' (geo) needs allow or deny.");
+                }
+
+                ValidateCountryList(name, AllowValue, policy.Allow, errors);
+                ValidateCountryList(name, "deny", policy.Deny, errors);
                 break;
             case "extAuth":
                 ValidateExtAuth(policy, errors);
@@ -765,6 +1032,48 @@ public static class TwpConfigValidator
     };
 
     /// <summary>The login is enforced by the Plus module. Without it the policy would refuse every request.</summary>
+    private static void ValidateGeoNeedsDatabase(TwpConfig config, List<string> errors)
+    {
+        if (config.Policies is not { Count: > 0 } policies)
+        {
+            return;
+        }
+
+        if (!policies.Any(static policy => string.Equals(policy.Kind, "geo", StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.Server?.GeoIpDatabasePath))
+        {
+            errors.Add("A geo policy requires server.geoIpDatabasePath.");
+        }
+    }
+
+    private static void ValidateCountryList(string name, string field, string? csv, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(csv))
+        {
+            return;
+        }
+
+        var count = 0;
+        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            count++;
+            if (count > 300)
+            {
+                errors.Add($"Policy '{name}' (geo) {field} has more than 300 country codes.");
+                return;
+            }
+
+            if (part.Length != 2 || !char.IsAsciiLetter(part[0]) || !char.IsAsciiLetter(part[1]))
+            {
+                errors.Add($"Policy '{name}' (geo) {field} entry '{part}' must be a two-letter country code.");
+            }
+        }
+    }
+
     private static void ValidateOidcNeedsPlus(TwpConfig config, List<string> errors)
     {
         if (config.Plus?.Enabled == true || config.Policies is not { Count: > 0 } policies)
@@ -1036,18 +1345,8 @@ public static class TwpConfigValidator
         }
     }
 
-    private static bool IsHeaderToken(string value)
-    {
-        foreach (var c in value)
-        {
-            if (!(char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c, StringComparison.Ordinal)))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private static bool IsHeaderToken(string value) =>
+        value.All(static c => char.IsAsciiLetterOrDigit(c) || "!#$%&'*+-.^_`|~".Contains(c, StringComparison.Ordinal));
 
     private static void ValidatePrefixList(string name, string field, string? csv, List<string> errors)
     {
@@ -1056,12 +1355,10 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                     .Where(static part => !CidrPrefix.TryParse(part, out _)))
         {
-            if (!CidrPrefix.TryParse(part, out _))
-            {
-                errors.Add($"Policy '{name}' {field} entry '{part}' is not an address or CIDR prefix.");
-            }
+            errors.Add($"Policy '{name}' {field} entry '{part}' is not an address or CIDR prefix.");
         }
     }
 
@@ -1610,6 +1907,11 @@ public static class TwpConfigValidator
         var hasDefault = !string.IsNullOrWhiteSpace(listener.SniDefaultClusterId);
         var usesSni = routes.Count > 0 || hasDefault;
 
+        if (listener.TerminateTls && listener.DecryptSsl)
+        {
+            errors.Add($"{prefix} terminateTls and decryptSsl: true are mutually exclusive.");
+        }
+
         if (usesSni)
         {
             if (!listener.Passthrough)
@@ -1694,15 +1996,7 @@ public static class TwpConfigValidator
             return false;
         }
 
-        foreach (var ch in host)
-        {
-            if (!(char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.'))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return host.All(static ch => char.IsAsciiLetterOrDigit(ch) || ch is '-' or '_' or '.');
     }
 
     private static void ValidateMasqueListener(ListenerConfig listener, List<string> errors)
@@ -1783,7 +2077,7 @@ public static class TwpConfigValidator
     {
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateMode)
             && !listener.ClientCertificateMode.Equals("none", StringComparison.OrdinalIgnoreCase)
-            && !listener.ClientCertificateMode.Equals("allow", StringComparison.OrdinalIgnoreCase)
+            && !listener.ClientCertificateMode.Equals(AllowValue, StringComparison.OrdinalIgnoreCase)
             && !listener.ClientCertificateMode.Equals("require", StringComparison.OrdinalIgnoreCase))
         {
             errors.Add(
@@ -1803,7 +2097,7 @@ public static class TwpConfigValidator
             return;
         }
 
-        if (!string.Equals(listener.ClientCertificateMode, "allow", StringComparison.OrdinalIgnoreCase)
+        if (!string.Equals(listener.ClientCertificateMode, AllowValue, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(listener.ClientCertificateMode, "require", StringComparison.OrdinalIgnoreCase))
         {
             errors.Add($"Listener port {listener.Port}: clientCertificateCaPath requires clientCertificateMode allow or require.");
@@ -1836,12 +2130,9 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var source in sources)
+        foreach (var source in sources.Where(static source => !CidrPrefix.TryParse(source, out _)))
         {
-            if (!CidrPrefix.TryParse(source, out _))
-            {
-                errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
-            }
+            errors.Add($"Listener port {listener.Port}: trustedProxyProtocolSources '{source}' is not a CIDR prefix.");
         }
     }
 
@@ -2109,7 +2400,7 @@ public static class TwpConfigValidator
         }
     }
 
-    private static readonly string[] CompressionAlgorithmNames = ["br", "gzip"];
+    private static readonly string[] CompressionAlgorithmNames = ["br", "gzip", "zstd"];
 
     private static void ValidateResponseCompression(ResponseCompressionConfig? compression, List<string> errors) // NOSONAR S3776 -- Response compression validation checks algorithms, sizes, and modes together.
     {
@@ -2137,13 +2428,13 @@ public static class TwpConfigValidator
         {
             if (algorithms.Count == 0)
             {
-                errors.Add($"{prefix}.algorithms must list at least one of: br, gzip.");
+                errors.Add($"{prefix}.algorithms must list at least one of: br, gzip, zstd.");
             }
 
             foreach (var name in algorithms.Where(name =>
                          !CompressionAlgorithmNames.Contains(name?.Trim(), StringComparer.OrdinalIgnoreCase)))
             {
-                errors.Add($"{prefix}.algorithms entry '{name}' is unknown. Use br or gzip.");
+                errors.Add($"{prefix}.algorithms entry '{name}' is unknown. Use br, gzip, or zstd.");
             }
         }
 
@@ -2524,12 +2815,9 @@ public static class TwpConfigValidator
             return;
         }
 
-        foreach (var name in tls.CipherSuites)
+        foreach (var name in tls.CipherSuites.Where(static name => !TlsPolicyParser.TryParseCipherSuite(name, out _)))
         {
-            if (!TlsPolicyParser.TryParseCipherSuite(name, out _))
-            {
-                errors.Add($"server.tls.cipherSuites '{name}' is not a TlsCipherSuite name.");
-            }
+            errors.Add($"server.tls.cipherSuites '{name}' is not a TlsCipherSuite name.");
         }
     }
 
@@ -2564,10 +2852,10 @@ public static class TwpConfigValidator
     private static void RejectUnknownProtocols(IList<string>? names, string path, List<string> errors)
     {
         if (names is null) return;
-        foreach (var name in names)
+        foreach (var name in names.Where(static name =>
+                     string.IsNullOrWhiteSpace(name) || !Enum.TryParse<SslProtocols>(name.Trim(), ignoreCase: true, out _)))
         {
-            if (string.IsNullOrWhiteSpace(name) || !Enum.TryParse<SslProtocols>(name.Trim(), ignoreCase: true, out _))
-                errors.Add($"{path} '{name}' is not an SslProtocols name.");
+            errors.Add($"{path} '{name}' is not an SslProtocols name.");
         }
     }
 
@@ -2651,6 +2939,7 @@ public static class TwpConfigValidator
         var warnings = new List<string>();
         CollectTlsWarnings(config.Server?.Tls, isWindows, warnings);
         CollectClusterProxyProtocolWarnings(config, warnings);
+        CollectActiveHealthWarnings(config, warnings);
         if (config.Plus is { Enabled: true, ControlPlane: { AllowInsecureNonLoopback: true, Tls: null } insecure } &&
             !IsLoopbackControlPlaneHost(insecure.Host))
         {
@@ -2669,8 +2958,8 @@ public static class TwpConfigValidator
         if (config.Server?.ResponseCompression is { Enabled: true })
         {
             warnings.Add(
-                "server.responseCompression compresses HTTP/1.1 and HTTP/2-to-HTTP/1.1 responses only. " +
-                "It is not applied on HTTP/2-to-HTTP/2, HTTP/3, or HTTP/1.1-to-HTTP/2 paths.");
+                "server.responseCompression can compress buffered or streaming responses on HTTP/1.1, HTTP/2, and HTTP/3 " +
+                "clients across H1/H2/H3 origin bridges when interception is on. Fast-path passthrough stays identity.");
         }
 
         if (config.Server?.RequestDecompression is { Enabled: true })
@@ -2722,6 +3011,33 @@ public static class TwpConfigValidator
         }
 
         return warnings;
+    }
+
+    private static void CollectActiveHealthWarnings(TwpConfig config, List<string> warnings)
+    {
+        foreach (var cluster in config.Clusters ?? [])
+        {
+            var active = cluster.HealthCheck?.Active;
+            if (active is not { Enabled: true, Kind: ActiveHealthKind.Grpc })
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrEmpty(active.Path) && active.Path != "/")
+            {
+                warnings.Add($"Cluster '{cluster.Id}' healthCheck.active.path is ignored when kind is grpc.");
+            }
+
+            if (!string.IsNullOrEmpty(active.Query))
+            {
+                warnings.Add($"Cluster '{cluster.Id}' healthCheck.active.query is ignored when kind is grpc.");
+            }
+
+            if (active.ExpectedStatus is { Count: > 0 })
+            {
+                warnings.Add($"Cluster '{cluster.Id}' healthCheck.active.expectedStatus is ignored when kind is grpc.");
+            }
+        }
     }
 
     private static void CollectClusterProxyProtocolWarnings(TwpConfig config, List<string> warnings)

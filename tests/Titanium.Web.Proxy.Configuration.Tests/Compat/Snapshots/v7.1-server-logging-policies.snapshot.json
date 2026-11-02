@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "7.1",
+  "listeners": [
+    {
+      "host": "0.0.0.0",
+      "port": 8443,
+      "decryptSsl": false,
+      "type": "transparent",
+      "enableHttp2": true,
+      "acceptProxyProtocol": false,
+      "trustedProxyProtocolSources": [],
+      "passthrough": false,
+      "terminateTls": false,
+      "sniRoutes": []
+    }
+  ],
+  "routes": [
+    {
+      "id": "site",
+      "clusterId": "web",
+      "match": {
+        "path": "/",
+        "pathKind": "prefix",
+        "hosts": [
+          "www.example.test"
+        ],
+        "methods": [
+          "GET",
+          "POST"
+        ],
+        "pathCaseSensitive": true
+      },
+      "order": 0,
+      "grpcWeb": false
+    }
+  ],
+  "clusters": [
+    {
+      "id": "web",
+      "destinations": [
+        {
+          "id": "a",
+          "address": "backend.internal",
+          "port": 8080,
+          "useHttps": false,
+          "weight": 1,
+          "useDestinationHost": false,
+          "dnsRefreshSeconds": 0,
+          "priority": 0,
+          "backup": false,
+          "slowStartSeconds": 0
+        }
+      ],
+      "algorithm": "roundRobin",
+      "healthCheck": {
+        "passive": {
+          "enabled": true,
+          "failureStatusCodes": [
+            502,
+            503
+          ],
+          "consecutiveFailures": 3,
+          "reactivateAfterSeconds": 30,
+          "maxBackoffSeconds": 300,
+          "halfOpenSuccesses": 1,
+          "maxEjectionPercent": 100
+        },
+        "availabilityPolicy": "healthyAndUnknown",
+        "panicThresholdPercent": 0
+      },
+      "slowStartSeconds": 0
+    }
+  ],
+  "policies": [],
+  "server": {
+    "limits": {
+      "maxHeaderLineBytes": 65536,
+      "maxHeaderCount": 256,
+      "maxHeaderAggregateBytes": 262144,
+      "maxConcurrentStreamsPerConnection": 256,
+      "maxPeerInitiatedIncompleteStreamResets": 100
+    },
+    "policyModes": {
+      "headerLimits": "Enforce",
+      "http2AbuseBudget": "Enforce",
+      "allowAmbiguousFraming": false
+    },
+    "tls": {
+      "supportedSslProtocols": [
+        "Tls12",
+        "Tls13"
+      ]
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "minimumLevel": "Warning",
+    "enableConsole": true,
+    "enableConsoleColors": false,
+    "enableFile": false
+  }
+}

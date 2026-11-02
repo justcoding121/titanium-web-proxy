@@ -14,6 +14,16 @@ Paired A/B for the `feat/commercial-grade-parity` work items compares each commi
 
 Pass thresholds for the default configuration (feature off): median RPS delta at least −1.0%, lower bound of the 95% interval at least −2.0%, p99 latency at most +3%, RSS after warm-up at most +2%, Gen0 collections per 100k requests within 1%, error count zero. Never loosen a floor in [`validate-edition-gates.ps1`](validate-edition-gates.ps1) (floors stay at or above 0.50). Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
 
+## Leftovers baseline
+
+Paired A/B for the `feat/production-parity` work items compares each checkpoint against this SHA (the `develop` tip before that branch):
+
+| Key | Value |
+|-----|-------|
+| `BASELINE_SHA` | `46163c95ce7df6e6d3271fc1d2cf26c655fca0aa` |
+
+Same default-off thresholds as the commercial-grade block above. Feature-on arms target at least 0.90× of their named baseline (floors in `validate-edition-gates.ps1` stay at 0.50 unless a stricter bar is named in the feature). Placeholder leftover arms land in F01 with the same config as their baseline so they already run; later features edit only their arm's config.
+
 ## Branch policy + CI gates (beta / stable)
 
 **PR-only merges into `beta` / `stable`** (no direct pushes). Required status checks before merge:
@@ -132,6 +142,16 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 | `twp-cli-script-1in50-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
 | `twp-cli-extauth-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plugin-dotnet-noop-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
+| `twp-cli-geo-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-compress-h2-h2` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-compress-h3` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-health-grpc-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-zoneaware-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-tcp-tlsterm` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-ws-h3` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-compress-zstd-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-overload-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder; feature targets 0.98×) |
+| `twp-cli-hotrestart-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder; Linux) |
 
 **Scripting arms (S9).** Each script arm is a route with a `plugins:` entry named in `middleware:`, so the route arm is its baseline. The script lives in the arm's work directory (`script.lua` or `script.wat`). The Lua and Wasmtime natives must be beside the CLI (or in `TITANIUM_SCRIPTING_NATIVE_DIR`); without them the arm fails to start rather than silently measuring a 503. The slow-upstream pair fronts a 20 ms origin: the ratio stays near 1.0 only if script cost does not add to upstream wait. The 1-in-50 arm has the plugin on `/n/1` among 50 routes while the load hits the catch-all, so it catches a plugin on one route taxing every route. A default-off configuration needs no arm of its own: the existing reverse arms run without the natives (`ScriptingNothingLoadedTests` fails if that stops being true). `validate-edition-gates.ps1` rejects any gate below 0.50.
 

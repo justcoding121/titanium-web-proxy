@@ -20,6 +20,7 @@
   <!-- Golden configs from older releases; Compat/README.md holds the schema bump rules. -->
   <ItemGroup>
     <None Include="Compat\*.yaml;Compat\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Compat\Snapshots\*.json" CopyToOutputDirectory="PreserveNewest" Link="Compat\Snapshots\%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy.TestPlugins\Titanium.Web.Proxy.TestPlugins.csproj"

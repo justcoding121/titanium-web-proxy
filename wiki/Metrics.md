@@ -60,7 +60,10 @@ Generated from the instruments the core meter declares. A unit test fails when t
 | `twp.http2.frame_writer.pending_frames` | Histogram | `{frame}` | not exposed | Frames queued on an HTTP/2 frame writer when a sample is recorded (enqueue high-water crossings). |
 | `twp.http2.probe_duration_ms` | Histogram | `ms` | not exposed | Live HTTP/2 origin capability probe duration in milliseconds. |
 | `twp.lite.eligible` | ObservableGauge | `{state}` | not exposed | 1 when H1 terminate-lite can serve requests on a running proxy that has a fixed ForwardHost listener, 0 when a configured feature (route plugins, extAuth/oidc, grpcWeb, connectionLimit, compression, session-only middleware) forces the slower full session path. One measurement per such server; reports nothing otherwise. |
+| `twp.loadbalancer.zone.selections` | Counter | `{pick}` | not exposed | Load-balancer zone-aware picks: local (stayed in zone) or spill (used all zones). |
 | `twp.logger.drops` | Counter | `{entry}` | not exposed | Log entries dropped because a channel was saturated, tagged by channel. |
+| `twp.overload.actions` | Counter | `{action}` | not exposed | Overload shedding actions taken: disable_keep_alive, reject, or stop_accepting. |
+| `twp.overload.level` | ObservableGauge | `{level}` | not exposed | Overload level: 0 normal, 1 elevated, 2 critical. |
 | `twp.parser.errors` | Counter | `{error}` | not exposed | Rejected malformed input, tagged by parser (framing, chunk, header, websocket, http2, http3, qpack). |
 | `twp.passthrough.bytes` | Counter | `By` | not exposed | Bytes relayed by TCP passthrough, by direction: in (client to upstream) or out (upstream to client). |
 | `twp.passthrough.connections` | Counter | `{connection}` | not exposed | Finished TCP passthrough connections by route (a configured server name pattern, default, or forward) and result. |

@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Gateway;
 using Titanium.Gateway.Control;
 
 namespace Titanium.Gateway.Tests;
@@ -14,6 +15,16 @@ public sealed class GatewayOptionsAndObserverTests
     [
         "TITANIUM_GATEWAY_DATA_PORT", "TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS",
     ];
+
+    [TestMethod]
+    public void ParsePortMap_SplitsTcpAndUdp()
+    {
+        var (tcp, udp) = GatewayOptions.ParsePortMap("80=8080,443=8443,53/udp=5353,853/tcp=8853");
+        Assert.AreEqual(8080, tcp[80]);
+        Assert.AreEqual(8443, tcp[443]);
+        Assert.AreEqual(8853, tcp[853]);
+        Assert.AreEqual(5353, udp[53]);
+    }
 
     [TestMethod]
     public void Options_ReadFlagsAndFallBackToThePodEnvironment()

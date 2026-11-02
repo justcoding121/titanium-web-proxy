@@ -32,7 +32,7 @@ public sealed class ResponseCompressionConfig
     public string? Mode { get; init; }
 
     /// <summary>
-    ///     Encodings in order of preference: <c>br</c> and <c>gzip</c>. Null means <c>br</c> then <c>gzip</c>,
+    ///     Encodings in order of preference: <c>zstd</c>, <c>br</c>, and <c>gzip</c>. Null means <c>br</c> then <c>gzip</c>,
     ///     so Brotli wins when the client accepts both with the same weight. A higher <c>q</c> weight in the client's
     ///     <c>Accept-Encoding</c> wins over this order.
     /// </summary>

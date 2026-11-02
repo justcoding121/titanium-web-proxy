@@ -67,6 +67,9 @@ param(
         'twp-cli-script-lua-noop-http1', 'twp-cli-script-lua-header-http1', 'twp-cli-script-wasm-noop-http1',
         'twp-cli-slow-upstream-http1', 'twp-cli-script-lua-slow-upstream-http1', 'twp-cli-script-1in50-http1',
         'twp-cli-plugin-dotnet-noop-http1',
+        'twp-cli-geo-http1', 'twp-cli-compress-h2-h2', 'twp-cli-compress-h3', 'twp-cli-health-grpc-http1',
+        'twp-cli-zoneaware-http1', 'twp-cli-tcp-tlsterm', 'twp-ws-h3', 'twp-cli-compress-zstd-http1',
+        'twp-cli-overload-http1', 'twp-cli-hotrestart-http1',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 

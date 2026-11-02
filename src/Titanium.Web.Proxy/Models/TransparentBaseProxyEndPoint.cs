@@ -39,6 +39,18 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
     /// <summary>When true, accepted sockets are copied to <see cref="ForwardHost"/> without HTTP parsing.</summary>
     public bool Passthrough { get; set; }
 
+    /// <summary>When true with <see cref="Passthrough"/>, inbound TLS is terminated before relaying bytes.</summary>
+    public bool TerminateTls { get; set; }
+
+    /// <summary>Max concurrent inbound TLS handshakes for <see cref="TerminateTls"/> listeners.</summary>
+    public int MaxConcurrentTlsHandshakes { get; set; } = 256;
+
+    /// <summary>Inbound TLS handshake timeout for <see cref="TerminateTls"/> listeners.</summary>
+    public TimeSpan TlsHandshakeTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>ALPN names offered on <see cref="TerminateTls"/> listeners. Null or empty skips ALPN.</summary>
+    public IReadOnlyList<string>? TerminateTlsAlpn { get; set; }
+
     private IReadOnlyList<PassthroughSniRoute>? passthroughRoutes;
 
     /// <summary>

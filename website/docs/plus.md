@@ -144,7 +144,16 @@ Every change a session makes (Drain, Healthy, Reload, Sign out) needs the CSRF t
 
 Every response carries `Content-Security-Policy: default-src 'self'` (no inline script or style), `X-Content-Type-Options: nosniff`, `Cache-Control: no-store` and `Referrer-Policy: no-referrer`. Values from your config, such as a destination id, are HTML-encoded.
 
-Editing routes from the dashboard is not provided — change routes in the file, push a snapshot through the control plane, or publish through [titanium-manager](/docs/manager).
+### Editing routes and clusters
+
+With `plus.controlPlane.dashboardEditing: true` (and the CLI as host), an operator sees an **Edit configuration** panel at the top of the Routes view: one link per route and cluster, **Add route** and **Add cluster**, and the state of the saved overlay. Each link opens a JSON editor with the item as it runs now, in the same shape the config file and the snapshot PUT use.
+
+- **Validate** runs the same validator as a reload against the live configuration with your change applied, and changes nothing.
+- **Save** validates again, applies the change live under the same lock as reloads, and keeps it in the overlay file (`plus.controlPlane.overlayPath`) beside the config file. A rejected change shows the validator's messages and leaves the running config alone.
+- **Delete** removes the item the same way. An id cannot be changed; delete and add instead. **Add** refuses an id that already exists.
+- **Clear dashboard edits** deletes the overlay and returns to the file as written. A banner on the panel shows how many edits are layered over the file, and any overlay entry that no longer matches it.
+
+Editing is off by default, needs the operator role and the CSRF token, and every save, delete and clear is written to the [audit log](#audit-log). The viewer role never sees the panel. Listeners, certificates, plugins and `server.*` settings are not editable here; change those in the file.
 
 ## Control-plane and credential hardening
 
@@ -390,7 +399,7 @@ The earlier deny-list file (`{"denyPaths": [...]}`) is still read by the deny-li
 
 ### Regular-expression safety
 
-A pattern runs on attacker-chosen input, so every pattern is checked when the rules load. Empty patterns, patterns over 1024 characters, patterns that match the empty string, and patterns that nest an unbounded repeat inside an unbounded repeat are rejected. Patterns compile with `RegexOptions.NonBacktracking`, which cannot backtrack catastrophically; a pattern that needs lookarounds or backreferences falls back to the backtracking engine with a 5 ms match timeout. A timed-out rule counts as no match and is counted in `titanium_waf_rule_timeouts_total`; it does not add to the score. The test suite runs every pack rule against one-mebibyte adversarial inputs under a time budget.
+A pattern runs on attacker-chosen input, so every pattern is checked when the rules load. Empty patterns, patterns over 1024 characters, patterns that match the empty string, and patterns that nest an unbounded repeat inside an unbounded repeat are rejected. Patterns compile with `RegexOptions.NonBacktracking`, which cannot backtrack catastrophically, with a 50 ms match timeout (first-hit latency under load can exceed a few milliseconds even without backtracking). A pattern that needs lookarounds or backreferences falls back to the backtracking engine with a 5 ms match timeout. A timed-out rule counts as no match and is counted in `titanium_waf_rule_timeouts_total`; it does not add to the score. The test suite runs every pack rule against one-mebibyte adversarial inputs under a time budget.
 
 ### Cost and the fast path
 
@@ -417,9 +426,10 @@ String values under `plus.options` (examples):
 
 | Key | Role |
 |-----|------|
-| `discovery.mode` | `file`, `dns`, `consul`, or `k8s` |
+| `discovery.mode` | `file`, `dns`, `dnsSrv`, `consul`, or `k8s` |
 | `discovery.file` | Path for `mode=file` |
-| `discovery.dnsName` / `discovery.dnsPort` | DNS discovery target |
+| `discovery.dnsName` / `discovery.dnsPort` | DNS A/AAAA discovery target |
+| `discovery.srvName` / `discovery.srvMaxTargets` / `discovery.dnsServer` | DNS SRV name (for example `_http._tcp.api.svc.cluster.local`), cap on targets (default `64`, max `256`), optional resolver `host[:port]` |
 | `discovery.consulUrl` | Consul service endpoint, for example `http://consul:8500/v1/health/service/web` |
 | `discovery.consulWaitSeconds` / `discovery.consulPassing` / `discovery.consulToken` | Blocking-query wait (default `30`), passing-only filter (default `true`), ACL token |
 | `discovery.k8sUrl` | API server URL. Optional in a pod: `KUBERNETES_SERVICE_HOST` is used. A URL with a path (or without a selector) is used as the exact EndpointSlice collection to watch; a single Endpoints object there is polled every `discovery.intervalMs` |
