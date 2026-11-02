@@ -20,6 +20,9 @@ public partial class TestHygieneLintTests
     [GeneratedRegex(@"TcpListener\(\s*IPAddress\.(Any|IPv6Any)\b")]
     private static partial Regex TcpListenerAny();
 
+    [GeneratedRegex(@"TcpListener\.Create\s*\(")]
+    private static partial Regex TcpListenerCreate();
+
     [GeneratedRegex(@"host:\s*""?(0\.0\.0\.0|::|\*)""?")]
     private static partial Regex WildcardHost();
 
@@ -92,6 +95,7 @@ public partial class TestHygieneLintTests
             if (BindAddressAny().IsMatch(line) ||
                 BindEndpointAny().IsMatch(line) ||
                 TcpListenerAny().IsMatch(line) ||
+                TcpListenerCreate().IsMatch(line) ||
                 line.Contains("Listen" + "AnyIP", StringComparison.Ordinal) ||
                 line.Contains("http://" + "+", StringComparison.Ordinal) ||
                 WildcardHost().IsMatch(line))
