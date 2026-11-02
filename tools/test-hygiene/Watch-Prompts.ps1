@@ -82,6 +82,8 @@ while ((Get-Date) -lt $deadline) {
         if ($path) { $pathLower = $path.ToLowerInvariant() }
         if ($pathLower.StartsWith($rootNorm)) { $owned = $true }
         $procLower = $procName.ToLowerInvariant()
+        # PromptGuard's own fixture window is titled like a firewall alert. It is not an OS dialog.
+        if ($procLower -eq 'promptguard') { continue }
         if ($procLower -eq 'testhost' -or $procLower -like 'titanium*') { $owned = $true }
         # The user's own browser is not a test window. Playwright browsers live under the test root or ms-playwright.
         if (($procLower -eq 'chrome' -or $procLower -eq 'msedge' -or $procLower -eq 'firefox') -and
