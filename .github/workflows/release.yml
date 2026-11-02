@@ -856,7 +856,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile
@@ -919,7 +919,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.gateway
@@ -982,7 +982,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.manager
