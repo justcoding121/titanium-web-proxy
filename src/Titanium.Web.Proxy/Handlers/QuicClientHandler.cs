@@ -34,7 +34,11 @@ public partial class ProxyServer
     /// </summary>
     private void ListenQuic(IQuicInboundEndPoint endPoint)
     {
-        // Before the try: a test host stops the test as inconclusive, and that exception must not be wrapped.
+        // A harness child has no test callback. Skip the socket so the TCP proxy still starts.
+        // A test host stops the test as inconclusive, and that exception must not be wrapped by the try below.
+        if (QuicListenPolicy.SkipWithoutThrowing)
+            return;
+
         QuicListenPolicy.EnsureAllowed();
 
         if (!QuicListener.IsSupported)

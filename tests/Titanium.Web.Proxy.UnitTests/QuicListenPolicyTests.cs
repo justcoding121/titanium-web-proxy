@@ -55,15 +55,44 @@ public class QuicListenPolicyTests
     }
 
     [TestMethod]
-    public void ProductProcess_WithNoGuard_StillAllowsTheListen()
+    public void ProductProcess_WithoutTheSkipVariable_AllowsTheListen()
     {
+        var previous = QuicListenPolicy.BeforeListen;
+        var allow = Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS");
+        var skip = Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI");
+        try
+        {
+            QuicListenPolicy.BeforeListen = null;
+            Environment.SetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI", null);
+            Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", null);
+            Assert.IsFalse(QuicListenPolicy.SkipWithoutThrowing);
+            QuicListenPolicy.EnsureAllowed();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI", skip);
+            Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", allow);
+            QuicListenPolicy.BeforeListen = previous;
+        }
+    }
+
+    [TestMethod]
+    public void HarnessChild_SkipsTheListenWithoutACallback()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("The firewall prompt this guards is a Windows behavior.");
+            return;
+        }
+
         var previous = QuicListenPolicy.BeforeListen;
         var allow = Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS");
         try
         {
             QuicListenPolicy.BeforeListen = null;
             Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", null);
-            QuicListenPolicy.EnsureAllowed();
+            Assert.IsTrue(QuicListenPolicy.SkipWithoutThrowing);
+            Assert.ThrowsException<InvalidOperationException>(QuicListenPolicy.EnsureAllowed);
         }
         finally
         {

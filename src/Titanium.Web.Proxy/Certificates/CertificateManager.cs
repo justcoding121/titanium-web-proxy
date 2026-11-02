@@ -1550,6 +1550,16 @@ public sealed class CertificateManager : IDisposable
     /// <returns>True when the user Root store entry was newly added.</returns>
     public bool InstallRootIntoCertificateStores(bool machineTrusted = false)
     {
+        // Personal and Root are one trust action. A test host must not write either store:
+        // Root shows CryptUI, and the Personal copy is the leak the store guard counts.
+        if (ShouldSuppressInteractiveRootStoreMutations)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Root CA install skipped (interactive root-store UI suppressed)");
+            return false;
+        }
+
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 

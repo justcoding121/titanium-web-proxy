@@ -886,6 +886,9 @@ namespace Titanium.Web.Proxy.UnitTests
                 // Would otherwise open Trusted Root Yes/No; must no-op under suppress.
                 mgr.TrustRootCertificate(machineTrusted: false);
                 Assert.IsFalse(mgr.IsRootCertificateUserTrusted());
+                Assert.AreEqual(0, CountSubject(StoreName.My, cn),
+                    "Suppressed trust must not leave the root in Personal.");
+                Assert.AreEqual(0, CountSubject(StoreName.Root, cn));
 
                 // Would otherwise open Root DELETE Yes/No for any same-CN leftovers.
                 mgr.RemoveTrustedRootCertificate(machineTrusted: false);
@@ -894,6 +897,20 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 CertificateManager.SuppressInteractiveRootStoreMutations = previous;
             }
+        }
+
+        private static int CountSubject(StoreName storeName, string commonName)
+        {
+            using var store = new X509Store(storeName, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
+            var count = 0;
+            foreach (var cert in store.Certificates)
+            {
+                if (cert.Subject.Contains(commonName, StringComparison.Ordinal))
+                    count++;
+            }
+
+            return count;
         }
 
         /// <summary>

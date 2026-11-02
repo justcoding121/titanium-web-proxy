@@ -84,6 +84,10 @@ public class LoopbackListenAddressTests
     {
         if (!QuicListener.IsSupported)
             Assert.Inconclusive("MsQuic / System.Net.Quic is not supported on this platform.");
+        if (QuicListenPolicy.RefusesListen)
+            Assert.Inconclusive(
+                "MsQuic reports a loopback QUIC listen as a wildcard UDP socket. " +
+                "Set TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1 to run this test where a firewall prompt will not appear.");
         if (!System.Net.Sockets.Socket.OSSupportsIPv6)
             Assert.Inconclusive("Needs IPv6 loopback.");
 
