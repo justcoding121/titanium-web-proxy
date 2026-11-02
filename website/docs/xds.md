@@ -8,6 +8,8 @@ Titanium ships **no xDS server**. This is a dataplane client that translates a s
 
 ```yaml twp
 schemaVersion: "7.1"
+plus:
+  enabled: true
 xds:
   server: "127.0.0.1:18000"
   node:
