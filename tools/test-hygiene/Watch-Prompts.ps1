@@ -104,9 +104,19 @@ while ((Get-Date) -lt $deadline) {
     }
 
     if (($tick % 4) -eq 0) {
+        # TCP: only listening sockets. An outbound connection uses a public source address and is not a listen.
+        # UDP has no listen state. A connected datagram's local address is the outbound source (often a
+        # temporary IPv6). Wildcard 0.0.0.0 / :: is the bind that raises the firewall alert.
         $endpoints = @()
-        $endpoints += @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)
-        $endpoints += @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue)
+        foreach ($ep in @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue)) {
+            $endpoints += $ep
+        }
+        foreach ($ep in @(Get-NetUDPEndpoint -ErrorAction SilentlyContinue)) {
+            $udpAddr = [string]$ep.LocalAddress
+            if ($udpAddr -eq '0.0.0.0' -or $udpAddr -eq '::' -or $udpAddr -eq '*') {
+                $endpoints += $ep
+            }
+        }
         foreach ($ep in $endpoints) {
             $addr = [string]$ep.LocalAddress
             if ($addr -eq '127.0.0.1' -or $addr -eq '::1') { continue }
