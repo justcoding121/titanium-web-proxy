@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -69,6 +70,29 @@ public class UdpRelayListenerTests
         Assert.AreEqual(9, listener.Stats.BytesIn);
         Assert.AreEqual(9, listener.Stats.BytesOut);
         Assert.AreEqual(0, listener.Stats.DroppedTotal);
+    }
+
+    [TestMethod]
+    public void LoopbackPeer_BindsTheUpstreamSocketToLoopbackBeforeConnect()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        UdpRelayListener.BindToLoopbackWhenPeerIsLoopback(socket, new IPEndPoint(IPAddress.Loopback, 9));
+        socket.Connect(new IPEndPoint(IPAddress.Loopback, 9));
+
+        var local = (IPEndPoint)socket.LocalEndPoint!;
+        Assert.AreEqual(IPAddress.Loopback, local.Address);
+        if (OperatingSystem.IsWindows())
+        {
+            var reported = IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners()
+                .Where(ep => ep.Port == local.Port)
+                .ToArray();
+            Assert.IsTrue(reported.Length > 0);
+            Assert.IsTrue(reported.All(ep => ep.Address.Equals(IPAddress.Loopback)));
+        }
+
+        using var remote = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        UdpRelayListener.BindToLoopbackWhenPeerIsLoopback(remote, new IPEndPoint(IPAddress.Parse("203.0.113.9"), 9));
+        Assert.IsFalse(remote.IsBound);
     }
 
     [TestMethod]
@@ -607,6 +631,14 @@ public class UdpRelayListenerTests
         if (!Socket.OSSupportsIPv6)
         {
             Assert.Inconclusive("IPv6 is not available.");
+        }
+
+        // A dual-mode socket is only observable on IPv6Any. That bind can raise the Windows
+        // firewall prompt for testhost.exe, so developer machines skip it unless provisioned.
+        if (!string.Equals(Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS"), "1", StringComparison.Ordinal))
+        {
+            Assert.Inconclusive(
+                "Binds IPv6Any. Set TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1 on a provisioned machine or in CI.");
         }
 
         using var backend = new UdpBackend();

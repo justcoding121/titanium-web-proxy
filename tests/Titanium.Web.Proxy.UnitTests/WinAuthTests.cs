@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -281,10 +282,10 @@ namespace Titanium.Web.Proxy.UnitTests
                 Assert.Inconclusive("WinCertificateMaker requires Windows X509Enrollment COM.");
 
             // Uses in-memory PFX only — no TrustRootCertificate / store install.
+            var subject = $"twp-unit-{Guid.NewGuid():N}.local";
             try
             {
                 var maker = new WinCertificateMaker(30, 7);
-                var subject = $"twp-unit-{Guid.NewGuid():N}.local";
                 using var cert = maker.MakeCertificate(subject, null);
                 Assert.IsTrue(cert.HasPrivateKey);
                 StringAssert.Contains(cert.Subject, subject);
@@ -297,6 +298,10 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {ex.Message}");
             }
+            finally
+            {
+                RemoveUserCertificatesContaining(subject);
+            }
         }
 
         [TestMethod]
@@ -306,11 +311,11 @@ namespace Titanium.Web.Proxy.UnitTests
             if (!OperatingSystem.IsWindows())
                 Assert.Inconclusive("WinCertificateMaker requires Windows X509Enrollment COM.");
 
+            var rootCn = $"twp-root-{Guid.NewGuid():N}.local";
+            var leafCn = $"twp-leaf-{Guid.NewGuid():N}.local";
             try
             {
                 var maker = new WinCertificateMaker(30, 7);
-                var rootCn = $"twp-root-{Guid.NewGuid():N}.local";
-                var leafCn = $"twp-leaf-{Guid.NewGuid():N}.local";
                 using var root = maker.MakeCertificate(rootCn, null);
                 using var leaf = maker.MakeCertificate(leafCn, root);
                 Assert.IsTrue(leaf.HasPrivateKey);
@@ -324,6 +329,10 @@ namespace Titanium.Web.Proxy.UnitTests
             catch (COMException ex)
             {
                 Assert.Inconclusive($"COM enrollment unavailable headless (may need UI/elevation): {ex.Message}");
+            }
+            finally
+            {
+                RemoveUserCertificatesContaining(rootCn, leafCn);
             }
         }
 
@@ -397,7 +406,37 @@ namespace Titanium.Web.Proxy.UnitTests
                     // best-effort cleanup
                 }
 
+                RemoveUserCertificatesContaining("Acme Root CA", "twp-dn-");
                 customRoot.Dispose();
+            }
+        }
+
+        private static void RemoveUserCertificatesContaining(params string[] fragments)
+        {
+            if (!OperatingSystem.IsWindows() || fragments.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority })
+            {
+                try
+                {
+                    using var store = new X509Store(name, StoreLocation.CurrentUser);
+                    store.Open(OpenFlags.ReadWrite);
+                    foreach (var cert in store.Certificates.Cast<X509Certificate2>().ToList())
+                    {
+                        var text = cert.Subject + " " + cert.Issuer;
+                        if (fragments.Any(fragment => text.Contains(fragment, StringComparison.Ordinal)))
+                        {
+                            store.Remove(cert);
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // A store we cannot open is not cleaned here. The assembly leak guard still fails the run.
+                }
             }
         }
     }

@@ -1283,15 +1283,64 @@ public sealed class CertificateManager : IDisposable
 
         // offline: false lets .NET fetch and staple an OCSP response; the default stays offline.
         var offline = !ocspStapling;
+        System.Net.Security.SslStreamCertificateContext created;
         try
         {
-            return System.Net.Security.SslStreamCertificateContext.Create(
-                leaf, extras.Count > 0 ? extras : null, offline, trust);
+            try
+            {
+                created = System.Net.Security.SslStreamCertificateContext.Create(
+                    leaf, extras.Count > 0 ? extras : null, offline, trust);
+            }
+            catch (CryptographicException) when (trust != null)
+            {
+                created = System.Net.Security.SslStreamCertificateContext.Create(
+                    leaf, null, offline, trust);
+            }
         }
-        catch (CryptographicException) when (trust != null)
+        finally
         {
-            return System.Net.Security.SslStreamCertificateContext.Create(
-                leaf, null, offline, trust);
+            // SslStreamCertificateContext.Create copies the signer into CurrentUser\CA on Windows.
+            // A test host must not keep that copy.
+            DropTestHostOsStoreSideEffects(leaf);
+        }
+
+        return created;
+    }
+
+    private void DropTestHostOsStoreSideEffects(X509Certificate2 leaf)
+    {
+        if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        RemoveFromUserStores(leaf);
+        if (rootCertificate != null)
+            RemoveFromUserStores(rootCertificate);
+        if (IntermediateCertificates == null)
+            return;
+
+        foreach (X509Certificate2 extra in IntermediateCertificates)
+            RemoveFromUserStores(extra);
+    }
+
+    private static void RemoveFromUserStores(X509Certificate2 certificate)
+    {
+        var thumbprint = certificate.Thumbprint;
+        if (string.IsNullOrEmpty(thumbprint))
+            return;
+
+        foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority })
+        {
+            try
+            {
+                using var store = new X509Store(name, StoreLocation.CurrentUser);
+                store.Open(OpenFlags.ReadWrite);
+                foreach (var found in store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly: false))
+                    store.Remove(found);
+            }
+            catch (CryptographicException)
+            {
+                // The store can be locked. The assembly leak guard still fails the run.
+            }
         }
     }
 
@@ -1302,6 +1351,10 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private static void StageIntermediateForOsChainBuild(X509Certificate2 intermediate)
     {
+        // Test hosts must not write the real user store. Custom trust already carries the chain.
+        if (ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
         try
         {
             using var store = new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser);

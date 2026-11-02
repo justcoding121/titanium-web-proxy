@@ -59,7 +59,7 @@ $seenWindows = @{}
 $seenListeners = @{}
 $deadline = (Get-Date).AddSeconds($Seconds)
 $tick = 0
-$titlePattern = 'Windows Security Alert|Windows Defender Firewall|Security Warning|Root Certificate Store|User Account Control|Windows protected your PC'
+$titlePattern = 'Windows Security Alert|Windows Security|Windows Defender Firewall|Security Warning|Root Certificate Store|User Account Control|Windows protected your PC'
 $interestingNames = @('testhost', 'titanium', 'titaniuminspector', 'chrome', 'msedge', 'firefox', 'dotnet')
 
 while ((Get-Date) -lt $deadline) {

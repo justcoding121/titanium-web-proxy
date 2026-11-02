@@ -87,6 +87,24 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
 
     internal UdpRelayStats Stats => stats;
 
+    /// <summary>
+    ///     A UDP connect that has not been bound is an inbound listen on <c>0.0.0.0</c> or <c>::</c>.
+    ///     Windows then asks to allow the process, including testhost. A loopback peer is bound to
+    ///     <c>127.0.0.1</c> or <c>::1</c> first. Any other peer stays unbound until connect.
+    /// </summary>
+    internal static void BindToLoopbackWhenPeerIsLoopback(Socket socket, IPEndPoint peer)
+    {
+        if (socket.IsBound || !IPAddress.IsLoopback(peer.Address))
+        {
+            return;
+        }
+
+        var local = peer.Address.AddressFamily == AddressFamily.InterNetworkV6
+            ? IPAddress.IPv6Loopback
+            : IPAddress.Loopback;
+        socket.Bind(new IPEndPoint(local, 0));
+    }
+
     /// <summary>Binds the socket and starts the receive loop and the idle sweep.</summary>
     public void Start()
     {
@@ -436,6 +454,9 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
             try
             {
                 upstream = new Socket(picked.EndPoint!.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                // Connect without a prior bind is reported as 0.0.0.0 / :: and prompts the firewall,
+                // even when the peer is loopback.
+                BindToLoopbackWhenPeerIsLoopback(upstream, picked.EndPoint);
                 await upstream.ConnectAsync(picked.EndPoint, cancellationToken).ConfigureAwait(false);
             }
             catch (SocketException)

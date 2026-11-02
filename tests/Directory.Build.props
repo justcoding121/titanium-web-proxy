@@ -7,5 +7,6 @@
 
   <ItemGroup Condition="'$(IsTestHost)' == 'true'">
     <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\SuppressRootStoreUiModuleInit.cs" Link="Shared\SuppressRootStoreUiModuleInit.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\TwpStoreLeakGuard.cs" Link="Shared\TwpStoreLeakGuard.cs" />
   </ItemGroup>
 </Project>

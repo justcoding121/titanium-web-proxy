@@ -167,7 +167,9 @@ internal static class MasqueTunnel
                 candidate = endPoint.Options.SocketFactory?.Invoke(address.AddressFamily)
                             ?? new Socket(address.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
                 DisableWindowsUdpReset(candidate);
-                await candidate.ConnectAsync(new IPEndPoint(address, port), cancellationToken).ConfigureAwait(false);
+                var remote = new IPEndPoint(address, port);
+                Titanium.Web.Proxy.Udp.UdpRelayListener.BindToLoopbackWhenPeerIsLoopback(candidate, remote);
+                await candidate.ConnectAsync(remote, cancellationToken).ConfigureAwait(false);
                 udp = candidate;
                 break;
             }

@@ -39,8 +39,9 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
     {
         this.certificate = certificate;
         // HttpClient / the proxy resolve "localhost" to ::1 first, while QuicHttp3Client connects
-        // to 127.0.0.1. Both families, same port, no wildcard — a wildcard bind prompts the
-        // Windows firewall for testhost.exe.
+        // to 127.0.0.1. Both families, same port, no wildcard. MsQuic still opens per-processor
+        // UDP sockets that Windows reports as 0.0.0.0 and ::, and the firewall asks once per
+        // executable path. Binding loopback does not avoid that prompt.
         var maxAttempts = port == 0 ? 20 : 1;
         QuicListener? boundV6 = null;
         QuicListener? boundV4 = null;
