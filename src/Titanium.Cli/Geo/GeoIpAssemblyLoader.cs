@@ -40,6 +40,14 @@ internal static class GeoIpAssemblyLoader
                 throw new FileNotFoundException("GeoIP support assembly was not found beside the CLI.", path);
             }
 
+            // The satellite is loaded by path, so it is not in titanium.deps.json. Its MaxMind.Db
+            // dependency is not probed unless it is already in the default load context.
+            var maxMind = Path.Combine(baseDir, "MaxMind.Db.dll");
+            if (File.Exists(maxMind))
+            {
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(maxMind);
+            }
+
             existing = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);
             Volatile.Write(ref _geoIpAssembly, existing);
             return existing;
