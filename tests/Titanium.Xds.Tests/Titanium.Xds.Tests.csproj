@@ -17,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Xds\Titanium.Xds.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
   </ItemGroup>
 </Project>

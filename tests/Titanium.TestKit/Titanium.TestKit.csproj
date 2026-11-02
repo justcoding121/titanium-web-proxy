@@ -8,6 +8,10 @@
     <NoWarn>$(NoWarn);ASPDEPR004;ASPDEPR008</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Linked into each test assembly by tests/Directory.Build.props. TestKit does not reference the proxy assembly. -->
+    <Compile Remove="Shared\SuppressRootStoreUiModuleInit.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
     <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
