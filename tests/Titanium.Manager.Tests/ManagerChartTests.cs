@@ -108,7 +108,7 @@ public sealed class ManagerChartTests
         StringAssert.Matches(
             multiOut,
             new System.Text.RegularExpressions.Regex(
-                "single-instance only|Must be less than or equal to 1",
+                "single-instance only|Must be less than or equal to 1|maximum:\\s*got 2, want 1",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase));
     }
 
