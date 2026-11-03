@@ -99,7 +99,24 @@ function Download-Verified([string] $url, [string] $sha256, [string] $destPath) 
     }
     Write-Info "download $url"
     $tmp = "$destPath.partial"
-    Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
+    $delaySec = 2
+    $lastErr = $null
+    for ($i = 1; $i -le 5; $i++) {
+        try {
+            if (Test-Path $tmp) { Remove-Item -Force $tmp }
+            Invoke-WebRequest -Uri $url -OutFile $tmp -UseBasicParsing
+            $lastErr = $null
+            break
+        }
+        catch {
+            $lastErr = $_
+            if ($i -ge 5) { throw }
+            Write-Info "download retry $i/5 for $url : $($_.Exception.Message)"
+            Start-Sleep -Seconds $delaySec
+            $delaySec = [Math]::Min(30, $delaySec * 2)
+        }
+    }
+    if ($lastErr) { throw $lastErr }
     $actual = Get-Sha256 $tmp
     if ($actual -ne $sha256.ToLowerInvariant()) {
         Remove-Item -Force $tmp -ErrorAction SilentlyContinue

@@ -32,6 +32,28 @@ $cacheDir = Join-Path $repoRoot "tools/packaging/.cache/scripting-natives/lua"
 
 function Write-Info([string] $msg) { Write-Host "[lua-shim] $msg" }
 
+function Invoke-WebRequestWithRetry {
+    param(
+        [Parameter(Mandatory = $true)] [string] $Uri,
+        [Parameter(Mandatory = $true)] [string] $OutFile,
+        [int] $Attempts = 5
+    )
+    $delaySec = 2
+    for ($i = 1; $i -le $Attempts; $i++) {
+        try {
+            if (Test-Path $OutFile) { Remove-Item -Force $OutFile }
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+            return
+        }
+        catch {
+            if ($i -ge $Attempts) { throw }
+            Write-Info "download retry $i/$Attempts for $Uri : $($_.Exception.Message)"
+            Start-Sleep -Seconds $delaySec
+            $delaySec = [Math]::Min(30, $delaySec * 2)
+        }
+    }
+}
+
 # Zig bundles clang and MinGW headers, so it builds the Windows DLL on a machine with no Visual Studio C++ SDK.
 $zigVersion = "0.14.1"
 $zigUrl = "https://ziglang.org/download/$zigVersion/zig-x86_64-windows-$zigVersion.zip"
@@ -47,7 +69,7 @@ function Find-Zig {
     New-Item -ItemType Directory -Force -Path $toolchainDir | Out-Null
     $zip = Join-Path $toolchainDir "zig-$zigVersion.zip"
     Write-Info "download $zigUrl"
-    Invoke-WebRequest -Uri $zigUrl -OutFile $zip -UseBasicParsing
+    Invoke-WebRequestWithRetry -Uri $zigUrl -OutFile $zip
     $got = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
     if ($got -ne $zigSha256) {
         Remove-Item -Force $zip
@@ -85,7 +107,7 @@ $want = $lua.sha256.ToLowerInvariant()
 if (-not (Test-Path $tarball) -or (Get-FileHash -Algorithm SHA256 $tarball).Hash.ToLowerInvariant() -ne $want) {
     Write-Info "download $($lua.sourceUrl)"
     $tmp = "$tarball.partial"
-    Invoke-WebRequest -Uri $lua.sourceUrl -OutFile $tmp -UseBasicParsing
+    Invoke-WebRequestWithRetry -Uri $lua.sourceUrl -OutFile $tmp
     $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLowerInvariant()
     if ($got -ne $want) {
         Remove-Item -Force $tmp
