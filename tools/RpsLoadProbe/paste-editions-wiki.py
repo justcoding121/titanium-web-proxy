@@ -48,6 +48,16 @@ ROWS = [
     ("`twp-cli-script-lua-slow-upstream-http1` vs slow upstream", "twp-cli-script-lua-slow-upstream-http1", "twp-cli-slow-upstream-http1"),
     ("`twp-cli-script-1in50-http1` vs route", "twp-cli-script-1in50-http1", "twp-cli-reverse-http1-route"),
     ("`twp-cli-plugin-dotnet-noop-http1` vs route", "twp-cli-plugin-dotnet-noop-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-geo-http1` vs route", "twp-cli-geo-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-compress-h2-h2` vs route", "twp-cli-compress-h2-h2", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-compress-h3` vs route", "twp-cli-compress-h3", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-health-grpc-http1` vs route", "twp-cli-health-grpc-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-zoneaware-http1` vs route", "twp-cli-zoneaware-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-tcp-tlsterm` vs route", "twp-cli-tcp-tlsterm", "twp-cli-reverse-http1-route"),
+    ("`twp-ws-h3` vs route", "twp-ws-h3", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-compress-zstd-http1` vs route", "twp-cli-compress-zstd-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-overload-http1` vs route", "twp-cli-overload-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-hotrestart-http1` vs route", "twp-cli-hotrestart-http1", "twp-cli-reverse-http1-route"),
 ]
 
 
