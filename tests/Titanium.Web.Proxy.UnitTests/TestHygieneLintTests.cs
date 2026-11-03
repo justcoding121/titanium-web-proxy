@@ -26,6 +26,11 @@ public partial class TestHygieneLintTests
     [GeneratedRegex(@"host:\s*""?(0\.0\.0\.0|::|\*)""?")]
     private static partial Regex WildcardHost();
 
+    private static readonly string[] SharedSuppressRootStoreUiPath =
+    [
+        "tests/Titanium.TestKit/Shared/SuppressRootStoreUiModuleInit.cs",
+    ];
+
     [TestMethod]
     public void WildcardBindSample_IsReported()
     {
@@ -68,9 +73,7 @@ public partial class TestHygieneLintTests
         var copies = Directory.EnumerateFiles(Path.Combine(root, "tests"), "SuppressRootStoreUiModuleInit.cs", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(root, path).Replace('\\', '/'))
             .ToList();
-        CollectionAssert.AreEqual(
-            new[] { "tests/Titanium.TestKit/Shared/SuppressRootStoreUiModuleInit.cs" },
-            copies);
+        CollectionAssert.AreEqual(SharedSuppressRootStoreUiPath, copies);
 
         foreach (var project in Directory.EnumerateFiles(Path.Combine(root, "tests"), "*.csproj", SearchOption.AllDirectories))
         {

@@ -15,6 +15,12 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class DashboardHostTests
 {
+    private static readonly string[] DashboardLeakProbePaths = ["api/snapshot", "api/no-such", "routes", "%00"];
+
+    private static readonly System.Text.RegularExpressions.Regex StackLeakPattern = new(
+        @"at Titanium\.|StackTrace|System\.Exception",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+
     [TestMethod]
     public async Task Dashboard_RequiresSecret_AndSupportsAdminRoutes()
     {
@@ -90,12 +96,12 @@ public class DashboardHostTests
         using var dash = new DashboardHost(control, new DrainOperations(manager), new PrometheusMetricsExporter(manager, null), manager);
         dash.Start();
         using var http = new HttpClient();
-        foreach (var path in new[] { "api/snapshot", "api/no-such", "routes", "%00" })
+        foreach (var path in DashboardLeakProbePaths)
         {
             var response = await http.GetAsync(dash.Prefix + path);
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsFalse(
-                System.Text.RegularExpressions.Regex.IsMatch(body, @"at Titanium\.|StackTrace|System\.Exception"),
+                StackLeakPattern.IsMatch(body),
                 path + " leaked " + body);
             Assert.AreNotEqual(HttpStatusCode.InternalServerError, response.StatusCode, path);
         }

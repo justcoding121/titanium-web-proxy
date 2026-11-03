@@ -12,7 +12,7 @@ public class Http3PseudoHeaderTests
     [TestMethod]
     public void DuplicateProtocolPseudoHeader_IsAMessageError()
     {
-        var ex = Assert.ThrowsException<TargetInvocationException>(() =>
+        var ex = Assert.ThrowsExactly<TargetInvocationException>(() =>
             Extract(new List<(string Name, string Value)>
             {
                 (":protocol", "websocket"),

@@ -26,6 +26,8 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
     private const string Secret = "pw-cli-dashboard-secret";
     private const string ViewerSecret = "pw-cli-dashboard-viewer-secret";
 
+    private static readonly string[] SnapshotPropertyNames = ["clusters", "destinationStates"];
+
     private string _tempDir = null!;
     private CliProcessHarness? _harness;
     private EchoOrigin? _origin;
@@ -189,7 +191,7 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         http.DefaultRequestHeaders.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, Secret);
         using var doc = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync(_prefix + "api/snapshot"));
         var names = doc.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
-        CollectionAssert.AreEqual(new[] { "clusters", "destinationStates" }, names);
+        CollectionAssert.AreEqual(SnapshotPropertyNames, names);
     }
 
     [TestMethod]
