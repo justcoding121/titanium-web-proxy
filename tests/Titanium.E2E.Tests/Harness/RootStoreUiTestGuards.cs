@@ -3,21 +3,34 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Titanium.E2E.Tests.Harness;
 
 /// <summary>
-/// Guard for tests that would need Windows CryptUI / interactive Root trust. Automated runs have no one to
-/// answer those dialogs, so such tests are always inconclusive here; run the live walk with
-/// <c>dotnet run --project tools/InspectorDesktopProbe -- all</c> instead.
+/// Guard for tests that would need Windows CryptUI / interactive Root trust. A developer machine stays
+/// inconclusive. An ephemeral CI VM that already installed machine trust sets
+/// <c>TITANIUM_CI_MACHINE_TRUST=1</c> and <c>TITANIUM_EPHEMERAL_VM=1</c> and the tests run.
 /// </summary>
 internal static class RootStoreUiTestGuards
 {
     /// <summary>
-    ///     E2E always runs unattended; tests that mutate machine-wide OS state (Root store, WinINET proxy)
-    ///     check this and skip.
+    ///     True when this process must not change the user trust store or WinINET proxy.
+    ///     Ephemeral CI with machine trust already installed is the exception.
     /// </summary>
-    public static bool IsAutomatedCiOrSkipEnv() => true;
+    public static bool IsAutomatedCiOrSkipEnv() => !MachineTrustRun();
 
-    /// <summary>Always inconclusive: interactive Root-store trust is never exercised from <c>dotnet test</c>.</summary>
-    public static void RequireInteractiveRootTrustAvailable() =>
+    /// <summary>
+    ///     Inconclusive unless this is an ephemeral VM whose machine CA was installed before the test.
+    /// </summary>
+    public static void RequireInteractiveRootTrustAvailable()
+    {
+        if (MachineTrustRun())
+        {
+            return;
+        }
+
         Assert.Inconclusive(
             "Skipped: interactive Root-store trust needs a person to answer OS dialogs. " +
-            "Use tools/InspectorDesktopProbe for the live walk.");
+            "CI sets TITANIUM_CI_MACHINE_TRUST=1 and TITANIUM_EPHEMERAL_VM=1 after machine-trust install.");
+    }
+
+    private static bool MachineTrustRun() =>
+        string.Equals(Environment.GetEnvironmentVariable("TITANIUM_CI_MACHINE_TRUST"), "1", StringComparison.Ordinal)
+        && string.Equals(Environment.GetEnvironmentVariable("TITANIUM_EPHEMERAL_VM"), "1", StringComparison.Ordinal);
 }

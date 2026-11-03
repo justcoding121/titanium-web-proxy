@@ -245,31 +245,46 @@ public class CliPlusFeaturesE2ETests
             useRoutes: true);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
-        await harness.StartRunAsync(cfg, DevEnv());
+        await harness.StartRunAsync(cfg, DevEnv(), verbose: true);
         try
         {
-            using var handler = new HttpClientHandler
-            {
-                Proxy = new WebProxy($"http://127.0.0.1:{listen}"),
-                UseProxy = true,
-            };
-            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
+            using var http = DirectToListener(listen);
             using var direct = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             await WaitControlPlaneAsync(direct, control);
 
             Assert.AreEqual(
                 HttpStatusCode.Unauthorized,
-                (await http.GetAsync("http://example.invalid/nojwt")).StatusCode);
+                (await http.GetAsync($"http://127.0.0.1:{listen}/nojwt")).StatusCode);
 
             var token = CreateSignedJwt(rsa, DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(), authority, "api");
-            using (var ok = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt"))
+            // The first validation loads JWKS and fails closed if that fetch is not ready yet.
+            HttpStatusCode jwtStatus = 0;
+            var jwtBody = "";
+            var jwtDeadline = DateTime.UtcNow.AddSeconds(10);
+            while (true)
             {
+                using var ok = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/jwt");
                 ok.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-                var resp = await http.SendAsync(ok);
-                Assert.AreEqual(HttpStatusCode.OK, resp.StatusCode, await resp.Content.ReadAsStringAsync());
+                using var resp = await http.SendAsync(ok);
+                jwtStatus = resp.StatusCode;
+                jwtBody = await resp.Content.ReadAsStringAsync();
+                if (jwtStatus == HttpStatusCode.OK || DateTime.UtcNow >= jwtDeadline)
+                {
+                    break;
+                }
+
+                await Task.Delay(250);
             }
 
-            using (var bad = new HttpRequestMessage(HttpMethod.Get, "http://example.invalid/jwt"))
+            var cliLog = harness.StdOut + harness.StdErr;
+            if (cliLog.Length > 1500)
+            {
+                cliLog = cliLog[^1500..];
+            }
+
+            Assert.AreEqual(HttpStatusCode.OK, jwtStatus, jwtBody + " | " + cliLog);
+
+            using (var bad = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{listen}/jwt"))
             {
                 bad.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "not.a.jwt");
                 Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.SendAsync(bad)).StatusCode);
@@ -613,7 +628,11 @@ public class CliPlusFeaturesE2ETests
     private static HttpClient DirectToListener(int listenPort)
     {
         // ForwardHost / route listeners that accept absolute-form on the listen port.
-        return new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        // Ignore the machine proxy. An earlier test may have turned it on, and these calls are to 127.0.0.1.
+        return new HttpClient(new HttpClientHandler { UseProxy = false })
+        {
+            Timeout = TimeSpan.FromSeconds(20),
+        };
     }
 
     private static async Task WaitControlPlaneAsync(HttpClient http, int controlPort)

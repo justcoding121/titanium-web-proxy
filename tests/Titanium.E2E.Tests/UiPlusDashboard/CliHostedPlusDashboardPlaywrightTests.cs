@@ -13,8 +13,20 @@ namespace Titanium.E2E.Tests.UiPlusDashboard;
 [TestClass]
 public class CliHostedPlusDashboardPlaywrightTests : PageTest
 {
+    /// <summary>
+    ///     The dashboard CSP is <c>default-src 'self'</c>. Axe is injected by the test, so this
+    ///     context bypasses that policy. The product response is unchanged.
+    /// </summary>
+    public override BrowserNewContextOptions ContextOptions() =>
+        new()
+        {
+            BypassCSP = true,
+        };
+
     private const string Secret = "pw-cli-dashboard-secret";
     private const string ViewerSecret = "pw-cli-dashboard-viewer-secret";
+
+    private static readonly string[] SnapshotPropertyNames = ["clusters", "destinationStates"];
 
     private string _tempDir = null!;
     private CliProcessHarness? _harness;
@@ -168,6 +180,46 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         await Page.GetByTestId("link-metrics").ClickAsync();
         var metricsBody = await Page.InnerTextAsync("body");
         StringAssert.Contains(metricsBody, "titanium_destination_state");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_ApiSnapshot_HasTheStableShape()
+    {
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, Secret);
+        using var doc = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync(_prefix + "api/snapshot"));
+        var names = doc.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        CollectionAssert.AreEqual(SnapshotPropertyNames, names);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_Views_HaveNoSeriousAccessibilityViolations()
+    {
+        await LoginAsync(Secret);
+        foreach (var path in new[] { "", "routes" })
+        {
+            await Page.GotoAsync(_prefix + path);
+            await Page.AddScriptTagAsync(new PageAddScriptTagOptions
+            {
+                Url = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js",
+            });
+            var json = await Page.EvaluateAsync<string>(
+                "async () => JSON.stringify(await axe.run(document, { resultTypes: ['violations'] }))");
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var serious = doc.RootElement.GetProperty("violations").EnumerateArray()
+                .Where(violation =>
+                {
+                    var impact = violation.TryGetProperty("impact", out var value) ? value.GetString() : "";
+                    return impact is "serious" or "critical";
+                })
+                .Select(violation => violation.GetProperty("id").GetString())
+                .ToArray();
+            Assert.AreEqual(0, serious.Length, path + ": " + string.Join(", ", serious));
+        }
     }
 
     private async Task LoginAsync(string secret)

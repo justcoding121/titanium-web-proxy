@@ -509,15 +509,16 @@ public class Rfc9220TunnelTests
     }
 
     [TestMethod]
-    [Timeout(30_000)]
+    [Timeout(60_000)]
     public async Task WebSocket_H3ClientToH3Origin_WithoutSetting8_FallsBackToHttp11()
     {
         RequireQuic();
-        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
-        using var tcpEcho = new TcpWebSocketEchoOnPort(origin.Port);
+        // QUIC picks an ephemeral UDP port; pairing a TCP listener on the same number can hit a
+        // Windows excluded-port range (WSAEACCES). Retry until both binds succeed.
+        await using var paired = await BindQuicOriginWithTcpEchoAsync();
 
         using var testSuite = new TestSuite(sharedServer);
-        var (proxy, quicEp) = StartProxy(testSuite, origin.Port, UpstreamHttpProtocol.Http3);
+        var (proxy, quicEp) = StartProxy(testSuite, paired.Origin.Port, UpstreamHttpProtocol.Http3);
         try
         {
             await using var client = await QuicHttp3Client.ConnectAsync(
@@ -525,12 +526,12 @@ public class Rfc9220TunnelTests
             await client.WaitForPeerSettingsAsync();
 
             await using var tunnel = await client.OpenExtendedConnectAsync(
-                $"localhost:{origin.Port}", "/ws", "websocket",
+                $"localhost:{paired.Origin.Port}", "/ws", "websocket",
                 extraHeaders: [("sec-websocket-version", "13")], scheme: "http");
             Assert.AreEqual(200, tunnel.Status);
-            Assert.AreEqual(0, origin.ExtendedConnectAcceptCount,
+            Assert.AreEqual(0, paired.Origin.ExtendedConnectAcceptCount,
                 "Without ENABLE_CONNECT_PROTOCOL the proxy must not open an H3 extended CONNECT.");
-            Assert.IsTrue(tcpEcho.ConnectionsAccepted > 0,
+            Assert.IsTrue(paired.TcpEcho.ConnectionsAccepted > 0,
                 "The proxy must fall back to HTTP/1.1 WebSocket upgrade on TCP.");
 
             var frame = BuildMaskedTextFrame(Ascii.GetBytes("fallback-h3-h3"));
@@ -541,6 +542,40 @@ public class Rfc9220TunnelTests
         {
             proxy.Stop();
             proxy.Dispose();
+        }
+    }
+
+    private static async Task<QuicTcpPair> BindQuicOriginWithTcpEchoAsync(int maxAttempts = 20)
+    {
+        Exception? last = null;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+            try
+            {
+                return new QuicTcpPair(origin, new TcpWebSocketEchoOnPort(origin.Port));
+            }
+            catch (SocketException ex)
+            {
+                last = ex;
+                await origin.DisposeAsync();
+            }
+        }
+
+        throw new AssertFailedException(
+            $"Could not bind QUIC+TCP on the same loopback port after {maxAttempts} attempts." +
+            (last is null ? string.Empty : $" Last error: {last.GetType().Name}: {last.Message}"));
+    }
+
+    private sealed class QuicTcpPair(QuicHttp3OriginServer origin, TcpWebSocketEchoOnPort tcpEcho) : IAsyncDisposable
+    {
+        public QuicHttp3OriginServer Origin { get; } = origin;
+        public TcpWebSocketEchoOnPort TcpEcho { get; } = tcpEcho;
+
+        public async ValueTask DisposeAsync()
+        {
+            TcpEcho.Dispose();
+            await Origin.DisposeAsync();
         }
     }
 
@@ -732,7 +767,16 @@ public class Rfc9220TunnelTests
         public TcpWebSocketEchoOnPort(int port)
         {
             listener = new TcpListener(IPAddress.Loopback, port);
-            listener.Start();
+            try
+            {
+                listener.Start();
+            }
+            catch
+            {
+                try { listener.Stop(); } catch { /* best-effort */ }
+                throw;
+            }
+
             _ = AcceptLoopAsync();
         }
 

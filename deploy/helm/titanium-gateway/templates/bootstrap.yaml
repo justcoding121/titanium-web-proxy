@@ -36,7 +36,8 @@ type: Opaque
 {{- if not .Values.dataPlane.admin.token.existingSecret }}
 {{- /* Keep the token across `helm upgrade`; generate it only the first time. */}}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace $adminName }}
-{{- $token := randAlphaNum 40 }}
+{{- /* values.dataPlane.admin.token.value pins CI snapshots; live installs still get a random token. */}}
+{{- $token := .Values.dataPlane.admin.token.value | default (randAlphaNum 40) }}
 {{- if and $existing $existing.data }}
 {{- $token = (get $existing.data .Values.dataPlane.admin.token.key) | b64dec }}
 {{- end }}

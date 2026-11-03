@@ -569,6 +569,11 @@ public class SvcbDnsResolverTests
         Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("2001:db8::1")));
         Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Any));
         Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.IPv6Any));
+        Assert.AreEqual(IPAddress.Loopback,
+            UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("192.0.2.1"), confineNonLoopbackToLoopback: true));
+        Assert.AreEqual(IPAddress.IPv6Loopback,
+            UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("2001:db8::1"), confineNonLoopbackToLoopback: true));
+        Assert.IsNull(UdpSvcbDnsResolver.SelectClientBindAddress(IPAddress.Parse("192.0.2.1"), confineNonLoopbackToLoopback: false));
     }
 
     [TestMethod]

@@ -1,0 +1,21 @@
+name: dast
+
+on:
+  schedule:
+    - cron: '37 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Unauthenticated dashboard surface
+        run: |
+          dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj -c Release --filter "FullyQualifiedName~Dashboard_UnauthenticatedProbes_DoNotLeakAStack|FullyQualifiedName~DashboardAuthTests" --nologo

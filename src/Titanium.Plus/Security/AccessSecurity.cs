@@ -364,6 +364,11 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
         catch (Exception ex)
         {
             _logger?.LogDebug(ex, "Plus Security: JWT validation failed");
+            if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1", StringComparison.Ordinal))
+            {
+                _logger?.LogWarning("Plus Security: JWT validation failed: {Type}: {Message}", ex.GetType().Name, ex.Message);
+            }
+
             _validUntilUnix.TryRemove(token, out _);
             return false;
         }
@@ -458,7 +463,10 @@ public sealed class JwtAccessMiddleware : IProxyMiddleware
                 return _validation;
             }
 
-            using var http = _httpClientFactory?.Invoke() ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            // Do not follow the machine proxy. The configured JWKS URL is often loopback in tests,
+            // and a system proxy that is this process would hang the fetch.
+            using var http = _httpClientFactory?.Invoke()
+                ?? new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(10) };
             var jwksUrl = _jwksUrlOverride;
             if (string.IsNullOrEmpty(jwksUrl))
             {

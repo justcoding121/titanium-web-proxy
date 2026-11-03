@@ -98,6 +98,7 @@ public partial class CliAdminE2ETests
             server:
               admin:
                 enabled: true
+                # hygiene-allow-non-loopback: rejected before the process binds
                 host: "0.0.0.0"
                 port: 0
             """);

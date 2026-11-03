@@ -1,0 +1,382 @@
+---
+# Source: titanium/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: titanium
+      app.kubernetes.io/instance: rel
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - port: 8080
+          protocol: TCP
+    - ports:
+        - port: 9901
+          protocol: TCP
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+    - ports:
+        - port: 9080
+          protocol: TCP
+      from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+  egress:
+    - ports:
+      - port: 80
+        protocol: TCP
+      to:
+      - namespaceSelector: {}
+---
+# Source: titanium/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium
+      app.kubernetes.io/instance: rel
+---
+# Source: titanium/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+---
+# Source: titanium/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rel-titanium-admin
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+data:
+  admin-token: "Y2ktc25hcHNob3QtYWRtaW4tdG9rZW4tbm90LWEtc2VjcmV0"
+---
+# Source: titanium/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+data:
+  twp.yaml: |
+    clusters:
+    - destinations:
+      - address: backend.default.svc.cluster.local
+        id: backend
+        port: 80
+      id: web
+    listeners:
+    - decryptSsl: false
+      host: 0.0.0.0
+      port: 8080
+    plus:
+      controlPlane:
+        host: 0.0.0.0
+        port: 9080
+        sharedSecretEnv: TITANIUM_CONTROL_SECRET
+        tls:
+          certificatePath: /etc/titanium-plus-tls/tls.crt
+          keyPath: /etc/titanium-plus-tls/tls.key
+      enabled: true
+      options:
+        security.apiKeysFile: /etc/titanium-secret/api-keys
+    routes:
+    - clusterId: web
+      id: all
+      match:
+        path: /
+    schemaVersion: "7.1"
+    server:
+      admin:
+        authTokenEnv: TITANIUM_ADMIN_TOKEN
+        enabled: true
+        host: 0.0.0.0
+        port: 9901
+        preStopDelaySeconds: 10
+        readiness:
+          requireHealthyClusters: true
+---
+# Source: titanium/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: proxy
+spec:
+  type: ClusterIP
+  ports:
+    - name: proxy
+      port: 8080
+      targetPort: proxy
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+---
+# Source: titanium/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-titanium-admin
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: admin
+spec:
+  type: ClusterIP
+  ports:
+    - name: admin
+      port: 9901
+      targetPort: admin
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+---
+# Source: titanium/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium
+      app.kubernetes.io/instance: rel
+  template:
+    metadata:
+      annotations:
+        checksum/config: d0262af266cfb1b8f48db3e1dc81fe938dccf3b7ecc54b43a93b5a675b66de3e
+      labels:
+        helm.sh/chart: titanium-0.1.0
+        app.kubernetes.io/name: titanium
+        app.kubernetes.io/instance: rel
+        app.kubernetes.io/version: "7.0.27"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: rel-titanium
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        fsGroup: 1654
+        runAsGroup: 1654
+        runAsNonRoot: true
+        runAsUser: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: titanium
+          image: "ghcr.io/justcoding121/titanium-web-proxy:7.0.27"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          # The image ENTRYPOINT is `titanium run --config /etc/titanium/twp.yaml`; this CMD adds --watch.
+          args:
+            - --watch
+          ports:
+            - name: proxy
+              containerPort: 8080
+              protocol: TCP
+            - name: admin
+              containerPort: 9901
+              protocol: TCP
+            - name: control-plane
+              containerPort: 9080
+              protocol: TCP
+          env:
+            - name: TITANIUM_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rel-titanium-admin
+                  key: admin-token
+            - name: TITANIUM_CONTROL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: titanium-control-plane
+                  key: shared-secret
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: admin
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          resources:
+            limits:
+              ephemeral-storage: 1Gi
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 128Mi
+              memory: 128Mi
+          volumeMounts:
+            # Mount the whole directory: a ConfigMap update swaps the ..data symlink, which --watch follows.
+            - name: config
+              mountPath: /etc/titanium
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: plus-tls
+              mountPath: /etc/titanium-plus-tls
+              readOnly: true
+            - mountPath: /etc/titanium-secret
+              name: plus-secret
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: rel-titanium
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: plus-tls
+          secret:
+            secretName: titanium-control-plane-tls
+        - name: plus-secret
+          secret:
+            secretName: titanium-plus
+---
+# Source: titanium/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: rel-titanium
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+# Source: titanium/templates/servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rel-titanium
+  labels:
+    helm.sh/chart: titanium-0.1.0
+    app.kubernetes.io/name: titanium
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - default
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium
+      app.kubernetes.io/instance: rel
+      app.kubernetes.io/component: admin
+  endpoints:
+    - port: admin
+      path: /metrics
+      scheme: http
+      interval: 30s
+      scrapeTimeout: 10s
+      authorization:
+        type: Bearer
+        credentials:
+          name: rel-titanium-admin
+          key: admin-token

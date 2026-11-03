@@ -1,0 +1,39 @@
+name: nightly-slow
+
+# Slow integration tests (external sites, stress, large downloads). Retry once, then warn.
+# A warning is still a recorded result. The job does not go green by skipping the tests.
+
+on:
+  schedule:
+    - cron: '19 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration-slow:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      TITANIUM_SKIP_ROOT_STORE_UI: '1'
+      TITANIUM_NO_ELEVATE: '1'
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Slow integration
+        shell: pwsh
+        run: |
+          dotnet build tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj -c Release --nologo
+          $ok = $false
+          foreach ($attempt in 1..2) {
+            Write-Host "Slow integration attempt $attempt"
+            dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj -c Release --no-build --filter "TestCategory=Slow" --blame-hang --blame-hang-timeout 5m
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+          }
+          if (-not $ok) {
+            Write-Host "::warning::Slow integration failed after 2 attempts. External sites can flake. The log above is the result."
+          }

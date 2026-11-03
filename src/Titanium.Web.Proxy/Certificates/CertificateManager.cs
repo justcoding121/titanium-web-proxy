@@ -1283,16 +1283,118 @@ public sealed class CertificateManager : IDisposable
 
         // offline: false lets .NET fetch and staple an OCSP response; the default stays offline.
         var offline = !ocspStapling;
+        System.Net.Security.SslStreamCertificateContext created;
         try
         {
-            return System.Net.Security.SslStreamCertificateContext.Create(
-                leaf, extras.Count > 0 ? extras : null, offline, trust);
+            try
+            {
+                created = System.Net.Security.SslStreamCertificateContext.Create(
+                    leaf, extras.Count > 0 ? extras : null, offline, trust);
+            }
+            catch (CryptographicException) when (trust != null)
+            {
+                created = System.Net.Security.SslStreamCertificateContext.Create(
+                    leaf, null, offline, trust);
+            }
         }
-        catch (CryptographicException) when (trust != null)
+        finally
         {
-            return System.Net.Security.SslStreamCertificateContext.Create(
-                leaf, null, offline, trust);
+            // SslStreamCertificateContext.Create copies the signer into CurrentUser\CA on Windows.
+            // A test host must not keep that copy.
+            DropTestHostOsStoreSideEffects(leaf);
         }
+
+        return created;
+    }
+
+    private void DropTestHostOsStoreSideEffects(X509Certificate2 leaf)
+    {
+        if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        RemoveFromUserStores(leaf);
+        if (rootCertificate != null)
+            RemoveFromUserStores(rootCertificate);
+        if (IntermediateCertificates != null)
+        {
+            foreach (X509Certificate2 extra in IntermediateCertificates)
+                RemoveFromUserStores(extra);
+        }
+
+        // SslStreamCertificateContext.Create can leave re-encoded copies whose thumbprints
+        // no longer match the in-memory chain. Scrub every Titanium/TWP subject when suppressed.
+        ScrubTestHostUserStores();
+    }
+
+    private static void RemoveFromUserStores(X509Certificate2 certificate)
+    {
+        var thumbprint = certificate.Thumbprint;
+        if (string.IsNullOrEmpty(thumbprint))
+            return;
+
+        foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority })
+        {
+            try
+            {
+                using var store = new X509Store(name, StoreLocation.CurrentUser);
+                store.Open(OpenFlags.ReadWrite);
+                foreach (var found in store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly: false))
+                    store.Remove(found);
+            }
+            catch (CryptographicException)
+            {
+                // The store can be locked. The assembly leak guard still fails the run.
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Removes CurrentUser My/CA/Root entries whose subject or issuer looks like a Titanium test
+    ///     certificate. Used only when interactive root-store mutations are suppressed.
+    /// </summary>
+    private static void ScrubTestHostUserStores()
+    {
+        if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        ScrubStore(StoreName.My);
+        ScrubStore(StoreName.CertificateAuthority);
+        ScrubStore(StoreName.Root);
+    }
+
+    private static void ScrubStore(StoreName name)
+    {
+        try
+        {
+            using var store = new X509Store(name, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            var doomed = store.Certificates.Cast<X509Certificate2>().Where(IsTestHostCertificate).ToList();
+            foreach (var cert in doomed)
+            {
+                try
+                {
+                    store.Remove(cert);
+                }
+                catch (CryptographicException)
+                {
+                    // Root remove can still raise CryptUI; suppress skips interactive Root writes.
+                }
+            }
+        }
+        catch (CryptographicException)
+        {
+            // The store can be locked. The assembly leak guard still fails the run.
+        }
+    }
+
+    private static bool IsTestHostCertificate(X509Certificate2 cert)
+    {
+        var text = cert.Subject + " " + cert.Issuer;
+        return text.Contains("Titanium", StringComparison.Ordinal)
+               || text.Contains("twp-", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("TWP", StringComparison.Ordinal)
+               || text.Contains("Acme Corp", StringComparison.Ordinal)
+               || text.Contains("Acme Root CA", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -1302,6 +1404,10 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private static void StageIntermediateForOsChainBuild(X509Certificate2 intermediate)
     {
+        // Test hosts must not write the real user store. Custom trust already carries the chain.
+        if (ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
         try
         {
             using var store = new X509Store(StoreName.CertificateAuthority, StoreLocation.CurrentUser);
@@ -1497,6 +1603,16 @@ public sealed class CertificateManager : IDisposable
     /// <returns>True when the user Root store entry was newly added.</returns>
     public bool InstallRootIntoCertificateStores(bool machineTrusted = false)
     {
+        // Personal and Root are one trust action. A test host must not write either store:
+        // Root shows CryptUI, and the Personal copy is the leak the store guard counts.
+        if (ShouldSuppressInteractiveRootStoreMutations)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Root CA install skipped (interactive root-store UI suppressed)");
+            return false;
+        }
+
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 
@@ -2077,6 +2193,9 @@ public sealed class CertificateManager : IDisposable
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;
+
+            // Drop SslStreamCertificateContext.Create side effects after the cached contexts are gone.
+            ScrubTestHostUserStores();
         }
 
         disposed = true;

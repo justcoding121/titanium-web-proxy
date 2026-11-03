@@ -58,7 +58,7 @@ jobs:
 
       # Both architectures must build; only the runner's own is loaded for the run test below.
       - name: Build linux/amd64 and linux/arm64 (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile
@@ -69,7 +69,7 @@ jobs:
 
       # The Gateway API controller image builds for both architectures too.
       - name: Build the titanium-gateway image for linux/amd64 and linux/arm64 (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.gateway
@@ -80,7 +80,7 @@ jobs:
 
       # Manager control-plane image (same multi-arch contract as CLI/gateway).
       - name: Build the titanium-manager image for linux/amd64 and linux/arm64 (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.manager
@@ -90,7 +90,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build linux/amd64 and load it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile
@@ -148,7 +148,7 @@ jobs:
           test "$(docker inspect twp --format '{{.State.ExitCode}}')" = "0" || { docker logs twp; exit 1; }
 
       - name: Build titanium-gateway linux/amd64 and load it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.gateway
@@ -162,7 +162,7 @@ jobs:
           cache-from: type=gha
 
       - name: Build titanium-manager linux/amd64 and load it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.manager
@@ -269,6 +269,14 @@ jobs:
             | tar xz -C /usr/local/bin kubeconform
           kubeconform -v
 
+      - name: rendered manifests match the snapshots
+        run: |
+          set -euo pipefail
+          diff -u deploy/helm/titanium/ci/rendered-default.yaml <(helm template rel deploy/helm/titanium -f deploy/helm/titanium/ci/snapshot-values.yaml)
+          diff -u deploy/helm/titanium/ci/rendered-full.yaml <(helm template rel deploy/helm/titanium -f deploy/helm/titanium/ci/snapshot-values.yaml -f deploy/helm/titanium/ci/full-values.yaml)
+          diff -u deploy/helm/titanium-gateway/ci/rendered-default.yaml <(helm template rel deploy/helm/titanium-gateway --namespace gateway-system -f deploy/helm/titanium-gateway/ci/snapshot-values.yaml)
+          diff -u deploy/helm/titanium-manager/ci/rendered-default.yaml <(helm template rel deploy/helm/titanium-manager -f deploy/helm/titanium-manager/ci/snapshot-values.yaml)
+
       - name: helm lint
         run: |
           set -euo pipefail
@@ -280,11 +288,13 @@ jobs:
       - name: kubeconform
         run: |
           set -euo pipefail
-          for values in "" "-f deploy/helm/titanium/ci/full-values.yaml" "-f deploy/helm/titanium/ci/smoke-values.yaml"; do
-            helm template rel deploy/helm/titanium $values \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
-                  -schema-location default \
-                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          for version in 1.27.0 1.31.0; do
+            for values in "" "-f deploy/helm/titanium/ci/full-values.yaml" "-f deploy/helm/titanium/ci/smoke-values.yaml"; do
+              helm template rel deploy/helm/titanium $values \
+                | kubeconform -strict -summary -kubernetes-version "$version" \
+                    -schema-location default \
+                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+            done
           done
 
       # Renders the chart and loads the rendered twp.yaml with the CLI's own loader and validator.
@@ -302,11 +312,13 @@ jobs:
       - name: titanium-gateway chart kubeconform
         run: |
           set -euo pipefail
-          for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
-            helm template rel deploy/helm/titanium-gateway --namespace gateway-system  \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
-                  -schema-location default \
-                  -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          for version in 1.27.0 1.31.0; do
+            for values in "" "--set controller.secretNamespaces={team-a,team-b}" "-f deploy/helm/titanium-gateway/ci/kind-values.yaml"; do
+              helm template rel deploy/helm/titanium-gateway --namespace gateway-system $values \
+                | kubeconform -strict -summary -kubernetes-version "$version" \
+                    -schema-location default \
+                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+            done
           done
 
       - name: titanium-gateway chart tests
@@ -321,10 +333,12 @@ jobs:
       - name: titanium-manager chart kubeconform
         run: |
           set -euo pipefail
-          for values in "" "-f deploy/helm/titanium-manager/ci/smoke-values.yaml"; do
-            helm template rel deploy/helm/titanium-manager $values \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}" \
-                  -schema-location default -
+          for version in 1.27.0 1.31.0; do
+            for values in "" "-f deploy/helm/titanium-manager/ci/smoke-values.yaml"; do
+              helm template rel deploy/helm/titanium-manager $values \
+                | kubeconform -strict -summary -kubernetes-version "$version" \
+                    -schema-location default -
+            done
           done
 
       - name: titanium-manager chart tests

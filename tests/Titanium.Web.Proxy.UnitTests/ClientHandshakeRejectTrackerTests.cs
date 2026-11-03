@@ -13,6 +13,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 ///     aborts with no success in between so the proxy can stop decrypting that host.
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public class ClientHandshakeRejectTrackerTests
 {
     [TestMethod]
@@ -148,18 +149,33 @@ public class ClientHandshakeRejectTrackerTests
     [TestCategory("Regression-2026-10-07")]
     public void ProxyServer_ThresholdReached_ActivatesBypass_AndRaisesChangedOnce()
     {
-        using var proxy = new ProxyServer { EnableDecryptFailureBypass = true, ClientHandshakeRejectThreshold = 3 };
+        // Unique host + no store trust: constructing ProxyServer with default trust talks to the
+        // Windows cert store and has raced this assertion under CI load.
+        var host = "threshold-" + Guid.NewGuid().ToString("N") + ".example.test";
+        using var proxy = new ProxyServer(userTrustRootCertificate: false, machineTrustRootCertificate: false,
+            trustRootCertificateAsAdmin: false)
+        {
+            EnableDecryptFailureBypass = true,
+            ClientHandshakeRejectThreshold = 3,
+            ClientHandshakeRejectWindow = TimeSpan.FromMinutes(5),
+            DecryptFailureBypassTtl = TimeSpan.FromHours(1),
+        };
+        proxy.ClearDecryptFailureBypass();
+        proxy.ClientHandshakeRejects.Clear();
         var raised = 0;
-        proxy.DecryptFailureBypassChanged += (_, _) => raised++;
+        proxy.DecryptFailureBypassChanged += (_, e) =>
+        {
+            if (string.Equals(e.Host, host, StringComparison.OrdinalIgnoreCase))
+                raised++;
+        };
         var abort = new IOException("Received an unexpected EOF or 0 bytes from the transport stream.");
 
-        Assert.IsFalse(proxy.TryRecordClientHandshakeReject("api2.cursor.sh", abort));
-        Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost("api2.cursor.sh"));
-        Assert.IsFalse(proxy.TryRecordClientHandshakeReject("api2.cursor.sh", abort));
-        Assert.IsTrue(proxy.TryRecordClientHandshakeReject("api2.cursor.sh", abort));
-
-        Assert.IsTrue(proxy.ShouldBypassDecryptForLearnedHost("api2.cursor.sh"));
-        Assert.AreEqual(1, raised);
+        Assert.IsFalse(proxy.TryRecordClientHandshakeReject(host, abort), "strike 1 must not trip");
+        Assert.IsFalse(proxy.ShouldBypassDecryptForLearnedHost(host), "bypass stays off before threshold");
+        Assert.IsFalse(proxy.TryRecordClientHandshakeReject(host, abort), "strike 2 must not trip");
+        Assert.IsTrue(proxy.TryRecordClientHandshakeReject(host, abort), "strike 3 must trip and activate bypass");
+        Assert.IsTrue(proxy.ShouldBypassDecryptForLearnedHost(host), "bypass must be active after trip");
+        Assert.AreEqual(1, raised, "DecryptFailureBypassChanged must fire once on activation");
     }
 
     [TestMethod]

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using YamlDotNet.RepresentationModel;
 
@@ -9,8 +10,13 @@ namespace Titanium.Manager.Tests;
 ///     hardened defaults. Static checks always run; <c>helm</c> checks run when helm is installed (CI installs it).
 /// </summary>
 [TestClass]
-public sealed class ManagerChartTests
+public sealed partial class ManagerChartTests
 {
+    [GeneratedRegex(
+        "single-instance only|Must be less than or equal to 1|maximum:\\s*got 2, want 1",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex ReplicaCeilingMessage();
+
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string ChartDir = Path.Combine(RepoRoot, "deploy", "helm", "titanium-manager");
 
@@ -104,7 +110,8 @@ public sealed class ManagerChartTests
 
         var (multiExit, multiOut) = Run(helm, $"template rel \"{ChartDir}\" --set replicaCount=2");
         Assert.AreNotEqual(0, multiExit);
-        StringAssert.Contains(multiOut, "single-instance only");
+        // Helm schema messages vary by version; accept the chart's wording or the JSON-schema ceiling.
+        StringAssert.Matches(multiOut, ReplicaCeilingMessage());
     }
 
     private static string? FindHelm()

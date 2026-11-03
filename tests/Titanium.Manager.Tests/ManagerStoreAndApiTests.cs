@@ -182,6 +182,51 @@ public class ManagerStoreAndApiTests
     }
 
     [TestMethod]
+    public void Store_SecondPublishWhileOneIsRunning_Conflicts()
+    {
+        using var store = new ManagerStore(TempDb());
+        var fleet = store.CreateFleet("conflict");
+        var first = store.CreateRevision(fleet.Id, ValidYaml, "tester");
+        var second = store.CreateRevision(fleet.Id, ValidYamlV2, "tester");
+        var running = store.Publish(fleet.Id, first.Id, [new PublishWaveSpec(new Dictionary<string, string>(), 1, 30)]);
+        Assert.AreEqual("running", running.State);
+        var error = Assert.ThrowsExactly<InvalidOperationException>(() => store.Publish(fleet.Id, second.Id));
+        StringAssert.Contains(error.Message, "active rollout");
+    }
+
+    [TestMethod]
+    public void Store_PauseAndRollback_RestoresThePreviousRevision()
+    {
+        using var store = new ManagerStore(TempDb());
+        var fleet = store.CreateFleet("rollback");
+        var first = store.CreateRevision(fleet.Id, ValidYaml, "tester");
+        var second = store.CreateRevision(fleet.Id, ValidYamlV2, "tester");
+        store.Publish(fleet.Id, first.Id);
+        var staged = store.Publish(
+            fleet.Id,
+            second.Id,
+            [new PublishWaveSpec(new Dictionary<string, string>(), 1, 30)]);
+        var paused = store.PauseRollout(fleet.Id, staged.Id, "hold");
+        Assert.AreEqual("paused", paused.State);
+        Assert.AreEqual("hold", paused.PauseReason);
+
+        var rolled = store.RollbackRollout(fleet.Id, staged.Id);
+        Assert.AreEqual("rolled_back", rolled.State);
+        Assert.AreEqual(first.Id, store.GetPublished(fleet.Id)!.RevisionId);
+
+        var again = store.RollbackRollout(fleet.Id, staged.Id);
+        Assert.AreEqual(rolled.Id, again.Id);
+    }
+
+    [TestMethod]
+    public void Store_CorruptFile_FailsOpen()
+    {
+        var path = TempDb();
+        File.WriteAllText(path, "this is not a database");
+        Assert.ThrowsExactly<Microsoft.Data.Sqlite.SqliteException>(() => new ManagerStore(path));
+    }
+
+    [TestMethod]
     public async Task Api_OversizedBody_Returns413()
     {
         await using var host = await ManagerTestHost.StartAsync();

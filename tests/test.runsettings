@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- Per project invocation. The full solution is run one project at a time. -->
+    <TestSessionTimeout>5400000</TestSessionTimeout>
+    <EnvironmentVariables>
+      <TITANIUM_SKIP_ROOT_STORE_UI>1</TITANIUM_SKIP_ROOT_STORE_UI>
+      <TITANIUM_NO_ELEVATE>1</TITANIUM_NO_ELEVATE>
+    </EnvironmentVariables>
+  </RunConfiguration>
+  <MSTest>
+    <!-- Ceiling for tests that do not set [Timeout]. A test attribute still wins. -->
+    <TestTimeout>300000</TestTimeout>
+  </MSTest>
+</RunSettings>

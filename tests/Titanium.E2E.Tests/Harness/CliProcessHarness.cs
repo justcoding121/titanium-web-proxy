@@ -4,6 +4,8 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using Titanium.Web.Proxy.Configuration;
+using Titanium.Web.Proxy.Configuration.Models;
 
 namespace Titanium.E2E.Tests.Harness;
 
@@ -361,6 +363,66 @@ public sealed partial class CliProcessHarness : IDisposable
         return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     A config passed to <c>titanium run</c> must bind loopback unless the machine opted into wildcard binds.
+    ///     A missing listener host loads as <c>0.0.0.0</c> and can raise the firewall prompt.
+    /// </summary>
+    public static void AssertLoopbackConfig(string configPath)
+    {
+        if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var text = File.ReadAllText(configPath);
+        if (text.Contains("hygiene-allow-non-loopback", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        TwpConfig config;
+        try
+        {
+            config = TwpConfigLoader.LoadFile(configPath);
+        }
+        catch (Exception)
+        {
+            // The CLI reports a config it cannot load. It does not bind.
+            return;
+        }
+
+        foreach (var listener in config.Listeners)
+        {
+            if (!IsLoopbackHost(listener.Host))
+            {
+                throw new InvalidOperationException(
+                    $"Listener {listener.Host}:{listener.Port} in {configPath} is not loopback. " +
+                    "Set host to 127.0.0.1 or ::1.");
+            }
+        }
+
+        if (config.Server?.Admin is { Enabled: true } admin && !IsLoopbackOrUnset(admin.Host))
+        {
+            throw new InvalidOperationException($"server.admin.host {admin.Host} in {configPath} is not loopback.");
+        }
+
+        if (config.Server?.Metrics is { Enabled: true } metrics && !IsLoopbackOrUnset(metrics.Host))
+        {
+            throw new InvalidOperationException($"server.metrics.host {metrics.Host} in {configPath} is not loopback.");
+        }
+
+        if (config.Plus?.ControlPlane is { } control && !IsLoopbackHost(control.Host))
+        {
+            throw new InvalidOperationException($"plus.controlPlane.host {control.Host} in {configPath} is not loopback.");
+        }
+    }
+
+    private static bool IsLoopbackOrUnset(string? host) =>
+        string.IsNullOrWhiteSpace(host) || IsLoopbackHost(host);
+
+    private static bool IsLoopbackHost(string? host) =>
+        host is "127.0.0.1" or "::1" or "localhost";
+
     public async Task StartRunAsync(
         string configPath,
         IDictionary<string, string?>? env = null,
@@ -373,6 +435,8 @@ public sealed partial class CliProcessHarness : IDisposable
         {
             throw new InvalidOperationException("Already started.");
         }
+
+        AssertLoopbackConfig(configPath);
 
         var args = new List<string> { "run", "-c", configPath };
         if (verbose)
@@ -504,6 +568,9 @@ public sealed partial class CliProcessHarness : IDisposable
             _process = null;
         }
 
+        // The CLI child can leave CurrentUser\CA copies from SslStreamCertificateContext.Create.
+        Titanium.TestKit.Shared.TwpStoreLeakGuard.ScrubLeakedCertificates();
+
         if (_ownsIsolatedDirectory && _isolatedDirectory is not null)
         {
             try
@@ -607,6 +674,10 @@ public sealed partial class CliProcessHarness : IDisposable
                 }
             }
         }
+
+        // Child processes must not open a certificate dialog or a UAC relaunch, even if a test scrubs the environment.
+        psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
+        psi.Environment["TITANIUM_NO_ELEVATE"] = "1";
 
         var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start CLI.");
         process.OutputDataReceived += (_, e) =>
