@@ -7,7 +7,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Admin;
 using Titanium.Cli.Config;
 using Titanium.Web.Proxy;
-using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 
 namespace Titanium.Cli.Tests;
@@ -367,7 +366,6 @@ public class MetricsExpositionTests
                 routes,
                 middleware: [],
                 loadBalancer: new LoadBalancer(),
-                responseCache: new MemoryHttpResponseCache(),
                 plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 getGrpc: static () => null,
                 setGrpc: static _ => { },

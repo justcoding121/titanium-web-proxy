@@ -11,6 +11,12 @@ public interface IResponseCacheEngine
     int MaxEntryBytes { get; }
 
     /// <summary>
+    /// Allocates the body tee for a streamed store. Called only after <see cref="OnOriginResponse"/>
+    /// already decided to store, so a session with no cache state never calls it.
+    /// </summary>
+    ICacheBodyTee CreateBodyTee(long expectedLength);
+
+    /// <summary>
     /// Called with an origin response's status and headers, before any of the body is relayed.
     /// <paramref name="headers"/> is a snapshot of name/value pairs.
     /// </summary>

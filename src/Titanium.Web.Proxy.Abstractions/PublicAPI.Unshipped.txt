@@ -223,7 +223,7 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RefreshReverseProx
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RegisterMetricsAppender.get -> System.Action<System.Action<System.Text.StringBuilder!>!>?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.RegisterMetricsAppender.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ResponseCache.get -> Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache?
-Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ResponseCache.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ResponseCache.set -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Routes.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Abstractions.Routing.RouteConfig!>?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.Routes.init -> void
 Titanium.Web.Proxy.Abstractions.ReverseProxyOptions
@@ -1218,6 +1218,7 @@ Titanium.Web.Proxy.Abstractions.Caching.CachedServe.StatusCode.get -> int
 Titanium.Web.Proxy.Abstractions.Caching.CachedServe.StatusCode.init -> void
 Titanium.Web.Proxy.Abstractions.Caching.ICacheBodyTee
 Titanium.Web.Proxy.Abstractions.Caching.ICacheBodyTee.Append(byte[]! source, int offset, int count) -> void
+Titanium.Web.Proxy.Abstractions.Caching.ICacheBodyTee.ToArray() -> byte[]?
 Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState
 Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState.Abandon() -> void
 Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState.Owner.get -> Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine!
@@ -1225,6 +1226,7 @@ Titanium.Web.Proxy.Abstractions.Caching.IHttpResponseCacheStats
 Titanium.Web.Proxy.Abstractions.Caching.IHttpResponseCacheStats.Bytes.get -> long
 Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine
 Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.CompleteStore(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state, Titanium.Web.Proxy.Abstractions.Caching.CacheStorePlan! plan, byte[]? body, long expectedLength) -> void
+Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.CreateBodyTee(long expectedLength) -> Titanium.Web.Proxy.Abstractions.Caching.ICacheBodyTee!
 Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.ConditionalValidators(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state) -> (string? IfNoneMatch, string? IfModifiedSince)
 Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.MaxEntryBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.OnOriginResponse(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state, int statusCode, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! headers, bool hasBody, long contentLength, bool chunked) -> Titanium.Web.Proxy.Abstractions.Caching.OriginDecision

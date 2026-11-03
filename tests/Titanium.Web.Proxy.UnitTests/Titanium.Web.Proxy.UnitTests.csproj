@@ -22,7 +22,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Caching\rfc9111-vectors.json" CopyToOutputDirectory="PreserveNewest" />
     <!-- Adversarial parser corpus shared with external fuzzers (tests/fuzz/README.md). -->
     <None Include="..\fuzz\corpus\**\*" Link="fuzz\corpus\%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />

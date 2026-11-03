@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
@@ -8,14 +8,16 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Plus.Caching;
 using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.UnitTests.Caching;
+namespace Titanium.Plus.Tests;
 
 /// <summary>
 /// Drives the cache middleware the way the terminate-lite path does: request side through <c>InvokeAsync</c>, origin

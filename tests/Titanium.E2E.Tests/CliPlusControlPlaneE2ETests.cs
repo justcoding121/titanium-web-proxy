@@ -235,8 +235,8 @@ public class CliPlusControlPlaneE2ETests
     [TestCategory("E2E")]
     public async Task ControlPlane_CachePurge_WhenCacheDisabled_StillOk()
     {
-        // CLI always passes a MemoryHttpResponseCache into Plus even when cache.enable is off;
-        // purge therefore returns 200 (removed=0) rather than 503.
+        // Plus creates a MemoryHttpResponseCache during Apply even when cache.enable is off,
+        // so purge returns 200 (removed=0) rather than 503.
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var control = CliProcessHarness.GetFreePort();

@@ -613,7 +613,7 @@ public partial class ProxyServer
         }
 
         var decision = state.Owner.OnOriginResponse(state, response.StatusCode,
-            Caching.HttpResponseCacheMiddleware.Snapshot(response.Headers), response.HasBody, response.ContentLength,
+            Caching.CacheSessionSlot.Snapshot(response.Headers), response.HasBody, response.ContentLength,
             response.IsChunked);
         ApplyOriginCacheDecision(args, slot, state, response, decision);
     }
@@ -628,7 +628,7 @@ public partial class ProxyServer
         switch (decision.Action)
         {
             case OriginAction.Serve:
-                Caching.HttpResponseCacheMiddleware.RespondFromCache(args, decision.Serve!,
+                Caching.CacheSessionSlot.RespondFromCache(args, decision.Serve!,
                     closeServerConnection: response.HasBody && !response.IsBodyRead);
                 break;
 

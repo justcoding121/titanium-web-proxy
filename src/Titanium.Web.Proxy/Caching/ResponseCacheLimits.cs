@@ -5,6 +5,6 @@ namespace Titanium.Web.Proxy.Caching;
 /// </summary>
 internal static class ResponseCacheLimits
 {
-    /// <summary>64 KiB. Same value as <see cref="HttpResponseCacheMiddleware.MaxCachedBodyBytes"/>.</summary>
+    /// <summary>64 KiB. The Plus response cache stores the same ceiling on its middleware.</summary>
     internal const int MaxCachedBodyBytes = 64 * 1024;
 }

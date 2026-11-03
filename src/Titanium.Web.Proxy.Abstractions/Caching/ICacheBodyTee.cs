@@ -8,4 +8,10 @@ public interface ICacheBodyTee : IDisposable
 {
     /// <summary>Copies <paramref name="count"/> bytes from <paramref name="source"/> at <paramref name="offset"/>.</summary>
     void Append(byte[] source, int offset, int count);
+
+    /// <summary>
+    /// The accumulated body, or null when the tee overflowed or was released.
+    /// Called only from a session slot that already holds this tee.
+    /// </summary>
+    byte[]? ToArray();
 }

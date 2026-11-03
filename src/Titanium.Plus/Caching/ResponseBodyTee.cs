@@ -2,7 +2,7 @@ using System;
 using System.Buffers;
 using Titanium.Web.Proxy.Abstractions.Caching;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// Accumulates a streamed response body while it is relayed to the client, so it can be cached afterwards. It stops
@@ -82,74 +82,4 @@ internal sealed class ResponseBodyTee : ICacheBodyTee
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
-}
-
-/// <summary>
-/// The single per-session slot the response cache hangs its state on, so a session carries one reference that is
-/// null whenever the cache is off. Disposing the session releases any waiters and the staging buffer.
-/// </summary>
-internal sealed class CacheSessionSlot : IDisposable
-{
-    public ICacheRequestState? State;
-    public ICacheBodyTee? Tee;
-    public StorePlanHolder? Plan;
-
-    /// <summary>Start collecting the body that is about to be relayed, to store it under <paramref name="plan"/>.</summary>
-    public void BeginTee(ICacheRequestState state, CacheStorePlan plan, long expectedLength)
-    {
-        State = state;
-        Tee?.Dispose();
-        Tee = new ResponseBodyTee(state.Owner.MaxEntryBytes, expectedLength > 0 && expectedLength <= int.MaxValue ? (int)expectedLength : -1);
-        Plan = new StorePlanHolder { Plan = plan, ExpectedLength = expectedLength };
-    }
-
-    /// <summary>The caller already holds the whole body (a coalesced read): store it instead of using the tee.</summary>
-    public void StoreBuffered(byte[] body)
-    {
-        var tee = Tee;
-        Tee = null;
-        tee?.Dispose();
-        if (State is { } state && Plan is { } holder)
-        {
-            state.Owner.CompleteStore(state, holder.Plan, body, holder.ExpectedLength);
-        }
-    }
-
-    /// <summary>Called once the body was relayed in full: store it, or drop it when it outgrew the limit.</summary>
-    public void FinishStore()
-    {
-        var tee = Tee;
-        Tee = null;
-        if (tee is null || State is not { } state || Plan is not { } holder)
-        {
-            tee?.Dispose();
-            return;
-        }
-
-        byte[]? body;
-        try
-        {
-            body = ((ResponseBodyTee)tee).ToArray();
-        }
-        finally
-        {
-            tee.Dispose();
-        }
-
-        state.Owner.CompleteStore(state, holder.Plan, body, holder.ExpectedLength);
-    }
-
-    public void Dispose()
-    {
-        Tee?.Dispose();
-        Tee = null;
-        State?.Abandon();
-    }
-}
-
-/// <summary>Carries the store plan between the response-header decision and the end of the body copy.</summary>
-internal sealed class StorePlanHolder
-{
-    public required CacheStorePlan Plan { get; init; }
-    public long ExpectedLength { get; init; } = -1;
 }

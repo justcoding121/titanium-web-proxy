@@ -1,6 +1,6 @@
 using System;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// Behavior knobs for <see cref="HttpResponseCacheMiddleware"/>. Every default is the conservative choice:

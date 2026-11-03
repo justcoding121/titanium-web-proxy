@@ -229,7 +229,7 @@ public partial class ProxyServer
         request.IsBodyReceived = true;
         if (cacheState is not null)
         {
-            HttpResponseCacheMiddleware.ApplyConditionalHeaders(cacheState, request.Headers);
+            CacheSessionSlot.ApplyConditionalHeaders(cacheState, request.Headers);
         }
 
         // Remember before stripping hop-by-hop Connection for the origin write — NC clients send
@@ -352,7 +352,7 @@ public partial class ProxyServer
             if (cacheState is not null)
             {
                 cacheDecision = cacheState.Owner.OnOriginResponse(cacheState, response.StatusCode,
-                    Caching.HttpResponseCacheMiddleware.Snapshot(response.Headers), response.HasBody,
+                    CacheSessionSlot.Snapshot(response.Headers), response.HasBody,
                     response.ContentLength, response.IsChunked);
                 if (cacheDecision.Action == OriginAction.Serve)
                 {
@@ -862,10 +862,10 @@ public partial class ProxyServer
             ctx, cancellationToken).ConfigureAwait(false);
 
         if (!ctx.IsHandled && ctx.HandledStatusCode is null)
-            return (null, Caching.HttpResponseCacheMiddleware.StateOf(ctx));
+            return (null, CacheSessionSlot.StateOf(ctx));
 
         // Answered here (a cache hit or a middleware reply): nobody should be left waiting on this request.
-        Caching.HttpResponseCacheMiddleware.StateOf(ctx)?.Abandon();
+        CacheSessionSlot.StateOf(ctx)?.Abandon();
         await WriteTerminateLiteMiddlewareResponseAsync(clientStream, request, ctx, cancellationToken)
             .ConfigureAwait(false);
         return (!H1TerminateClientRequestedClose(request), null);
@@ -923,7 +923,7 @@ public partial class ProxyServer
         if (ctx.HandledIsCacheHit)
         {
             // Cached framing headers and a wire-encoded body: written as stored, never re-compressed or re-measured.
-            Caching.HttpResponseCacheMiddleware.Populate(response, ctx.HandledHeaders ?? [], ctx.HandledBodyBytes ?? []);
+            CacheSessionSlot.Populate(response, ctx.HandledHeaders ?? [], ctx.HandledBodyBytes ?? []);
         }
         else
         {

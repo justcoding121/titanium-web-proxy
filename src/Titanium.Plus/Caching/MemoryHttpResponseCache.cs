@@ -6,7 +6,7 @@ using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Diagnostics;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// In-process response cache bounded by bytes. Entries are charged for their body, headers and key; when the total

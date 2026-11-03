@@ -6,7 +6,7 @@ using System.Text;
 using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// The RFC 9111 subset the shared response cache implements, as pure functions of headers and a clock.

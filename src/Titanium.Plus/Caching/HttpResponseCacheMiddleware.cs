@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -14,7 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// Shared GET/HEAD response cache implementing an RFC 9111 subset (see <see cref="HttpCachePolicy"/>): freshness from
@@ -68,6 +69,10 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware, IResponseCac
 
     /// <summary>Largest body this cache will store.</summary>
     public int MaxEntryBytes => _options.MaxEntryBytes;
+
+    /// <inheritdoc />
+    public ICacheBodyTee CreateBodyTee(long expectedLength) =>
+        new ResponseBodyTee(MaxEntryBytes, expectedLength > 0 && expectedLength <= int.MaxValue ? (int)expectedLength : -1);
 
     internal bool ExposeHeaders => _options.ExposeHeaders;
 
@@ -518,32 +523,15 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware, IResponseCac
     }
 
     /// <summary>Answer a session with a cached response. Framing headers come from the cache; the body is already wire-encoded.</summary>
-    internal static void RespondFromCache(SessionEventArgs session, CachedServe serve, bool closeServerConnection)
-    {
-        var response = new GenericResponse((HttpStatusCode)serve.StatusCode);
-        response.HttpVersion = session.HttpClient.Request.HttpVersion;
-        Populate(response, serve.Headers, serve.Body);
-        session.Respond(response, closeServerConnection);
-    }
+    internal static void RespondFromCache(SessionEventArgs session, CachedServe serve, bool closeServerConnection) =>
+        CacheSessionSlot.RespondFromCache(session, serve, closeServerConnection);
 
-    /// <summary>
-    /// Fill a response from cached headers and an already wire-encoded body. The body goes first because assigning it
-    /// stamps a Content-Length; the stored one then replaces that, so a HEAD or 304 answer keeps the representation's
-    /// length with an empty body, and the body is never compressed a second time.
-    /// </summary>
+    /// <inheritdoc cref="CacheSessionSlot.Populate"/>
     internal static void Populate(
         Response response,
         IReadOnlyList<KeyValuePair<string, string>> headers,
-        byte[] body)
-    {
-        response.Body = body;
-        response.BodyIsWireEncoded = true;
-        response.Headers.RemoveHeader("Content-Length");
-        foreach (var h in headers)
-        {
-            response.Headers.AddHeader(h.Key, h.Value);
-        }
-    }
+        byte[] body) =>
+        CacheSessionSlot.Populate(response, headers, body);
 
     private static void RespondGatewayTimeout(ProxyMiddlewareContext context)
     {
@@ -570,24 +558,11 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware, IResponseCac
 
     /// <summary>The cache state a terminate-lite request carries out of the middleware chain, if any.</summary>
     internal static ICacheRequestState? StateOf(ProxyMiddlewareContext context) =>
-        context.Items.TryGetValue(StateItemKey, out var value) ? value as ICacheRequestState : null;
+        CacheSessionSlot.StateOf(context);
 
     /// <summary>Adds If-None-Match / If-Modified-Since from the stale entry to the request headed for the origin.</summary>
-    internal static void ApplyConditionalHeaders(ICacheRequestState st, HeaderCollection headers)
-    {
-        var (etag, modified) = st.Owner.ConditionalValidators(st);
-        if (etag is not null)
-        {
-            headers.RemoveHeader("If-None-Match");
-            headers.AddHeader("If-None-Match", etag);
-        }
-
-        if (modified is not null)
-        {
-            headers.RemoveHeader("If-Modified-Since");
-            headers.AddHeader("If-Modified-Since", modified);
-        }
-    }
+    internal static void ApplyConditionalHeaders(ICacheRequestState st, HeaderCollection headers) =>
+        CacheSessionSlot.ApplyConditionalHeaders(st, headers);
 
     /// <inheritdoc cref="IResponseCacheEngine.ConditionalValidators"/>
     public (string? IfNoneMatch, string? IfModifiedSince) ConditionalValidators(ICacheRequestState state)
@@ -965,16 +940,8 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware, IResponseCac
             });
     }
 
-    internal static List<KeyValuePair<string, string>> Snapshot(IEnumerable<HttpHeader> headers)
-    {
-        var list = new List<KeyValuePair<string, string>>();
-        foreach (var h in headers)
-        {
-            list.Add(new KeyValuePair<string, string>(h.Name, h.Value));
-        }
-
-        return list;
-    }
+    internal static List<KeyValuePair<string, string>> Snapshot(IEnumerable<HttpHeader> headers) =>
+        CacheSessionSlot.Snapshot(headers);
 }
 
 /// <summary>What the cache knows about one in-flight request between the middleware and the origin response.</summary>

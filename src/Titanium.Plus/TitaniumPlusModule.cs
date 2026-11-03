@@ -1,4 +1,5 @@
 using Titanium.Plus.Audit;
+using Titanium.Plus.Caching;
 using Titanium.Plus.Clusters;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
@@ -28,6 +29,10 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
     public void Apply(PlusActivationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Before the control plane (it purges this cache) and before access control, WAF, and shared state,
+        // so a cache hit stays ahead of those modules. The host's pre-Plus middleware, if any, is already in the list.
+        ResponseCacheConfiguration.Install(context);
 
         var options = context.Options ?? new Dictionary<string, string>();
         var secret = options.GetValueOrDefault("controlPlane.sharedSecret")

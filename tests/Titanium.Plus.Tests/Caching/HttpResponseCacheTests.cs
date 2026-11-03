@@ -6,15 +6,16 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
-using Titanium.Web.Proxy.Caching;
+using Titanium.Plus.Caching;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
 
-namespace Titanium.Web.Proxy.UnitTests.Caching;
+namespace Titanium.Plus.Tests;
 
 [TestClass]
 public class MemoryHttpResponseCacheTests

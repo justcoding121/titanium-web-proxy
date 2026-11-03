@@ -22,6 +22,7 @@
     <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Caching\rfc9111-vectors.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />
     <!-- Manager→agent config JSON fuzz corpus (tests/fuzz/README.md). -->
     <None Include="..\fuzz\corpus\manager-agent-config\**\*" Link="fuzz\corpus\manager-agent-config\%(Filename)%(Extension)"
