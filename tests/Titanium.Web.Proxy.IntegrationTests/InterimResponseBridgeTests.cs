@@ -124,44 +124,82 @@ public class InterimResponseBridgeTests
                 $"Request {i + 1}: expected HTTP/1.1 200 but got: '{statusLine}'.");
 
             var contentLength = -1;
+            var chunked = false;
             string? headerLine;
             while (!string.IsNullOrEmpty(headerLine = await reader.ReadLineAsync()))
+            {
                 if (headerLine.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                     contentLength = int.Parse(headerLine.Substring("Content-Length:".Length).Trim());
-
-            string body;
-            if (contentLength >= 0)
-            {
-                // Read exactly contentLength chars (ASCII: 1 byte = 1 char).
-                var bodyChars = new char[contentLength];
-                var bodyRead = 0;
-                while (bodyRead < contentLength)
-                {
-                    var n = await reader.ReadAsync(bodyChars.AsMemory(bodyRead, contentLength - bodyRead));
-                    if (n == 0) break;
-                    bodyRead += n;
-                }
-
-                body = new string(bodyChars, 0, bodyRead);
-            }
-            else
-            {
-                // No Content-Length (chunked / connection-close): read until we have the expected body.
-                var acc = new System.Text.StringBuilder();
-                var deadline = DateTime.UtcNow.AddSeconds(5);
-                while (acc.Length < 4 && DateTime.UtcNow < deadline)
-                {
-                    var buf = new char[16];
-                    var n = await reader.ReadAsync(buf.AsMemory());
-                    if (n == 0) break;
-                    acc.Append(buf, 0, n);
-                }
-
-                body = acc.ToString();
+                else if (headerLine.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                         && headerLine.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                    chunked = true;
             }
 
+            // A finished HTTP/2 body may already be complete (Content-Length) or still open (chunked)
+            // depending on scheduling. Either framing is correct; the decoded body bytes are the check.
+            var body = await ReadKeepAliveBodyAsync(reader, contentLength, chunked);
             Assert.AreEqual("pong", body, $"Request {i + 1}: unexpected body.");
         }
+    }
+
+    /// <summary>
+    ///     Reads one keep-alive response body without consuming past its framing, so the next response
+    ///     on the same <see cref="StreamReader" /> starts at the next status line.
+    /// </summary>
+    private static async Task<string> ReadKeepAliveBodyAsync(StreamReader reader, int contentLength, bool chunked)
+    {
+        if (contentLength >= 0)
+        {
+            var bodyChars = new char[contentLength];
+            var bodyRead = 0;
+            while (bodyRead < contentLength)
+            {
+                var n = await reader.ReadAsync(bodyChars.AsMemory(bodyRead, contentLength - bodyRead));
+                Assert.AreNotEqual(0, n, "Content-Length body ended before its declared length.");
+                bodyRead += n;
+            }
+
+            return new string(bodyChars, 0, bodyRead);
+        }
+
+        if (!chunked)
+        {
+            Assert.Fail("Keep-alive response had neither Content-Length nor chunked Transfer-Encoding.");
+            return string.Empty;
+        }
+
+        var body = new StringBuilder();
+        while (true)
+        {
+            var sizeLine = await reader.ReadLineAsync();
+            Assert.IsNotNull(sizeLine, "Chunked body ended before the zero chunk.");
+            var sizeText = sizeLine.Split(';')[0].Trim();
+            var size = Convert.ToInt32(sizeText, 16);
+            if (size == 0)
+            {
+                while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+                {
+                    // trailers
+                }
+
+                break;
+            }
+
+            var buffer = new char[size];
+            var read = 0;
+            while (read < size)
+            {
+                var n = await reader.ReadAsync(buffer.AsMemory(read, size - read));
+                Assert.AreNotEqual(0, n, "Chunk ended before its declared length.");
+                read += n;
+            }
+
+            body.Append(buffer);
+            var afterChunk = await reader.ReadLineAsync();
+            Assert.AreEqual(string.Empty, afterChunk, "Expected CRLF after a chunk.");
+        }
+
+        return body.ToString();
     }
 
     /// <summary>
