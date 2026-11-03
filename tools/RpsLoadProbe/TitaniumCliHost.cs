@@ -1049,60 +1049,60 @@ internal sealed class TitaniumCliHost : IDisposable
     private static void EnsurePlusDllBesideCli(string cliDir)
     {
         var dest = Path.Combine(cliDir, "Titanium.Plus.dll");
-        // rps-ab.yml (and similar) may already stage the Plus bundle beside the published CLI.
-        var staged = File.Exists(dest)
-            && File.Exists(Path.Combine(cliDir, "Titanium.Xds.dll"))
-            && File.Exists(Path.Combine(cliDir, "Titanium.Cli.GeoIp.dll"))
-            && File.Exists(Path.Combine(cliDir, "MaxMind.Db.dll"));
-        if (!staged)
+        // rps-ab.yml (and similar) may already stage Plus beside the published CLI. Do not require
+        // the full satellite set for that short-circuit: pre-bundle baselines only need Plus.dll for
+        // cache arms, and LocatePlus walks from the probe bin (not the product worktree).
+        if (File.Exists(dest))
         {
-            var plusDir = LocatePlusOutputDirectory();
-            var listed = new List<string>();
-            foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
+            return;
+        }
+
+        var plusDir = LocatePlusOutputDirectory();
+        var listed = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
+        {
+            var name = Path.GetFileName(file);
+            if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase) &&
+                !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
             {
-                var name = Path.GetFileName(file);
-                if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var target = Path.Combine(cliDir, name);
-                var existed = File.Exists(target);
-                var satellite = name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase)
-                    || name.Equals("Titanium.Xds.dll", StringComparison.OrdinalIgnoreCase)
-                    || name.Equals("Titanium.Cli.GeoIp.dll", StringComparison.OrdinalIgnoreCase)
-                    || name.Equals("MaxMind.Db.dll", StringComparison.OrdinalIgnoreCase);
-                if (existed && !satellite)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    File.Copy(file, target, overwrite: true);
-                }
-                catch (IOException) when (File.Exists(target))
-                {
-                    // Destination locked by a concurrent titanium host — keep existing copy.
-                }
-
-                if (!existed || satellite)
-                {
-                    listed.Add(name);
-                }
+                continue;
             }
 
-            listed.Add("Titanium.Plus.files");
-            listed.Sort(StringComparer.Ordinal);
+            var target = Path.Combine(cliDir, name);
+            var existed = File.Exists(target);
+            var satellite = name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Titanium.Xds.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Titanium.Cli.GeoIp.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("MaxMind.Db.dll", StringComparison.OrdinalIgnoreCase);
+            if (existed && !satellite)
+            {
+                continue;
+            }
+
             try
             {
-                File.WriteAllLines(Path.Combine(cliDir, "Titanium.Plus.files"), listed);
+                File.Copy(file, target, overwrite: true);
             }
-            catch (IOException)
+            catch (IOException) when (File.Exists(target))
             {
-                // A concurrent host may hold the list. The copied assemblies are what the arm needs.
+                // Destination locked by a concurrent titanium host — keep existing copy.
             }
+
+            if (!existed || satellite)
+            {
+                listed.Add(name);
+            }
+        }
+
+        listed.Add("Titanium.Plus.files");
+        listed.Sort(StringComparer.Ordinal);
+        try
+        {
+            File.WriteAllLines(Path.Combine(cliDir, "Titanium.Plus.files"), listed);
+        }
+        catch (IOException)
+        {
+            // A concurrent host may hold the list. The copied assemblies are what the arm needs.
         }
 
         if (!File.Exists(dest))
