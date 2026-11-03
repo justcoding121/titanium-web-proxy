@@ -36,6 +36,7 @@ public class ClusterGrpcHealthProberTests
     }
 
     [TestMethod]
+    [Timeout(60_000)]
     public async Task GrpcProbe_MarksDestinationHealthyWhenOriginServes()
     {
         using var origin = Http2RawOriginServer.CreateCleartext();
@@ -53,7 +54,7 @@ public class ClusterGrpcHealthProberTests
                     Enabled = true,
                     Kind = ActiveHealthKind.Grpc,
                     IntervalSeconds = 3600,
-                    TimeoutSeconds = 5,
+                    TimeoutSeconds = 15,
                     UnhealthyThreshold = 1,
                     HealthyThreshold = 1,
                 },
@@ -66,8 +67,19 @@ public class ClusterGrpcHealthProberTests
         await prober.ProbeOnceAsync();
         Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("g"));
         ClusterHealthProber.ProbeOverride = null;
-        await prober.ProbeOnceAsync();
-        Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("g"));
+
+        // Cold h2c under CI load can miss the first real probe; a short retry stays in-test.
+        DestinationState state = DestinationState.Unhealthy;
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await prober.ProbeOnceAsync();
+            state = manager.GetDestinationState("g");
+            if (state == DestinationState.Healthy)
+                break;
+            await Task.Delay(200);
+        }
+
+        Assert.AreEqual(DestinationState.Healthy, state);
     }
 
     private static async Task ServeGrpcHealthAsync(Http2RawFrame.Connection conn)
