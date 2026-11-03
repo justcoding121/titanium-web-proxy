@@ -26,30 +26,8 @@ internal sealed class GeoIpResolverHost : IDisposable
             return;
         }
 
-        if (!File.Exists(databasePath))
+        if (!TryReadWriteTicks(databasePath, startup, warn, out var writeTicks))
         {
-            if (startup)
-            {
-                throw new FileNotFoundException($"GeoIP database not found: {databasePath}", databasePath);
-            }
-
-            warn?.Invoke($"GeoIP reload skipped: database not found at '{databasePath}'. Keeping the previous resolver.");
-            return;
-        }
-
-        long writeTicks;
-        try
-        {
-            writeTicks = File.GetLastWriteTimeUtc(databasePath).Ticks;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (startup)
-            {
-                throw new InvalidOperationException($"GeoIP database is not readable: {databasePath}", ex);
-            }
-
-            warn?.Invoke($"GeoIP reload skipped: cannot read '{databasePath}' ({ex.Message}). Keeping the previous resolver.");
             return;
         }
 
@@ -73,17 +51,74 @@ internal sealed class GeoIpResolverHost : IDisposable
         }
         catch (Exception ex) when (ex is not FileNotFoundException)
         {
+            FailOrWarn(startup, warn, databasePath, ex, corrupt: true);
+        }
+    }
+
+    private static bool TryReadWriteTicks(
+        string databasePath,
+        bool startup,
+        Action<string>? warn,
+        out long writeTicks)
+    {
+        writeTicks = 0;
+        if (!File.Exists(databasePath))
+        {
+            FailOrWarn(
+                startup,
+                warn,
+                databasePath,
+                new FileNotFoundException($"GeoIP database not found: {databasePath}", databasePath),
+                corrupt: false);
+            return false;
+        }
+
+        try
+        {
+            writeTicks = File.GetLastWriteTimeUtc(databasePath).Ticks;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
             if (startup)
             {
-                var detail = ex;
-                while (detail.InnerException is not null)
-                    detail = detail.InnerException;
-                throw new InvalidOperationException(
-                    $"GeoIP database is corrupt or unreadable: {databasePath} ({detail.GetType().Name}: {detail.Message})", ex);
+                throw new InvalidOperationException($"GeoIP database is not readable: {databasePath}", ex);
             }
 
-            warn?.Invoke($"GeoIP reload failed for '{databasePath}' ({ex.Message}). Keeping the previous resolver.");
+            warn?.Invoke($"GeoIP reload skipped: cannot read '{databasePath}' ({ex.Message}). Keeping the previous resolver.");
+            return false;
         }
+    }
+
+    private static void FailOrWarn(
+        bool startup,
+        Action<string>? warn,
+        string databasePath,
+        Exception ex,
+        bool corrupt)
+    {
+        if (startup)
+        {
+            if (ex is FileNotFoundException missing)
+            {
+                throw missing;
+            }
+
+            var detail = ex;
+            while (detail.InnerException is not null)
+            {
+                detail = detail.InnerException;
+            }
+
+            throw new InvalidOperationException(
+                $"GeoIP database is corrupt or unreadable: {databasePath} ({detail.GetType().Name}: {detail.Message})",
+                ex);
+        }
+
+        warn?.Invoke(
+            corrupt
+                ? $"GeoIP reload failed for '{databasePath}' ({ex.Message}). Keeping the previous resolver."
+                : $"GeoIP reload skipped: database not found at '{databasePath}'. Keeping the previous resolver.");
     }
 
     private IGeoIpResolver? Swap(IGeoIpResolver? next) =>
@@ -130,6 +165,7 @@ internal sealed class GeoIpResolverHost : IDisposable
         {
             disposable.Dispose();
         }
+
         lock (_pendingDisposals)
         {
             foreach (var timer in _pendingDisposals)
