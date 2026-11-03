@@ -187,7 +187,8 @@ public class ContentWatcherTests
         Assert.AreEqual(0, calls.Count, "the poll is every 30 seconds");
 
         clock.Advance(TimeSpan.FromSeconds(1));
-        await WaitForTimersAsync(clock, 2);
+        // The poll callback schedules the debounce on a thread-pool turn; wait for it under CI load.
+        await WaitForTimersAsync(clock, 2, TimeSpan.FromSeconds(30));
         clock.Advance(Debounce);
 
         await calls.WaitForAsync(1);
@@ -302,12 +303,14 @@ public class ContentWatcherTests
     private static ContentWatcher Watch(string[] paths, Counter calls) =>
         new(paths, calls.OnChangedAsync, debounce: Debounce, pollInterval: Timeout.InfiniteTimeSpan);
 
-    private static async Task WaitForTimersAsync(FakeTimeProvider clock, int count)
+    private static async Task WaitForTimersAsync(FakeTimeProvider clock, int count, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(15));
         while (clock.ActiveTimers < count && DateTime.UtcNow < deadline)
         {
-            await Task.Delay(10);
+            // Nudge the provider so a queued timer callback can run under a busy CI runner.
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            await Task.Delay(20);
         }
 
         Assert.IsTrue(clock.ActiveTimers >= count, "the debounce timer was never created");

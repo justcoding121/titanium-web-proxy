@@ -1,0 +1,6 @@
+# Fixed admin token so helm template output is deterministic for CI snapshots.
+# Not a real credential; live installs leave dataPlane.admin.token.value empty and get a random token.
+dataPlane:
+  admin:
+    token:
+      value: ci-snapshot-admin-token-not-a-secret

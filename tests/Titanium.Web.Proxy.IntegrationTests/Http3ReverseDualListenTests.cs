@@ -65,6 +65,40 @@ public class Http3ReverseDualListenTests
         return proxy;
     }
 
+    private static bool IsAddressInUse(Exception ex)
+    {
+        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (cur is System.Net.Sockets.SocketException se &&
+                (se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse
+                 || se.NativeErrorCode is 10048 or 98))
+                return true;
+            if (cur.Message.Contains("Only one usage of each socket address", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static TransparentProxyEndPoint NewDualListenEndPoint(int forwardPort)
+    {
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        {
+            EnableHttp3 = true,
+            ForwardHost = "127.0.0.1",
+            ForwardPort = forwardPort,
+            ForwardCleartext = true,
+            GenericCertificateName = "localhost",
+            MaxInboundBidirectionalStreams = 100
+        };
+        endPoint.BeforeQuicAuthenticate += (_, args) =>
+        {
+            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            return Task.CompletedTask;
+        };
+        return endPoint;
+    }
+
     private static SocketsHttpHandler CreateHttpClientHandler(Version version)
     {
         return new SocketsHttpHandler
@@ -81,41 +115,52 @@ public class Http3ReverseDualListenTests
     }
 
     [TestMethod]
+    [Timeout(60_000)]
     public async Task HttpClient_Http3_RoundTrip_Via_DualListen()
     {
         RequireQuic();
 
         sharedServer.HandleRequest(context => context.Response.WriteAsync("h3-dual-ok"));
 
-        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
+        var forwardPort = new Uri(sharedServer.ListeningHttpUrl).Port;
+        ProxyServer? proxy = null;
+        TransparentProxyEndPoint? endPoint = null;
+        Exception? last = null;
+        for (var attempt = 1; attempt <= 8; attempt++)
         {
-            EnableHttp3 = true,
-            ForwardHost = "127.0.0.1",
-            ForwardPort = new Uri(sharedServer.ListeningHttpUrl).Port,
-            ForwardCleartext = true,
-            GenericCertificateName = "localhost",
-            MaxInboundBidirectionalStreams = 100
-        };
-        endPoint.BeforeQuicAuthenticate += (_, args) =>
+            endPoint = NewDualListenEndPoint(forwardPort);
+            try
+            {
+                // TCP binds first on port 0, then QUIC reuses that port. Retry when UDP is taken.
+                proxy = CreateDualListenProxy(endPoint);
+                break;
+            }
+            catch (Exception ex) when (IsAddressInUse(ex))
+            {
+                last = ex;
+                try { proxy?.Dispose(); } catch { /* best-effort */ }
+                proxy = null;
+            }
+        }
+
+        Assert.IsNotNull(proxy, "Dual-listen QUIC bind failed after retries: " + last);
+        Assert.IsNotNull(endPoint);
+        using (proxy)
         {
-            args.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
-            return Task.CompletedTask;
-        };
+            using var handler = CreateHttpClientHandler(HttpVersion.Version30);
+            using var client = new HttpClient(handler)
+            {
+                DefaultRequestVersion = HttpVersion.Version30,
+                DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
+            };
 
-        using var proxy = CreateDualListenProxy(endPoint);
-        using var handler = CreateHttpClientHandler(HttpVersion.Version30);
-        using var client = new HttpClient(handler)
-        {
-            DefaultRequestVersion = HttpVersion.Version30,
-            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
-        };
+            using var response = await client.GetAsync($"https://localhost:{endPoint!.Port}/");
+            var body = await response.Content.ReadAsStringAsync();
 
-        using var response = await client.GetAsync($"https://localhost:{endPoint.Port}/");
-        var body = await response.Content.ReadAsStringAsync();
-
-        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
-        Assert.AreEqual(HttpVersion.Version30, response.Version);
-        Assert.AreEqual("h3-dual-ok", body);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
+            Assert.AreEqual(HttpVersion.Version30, response.Version);
+            Assert.AreEqual("h3-dual-ok", body);
+        }
     }
 
     /// <summary>

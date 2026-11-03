@@ -31,7 +31,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 /// </summary>
 internal sealed class Http2RawOriginServer : IDisposable
 {
-    private readonly TcpListener listener;
+    private readonly TcpListener[] listeners;
     private readonly X509Certificate2? certificate;
     private readonly bool cleartext;
     private readonly TimeSpan handshakeDelay;
@@ -62,12 +62,12 @@ internal sealed class Http2RawOriginServer : IDisposable
         this.certificate = certificate;
         this.cleartext = cleartext;
         this.handshakeDelay = handshakeDelay;
-        listener = TcpListener.Create(0);
-        listener.Start();
-        _ = AcceptLoopAsync();
+        listeners = LoopbackTcpListen.Start();
+        foreach (var listener in listeners)
+            _ = AcceptLoopAsync(listener);
     }
 
-    public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
+    public int Port => ((IPEndPoint)listeners[0].LocalEndpoint).Port;
 
     public string Url => cleartext ? $"http://127.0.0.1:{Port}/" : $"https://localhost:{Port}/";
 
@@ -92,7 +92,7 @@ internal sealed class Http2RawOriginServer : IDisposable
         handler = connectionHandler;
     }
 
-    private async Task AcceptLoopAsync()
+    private async Task AcceptLoopAsync(TcpListener listener)
     {
         while (!disposed)
         {
@@ -203,6 +203,7 @@ internal sealed class Http2RawOriginServer : IDisposable
     public void Dispose()
     {
         disposed = true;
-        listener.Stop();
+        foreach (var listener in listeners)
+            listener.Stop();
     }
 }

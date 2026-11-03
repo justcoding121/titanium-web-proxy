@@ -16,6 +16,26 @@ namespace Titanium.Plus.Tests;
 public class ServiceDiscoveryHardeningTests
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    ///     The discovery loop re-reads the projected token while a test rotates it.
+    ///     Windows can refuse the write for the moment that read has the file open.
+    /// </summary>
+    private static async Task WriteTokenAsync(string path, string text)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await File.WriteAllTextAsync(path, text);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                await Task.Delay(50);
+            }
+        }
+    }
     private static readonly string[] K8sAddress10003 = ["10.0.0.3"];
     private static readonly string[] K8sAddress10001 = ["10.0.0.1"];
     private static readonly string[] K8sAddresses10001And10003 = ["10.0.0.1", "10.0.0.3"];
@@ -290,7 +310,7 @@ public class ServiceDiscoveryHardeningTests
             });
 
             await WaitUntilAsync(() => api.Requests.Any(r => r.IsWatch));
-            await File.WriteAllTextAsync(Path.Combine(sa, "token"), "token-two\n");
+            await WriteTokenAsync(Path.Combine(sa, "token"), "token-two\n");
             release.TrySetResult();
             await WaitUntilAsync(() => api.Requests.Count(r => r.IsWatch) >= 2);
 
@@ -336,7 +356,7 @@ public class ServiceDiscoveryHardeningTests
             });
 
             await WaitUntilAsync(() => api.Requests.Length >= 1);
-            await File.WriteAllTextAsync(Path.Combine(sa, "token"), "fresh");
+            await WriteTokenAsync(Path.Combine(sa, "token"), "fresh");
             await WaitUntilAsync(() => Addresses(manager, "k8s").SequenceEqual(["10.0.0.1"]));
         }
         finally

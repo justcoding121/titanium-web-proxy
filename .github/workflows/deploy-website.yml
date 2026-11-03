@@ -45,6 +45,33 @@ jobs:
           cache: npm
           cache-dependency-path: website/package-lock.json
 
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Capability tests and relative links
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet test tests/Titanium.Web.Proxy.Configuration.Tests -c Release --filter "FullyQualifiedName~CapabilityCoverageTests" --nologo
+          python3 - <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path("website")
+          missing = []
+          for page in root.rglob("*.md"):
+              text = page.read_text(encoding="utf-8", errors="replace")
+              for match in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+                  target = match.split("#", 1)[0].strip()
+                  if not target or target.startswith(("http://", "https://", "mailto:", "/")):
+                      continue
+                  candidate = (page.parent / target).resolve()
+                  if not candidate.exists():
+                      missing.append(f"{page}: {target}")
+          if missing:
+              print("\n".join(missing[:40]))
+              sys.exit(1)
+          PY
+
       - name: Install and build
         working-directory: website
         env:

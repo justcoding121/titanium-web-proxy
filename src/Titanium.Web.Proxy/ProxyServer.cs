@@ -461,13 +461,19 @@ public partial class ProxyServer : IDisposable
         if (!ClientHandshakeRejects.RecordFailure(host, DateTime.UtcNow))
             return false;
 
-        if (DecryptFailureBypassCache.MarkBypassed(host))
+        // Mark under the cache write gate, then re-check through IsBypassActive (also gated) so a
+        // concurrent trim/evict cannot leave the caller with "tripped" but "not bypassing".
+        var becameActive = DecryptFailureBypassCache.MarkBypassed(host);
+        if (!DecryptFailureBypassCache.IsBypassActive(host))
+            becameActive = DecryptFailureBypassCache.MarkBypassed(host) || becameActive;
+
+        if (becameActive)
         {
             ProxyLog.ClientRejectedCertificateBypassLearned(logger, host, ClientHandshakeRejects.Threshold);
             RaiseDecryptFailureBypassChanged(host);
         }
 
-        return true;
+        return DecryptFailureBypassCache.IsBypassActive(host);
     }
 
     /// <summary>

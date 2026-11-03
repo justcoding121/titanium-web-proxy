@@ -1,0 +1,169 @@
+---
+# Source: titanium-manager/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rel-titanium-manager
+  labels:
+    helm.sh/chart: titanium-manager-0.1.0
+    app.kubernetes.io/name: titanium-manager
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+automountServiceAccountToken: false
+---
+# Source: titanium-manager/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rel-titanium-manager-admin
+  labels:
+    helm.sh/chart: titanium-manager-0.1.0
+    app.kubernetes.io/name: titanium-manager
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+data:
+  admin-token: "Y2ktc25hcHNob3QtYWRtaW4tdG9rZW4tbm90LWEtc2VjcmV0"
+---
+# Source: titanium-manager/templates/pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rel-titanium-manager
+  labels:
+    helm.sh/chart: titanium-manager-0.1.0
+    app.kubernetes.io/name: titanium-manager
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Source: titanium-manager/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: rel-titanium-manager
+  labels:
+    helm.sh/chart: titanium-manager-0.1.0
+    app.kubernetes.io/name: titanium-manager
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: manager
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 7700
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: titanium-manager
+    app.kubernetes.io/instance: rel
+---
+# Source: titanium-manager/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rel-titanium-manager
+  labels:
+    helm.sh/chart: titanium-manager-0.1.0
+    app.kubernetes.io/name: titanium-manager
+    app.kubernetes.io/instance: rel
+    app.kubernetes.io/version: "7.0.27"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: titanium-manager
+      app.kubernetes.io/instance: rel
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: titanium-manager-0.1.0
+        app.kubernetes.io/name: titanium-manager
+        app.kubernetes.io/instance: rel
+        app.kubernetes.io/version: "7.0.27"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: rel-titanium-manager
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        fsGroup: 1654
+        runAsGroup: 1654
+        runAsNonRoot: true
+        runAsUser: 1654
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: "ghcr.io/justcoding121/titanium-manager:7.0.27"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+          # Image ENTRYPOINT already sets --listen and --db; admin token comes from the env.
+          ports:
+            - name: http
+              containerPort: 7700
+              protocol: TCP
+          env:
+            - name: TITANIUM_MANAGER_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rel-titanium-manager-admin
+                  key: admin-token
+          startupProbe:
+            httpGet:
+              path: /v1/healthz
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /v1/healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/healthz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          resources:
+            limits:
+              ephemeral-storage: 1Gi
+              memory: 512Mi
+            requests:
+              cpu: 50m
+              ephemeral-storage: 128Mi
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/titanium-manager
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: rel-titanium-manager
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

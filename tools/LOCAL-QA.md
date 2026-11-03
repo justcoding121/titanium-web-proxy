@@ -1,5 +1,7 @@
 # Local QA recipe (solo / per-OS)
 
+Unattended runs use `tools/run-tests.ps1`. It sets `TITANIUM_SKIP_ROOT_STORE_UI=1` and `TITANIUM_NO_ELEVATE=1`, blames hangs at 5 minutes, and with `-Verify` fails if a certificate dialog, a non-loopback listen, or a machine-state change shows up. A developer test host refuses a QUIC listen and marks that test inconclusive unless `TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1`, because MsQuic reports a loopback listen as a wildcard UDP socket. Leave that opt-in unset on this PC. If a firewall dialog still appears, click Cancel. `tools/test-hygiene/Remove-TwpCertificates.ps1` and `Remove-TestFirewallRules.ps1` are dry-run unless `-Apply` is passed. Firewall removal needs an elevated window. Do not click Yes on a certificate install prompt on a developer PC.
+
 CLI and CLI Plus command-tree / control-plane process E2E runs in CI on **Windows, Linux, and macOS** (`cli-e2e` job, `TestCategory=E2E`). You do not need CliQaProbe for day-to-day command coverage.
 
 ```powershell

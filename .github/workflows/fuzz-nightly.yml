@@ -1,0 +1,21 @@
+name: fuzz-nightly
+
+on:
+  schedule:
+    - cron: '29 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Crash-only parser mutations
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj -c Release --filter "TestCategory=Fuzz-Nightly|FullyQualifiedName~ParserCorpusRunnerTests" --nologo
