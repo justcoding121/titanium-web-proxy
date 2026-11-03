@@ -1,3 +1,39 @@
 DnsClient (https://github.com/MichaCo/DnsClient.NET)
   License: Apache License 2.0
   Used by: Titanium.Plus (DNS SRV service discovery, dnsSrv mode only)
+
+BCrypt.Net-Next (https://github.com/BcryptNet/bcrypt.net)
+  License: MIT
+  Used by: Titanium.Plus (basic-auth password hashes)
+
+StackExchange.Redis (https://github.com/StackExchange/StackExchange.Redis)
+  License: MIT
+  Used by: Titanium.Plus (shared state / fleet rate limit)
+
+System.IdentityModel.Tokens.Jwt / Microsoft.IdentityModel.* (https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet)
+  License: MIT
+  Used by: Titanium.Plus (JWT validation, OpenID Connect)
+
+YamlDotNet (https://github.com/aaubry/YamlDotNet)
+  License: MIT
+  Used by: Titanium.Plus
+
+Google.Protobuf (https://github.com/protocolbuffers/protobuf)
+  License: BSD-3-Clause (NuGet license expression)
+  Used by: Titanium.Plus (gRPC-JSON), Titanium.Xds (ADS)
+
+Google.Api.CommonProtos (https://github.com/googleapis/api-common-protos)
+  License: BSD-3-Clause (NuGet license expression)
+  Used by: Titanium.Plus (gRPC-JSON)
+
+Grpc.Net.Client / Grpc.Net.Common / Grpc.Core.Api (https://github.com/grpc/grpc-dotnet)
+  License: Apache License 2.0
+  Used by: Titanium.Xds (ADS client)
+
+MaxMind.Db (https://github.com/maxmind/MaxMind-DB-Reader-dotnet)
+  License: Apache License 2.0
+  Used by: Titanium.Cli.GeoIp
+
+Vendored xDS protocol buffer definitions under src/Titanium.Xds/protos/
+  License: Apache License 2.0 (see src/Titanium.Xds/NOTICE)
+  Used by: Titanium.Xds

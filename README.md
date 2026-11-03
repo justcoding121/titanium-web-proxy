@@ -152,4 +152,9 @@ Actively maintained by [justcoding121](https://github.com/justcoding121). Past c
 
 ## License
 
-Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector and Titanium.Plus are [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt).
+Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector, Titanium.Plus, Titanium.Xds, and Titanium.Cli.GeoIp are [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protos keep their Apache-2.0 NOTICE under `src/Titanium.Xds/NOTICE`.
+
+| Folder | License |
+|--------|---------|
+| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli` (except GeoIp), `src/Titanium.Manager`, examples, website | MIT |
+| `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp` | PolyForm Noncommercial 1.0.0 |
