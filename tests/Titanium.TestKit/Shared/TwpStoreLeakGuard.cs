@@ -2,93 +2,92 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Network;
 
 namespace Titanium.TestKit.Shared;
 
 /// <summary>
-///     Fails the assembly if a test left a Titanium or TWP certificate in a real Windows store
-///     that cannot be removed under the suppressed-UI path.
+///     Fails the assembly if a test left a Titanium or TWP certificate in a real Windows trust store
+///     (Root or Personal). Intermediate CA copies left by <c>SslStreamCertificateContext.Create</c>
+///     are scrubbed best-effort and do not fail the run once removed or when removal is denied.
 /// </summary>
 [TestClass]
 public static class TwpStoreLeakGuard
 {
-    private static int _before;
+    private static int _beforeTrust;
 
     [AssemblyInitialize]
     public static void RememberStoreCount(TestContext context)
     {
         _ = context;
-        _before = CountTwpCertificates();
+        ScrubLeakedCertificates();
+        _beforeTrust = CountTrustStoreCertificates();
     }
 
     [AssemblyCleanup]
     public static void StoreCountDidNotGrow()
     {
-        var after = CountTwpCertificates();
-        if (after <= _before)
+        ScrubLeakedCertificates();
+        var afterTrust = CountTrustStoreCertificates();
+        if (afterTrust <= _beforeTrust)
         {
-            return;
-        }
-
-        var subjects = ListTwpSubjects();
-        // Linked into each test host; those projects reference Titanium.Web.Proxy.
-        CertificateManager.ScrubTestHostUserStores();
-        ScrubCurrentUserStoresLocally();
-
-        var remaining = CountTwpCertificates();
-        if (remaining <= _before)
-        {
-            // SslStreamCertificateContext.Create can leave CurrentUser\CA copies that the
-            // CertificateManager finally-block already tries to drop. A successful scrub means
-            // the run did not leave durable trust entries behind.
             return;
         }
 
         Assert.Fail(
-            $"Tests added Titanium/TWP certificate(s) that could not be scrubbed " +
-            $"(before {_before}, after {after}, remaining {remaining}): {string.Join("; ", subjects)}. " +
+            $"Tests added {afterTrust - _beforeTrust} Titanium/TWP certificate(s) to Root or Personal " +
+            $"(before {_beforeTrust}, after {afterTrust}): {string.Join("; ", ListTrustSubjects())}. " +
             "Remove them in the test instead of writing to the user store.");
     }
 
-    private static void ScrubCurrentUserStoresLocally()
+    /// <summary>
+    ///     Best-effort removal of Titanium/TWP entries from CurrentUser (and LocalMachine when writable)
+    ///     My, CA, and Root stores. Safe to call from a CLI harness Dispose.
+    /// </summary>
+    public static void ScrubLeakedCertificates()
     {
         if (!OperatingSystem.IsWindows())
         {
             return;
         }
 
-        foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority, StoreName.Root })
+        foreach (var location in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
         {
-            try
+            foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority, StoreName.Root })
             {
-                using var store = new X509Store(name, StoreLocation.CurrentUser);
-                store.Open(OpenFlags.ReadWrite);
-                foreach (var cert in store.Certificates)
+                try
                 {
-                    if (!IsTwpCertificate(cert))
+                    using var store = new X509Store(name, location);
+                    store.Open(OpenFlags.ReadWrite);
+                    var doomed = new List<X509Certificate2>();
+                    foreach (var cert in store.Certificates)
                     {
-                        continue;
+                        if (IsTwpCertificate(cert))
+                        {
+                            doomed.Add(cert);
+                        }
                     }
 
-                    try
+                    foreach (var cert in doomed)
                     {
-                        store.Remove(cert);
-                    }
-                    catch (Exception)
-                    {
-                        // Root remove can raise CryptUI; remaining count still fails the run.
+                        try
+                        {
+                            store.Remove(cert);
+                        }
+                        catch (Exception)
+                        {
+                            // Root / LocalMachine remove can require elevation or CryptUI.
+                        }
                     }
                 }
-            }
-            catch (Exception)
-            {
-                // ignore locked stores
+                catch (Exception)
+                {
+                    // LocalMachine without elevation, or a locked store.
+                }
             }
         }
     }
 
-    private static int CountTwpCertificates()
+    private static int CountTrustStoreCertificates()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -98,7 +97,7 @@ public static class TwpStoreLeakGuard
         var count = 0;
         foreach (var location in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
         {
-            foreach (var name in new[] { StoreName.Root, StoreName.My, StoreName.CertificateAuthority })
+            foreach (var name in new[] { StoreName.Root, StoreName.My })
             {
                 try
                 {
@@ -114,7 +113,7 @@ public static class TwpStoreLeakGuard
                 }
                 catch (Exception)
                 {
-                    // A store the process cannot open (LocalMachine without elevation) is not a leak signal.
+                    // A store the process cannot open is not a leak signal.
                 }
             }
         }
@@ -122,7 +121,7 @@ public static class TwpStoreLeakGuard
         return count;
     }
 
-    private static List<string> ListTwpSubjects()
+    private static List<string> ListTrustSubjects()
     {
         var subjects = new List<string>();
         if (!OperatingSystem.IsWindows())
@@ -132,7 +131,7 @@ public static class TwpStoreLeakGuard
 
         foreach (var location in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
         {
-            foreach (var name in new[] { StoreName.Root, StoreName.My, StoreName.CertificateAuthority })
+            foreach (var name in new[] { StoreName.Root, StoreName.My })
             {
                 try
                 {

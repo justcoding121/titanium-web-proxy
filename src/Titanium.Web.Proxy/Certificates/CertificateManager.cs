@@ -1352,7 +1352,7 @@ public sealed class CertificateManager : IDisposable
     ///     Removes CurrentUser My/CA/Root entries whose subject or issuer looks like a Titanium test
     ///     certificate. Used only when interactive root-store mutations are suppressed.
     /// </summary>
-    public static void ScrubTestHostUserStores()
+    private static void ScrubTestHostUserStores()
     {
         if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
             return;
@@ -1363,6 +1363,7 @@ public sealed class CertificateManager : IDisposable
             {
                 using var store = new X509Store(name, StoreLocation.CurrentUser);
                 store.Open(OpenFlags.ReadWrite);
+                var doomed = new List<X509Certificate2>();
                 foreach (var cert in store.Certificates)
                 {
                     var text = cert.Subject + " " + cert.Issuer;
@@ -1372,14 +1373,19 @@ public sealed class CertificateManager : IDisposable
                         text.Contains("Acme Corp", StringComparison.Ordinal) ||
                         text.Contains("Acme Root CA", StringComparison.Ordinal))
                     {
-                        try
-                        {
-                            store.Remove(cert);
-                        }
-                        catch (CryptographicException)
-                        {
-                            // Root remove can still raise CryptUI; suppress skips interactive Root writes.
-                        }
+                        doomed.Add(cert);
+                    }
+                }
+
+                foreach (var cert in doomed)
+                {
+                    try
+                    {
+                        store.Remove(cert);
+                    }
+                    catch (CryptographicException)
+                    {
+                        // Root remove can still raise CryptUI; suppress skips interactive Root writes.
                     }
                 }
             }
