@@ -58,7 +58,7 @@ jobs:
 
       # Both architectures must build; only the runner's own is loaded for the run test below.
       - name: Build linux/amd64 and linux/arm64 (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile
@@ -69,7 +69,7 @@ jobs:
 
       # The Gateway API controller image builds for both architectures too.
       - name: Build the titanium-gateway image for linux/amd64 and linux/arm64 (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.gateway
@@ -80,7 +80,7 @@ jobs:
 
       # Manager control-plane image (same multi-arch contract as CLI/gateway).
       - name: Build the titanium-manager image for linux/amd64 and linux/arm64 (no push)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.manager
@@ -90,7 +90,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build linux/amd64 and load it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile
@@ -148,7 +148,7 @@ jobs:
           test "$(docker inspect twp --format '{{.State.ExitCode}}')" = "0" || { docker logs twp; exit 1; }
 
       - name: Build titanium-gateway linux/amd64 and load it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.gateway
@@ -162,7 +162,7 @@ jobs:
           cache-from: type=gha
 
       - name: Build titanium-manager linux/amd64 and load it
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.manager

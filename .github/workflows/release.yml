@@ -934,7 +934,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -950,7 +950,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile
@@ -997,7 +997,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1013,7 +1013,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.gateway
@@ -1060,7 +1060,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1076,7 +1076,7 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
             type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: tools/packaging/docker/Dockerfile.manager
