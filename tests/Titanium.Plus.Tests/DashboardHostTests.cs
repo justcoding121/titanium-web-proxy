@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
@@ -13,13 +14,12 @@ using Titanium.Web.Proxy.Clusters;
 namespace Titanium.Plus.Tests;
 
 [TestClass]
-public class DashboardHostTests
+public partial class DashboardHostTests
 {
     private static readonly string[] DashboardLeakProbePaths = ["api/snapshot", "api/no-such", "routes", "%00"];
 
-    private static readonly System.Text.RegularExpressions.Regex StackLeakPattern = new(
-        @"at Titanium\.|StackTrace|System\.Exception",
-        System.Text.RegularExpressions.RegexOptions.Compiled);
+    [GeneratedRegex(@"at Titanium\.|StackTrace|System\.Exception")]
+    private static partial Regex StackLeakPattern();
 
     [TestMethod]
     public async Task Dashboard_RequiresSecret_AndSupportsAdminRoutes()
@@ -101,7 +101,7 @@ public class DashboardHostTests
             var response = await http.GetAsync(dash.Prefix + path);
             var body = await response.Content.ReadAsStringAsync();
             Assert.IsFalse(
-                StackLeakPattern.IsMatch(body),
+                StackLeakPattern().IsMatch(body),
                 path + " leaked " + body);
             Assert.AreNotEqual(HttpStatusCode.InternalServerError, response.StatusCode, path);
         }
