@@ -46,36 +46,33 @@ public class CertificateStoreWriteSuppressionTests
             return;
         }
 
-        var before = CountSubjects();
         using var manager = new CertificateManager(
             IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
         };
         Assert.IsTrue(manager.CreateRootCertificate(persistToFile: false));
+        var root = manager.RootCertificate;
+        Assert.IsNotNull(root);
         using var leaf = manager.CreateServerCertificate("store-leak.example").GetAwaiter().GetResult();
         Assert.IsNotNull(leaf);
         _ = manager.CreateSslCertificateContext(leaf!);
-        Assert.AreEqual(before, CountSubjects(), "A test host must not leave the root or leaf in a real store.");
+
+        // Count only this fixture's thumbprints. A global Titanium subject count races with
+        // parallel unit tests that also create short-lived roots.
+        Assert.AreEqual(0, Count(root!.Thumbprint), "Root must not remain in CurrentUser\\CA.");
+        Assert.AreEqual(0, CountInStores(root.Thumbprint), "Root must not remain in My/Root/CA.");
+        Assert.AreEqual(0, CountInStores(leaf!.Thumbprint), "Leaf must not remain in My/Root/CA.");
     }
 
-    private static int CountSubjects()
+    private static int CountInStores(string thumbprint)
     {
         var count = 0;
         foreach (var name in new[] { StoreName.Root, StoreName.My, StoreName.CertificateAuthority })
         {
             using var store = new X509Store(name, StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadOnly | OpenFlags.OpenExistingOnly);
-            foreach (var cert in store.Certificates)
-            {
-                var text = cert.Subject + " " + cert.Issuer;
-                if (text.Contains("Titanium", StringComparison.Ordinal) ||
-                    text.Contains("twp-", StringComparison.Ordinal) ||
-                    text.Contains("Acme Corp", StringComparison.Ordinal))
-                {
-                    count++;
-                }
-            }
+            count += store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly: false).Count;
         }
 
         return count;
