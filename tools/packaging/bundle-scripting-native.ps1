@@ -219,10 +219,13 @@ function Get-HostMachineArch {
 }
 
 function Test-HostCanBuildRid {
+    $allowCross = $env:TITANIUM_SCRIPTING_ALLOW_CROSS -eq "1"
     $arch = Get-HostMachineArch
     $wantArm = $Rid -like "*arm64"
     $hostArm = $arch -eq "arm64"
-    if ($wantArm -ne $hostArm) { return "host arch $arch cannot build $Rid natively" }
+    if (-not $allowCross -and ($wantArm -ne $hostArm)) {
+        return "host arch $arch cannot build $Rid natively"
+    }
 
     if ($Rid -like "win-*") {
         if (-not (Test-IsWindowsHost)) { return "$Rid must be built on Windows" }
@@ -237,7 +240,9 @@ function Test-HostCanBuildRid {
     }
     elseif ($Rid -like "linux-*") {
         if (-not (Test-IsLinuxHost)) { return "$Rid must be built on Linux" }
-        if (Test-Path "/etc/alpine-release") { return "$Rid (glibc) must not be built on a musl host" }
+        if (-not $allowCross -and (Test-Path "/etc/alpine-release")) {
+            return "$Rid (glibc) must not be built on a musl host"
+        }
     }
     return $null
 }
@@ -297,10 +302,12 @@ function Bundle-Lua {
             else { Skip-Lua "neither cl nor gcc found on PATH"; return }
         }
         else {
-            $cc = Find-Tool "cc"
+            # Prefer CC (e.g. aarch64-linux-gnu-gcc for Docker cross builds on BUILDPLATFORM).
+            $cc = $env:CC
+            if ([string]::IsNullOrWhiteSpace($cc)) { $cc = Find-Tool "cc" }
             if (-not $cc) { $cc = Find-Tool "gcc" }
             if (-not $cc) { $cc = Find-Tool "clang" }
-            if (-not $cc) { Skip-Lua "no C compiler (cc/gcc/clang) found"; return }
+            if (-not $cc) { Skip-Lua "no C compiler (CC/cc/gcc/clang) found"; return }
 
             if ($Rid -like "osx-*") {
                 Invoke-Native $cc (@("-O2", "-dynamiclib", "-fPIC", "-DLUA_USE_MACOSX", "-I$srcDir", "-I$shimDir",
