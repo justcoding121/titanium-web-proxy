@@ -92,12 +92,17 @@ internal static class Program
         var buttons = title.Contains("Security", StringComparison.Ordinal) && title.Contains("Warning", StringComparison.Ordinal)
             ? new[] { "&Yes", "&No" }
             : new[] { "Allow access", "Cancel" };
+        // Keep the fixture off-screen. The titles match real OS prompts so PromptGuard can find
+        // them, but a developer watching unit tests should not see a flash of Yes/No or Allow/Cancel.
         using var form = new Form
         {
             Text = title,
             Width = 420,
             Height = 180,
-            StartPosition = FormStartPosition.CenterScreen,
+            StartPosition = FormStartPosition.Manual,
+            Location = new System.Drawing.Point(-32000, -32000),
+            ShowInTaskbar = false,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
         };
         var left = 20;
         foreach (var label in buttons)
