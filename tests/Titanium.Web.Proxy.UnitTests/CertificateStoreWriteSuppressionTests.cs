@@ -46,23 +46,28 @@ public class CertificateStoreWriteSuppressionTests
             return;
         }
 
-        using var manager = new CertificateManager(
-            IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
+        string rootThumb;
+        string leafThumb;
+        using (var manager = new CertificateManager(
+                   IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
+               {
+                   CertificateEngine = CertificateEngine.BouncyCastle,
+               })
         {
-            CertificateEngine = CertificateEngine.BouncyCastle,
-        };
-        Assert.IsTrue(manager.CreateRootCertificate(persistToFile: false));
-        var root = manager.RootCertificate;
-        Assert.IsNotNull(root);
-        using var leaf = manager.CreateServerCertificate("store-leak.example").GetAwaiter().GetResult();
-        Assert.IsNotNull(leaf);
-        _ = manager.CreateSslCertificateContext(leaf!);
+            Assert.IsTrue(manager.CreateRootCertificate(persistToFile: false));
+            var root = manager.RootCertificate;
+            Assert.IsNotNull(root);
+            rootThumb = root!.Thumbprint;
+            using var leaf = manager.CreateServerCertificate("store-leak.example").GetAwaiter().GetResult();
+            Assert.IsNotNull(leaf);
+            leafThumb = leaf!.Thumbprint;
+            _ = manager.CreateSslCertificateContext(leaf);
+        }
 
-        // Count only this fixture's thumbprints. A global Titanium subject count races with
-        // parallel unit tests that also create short-lived roots.
-        Assert.AreEqual(0, Count(root!.Thumbprint), "Root must not remain in CurrentUser\\CA.");
-        Assert.AreEqual(0, CountInStores(root.Thumbprint), "Root must not remain in My/Root/CA.");
-        Assert.AreEqual(0, CountInStores(leaf!.Thumbprint), "Leaf must not remain in My/Root/CA.");
+        // SslStreamCertificateContext can keep a CA store copy alive until the manager (and its
+        // cached contexts) are disposed. Assert after Dispose, by this fixture's thumbprints only.
+        Assert.AreEqual(0, CountInStores(rootThumb), "Root must not remain in My/Root/CA after Dispose.");
+        Assert.AreEqual(0, CountInStores(leafThumb), "Leaf must not remain in My/Root/CA after Dispose.");
     }
 
     private static int CountInStores(string thumbprint)

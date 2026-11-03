@@ -2192,6 +2192,9 @@ public sealed class CertificateManager : IDisposable
 
             // Do not dispose rootCertificate: ownership may belong to the caller.
             rootCertificate = null;
+
+            // Drop SslStreamCertificateContext.Create side effects after the cached contexts are gone.
+            ScrubTestHostUserStores();
         }
 
         disposed = true;
