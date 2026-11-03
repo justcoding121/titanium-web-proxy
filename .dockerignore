@@ -1,4 +1,5 @@
-# Build context is the repository root; keep it small. The Dockerfile only needs global.json, NuGet.config and src/.
+# Build context is the repository root; keep it small. The Dockerfile needs global.json, NuGet.config, src/,
+# plus tools/packaging + tools/scripting for Lua/Wasmtime natives in the CLI image.
 **/bin/
 **/obj/
 **/node_modules/
@@ -17,5 +18,10 @@ docs/
 examples/
 benchmarks/
 tests/
-tools/
+tools/*
+!tools/packaging/
+!tools/packaging/**
+!tools/scripting/
+!tools/scripting/**
+tools/packaging/.cache/
 *.log
