@@ -201,8 +201,25 @@ function Skip-Lua([string] $reason) {
     Write-Warn "skipping Lua ($reason). Scripting will report lua as missing until built; see tools/scripting/README.md."
 }
 
+function Get-HostMachineArch {
+    # Prefer uname on Unix: under buildx QEMU, RuntimeInformation still reports the builder host
+    # (x64) while the container is arm64 and gcc emits arm64 objects.
+    if ((Test-IsLinuxHost) -or (Test-IsMacHost)) {
+        $uname = Find-Tool "uname"
+        if ($uname) {
+            try {
+                $m = (& $uname -m 2>$null | Out-String).Trim().ToLowerInvariant()
+                if ($m -match '^(aarch64|arm64)$') { return "arm64" }
+                if ($m -match '^(x86_64|amd64)$') { return "x64" }
+            }
+            catch { }
+        }
+    }
+    return [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+}
+
 function Test-HostCanBuildRid {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+    $arch = Get-HostMachineArch
     $wantArm = $Rid -like "*arm64"
     $hostArm = $arch -eq "arm64"
     if ($wantArm -ne $hostArm) { return "host arch $arch cannot build $Rid natively" }
