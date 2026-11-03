@@ -19,7 +19,6 @@ function Get-FirewallSnapshot {
         $program = ''
         if ($map.ContainsKey($rule.InstanceID)) { $program = $map[$rule.InstanceID] }
         [pscustomobject]@{
-            name        = [string]$rule.Name
             displayName = [string]$rule.DisplayName
             group       = [string]$rule.Group
             program     = $program
@@ -37,7 +36,11 @@ function Get-FirewallSnapshot {
             defaultInbound = [string]$_.DefaultInboundAction
         }
     })
-    [pscustomobject]@{ rules = @($rows | Sort-Object name); profiles = @($profiles | Sort-Object name) }
+    # Windows rewrites a rule's id when an app refreshes the same allow entry. Compare the policy, not the id.
+    [pscustomobject]@{
+        rules = @($rows | Sort-Object displayName, program, direction, action, profile, enabled)
+        profiles = @($profiles | Sort-Object name)
+    }
 }
 
 function Get-CertificateSnapshot {
