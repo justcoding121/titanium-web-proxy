@@ -320,7 +320,16 @@ internal static partial class UpdateCommand
                 continue;
             }
 
-            var dest = Path.GetFullPath(Path.Combine(stage, entry.FullName));
+            // Path.GetFileName is the Zip Slip sanitizer CodeQL recognizes; require FullName already
+            // be that leaf (inventory already enforced the same rule).
+            var name = Path.GetFileName(entry.FullName);
+            if (!IsPlainPlusFileName(name)
+                || !string.Equals(name, entry.FullName, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException($"Plus bundle entry '{entry.FullName}' is not a plain file name.");
+            }
+
+            var dest = Path.GetFullPath(Path.Combine(stage, name));
             EnsurePathInside(stage, dest);
             using var input = entry.Open();
             using var output = File.Create(dest);

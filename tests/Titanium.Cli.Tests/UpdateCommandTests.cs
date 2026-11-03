@@ -291,6 +291,33 @@ public class UpdateCommandTests
     }
 
     [TestMethod]
+    public void PlusBundle_RejectsZipSlipParentEntry()
+    {
+        var root = NewTempDir();
+        var install = Path.Combine(root, "install");
+        Directory.CreateDirectory(install);
+        try
+        {
+            var zipPath = Path.Combine(root, "slip.zip");
+            using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+            {
+                var entry = zip.CreateEntry("../evil.dll");
+                using var writer = new StreamWriter(entry.Open());
+                writer.Write("nope");
+            }
+
+            Assert.AreEqual(1, UpdateCommand.ApplyPlusBundleZip(zipPath, install));
+            Assert.IsFalse(File.Exists(Path.Combine(root, "evil.dll")));
+            Assert.IsFalse(File.Exists(Path.Combine(install, "evil.dll")));
+            Assert.IsFalse(File.Exists(Path.Combine(install, "Titanium.Plus.dll")));
+        }
+        finally
+        {
+            TryDeleteTree(root);
+        }
+    }
+
+    [TestMethod]
     public void PlusBundle_RollsBackWhenALaterFileFails()
     {
         var root = NewTempDir();
