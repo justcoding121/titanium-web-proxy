@@ -88,24 +88,21 @@ public class Http11ToHttp2InterceptionKeepAliveTests
 
                 var status = int.Parse(statusLine.AsSpan("HTTP/1.1 ".Length, 3));
                 var contentLength = -1;
+                var chunked = false;
                 string? line;
                 while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync()))
                 {
                     if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                         contentLength = int.Parse(line.AsSpan("Content-Length:".Length).Trim());
+                    else if (line.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                             && line.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                        chunked = true;
                 }
 
-                Assert.IsTrue(contentLength >= 0, "Expected Content-Length from H1→H2 bridge.");
-                var buf = new char[contentLength];
-                var read = 0;
-                while (read < contentLength)
-                {
-                    var n = await reader.ReadAsync(buf.AsMemory(read, contentLength - read));
-                    Assert.IsTrue(n > 0, "Unexpected EOF reading body.");
-                    read += n;
-                }
-
-                return (status, new string(buf));
+                // Tiny H2 bodies may already be complete (Content-Length) or still open (chunked)
+                // depending on scheduling. Either framing must leave the keep-alive socket aligned.
+                var body = await ReadKeepAliveBodyAsync(reader, contentLength, chunked);
+                return (status, body);
             }
 
             var (status1, body1) = await ExchangeAsync();
@@ -124,5 +121,54 @@ public class Http11ToHttp2InterceptionKeepAliveTests
             proxy.Stop();
             proxy.Dispose();
         }
+    }
+
+    private static async Task<string> ReadKeepAliveBodyAsync(StreamReader reader, int contentLength, bool chunked)
+    {
+        if (contentLength >= 0)
+        {
+            var buf = new char[contentLength];
+            var read = 0;
+            while (read < contentLength)
+            {
+                var n = await reader.ReadAsync(buf.AsMemory(read, contentLength - read));
+                Assert.IsTrue(n > 0, "Unexpected EOF reading body.");
+                read += n;
+            }
+
+            return new string(buf);
+        }
+
+        Assert.IsTrue(chunked, "Keep-alive response had neither Content-Length nor chunked Transfer-Encoding.");
+        var body = new StringBuilder();
+        while (true)
+        {
+            var sizeLine = await reader.ReadLineAsync();
+            Assert.IsNotNull(sizeLine, "Chunked body ended before the zero chunk.");
+            var size = Convert.ToInt32(sizeLine.Split(';')[0].Trim(), 16);
+            if (size == 0)
+            {
+                while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+                {
+                    // trailers
+                }
+
+                break;
+            }
+
+            var buffer = new char[size];
+            var read = 0;
+            while (read < size)
+            {
+                var n = await reader.ReadAsync(buffer.AsMemory(read, size - read));
+                Assert.AreNotEqual(0, n, "Chunk ended before its declared length.");
+                read += n;
+            }
+
+            body.Append(buffer);
+            Assert.AreEqual(string.Empty, await reader.ReadLineAsync(), "Expected CRLF after a chunk.");
+        }
+
+        return body.ToString();
     }
 }
