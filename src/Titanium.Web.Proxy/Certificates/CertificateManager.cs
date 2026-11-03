@@ -1357,43 +1357,44 @@ public sealed class CertificateManager : IDisposable
         if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
             return;
 
-        foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority, StoreName.Root })
-        {
-            try
-            {
-                using var store = new X509Store(name, StoreLocation.CurrentUser);
-                store.Open(OpenFlags.ReadWrite);
-                var doomed = new List<X509Certificate2>();
-                foreach (var cert in store.Certificates)
-                {
-                    var text = cert.Subject + " " + cert.Issuer;
-                    if (text.Contains("Titanium", StringComparison.Ordinal) ||
-                        text.Contains("twp-", StringComparison.OrdinalIgnoreCase) ||
-                        text.Contains("TWP", StringComparison.Ordinal) ||
-                        text.Contains("Acme Corp", StringComparison.Ordinal) ||
-                        text.Contains("Acme Root CA", StringComparison.Ordinal))
-                    {
-                        doomed.Add(cert);
-                    }
-                }
+        ScrubStore(StoreName.My);
+        ScrubStore(StoreName.CertificateAuthority);
+        ScrubStore(StoreName.Root);
+    }
 
-                foreach (var cert in doomed)
-                {
-                    try
-                    {
-                        store.Remove(cert);
-                    }
-                    catch (CryptographicException)
-                    {
-                        // Root remove can still raise CryptUI; suppress skips interactive Root writes.
-                    }
-                }
-            }
-            catch (CryptographicException)
+    private static void ScrubStore(StoreName name)
+    {
+        try
+        {
+            using var store = new X509Store(name, StoreLocation.CurrentUser);
+            store.Open(OpenFlags.ReadWrite);
+            var doomed = store.Certificates.Cast<X509Certificate2>().Where(IsTestHostCertificate).ToList();
+            foreach (var cert in doomed)
             {
-                // The store can be locked. The assembly leak guard still fails the run.
+                try
+                {
+                    store.Remove(cert);
+                }
+                catch (CryptographicException)
+                {
+                    // Root remove can still raise CryptUI; suppress skips interactive Root writes.
+                }
             }
         }
+        catch (CryptographicException)
+        {
+            // The store can be locked. The assembly leak guard still fails the run.
+        }
+    }
+
+    private static bool IsTestHostCertificate(X509Certificate2 cert)
+    {
+        var text = cert.Subject + " " + cert.Issuer;
+        return text.Contains("Titanium", StringComparison.Ordinal)
+               || text.Contains("twp-", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("TWP", StringComparison.Ordinal)
+               || text.Contains("Acme Corp", StringComparison.Ordinal)
+               || text.Contains("Acme Root CA", StringComparison.Ordinal);
     }
 
     /// <summary>

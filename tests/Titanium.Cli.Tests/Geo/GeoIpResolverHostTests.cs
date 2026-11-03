@@ -53,4 +53,51 @@ public class GeoIpResolverHostTests
         Assert.ThrowsExactly<FileNotFoundException>(() =>
             host.Apply(Path.Combine(Path.GetTempPath(), "twp-missing-" + Guid.NewGuid().ToString("N") + ".mmdb"), startup: true));
     }
+
+    [TestMethod]
+    public void Apply_MissingDatabase_OnReload_KeepsPreviousAndWarns()
+    {
+        using var host = new GeoIpResolverHost();
+        var warnings = new List<string>();
+        host.Apply(
+            Path.Combine(Path.GetTempPath(), "twp-missing-" + Guid.NewGuid().ToString("N") + ".mmdb"),
+            startup: false,
+            warn: warnings.Add);
+        Assert.IsNull(host.Resolver);
+        Assert.AreEqual(1, warnings.Count);
+        StringAssert.Contains(warnings[0], "not found");
+    }
+
+    [TestMethod]
+    public async Task Apply_SamePathAndTimestamp_IsANoOp()
+    {
+        var path = await EnsureOfficialDatabaseAsync();
+        using var host = new GeoIpResolverHost();
+        host.Apply(path, startup: true);
+        var first = host.Resolver;
+        host.Apply(path, startup: true);
+        Assert.AreSame(first, host.Resolver);
+    }
+
+    [TestMethod]
+    public void Apply_UnreadablePath_OnReload_WarnsWithoutThrowing()
+    {
+        using var host = new GeoIpResolverHost();
+        var warnings = new List<string>();
+        // A directory path makes GetLastWriteTimeUtc succeed on some OSes and Create fail;
+        // a null device path is not portable. Use a missing file for the reload warn path above
+        // and an empty file that is not a valid MMDB for the corrupt-reload path.
+        var empty = Path.Combine(Path.GetTempPath(), "twp-empty-" + Guid.NewGuid().ToString("N") + ".mmdb");
+        File.WriteAllBytes(empty, Array.Empty<byte>());
+        try
+        {
+            host.Apply(empty, startup: false, warn: warnings.Add);
+            Assert.IsNull(host.Resolver);
+            Assert.IsTrue(warnings.Count >= 1, string.Join("; ", warnings));
+        }
+        finally
+        {
+            try { File.Delete(empty); } catch { /* ignore */ }
+        }
+    }
 }
