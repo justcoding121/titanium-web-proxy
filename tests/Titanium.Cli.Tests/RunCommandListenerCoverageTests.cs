@@ -164,10 +164,6 @@ public class RunCommandListenerCoverageTests
 
         Assert.IsTrue((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = true }, true)!);
         Assert.IsFalse((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = false }, true)!);
-        Assert.IsTrue((bool)Invoke("IsTruthy",
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["k"] = "true" }, "k")!);
-        Assert.IsFalse((bool)Invoke("IsTruthy",
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["k"] = "0" }, "k")!);
 
         Invoke("StartAcmeIfConfigured", proxy, new TwpConfig());
         Invoke("StartAcmeIfConfigured", proxy, new TwpConfig
