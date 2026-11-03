@@ -1,22 +1,40 @@
 # Step 3 fix loop
 
-The audited findings that can be fixed in code are fixed on `chore/test-no-prompt-hygiene`. The certificate stores were cleaned again after the audit: 23 current-user certificates (17 CA, 6 My), broad scan 0, local-machine candidates 0. Public backups are in `C:\Work\qa-prompt-audit\cert-backup-step3`. `rootCert.pfx` was not touched.
+Two consecutive full runs of `tools/run-tests.ps1 -Project all -Verify` finished with exit 0. Each used a never-used worktree of `89b7c379` on `chore/test-no-prompt-hygiene`. Neither run set `CI`, `GITHUB_ACTIONS`, `TF_BUILD`, or `TITANIUM_ALLOW_WILDCARD_BIND_TESTS`.
 
-## Fixed
-
-| Finding | Fix | Guard |
+| Run | Worktree | Result |
 | --- | --- | --- |
-| UDP connect reported as `0.0.0.0` or `::` | Bind the socket to loopback before connect when the peer is loopback (`UdpRelayListener`, MASQUE) | `LoopbackPeer_BindsTheUpstreamSocketToLoopbackBeforeConnect` |
-| Dual-mode `IPv6Any` listen | Inconclusive unless `TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1` | The test itself |
-| QUIC client to localhost | Set `LocalEndPoint` to loopback | `QuicLoopbackBindTests` |
-| CLI listener host omitted or wildcard | `CliProcessHarness.AssertLoopbackConfig` | `StartRun_RejectsAWildcardListenerHost` |
-| Certificate store writes | Root UI stays suppressed. `SslStreamCertificateContext.Create` copies the signer into CurrentUser\CA; a suppressed host removes that copy. WinAuth tests remove what they add. | `CertificateStoreWriteSuppressionTests`, `TwpStoreLeakGuard` |
-| Service UAC | `TITANIUM_NO_ELEVATE=1` in runsettings and on every harness child | Existing `CanPromptInteractively` check |
+| 1 | `C:\Work\qa-prompt-audit\edcb3b32007340339d2ee81f807edd57` | Exit 0. No prompt log. TWP certificates 0. Machine-state diff empty. |
+| 2 | `C:\Work\qa-prompt-audit\f1e3b0cd56e84a02bf2d1b1127f30b07` | Exit 0. No prompt log. TWP certificates 0. Machine-state diff empty. |
 
-## Residual
+No Windows Security dialog, no UAC consent, and no wildcard listen from a test process. HTTP/3 and other wildcard binds are inconclusive on this PC because the test host refuses them unless `TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1`. CI sets that variable and still listens. Counts from run 2:
 
-A QUIC listen whose `LocalEndPoint` is `[::1]` is still reported by Windows as `0.0.0.0` and `::`. The firewall asks once per new executable path. Binding a tighter address does not stop it. Two full runs at never-used paths are therefore not dialog-free while HTTP/3 tests run. `tools/test-hygiene/Initialize-TestMachine.ps1` can add loopback-only allow rules or turn `NotifyOnListen` off, and it does neither unless the user passes a switch. PromptGuard clicks Cancel on a developer PC.
+| Project | Total | Passed | Skipped |
+| --- | --- | --- | --- |
+| configuration | 335 | 334 | 1 |
+| scripting | 105 | 68 | 37 |
+| manager | 32 | 31 | 1 |
+| gateway | 291 | 290 | 1 |
+| xds | 11 | 11 | 0 |
+| geoip | 3 | 3 | 0 |
+| unit | 2904 | 2885 | 19 |
+| cli | 353 | 350 | 3 |
+| plus | 461 | 459 | 2 |
+| inspector | 711 | 699 | 12 |
+| integration | 778 | 682 | 96 |
+| e2e | 252 | 227 | 25 |
 
-## Not run
+The Step 2 baseline had one inspector failure (`Prune_LeavesAtMostKeepFiles`). These two runs had no failures. The new skips are the refused QUIC and wildcard listens, not new failures.
 
-The elevated firewall cleanup in Step 0b. Two consecutive full-suite runs at new worktree paths, because those runs would raise the QUIC dialog above.
+## What stopped the prompts
+
+- Raw HTTP/2 origins used `TcpListener.Create`, which listens on every interface. They now listen on `127.0.0.1` and `::1`. The lint test rejects `TcpListener.Create`.
+- A developer test host refuses a QUIC listen. A CLI child skips that listen and keeps the TCP proxy. A product process that does not set `TITANIUM_SKIP_ROOT_STORE_UI` still listens.
+- DNS queries on that host bind to loopback and fail closed instead of connecting an unbound UDP socket.
+- Suppressed trust installation does not write the Personal store.
+- The prompt watcher records OS prompt titles. It does not record the Inspector window, the sign-in picker, or an outbound datagram's public source address.
+- Firewall comparison ignores rule ids. Windows rewrites the id when an app refreshes the same allow entry.
+
+## Still needs an elevated window
+
+A dry run of `tools/test-hygiene/Remove-TestFirewallRules.ps1` found 6 block rules from earlier Cancel clicks (4 `testhost.exe`, 2 `dotnet.exe`). They were not removed. Pass `-Apply` from an elevated PowerShell if those rules should go. The backup of the earlier clean slate remains `C:\Work\qa-prompt-audit\fw-backup\firewall-before.wfw`.
