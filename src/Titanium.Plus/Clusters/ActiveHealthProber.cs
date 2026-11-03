@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
@@ -9,17 +8,20 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Network;
 
-namespace Titanium.Web.Proxy.Clusters;
+namespace Titanium.Plus.Clusters;
 
-/// <summary>Background active probe for one cluster. Exists only when active health is enabled.</summary>
-internal sealed class ClusterHealthProber : IDisposable
+/// <summary>
+///     Background HTTP, TCP, or gRPC probe for one cluster. Core starts one only when
+///     <c>healthCheck.active</c> is enabled and an <c>IActiveHealthProbeProvider</c> is assigned.
+///     DNS refresh stays in core.
+/// </summary>
+internal sealed class ActiveHealthProber : IDisposable, IActiveHealthProbeSession
 {
     /// <summary>Test seam. When set, probes do not open sockets.</summary>
     internal static Func<DestinationConfig, CancellationToken, Task<bool>>? ProbeOverride { get; set; }
-
-    private static readonly TimeSpan DnsRefreshTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ClusterManager _manager;
     private readonly ClusterConfig _cluster;
@@ -35,12 +37,11 @@ internal sealed class ClusterHealthProber : IDisposable
     private readonly HttpClient? _tlsHttp;
     private readonly string? _tlsServerName;
 
-    private readonly Dictionary<string, DateTimeOffset> _dnsRefreshed = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cancel = new();
     private readonly Task _loop;
     private int _disposed;
 
-    public ClusterHealthProber(ClusterManager manager, ClusterConfig cluster, TimeProvider time)
+    public ActiveHealthProber(ClusterManager manager, ClusterConfig cluster, TimeProvider time)
     {
         _manager = manager;
         _cluster = cluster;
@@ -117,88 +118,25 @@ internal sealed class ClusterHealthProber : IDisposable
     private async Task LoopAsync(TimeProvider time)
     {
         var active = _cluster.HealthCheck?.Active;
-        var seconds = active is { Enabled: true } ? Math.Max(1, active.IntervalSeconds) : int.MaxValue;
-        var dnsInterval = MinDnsRefreshSeconds(_cluster);
-        if (dnsInterval > 0)
-        {
-            seconds = Math.Min(seconds, dnsInterval);
-        }
-
-        if (seconds == int.MaxValue)
-        {
-            seconds = 15;
-        }
+        var seconds = active is { Enabled: true } ? Math.Max(1, active.IntervalSeconds) : 15;
         if (active is { JitterPercent: > 0 } jittered)
         {
             var spread = (Random.Shared.NextDouble() * 2) - 1;
             seconds = Math.Max(1, (int)Math.Round(seconds * (1 + (spread * jittered.JitterPercent / 100.0))));
         }
+
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(seconds), time);
         try
         {
             while (await timer.WaitForNextTickAsync(_cancel.Token).ConfigureAwait(false))
             {
                 await ProbeOnceAsync(_cancel.Token).ConfigureAwait(false);
-                await RefreshDnsAsync(time, _cancel.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
         {
             // Stopped with the cluster.
         }
-    }
-
-    private async Task RefreshDnsAsync(TimeProvider time, CancellationToken cancellationToken)
-    {
-        var now = time.GetUtcNow();
-        foreach (var destination in _cluster.Destinations)
-        {
-            if (destination.DnsRefreshSeconds <= 0 ||
-                destination.Address.StartsWith("unix:", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (_dnsRefreshed.TryGetValue(destination.Id, out var refreshed) &&
-                now - refreshed < TimeSpan.FromSeconds(destination.DnsRefreshSeconds))
-            {
-                continue;
-            }
-
-            try
-            {
-                // A resolver that never answers must not freeze the probe loop for every other destination.
-                using var lookup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                lookup.CancelAfter(DnsRefreshTimeout);
-                var addresses = await Dns.GetHostAddressesAsync(destination.Address, lookup.Token)
-                    .ConfigureAwait(false);
-                if (addresses.Length > 0)
-                {
-                    _manager.SetResolved(destination.Id, addresses[0]);
-                    _dnsRefreshed[destination.Id] = now;
-                }
-            }
-            catch (Exception ex) when (ex is SocketException or IOException or OperationCanceledException)
-            {
-                // The next pass retries. A failed refresh keeps the previous address.
-            }
-        }
-    }
-
-    private static int MinDnsRefreshSeconds(ClusterConfig cluster)
-    {
-        var min = 0;
-        var destinations = cluster.Destinations;
-        for (var i = 0; i < destinations.Count; i++)
-        {
-            var seconds = destinations[i].DnsRefreshSeconds;
-            if (seconds > 0 && (min == 0 || seconds < min))
-            {
-                min = seconds;
-            }
-        }
-
-        return min;
     }
 
     /// <summary>

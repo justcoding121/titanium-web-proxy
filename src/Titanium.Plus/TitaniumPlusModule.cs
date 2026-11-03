@@ -1,4 +1,5 @@
 using Titanium.Plus.Audit;
+using Titanium.Plus.Clusters;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
 using Titanium.Plus.Discovery;
@@ -11,6 +12,7 @@ using Titanium.Plus.Security;
 using Titanium.Plus.Security.Oidc;
 using Titanium.Plus.State;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Clusters;
 namespace Titanium.Plus;
 
 /// <summary>
@@ -109,6 +111,12 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
             });
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");
+
+        // healthCheck.active probes start for every loaded Plus module.
+        if (context.ClusterManager is ClusterManager clusters)
+        {
+            clusters.ActiveHealthProbeProvider = new ActiveHealthProbeProvider();
+        }
 
         // Stretch modules — activate only when configured.
         _ = ServiceDiscovery.TryStart(context, options);

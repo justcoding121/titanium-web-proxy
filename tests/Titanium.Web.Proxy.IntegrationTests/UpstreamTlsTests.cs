@@ -33,7 +33,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 
 /// <summary>
 ///     Per-cluster upstream TLS end to end: client certificate, custom CA, SNI override, hostname policy,
-///     fail-closed files, QUIC accept-any, and active health probes against an mTLS origin.
+///     fail-closed files, and QUIC accept-any.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -228,36 +228,6 @@ public class UpstreamTlsTests
 
     [TestMethod]
     [Timeout(60_000)]
-    public async Task ActiveHealthProbe_UsesTheClusterIdentity_SoAnMtlsDestinationStaysHealthy()
-    {
-        using var pki = new UpstreamTlsTestPki();
-        using var serverCert = pki.IssueServer(OriginName);
-        using var clientCert = pki.IssueClient("probe-client");
-        var (certPath, keyPath) = pki.WritePemPair(clientCert);
-        await using var origin = new MtlsOrigin(serverCert, pki.CaCertificate, requireClientCertificate: true);
-
-        var withIdentity = await ProbeAsync(origin.Port, new ClusterHttpClientConfig
-        {
-            ClientCertificatePath = certPath,
-            ClientCertificateKeyPath = keyPath,
-            CaBundlePath = pki.WriteCaPem(),
-            ServerName = OriginName,
-        });
-        var errorAfterFirst = origin.LastError;
-        var withoutCertificate = await ProbeAsync(origin.Port, new ClusterHttpClientConfig
-        {
-            CaBundlePath = pki.WriteCaPem(),
-            ServerName = OriginName,
-        });
-
-        Assert.AreEqual(DestinationState.Healthy, withIdentity, "the probe presents the cluster certificate: " + errorAfterFirst + " names=" + string.Join(",", origin.ServerNames) + " requests=" + origin.Requests);
-        Assert.AreEqual(DestinationState.Unhealthy, withoutCertificate,
-            "control: without the client certificate the same destination is rightly ejected");
-        Assert.IsTrue(origin.Requests >= 1);
-    }
-
-    [TestMethod]
-    [Timeout(60_000)]
     public async Task Http3_AcceptAnyServerCertificate_IsHonoredByTheCentralValidation()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
@@ -325,33 +295,6 @@ public class UpstreamTlsTests
         {
             UpstreamHttpClient = httpClient,
         };
-    }
-
-    private static async Task<DestinationState> ProbeAsync(int port, ClusterHttpClientConfig httpClient)
-    {
-        var cluster = new ClusterConfig
-        {
-            Id = "probe",
-            HttpClient = httpClient,
-            Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = port, UseHttps = true }],
-            HealthCheck = new HealthCheckConfig
-            {
-                Active = new ActiveHealthConfig
-                {
-                    Enabled = true,
-                    IntervalSeconds = 3600,
-                    TimeoutSeconds = 10,
-                    Path = "/health",
-                    UnhealthyThreshold = 1,
-                    HealthyThreshold = 1,
-                },
-            },
-        };
-        var manager = new ClusterManager();
-        await manager.ApplyAsync([cluster]);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
-        await prober.ProbeOnceAsync();
-        return manager.GetDestinationState("d");
     }
 
     private static async Task<ProxyServer> StartProxyAsync(int originPort, ClusterHttpClientConfig httpClient)

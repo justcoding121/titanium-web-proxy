@@ -568,6 +568,8 @@ Titanium.Web.Proxy.Abstractions.Clusters.SessionAffinityConfig
 Titanium.Web.Proxy.Abstractions.Clusters.SessionAffinityConfig.SessionAffinityConfig() -> void
 Titanium.Web.Proxy.Abstractions.Clusters.HashKeyConfig
 Titanium.Web.Proxy.Abstractions.Clusters.HashKeyConfig.HashKeyConfig() -> void
+Titanium.Web.Proxy.Abstractions.Clusters.IActiveHealthProbeProvider
+Titanium.Web.Proxy.Abstractions.Clusters.IActiveHealthProbeProvider.Start(Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig! cluster, Titanium.Web.Proxy.Abstractions.Routing.IClusterManager! clusterManager) -> System.IDisposable!
 Titanium.Web.Proxy.Abstractions.Clusters.ILoadBalancingPolicy
 Titanium.Web.Proxy.Abstractions.Routing.WeightedCluster
 Titanium.Web.Proxy.Abstractions.Routing.ErrorPageConfig

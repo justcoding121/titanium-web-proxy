@@ -145,6 +145,8 @@ Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(string! destinati
 Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState(string! destinationId, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState expected, Titanium.Web.Proxy.Abstractions.Clusters.DestinationState next) -> bool
 Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone.get -> string?
 Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone.set -> void
+Titanium.Web.Proxy.Clusters.ClusterManager.ActiveHealthProbeProvider.get -> Titanium.Web.Proxy.Abstractions.Clusters.IActiveHealthProbeProvider?
+Titanium.Web.Proxy.Clusters.ClusterManager.ActiveHealthProbeProvider.set -> void
 Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot.get -> Titanium.Web.Proxy.Abstractions.Clusters.ImmutableClusterSnapshot!
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker
 Titanium.Web.Proxy.Clusters.DestinationHealthTracker.DestinationHealthTracker() -> void
