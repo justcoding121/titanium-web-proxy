@@ -168,7 +168,7 @@ public sealed class FakeUpdateFeed : IDisposable
         return JsonSerializer.Serialize(doc);
     }
 
-    private object BuildPlusManifest()
+    private Dictionary<string, object?> BuildPlusManifest()
     {
         var plus = new Dictionary<string, object?>
         {

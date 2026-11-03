@@ -18,7 +18,7 @@ namespace Titanium.Plus.Clusters;
 ///     <c>healthCheck.active</c> is enabled and an <c>IActiveHealthProbeProvider</c> is assigned.
 ///     DNS refresh stays in core.
 /// </summary>
-internal sealed class ActiveHealthProber : IDisposable, IActiveHealthProbeSession
+internal sealed class ActiveHealthProber : IActiveHealthProbeSession
 {
     /// <summary>Test seam. When set, probes do not open sockets.</summary>
     internal static Func<DestinationConfig, CancellationToken, Task<bool>>? ProbeOverride { get; set; }

@@ -225,8 +225,8 @@ public class UpdateCommandTests
         var tooMany = Enumerable.Range(0, UpdateCommand.MaxPlusBundleEntries + 1)
             .Select(i => ($"f{i}.dll", 1L))
             .ToList();
-        Assert.ThrowsException<InvalidDataException>(() => UpdateCommand.EnsurePlusBundleInventory(tooMany));
-        Assert.ThrowsException<InvalidDataException>(() => UpdateCommand.EnsurePlusBundleInventory(
+        Assert.ThrowsExactly<InvalidDataException>(() => UpdateCommand.EnsurePlusBundleInventory(tooMany));
+        Assert.ThrowsExactly<InvalidDataException>(() => UpdateCommand.EnsurePlusBundleInventory(
             [("a.dll", UpdateCommand.MaxPlusBundleUncompressedBytes + 1)]));
     }
 
@@ -256,7 +256,7 @@ public class UpdateCommandTests
             Assert.IsFalse(File.Exists(Path.Combine(install, "StackExchange.Redis.dll")));
             Assert.IsFalse(File.Exists(Path.Combine(install, UpdateCommand.PlusFileListName)));
             Assert.AreEqual("cli", File.ReadAllText(Path.Combine(install, "titanium.dll")));
-            Assert.AreEqual(0, Directory.GetDirectories(root, ".plus-stage-*").Length);
+            Assert.AreEqual(0, Directory.GetDirectories(install, ".plus-stage-*").Length);
         }
         finally
         {

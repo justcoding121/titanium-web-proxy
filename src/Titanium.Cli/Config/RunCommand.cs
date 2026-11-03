@@ -2004,12 +2004,6 @@ internal static class RunCommand
     private static bool ResolveListenerHttp3(ListenerConfig listener, bool decryptSsl) =>
         listener.EnableHttp3 ?? (decryptSsl && System.Net.Quic.QuicListener.IsSupported);
 
-    private static bool IsTruthy(IReadOnlyDictionary<string, string> options, string key) =>
-        options.TryGetValue(key, out var value) &&
-        (value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-         value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
-         value.Equals("yes", StringComparison.OrdinalIgnoreCase));
-
     internal static Dictionary<string, string> BuildPlusOptions(PlusConfig plus) // NOSONAR S3776 -- Plus option flattening mirrors config surface area.
     {
         var options = plus.Options is null

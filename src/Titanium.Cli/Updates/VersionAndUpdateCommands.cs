@@ -599,9 +599,14 @@ internal static partial class UpdateCommand
 
     private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest, string channelDisplay)
     {
-        var plus = manifest.Products?.Plus;
-        var bundle = plus?.Bundle;
-        var asset = plus?.Asset;
+        if (manifest.Products?.Plus is not { } plus)
+        {
+            AsyncConsole.WriteError($"No Plus package on channel {channelDisplay}.");
+            return 1;
+        }
+
+        var bundle = plus.Bundle;
+        var asset = plus.Asset;
         var useBundle = !string.IsNullOrWhiteSpace(bundle?.Url);
         var package = useBundle ? bundle : asset;
         if (package is null || string.IsNullOrWhiteSpace(package.Url))
@@ -610,66 +615,119 @@ internal static partial class UpdateCommand
             return 1;
         }
 
-        var remoteLabel = ReleaseVersion.NormalizeTag(plus?.Version ?? manifest.Version ?? "unknown");
+        var remoteLabel = ReleaseVersion.NormalizeTag(plus.Version ?? manifest.Version ?? "unknown");
         var installDir = AppContext.BaseDirectory.TrimEnd(
             Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var destDll = Path.Combine(installDir, "Titanium.Plus.dll");
         var plusLocal = VersionCommand.TryGetLocalPlusVersion();
         var plusInfo = VersionCommand.TryGetLocalPlusInformationalVersion();
-        var installing = plusLocal is null;
-
-        if (plusLocal is not null)
+        if (ShouldSkipPlusUpdate(useBundle, asset, installDir, plusLocal, remoteLabel, channelDisplay, plusInfo))
         {
-            if (!useBundle
-                && asset is not null
-                && TryWritePlusAlreadyCurrent(asset, destDll, plusLocal, remoteLabel, channelDisplay, plusInfo))
-            {
-                return 0;
-            }
-
-            if (useBundle && !VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
-            {
-                WritePlusAlreadyCurrent(plusLocal, plusInfo, remoteLabel, channelDisplay);
-                return 0;
-            }
+            return 0;
         }
 
+        var installing = plusLocal is null;
         AsyncConsole.WriteLine(installing
             ? $"Installing Plus {remoteLabel} ({channelDisplay})…"
             : $"Updating Plus {ReleaseVersion.FormatDisplay(plusLocal)} → {remoteLabel} ({channelDisplay})…");
         AsyncConsole.WriteLine("Downloading…");
 
-        var workDir = Path.Combine(Path.GetTempPath(), "TitaniumPlus-update");
+        return await DownloadAndApplyPlusAsync(
+            package, installDir, useBundle, remoteLabel, channelDisplay, installing).ConfigureAwait(false);
+    }
+
+    private static bool ShouldSkipPlusUpdate(
+        bool useBundle,
+        AssetBlock? asset,
+        string installDir,
+        Version? plusLocal,
+        string remoteLabel,
+        string channelDisplay,
+        string? plusInfo)
+    {
+        if (plusLocal is null)
+        {
+            return false;
+        }
+
+        if (!useBundle
+            && asset is not null
+            && TryWritePlusAlreadyCurrent(
+                asset,
+                Path.Combine(installDir, "Titanium.Plus.dll"),
+                plusLocal,
+                remoteLabel,
+                channelDisplay,
+                plusInfo))
+        {
+            return true;
+        }
+
+        if (useBundle && !VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
+        {
+            WritePlusAlreadyCurrent(plusLocal, plusInfo, remoteLabel, channelDisplay);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static async Task<int> DownloadAndApplyPlusAsync(
+        AssetBlock package,
+        string installDir,
+        bool useBundle,
+        string remoteLabel,
+        string channelDisplay,
+        bool installing)
+    {
+        // Keep the download under the install directory (not Path.GetTempPath) — S5443.
+        var workDir = Path.Combine(installDir, ".plus-download-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workDir);
-        var downloadPath = Path.Combine(
-            workDir,
-            useBundle ? $"Titanium.Plus-{SanitizeFileToken(remoteLabel)}.zip" : "Titanium.Plus.dll");
-
-        var downloadRc = await DownloadVerifiedAssetAsync(
-            package, downloadPath, "SHA256 mismatch — aborting Plus update.").ConfigureAwait(false);
-        if (downloadRc != 0)
+        try
         {
-            return downloadRc;
-        }
+            var downloadPath = Path.Combine(
+                workDir,
+                useBundle ? $"Titanium.Plus-{SanitizeFileToken(remoteLabel)}.zip" : "Titanium.Plus.dll");
 
-        if (package.Size is > 0 && new FileInfo(downloadPath).Length != package.Size.Value)
+            var downloadRc = await DownloadVerifiedAssetAsync(
+                package, downloadPath, "SHA256 mismatch — aborting Plus update.").ConfigureAwait(false);
+            if (downloadRc != 0)
+            {
+                return downloadRc;
+            }
+
+            if (package.Size is > 0 && new FileInfo(downloadPath).Length != package.Size.Value)
+            {
+                AsyncConsole.WriteError("Plus download size mismatch — aborting Plus update.");
+                return 1;
+            }
+
+            var applied = useBundle
+                ? ApplyPlusBundleZip(downloadPath, installDir)
+                : ApplyPlusLegacyDll(downloadPath, installDir);
+            if (applied != 0)
+            {
+                return applied;
+            }
+
+            AsyncConsole.WriteLine(installing
+                ? $"Installed Plus {remoteLabel} ({channelDisplay})."
+                : $"Updated Plus to {remoteLabel} ({channelDisplay}).");
+            return 0;
+        }
+        finally
         {
-            AsyncConsole.WriteError("Plus download size mismatch — aborting Plus update.");
-            return 1;
+            try
+            {
+                if (Directory.Exists(workDir))
+                {
+                    Directory.Delete(workDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup of the download directory beside the install.
+            }
         }
-
-        var applied = useBundle
-            ? ApplyPlusBundleZip(downloadPath, installDir)
-            : ApplyPlusLegacyDll(downloadPath, installDir);
-        if (applied != 0)
-        {
-            return applied;
-        }
-
-        AsyncConsole.WriteLine(installing
-            ? $"Installed Plus {remoteLabel} ({channelDisplay})."
-            : $"Updated Plus to {remoteLabel} ({channelDisplay}).");
-        return 0;
     }
 
     private static string SanitizeFileToken(string value)

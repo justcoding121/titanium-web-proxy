@@ -371,7 +371,7 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         return new ClusterRuntime(cluster, localZone);
     }
 
-    private IReadOnlyList<ClusterConfig> CurrentClusters()
+    private ClusterConfig[] CurrentClusters()
     {
         var clusters = Snapshot.Clusters;
         if (clusters.Count == 0)

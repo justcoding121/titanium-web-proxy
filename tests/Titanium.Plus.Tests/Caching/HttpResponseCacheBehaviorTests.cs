@@ -962,10 +962,13 @@ public class HttpResponseCacheBehaviorTests
     [TestMethod]
     public void MaxCachedBodyBytes_MatchesH1CoalesceLimit()
     {
-        // Core's H1 terminate-lite coalesce path and the cache store limit share this value today.
-        // Phase 3a/3b must keep a core constant equal to the cache limit (64 KiB).
-        Assert.AreEqual(64 * 1024, HttpResponseCacheMiddleware.MaxCachedBodyBytes);
-        Assert.AreEqual(HttpResponseCacheMiddleware.MaxCachedBodyBytes, ResponseCacheLimits.MaxCachedBodyBytes);
+        // Core's H1 terminate-lite coalesce path and the Plus cache store limit share 64 KiB.
+        // Plus aliases ResponseCacheLimits.MaxCachedBodyBytes as a const, so equality is compile-time.
+        const int expectedKiB = 64 * 1024;
+#pragma warning disable MSTEST0032 // const aliases are intentionally pinned equal
+        Assert.AreEqual(expectedKiB, ResponseCacheLimits.MaxCachedBodyBytes);
+        Assert.AreEqual(expectedKiB, HttpResponseCacheMiddleware.MaxCachedBodyBytes);
+#pragma warning restore MSTEST0032
     }
 
     [TestMethod]

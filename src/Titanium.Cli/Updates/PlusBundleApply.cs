@@ -168,15 +168,7 @@ internal static partial class UpdateCommand
             return false;
         }
 
-        foreach (var c in name)
-        {
-            if (char.IsControl(c))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return name.All(static c => !char.IsControl(c));
     }
 
     internal static void EnsurePlusBundleInventory(IReadOnlyList<(string Name, long Length)> entries)
@@ -286,13 +278,8 @@ internal static partial class UpdateCommand
 
     private static string CreatePlusStageDirectory(string installDir)
     {
-        var parent = Path.GetDirectoryName(installDir);
-        if (string.IsNullOrEmpty(parent))
-        {
-            parent = Path.GetTempPath();
-        }
-
-        var stage = Path.Combine(parent, ".plus-stage-" + Guid.NewGuid().ToString("N"));
+        // Stage under the CLI install directory (not Path.GetTempPath) so extraction is not world-writable.
+        var stage = Path.Combine(installDir, ".plus-stage-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
         return stage;
     }
