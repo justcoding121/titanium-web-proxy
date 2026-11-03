@@ -1,6 +1,6 @@
 # xDS (ADS client)
 
-> Plus-gated (`plus.enabled: true` and a loaded Plus module). Configure an `xds:` section to pull listeners, routes, clusters, endpoints, and secrets from an xDS **ADS** control plane. `titanium test` rejects `xds:` without Plus.
+> Plus-gated (`plus.enabled: true` and a loaded Plus module). The `Titanium.Xds` satellite arrives with `titanium update --plus` (not in the MIT CLI zip). Configure an `xds:` section to pull listeners, routes, clusters, endpoints, and secrets from an xDS **ADS** control plane. `titanium test` rejects `xds:` without Plus.
 
 Titanium ships **no xDS server**. This is a dataplane client that translates a supported xDS v3 subset into native `twp.yaml` shape and applies it through the same validator and atomic reload path as file config.
 

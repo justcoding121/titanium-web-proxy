@@ -12,7 +12,12 @@ Paired A/B spot checks for the Plus license-boundary work (cache seam, cache mov
 |-----|-------|
 | `BASELINE_SHA` | `c14228d207413cf81e2b1eac73fb5a7b86cf634a` |
 
-Spot-check arms: `twp-cli-reverse-http1` (default-off) and `twp-cli-plus-cache-hit-http1`. Checkpoint A is the last Phase 3a commit; Checkpoint B is the final PR tip. Same default-off thresholds as the commercial-grade block below. Cache-hit arm: median RPS delta at least −2.0%, 95% CI lower bound at least −3.0%, p99 at most +3%, Gen0 per 100k within 1%, zero errors. Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+Spot-check arms: `twp-cli-reverse-http1` (default-off) and `twp-cli-plus-cache-hit-http1` (`compare-editions`). Checkpoint A is the last Phase 3a commit (`89d1b756`); Checkpoint B is the PR tip. Same default-off thresholds as the commercial-grade block below. Cache-hit arm: median RPS delta at least −2.0%, 95% CI lower bound at least −3.0%, p99 at most +3%, Gen0 per 100k within 1%, zero errors. Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+
+| Checkpoint | Arm filter | Run |
+|------------|------------|-----|
+| A (3a seam) | `twp-cli-reverse-http1` | [41723339664](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41723339664) |
+| B (PR tip) | `twp-cli-reverse-http1` / `twp-cli-plus-cache-hit-http1` | re-measure after merge tip pushes; see open PR |
 
 ## Commercial-grade parity baseline
 

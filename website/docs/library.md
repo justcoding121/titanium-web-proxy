@@ -47,7 +47,9 @@ proxyServer.Start();
 
 ## Reverse proxy
 
-Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so active health probes shut down. `DrainAsync` stops admitting new clients and then stops the proxy. Hosts that use dependency injection can call `AddTitaniumReverseProxy` from the hosting package. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
+Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so background DNS refresh (and any registered active-health probes) shut down. `DrainAsync` stops admitting new clients and then stops the proxy. Hosts that use dependency injection can call `AddTitaniumReverseProxy` from the hosting package. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
+
+From 8.0, the RFC 9111 response cache and `healthCheck.active` probing ship in **Titanium.Plus** (PolyForm), not in the MIT library package. Assign `ClusterManager.ActiveHealthProbeProvider` (Plus does this when loaded) before `healthCheck.active` does anything at runtime. See [Migration from 7.x](https://github.com/justcoding121/titanium-web-proxy/wiki/Migration-from-7.x).
 
 For `geo` route policies, assign `ReverseProxyOptions.GeoIpResolver` (`IGeoIpResolver` in **Titanium.Web.Proxy.Abstractions**). The CLI loads an MMDB from `server.geoIpDatabasePath`; embedders supply their own resolver (any database or lookup service).
 
