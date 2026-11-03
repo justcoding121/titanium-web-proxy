@@ -58,6 +58,8 @@ public class CertificateStoreWriteSuppressionTests
             var root = manager.RootCertificate;
             Assert.IsNotNull(root);
             rootThumb = root!.Thumbprint;
+            // Exercise DropTestHostOsStoreSideEffects' IntermediateCertificates loop under suppression.
+            manager.IntermediateCertificates = new X509Certificate2Collection(root);
             using var leaf = manager.CreateServerCertificate("store-leak.example").GetAwaiter().GetResult();
             Assert.IsNotNull(leaf);
             leafThumb = leaf!.Thumbprint;

@@ -105,12 +105,12 @@ public sealed class ManagerChartTests
         var (multiExit, multiOut) = Run(helm, $"template rel \"{ChartDir}\" --set replicaCount=2");
         Assert.AreNotEqual(0, multiExit);
         // Helm schema messages vary by version; accept the chart's wording or the JSON-schema ceiling.
-        StringAssert.Matches(
-            multiOut,
-            new System.Text.RegularExpressions.Regex(
-                "single-instance only|Must be less than or equal to 1|maximum:\\s*got 2, want 1",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+        StringAssert.Matches(multiOut, ReplicaCeilingMessage);
     }
+
+    private static readonly System.Text.RegularExpressions.Regex ReplicaCeilingMessage = new(
+        "single-instance only|Must be less than or equal to 1|maximum:\\s*got 2, want 1",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static string? FindHelm()
     {

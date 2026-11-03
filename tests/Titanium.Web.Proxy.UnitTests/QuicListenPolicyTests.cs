@@ -43,7 +43,7 @@ public class QuicListenPolicyTests
         {
             QuicListenPolicy.BeforeListen = () => called = true;
             Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", null);
-            var ex = Assert.ThrowsException<InvalidOperationException>(QuicListenPolicy.EnsureAllowed);
+            var ex = Assert.ThrowsExactly<InvalidOperationException>(QuicListenPolicy.EnsureAllowed);
             Assert.IsTrue(called);
             StringAssert.Contains(ex.Message, "TITANIUM_ALLOW_WILDCARD_BIND_TESTS");
         }
@@ -92,7 +92,7 @@ public class QuicListenPolicyTests
             QuicListenPolicy.BeforeListen = null;
             Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", null);
             Assert.IsTrue(QuicListenPolicy.SkipWithoutThrowing);
-            Assert.ThrowsException<InvalidOperationException>(QuicListenPolicy.EnsureAllowed);
+            Assert.ThrowsExactly<InvalidOperationException>(QuicListenPolicy.EnsureAllowed);
         }
         finally
         {
