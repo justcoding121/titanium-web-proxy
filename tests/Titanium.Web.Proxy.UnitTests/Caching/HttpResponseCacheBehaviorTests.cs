@@ -24,6 +24,7 @@ namespace Titanium.Web.Proxy.UnitTests.Caching;
 internal sealed class CacheHarness
 {
     private int _originHits;
+    private readonly List<IProxyMiddleware> _afterCache = [];
 
     public CacheHarness(
         ResponseCacheOptions? options = null,
@@ -38,6 +39,13 @@ internal sealed class CacheHarness
     public HttpResponseCacheMiddleware Middleware { get; }
 
     public int OriginHits => Volatile.Read(ref _originHits);
+
+    /// <summary>Append middleware that runs after the cache (as Plus access middleware does today).</summary>
+    public CacheHarness WithAfterCache(IProxyMiddleware middleware)
+    {
+        _afterCache.Add(middleware);
+        return this;
+    }
 
     /// <summary>The request headers the origin saw on its last fetch (including any conditional headers the cache added).</summary>
     public ConcurrentQueue<HeaderCollection> OriginRequests { get; } = new();
@@ -86,7 +94,7 @@ internal sealed class CacheHarness
 
         Result? fetched = null;
         var nextCalled = false;
-        await Middleware.InvokeAsync(ctx, async (c, _) =>
+        ProxyMiddlewareDelegate terminus = async (c, _) =>
         {
             nextCalled = true;
             var state = HttpResponseCacheMiddleware.StateOf(c);
@@ -145,7 +153,13 @@ internal sealed class CacheHarness
             {
                 state.Abandon();
             }
-        }, CancellationToken.None).ConfigureAwait(false);
+        };
+
+        // Cache first (outermost), then any after-cache middleware — same order as RunCommand + Plus.
+        var chain = new List<IProxyMiddleware> { Middleware };
+        chain.AddRange(_afterCache);
+        var pipeline = Titanium.Web.Proxy.Middleware.ProxyMiddlewarePipeline.Build(chain, terminus);
+        await pipeline(ctx, CancellationToken.None).ConfigureAwait(false);
 
         if (ctx.IsHandled && fetched is null)
         {
@@ -872,11 +886,15 @@ public class HttpResponseCacheBehaviorTests
         var counts = new ConcurrentDictionary<string, long>();
         long bytes = -1;
         long entries = -1;
+        var units = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var descriptions = new Dictionary<string, string?>(StringComparer.Ordinal);
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, l) =>
         {
             if (instrument.Meter.Name == "Titanium.Web.Proxy" && instrument.Name.StartsWith("twp.cache.", StringComparison.Ordinal))
             {
+                units[instrument.Name] = instrument.Unit;
+                descriptions[instrument.Name] = instrument.Description;
                 l.EnableMeasurementEvents(instrument);
             }
         };
@@ -922,6 +940,59 @@ public class HttpResponseCacheBehaviorTests
         Assert.IsTrue(entries >= h.Cache.Count, $"entries gauge {entries} < {h.Cache.Count}");
         Assert.IsTrue(bytes >= h.Cache.Bytes, $"bytes gauge {bytes} < {h.Cache.Bytes}");
         Assert.IsTrue(h.Cache.Bytes > 0);
+
+        // Phase 0 pin: name, unit and description must stay byte-identical across the Plus boundary move.
+        Assert.AreEqual("{request}", units["twp.cache.requests"]);
+        Assert.AreEqual("By", units["twp.cache.bytes"]);
+        Assert.AreEqual("{entry}", units["twp.cache.entries"]);
+        Assert.AreEqual(
+            "Response cache outcomes by result: hit, miss, stale, bypass, revalidated.",
+            descriptions["twp.cache.requests"]);
+        Assert.AreEqual(
+            "Bytes charged to the in-memory response cache (bodies, headers and keys), summed across live caches.",
+            descriptions["twp.cache.bytes"]);
+        Assert.AreEqual(
+            "Entries held by the in-memory response cache, summed across live caches.",
+            descriptions["twp.cache.entries"]);
+    }
+
+    [TestMethod]
+    public void MaxCachedBodyBytes_MatchesH1CoalesceLimit()
+    {
+        // Core's H1 terminate-lite coalesce path and the cache store limit share this value today.
+        // Phase 3a/3b must keep a core constant equal to the cache limit (64 KiB).
+        Assert.AreEqual(64 * 1024, HttpResponseCacheMiddleware.MaxCachedBodyBytes);
+    }
+
+    [TestMethod]
+    public async Task CacheHit_IsServedBeforeLaterMiddleware_PinnedCurrentOrder()
+    {
+        // Mirrors RunCommand then Plus: cache middleware is registered first (outermost); Plus access
+        // middleware is appended after. A hit returns without calling next, so later middleware never runs.
+        var denyCalls = 0;
+        var h = new CacheHarness(options: new ResponseCacheOptions { ExposeHeaders = true })
+            .WithAfterCache(new CountingDenyMiddleware(() => Interlocked.Increment(ref denyCalls)));
+
+        await h.GetAsync("/order", CacheHarness.Reply.Ok("warm", Fresh));
+        Assert.AreEqual(1, denyCalls, "MISS must call next so Plus access middleware can run");
+
+        denyCalls = 0;
+        var hit = await h.GetAsync("/order", CacheHarness.Reply.Ok("warm", Fresh));
+        Assert.IsTrue(hit.FromCache);
+        Assert.AreEqual(0, denyCalls, "HIT must short-circuit before later Plus middleware");
+        Assert.AreEqual(1, h.OriginHits);
+    }
+
+    private sealed class CountingDenyMiddleware(Func<int> onInvoke) : IProxyMiddleware
+    {
+        public async ValueTask InvokeAsync(
+            ProxyMiddlewareContext context,
+            ProxyMiddlewareDelegate next,
+            CancellationToken cancellationToken)
+        {
+            onInvoke();
+            await next(context, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     [TestMethod]
