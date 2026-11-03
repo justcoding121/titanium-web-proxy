@@ -7,6 +7,8 @@
     <LangVersion>latest</LangVersion>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <IsPackable>false</IsPackable>
+    <!-- Plus output copies this folder beside the CLI. NuGet dependencies must be in it. -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Titanium.Xds.Tests" />

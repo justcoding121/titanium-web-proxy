@@ -445,19 +445,21 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Build Plus
+      - name: Build Plus bundle
+        shell: pwsh
         env:
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
-          ver="${RELEASE_VERSION:-0.0.0}"
-          # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
-          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus -p:Version="$ver"
-          cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
+          $tag = $env:RELEASE_TAG
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = "0.0.0-dev" }
+          ./tools/packaging/plus-bundle/build-plus-bundle.ps1 -Tag $tag -Version $env:RELEASE_VERSION -OutputDirectory .
       - uses: actions/upload-artifact@v7
         with:
           name: plus
-          path: Titanium.Plus-*.dll
+          path: |
+            Titanium.Plus-*.zip
+            Titanium.Plus-*.dll
 
   build-inspector:
     needs: [resolve-version, test]
@@ -897,7 +899,12 @@ jobs:
                     key = rid if ext == ".zip" else f"{rid}{ext}"
                     put("inspector", key, entry)
                     break
-            elif name.startswith("Titanium.Plus"):
+            elif name.startswith("Titanium.Plus") and name.endswith(".zip"):
+              bundle = dict(entry)
+              bundle["size"] = pathlib.Path(meta["path"]).stat().st_size
+              manifest["products"]["plus"]["bundle"] = bundle
+              manifest["products"]["plus"]["version"] = version
+            elif name.startswith("Titanium.Plus") and name.endswith(".dll"):
               manifest["products"]["plus"]["asset"] = entry
               manifest["products"]["plus"]["version"] = version
           pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))

@@ -37,7 +37,9 @@ internal static class GeoIpAssemblyLoader
             var path = Path.Combine(baseDir, "Titanium.Cli.GeoIp.dll");
             if (!File.Exists(path))
             {
-                throw new FileNotFoundException("GeoIP support assembly was not found beside the CLI.", path);
+                throw new FileNotFoundException(
+                    "GeoIP support assembly was not found beside the CLI. Install it with: titanium update --plus.",
+                    path);
             }
 
             // The satellite is loaded by path, so it is not in titanium.deps.json. Its MaxMind.Db

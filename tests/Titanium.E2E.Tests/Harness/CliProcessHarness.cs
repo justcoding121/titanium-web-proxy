@@ -195,29 +195,94 @@ public sealed partial class CliProcessHarness : IDisposable
 
     public void EnsurePlusDllBesideCli(bool copy)
     {
-        var dest = Path.Combine(CliDirectory, "Titanium.Plus.dll");
         if (!copy)
         {
-            if (File.Exists(dest))
-            {
-                File.Delete(dest);
-            }
-
+            RemoveHarnessPlusFiles(CliDirectory);
             return;
         }
 
         var plusDir = Path.GetDirectoryName(LocatePlusDll())!;
+        var listed = new List<string>();
         foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
         {
             var name = Path.GetFileName(file);
-            // Skip Core/Abstractions already provided by the CLI host.
-            if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase) &&
-                !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
+            if (IsCliOwnedAssembly(name))
             {
                 continue;
             }
 
-            CopyWhenFree(file, Path.Combine(CliDirectory, name));
+            var dest = Path.Combine(CliDirectory, name);
+            var existed = File.Exists(dest);
+            if (existed && !IsPlusSatellite(name))
+            {
+                // Leave assemblies the CLI already ships. Overwriting them and listing them would
+                // make --remove-plus delete a CLI file.
+                continue;
+            }
+
+            CopyWhenFree(file, dest);
+            if (!existed || IsPlusSatellite(name))
+            {
+                listed.Add(name);
+            }
+        }
+
+        listed.Add("Titanium.Plus.files");
+        listed.Sort(StringComparer.Ordinal);
+        File.WriteAllLines(Path.Combine(CliDirectory, "Titanium.Plus.files"), listed);
+    }
+
+    private static bool IsCliOwnedAssembly(string name) =>
+        name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase)
+        && !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPlusSatellite(string name) =>
+        name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Titanium.Xds.dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Titanium.Cli.GeoIp.dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("MaxMind.Db.dll", StringComparison.OrdinalIgnoreCase);
+
+    private static void RemoveHarnessPlusFiles(string directory)
+    {
+        var listPath = Path.Combine(directory, "Titanium.Plus.files");
+        if (File.Exists(listPath))
+        {
+            foreach (var raw in File.ReadAllLines(listPath))
+            {
+                var name = raw.Trim();
+                if (name.Length == 0 || name.IndexOfAny(['/', '\\', ':']) >= 0 || name.Contains("..", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                DeleteWhenFree(Path.Combine(directory, name));
+            }
+
+            DeleteWhenFree(listPath);
+            return;
+        }
+
+        DeleteWhenFree(Path.Combine(directory, "Titanium.Plus.dll"));
+    }
+
+    private static void DeleteWhenFree(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(250);
+            }
         }
     }
 

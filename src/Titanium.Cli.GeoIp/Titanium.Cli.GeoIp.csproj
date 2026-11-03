@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Titanium.Cli.GeoIp</AssemblyName>
-    <!-- The CLI copies this output beside titanium.exe. NuGet dependencies must be in that folder. -->
+    <!-- Plus output and the Plus bundle copy this assembly beside the CLI. NuGet dependencies must be in that folder. -->
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <IsPackable>false</IsPackable>

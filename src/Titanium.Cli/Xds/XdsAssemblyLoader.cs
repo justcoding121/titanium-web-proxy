@@ -35,7 +35,9 @@ internal static class XdsAssemblyLoader
             var path = Path.Combine(AppContext.BaseDirectory, "Titanium.Xds.dll");
             if (!File.Exists(path))
             {
-                throw new FileNotFoundException("xDS support assembly was not found beside the CLI.", path);
+                throw new FileNotFoundException(
+                    "xDS support assembly was not found beside the CLI. Install it with: titanium update --plus.",
+                    path);
             }
 
             existing = AssemblyLoadContext.Default.LoadFromAssemblyPath(path);

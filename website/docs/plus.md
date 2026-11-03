@@ -39,7 +39,7 @@ titanium update --plus --channel beta
 titanium version --check --plus --channel beta
 ```
 
-`titanium version --check --plus` reports local → remote and exit code `2` when a newer Plus is available or Plus is missing. `titanium update --plus` installs or upgrades only when needed; if Plus is already current it prints that and skips the download.
+`titanium version --check --plus` reports local → remote and exit code `2` when a newer Plus is available or Plus is missing. `titanium update --plus` installs or upgrades only when needed; if Plus is already current it prints that and skips the download. The install is a bundle (Plus, the xDS and GeoIP assemblies, and the libraries they need) placed beside the CLI. A feed that only publishes the legacy single-file asset still installs `Titanium.Plus.dll`.
 
 ## Enable / disable
 
@@ -70,7 +70,7 @@ To delete Plus from disk:
 titanium update --remove-plus
 ```
 
-This removes Plus beside the CLI (and `.bak` / `.new`). It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
+This removes exactly the files listed in `Titanium.Plus.files` (and their `.bak` / `.new` copies). When that list is missing, it removes `Titanium.Plus*.dll` only. It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
 
 ## Dashboard
 

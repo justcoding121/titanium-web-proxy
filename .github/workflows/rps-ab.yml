@@ -154,7 +154,7 @@ jobs:
             out="$RUNNER_TEMP/ab-cli/$side"
             dotnet publish -c Release "$wt/src/Titanium.Cli/Titanium.Cli.csproj" -o "$out"
             test -f "$out/titanium.dll"
-            # Plus edition arms copy Titanium.Plus.dll (and its deps) from the product tree beside the CLI.
+            # Plus edition arms copy the Plus file set (Plus, xDS, GeoIP, and deps) from the product tree.
             # Build Plus into the worktree so LocatePlusOutputDirectory / EnsurePlusDllBesideCli can find it.
             if [ -f "$wt/src/Titanium.Plus/Titanium.Plus.csproj" ]; then
               dotnet build -c Release "$wt/src/Titanium.Plus/Titanium.Plus.csproj"
@@ -169,7 +169,9 @@ jobs:
                   Microsoft.IdentityModel.Logging.dll Microsoft.IdentityModel.Protocols.dll \
                   Microsoft.IdentityModel.Protocols.OpenIdConnect.dll Microsoft.IdentityModel.Tokens.dll \
                   Pipelines.Sockets.Unofficial.dll StackExchange.Redis.dll System.IdentityModel.Tokens.Jwt.dll \
-                  YamlDotNet.dll BouncyCastle.Cryptography.dll; do
+                  YamlDotNet.dll BouncyCastle.Cryptography.dll \
+                  Titanium.Xds.dll Titanium.Cli.GeoIp.dll MaxMind.Db.dll \
+                  Grpc.Net.Client.dll Grpc.Net.Common.dll Grpc.Core.Api.dll; do
                 if [ -f "$plus_dir/$dep" ]; then cp -f "$plus_dir/$dep" "$out/$dep"; fi
               done
             fi

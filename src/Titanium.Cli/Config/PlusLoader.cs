@@ -16,7 +16,7 @@ internal static class PlusLoader
         var dllPath = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
         if (!File.Exists(dllPath))
         {
-            warning = "Plus features enabled but Titanium.Plus.dll was not found beside the executable.";
+            warning = "Plus features enabled but Titanium.Plus.dll was not found beside the executable. Install it with: titanium update --plus.";
             return null;
         }
 
@@ -38,8 +38,8 @@ internal static class PlusLoader
 
     private static Assembly? ResolveBesideExecutable(AssemblyLoadContext context, AssemblyName name)
     {
-        // Prefer an assembly already in the default context. Titanium.Xds is copied beside the CLI with
-        // Google.Protobuf; loading that same path into the Plus collectible ALC fails on macOS with
+        // Prefer an assembly already in the default context. The Plus bundle places Titanium.Xds beside
+        // the CLI with Google.Protobuf; loading that same path into the Plus collectible ALC fails on macOS with
         // "An operation is not legal in the current state" (0x80131509). Collectible contexts may
         // reference default-context assemblies.
         var alreadyLoaded = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(loaded =>

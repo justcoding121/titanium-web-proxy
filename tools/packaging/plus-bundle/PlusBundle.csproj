@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Packaging project only. Publish framework-dependent (no RID) and subtract the CLI file set. -->
+    <Description>Framework-dependent closure of Plus, xDS, and GeoIP used to build the Plus bundle zip.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Titanium.Plus\Titanium.Plus.csproj" />
+    <ProjectReference Include="..\..\..\src\Titanium.Xds\Titanium.Xds.csproj" />
+    <ProjectReference Include="..\..\..\src\Titanium.Cli.GeoIp\Titanium.Cli.GeoIp.csproj" />
+  </ItemGroup>
+</Project>

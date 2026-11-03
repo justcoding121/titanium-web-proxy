@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -6,9 +7,19 @@ using System.Text.Json;
 
 namespace Titanium.E2E.Tests.Harness;
 
+/// <summary>Which Plus payload the fake feed advertises.</summary>
+public enum PlusFeedLayout
+{
+    /// <summary>Bundle zip and legacy single-DLL asset. The CLI prefers the bundle.</summary>
+    BundleAndAsset,
+
+    /// <summary>Legacy <c>products.plus.asset</c> only.</summary>
+    AssetOnly,
+}
+
 /// <summary>
 /// Loopback update feed for <c>TITANIUM_UPDATE_FEED</c>: serves a release-manifest JSON,
-/// RID CLI zip, and Plus DLL with matching SHA256.
+/// RID CLI zip, Plus bundle zip, and legacy Plus DLL with matching SHA256.
 /// </summary>
 public sealed class FakeUpdateFeed : IDisposable
 {
@@ -16,11 +27,14 @@ public sealed class FakeUpdateFeed : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly byte[] _cliZip;
     private readonly byte[] _plusDll;
+    private readonly byte[] _plusBundle;
     private readonly string _cliSha;
     private readonly string _plusSha;
+    private readonly string _bundleSha;
     private readonly string _rid;
     private readonly string _version;
     private readonly string _channel;
+    private readonly PlusFeedLayout _layout;
 
     public int Port { get; }
     public string ManifestUrl => $"http://127.0.0.1:{Port}/manifest.json";
@@ -31,10 +45,12 @@ public sealed class FakeUpdateFeed : IDisposable
         string sourceCliDirectory,
         string? plusDllPath,
         string version = "99.0.0",
-        string channel = "stable")
+        string channel = "stable",
+        PlusFeedLayout layout = PlusFeedLayout.BundleAndAsset)
     {
         _version = version;
         _channel = channel;
+        _layout = layout;
         _rid = SuggestRid();
         _cliZip = BuildCliZip(sourceCliDirectory);
         _cliSha = Convert.ToHexString(SHA256.HashData(_cliZip)).ToLowerInvariant();
@@ -50,6 +66,8 @@ public sealed class FakeUpdateFeed : IDisposable
         }
 
         _plusSha = Convert.ToHexString(SHA256.HashData(_plusDll)).ToLowerInvariant();
+        _plusBundle = BuildPlusBundle(sourceCliDirectory, plusDllPath, _plusDll);
+        _bundleSha = Convert.ToHexString(SHA256.HashData(_plusBundle)).ToLowerInvariant();
 
         (_listener, Port) = CliProcessHarness.BindHttpListenerOrRetry(p => $"http://127.0.0.1:{p}/");
         _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
@@ -104,6 +122,12 @@ public sealed class FakeUpdateFeed : IDisposable
                 return;
             }
 
+            if (path.Equals("/Titanium.Plus.zip", StringComparison.OrdinalIgnoreCase))
+            {
+                WriteBytes(ctx, _plusBundle, "application/zip");
+                return;
+            }
+
             if (path.Equals("/Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
             {
                 WriteBytes(ctx, _plusDll, "application/octet-stream");
@@ -138,18 +162,121 @@ public sealed class FakeUpdateFeed : IDisposable
                         },
                     },
                 },
-                plus = new
-                {
-                    version = _version,
-                    asset = new
-                    {
-                        url = $"http://127.0.0.1:{Port}/Titanium.Plus.dll",
-                        sha256 = _plusSha,
-                    },
-                },
+                plus = BuildPlusManifest(),
             },
         };
         return JsonSerializer.Serialize(doc);
+    }
+
+    private object BuildPlusManifest()
+    {
+        var plus = new Dictionary<string, object?>
+        {
+            ["version"] = _version,
+        };
+        if (_layout != PlusFeedLayout.AssetOnly)
+        {
+            plus["bundle"] = new
+            {
+                url = $"http://127.0.0.1:{Port}/Titanium.Plus.zip",
+                sha256 = _bundleSha,
+                size = _plusBundle.Length,
+            };
+        }
+
+        plus["asset"] = new
+        {
+            url = $"http://127.0.0.1:{Port}/Titanium.Plus.dll",
+            sha256 = _plusSha,
+        };
+        return plus;
+    }
+
+    /// <summary>
+    /// Zip Plus-only assemblies (names not already in the CLI directory) plus <c>Titanium.Plus.files</c>.
+    /// A Plus DLL that lives inside a CLI directory becomes a one-file bundle so version checks
+    /// that pass that path do not zip the whole CLI tree.
+    /// </summary>
+    private static byte[] BuildPlusBundle(string sourceCliDirectory, string? plusDllPath, byte[] plusDllBytes)
+    {
+        var files = new List<(string Name, byte[] Bytes)>();
+        var plusDir = ResolvePlusOutputDirectory(plusDllPath);
+        if (plusDir is null)
+        {
+            files.Add(("Titanium.Plus.dll", plusDllBytes));
+        }
+        else
+        {
+            var cliNames = Directory.EnumerateFiles(sourceCliDirectory)
+                .Select(Path.GetFileName)
+                .Where(static name => name is not null)
+                .Cast<string>()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
+            {
+                var name = Path.GetFileName(file);
+                if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase)
+                    && !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (cliNames.Contains(name)
+                    && !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                files.Add((name, File.ReadAllBytes(file)));
+            }
+
+            if (files.All(pair => !pair.Name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase)))
+            {
+                files.Add(("Titanium.Plus.dll", plusDllBytes));
+            }
+        }
+
+        var names = files.Select(pair => pair.Name).Append("Titanium.Plus.files")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, bytes) in files.OrderBy(pair => pair.Name, StringComparer.Ordinal))
+            {
+                var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
+                using var output = entry.Open();
+                output.Write(bytes);
+            }
+
+            var list = zip.CreateEntry("Titanium.Plus.files", CompressionLevel.Fastest);
+            using var listStream = list.Open();
+            using var writer = new StreamWriter(listStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            foreach (var name in names)
+            {
+                writer.Write(name);
+                writer.Write('\n');
+            }
+        }
+
+        return ms.ToArray();
+    }
+
+    private static string? ResolvePlusOutputDirectory(string? plusDllPath)
+    {
+        if (string.IsNullOrEmpty(plusDllPath) || !File.Exists(plusDllPath))
+        {
+            return null;
+        }
+
+        var dir = Path.GetDirectoryName(plusDllPath);
+        if (string.IsNullOrEmpty(dir) || File.Exists(Path.Combine(dir, "titanium.dll")))
+        {
+            return null;
+        }
+
+        return dir;
     }
 
     private static byte[] BuildCliZip(string sourceCliDirectory)
