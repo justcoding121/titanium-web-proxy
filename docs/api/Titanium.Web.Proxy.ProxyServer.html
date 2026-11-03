@@ -1338,14 +1338,15 @@ for timing purposes anywhere in the proxy, so there is zero overhead on the hot 
   <a id="Titanium_Web_Proxy_ProxyServer_EnableRfc8441_" data-uid="Titanium.Web.Proxy.ProxyServer.EnableRfc8441*"></a>
   <h4 id="Titanium_Web_Proxy_ProxyServer_EnableRfc8441" data-uid="Titanium.Web.Proxy.ProxyServer.EnableRfc8441">EnableRfc8441</h4>
   <div class="markdown level1 summary"><p>When <a href="https://learn.microsoft.com/dotnet/csharp/language-reference/builtin-types/bool">true</a>, the proxy enables RFC 8441 WebSocket-over-HTTP/2 and RFC 9220
-WebSocket-over-HTTP/3 (HTTP/1.1 origins only for HTTP/3 in this release):</p>
+WebSocket-over-HTTP/3 (HTTP/1.1, HTTP/2, and HTTP/3 origins for HTTP/3 clients):</p>
 <ul><li>
       Accepts extended CONNECT (<code>:protocol = websocket</code>) from h2 and h3 clients and
       advertises <code>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</code> to them. Per origin: if the
-      origin is HTTP/2 and advertises RFC 8441 support, DATA frames are relayed directly;
-      if the origin is HTTP/2 and does not, the stream is reset with
-      <code>REFUSED_STREAM</code>; if the origin is HTTP/1.1, the h2→h1 or h3→h1 WebSocket
-      upgrade bridge is used.
+      origin is HTTP/2 or HTTP/3 and advertises CONNECT-protocol support, DATA frames are
+      relayed directly; if an h2 client reaches an HTTP/2 origin that does not, the stream
+      is reset with <code>REFUSED_STREAM</code>; if an h3 client reaches an HTTP/2 or HTTP/3
+      origin that does not, the proxy falls back to an HTTP/1.1 WebSocket upgrade; if the
+      origin is HTTP/1.1, the h2→h1 or h3→h1 WebSocket upgrade bridge is used.
     </li><li>
       On the HTTP/1.1-client-to-h2-origin translation bridge, translates
       <code>Upgrade: websocket</code> into extended CONNECT when the origin advertises the

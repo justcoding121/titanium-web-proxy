@@ -51,9 +51,11 @@ Not supported:
 - Mid-connection HTTP/2 → HTTP/3 on an already-open H2↔H2 MITM session.
 - Explicit QUIC proxying (inbound HTTP/3 is `TransparentQuicProxyEndPoint` only).
 
-WebSocket over HTTP/3 (RFC 9220) to HTTP/1.1 origins is supported when `EnableRfc8441 = true` (same switch as
-RFC 8441). The proxy advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL` on HTTP/3 and relays extended CONNECT
-WebSocket DATA to an HTTP/1.1 upgrade on the origin. HTTP/2 and HTTP/3 origins are planned separately.
+WebSocket over HTTP/3 (RFC 9220) is supported when `EnableRfc8441 = true` (same switch as
+RFC 8441). The proxy advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL` on HTTP/3 and bridges
+extended CONNECT (`:protocol = websocket`) to HTTP/1.1, HTTP/2, and HTTP/3 origins
+(HTTP/1.1 upgrade, or native extended CONNECT when the origin advertises the setting;
+otherwise HTTP/1.1 fallback).
 
 WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (plus a native h2↔h2 DATA
 tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
@@ -138,7 +140,7 @@ origin cannot be sent again.
 | `Expect: 100-continue` | Yes | Yes | N/A (no equivalent frame flow) | N/A | `ProxyServer.Enable100ContinueBehaviour`. Set `CompatibilityMode100Continue = true` to emit a synthetic `100 Continue` to clients that block on it when `Enable100ContinueBehaviour = false`. |
 | Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | Yes | Yes | Relayed for all protocol versions. HTTP/3: `Http3OriginBridge` loops on 1xx responses from the origin (up to 20 per request) and forwards each interim HEADERS frame to the client before the final response. |
 | HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (no CONTINUATION frames); multi-frame header blocks do not exist in HTTP/3. |
-| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | RFC 9220 | HTTP/3 uses extended CONNECT for WebSocket when `EnableRfc8441 = true`; HTTP/1.1 origins only in this release. |
+| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | RFC 9220 | HTTP/3 uses extended CONNECT for WebSocket when `EnableRfc8441 = true`; HTTP/1.1, HTTP/2, and HTTP/3 origins. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | No | HTTP/3 transparent endpoint only; no explicit QUIC proxy yet (see [HTTP-3](HTTP-3) §Why no explicit endpoint). |
 | CONNECT-UDP (MASQUE, RFC 9298) | No | Opt-in `Upgrade: connect-udp` when `allowHttp11Upgrade` is true | Capsules on a `type: masque` listener | No | A decrypting hairpin is not implemented. Existing listener types still return 501 for `:protocol connect-udp`. See [MASQUE](MASQUE). |
 | ALPN-based protocol routing | N/A | N/A | Yes | Yes | HTTP/3 negotiates `h3` via QUIC TLS 1.3; the QUIC listener only accepts connections with `h3` ALPN. |
@@ -264,7 +266,7 @@ The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-co
 | `MaxWebSocketFramePayloadBytes` | 16,777,216 (16 MiB) | Maximum WebSocket frame payload size in intercepted sessions. Frames exceeding this are rejected. |
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
-| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and also bridges HTTP/1.1 `Upgrade: websocket` onto h2 origins (extended CONNECT, or HTTP/1.1 fallback when the origin lacks the setting). For h2 clients: if the origin is HTTP/2 and advertises the setting, native h2↔h2 DATA relay is used; if the origin is HTTP/2 and does not, the stream is reset with `REFUSED_STREAM`; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge is used. |
+| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 and h3 clients and also bridges HTTP/1.1 `Upgrade: websocket` onto h2 origins (extended CONNECT, or HTTP/1.1 fallback when the origin lacks the setting). For h2 clients: if the origin is HTTP/2 and advertises the setting, native h2↔h2 DATA relay is used; if the origin is HTTP/2 and does not, the stream is reset with `REFUSED_STREAM`; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge is used. For h3 clients: HTTP/1.1, HTTP/2, and HTTP/3 origins are bridged (native extended CONNECT when the origin advertises the setting; otherwise HTTP/1.1 fallback). |
 | `EnableHttp3` | `false` | Library default. CLI and Inspector turn HTTP/3 on when QUIC is supported. See [HTTP-3](HTTP-3). |
 | `EnableQpackDynamicTable` | `false` | Enables QPACK dynamic table synchronisation per RFC 9204 (full Base-relative decode). Requires `EnableHttp3 = true`. See [HTTP-3](HTTP-3) for details. |
 | `EnableHttpsSvcbDnsDiscovery` | inherits `EnableHttp3` | Enables proactive HTTP/3 capability discovery via HTTPS/SVCB DNS queries (RFC 9460). Background-only in Auto mode; first-connection H3 adoption otherwise comes from `Alt-Svc`. |
