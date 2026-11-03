@@ -569,7 +569,7 @@ public sealed partial class CliProcessHarness : IDisposable
         }
 
         // The CLI child can leave CurrentUser\CA copies from SslStreamCertificateContext.Create.
-        Titanium.Web.Proxy.Network.CertificateManager.ScrubTestHostUserStores();
+        Titanium.TestKit.Shared.TwpStoreLeakGuard.ScrubLeakedCertificates();
 
         if (_ownsIsolatedDirectory && _isolatedDirectory is not null)
         {

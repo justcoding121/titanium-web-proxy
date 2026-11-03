@@ -104,7 +104,12 @@ public sealed class ManagerChartTests
 
         var (multiExit, multiOut) = Run(helm, $"template rel \"{ChartDir}\" --set replicaCount=2");
         Assert.AreNotEqual(0, multiExit);
-        StringAssert.Contains(multiOut, "single-instance only");
+        // Helm schema messages vary by version; accept the chart's wording or the JSON-schema ceiling.
+        StringAssert.Matches(
+            multiOut,
+            new System.Text.RegularExpressions.Regex(
+                "single-instance only|Must be less than or equal to 1",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase));
     }
 
     private static string? FindHelm()

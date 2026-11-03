@@ -56,21 +56,17 @@ if ($Remove) {
 }
 
 if ($Ci -or $LoopbackRules) {
-    # New-NetFirewallRule rejects mixing 127.0.0.1 and ::1 in one RemoteAddress list
-    # ("loopback IPv6 address was specified"). Keep one rule per address family.
-    foreach ($pair in @(
-            @{ Name = "$ruleName (IPv4)"; Remote = '127.0.0.1' },
-            @{ Name = "$ruleName (IPv6)"; Remote = '::1' }
-        )) {
-        $existing = Get-NetFirewallRule -PolicyStore PersistentStore -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -eq $pair.Name }
-        if (-not $existing) {
-            New-NetFirewallRule -PolicyStore PersistentStore -DisplayName $pair.Name -Direction Inbound -Action Allow `
-                -Program $dotnet -RemoteAddress $pair.Remote -Profile Any | Out-Null
-            Write-Host "Added $($pair.Name) for $dotnet"
-        } else {
-            Write-Host "$($pair.Name) already exists"
-        }
+    # New-NetFirewallRule rejects ::1 as RemoteAddress ("loopback IPv6 address was specified").
+    # IPv4 loopback is enough for hosted runners; tests bind 127.0.0.1.
+    $display = "$ruleName (IPv4)"
+    $existing = Get-NetFirewallRule -PolicyStore PersistentStore -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -eq $display -or $_.DisplayName -eq $ruleName }
+    if (-not $existing) {
+        New-NetFirewallRule -PolicyStore PersistentStore -DisplayName $display -Direction Inbound -Action Allow `
+            -Program $dotnet -RemoteAddress '127.0.0.1' -Profile Any | Out-Null
+        Write-Host "Added $display for $dotnet"
+    } else {
+        Write-Host "$display already exists"
     }
 }
 
