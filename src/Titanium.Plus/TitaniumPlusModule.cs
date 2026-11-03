@@ -21,7 +21,7 @@ namespace Titanium.Plus;
 /// </summary>
 public sealed class TitaniumPlusModule : ITitaniumPlusModule
 {
-    public Version RequiredAbstractionsVersion { get; } = new(7, 0, 1);
+    public Version RequiredAbstractionsVersion { get; } = new(8, 0, 0);
 
     public void Apply(PlusActivationContext context)
     {

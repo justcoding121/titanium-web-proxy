@@ -38,6 +38,8 @@ cosign verify ghcr.io/justcoding121/titanium-web-proxy:<version> \
 
 The image does not carry `libmsquic`, so HTTP/3 and QUIC listeners are off. Use the release zip or a custom base image when you need them.
 
+Release images **do** bundle Lua and Wasmtime natives for `linux/amd64` and `linux/arm64` (glibc). Script plugins work in the default chart Deployment. Alpine / musl nodes need the `linux-musl-*` CLI zip or a custom image — see [Scripting](/docs/scripting) and `titanium scripting-deps status`.
+
 ## Admin endpoints
 
 Turn on `server.admin` for probes and metrics on a port that no proxy listener shares. Full reference: [Admin listener](/docs/configuration#admin-listener-server-admin).
@@ -53,9 +55,14 @@ Binding the admin port to anything but loopback requires a token (`authTokenEnv`
 
 ## Helm chart
 
+Install from the repo tree, from the Helm `.tgz` on the [GitHub Release](https://github.com/justcoding121/titanium-web-proxy/releases), or from OCI:
+
 ```shell
 helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
+# or: helm install titanium oci://ghcr.io/justcoding121/charts/titanium --version <chart-version>
 ```
+
+Gateway API and Manager charts follow the same paths (`titanium-gateway`, `titanium-manager`).
 
 Minimal `my-values.yaml`:
 

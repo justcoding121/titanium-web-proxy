@@ -1,8 +1,8 @@
-# Perf gate checklist (7.0)
+# Perf gate checklist (8.0)
 
 Run on the release SHA via [`.github/workflows/rps-saturation.yml`](../../.github/workflows/rps-saturation.yml) (manual `workflow_dispatch`).
 
-Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature commits.
+Product version is **`8.0.0.0`**; gates block beta/stable tags, not feature commits.
 
 ## Commercial-grade parity baseline
 

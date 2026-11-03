@@ -21,9 +21,9 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 
 - Decrypt and inspect HTTPS in a native desktop Inspector on Windows, macOS, and Linux — AutoResponder, Map Local/Remote, breakpoints, Composer, HAR, curl/fetch
 - Speak modern HTTP — HTTP/2 by default, optional HTTP/3, WebSocket, gRPC, SSE, GraphQL rules in the same grid
-- Run the same engine as a reverse / edge proxy from the CLI — YAML routes, load balancing and failover, retries, rate limits, response compression, gRPC-Web, TCP and UDP relay, ACME, live reload
-- Deploy on Kubernetes with a hardened container image, a Helm chart, probes, and a Gateway API and Ingress controller
-- Observe it with Prometheus text, OTLP traces and metrics, and an access log; Plus adds a dashboard, OpenID Connect login, a response cache, and WAF screening
+- Run the same engine as a reverse / edge proxy from the CLI — YAML routes, load balancing and failover, retries, rate limits, response compression, gRPC-Web, TCP and UDP relay, ACME, live reload, Lua 5.4 and proxy-wasm scripting (`titanium scripting-deps`)
+- Deploy on Kubernetes with a hardened container image, Helm charts (git, Release `.tgz`, or OCI), probes, a Gateway API / Ingress controller, and an optional Manager control plane; hot restart for TCP without a gap
+- Observe it with Prometheus text, OTLP traces and metrics, and an access log; Plus adds a dashboard, OpenID Connect login, a response cache, fleet rate limits, xDS, and WAF screening
 - Embed in .NET via NuGet (MIT); Inspector is free for personal and education use
 - When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 
@@ -58,7 +58,7 @@ titanium update
 
 **Optional Plus:** `titanium update --plus`, then `plus.enabled: true` — [Plus](https://titaniumproxy.com/docs/plus).
 
-**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64) and a chart in `deploy/helm/titanium` — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). To run Titanium behind Gateway API or Ingress resources, see [Gateway API](https://titaniumproxy.com/docs/gateway-api).
+**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64, with Lua/Wasmtime natives) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api). 7.x→8.0: [migration](docs/migration-7-to-8.md).
 
 ```shell
 docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest

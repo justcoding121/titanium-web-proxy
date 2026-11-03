@@ -243,18 +243,19 @@ jobs:
       max-parallel: 2
       matrix:
         include:
+          # Lua shim builds only on a matching OS/arch host; arm/musl use native or Alpine runners.
           - rid: linux-x64
             os: ubuntu-latest
           - rid: linux-arm64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
           - rid: linux-musl-x64
             os: ubuntu-latest
           - rid: linux-musl-arm64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
           - rid: win-x64
             os: windows-latest
           - rid: osx-x64
-            os: macos-latest
+            os: macos-13
           - rid: osx-arm64
             os: macos-latest
     steps:
@@ -300,15 +301,33 @@ jobs:
             Copy-Item "$out/titanium" "$out/twp"
           }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
-      # Scripting natives (Lua + shim, Wasmtime). Soft-fail on first landing: the CLI works without them
-      # (titanium scripting-deps status reports what is missing). Lua is skipped with a warning when
-      # the runner cannot build the RID natively or tools/scripting/lua-shim has no sources yet.
+      # Scripting natives (Lua + shim, Wasmtime). Hard-fail for every shipping RID: release zips must
+      # ship both files so `titanium scripting-deps status` reports loaded. Lua needs a matching host
+      # (see matrix OS) or an Alpine container for musl RIDs.
       - name: Bundle scripting natives (Cli)
-        continue-on-error: true
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
         shell: pwsh
         run: |
           $rid = "${{ matrix.rid }}"
-          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/cli/$rid"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/cli/$rid" -Strict
+      - name: Bundle scripting natives (Cli, musl via Alpine)
+        if: startsWith(matrix.rid, 'linux-musl-')
+        shell: bash
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          out="artifacts/cli/$rid"
+          # Wasmtime archive is RID-specific and downloads on any host; Lua must compile on musl.
+          pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 -Rid "$rid" -PublishDir "$out" -SkipLua
+          platform=linux/amd64
+          if [[ "$rid" == *arm64 ]]; then platform=linux/arm64; fi
+          docker run --rm --platform "$platform" \
+            -v "$PWD:/src" -w /src \
+            mcr.microsoft.com/powershell:lts-alpine-3.17 \
+            sh -c "apk add --no-cache build-base curl ca-certificates icu-libs \
+              && pwsh -NoProfile -File tools/packaging/bundle-scripting-native.ps1 -Rid '$rid' -PublishDir '$out' -SkipWasmtime -Strict"
+          test -f "$out/liblua54.so"
+          test -f "$out/libwasmtime.so"
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3
@@ -516,12 +535,7 @@ jobs:
             Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
             Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
           }
-      - name: Bundle scripting natives (Inspector)
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $rid = "${{ matrix.rid }}"
-          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/inspector/$rid"
+      # Inspector does not register Lua/WASM engines; do not ship scripting natives in Inspector zips.
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3
@@ -682,6 +696,48 @@ jobs:
             grep -qi 'IsSupported' /cli/smoke-out.txt
             test -e /cli/libmsquic.so -o -e /cli/libmsquic.so.2 -o -e /cli/libmsquic.so.2.5.7
 
+  smoke-scripting:
+    needs: build-cli
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: win-x64
+            os: windows-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-${{ matrix.rid }}
+          path: dist
+      - name: Smoke scripting natives (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          unzip -q dist/Titanium.Cli-${{ matrix.rid }}.zip -d cli
+          chmod +x cli/titanium
+          test -f cli/liblua54.so
+          test -f cli/libwasmtime.so
+          ./cli/titanium scripting-deps status | tee smoke-scripting.txt
+          grep -qi 'Lua: loaded' smoke-scripting.txt
+          grep -qi 'Wasmtime: loaded' smoke-scripting.txt
+      - name: Smoke scripting natives (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive -Path "dist/Titanium.Cli-${{ matrix.rid }}.zip" -DestinationPath cli -Force
+          if (-not (Test-Path cli/lua54.dll)) { throw 'lua54.dll missing from win-x64 CLI zip' }
+          if (-not (Test-Path cli/wasmtime.dll)) { throw 'wasmtime.dll missing from win-x64 CLI zip' }
+          & ./cli/titanium.exe scripting-deps status | Tee-Object -FilePath smoke-scripting.txt
+          $text = Get-Content -Raw smoke-scripting.txt
+          if ($text -notmatch 'Lua:\s*loaded') { throw 'Lua not loaded in scripting-deps status' }
+          if ($text -notmatch 'Wasmtime:\s*loaded') { throw 'Wasmtime not loaded in scripting-deps status' }
+
   # Stable-only Linux product RPS smoke (not wiki-grade 3-OS median-of-3).
   # Beta channel skips this; spot + editions already ran on the merge SHA.
   rps-product-smoke:
@@ -732,7 +788,7 @@ jobs:
           if-no-files-found: ignore
 
   publish-release:
-    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, rps-product-smoke]
+    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, smoke-scripting, rps-product-smoke]
     if: |
       always() &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
@@ -741,6 +797,7 @@ jobs:
       needs.build-plus.result == 'success' &&
       needs.build-inspector.result == 'success' &&
       needs.smoke-http3.result == 'success' &&
+      needs.smoke-scripting.result == 'success' &&
       (needs.rps-product-smoke.result == 'success' || needs.rps-product-smoke.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -807,7 +864,7 @@ jobs:
             "abstractionsVersion": version.split("-")[0],
             "products": {
               "cli": {"assets": {}},
-              "plus": {"version": version, "requiredAbstractions": "7.0.0", "asset": None},
+              "plus": {"version": version, "requiredAbstractions": "8.0.0", "asset": None},
               "inspector": {"assets": {}},
             },
             "nuget": {
@@ -1182,15 +1239,23 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v7
       - uses: azure/setup-helm@v5
         with:
           version: v3.17.3
-      - name: Package the charts onto the GitHub release
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package charts onto the GitHub release and push OCI
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          CHANNEL: ${{ needs.resolve-version.outputs.channel }}
         run: |
           set -euo pipefail
           mkdir -p charts
@@ -1198,6 +1263,11 @@ jobs:
           helm package deploy/helm/titanium-gateway -d charts
           helm package deploy/helm/titanium-manager -d charts
           gh release upload "$TAG" charts/*.tgz --clobber
+          # OCI registry: oci://ghcr.io/justcoding121/charts/<chart-name>
+          for tgz in charts/*.tgz; do
+            helm push "$tgz" oci://ghcr.io/justcoding121/charts
+          done
+          echo "Published Helm charts to GitHub release $TAG and oci://ghcr.io/justcoding121/charts (channel=$CHANNEL version=$VERSION)"
 
   image-scan:
     needs: [resolve-version, publish-image, publish-gateway-image, publish-manager-image]

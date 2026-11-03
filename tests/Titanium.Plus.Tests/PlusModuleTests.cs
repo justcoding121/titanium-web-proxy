@@ -26,10 +26,10 @@ namespace Titanium.Plus.Tests;
 public class PlusModuleTests
 {
     [TestMethod]
-    public void RequiredAbstractionsVersion_Is70()
+    public void RequiredAbstractionsVersion_Is80()
     {
         TitaniumPlusModule module = new TitaniumPlusModule();
-        Assert.AreEqual(new Version(7, 0, 1), module.RequiredAbstractionsVersion);
+        Assert.AreEqual(new Version(8, 0, 0), module.RequiredAbstractionsVersion);
     }
 
     [TestMethod]

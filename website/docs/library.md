@@ -10,7 +10,9 @@ dotnet add package Titanium.Web.Proxy
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for library users). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md).
+Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for library users). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md) and [migration 7→8](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-7-to-8.md).
+
+**Scripting** (Lua / WASM) ships inside the CLI, not as a NuGet package. Embedders that need those engines copy the RID natives beside the host binary (see [Scripting](/docs/scripting) and `titanium scripting-deps`).
 
 ## Explicit man-in-the-middle (MITM) proxy
 

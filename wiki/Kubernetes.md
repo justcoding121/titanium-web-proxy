@@ -16,6 +16,8 @@ The CLI ships as a hardened container image and a Helm chart. The image is `ghcr
 
 ```shell
 helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
+# or from OCI / the Helm .tgz on the GitHub Release:
+# helm install titanium oci://ghcr.io/justcoding121/charts/titanium --version <chart-version>
 ```
 
 `config` in the values is the whole `twp.yaml`. The chart owns `server.admin`; set those fields through the `admin.*` values. Mount the config and any Secret files as **directories**, never with `subPath`: a single-file mount does not see the `..data` swap.
@@ -26,6 +28,6 @@ PodDisruptionBudget (on), HorizontalPodAutoscaler, ServiceMonitor (needs the Pro
 
 ## Limits
 
-The image carries no `libmsquic`, so HTTP/3 listeners are off; use the release zip or a custom base for QUIC. Listener, certificate, and Plus plugin changes need a restart, and `rolloutOnConfigChange: true` rolls the pods when the ConfigMap changes.
+The image carries no `libmsquic`, so HTTP/3 listeners are off; use the release zip or a custom base for QUIC. Release images do bundle Lua and Wasmtime natives on glibc (`linux/amd64`, `linux/arm64`); musl nodes need the `linux-musl-*` zip or a custom image (`titanium scripting-deps status`). Listener, certificate, and Plus plugin changes need a restart, and `rolloutOnConfigChange: true` rolls the pods when the ConfigMap changes.
 
 See [Metrics](Metrics) for the Prometheus text and [Security considerations](Security-Considerations) for hardening.

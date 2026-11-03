@@ -1,6 +1,6 @@
 # Packaging notes (Titanium Inspector / Cli)
 
-## RID matrix (7.0)
+## RID matrix (8.0)
 
 | Product | RIDs | Primary formats | Also attached |
 | --- | --- | --- | --- |
@@ -11,7 +11,7 @@ HTTP/3 natives are bundled into every Linux/macOS publish via [`bundle-http3-nat
 
 Website [download](../../website/download.md) prefers MSI/DMG/AppImage/deb/rpm and hides redundant zips when those exist.
 
-Container images (CLI, gateway, manager) live under [`docker/`](docker/); build from the repository root with `-f tools/packaging/docker/Dockerfile` (and the `.gateway` / `.manager` variants). Helm charts stay under `deploy/helm/`.
+Container images (CLI, gateway, manager) live under [`docker/`](docker/); build from the repository root with `-f tools/packaging/docker/Dockerfile` (and the `.gateway` / `.manager` variants). The CLI image bundles Lua/Wasmtime natives for glibc RIDs; it still omits libmsquic. Helm charts stay under `deploy/helm/` (`version` 1.0.0 with product majors). Release CI packages charts onto the GitHub Release and pushes OCI to `oci://ghcr.io/justcoding121/charts`. `Titanium.Web.Proxy.Scripting` is not published to nuget.org (CLI-embedded only).
 
 ## Publish (local)
 
@@ -140,16 +140,18 @@ Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistrib
 | Lua 5.4.7 + Titanium Lua shim | Built from the lua.org source tarball (sha256 pinned) plus `tools/scripting/lua-shim/*.c` into `lua54.dll` / `liblua54.so` / `liblua54.dylib`. Needs a native compiler for the RID; skipped with a warning otherwise |
 | Wasmtime C API 50.0.0 | Prebuilt GitHub release `*-c-api` archive per RID (sha256 pinned) → `wasmtime.dll` / `libwasmtime.so` / `libwasmtime.dylib` |
 
-`bundle-scripting-native.ps1 -Rid <rid> -PublishDir <dir>` downloads, verifies, and copies them; release CI runs it as a soft-fail step (`continue-on-error`) after the HTTP/3 bundle. Licenses: `THIRD-PARTY-SCRIPTING.txt`. Local dev: `tools/scripting/README.md`. Bump Wasmtime by updating the version, URLs, and the GitHub asset digests together.
+`bundle-scripting-native.ps1 -Rid <rid> -PublishDir <dir>` downloads, verifies, and copies them. Release CI **hard-fails** the CLI matrix when natives are missing (`-Strict` on matching hosts; musl Lua builds inside Alpine). Inspector zips do **not** bundle scripting natives. Licenses: `THIRD-PARTY-SCRIPTING.txt`. Local dev: `tools/scripting/README.md`. Bump Wasmtime by updating the version, URLs, and the GitHub asset digests together.
+
 ## CI
 
 See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 
-- Matrix RID × runner (`windows-latest` for `win-x64` CLI/Inspector; `ubuntu-latest` for linux/musl; `macos-latest` for osx).
+- Matrix RID × matching runner (`windows-latest` for `win-x64`; `ubuntu-24.04-arm` for linux-arm64 / musl-arm64; `macos-13` for `osx-x64`; `macos-latest` for `osx-arm64`; Alpine container for musl Lua).
 - Azure Artifact Signing on Windows; optional Apple notarize when secrets exist; optional GPG on checksums.
-- Smoke: `linux-x64` on host + `linux-musl-x64` inside `alpine:3.24` — `titanium http3-deps status` + assert natives present.
+- Smoke: `linux-x64` / `linux-musl-x64` HTTP/3; `linux-x64` + `win-x64` scripting (`titanium scripting-deps status` + native files).
+- Helm: package three charts onto the Release and `helm push` to OCI (`setup-helm` v5).
 
-Native bundling runs on **release** only (not every PR).
+Native bundling for CLI scripting runs on **release** and hard-fails the cut when incomplete.
 
 ### Local macOS Debug / `dotnet run`
 

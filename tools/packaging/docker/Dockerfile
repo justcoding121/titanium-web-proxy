@@ -11,8 +11,8 @@
 #
 # The runtime stage is a chiseled, distroless-style base: no shell, no package manager, non-root user (UID 1654).
 # HTTP/3 needs libmsquic, which this image does not carry; use the release zip or a custom base for QUIC listeners.
-# Scripting (Lua / Wasmtime) natives are not built into this image yet: run tools/packaging/bundle-scripting-native.ps1
-# -Rid linux-x64|linux-arm64 -PublishDir <out> and COPY the resulting liblua54.so / libwasmtime.so into /app, or use the release zip.
+# Scripting (Lua / Wasmtime) natives are bundled for linux-x64 and linux-arm64 (glibc). Alpine/musl clusters
+# should use the linux-musl-* CLI zip or a custom image built from that zip.
 
 ARG DOTNET_VERSION=10.0
 
@@ -36,6 +36,27 @@ RUN case "${TARGETARCH}" in \
          -p:DebugType=None -p:DebugSymbols=false \
          -o /out
 
+# Lua must compile on the target arch; Wasmtime is downloaded for that RID. Run under TARGETPLATFORM.
+FROM --platform=$TARGETPLATFORM mcr.microsoft.com/powershell:lts-ubuntu-22.04 AS scripting
+ARG TARGETARCH
+WORKDIR /work
+COPY tools/packaging tools/packaging
+COPY tools/scripting tools/scripting
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+         build-essential ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && case "${TARGETARCH}" in \
+         amd64) RID=linux-x64 ;; \
+         arm64) RID=linux-arm64 ;; \
+         *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+       esac \
+    && mkdir -p /natives \
+    && pwsh -NoProfile -File tools/packaging/bundle-scripting-native.ps1 \
+         -Rid "${RID}" -PublishDir /natives -Strict \
+    && test -f /natives/liblua54.so \
+    && test -f /natives/libwasmtime.so
+
 FROM mcr.microsoft.com/dotnet/runtime-deps:${DOTNET_VERSION}-noble-chiseled-extra AS runtime
 ARG VERSION=0.0.0-dev
 ARG COMMIT=unknown
@@ -48,6 +69,8 @@ LABEL org.opencontainers.image.title="Titanium Web Proxy" \
 
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /out/ /app/
+COPY --from=scripting --chown=1654:1654 /natives/liblua54.so /natives/libwasmtime.so /app/
+COPY --from=scripting --chown=1654:1654 /natives/THIRD-PARTY-SCRIPTING.txt /natives/LICENSE-WASMTIME.txt /app/
 
 # Read-only root friendly: nothing is written under /app. Scratch files go to /tmp (mount an emptyDir or tmpfs).
 # Diagnostics are off because the .NET diagnostic IPC socket would otherwise need a writable /tmp.

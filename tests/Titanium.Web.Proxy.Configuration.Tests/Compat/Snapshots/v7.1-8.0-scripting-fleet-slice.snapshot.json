@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "7.1",
+  "listeners": [
+    {
+      "host": "127.0.0.1",
+      "port": 8080,
+      "decryptSsl": false,
+      "acceptProxyProtocol": false,
+      "trustedProxyProtocolSources": [],
+      "passthrough": false,
+      "terminateTls": false,
+      "sniRoutes": []
+    }
+  ],
+  "routes": [
+    {
+      "id": "site",
+      "clusterId": "web",
+      "match": {
+        "path": "/",
+        "pathKind": "prefix",
+        "pathCaseSensitive": true
+      },
+      "order": 0,
+      "policies": [
+        "fleet-bucket"
+      ],
+      "grpcWeb": false,
+      "middleware": [
+        "header-gate"
+      ]
+    }
+  ],
+  "clusters": [
+    {
+      "id": "web",
+      "destinations": [
+        {
+          "id": "a",
+          "address": "127.0.0.1",
+          "port": 9000,
+          "useHttps": false,
+          "weight": 1,
+          "useDestinationHost": false,
+          "dnsRefreshSeconds": 0,
+          "priority": 0,
+          "backup": false,
+          "slowStartSeconds": 0
+        }
+      ],
+      "algorithm": "roundRobin",
+      "slowStartSeconds": 0
+    }
+  ],
+  "policies": [
+    {
+      "name": "fleet-bucket",
+      "kind": "rateLimit",
+      "limit": 100,
+      "windowSeconds": 60,
+      "key": "client",
+      "algorithm": "tokenBucket",
+      "burst": 100,
+      "scope": "fleet",
+      "fleetFailMode": "local",
+      "localShare": 0.25
+    }
+  ],
+  "plus": {
+    "enabled": true,
+    "options": {
+      "state.redis": "127.0.0.1:6379"
+    }
+  },
+  "plugins": [
+    {
+      "name": "header-gate",
+      "kind": "lua",
+      "file": "Compat/noop-header-gate.lua"
+    }
+  ]
+}
