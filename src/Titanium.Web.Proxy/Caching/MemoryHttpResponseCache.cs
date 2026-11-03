@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Diagnostics;
 
@@ -19,7 +20,7 @@ namespace Titanium.Web.Proxy.Caching;
 /// Resident bodies are exact-size arrays shared by all readers (a hit copies nothing); the pooled staging buffers
 /// used while a streamed body is accumulated are returned before the entry is stored.
 /// </remarks>
-public sealed class MemoryHttpResponseCache : IHttpResponseCache
+public sealed class MemoryHttpResponseCache : IHttpResponseCache, IHttpResponseCacheStats
 {
     /// <summary>Default total budget: 64 MiB.</summary>
     public const long DefaultMaxBytes = 64L * 1024 * 1024;

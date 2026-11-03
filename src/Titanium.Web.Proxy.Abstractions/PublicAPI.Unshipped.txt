@@ -1206,3 +1206,44 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusActivationContext.ConfigEditor.init 
 static Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Ok(string? overlayDigest = null) -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult!
 static Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult.Rejected(System.Collections.Generic.IReadOnlyList<string!>! errors) -> Titanium.Web.Proxy.Abstractions.Plugins.ConfigEditResult!
 static Titanium.Web.Proxy.Abstractions.Compression.ContentCodecs.Unregister(string! name) -> bool
+Titanium.Web.Proxy.Abstractions.Caching.CacheStorePlan
+Titanium.Web.Proxy.Abstractions.Caching.CacheStorePlan.CacheStorePlan() -> void
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.Body.get -> byte[]!
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.Body.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.CachedServe() -> void
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.Headers.get -> System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<string!, string!>>!
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.Headers.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.StatusCode.get -> int
+Titanium.Web.Proxy.Abstractions.Caching.CachedServe.StatusCode.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.ICacheBodyTee
+Titanium.Web.Proxy.Abstractions.Caching.ICacheBodyTee.Append(byte[]! source, int offset, int count) -> void
+Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState
+Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState.Abandon() -> void
+Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState.Owner.get -> Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine!
+Titanium.Web.Proxy.Abstractions.Caching.IHttpResponseCacheStats
+Titanium.Web.Proxy.Abstractions.Caching.IHttpResponseCacheStats.Bytes.get -> long
+Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine
+Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.CompleteStore(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state, Titanium.Web.Proxy.Abstractions.Caching.CacheStorePlan! plan, byte[]? body, long expectedLength) -> void
+Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.ConditionalValidators(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state) -> (string? IfNoneMatch, string? IfModifiedSince)
+Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.MaxEntryBytes.get -> int
+Titanium.Web.Proxy.Abstractions.Caching.IResponseCacheEngine.OnOriginResponse(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state, int statusCode, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! headers, bool hasBody, long contentLength, bool chunked) -> Titanium.Web.Proxy.Abstractions.Caching.OriginDecision
+Titanium.Web.Proxy.Abstractions.Caching.OriginAction
+Titanium.Web.Proxy.Abstractions.Caching.OriginAction.Pass = 0 -> Titanium.Web.Proxy.Abstractions.Caching.OriginAction
+Titanium.Web.Proxy.Abstractions.Caching.OriginAction.Serve = 1 -> Titanium.Web.Proxy.Abstractions.Caching.OriginAction
+Titanium.Web.Proxy.Abstractions.Caching.OriginAction.StoreBuffered = 2 -> Titanium.Web.Proxy.Abstractions.Caching.OriginAction
+Titanium.Web.Proxy.Abstractions.Caching.OriginAction.StoreStreamed = 3 -> Titanium.Web.Proxy.Abstractions.Caching.OriginAction
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Action.get -> Titanium.Web.Proxy.Abstractions.Caching.OriginAction
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Action.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.ContentLength.get -> long
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.ContentLength.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.OriginDecision() -> void
+static Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Pass.get -> Titanium.Web.Proxy.Abstractions.Caching.OriginDecision
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Plan.get -> Titanium.Web.Proxy.Abstractions.Caching.CacheStorePlan?
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Plan.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Serve.get -> Titanium.Web.Proxy.Abstractions.Caching.CachedServe?
+Titanium.Web.Proxy.Abstractions.Caching.OriginDecision.Serve.init -> void
+Titanium.Web.Proxy.Abstractions.Caching.ResponseCacheItems
+const Titanium.Web.Proxy.Abstractions.Caching.ResponseCacheItems.StateKey = "twp.cache.state" -> string!
+

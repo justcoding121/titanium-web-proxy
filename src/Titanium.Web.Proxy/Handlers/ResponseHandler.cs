@@ -5,6 +5,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -566,7 +567,7 @@ public partial class ProxyServer
         Compression.ResponseCompressionPolicy.Apply(response, algorithm, compressed);
     }
 
-    private Caching.HttpResponseCacheMiddleware? FindResponseCache()
+    private IResponseCacheEngine? FindResponseCache()
     {
         var middleware = ReverseProxy?.Middleware;
         if (middleware == null)
@@ -574,7 +575,7 @@ public partial class ProxyServer
 
         for (var i = 0; i < middleware.Count; i++)
         {
-            if (middleware[i] is Caching.HttpResponseCacheMiddleware cache)
+            if (middleware[i] is IResponseCacheEngine cache)
                 return cache;
         }
 
@@ -620,19 +621,19 @@ public partial class ProxyServer
     private static void ApplyOriginCacheDecision(
         SessionEventArgs args,
         Caching.CacheSessionSlot slot,
-        Caching.CacheRequestState state,
+        ICacheRequestState state,
         Response response,
-        Caching.HttpResponseCacheMiddleware.OriginDecision decision)
+        OriginDecision decision)
     {
         switch (decision.Action)
         {
-            case Caching.HttpResponseCacheMiddleware.OriginAction.Serve:
+            case OriginAction.Serve:
                 Caching.HttpResponseCacheMiddleware.RespondFromCache(args, decision.Serve!,
                     closeServerConnection: response.HasBody && !response.IsBodyRead);
                 break;
 
-            case Caching.HttpResponseCacheMiddleware.OriginAction.StoreBuffered
-                or Caching.HttpResponseCacheMiddleware.OriginAction.StoreStreamed:
+            case OriginAction.StoreBuffered
+                or OriginAction.StoreStreamed:
                 ApplyStoreOriginCacheDecision(slot, state, response, decision);
                 break;
         }
@@ -640,9 +641,9 @@ public partial class ProxyServer
 
     private static void ApplyStoreOriginCacheDecision(
         Caching.CacheSessionSlot slot,
-        Caching.CacheRequestState state,
+        ICacheRequestState state,
         Response response,
-        Caching.HttpResponseCacheMiddleware.OriginDecision decision)
+        OriginDecision decision)
     {
         if (response.IsBodyRead)
         {
@@ -685,7 +686,7 @@ public partial class ProxyServer
             && response.HasBody
             && !response.IsChunked
             && !response.HasTrailingHeaders
-            && response.ContentLength is > 0 and <= Caching.HttpResponseCacheMiddleware.MaxCachedBodyBytes)
+            && response.ContentLength is > 0 and <= Caching.ResponseCacheLimits.MaxCachedBodyBytes)
         {
             try
             {

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using Titanium.Web.Proxy.Abstractions.Caching;
 
 namespace Titanium.Web.Proxy.Caching;
 
@@ -8,7 +9,7 @@ namespace Titanium.Web.Proxy.Caching;
 /// accumulating (and frees its buffer) the moment the body outgrows its limit; the relay is never affected either way.
 /// The staging buffer is rented from <see cref="ArrayPool{T}.Shared"/> and always returned.
 /// </summary>
-internal sealed class ResponseBodyTee : IDisposable
+internal sealed class ResponseBodyTee : ICacheBodyTee
 {
     private readonly int _limit;
     private byte[]? _buffer;
@@ -89,12 +90,12 @@ internal sealed class ResponseBodyTee : IDisposable
 /// </summary>
 internal sealed class CacheSessionSlot : IDisposable
 {
-    public CacheRequestState? State;
-    public ResponseBodyTee? Tee;
+    public ICacheRequestState? State;
+    public ICacheBodyTee? Tee;
     public StorePlanHolder? Plan;
 
     /// <summary>Start collecting the body that is about to be relayed, to store it under <paramref name="plan"/>.</summary>
-    public void BeginTee(CacheRequestState state, HttpCachePolicy.StorePlan plan, long expectedLength)
+    public void BeginTee(ICacheRequestState state, CacheStorePlan plan, long expectedLength)
     {
         State = state;
         Tee?.Dispose();
@@ -128,7 +129,7 @@ internal sealed class CacheSessionSlot : IDisposable
         byte[]? body;
         try
         {
-            body = tee.ToArray();
+            body = ((ResponseBodyTee)tee).ToArray();
         }
         finally
         {
@@ -149,6 +150,6 @@ internal sealed class CacheSessionSlot : IDisposable
 /// <summary>Carries the store plan between the response-header decision and the end of the body copy.</summary>
 internal sealed class StorePlanHolder
 {
-    public required HttpCachePolicy.StorePlan Plan { get; init; }
+    public required CacheStorePlan Plan { get; init; }
     public long ExpectedLength { get; init; } = -1;
 }

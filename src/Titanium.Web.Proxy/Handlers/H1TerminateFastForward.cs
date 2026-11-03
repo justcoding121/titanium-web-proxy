@@ -5,6 +5,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Diagnostics;
@@ -213,7 +214,7 @@ public partial class ProxyServer
             return !H1TerminateClientRequestedClose(request);
         }
 
-        Caching.CacheRequestState? cacheState = null;
+        ICacheRequestState? cacheState = null;
         if (ReverseProxy?.Middleware is { Count: > 0 } middleware)
         {
             var (handled, state) = await TryRunTerminateLiteMiddlewareAsync(
@@ -347,13 +348,13 @@ public partial class ProxyServer
 
             // Response cache: a 304 to our revalidation or a 5xx covered by stale-if-error is answered from the
             // cache; a storable body is collected below (coalesced buffer or tee) and stored once complete.
-            Caching.HttpResponseCacheMiddleware.OriginDecision cacheDecision = default;
+            OriginDecision cacheDecision = default;
             if (cacheState is not null)
             {
                 cacheDecision = cacheState.Owner.OnOriginResponse(cacheState, response.StatusCode,
                     Caching.HttpResponseCacheMiddleware.Snapshot(response.Headers), response.HasBody,
                     response.ContentLength, response.IsChunked);
-                if (cacheDecision.Action == Caching.HttpResponseCacheMiddleware.OriginAction.Serve)
+                if (cacheDecision.Action == OriginAction.Serve)
                 {
                     // An unread origin body leaves the connection mid-message; only a bodiless 304 can be pooled.
                     if (response.HasBody || !response.KeepAlive
@@ -377,7 +378,7 @@ public partial class ProxyServer
 
             // Known-CL ≤64 KiB: one coalesced client write without assigning Response.Body.
             // Larger / chunked bodies: still stream via CopyBody with a throwaway session (hooks unused).
-            const int coalesceBodyLimit = Caching.HttpResponseCacheMiddleware.MaxCachedBodyBytes;
+            const int coalesceBodyLimit = Caching.ResponseCacheLimits.MaxCachedBodyBytes;
             if (response.HasBody
                 && !response.IsChunked
                 && !response.HasTrailingHeaders
@@ -843,7 +844,7 @@ public partial class ProxyServer
     ///     <see cref="SessionEventArgs"/>. Returns keep-alive when middleware handled the request;
     ///     null when the origin forward should continue.
     /// </summary>
-    private async Task<(bool? KeepAlive, Caching.CacheRequestState? CacheState)> TryRunTerminateLiteMiddlewareAsync(
+    private async Task<(bool? KeepAlive, ICacheRequestState? CacheState)> TryRunTerminateLiteMiddlewareAsync(
         TransparentBaseProxyEndPoint endPoint,
         HttpClientStream clientStream,
         Request request,

@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Caching;
@@ -137,12 +138,12 @@ internal sealed class CacheHarness
                     reply.Chunked ? -1 : body.Length, reply.Chunked);
                 switch (decision.Action)
                 {
-                    case HttpResponseCacheMiddleware.OriginAction.Serve:
+                    case OriginAction.Serve:
                         fetched = new Result(true, true, decision.Serve!.StatusCode, decision.Serve.Headers, decision.Serve.Body);
                         return;
 
-                    case HttpResponseCacheMiddleware.OriginAction.StoreBuffered:
-                    case HttpResponseCacheMiddleware.OriginAction.StoreStreamed:
+                    case OriginAction.StoreBuffered:
+                    case OriginAction.StoreStreamed:
                         state.Owner.CompleteStore(state, decision.Plan!, body, reply.Chunked ? -1 : body.Length);
                         break;
                 }
@@ -717,7 +718,7 @@ public class HttpResponseCacheBehaviorTests
         {
             var state = HttpResponseCacheMiddleware.StateOf(c)!;
             var decision = state.Owner.OnOriginResponse(state, 200, [new("Cache-Control", "max-age=60")], true, -1, true);
-            Assert.AreEqual(HttpResponseCacheMiddleware.OriginAction.StoreStreamed, decision.Action);
+            Assert.AreEqual(OriginAction.StoreStreamed, decision.Action);
             var slot = new CacheSessionSlot();
             slot.BeginTee(state, decision.Plan!, decision.ContentLength);
             slot.Tee!.Append(Encoding.UTF8.GetBytes("hello "), 0, 6);
@@ -962,6 +963,7 @@ public class HttpResponseCacheBehaviorTests
         // Core's H1 terminate-lite coalesce path and the cache store limit share this value today.
         // Phase 3a/3b must keep a core constant equal to the cache limit (64 KiB).
         Assert.AreEqual(64 * 1024, HttpResponseCacheMiddleware.MaxCachedBodyBytes);
+        Assert.AreEqual(HttpResponseCacheMiddleware.MaxCachedBodyBytes, ResponseCacheLimits.MaxCachedBodyBytes);
     }
 
     [TestMethod]

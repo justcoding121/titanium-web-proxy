@@ -577,3 +577,7 @@ Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(bool enabled, int level, bool 
 Titanium.Web.Proxy.ProxyServer.StartHttp3Listener(Titanium.Web.Proxy.Models.TransparentProxyEndPoint! endPoint) -> void
 Titanium.Web.Proxy.ProxyServer.CloseTcpListeners() -> void
 Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections() -> void
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.CompleteStore(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state, Titanium.Web.Proxy.Abstractions.Caching.CacheStorePlan! plan, byte[]? body, long expectedLength) -> void
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.ConditionalValidators(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state) -> (string? IfNoneMatch, string? IfModifiedSince)
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.MaxEntryBytes.get -> int
+Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.OnOriginResponse(Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState! state, int statusCode, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.KeyValuePair<string!, string!>>! headers, bool hasBody, long contentLength, bool chunked) -> Titanium.Web.Proxy.Abstractions.Caching.OriginDecision
