@@ -1,0 +1,8 @@
+# Gitleaks config for this repository.
+title = "titanium-web-proxy"
+
+[allowlist]
+description = "Helm CI rendered snapshots embed a fixed non-secret admin.token.value so template diffs stay deterministic"
+paths = [
+  '''(^|/)deploy/helm/.+/ci/rendered-.+\.yaml$''',
+]

@@ -1315,11 +1315,15 @@ public sealed class CertificateManager : IDisposable
         RemoveFromUserStores(leaf);
         if (rootCertificate != null)
             RemoveFromUserStores(rootCertificate);
-        if (IntermediateCertificates == null)
-            return;
+        if (IntermediateCertificates != null)
+        {
+            foreach (X509Certificate2 extra in IntermediateCertificates)
+                RemoveFromUserStores(extra);
+        }
 
-        foreach (X509Certificate2 extra in IntermediateCertificates)
-            RemoveFromUserStores(extra);
+        // SslStreamCertificateContext.Create can leave re-encoded copies whose thumbprints
+        // no longer match the in-memory chain. Scrub every Titanium/TWP subject when suppressed.
+        ScrubTestHostUserStores();
     }
 
     private static void RemoveFromUserStores(X509Certificate2 certificate)
@@ -1336,6 +1340,48 @@ public sealed class CertificateManager : IDisposable
                 store.Open(OpenFlags.ReadWrite);
                 foreach (var found in store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly: false))
                     store.Remove(found);
+            }
+            catch (CryptographicException)
+            {
+                // The store can be locked. The assembly leak guard still fails the run.
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Removes CurrentUser My/CA/Root entries whose subject or issuer looks like a Titanium test
+    ///     certificate. Used only when interactive root-store mutations are suppressed.
+    /// </summary>
+    public static void ScrubTestHostUserStores()
+    {
+        if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority, StoreName.Root })
+        {
+            try
+            {
+                using var store = new X509Store(name, StoreLocation.CurrentUser);
+                store.Open(OpenFlags.ReadWrite);
+                foreach (var cert in store.Certificates)
+                {
+                    var text = cert.Subject + " " + cert.Issuer;
+                    if (text.Contains("Titanium", StringComparison.Ordinal) ||
+                        text.Contains("twp-", StringComparison.OrdinalIgnoreCase) ||
+                        text.Contains("TWP", StringComparison.Ordinal) ||
+                        text.Contains("Acme Corp", StringComparison.Ordinal) ||
+                        text.Contains("Acme Root CA", StringComparison.Ordinal))
+                    {
+                        try
+                        {
+                            store.Remove(cert);
+                        }
+                        catch (CryptographicException)
+                        {
+                            // Root remove can still raise CryptUI; suppress skips interactive Root writes.
+                        }
+                    }
+                }
             }
             catch (CryptographicException)
             {
