@@ -25,7 +25,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 type: Opaque
 data:
-  admin-token: "U2FpM0hnVExMSnBCdG40VlFPYmJyVkFxVlMyRkIxSlY4VVpRY2phUQ=="
+  admin-token: "Y2ktc25hcHNob3QtYWRtaW4tdG9rZW4tbm90LWEtc2VjcmV0"
 ---
 # Source: titanium-manager/templates/pvc.yaml
 apiVersion: v1

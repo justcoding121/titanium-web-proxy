@@ -6,7 +6,8 @@
     <IsPackable>false</IsPackable>
     <RootNamespace>Titanium.E2E.Tests</RootNamespace>
     <!-- Headless Avalonia needs a desktop-compatible TFM; Windows runners are fine. -->
-    <NoWarn>$(NoWarn);CA1416;ASPDEPR004;ASPDEPR008</NoWarn>
+    <!-- FlaUI ships net461 assets; restore with warnaserror treats NU1701 as an error. -->
+    <NoWarn>$(NoWarn);CA1416;ASPDEPR004;ASPDEPR008;NU1701</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>

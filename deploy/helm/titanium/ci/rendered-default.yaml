@@ -43,7 +43,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 type: Opaque
 data:
-  admin-token: "cDZXbTJaNEl5dmRsMno4SmNTQmZXdmhhb3lPVlZRSG55TmxSSTlwdA=="
+  admin-token: "Y2ktc25hcHNob3QtYWRtaW4tdG9rZW4tbm90LWEtc2VjcmV0"
 ---
 # Source: titanium/templates/configmap.yaml
 apiVersion: v1
