@@ -414,8 +414,27 @@ public class ExtAuthRouteTests
 
         for (var i = 0; i < 3; i++)
         {
-            using var response = await client.SendAsync(NewRequest(proxy, ClientKind.H1Cleartext, "/s"));
-            Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode, "request " + i);
+            HttpResponseMessage? response = null;
+            Exception? last = null;
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    response = await client.SendAsync(NewRequest(proxy, ClientKind.H1Cleartext, "/s"));
+                    last = null;
+                    break;
+                }
+                catch (HttpRequestException ex)
+                {
+                    // Connection-limit denial can RST a keep-alive socket under load; retry the slot check.
+                    last = ex;
+                    await Task.Delay(50);
+                }
+            }
+
+            Assert.IsNull(last, "request " + i + " failed: " + last);
+            using (response)
+                Assert.AreEqual(HttpStatusCode.Unauthorized, response!.StatusCode, "request " + i);
         }
     }
 

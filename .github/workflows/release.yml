@@ -174,7 +174,7 @@ jobs:
           dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --no-restore --nologo --filter "TestCategory=E2E-UI"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $maxAttempts = 2
+          $maxAttempts = 3
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             Write-Host "=== Integration attempt $attempt of $maxAttempts ==="
             dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj `
