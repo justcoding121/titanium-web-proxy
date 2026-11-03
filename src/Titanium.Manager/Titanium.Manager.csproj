@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <SignAssembly>false</SignAssembly>
-    <VersionPrefix>7.0.27</VersionPrefix>
+    <VersionPrefix>8.0.0</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Titanium Manager: SQLite-backed multi-cluster config control plane (single-instance v1).</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
