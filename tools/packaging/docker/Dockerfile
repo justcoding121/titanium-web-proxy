@@ -45,7 +45,8 @@ COPY tools/packaging tools/packaging
 COPY tools/scripting tools/scripting
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-         build-essential ca-certificates curl gcc-aarch64-linux-gnu \
+         build-essential ca-certificates curl \
+         gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
     && rm -rf /var/lib/apt/lists/* \
     && case "${TARGETARCH}" in \
          amd64) RID=linux-x64; export CC=gcc ;; \
