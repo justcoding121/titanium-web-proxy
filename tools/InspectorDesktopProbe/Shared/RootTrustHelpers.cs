@@ -24,7 +24,12 @@ public static class RootTrustHelpers
     public static bool TrustRootInteractively(InterceptionService interception)
     {
         if (CertificateManager.AreInteractiveRootStoreMutationsSuppressed)
+        {
+            // GitHub Actions always suppresses CryptUI. An ephemeral VM may still import with certutil.
+            if (OperatingSystem.IsWindows() && IsEphemeralCiMachineTrust())
+                return TrustRootWithCertUtil(interception);
             return false;
+        }
 
         if (OperatingSystem.IsWindows() && IsTitaniumRootInCurrentUserStore(interception))
         {
@@ -66,5 +71,52 @@ public static class RootTrustHelpers
         }
 
         interception.VerifyOsUserSslTrust();
+    }
+
+    private static bool IsEphemeralCiMachineTrust() =>
+        string.Equals(Environment.GetEnvironmentVariable("TITANIUM_EPHEMERAL_VM"), "1", StringComparison.Ordinal)
+        && string.Equals(Environment.GetEnvironmentVariable("TITANIUM_CI_MACHINE_TRUST"), "1", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Import the current root with certutil. No CryptUI. Only for the ephemeral CI job.
+    /// </summary>
+    private static bool TrustRootWithCertUtil(InterceptionService interception)
+    {
+        var cert = interception.RootCertificate;
+        if (cert is null)
+            return false;
+
+        var path = Path.Combine(Path.GetTempPath(), "titanium-ci-root-" + cert.Thumbprint + ".cer");
+        File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
+        try
+        {
+            var certutil = Path.Combine(Environment.SystemDirectory, "certutil.exe");
+            RunCertUtil(certutil, "-user -addstore -f Root \"" + path + "\"");
+            RunCertUtil(certutil, "-addstore -f Root \"" + path + "\"");
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* temp cert */ }
+        }
+
+        if (!IsTitaniumRootInCurrentUserStore(interception))
+            return false;
+
+        interception.VerifyOsUserSslTrust();
+        return true;
+    }
+
+    private static void RunCertUtil(string certutil, string arguments)
+    {
+        using var process = Process.Start(new ProcessStartInfo
+        {
+            FileName = certutil,
+            Arguments = arguments,
+            CreateNoWindow = true,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        process?.WaitForExit(20000);
     }
 }

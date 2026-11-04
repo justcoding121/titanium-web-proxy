@@ -42,6 +42,10 @@
   </ItemGroup>
   <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
     <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <Reference Include="Accessibility" Condition="Exists('$(windir)\Microsoft.NET\Framework64\v4.0.30319\Accessibility.dll')">
+      <HintPath>$(windir)\Microsoft.NET\Framework64\v4.0.30319\Accessibility.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />
