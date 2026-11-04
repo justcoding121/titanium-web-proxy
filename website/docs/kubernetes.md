@@ -99,7 +99,30 @@ config:
 | HorizontalPodAutoscaler | `autoscaling.enabled`, CPU and optional memory |
 | ServiceMonitor | `serviceMonitor.enabled`: scrapes `/metrics` on the admin port with the admin token (needs the Prometheus Operator CRDs) |
 | NetworkPolicy | `networkPolicy.enabled`: a sample that limits the admin port to the sources you list |
-| Plus | `plus.enabled` with `plus.controlPlane.sharedSecret.existingSecret` (passed by environment variable) and either `plus.controlPlane.tls.existingSecret` (a `kubernetes.io/tls` Secret, mounted at `/etc/titanium-plus-tls`) or `plus.controlPlane.allowInsecureNonLoopback=true` |
+| Plus | `plus.enabled` with `plus.controlPlane.sharedSecret.existingSecret` (passed by environment variable) and either `plus.controlPlane.tls.existingSecret` (a `kubernetes.io/tls` Secret, mounted at `/etc/titanium-plus-tls`) or `plus.controlPlane.allowInsecureNonLoopback=true`. The default image does not contain Plus; see [Plus on Kubernetes](#plus-on-kubernetes). |
+
+### Plus on Kubernetes
+
+`ghcr.io/justcoding121/titanium-web-proxy` is the MIT CLI. It does not include `Titanium.Plus.dll` or the xDS and GeoIP satellites. The runtime image has no shell and no package manager, so `titanium update --plus` cannot download a bundle into a running pod.
+
+Build an image that already contains the Plus bundle, then set `image.repository` and `image.tag` (or `image.digest`) on the [proxy chart](#helm-chart) or `dataPlane.image` on the gateway chart. Take `Titanium.Plus-<version>.zip` from the GitHub Release (the manifest field `products.plus.bundle`), unpack it, and copy the files beside the CLI. The process runs as UID `1654`.
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS plus
+ARG PLUS_ZIP=Titanium.Plus-8.0.0.zip
+COPY ${PLUS_ZIP} /tmp/plus.zip
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && unzip /tmp/plus.zip -d /plus \
+    && test -f /plus/Titanium.Plus.dll \
+    && test -f /plus/Titanium.Plus.files
+
+FROM ghcr.io/justcoding121/titanium-web-proxy:8.0.0
+COPY --from=plus --chown=1654:1654 /plus/ /app/
+```
+
+`plus.enabled` still needs the control-plane Secret from the table above. The same custom image is required for a gateway data plane that loads Plus features (cache, active health, xDS, GeoIP).
 
 ### Graceful rollout
 

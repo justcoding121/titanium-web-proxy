@@ -4,6 +4,8 @@ What the `titanium` CLI and its optional Plus add-on cover, by area. Every row l
 
 **Status:** `supported` works as described. `partial` works with the limits named in Notes. `not supported` is not offered; Notes gives the reason and what to use instead.
 
+Upgrading a 7.x install: [Migrating from 7.x to 8.0](/docs/migration-7-to-8).
+
 **Config key:** a key in `twp.yaml`, written the way the schema nests it (`routes[]` is a list entry). A key with a prefix such as `plus.options:` is a Titanium Plus option, which is a free-form string key. A row with a command, an API path, or a resource name has no `twp.yaml` key; the cell says what to use. `—` means there is nothing to set.
 
 ## Routing

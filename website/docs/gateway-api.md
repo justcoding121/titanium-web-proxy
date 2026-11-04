@@ -1,10 +1,10 @@
 # Gateway API
 
-Run Titanium as a [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) implementation. A leader-elected controller, `titanium-gateway`, watches `GatewayClass`, `Gateway`, `HTTPRoute`, and `ReferenceGrant` resources, renders them into the data plane's `twp.yaml`, and reports status back on the resources.
+Run Titanium as a [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) implementation. A leader-elected controller, `titanium-gateway`, watches `GatewayClass`, `Gateway` (HTTP and HTTPS listeners), `HTTPRoute`, `ReferenceGrant`, and Ingress. It renders those into the data plane's `twp.yaml` and reports status back on the resources. The chart also installs the L4 CRDs (`TLSRoute`, `TCPRoute`, `UDPRoute`) and `GRPCRoute`; the controller does not watch them.
 
 **Next:** [install the chart](#install) → apply a [Gateway and an HTTPRoute](#quick-start) → read [what is not supported](#what-is-not-supported) before you migrate real routes.
 
-> Gateway API support covers the **standard channel** bundle **v1.7.0** (HTTPRoute, GRPCRoute, TLSRoute, TCPRoute, UDPRoute, BackendTLSPolicy, and ReferenceGrant v1), including TLS listener **Terminate** mode (L4 TLS termination on the data plane). The same controller also serves `networking.k8s.io/v1` `Ingress` resources and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
+> The chart installs the **standard channel** bundle **v1.7.0**. The controller programs **HTTP** and **HTTPS** listeners (TLS mode **Terminate**) and `HTTPRoute`. Bundled `GRPCRoute`, `TLSRoute`, `TCPRoute`, `UDPRoute`, and `BackendTLSPolicy` are not watched. The same controller serves `networking.k8s.io/v1` `Ingress` and the `titanium.io/` annotations; see [Ingress](/docs/ingress).
 
 ## Install
 

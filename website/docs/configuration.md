@@ -847,7 +847,7 @@ server:
   responseCompression:
     enabled: true
     mode: buffered           # buffered (default) | streaming
-    algorithms: [br, gzip]   # default: both; brotli preferred when the client accepts it
+    algorithms: [br, gzip]   # or zstd; default is br then gzip. zstd is registered by the CLI when listed
     minBytes: 1024           # default 1024
     maxBytes: 1048576        # default 1 MiB, upper limit 1 MiB (buffered mode only)
     level: fastest           # fastest | optimal | smallestSize
@@ -875,7 +875,7 @@ When it compresses, the proxy sets `Content-Encoding`, replaces (buffered) or re
 - **Chunked output.** The response has no `Content-Length`. An HTTP/1.1 client gets `Transfer-Encoding: chunked`; an HTTP/2 client (the HTTP/2-to-HTTP/1.1 bridge) gets DATA frames.
 - **Backpressure.** The write to the client is awaited before the next origin read, so a slow client holds the origin back and memory stays flat (a few tens of KiB per response), however large the body is.
 - **Early abort.** When the client goes away the relay stops reading, no gzip trailer is written, and the origin connection is closed rather than reused, because its body was only partly read. A response that was being stored by the [response cache](#response-cache) is abandoned, not stored.
-- **Algorithms.** gzip and brotli. zstd is not offered: .NET 10 has no zstd stream in the base library, and `algorithms` rejects it.
+- **Algorithms.** gzip, brotli (`br`), and zstd. The default is brotli then gzip. List `zstd` in `algorithms` to offer it; the CLI registers that codec when the config names it. A library host that lists `zstd` must register a codec through `ContentCodecs`, or validation rejects the config.
 - **Left uncompressed.** Everything in the list above, plus `text/event-stream` (server-sent events must reach the client event by event), HTTP/1.0 clients (they cannot take a chunked body), a response whose body a handler already read (`GetResponseBody` in `BeforeResponse`) or replaced, and any proxy that has a body-write hook (`OnResponseBodyWrite`), since those hooks expect the origin's plain bytes.
 - **Sizes and WebAssembly.** `application/wasm` is not in the default `mimeTypes`; add it to compress `.wasm` files.
 

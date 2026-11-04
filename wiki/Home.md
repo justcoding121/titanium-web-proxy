@@ -27,11 +27,12 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 - [Security considerations](Security-Considerations)
 - [Metrics](Metrics) — Prometheus exposition of the core meter
 - [Kubernetes](Kubernetes) — container image, Helm chart, probes, and ConfigMap reload
-- [Gateway API](Gateway-API) — `titanium-gateway` controller for Gateway, HTTPRoute, and ReferenceGrant
+- [Gateway API](Gateway-API) — controller for HTTP and HTTPS listeners and HTTPRoute; bundled L4 CRDs are not watched
 - [Limits and escape hatches](Limits-and-Escape-Hatches)
 - [Why did my request fail](Troubleshooting)
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#user-content-protocol-bridges))
 - [Migrating from 4.x](Migration-from-4.x)
+- [Migrating from 7.x](Migration-from-7.x)
 
 ### Library API (.NET)
 

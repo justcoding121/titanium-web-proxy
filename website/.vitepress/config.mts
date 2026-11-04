@@ -49,6 +49,7 @@ export default defineConfig({
             { text: 'Parity re-audit', link: '/docs/parity-reaudit' },
             { text: 'Install', link: '/docs/install' },
             { text: 'Editions & licenses', link: '/docs/editions' },
+            { text: 'Migrating from 7.x', link: '/docs/migration-7-to-8' },
           ],
         },
         {

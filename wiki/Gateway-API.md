@@ -1,6 +1,6 @@
 > For operators who run Titanium behind Kubernetes Gateway API resources. The full guide, with every option, is on the [website](https://titaniumproxy.com/docs/gateway-api).
 
-`titanium-gateway` is a leader-elected controller that turns Gateway API resources (standard channel **v1.7.0**: `GatewayClass`, `Gateway`, `HTTPRoute`, `GRPCRoute`, `TLSRoute`, `TCPRoute`, `UDPRoute`, `BackendTLSPolicy`, and `ReferenceGrant` v1) into the `twp.yaml` the Titanium data plane runs, and writes status back. TLS listener **Terminate** is not supported yet. The chart is `deploy/helm/titanium-gateway`; the controller image is `ghcr.io/justcoding121/titanium-gateway` for `linux/amd64` and `linux/arm64`.
+`titanium-gateway` is a leader-elected controller that watches `GatewayClass`, `Gateway` (HTTP and HTTPS listeners, TLS **Terminate**), `HTTPRoute`, `ReferenceGrant`, and Ingress, renders them into the `twp.yaml` the Titanium data plane runs, and writes status back. The chart installs the standard-channel CRD bundle **v1.7.0**, including `GRPCRoute`, `TLSRoute`, `TCPRoute`, `UDPRoute`, and `BackendTLSPolicy`. Those L4 and gRPC kinds are not watched; a `TLSRoute`, `TCPRoute`, or `UDPRoute` does not program the data plane. The chart is `deploy/helm/titanium-gateway`; the controller image is `ghcr.io/justcoding121/titanium-gateway` for `linux/amd64` and `linux/arm64`.
 
 ```shell
 helm install titanium-gateway ./deploy/helm/titanium-gateway --namespace gateway-system --create-namespace

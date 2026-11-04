@@ -12,18 +12,26 @@
 | Product | Role |
 |---------|------|
 | **Titanium.Cli** (`titanium` / `twp`) | MIT daemon — reverse / forward / edge proxy |
-| **Titanium.Plus** | Optional ALC plugin DLL; not on nuget.org; requires Abstractions ≥ **8.0.0** |
+| **Titanium.Plus** | Optional bundle beside the CLI (Plus, xDS, and GeoIP satellites); not on nuget.org; requires Abstractions ≥ **8.0.0** |
 | **Titanium Inspector** | Desktop MITM debugger |
 | **titanium-gateway** | Gateway API / Ingress controller (GHCR + Helm) |
 | **titanium-manager** | Fleet control-plane (GHCR + Helm) |
 
 See the README [License](https://github.com/justcoding121/titanium-web-proxy/blob/develop/README.md#license) section for licenses and distribution channels.
 
-## Plus ABI floor
+## Plus bundle and ABI floor
 
 8.0 Plus reports `RequiredAbstractionsVersion` **8.0.0**. Pair 8.0 Plus with an 8.0 CLI (or host that loads Abstractions ≥ 8.0.0). Mixing 7.x CLI with 8.0 Plus (or the reverse) skips Plus load.
 
+Plus ships as a **bundle**, not a single plugin DLL:
+
+- `titanium update --plus` prefers `products.plus.bundle` in the release manifest (a zip of `Titanium.Plus.dll`, the PolyForm **Titanium.Xds** and **Titanium.Cli.GeoIp** satellites, and managed dependencies that are not already in the MIT CLI zip). It falls back to the legacy single-DLL `products.plus.asset` for older feeds.
+- The MIT CLI zip does not include those satellites. `titanium update --remove-plus` deletes the files listed in `Titanium.Plus.files`.
+- The RFC 9111 response cache and active health probing run inside Plus. The MIT core keeps the seams only. `clusters[].healthCheck.active` stays inactive until Plus loads a probe provider.
+
 Features gated behind `plus.enabled` include xDS ADS, GeoIP, response cache, fleet-wide rate limit, and active health probes. Enable Plus before relying on those surfaces.
+
+On Kubernetes the default GHCR image is the MIT CLI and has no shell, so `titanium update --plus` cannot install the bundle in a pod. Use an image that already contains the bundle. See [Plus on Kubernetes](https://titaniumproxy.com/docs/kubernetes#plus-on-kubernetes).
 
 ## Scripting (Lua / WASM)
 
@@ -38,7 +46,7 @@ Features gated behind `plus.enabled` include xDS ADS, GeoIP, response cache, fle
 - Charts live under `deploy/helm/{titanium,titanium-gateway,titanium-manager}`.
 - Install from the git tree, from Helm `.tgz` assets on the GitHub Release, or from OCI (`oci://ghcr.io/justcoding121/charts`).
 - Chart `appVersion` tracks the product version; chart semver is **1.0.0** for the 8.0 GA packaging contract.
-- Default CLI image includes scripting natives; it still omits `libmsquic` (no HTTP/3 in the default image).
+- Default CLI image includes scripting natives; it still omits `libmsquic` (no HTTP/3 in the default image) and omits the Plus bundle.
 
 ## Managed fleet vs Gateway / Ingress
 
