@@ -21,7 +21,13 @@ public sealed class JsonHttpStub : IDisposable
         _contentType = contentType;
         _statusCode = statusCode;
         (_listener, Port) = CliProcessHarness.BindHttpListenerOrRetry(p => $"http://127.0.0.1:{p}/");
-        _ = Task.Run(() => AcceptLoopAsync(_cts.Token));
+        // A busy test host can stall a thread-pool accept loop, and the CLI then waits out its JWKS timeout.
+        var thread = new Thread(() => AcceptLoop(_cts.Token))
+        {
+            IsBackground = true,
+            Name = "json-http-stub",
+        };
+        thread.Start();
     }
 
     public void Dispose()
@@ -38,35 +44,32 @@ public sealed class JsonHttpStub : IDisposable
         }
     }
 
-    private async Task AcceptLoopAsync(CancellationToken ct)
+    private void AcceptLoop(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested && _listener.IsListening)
         {
             HttpListenerContext ctx;
             try
             {
-                ctx = await _listener.GetContextAsync().WaitAsync(ct);
+                ctx = _listener.GetContext();
             }
             catch
             {
                 return;
             }
 
-            _ = Task.Run(() =>
+            try
             {
-                try
-                {
-                    ctx.Response.StatusCode = _statusCode;
-                    ctx.Response.ContentType = _contentType;
-                    ctx.Response.ContentLength64 = _body.Length;
-                    ctx.Response.OutputStream.Write(_body);
-                    ctx.Response.Close();
-                }
-                catch
-                {
-                    try { ctx.Response.Abort(); } catch { /* ignore */ }
-                }
-            }, ct);
+                ctx.Response.StatusCode = _statusCode;
+                ctx.Response.ContentType = _contentType;
+                ctx.Response.ContentLength64 = _body.Length;
+                ctx.Response.OutputStream.Write(_body);
+                ctx.Response.Close();
+            }
+            catch
+            {
+                try { ctx.Response.Abort(); } catch { /* ignore */ }
+            }
         }
     }
 }

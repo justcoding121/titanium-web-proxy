@@ -1,0 +1,3 @@
+# expect: parsed:1
+# reason: bytes after the last pair are ignored
+01 00 00 00 01 00 00 00 01 00 00 00 61 00 62 00 de ad

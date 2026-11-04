@@ -461,13 +461,19 @@ public partial class ProxyServer : IDisposable
         if (!ClientHandshakeRejects.RecordFailure(host, DateTime.UtcNow))
             return false;
 
-        if (DecryptFailureBypassCache.MarkBypassed(host))
+        // Mark under the cache write gate, then re-check through IsBypassActive (also gated) so a
+        // concurrent trim/evict cannot leave the caller with "tripped" but "not bypassing".
+        var becameActive = DecryptFailureBypassCache.MarkBypassed(host);
+        if (!DecryptFailureBypassCache.IsBypassActive(host))
+            becameActive = DecryptFailureBypassCache.MarkBypassed(host) || becameActive;
+
+        if (becameActive)
         {
             ProxyLog.ClientRejectedCertificateBypassLearned(logger, host, ClientHandshakeRejects.Threshold);
             RaiseDecryptFailureBypassChanged(host);
         }
 
-        return true;
+        return DecryptFailureBypassCache.IsBypassActive(host);
     }
 
     /// <summary>
@@ -580,16 +586,18 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
-    ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2:
+    ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2 and RFC 9220
+    ///     WebSocket-over-HTTP/3 (HTTP/1.1, HTTP/2, and HTTP/3 origins for HTTP/3 clients):
     ///     <list type="bullet">
     ///       <item>
     ///         <description>
-    ///           Accepts extended CONNECT (<c>:protocol = websocket</c>) from h2 clients and
+    ///           Accepts extended CONNECT (<c>:protocol = websocket</c>) from h2 and h3 clients and
     ///           advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to them. Per origin: if the
-    ///           origin is HTTP/2 and advertises RFC 8441 support, DATA frames are relayed directly;
-    ///           if the origin is HTTP/2 and does not, the stream is reset with
-    ///           <c>REFUSED_STREAM</c>; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge
-    ///           is used.
+    ///           origin is HTTP/2 or HTTP/3 and advertises CONNECT-protocol support, DATA frames are
+    ///           relayed directly; if an h2 client reaches an HTTP/2 origin that does not, the stream
+    ///           is reset with <c>REFUSED_STREAM</c>; if an h3 client reaches an HTTP/2 or HTTP/3
+    ///           origin that does not, the proxy falls back to an HTTP/1.1 WebSocket upgrade; if the
+    ///           origin is HTTP/1.1, the h2→h1 or h3→h1 WebSocket upgrade bridge is used.
     ///         </description>
     ///       </item>
     ///       <item>
@@ -1625,8 +1633,52 @@ public partial class ProxyServer : IDisposable
     /// <summary>When true with <see cref="TracingEnabled"/>, copy the span context onto the upstream request.</summary>
     public bool PropagateTraceContext { get; set; }
 
+    /// <summary>
+    /// Request header names recorded as <c>http.request.header.*</c> span attributes. Null or empty records none.
+    /// Cookies, credentials and similar secret-bearing headers are never recorded, even when listed.
+    /// </summary>
+    public IReadOnlyList<string>? TracingHeaderAllowList { get; set; }
+
     /// <summary>Null leaves forwarded headers untouched and keeps terminate-lite eligible.</summary>
     public Abstractions.Routing.ForwardedHeadersConfig? ForwardedHeaders { get; set; }
+
+    private Abstractions.Routing.ResponseCompressionConfig? responseCompression;
+
+    /// <summary>
+    /// Buffered gzip / Brotli compression of small known-length responses, applied on HTTP/1.1 and
+    /// HTTP/2-to-HTTP/1.1 sessions only. Null or <c>Enabled = false</c> (the default) is off: one null
+    /// check per response and terminate-lite stays eligible.
+    /// </summary>
+    public Abstractions.Routing.ResponseCompressionConfig? ResponseCompression
+    {
+        get => responseCompression;
+        set
+        {
+            responseCompression = value;
+            CompressionPolicy = Compression.ResponseCompressionPolicy.Create(value);
+        }
+    }
+
+    internal Compression.ResponseCompressionPolicy? CompressionPolicy { get; private set; }
+
+    private Abstractions.Routing.RequestDecompressionConfig? requestDecompression;
+
+    /// <summary>
+    /// Bounded decompression of gzip and Brotli HTTP/1.x request bodies before they reach the origin, with a
+    /// decompressed-size limit and a ratio limit. A body over either limit is answered with 413. Null or
+    /// <c>Enabled = false</c> (the default) is off: one null check per request.
+    /// </summary>
+    public Abstractions.Routing.RequestDecompressionConfig? RequestDecompression
+    {
+        get => requestDecompression;
+        set
+        {
+            requestDecompression = value;
+            RequestDecompressionPolicy = Compression.RequestDecompressionPolicy.Create(value);
+        }
+    }
+
+    internal Compression.RequestDecompressionPolicy? RequestDecompressionPolicy { get; private set; }
 
     /// <summary>
     /// Returns <see langword="true"/> when the global interception gate is active for the given
@@ -1645,7 +1697,13 @@ public partial class ProxyServer : IDisposable
         || EnableDecryptFailureBypass
         || TracingEnabled
         || RequestIdHeader is not null
-        || ForwardedHeaders is not null;
+        || ForwardedHeaders is not null
+        || CompressionPolicy is not null
+        || RequestDecompressionPolicy is not null
+        || ReverseProxy is { HasGrpcWebRoutes: true }
+        || ReverseProxy is { HasHandledPolicies: true }
+        || ReverseProxy is { HasRoutePlugins: true }
+        || ReverseProxy is { HasScriptHooks: true };
 
     /// <summary>
     /// Returns <see langword="true"/> when this specific request/stream should go through the
@@ -1753,6 +1811,16 @@ public partial class ProxyServer : IDisposable
 
         try
         {
+            // SO_REUSEPORT = 15. SetRawSocketOption talks to the kernel directly: SetSocketOption(ReusePort)
+            // throws SocketException "Operation not supported" on some Linux hosts (the option is outside the try
+            // that wraps Start, so the process used to exit before it was ready).
+            if (endPoint.ReusePort && OperatingSystem.IsLinux())
+            {
+                // Linux SOL_SOCKET is 1. Casting SocketOptionLevel.Socket yields the Windows value 65535
+                // and the kernel rejects it; SetSocketOption maps levels, SetRawSocketOption does not.
+                endPoint.Listener.Server.SetRawSocketOption(1, 15, BitConverter.GetBytes(1));
+            }
+
             endPoint.Listener.Start(ListenerBackLog);
 
             endPoint.Port = ((IPEndPoint)endPoint.Listener.LocalEndpoint).Port;
@@ -1870,8 +1938,13 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (!ProxyRunning || _stopAccepting)
+            if (!ProxyRunning || _stopAccepting || ShouldOverloadStopAccepting)
             {
+                if (ProxyRunning && !_stopAccepting)
+                {
+                    Diagnostics.ProxyMetrics.RecordOverloadAction("stop_accepting");
+                }
+
                 // Unread bytes make Linux answer close() with RST. Drain them so the client sees a FIN.
                 CloseAcceptedSocketWithoutResponse(tcpClient);
                 if (!ProxyRunning)
@@ -1882,7 +1955,7 @@ public partial class ProxyServer : IDisposable
                 continue;
             }
 
-            if (endPoint is TransparentBaseProxyEndPoint { Passthrough: true, ForwardHost: { Length: > 0 } forwardHost } passthrough)
+            if (endPoint is TransparentBaseProxyEndPoint { HasPassthroughTarget: true } passthrough)
             {
                 if (!TryAdmitClientConnection(endPoint))
                 {
@@ -1892,11 +1965,10 @@ public partial class ProxyServer : IDisposable
 
                 // The relay runs for the life of the connection. Awaiting it here would hold the accept
                 // loop and serialize every passthrough client behind the one before it.
-                var passthroughPort = passthrough.ForwardPort ?? (endPoint.DecryptSsl ? 443 : 80);
                 var passthroughClient = tcpClient;
                 ThreadPool.UnsafeQueueUserWorkItem(
                     new DeferredWorkItem(() => HandlePassthroughClientAsync(
-                        passthroughClient, endPoint, forwardHost, passthroughPort, cancellationToken)),
+                        passthroughClient, passthrough, cancellationToken)),
                     preferLocal: false);
                 continue;
             }
@@ -1972,28 +2044,6 @@ public partial class ProxyServer : IDisposable
             ReleaseClientConnection(endPoint);
             clientHelloWait = Task.FromResult(0);
             return false;
-        }
-    }
-
-    private async Task HandlePassthroughClientAsync(Socket client, ProxyEndPoint endPoint, string host, int port,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Network.TcpPassthrough.RelayAsync(client, host, port, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // The proxy is stopping. Closing the sockets below ends the relay.
-        }
-        catch (Exception ex)
-        {
-            OnException(null, ex);
-        }
-        finally
-        {
-            client.Dispose();
-            ReleaseClientConnection(endPoint);
         }
     }
 

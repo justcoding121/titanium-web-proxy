@@ -1,0 +1,44 @@
+# GOLDEN FILE - the 7.1 shape that gained logging:, server: (profile, limits, policy modes, TLS) and named policies.
+# Every key here shipped in a released 7.1 build; removing or renaming one is a breaking change.
+schemaVersion: "7.1"
+logging:
+  enabled: true
+  minimumLevel: "Warning"
+  enableConsole: true
+  enableConsoleColors: false
+server:
+  limits:
+    maxHeaderLineBytes: 65536
+    maxHeaderCount: 256
+    maxHeaderAggregateBytes: 262144
+    maxConcurrentStreamsPerConnection: 256
+    maxPeerInitiatedIncompleteStreamResets: 100
+  policyModes:
+    headerLimits: Enforce
+    http2AbuseBudget: Enforce
+    allowAmbiguousFraming: false
+  tls:
+    supportedSslProtocols: [Tls12, Tls13]
+listeners:
+  - host: "0.0.0.0"
+    port: 8443
+    decryptSsl: false
+    type: transparent
+    enableHttp2: true
+clusters:
+  - id: web
+    destinations:
+      - id: a
+        address: backend.internal
+        port: 8080
+    healthCheck:
+      passive:
+        failureStatusCodes: [502, 503]
+routes:
+  - id: site
+    clusterId: web
+    match:
+      path: /
+      pathKind: prefix
+      hosts: [www.example.test]
+      methods: [GET, POST]

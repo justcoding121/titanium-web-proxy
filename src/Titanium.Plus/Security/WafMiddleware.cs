@@ -3,15 +3,27 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Abstractions.Middleware;
+using Titanium.Plus.Security.Waf;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 
 namespace Titanium.Plus.Security;
 
-/// <summary>Registers thin deny-list WAF middleware when <c>waf.enabled</c> is true.</summary>
+/// <summary>
+/// Registers the WAF when <c>waf.enabled</c> is true: the operator deny-list (<see cref="WafDenyMiddleware"/>) and the
+/// signature screening of <see cref="WafScreeningMiddleware"/>, which defaults to detect mode.
+/// </summary>
 public sealed class WafGuard
 {
+    private WafGuard(WafScreeningMiddleware? screening)
+    {
+        Screening = screening;
+    }
+
+    /// <summary>The screening middleware, or null when it was not registered (mode off and no <c>waf</c> policy).</summary>
+    public WafScreeningMiddleware? Screening { get; }
+
     public static WafGuard? TryStart(PlusActivationContext context, IReadOnlyDictionary<string, string> options)
     {
         if (!options.TryGetValue("waf.enabled", out var enabled) ||
@@ -23,18 +35,32 @@ public sealed class WafGuard
         if (context.Middleware is null)
         {
             PlusLog.Warn(context, "Plus WAF: Middleware list is null — not registered.");
-            return new WafGuard();
+            return new WafGuard(null);
         }
 
         var rules = WafRules.FromOptions(options);
         context.Middleware.Add(new WafDenyMiddleware(rules, context.Logger));
+
+        // A bad option, rules file, or policy stops activation: a WAF that silently drops rules is worse than none.
+        var wafOptions = WafOptions.FromOptions(options);
+        var engine = WafEngine.Create(wafOptions);
+        var screening = new WafScreeningMiddleware(engine, context.Policies, context.Logger);
+        var active = wafOptions.Mode != WafMode.Off || screening.HasRoutePolicies;
+        if (active)
+        {
+            context.Middleware.Add(screening);
+            context.RegisterMetricsAppender?.Invoke(sb => screening.Stats.AppendTo(sb, engine.Rules.Count));
+        }
+
         PlusLog.Info(context,
-            $"Plus WAF: enabled (pathRules={rules.PathDeny.Count}, headerRules={rules.HeaderDeny.Count}, maxBody={rules.MaxBodyBytes}).");
-        return new WafGuard();
+            $"Plus WAF: enabled (pathRules={rules.PathDeny.Count}, headerRules={rules.HeaderDeny.Count}, maxBody={rules.MaxBodyBytes}; " +
+            $"screening {(active ? "on" : "off")}, pack={WafRulePack.Version}, rules={engine.Rules.Count}, mode={wafOptions.Mode.ToString().ToLowerInvariant()}, " +
+            $"paranoia={wafOptions.ParanoiaLevel}, threshold={wafOptions.BlockThreshold}).");
+        return new WafGuard(active ? screening : null);
     }
 }
 
-/// <summary>Deny-list rules for path/method/header/body size (not ModSecurity/CRS).</summary>
+/// <summary>Deny-list rules for path/method/header/body size (operator-written, not signatures).</summary>
 public sealed class WafRules
 {
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);

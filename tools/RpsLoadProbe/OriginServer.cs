@@ -68,7 +68,8 @@ internal sealed class OriginServer : IAsyncDisposable
             EarlyResponseAfterBytes = workload.EarlyResponseAfterBytes,
             EnableWebSockets = workload.IsWebSocket,
             EnableGrpc = workload.IsGrpc,
-            CacheControl = options.CacheControl
+            CacheControl = options.CacheControl,
+            ResponseDelayMs = options.ResponseDelayMs
         };
     }
 
@@ -90,6 +91,7 @@ internal sealed class OriginServer : IAsyncDisposable
         var earlyAfter = Math.Max(0, options.EarlyResponseAfterBytes);
         var enableWebSockets = options.EnableWebSockets;
         var enableGrpc = options.EnableGrpc;
+        var responseDelayMs = Math.Max(0, options.ResponseDelayMs);
         var cacheControl = options.CacheControl
                            ?? Environment.GetEnvironmentVariable("TWP_RPS_ORIGIN_CACHE_CONTROL");
         var protocols = enableGrpc
@@ -168,6 +170,9 @@ internal sealed class OriginServer : IAsyncDisposable
 
                     app.Run(async context =>
                     {
+                        if (responseDelayMs > 0)
+                            await Task.Delay(responseDelayMs, context.RequestAborted);
+
                         var hasBody = context.Request.ContentLength is > 0
                                       || context.Request.Headers.ContainsKey("Transfer-Encoding");
                         if (hasBody && earlyAfter > 0)
@@ -287,4 +292,6 @@ internal sealed class OriginListenOptions
     public bool EnableGrpc { get; init; }
     /// <summary>Optional Cache-Control response header (edition cache-hit arm).</summary>
     public string? CacheControl { get; init; }
+    /// <summary>Wait before every response, so the origin looks slow (slow-upstream script arms). 0 = none.</summary>
+    public int ResponseDelayMs { get; init; }
 }

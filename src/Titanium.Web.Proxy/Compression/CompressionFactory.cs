@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.IO.Compression;
+using Titanium.Web.Proxy.Abstractions.Compression;
 
 namespace Titanium.Web.Proxy.Compression
 {
@@ -9,6 +10,19 @@ namespace Titanium.Web.Proxy.Compression
     /// </summary>
     internal static class CompressionFactory
     {
+        /// <summary>Compressor with an explicit level (response compression); gzip and Brotli only.</summary>
+        internal static Stream Create(HttpCompression type, Stream stream, CompressionLevel level, bool leaveOpen = true)
+        {
+            return type switch
+            {
+                HttpCompression.Gzip => new GZipStream(stream, level, leaveOpen),
+                HttpCompression.Brotli => new BrotliStream(stream, level, leaveOpen),
+                HttpCompression.Zstd when ContentCodecs.TryGet("zstd", out var codec) && codec is not null
+                    => codec.CreateCompressor(stream, level, leaveOpen),
+                _ => throw new NotSupportedException($"Unsupported compression mode: {type}")
+            };
+        }
+
         internal static Stream Create(HttpCompression type, Stream stream, bool leaveOpen = true)
         {
             return type switch

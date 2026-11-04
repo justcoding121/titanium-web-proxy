@@ -154,6 +154,27 @@ jobs:
             out="$RUNNER_TEMP/ab-cli/$side"
             dotnet publish -c Release "$wt/src/Titanium.Cli/Titanium.Cli.csproj" -o "$out"
             test -f "$out/titanium.dll"
+            # Plus edition arms copy the Plus file set (Plus, xDS, GeoIP, and deps) from the product tree.
+            # Build Plus into the worktree so LocatePlusOutputDirectory / EnsurePlusDllBesideCli can find it.
+            if [ -f "$wt/src/Titanium.Plus/Titanium.Plus.csproj" ]; then
+              dotnet build -c Release "$wt/src/Titanium.Plus/Titanium.Plus.csproj"
+              plus_dir="$wt/src/Titanium.Plus/bin/Release/net10.0"
+              test -f "$plus_dir/Titanium.Plus.dll"
+              # Also stage beside the published CLI so TWP_RPS_CLI_DIR hosts are Plus-ready without walking the tree.
+              cp -f "$plus_dir"/*.dll "$out/" 2>/dev/null || true
+              # Do not overwrite the published Titanium.Web.Proxy* assemblies with Plus's reference copies.
+              cp -f "$plus_dir/Titanium.Plus.dll" "$out/Titanium.Plus.dll"
+              for dep in BCrypt.Net-Next.dll DnsClient.dll Google.Api.CommonProtos.dll Google.Protobuf.dll \
+                  Microsoft.IdentityModel.Abstractions.dll Microsoft.IdentityModel.JsonWebTokens.dll \
+                  Microsoft.IdentityModel.Logging.dll Microsoft.IdentityModel.Protocols.dll \
+                  Microsoft.IdentityModel.Protocols.OpenIdConnect.dll Microsoft.IdentityModel.Tokens.dll \
+                  Pipelines.Sockets.Unofficial.dll StackExchange.Redis.dll System.IdentityModel.Tokens.Jwt.dll \
+                  YamlDotNet.dll BouncyCastle.Cryptography.dll \
+                  Titanium.Xds.dll Titanium.Cli.GeoIp.dll MaxMind.Db.dll \
+                  Grpc.Net.Client.dll Grpc.Net.Common.dll Grpc.Core.Api.dll; do
+                if [ -f "$plus_dir/$dep" ]; then cp -f "$plus_dir/$dep" "$out/$dep"; fi
+              done
+            fi
             wrapper="$RUNNER_TEMP/ab-bin/$side/run-probe.sh"
             printf '%s\n' '#!/bin/bash' "export TWP_RPS_CLI_DIR=\"$out\"" "exec \"$RUNNER_TEMP/ab-bin/$side/RpsLoadProbe\" \"\$@\"" > "$wrapper"
             chmod +x "$wrapper"

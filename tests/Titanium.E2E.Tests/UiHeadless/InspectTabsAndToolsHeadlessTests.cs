@@ -133,9 +133,21 @@ public class InspectTabsAndToolsHeadlessTests
         });
 
         // Pump dispatcher so async RelayCommand continuations (no ConfigureAwait(false)) run.
+        // A later status line can replace the export message before the next assert.
+        string? exportStatus = null;
         await fx.WaitUntilAsync(
-            () => fx.ViewModel.StatusText.Contains("Exported 1 sessions", StringComparison.Ordinal)
-                  || fx.ViewModel.StatusText.Contains("Export HAR failed", StringComparison.Ordinal),
+            () =>
+            {
+                var text = fx.ViewModel.StatusText ?? "";
+                if (text.Contains("Exported 1 sessions", StringComparison.Ordinal)
+                    || text.Contains("Export HAR failed", StringComparison.Ordinal))
+                {
+                    exportStatus = text;
+                    return true;
+                }
+
+                return false;
+            },
             TimeSpan.FromSeconds(20));
 
         await fx.DispatchAsync(() =>
@@ -143,9 +155,9 @@ public class InspectTabsAndToolsHeadlessTests
             Assert.IsTrue(fx.PathPicker.SaveCalls >= 1, "Save picker calls=" + fx.PathPicker.SaveCalls);
             Assert.IsTrue(File.Exists(har), "HAR should be written via scripted picker path");
             StringAssert.Contains(
-                fx.ViewModel.StatusText,
+                exportStatus ?? "",
                 "Exported 1 sessions",
-                "StatusText after HAR export: " + fx.ViewModel.StatusText);
+                "StatusText after HAR export: " + exportStatus);
         });
 
         try { File.Delete(har); } catch { /* ignore */ }

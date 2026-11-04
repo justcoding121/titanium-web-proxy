@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: /foo?x=1
+# reason: trailing NUL run is trimmed
+request\0path\0\0\0

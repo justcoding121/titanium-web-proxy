@@ -64,10 +64,15 @@ internal sealed class DecryptBypassCache
             return false;
 
         var key = Normalize(host);
-        if (!cache.TryGetValue(key, out var entry))
-            return false;
+        // Same gate as writers: BypassActive/ExpiresAtUtc are plain fields, so a lock-free read
+        // can observe a torn entry under concurrent MarkBypassed/RecordFailure/Evict.
+        lock (writeGate)
+        {
+            if (!cache.TryGetValue(key, out var entry))
+                return false;
 
-        return entry.ExpiresAtUtc > DateTime.UtcNow && entry.BypassActive;
+            return entry.ExpiresAtUtc > DateTime.UtcNow && entry.BypassActive;
+        }
     }
 
     /// <summary>
@@ -120,7 +125,7 @@ internal sealed class DecryptBypassCache
             becameActive = active && !wasActive;
         }
 
-        EvictIfOverCapacity();
+        EvictIfOverCapacity(protectKey: key);
         return active;
     }
 
@@ -153,7 +158,7 @@ internal sealed class DecryptBypassCache
                 entry.LearnedAtUtc = now;
         }
 
-        EvictIfOverCapacity();
+        EvictIfOverCapacity(protectKey: key);
         return becameActive;
     }
 
@@ -189,25 +194,34 @@ internal sealed class DecryptBypassCache
                 cache.TryRemove(key, out _);
     }
 
-    private void EvictIfOverCapacity()
+    private void EvictIfOverCapacity(string? protectKey = null)
     {
-        var over = cache.Count - MaxEntries;
-        if (over <= 0)
-            return;
+        lock (writeGate)
+        {
+            var over = cache.Count - MaxEntries;
+            if (over <= 0)
+                return;
 
-        TrimExpired();
-        over = cache.Count - MaxEntries;
-        if (over <= 0)
-            return;
+            var now = DateTime.UtcNow;
+            foreach (var key in cache.Keys)
+                if (cache.TryGetValue(key, out var entry) && entry.ExpiresAtUtc <= now)
+                    cache.TryRemove(key, out _);
 
-        var victims = cache
-            .OrderBy(kv => kv.Value.LastAccessUtc)
-            .Take(over)
-            .Select(kv => kv.Key)
-            .ToList();
+            over = cache.Count - MaxEntries;
+            if (over <= 0)
+                return;
 
-        foreach (var key in victims)
-            cache.TryRemove(key, out _);
+            var victims = cache
+                .Where(kv => protectKey is null ||
+                             !string.Equals(kv.Key, protectKey, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(kv => kv.Value.LastAccessUtc)
+                .Take(over)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var key in victims)
+                cache.TryRemove(key, out _);
+        }
     }
 
     internal static string Normalize(string host)

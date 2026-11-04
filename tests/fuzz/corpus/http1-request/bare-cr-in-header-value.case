@@ -1,0 +1,7 @@
+# expect: reject
+# reason: a bare CR inside a value is a line terminator to some peers; it must not be forwarded
+POST / HTTP/1.1\r\n
+Host: a\r\n
+X-A: b\rContent-Length: 5\r\n
+\r\n
+hello

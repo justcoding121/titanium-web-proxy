@@ -1,0 +1,10 @@
+# GOLDEN FILE - do not edit to make a failing test pass. This is the shape the first 7.0 release documented:
+# schemaVersion 7.0, one classic ForwardHost listener, none of the sections added since.
+# If it stops loading, a schema change was not additive; see Compat/README.md.
+schemaVersion: "7.0"
+listeners:
+  - host: "127.0.0.1"
+    port: 8000
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 8080

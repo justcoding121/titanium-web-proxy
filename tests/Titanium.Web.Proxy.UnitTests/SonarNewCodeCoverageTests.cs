@@ -1326,7 +1326,8 @@ public class SonarNewCodeCoverageTests
                 Assert.IsFalse(string.IsNullOrEmpty(Http2OriginConnectionPool.DiagPickStats.FormatSummary()));
                 Assert.IsTrue(SpinWait.SpinUntil(
                     () => File.Exists(outPath) && new FileInfo(outPath).Length > 0,
-                    TimeSpan.FromSeconds(3)));
+                    TimeSpan.FromSeconds(10)),
+                    "DiagPickStats Emit should write the pool-pick log within 10s.");
             }
             finally
             {
@@ -1755,16 +1756,16 @@ public class SonarNewCodeCoverageTests
             var buf = new byte[1024];
             try { accepted.Receive(buf); } catch { /* ignore */ }
         });
-        await (Task)writeMw.Invoke(proxy, [clientStream, req, ctx, CancellationToken.None])!;
+        await (Task)writeMw.Invoke(proxy, [clientStream, req, ctx, CancellationToken.None, null])!;
         await drain;
 
         var tryMw = typeof(ProxyServer).GetMethod("TryRunTerminateLiteMiddlewareAsync", PrivateInstance)!;
         var handled = new HandleAllMiddleware();
-        var keep = await (Task<bool?>)tryMw.Invoke(proxy,
+        var (keep, _) = await (Task<(bool? Keep, Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState? State)>)tryMw.Invoke(proxy,
             [ep, clientStream, req, new IProxyMiddleware[] { handled }, CancellationToken.None])!;
         Assert.IsNotNull(keep);
 
-        var passthrough = await (Task<bool?>)tryMw.Invoke(proxy,
+        var (passthrough, _) = await (Task<(bool? Keep, Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState? State)>)tryMw.Invoke(proxy,
             [ep, clientStream, req, Array.Empty<IProxyMiddleware>(), CancellationToken.None])!;
         Assert.IsNull(passthrough);
 

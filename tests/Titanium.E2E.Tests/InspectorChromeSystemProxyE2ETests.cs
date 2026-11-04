@@ -52,7 +52,9 @@ public class InspectorChromeSystemProxyE2ETests
             CertificateManager.SuppressInteractiveRootStoreMutations = false;
             try
             {
-                var trusted = interception.InstallRootCertificate(machineStore: false);
+                var trusted = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                    ? RootTrustHelpers.TrustRootInteractively(interception)
+                    : interception.InstallRootCertificate(machineStore: false);
                 Assert.IsTrue(trusted || RuntimeInformation.IsOSPlatform(OSPlatform.Linux),
                     "CA must be trusted for Chrome (Windows Root / Linux NSS)");
             }

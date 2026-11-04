@@ -249,8 +249,7 @@ public static class InspectorBodyLimits
         var ct = contentType?.Split(';', 2)[0].Trim() ?? "";
         try
         {
-            if (ct.Contains("json", StringComparison.OrdinalIgnoreCase)
-                || (string.IsNullOrEmpty(ct) && LooksLikeJson(text)))
+            if (ShouldTryPrettyPrintJson(ct, text))
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(text);
                 var pretty = System.Text.Json.JsonSerializer.Serialize(
@@ -280,6 +279,27 @@ public static class InspectorBodyLimits
         }
 
         return null;
+    }
+
+    /// <summary>
+    ///     Declared JSON, or a body that looks like JSON under a type that often mislabels it
+    ///     (<c>text/plain</c>, <c>application/octet-stream</c>, or missing).
+    /// </summary>
+    private static bool ShouldTryPrettyPrintJson(string contentType, string text)
+    {
+        if (contentType.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!LooksLikeJson(text))
+        {
+            return false;
+        }
+
+        return string.IsNullOrEmpty(contentType)
+               || contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase)
+               || contentType.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikeJson(string text)

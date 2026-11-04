@@ -291,7 +291,7 @@ def apply_to_wiki(
                 f"(https://github.com/justcoding121/titanium-web-proxy/actions/runs/{primary_run_id}). {stay}"
             )
         body = re.sub(
-            r"Median of \*\*3\*\* repeats @ `[^`]+` — \[[0-9]+\]\(https://github\.com/justcoding121/titanium-web-proxy/actions/runs/[0-9]+\)",
+            r"Median of \*\*3\*\* repeats(?: @ `[^`]+`)?(?: — \[[0-9]+\]\(https://github\.com/justcoding121/titanium-web-proxy/actions/runs/[0-9]+\)|\. Source: \[[0-9]+\]\(https://github\.com/justcoding121/titanium-web-proxy/actions/runs/[0-9]+\))",
             sha_line,
             body,
             count=1,

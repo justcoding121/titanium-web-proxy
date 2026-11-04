@@ -1,0 +1,9 @@
+# expect: normalize
+# reason: "Content-Length : 5" is forwarded under the canonical name or refused, never as a padded name
+# assert-header: Content-Length=5
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length : 5\r\n
+\r\n
+hello

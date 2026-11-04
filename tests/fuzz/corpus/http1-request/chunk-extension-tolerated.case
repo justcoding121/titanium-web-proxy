@@ -1,0 +1,10 @@
+# expect: accept
+# reason: chunk-ext after ";" is tolerated and not decoded
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+3;ext=1\r\nabc\r\n
+0\r\n
+\r\n

@@ -32,13 +32,16 @@ Allowed target ports default to 443. The tunnel pins one address at open time, a
 
 Caps default to 16 tunnels per client address and 1024 per listener. Each tunnel also has a one-second token bucket (1000 datagrams and 1,000,000 bytes). The idle timer defaults to 120 seconds and resets on traffic in either direction. A full client-bound queue drops datagrams. UDP send failures are counted and do not close the tunnel.
 
-```yaml
+```yaml twp
 listeners:
   - type: masque
     host: 0.0.0.0
     port: 443
     masque:
       requireAuth: true
+      credentials:
+        - username: relay
+          passwordEnv: MASQUE_RELAY_PASSWORD
       allowedPorts: [443]
       blockPrivateTargets: true
       maxTunnels: 1024

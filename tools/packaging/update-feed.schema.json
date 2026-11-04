@@ -18,7 +18,8 @@
           "properties": {
             "version": { "type": "string" },
             "requiredAbstractions": { "type": "string" },
-            "asset": { "$ref": "#/$defs/asset" }
+            "asset": { "$ref": "#/$defs/asset" },
+            "bundle": { "$ref": "#/$defs/bundle" }
           }
         },
         "inspector": { "$ref": "#/$defs/productAssets" }
@@ -36,6 +37,15 @@
       "properties": {
         "url": { "type": "string", "format": "uri" },
         "sha256": { "type": "string", "minLength": 64, "maxLength": 64 }
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "required": ["url", "sha256"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "size": { "type": "integer", "minimum": 0 }
       }
     },
     "productAssets": {

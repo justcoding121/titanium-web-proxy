@@ -1,0 +1,16 @@
+Titanium.Xds — third-party notices
+==================================
+
+This assembly vendors a trimmed subset of Protocol Buffer definitions under
+`protos/envoy/`. Those definitions are derived from the Apache License 2.0
+data-plane API published at:
+
+  https://github.com/envoyproxy/data-plane-api
+
+Reference tag used for the initial subset: v1.32.2 (2024-10).
+
+Protobuf package names, import paths, and type URL prefixes that appear in the
+wire protocol are retained for Aggregated Discovery Service (ADS) interop.
+Product documentation refers to this feature as Titanium's xDS / ADS client.
+
+Full license text: https://www.apache.org/licenses/LICENSE-2.0

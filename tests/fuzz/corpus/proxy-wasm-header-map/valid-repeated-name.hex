@@ -1,0 +1,3 @@
+# expect: parsed:2
+# reason: repeats are allowed and keep their order
+02 00 00 00 01 00 00 00 01 00 00 00 01 00 00 00 01 00 00 00 61 00 62 00 61 00 63 00

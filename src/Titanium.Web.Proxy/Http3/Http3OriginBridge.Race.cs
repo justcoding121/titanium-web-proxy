@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 
 namespace Titanium.Web.Proxy.Http3;
@@ -64,6 +65,7 @@ internal static partial class Http3OriginBridge
         internal IPEndPoint? UpStreamEndPoint { get; init; }
         internal IExternalProxy? UpstreamProxy { get; init; }
         internal required string PoolKey { get; init; }
+        internal UpstreamTlsMaterial? TlsMaterial { get; init; }
     }
 
     private static async Task<(QuicServerConnection? Quic, bool TcpWon)> AcquireQuicRacingTcpAsync(
@@ -88,7 +90,8 @@ internal static partial class Http3OriginBridge
             sniHost: sniHost,
             failFastHandshake: true,
             capabilityKey: hostAndPort,
-            precomputedCacheKey: poolKey).AsTask();
+            precomputedCacheKey: poolKey,
+            tlsMaterial: target.TlsMaterial).AsTask();
 
         using var tcpCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try

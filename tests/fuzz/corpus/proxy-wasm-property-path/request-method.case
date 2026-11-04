@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: GET
+# reason: :method attribute
+request.method

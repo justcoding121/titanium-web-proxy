@@ -10,6 +10,28 @@ public enum PathMatchKind
     Regex = 4,
 }
 
+/// <summary>How a <see cref="QueryParameterMatch"/> compares the decoded parameter value.</summary>
+public enum QueryMatchKind
+{
+    /// <summary>Ordinal, case-sensitive equality.</summary>
+    Exact = 0,
+
+    /// <summary>The whole value must match the regular expression (non-backtracking engine).</summary>
+    Regex = 1,
+}
+
+/// <summary>One query parameter constraint.</summary>
+public sealed class QueryParameterMatch
+{
+    /// <summary>Parameter name, compared case-sensitively.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Expected value, or a regular expression when <see cref="Kind"/> is <see cref="QueryMatchKind.Regex"/>.</summary>
+    public required string Value { get; init; }
+
+    public QueryMatchKind Kind { get; init; } = QueryMatchKind.Exact;
+}
+
 /// <summary>Declarative route match criteria (host, path, method, headers, query).</summary>
 public sealed class RouteMatch
 {
@@ -19,6 +41,13 @@ public sealed class RouteMatch
     public string? Method { get; init; }
     public IReadOnlyDictionary<string, string>? Headers { get; init; }
     public IReadOnlyDictionary<string, string>? Query { get; init; }
+
+    /// <summary>
+    ///     Query parameter matches that can use a regular expression. Every entry must match. Null (the default)
+    ///     adds no constraint and no per-request work.
+    /// </summary>
+    public IReadOnlyList<QueryParameterMatch>? QueryParameters { get; init; }
+
     public IReadOnlyList<string>? Hosts { get; init; }
     public IReadOnlyList<string>? Methods { get; init; }
 
@@ -66,6 +95,25 @@ public sealed class RouteConfig
 
     /// <summary>Overrides the server error pages for this route.</summary>
     public IReadOnlyList<ErrorPageConfig>? ErrorPages { get; init; }
+
+    /// <summary>
+    ///     Per-route response compression override. <c>off</c> skips <c>server.responseCompression</c> for this
+    ///     route. Null follows the server setting.
+    /// </summary>
+    public string? Compression { get; init; }
+
+    /// <summary>
+    ///     Translates binary gRPC-Web (<c>application/grpc-web</c>, <c>application/grpc-web+proto</c>) POSTs to
+    ///     gRPC on an HTTP/2 origin and folds the response trailers into a final gRPC-Web trailer frame.
+    ///     Unary and server-streaming calls only. Off by default.
+    /// </summary>
+    public bool GrpcWeb { get; init; }
+
+    /// <summary>
+    ///     Names of <c>plugins</c> that run for this route only, in order, after its policies. Null (the default) means the
+    ///     route pays nothing for plugins.
+    /// </summary>
+    public IReadOnlyList<string>? Middleware { get; init; }
 }
 
 /// <summary>One cluster in a traffic split.</summary>
@@ -116,6 +164,156 @@ public sealed class RoutePolicyConfig
     public string? Deny { get; init; }
     public string? Origins { get; init; }
     public string? Methods { get; init; }
+
+    /// <summary><c>extAuth</c>: absolute http or https URL of the authorization service. Fixed in config.</summary>
+    public string? Url { get; init; }
+
+    /// <summary><c>extAuth</c>: HTTP method of the subrequest. Default: GET.</summary>
+    public string? Method { get; init; }
+
+    /// <summary><c>extAuth</c>: client request headers copied onto the subrequest. Default: Authorization, Cookie.</summary>
+    public IReadOnlyList<string>? SendHeaders { get; init; }
+
+    /// <summary><c>extAuth</c>: headers of a 2xx answer set on the upstream request, replacing client-supplied ones.</summary>
+    public IReadOnlyList<string>? CopyResponseHeaders { get; init; }
+
+    /// <summary>
+    /// <c>extAuth</c>: headers of a non-2xx answer relayed to the client.
+    /// Default: Location, Set-Cookie, WWW-Authenticate, Content-Type.
+    /// </summary>
+    public IReadOnlyList<string>? DenyResponseHeaders { get; init; }
+
+    /// <summary><c>extAuth</c>: subrequest deadline in milliseconds, 1-60000. Default: 2000.</summary>
+    public int? TimeoutMilliseconds { get; init; }
+
+    /// <summary><c>extAuth</c>: allow the request when the service times out, fails, or answers 5xx. Default: false.</summary>
+    public bool? FailOpen { get; init; }
+
+    /// <summary><c>extAuth</c>: seconds a 2xx answer is reused for identical credentials. Default: 0 (off).</summary>
+    public int? CacheSeconds { get; init; }
+
+    /// <summary><c>extAuth</c>: most cached answers kept, oldest evicted first. Default: 10000.</summary>
+    public int? CacheMaxEntries { get; init; }
+
+    /// <summary>
+    /// <c>rateLimit</c>: what a counter is keyed on. <c>client</c> (default, the socket address),
+    /// <c>forwardedClient</c> (rightmost X-Forwarded-For entry that is not a trusted proxy),
+    /// <c>header:&lt;Name&gt;</c>, <c>cookie:&lt;Name&gt;</c> (a request without the value falls back to the client address),
+    /// or <c>route</c> (one counter per route).
+    /// </summary>
+    public string? Key { get; init; }
+
+    /// <summary><c>rateLimit</c>: <c>fixedWindow</c> (default) or <c>tokenBucket</c>.</summary>
+    public string? Algorithm { get; init; }
+
+    /// <summary><c>rateLimit</c> token bucket: bucket capacity, at least 1. Default: the limit.</summary>
+    public int? Burst { get; init; }
+
+    /// <summary>
+    /// <c>rateLimit</c>: most counters kept for this policy, 1000-10000000. Once full, expired counters are dropped,
+    /// and new keys share one overflow counter. Default: 100000.
+    /// </summary>
+    public int? MaxKeys { get; init; }
+
+    /// <summary><c>rateLimit</c>: add RateLimit-Limit, RateLimit-Remaining and RateLimit-Reset to a 429. Default: false.</summary>
+    public bool? EmitHeaders { get; init; }
+
+    /// <summary><c>rateLimit</c>: <c>node</c> (default) or <c>fleet</c>.</summary>
+    public string? Scope { get; init; }
+
+    /// <summary><c>rateLimit</c> fleet: <c>local</c> | <c>open</c> | <c>closed</c>. Default <c>local</c>.</summary>
+    public string? FleetFailMode { get; init; }
+
+    /// <summary>
+    /// <c>rateLimit</c> fleet: fraction of <c>limit</c> used as the per-node fallback when the store is down.
+    /// Default null → 0.25.
+    /// </summary>
+    public double? LocalShare { get; init; }
+
+    /// <summary><c>oidc</c> (Plus): issuer URL. Must match the <c>issuer</c> of its discovery document exactly.</summary>
+    public string? Issuer { get; init; }
+
+    /// <summary><c>oidc</c>: client id registered with the provider.</summary>
+    public string? ClientId { get; init; }
+
+    /// <summary><c>oidc</c>: name of the environment variable that holds the client secret. Omit both secret forms for a public client.</summary>
+    public string? ClientSecretEnv { get; init; }
+
+    /// <summary><c>oidc</c>: file that holds the client secret (a mounted Secret).</summary>
+    public string? ClientSecretFile { get; init; }
+
+    /// <summary>
+    /// <c>oidc</c>: path the provider returns the browser to. Default: <c>/_titanium/oidc/callback</c>.
+    /// The route must match this path, or the callback never reaches the policy.
+    /// </summary>
+    public string? RedirectPath { get; init; }
+
+    /// <summary><c>oidc</c>: absolute http(s) origin the provider redirects to. Default: scheme and Host of the request.</summary>
+    public string? PublicBaseUrl { get; init; }
+
+    /// <summary><c>oidc</c>: scopes to request. Default: <c>openid email profile</c> (plus <c>offline_access</c> with refreshTokens).</summary>
+    public IReadOnlyList<string>? Scopes { get; init; }
+
+    /// <summary><c>oidc</c>: session cookie name. Default: <c>titanium_oidc</c>.</summary>
+    public string? CookieName { get; init; }
+
+    /// <summary>
+    /// <c>oidc</c>: name of the environment variable that holds the cookie key (32 bytes as base64 or 64 hex digits).
+    /// A second key (separated by a comma or a new line) decrypts cookies made before a rotation.
+    /// </summary>
+    public string? CookieSecretEnv { get; init; }
+
+    /// <summary><c>oidc</c>: file that holds the cookie key, or two keys one per line during a rotation.</summary>
+    public string? CookieSecretFile { get; init; }
+
+    /// <summary><c>oidc</c>: how long a session lasts, 60 to 2592000. Default: 28800.</summary>
+    public int? SessionTtlSeconds { get; init; }
+
+    /// <summary><c>oidc</c>: e-mail addresses that may sign in (case-insensitive).</summary>
+    public IReadOnlyList<string>? AllowedEmails { get; init; }
+
+    /// <summary><c>oidc</c>: e-mail domains that may sign in (exact, case-insensitive).</summary>
+    public IReadOnlyList<string>? AllowedEmailDomains { get; init; }
+
+    /// <summary><c>oidc</c>: groups of which a person must be a member.</summary>
+    public IReadOnlyList<string>? AllowedGroups { get; init; }
+
+    /// <summary><c>oidc</c>: claim that lists the groups. Default: <c>groups</c>.</summary>
+    public string? GroupsClaim { get; init; }
+
+    /// <summary><c>oidc</c>: claim name to request header name. Client values for these headers are always removed.</summary>
+    public IReadOnlyDictionary<string, string>? PassClaims { get; init; }
+
+    /// <summary><c>oidc</c>: path that ends the session. Default: none.</summary>
+    public string? LogoutPath { get; init; }
+
+    /// <summary><c>oidc</c>: absolute origins an <c>rd</c> redirect may name. Relative paths are always allowed.</summary>
+    public IReadOnlyList<string>? PostLoginRedirectAllowlist { get; init; }
+
+    /// <summary><c>oidc</c>: renew the session with the refresh token shortly before the ID token expires. Default: false.</summary>
+    public bool? RefreshTokens { get; init; }
+
+    /// <summary>
+    /// <c>waf</c> (Plus): <c>off</c>, <c>detect</c> (log and count only), or <c>block</c> for this route. Omit to follow
+    /// <c>plus.options</c> <c>waf.mode</c>. Core ignores this kind; the Plus WAF reads it.
+    /// </summary>
+    public string? Mode { get; init; }
+
+    /// <summary><c>waf</c>: paranoia level 1-3 for this route. Omit to follow <c>waf.paranoia</c>.</summary>
+    public int? ParanoiaLevel { get; init; }
+
+    /// <summary><c>waf</c>: anomaly score at which <c>block</c> mode refuses the request. Omit to follow <c>waf.blockThreshold</c>.</summary>
+    public int? BlockThreshold { get; init; }
+
+    /// <summary><c>waf</c>: rule ids or categories switched off for this route, in addition to <c>waf.disableRules</c>.</summary>
+    public IReadOnlyList<string>? DisabledRules { get; init; }
+
+    /// <summary>
+    /// <c>waf</c>: exclusions as <c>rule[@target]</c>. <c>rule</c> is a rule id, a category, or <c>*</c>.
+    /// <c>target</c> is <c>path</c>, <c>query</c>, <c>query:name</c>, <c>header</c>, <c>header:Name</c>, <c>cookie</c>,
+    /// <c>cookie:name</c>, <c>body</c>, or <c>body:field</c>. Without a target the rule is excluded everywhere.
+    /// </summary>
+    public IReadOnlyList<string>? Exclusions { get; init; }
 }
 
 /// <summary>Redirect built by the proxy.</summary>

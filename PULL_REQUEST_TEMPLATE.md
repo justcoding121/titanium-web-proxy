@@ -16,3 +16,4 @@
 - [ ] Hot-path / terminate-lite behavior preserved when routes unset or ForwardHost-equivalent
 - [ ] PublicAPI.Shipped.txt / Unshipped.txt updated if public surface changed
 - [ ] Target branch is `develop` (unless directed otherwise)
+- [ ] New or changed **supported** capability has a smoke entry in `tests/smoke-matrix.yml` (test FQN or workflow job)

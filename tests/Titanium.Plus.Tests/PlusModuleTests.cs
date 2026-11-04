@@ -26,10 +26,10 @@ namespace Titanium.Plus.Tests;
 public class PlusModuleTests
 {
     [TestMethod]
-    public void RequiredAbstractionsVersion_Is70()
+    public void RequiredAbstractionsVersion_Is80()
     {
         TitaniumPlusModule module = new TitaniumPlusModule();
-        Assert.AreEqual(new Version(7, 0, 1), module.RequiredAbstractionsVersion);
+        Assert.AreEqual(new Version(8, 0, 0), module.RequiredAbstractionsVersion);
     }
 
     [TestMethod]
@@ -390,6 +390,18 @@ public class PlusModuleTests
                 "File discovery should apply clusters from the watched JSON within a few seconds.");
             Assert.AreEqual("10.0.0.9", manager.Snapshot.Clusters["from-file"].Destinations[0].Address);
             Assert.IsTrue(refreshed >= 1);
+
+            await File.WriteAllTextAsync(path, """
+                {"clusters":[{"id":"from-file","destinations":[{"id":"fd2","address":"10.0.0.10","port":9001}]}]}
+                """);
+            for (var i = 0; i < 100 && manager.Snapshot.Clusters["from-file"].Destinations[0].Id != "fd2"; i++)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.AreEqual("fd2", manager.Snapshot.Clusters["from-file"].Destinations[0].Id,
+                "File discovery should pick up an overwrite via watcher or poll within a few seconds.");
+            Assert.AreEqual("10.0.0.10", manager.Snapshot.Clusters["from-file"].Destinations[0].Address);
         }
         finally
         {
@@ -516,6 +528,136 @@ public class PlusModuleTests
         mw.SetValidationParametersForTests(CreateValidationParameters(rsa, "https://issuer.example", "api"));
         Assert.IsTrue(await mw.TryValidateJwtAsync(token));
         Assert.IsTrue(await mw.TryValidateJwtAsync(token));
+    }
+
+    [TestMethod]
+    public async Task Jwt_JwksRefreshFailure_FailsClosed_DoesNotReusePreviousKeys()
+    {
+        using var rsa = RSA.Create(2048);
+        var jwks = CreateJwksJson(rsa, "k1");
+        var hits = 0;
+        using var server = new HttpListener();
+        var prefix = $"http://127.0.0.1:{GetFreeTcpPort()}/";
+        server.Prefixes.Add(prefix);
+        server.Start();
+        var serve = Task.Run(async () =>
+        {
+            while (server.IsListening)
+            {
+                HttpListenerContext ctx;
+                try
+                {
+                    ctx = await server.GetContextAsync();
+                }
+                catch (HttpListenerException)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+
+                Interlocked.Increment(ref hits);
+                if (Volatile.Read(ref hits) == 1)
+                {
+                    var bytes = Encoding.UTF8.GetBytes(jwks);
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.ContentType = "application/json";
+                    await ctx.Response.OutputStream.WriteAsync(bytes);
+                }
+                else
+                {
+                    ctx.Response.StatusCode = 503;
+                }
+
+                ctx.Response.Close();
+            }
+        });
+
+        try
+        {
+            var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+            var token = CreateSignedJwt(rsa, exp, "https://issuer.example", "api");
+            var mw = new JwtAccessMiddleware(
+                "https://issuer.example",
+                "api",
+                jwksUrl: prefix + "jwks",
+                httpClientFactory: () => new HttpClient { Timeout = TimeSpan.FromSeconds(5) });
+
+            Assert.IsTrue(await mw.TryValidateJwtAsync(token), "first validation loads JWKS");
+            mw.ExpireKeysCacheForTests();
+            Assert.IsFalse(await mw.TryValidateJwtAsync(token), "a JWKS outage must not keep admitting tokens");
+            Assert.IsTrue(Volatile.Read(ref hits) >= 2);
+        }
+        finally
+        {
+            server.Stop();
+            try { await serve; } catch { /* listener stopped */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task Jwt_JwksKeyRemoved_RejectsTokenSignedWithThatKey()
+    {
+        using var oldKey = RSA.Create(2048);
+        using var newKey = RSA.Create(2048);
+        var both = CombineJwks(CreateJwksJson(oldKey, "old"), CreateJwksJson(newKey, "new"));
+        var onlyNew = CreateJwksJson(newKey, "new");
+        var document = both;
+        using var server = new HttpListener();
+        var prefix = $"http://127.0.0.1:{GetFreeTcpPort()}/";
+        server.Prefixes.Add(prefix);
+        server.Start();
+        var serve = Task.Run(async () =>
+        {
+            while (server.IsListening)
+            {
+                HttpListenerContext ctx;
+                try
+                {
+                    ctx = await server.GetContextAsync();
+                }
+                catch (HttpListenerException)
+                {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+
+                var bytes = Encoding.UTF8.GetBytes(Volatile.Read(ref document)!);
+                ctx.Response.StatusCode = 200;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.OutputStream.WriteAsync(bytes);
+                ctx.Response.Close();
+            }
+        });
+
+        try
+        {
+            var exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+            var oldToken = CreateSignedJwt(oldKey, exp, "https://issuer.example", "api");
+            var newToken = CreateSignedJwt(newKey, exp, "https://issuer.example", "api");
+            var mw = new JwtAccessMiddleware(
+                "https://issuer.example",
+                "api",
+                jwksUrl: prefix + "jwks",
+                httpClientFactory: () => new HttpClient { Timeout = TimeSpan.FromSeconds(5) });
+
+            Assert.IsTrue(await mw.TryValidateJwtAsync(oldToken), "overlap: both keys published");
+            Assert.IsTrue(await mw.TryValidateJwtAsync(newToken));
+            Volatile.Write(ref document, onlyNew);
+            mw.ExpireKeysCacheForTests();
+            Assert.IsFalse(await mw.TryValidateJwtAsync(oldToken), "a key dropped from JWKS must no longer validate");
+            Assert.IsTrue(await mw.TryValidateJwtAsync(newToken));
+        }
+        finally
+        {
+            server.Stop();
+            try { await serve; } catch { /* listener stopped */ }
+        }
     }
 
     [TestMethod]
@@ -757,6 +899,53 @@ public class PlusModuleTests
             RequireExpirationTime = true,
             RequireSignedTokens = true,
         };
+
+    private static string CreateJwksJson(RSA rsa, string kid)
+    {
+        var p = rsa.ExportParameters(false);
+        return JsonSerializer.Serialize(new
+        {
+            keys = new[]
+            {
+                new Dictionary<string, string>
+                {
+                    ["kty"] = "RSA",
+                    ["use"] = "sig",
+                    ["alg"] = "RS256",
+                    ["kid"] = kid,
+                    ["n"] = Base64UrlEncoder.Encode(p.Modulus!),
+                    ["e"] = Base64UrlEncoder.Encode(p.Exponent!),
+                },
+            },
+        });
+    }
+
+    private static string CombineJwks(string first, string second)
+    {
+        using var a = JsonDocument.Parse(first);
+        using var b = JsonDocument.Parse(second);
+        var keys = new List<JsonElement>();
+        foreach (var k in a.RootElement.GetProperty("keys").EnumerateArray())
+        {
+            keys.Add(k.Clone());
+        }
+
+        foreach (var k in b.RootElement.GetProperty("keys").EnumerateArray())
+        {
+            keys.Add(k.Clone());
+        }
+
+        return JsonSerializer.Serialize(new { keys });
+    }
+
+    private static int GetFreeTcpPort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
 
     private sealed class TestLatencyRecorder : ILatencyRecorder
     {

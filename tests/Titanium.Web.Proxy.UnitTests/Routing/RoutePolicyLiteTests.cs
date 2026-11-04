@@ -171,8 +171,25 @@ public class RoutePolicyLiteTests
         Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
         Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out var status, out _, out _));
         Assert.AreEqual(503, status);
-        RoutePolicies.Release("slots");
+        RoutePolicies.Release(options, "slots");
         Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void TwoOptionsInstances_DoNotShareConnectionSlots()
+    {
+        var policy = new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 1 };
+        var first = Options(["slots"], policy);
+        var second = Options(["slots"], policy);
+        Assert.IsFalse(Handle(first, Req(), "10.0.0.1", out _, out _, out _));
+        Assert.IsTrue(Handle(first, Req(), "10.0.0.1", out var status, out _, out _));
+        Assert.AreEqual(503, status);
+        Assert.IsFalse(Handle(second, Req(), "10.0.0.1", out _, out _, out _), "another instance has its own slots");
+
+        // Giving a slot back to one instance does not free the other.
+        RoutePolicies.Release(first, "slots");
+        Assert.IsFalse(Handle(first, Req(), "10.0.0.1", out _, out _, out _));
+        Assert.IsTrue(Handle(second, Req(), "10.0.0.1", out _, out _, out _));
     }
 
     [TestMethod]
@@ -184,9 +201,9 @@ public class RoutePolicyLiteTests
             new RoutePolicyConfig { Name = "b", Kind = "connectionLimit", Limit = 1 });
         Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
         Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
-        RoutePolicies.Release("a\u001fb");
-        RoutePolicies.Release("a\u001fb");
-        RoutePolicies.Release(string.Empty);
+        RoutePolicies.Release(options, "a\u001fb");
+        RoutePolicies.Release(options, "a\u001fb");
+        RoutePolicies.Release(options, string.Empty);
         Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
     }
 

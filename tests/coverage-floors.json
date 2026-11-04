@@ -1,0 +1,16 @@
+{
+  "note": "Line-coverage percent per assembly. A pull request fails when a measured assembly drops more than 0.1 below its floor unless this file changes in the same pull request. Floors start at 0 until a trusted report is recorded; do not raise a floor to hide an exclusion.",
+  "dropAllowance": 0.1,
+  "assemblies": {
+    "Titanium.Web.Proxy": 0,
+    "Titanium.Web.Proxy.Configuration": 0,
+    "Titanium.Cli": 0,
+    "Titanium.Plus": 0,
+    "Titanium.Gateway": 0,
+    "Titanium.Manager": 0,
+    "Titanium.Xds": 0,
+    "Titanium.Inspector": 0,
+    "Titanium.Web.Proxy.Scripting": 0,
+    "Titanium.Cli.GeoIp": 0
+  }
+}

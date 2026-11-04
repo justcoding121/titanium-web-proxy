@@ -10,7 +10,9 @@ dotnet add package Titanium.Web.Proxy
 dotnet add package Titanium.Web.Proxy --prerelease
 ```
 
-Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for library users). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md).
+Related MIT packages (also on NuGet): **Titanium.Web.Proxy.Abstractions** (shared contracts) and **Titanium.Web.Proxy.Configuration** (`twp.yaml` / dialect loaders — optional for library users). See [migration 6→7](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-6-to-7.md) and [migration 7→8](https://github.com/justcoding121/titanium-web-proxy/blob/develop/docs/migration-7-to-8.md).
+
+**Scripting** (Lua / WASM) ships inside the CLI, not as a NuGet package. Embedders that need those engines copy the RID natives beside the host binary (see [Scripting](/docs/scripting) and `titanium scripting-deps`).
 
 ## Explicit man-in-the-middle (MITM) proxy
 
@@ -37,7 +39,7 @@ proxyServer.Start();
 
 - Intercept, modify, redirect, or block HTTP and HTTPS
 - Explicit, transparent, and SOCKS4/5 endpoints
-- HTTP/2 on by default (`ProxyServer.EnableHttp2`); HTTP/3 opt-in (`EnableHttp3`, experimental `TWP001`)
+- HTTP/2 on by default (`ProxyServer.EnableHttp2`). The library leaves HTTP/3 off until the host calls `TryEnableHttp3IfSupported` (or sets `EnableHttp3`). CLI and Inspector do that when QUIC is available.
 - Upstream HTTP/HTTPS/SOCKS + system proxy detection
 - Proxy auth, mTLS, Kerberos, NTLM
 - Connection, certificate, and buffer pooling
@@ -45,7 +47,11 @@ proxyServer.Start();
 
 ## Reverse proxy
 
-Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so active health probes shut down. `DrainAsync` stops admitting new clients and then stops the proxy. Hosts that use dependency injection can call `AddTitaniumReverseProxy` from the hosting package. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
+Use `ForwardHost` on a transparent endpoint for a zero-cost terminate-lite path, or declarative routes/clusters (also used by the CLI). Call `DisposeAsync` on `ClusterManager` when the proxy stops so background DNS refresh (and any registered active-health probes) shut down. `DrainAsync` stops admitting new clients and then stops the proxy. Hosts that use dependency injection can call `AddTitaniumReverseProxy` from the hosting package. See [Configuration](/docs/configuration) and [Protocol support](/docs/protocol-support).
+
+From 8.0, the RFC 9111 response cache and `healthCheck.active` probing ship in **Titanium.Plus** (PolyForm), not in the MIT library package. Assign `ClusterManager.ActiveHealthProbeProvider` (Plus does this when loaded) before `healthCheck.active` does anything at runtime. See [Migration from 7.x](https://github.com/justcoding121/titanium-web-proxy/wiki/Migration-from-7.x).
+
+For `geo` route policies, assign `ReverseProxyOptions.GeoIpResolver` (`IGeoIpResolver` in **Titanium.Web.Proxy.Abstractions**). The CLI loads an MMDB from `server.geoIpDatabasePath`; embedders supply their own resolver (any database or lookup service).
 
 ## API reference
 

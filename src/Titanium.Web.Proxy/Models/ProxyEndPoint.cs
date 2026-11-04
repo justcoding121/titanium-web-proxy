@@ -83,6 +83,9 @@ public abstract class ProxyEndPoint
     /// <summary>When true, the accept loop requires a PROXY protocol preamble.</summary>
     public bool AcceptProxyProtocol { get; set; }
 
+    /// <summary>Linux only: bind with <c>SO_REUSEPORT</c> for hot restart handover.</summary>
+    public bool ReusePort { get; set; }
+
     private CidrPrefix[]? _trustedProxySources;
     private IReadOnlyList<string>? _trustedProxySourceText;
 

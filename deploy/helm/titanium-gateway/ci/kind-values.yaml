@@ -1,0 +1,24 @@
+# Used by the Gateway API conformance workflow: images built and loaded into kind, a LoadBalancer address from MetalLB.
+controller:
+  replicaCount: 2
+  image:
+    repository: titanium-gateway
+    tag: ci
+    pullPolicy: Never
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+dataPlane:
+  replicaCount: 2
+  image:
+    repository: titanium-web-proxy
+    tag: ci
+    pullPolicy: Never
+  service:
+    type: LoadBalancer
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+

@@ -1,0 +1,8 @@
+# Autobahn|Testsuite known gaps for a WebSocket client that connects through a Titanium reverse listener.
+# One case id per line (exact match, for example 6.4.3). '#' starts a comment.
+# Every entry needs an issue link and a reason. Remove the entry when the gap is fixed: the checker reports stale entries.
+#
+# The list is empty: the first nightly run is the baseline. Record any FAILED case it reports here as
+#   <case id> # <issue placeholder: TWP-AUTOBAHN-NNN> <why this is accepted or when it will be fixed>
+# Cases that the client library itself cannot take part in (for example invalid UTF-8 text echoed by
+# System.Net.WebSockets) belong here too, with that reason.

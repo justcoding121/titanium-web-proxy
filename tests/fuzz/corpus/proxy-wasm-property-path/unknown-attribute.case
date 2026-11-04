@@ -1,0 +1,3 @@
+# expect: notfound
+# reason: unknown names are NotFound
+no.such.attribute

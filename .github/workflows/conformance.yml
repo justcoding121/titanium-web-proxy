@@ -1,0 +1,301 @@
+name: conformance
+
+# Conformance, parser-safety and resilience jobs. See tests/conformance/README.md and tests/fuzz/README.md.
+#
+#   parser-and-chaos  every PR that touches the HTTP parsers, the proxy core or these tests; runs in a few minutes
+#   h2spec            nightly + workflow_dispatch: h2spec against a prior-knowledge h2c reverse listener
+#   autobahn          nightly + workflow_dispatch: Autobahn|Testsuite client cases through a reverse listener
+#   real-peer         nightly + workflow_dispatch: the reverse listener in front of a stock nginx container
+#
+# The three heavy jobs follow the gateway-conformance precedent: they report from the first run on, but they only
+# fail the workflow once the repository variable CONFORMANCE_ENFORCE is 'true'. Until then the report (and the
+# step summary) says what failed. Every job skips cleanly, with a notice and a green result, when its external
+# tool or image cannot be fetched. Known gaps live in tests/conformance/*-known.txt.
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - beta
+      - stable
+    paths:
+      - 'src/Titanium.Web.Proxy/**'
+      - 'src/Titanium.Web.Proxy.Configuration/**'
+      - 'tests/fuzz/**'
+      - 'tests/conformance/**'
+      - 'tests/Titanium.Web.Proxy.UnitTests/Fuzz/**'
+      - 'tests/Titanium.Web.Proxy.IntegrationTests/ReverseProxy*'
+      - 'tests/Titanium.Web.Proxy.Configuration.Tests/**'
+      - '.github/workflows/conformance.yml'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ENFORCE: ${{ vars.CONFORMANCE_ENFORCE == 'true' }}
+
+jobs:
+  # Light job: the deterministic parser corpus, the golden config corpus, and the reverse-proxy chaos tests.
+  # ReverseProxyTests is included because its origin is an in-process Kestrel server: the real-HTTP-server row.
+  parser-and-chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Parser corpus (HTTP/1 request parser and ClientHello SNI parser)
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release \
+            --filter "FullyQualifiedName~ParserCorpusRunnerTests"
+
+      - name: Upgrade compatibility (golden configs)
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj --configuration Release \
+            --filter "FullyQualifiedName~ConfigCompatibilityTests"
+
+      - name: Reverse-proxy chaos and the Kestrel origin row
+        run: |
+          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release \
+            --filter "FullyQualifiedName~ReverseProxyChaosTests|FullyQualifiedName~ReverseProxyTests"
+
+  h2spec:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      H2SPEC_VERSION: v2.6.0
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Fetch h2spec
+        id: tool
+        run: |
+          mkdir -p artifacts/h2spec
+          if curl -fsSL --retry 3 -o artifacts/h2spec/h2spec.tar.gz \
+              "https://github.com/summerwind/h2spec/releases/download/${H2SPEC_VERSION}/h2spec_linux_amd64.tar.gz" \
+            && tar -xzf artifacts/h2spec/h2spec.tar.gz -C artifacts/h2spec h2spec; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::h2spec ${H2SPEC_VERSION} could not be downloaded; skipping the HTTP/2 conformance job."
+          fi
+
+      - name: Publish the CLI
+        if: steps.tool.outputs.available == 'true'
+        run: dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -o artifacts/titanium
+
+      - name: Run h2spec against a prior-knowledge h2c listener
+        if: steps.tool.outputs.available == 'true'
+        run: |
+          # Origin: a static HTTP/1.1 server. The listener (tests/conformance/configs/h2spec.yaml) is on 9101.
+          mkdir -p artifacts/h2spec/www && echo ok > artifacts/h2spec/www/index.html
+          python3 -m http.server 9100 --bind 127.0.0.1 --directory artifacts/h2spec/www > artifacts/h2spec/origin.log 2>&1 &
+          artifacts/titanium/titanium run -c tests/conformance/configs/h2spec.yaml > artifacts/h2spec/titanium.log 2>&1 &
+          for i in $(seq 1 60); do
+            (echo > /dev/tcp/127.0.0.1/9101) 2>/dev/null && break
+            sleep 1
+          done
+          # h2spec exits non-zero for any failed case; the allow-list check below decides what that means.
+          artifacts/h2spec/h2spec -h 127.0.0.1 -p 9101 --timeout 5 -j artifacts/h2spec/report.xml > artifacts/h2spec/h2spec.log 2>&1 || true
+          tail -n 25 artifacts/h2spec/h2spec.log
+
+      - name: Compare with the known gaps
+        if: steps.tool.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          pwsh tests/conformance/check-known.ps1 -Kind h2spec -Report artifacts/h2spec/report.xml -Known tests/conformance/h2spec-known.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0 -and $env:ENFORCE -ne 'true') {
+            Write-Host "::warning::h2spec reported unexpected failures; not failing the run until CONFORMANCE_ENFORCE is 'true'."
+            exit 0
+          }
+          exit $code
+
+      - name: Upload the h2spec report
+        if: always() && steps.tool.outputs.available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: h2spec
+          path: |
+            artifacts/h2spec/report.xml
+            artifacts/h2spec/*.log
+          if-no-files-found: ignore
+
+  autobahn:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      AUTOBAHN_IMAGE: crossbario/autobahn-testsuite
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Pull the fuzzingserver image
+        id: tool
+        run: |
+          if docker pull "$AUTOBAHN_IMAGE"; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$AUTOBAHN_IMAGE could not be pulled; skipping the WebSocket conformance job."
+          fi
+
+      - name: Publish the CLI
+        if: steps.tool.outputs.available == 'true'
+        run: dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -o artifacts/titanium
+
+      - name: Run the Autobahn client cases through the listener
+        if: steps.tool.outputs.available == 'true'
+        run: |
+          mkdir -p artifacts/autobahn/reports
+          chmod 777 artifacts/autobahn/reports
+          docker run -d --name fuzzingserver -p 127.0.0.1:9001:9001 \
+            -v "$PWD/tests/conformance/autobahn:/config:ro" \
+            -v "$PWD/artifacts/autobahn/reports:/reports" \
+            "$AUTOBAHN_IMAGE" wstest -m fuzzingserver -s /config/fuzzingserver.json
+          artifacts/titanium/titanium run -c tests/conformance/configs/autobahn.yaml > artifacts/autobahn/titanium.log 2>&1 &
+          for i in $(seq 1 60); do
+            (echo > /dev/tcp/127.0.0.1/9001) 2>/dev/null && (echo > /dev/tcp/127.0.0.1/9102) 2>/dev/null && break
+            sleep 1
+          done
+          # The client talks to the listener (9102), which forwards to the fuzzingserver (9001).
+          dotnet run tests/conformance/autobahn/AutobahnClient.cs -- ws://127.0.0.1:9102 titanium | tee artifacts/autobahn/client.log
+          docker logs fuzzingserver > artifacts/autobahn/fuzzingserver.log 2>&1 || true
+
+      - name: Compare with the known gaps
+        if: steps.tool.outputs.available == 'true'
+        shell: pwsh
+        run: |
+          pwsh tests/conformance/check-known.ps1 -Kind autobahn -Report artifacts/autobahn/reports/clients/index.json -Known tests/conformance/autobahn-known.txt
+          $code = $LASTEXITCODE
+          if ($code -ne 0 -and $env:ENFORCE -ne 'true') {
+            Write-Host "::warning::Autobahn reported unexpected failures; not failing the run until CONFORMANCE_ENFORCE is 'true'."
+            exit 0
+          }
+          exit $code
+
+      - name: Upload the Autobahn reports
+        if: always() && steps.tool.outputs.available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: autobahn
+          path: artifacts/autobahn
+          if-no-files-found: ignore
+
+  # Real-peer row: the listener in front of a stock nginx. The checks compare what the client gets through the
+  # proxy with what nginx sends directly, so a framing, header or body regression shows up against a server we
+  # did not write. Envoy joins the matrix the same way: add `envoy` below with its container and port mapping.
+  real-peer:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        peer: [nginx]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: Pull the peer image
+        id: tool
+        run: |
+          if docker pull nginx:stable; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::nginx:stable could not be pulled; skipping the real-peer job."
+          fi
+
+      - name: Publish the CLI
+        if: steps.tool.outputs.available == 'true'
+        run: dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -o artifacts/titanium
+
+      - name: Compare the proxy with the peer
+        id: compare
+        if: steps.tool.outputs.available == 'true'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/real-peer/html
+          head -c 8388608 /dev/urandom > artifacts/real-peer/html/big.bin
+          echo '<html><body>real peer</body></html>' > artifacts/real-peer/html/index.html
+          docker run -d --name peer -p 127.0.0.1:9201:80 -v "$PWD/artifacts/real-peer/html:/usr/share/nginx/html:ro" nginx:stable
+          artifacts/titanium/titanium run -c tests/conformance/configs/real-peer.yaml > artifacts/real-peer/titanium.log 2>&1 &
+          for i in $(seq 1 60); do
+            (echo > /dev/tcp/127.0.0.1/9201) 2>/dev/null && (echo > /dev/tcp/127.0.0.1/9202) 2>/dev/null && break
+            sleep 1
+          done
+
+          direct=http://127.0.0.1:9201
+          proxied=http://127.0.0.1:9202
+          fail=0
+          check() { if [ "$2" != "$3" ]; then echo "::error::$1: direct='$2' proxied='$3'"; fail=1; fi; }
+
+          check "GET / status"    "$(curl -s -o /dev/null -w '%{http_code}' $direct/)"            "$(curl -s -o /dev/null -w '%{http_code}' $proxied/)"
+          check "GET / body"      "$(curl -s $direct/ | sha256sum)"                                "$(curl -s $proxied/ | sha256sum)"
+          check "404 status"      "$(curl -s -o /dev/null -w '%{http_code}' $direct/missing)"      "$(curl -s -o /dev/null -w '%{http_code}' $proxied/missing)"
+          check "8 MiB body"      "$(curl -s $direct/big.bin | sha256sum)"                          "$(curl -s $proxied/big.bin | sha256sum)"
+          check "range status"    "$(curl -s -o /dev/null -w '%{http_code}' -r 0-99 $direct/big.bin)" "$(curl -s -o /dev/null -w '%{http_code}' -r 0-99 $proxied/big.bin)"
+          check "range body"      "$(curl -s -r 0-99 $direct/big.bin | sha256sum)"                  "$(curl -s -r 0-99 $proxied/big.bin | sha256sum)"
+          check "HEAD length"     "$(curl -sI $direct/big.bin | tr -d '\r' | grep -i '^content-length')" "$(curl -sI $proxied/big.bin | tr -d '\r' | grep -i '^content-length')"
+          check "POST status"     "$(curl -s -o /dev/null -w '%{http_code}' -d x=1 $direct/)"       "$(curl -s -o /dev/null -w '%{http_code}' -d x=1 $proxied/)"
+          check "chunked POST"    "$(curl -s -o /dev/null -w '%{http_code}' -H 'Transfer-Encoding: chunked' -d x=1 $direct/)" "$(curl -s -o /dev/null -w '%{http_code}' -H 'Transfer-Encoding: chunked' -d x=1 $proxied/)"
+          # Keep-alive: two requests in one curl invocation reuse one client connection to the proxy.
+          # num_connects is the number of new connections a transfer needed: the second one must need none.
+          check "keep-alive"      "0" "$(curl -s -o /dev/null -o /dev/null -w '%{num_connects}\n' $proxied/ $proxied/index.html | tail -n 1)"
+          exit $fail
+
+      - name: Gate on the result
+        if: steps.tool.outputs.available == 'true'
+        run: |
+          if [ "${{ steps.compare.outcome }}" = "failure" ]; then
+            if [ "$ENFORCE" = "true" ]; then
+              echo "::error::The real-peer comparison failed."
+              exit 1
+            fi
+            echo "::warning::The real-peer comparison failed; not failing the run until CONFORMANCE_ENFORCE is 'true'."
+          fi
+
+      - name: Collect the logs
+        if: always() && steps.tool.outputs.available == 'true'
+        run: docker logs peer > artifacts/real-peer/peer.log 2>&1 || true
+
+      - name: Upload the logs
+        if: always() && steps.tool.outputs.available == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: real-peer-${{ matrix.peer }}
+          path: |
+            artifacts/real-peer/*.log
+          if-no-files-found: ignore

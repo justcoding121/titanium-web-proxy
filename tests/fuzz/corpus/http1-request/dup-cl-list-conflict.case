@@ -1,0 +1,8 @@
+# expect: reject
+# reason: list-form Content-Length with different members
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 3, 4\r\n
+\r\n
+abcd

@@ -46,13 +46,7 @@ internal static class DestinationResolver
             return DestinationResolution.NoRoute;
         }
 
-        var matcher = options.RouteMatcher ?? new RouteMatcher();
-        var target = RouteTarget.Get(request, fallbackHost);
-        var requirements = RouteTableRequirements.Get(options);
-        var headers = requirements.HeaderNames is null ? null : CollectHeaders(request, requirements.HeaderNames);
-        var query = requirements.QueryNames is null ? null : CollectQuery(request, requirements.QueryNames);
-        var method = request.Method ?? "GET";
-        route = matcher.Match(new RouteMatchContext(target.Host, target.Path, method, headers, query), options.Routes);
+        route = MatchRoute(options, request, fallbackHost);
         if (route is null)
         {
             return DestinationResolution.NoRoute;
@@ -64,9 +58,22 @@ internal static class DestinationResolver
             return DestinationResolution.Terminal;
         }
 
+        return ResolveCluster(options, request, TrafficSplit.Select(route, request), out destination);
+    }
+
+    /// <summary>
+    /// Picks a destination in <paramref name="clusterId"/> through the normal load-balancer path (affinity, health,
+    /// priority). Also the entry point a script phase uses when it chooses a cluster.
+    /// </summary>
+    public static DestinationResolution ResolveCluster(
+        ReverseProxyOptions options,
+        Request request,
+        string clusterId,
+        out DestinationConfig? destination)
+    {
+        destination = null;
         var manager = options.ClusterManager;
         var snapshot = manager?.Snapshot ?? ImmutableClusterSnapshot.Empty;
-        var clusterId = TrafficSplit.Select(route, request);
         if (!snapshot.Clusters.TryGetValue(clusterId, out var cluster))
         {
             return DestinationResolution.RouteWithoutDestination;
@@ -85,6 +92,23 @@ internal static class DestinationResolver
         }
 
         return destination is null ? DestinationResolution.RouteWithoutDestination : DestinationResolution.Resolved;
+    }
+
+    /// <summary>The route the request matches. No cluster is chosen and no destination is picked.</summary>
+    public static RouteConfig? MatchRoute(ReverseProxyOptions? options, Request request, string? fallbackHost)
+    {
+        if (options?.Routes is null || options.Routes.Count == 0)
+        {
+            return null;
+        }
+
+        var matcher = options.RouteMatcher ?? new RouteMatcher();
+        var target = RouteTarget.Get(request, fallbackHost);
+        var requirements = RouteTableRequirements.Get(options);
+        var headers = requirements.HeaderNames is null ? null : CollectHeaders(request, requirements.HeaderNames);
+        var query = requirements.QueryNames is null ? null : CollectQuery(request, requirements.QueryNames);
+        var method = request.Method ?? "GET";
+        return matcher.Match(new RouteMatchContext(target.Host, target.Path, method, headers, query), options.Routes);
     }
 
     private static string? HashInput(Request request, ClusterConfig cluster)
@@ -325,6 +349,7 @@ internal sealed class RouteTableRequirements
             {
                 AddKeys(match.Headers, ref headers, StringComparer.OrdinalIgnoreCase);
                 AddKeys(match.Query, ref query, StringComparer.Ordinal);
+                AddQueryParameterNames(match.QueryParameters, ref query);
             }
         }
 
@@ -336,6 +361,20 @@ internal sealed class RouteTableRequirements
         };
         options.Compiled = next;
         return next;
+    }
+
+    private static void AddQueryParameterNames(IReadOnlyList<QueryParameterMatch>? source, ref HashSet<string>? set)
+    {
+        if (source is not { Count: > 0 })
+        {
+            return;
+        }
+
+        set ??= new HashSet<string>(StringComparer.Ordinal);
+        for (var i = 0; i < source.Count; i++)
+        {
+            set.Add(source[i].Name);
+        }
     }
 
     private static void AddKeys(

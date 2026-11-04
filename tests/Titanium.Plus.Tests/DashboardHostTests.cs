@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
@@ -13,8 +14,13 @@ using Titanium.Web.Proxy.Clusters;
 namespace Titanium.Plus.Tests;
 
 [TestClass]
-public class DashboardHostTests
+public partial class DashboardHostTests
 {
+    private static readonly string[] DashboardLeakProbePaths = ["api/snapshot", "api/no-such", "routes", "%00"];
+
+    [GeneratedRegex(@"at Titanium\.|StackTrace|System\.Exception")]
+    private static partial Regex StackLeakPattern();
+
     [TestMethod]
     public async Task Dashboard_RequiresSecret_AndSupportsAdminRoutes()
     {
@@ -44,10 +50,10 @@ public class DashboardHostTests
 
         using var http = new HttpClient();
 
-        var unauth = await http.GetAsync(dash.Prefix);
+        var unauth = await http.GetAsync(dash.Prefix + "api/snapshot");
         Assert.AreEqual(HttpStatusCode.Unauthorized, unauth.StatusCode);
 
-        using var authReq = new HttpRequestMessage(HttpMethod.Get, dash.Prefix);
+        using var authReq = new HttpRequestMessage(HttpMethod.Get, dash.Prefix + "routes");
         authReq.Headers.Add(ControlPlaneServer.SharedSecretHeader, secret);
         var html = await http.SendAsync(authReq);
         Assert.AreEqual(HttpStatusCode.OK, html.StatusCode);
@@ -79,6 +85,26 @@ public class DashboardHostTests
 
         using var drainUnauth = new HttpRequestMessage(HttpMethod.Post, dash.Prefix + "drain/d1");
         Assert.AreEqual(HttpStatusCode.Unauthorized, (await http.SendAsync(drainUnauth)).StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Dashboard_UnauthenticatedProbes_DoNotLeakAStack()
+    {
+        Environment.SetEnvironmentVariable("TITANIUM_PLUS_ALLOW_DEV_SECRET", "1");
+        var manager = new ClusterManager();
+        using var control = StartControlPlaneOrRetry(manager, "dashboard-test-secret");
+        using var dash = new DashboardHost(control, new DrainOperations(manager), new PrometheusMetricsExporter(manager, null), manager);
+        dash.Start();
+        using var http = new HttpClient();
+        foreach (var path in DashboardLeakProbePaths)
+        {
+            var response = await http.GetAsync(dash.Prefix + path);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.IsFalse(
+                StackLeakPattern().IsMatch(body),
+                path + " leaked " + body);
+            Assert.AreNotEqual(HttpStatusCode.InternalServerError, response.StatusCode, path);
+        }
     }
 
     private static ControlPlaneServer StartControlPlaneOrRetry(

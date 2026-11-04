@@ -223,7 +223,7 @@ public class CliPlusControlPlaneE2ETests
             // Dashboard without secret → 401
             Assert.AreEqual(
                 HttpStatusCode.Unauthorized,
-                (await http.GetAsync($"http://127.0.0.1:{dashboard}/")).StatusCode);
+                (await http.GetAsync($"http://127.0.0.1:{dashboard}/api/snapshot")).StatusCode);
         }
         finally
         {
@@ -235,8 +235,8 @@ public class CliPlusControlPlaneE2ETests
     [TestCategory("E2E")]
     public async Task ControlPlane_CachePurge_WhenCacheDisabled_StillOk()
     {
-        // CLI always passes a MemoryHttpResponseCache into Plus even when cache.enable is off;
-        // purge therefore returns 200 (removed=0) rather than 503.
+        // Plus creates a MemoryHttpResponseCache during Apply even when cache.enable is off,
+        // so purge returns 200 (removed=0) rather than 503.
         using var origin = new EchoOrigin();
         var listen = CliProcessHarness.GetFreePort();
         var control = CliProcessHarness.GetFreePort();
@@ -284,7 +284,7 @@ public class CliPlusControlPlaneE2ETests
             origin.Port,
             control,
             secret,
-            new Dictionary<string, string> { ["cache.enable"] = "true" },
+            new Dictionary<string, string> { ["cache.enable"] = "true", ["cache.exposeHeaders"] = "true" },
             useRoutes: true);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);

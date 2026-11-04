@@ -240,7 +240,7 @@ public partial class ProxyServer
                 {
                     connectRequest.IsHttps = true; // Decryption changes the tunneled request to HTTPS semantics.
 
-                    var sslProtocol = clientHelloInfo.SslProtocol & SupportedSslProtocols;
+                    var sslProtocol = clientHelloInfo.SslProtocol & ListenerSslProtocols;
                     if (sslProtocol == SslProtocols.None)
                     {
                         throw new NotSupportedException("Unsupported client SSL version.");
@@ -367,7 +367,7 @@ public partial class ProxyServer
 
                         CertificateManager.ConfigureServerCertificate(options, certificate);
                         options.ClientCertificateRequired = false;
-                        options.EnabledSslProtocols = SupportedSslProtocols;
+                        ApplyListenerTlsPolicy(options);
                         options.CertificateRevocationCheckMode = X509RevocationMode.NoCheck;
 
                         ClientTlsTiming? clientTlsTiming = null;
@@ -626,6 +626,18 @@ public partial class ProxyServer
                         await SendHttp2ToHttp11Bridge(clientStream, endPoint, connectArgs.HttpClient.ConnectRequest,
                             connectArgs.UserData, bridgeHost, bridgePort, null, null,
                             connectArgs.CancellationTokenSource);
+                        return;
+                    }
+
+                    if (Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(ReverseProxy, endPoint))
+                    {
+                        await TcpConnectionFactory.Release(prefetchConnectionTask, true);
+                        prefetchConnectionTask = null;
+                        var (dispatchHost, dispatchPort) =
+                            ParseHostAndPort(connectArgs.HttpClient.ConnectRequest.Authority.GetString(), 443);
+                        await SendHttp2ToHttp2DispatchBridge(clientStream, endPoint,
+                            connectArgs.HttpClient.ConnectRequest, connectArgs.UserData, dispatchHost, dispatchPort,
+                            null, null, connectArgs.CancellationTokenSource);
                         return;
                     }
 

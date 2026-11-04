@@ -1,0 +1,10 @@
+# expect: reject
+# reason: a chunk-size that overflows 64 bits must not wrap to a small or negative value
+# reject-type: ProxyHttpException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+ffffffffffffffffff\r\nabc\r\n
+0\r\n
+\r\n

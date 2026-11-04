@@ -73,6 +73,23 @@ public class RequestHandlerAndBridgeHelperTests
     }
 
     [TestMethod]
+    public void PrepareRequestHeaders_DropsCodingsTheClientForbidsWithQZero()
+    {
+        var headers = new HeaderCollection();
+        headers.AddHeader(KnownHeaders.AcceptEncoding, "gzip;q=0, br;q=0.0, deflate;q=0.5, identity");
+
+        typeof(ProxyServer).GetMethod("PrepareRequestHeaders", PrivateStatic)!
+            .Invoke(null, [headers]);
+
+        var accept = headers.GetHeaderValueOrNull(KnownHeaders.AcceptEncoding);
+        Assert.IsNotNull(accept);
+        Assert.IsFalse(accept.Contains("gzip", StringComparison.OrdinalIgnoreCase));
+        Assert.IsFalse(accept.Contains("br", StringComparison.OrdinalIgnoreCase));
+        StringAssert.Contains(accept, "deflate");
+        StringAssert.Contains(accept, "identity");
+    }
+
+    [TestMethod]
     public void PrepareRequestHeaders_MissingAcceptEncoding_StillFixesProxyHeaders()
     {
         var headers = new HeaderCollection();

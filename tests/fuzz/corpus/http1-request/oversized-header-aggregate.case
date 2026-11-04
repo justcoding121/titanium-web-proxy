@@ -1,0 +1,7 @@
+# expect: reject
+# reason: header block over MaxHeaderAggregateBytes (256 KiB) built from individually legal lines
+# reject-type: HeaderLimitsExceededException
+GET / HTTP/1.1\r\n
+Host: a\r\n
+%REPEAT(X-H: %REPEAT(B,2000)%\r\n,200)%
+\r\n

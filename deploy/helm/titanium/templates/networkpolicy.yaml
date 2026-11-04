@@ -1,0 +1,47 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "titanium.fullname" . }}
+  labels:
+    {{- include "titanium.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "titanium.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    {{- if .Values.networkPolicy.egress.enabled }}
+    - Egress
+    {{- end }}
+  ingress:
+    - ports:
+        {{- range .Values.ports }}
+        - port: {{ .containerPort }}
+          protocol: {{ default "TCP" .protocol }}
+        {{- end }}
+      {{- with .Values.networkPolicy.proxyFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    - ports:
+        - port: {{ int .Values.admin.port }}
+          protocol: TCP
+      {{- with .Values.networkPolicy.adminFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- if .Values.plus.enabled }}
+    - ports:
+        - port: {{ int .Values.plus.controlPlane.port }}
+          protocol: TCP
+      {{- with .Values.networkPolicy.adminFrom }}
+      from:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+  {{- if .Values.networkPolicy.egress.enabled }}
+  egress:
+    {{- toYaml .Values.networkPolicy.egress.rules | nindent 4 }}
+  {{- end }}
+{{- end }}

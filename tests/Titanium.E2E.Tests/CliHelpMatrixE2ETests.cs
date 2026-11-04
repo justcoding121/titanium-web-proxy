@@ -15,7 +15,7 @@ public class CliHelpMatrixE2ETests
     {
         using var harness = new CliProcessHarness();
 
-        await AssertHelp(harness, ["help"], text => ContainsAll(text, "run", "test", "service", "http3-deps"), exit: 0);
+        await AssertHelp(harness, ["help"], text => ContainsAll(text, "run", "test", "service", "http3-deps", "scripting-deps"), exit: 0);
         await AssertHelp(harness, ["-h"], text => ContainsAll(text, "run", "test"), exit: 0);
         await AssertHelp(harness, ["--help"], text => ContainsAll(text, "run", "test"), exit: 0);
         await AssertHelp(harness, ["run", "--help"], text =>
@@ -32,6 +32,17 @@ public class CliHelpMatrixE2ETests
         await AssertHelp(harness, ["http3-deps", "--help"], _ => true, exit: 0);
         await AssertHelp(harness, ["http3-deps", "status", "--help"], _ => true, exit: 0);
         await AssertHelp(harness, ["http3-deps", "install", "--help"], _ => true, exit: 0);
+        await AssertHelp(harness, ["scripting-deps", "--help"], text => ContainsAll(text, "status", "install"), exit: 0);
+        await AssertHelp(harness, ["scripting-deps", "status", "--help"], _ => true, exit: 0);
+        await AssertHelp(harness, ["scripting-deps", "install", "--help"], _ => true, exit: 0);
+        await AssertHelp(harness, ["reload", "--help"], text =>
+            text.Contains("-c", StringComparison.Ordinal) || text.Contains("--config", StringComparison.OrdinalIgnoreCase), exit: 0);
+        await AssertHelp(harness, ["healthcheck", "--help"], text =>
+            (ContainsAll(text, "--url", "--timeout") || text.Contains("-c", StringComparison.Ordinal)), exit: 0);
+        await AssertHelp(harness, ["plus", "--help"], text =>
+            text.Contains("hash-password", StringComparison.OrdinalIgnoreCase), exit: 0);
+        await AssertHelp(harness, ["plus", "hash-password", "--help"], text =>
+            ContainsAll(text, "--user", "--role") || text.Contains("password", StringComparison.OrdinalIgnoreCase), exit: 0);
         await AssertHelp(harness, ["service", "--help"], text =>
             ContainsAll(text, "install", "uninstall", "start", "stop", "restart", "status"), exit: 0);
         await AssertHelp(harness, ["service", "install", "--help"], text =>

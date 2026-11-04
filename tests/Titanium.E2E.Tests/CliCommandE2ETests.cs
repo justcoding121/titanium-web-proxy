@@ -111,6 +111,20 @@ public class CliCommandE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
+    public void StartRun_RejectsAWildcardListenerHost()
+    {
+        var path = Path.Combine(_tempDir, "wildcard.yaml");
+        File.WriteAllText(path, """
+            listeners:
+              - host: "0.0.0.0"
+                port: 9
+            """);
+        var error = Assert.ThrowsExactly<InvalidOperationException>(() => CliProcessHarness.AssertLoopbackConfig(path));
+        StringAssert.Contains(error.Message, "127.0.0.1");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E")]
     public async Task TestCommand_InvalidConfig_ExitNonZero()
     {
         var cfg = ConfigFixtures.WriteInvalid(_tempDir);
@@ -126,7 +140,7 @@ public class CliCommandE2ETests
         using var harness = new CliProcessHarness();
         var (code, stdout, _) = await harness.RunOnceAsync(["version"]);
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout, "7.0.27");
+        StringAssert.Contains(stdout, "8.0.0");
     }
 
     [TestMethod]
@@ -503,7 +517,7 @@ public class CliCommandE2ETests
         var combined = stdout + stderr;
         // 0 = up to date, 2 = update available, 1 = feed unreachable (transient CI / network).
         Assert.IsTrue(code is 0 or 1 or 2, $"Unexpected exit {code}. Output: {combined}");
-        StringAssert.Contains(combined, "7.0.27");
+        StringAssert.Contains(combined, "8.0.0");
         if (code == 1)
         {
             Assert.IsTrue(

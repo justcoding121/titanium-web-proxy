@@ -29,7 +29,7 @@ titanium version --check
 
 Use `--channel beta` when you intentionally follow beta.
 
-**winget (Windows):** the Windows CLI is a single self-contained `titanium.exe` (plus `twp.exe`), so winget's `Links` shortcuts work. Update a winget install with `winget upgrade`, not `titanium update`. A downloaded Plus add-on may be placed beside the `Links` shortcut rather than the package folder.
+**winget (Windows):** the Windows CLI is a single self-contained `titanium.exe` (plus `twp.exe`), so winget's `Links` shortcuts work. Update a winget install with `winget upgrade`, not `titanium update`. A downloaded Plus bundle may be placed beside the `Links` shortcut rather than the package folder.
 
 ## Plus (optional ops add-on)
 
@@ -57,6 +57,7 @@ dotnet add package Titanium.Web.Proxy --prerelease
 - Most Linux desktops and servers: **AppImage**, **`.deb`**, **`.rpm`**, or the regular `linux-x64` / `linux-arm64` zip.
 - **Alpine** or other **musl** containers: use the **Alpine / musl** zip (`linux-musl-x64` or `linux-musl-arm64`), not the regular Linux zip.
 - HTTP/3 support is bundled in the platform packages — see [HTTP/3](/docs/http3).
+- Lua / WASM scripting natives ship in the same CLI RID zip (and in the default glibc GHCR image). On musl, take the musl zip so both HTTP/3 and scripting natives match. Verify with `titanium scripting-deps status` — see [Scripting](/docs/scripting).
 
 ### Trust / publisher
 

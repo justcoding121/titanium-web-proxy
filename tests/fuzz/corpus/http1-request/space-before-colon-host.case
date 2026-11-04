@@ -1,0 +1,6 @@
+# expect: normalize
+# reason: whitespace between a field name and the colon is stripped
+# assert-header: Host=a
+GET / HTTP/1.1\r\n
+Host : a\r\n
+\r\n

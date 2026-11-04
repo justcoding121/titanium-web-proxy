@@ -59,11 +59,17 @@ param(
         'reverse-http3-to-h2c', 'yarp-reverse-http3-to-h2c', 'yarp-reverse-http3-to-http3',
         'twp-cli-reverse-http1', 'twp-cli-reverse-http1-tls', 'twp-cli-reverse-http1-route',
         'twp-cli-plus-base-http1', 'twp-cli-plus-cache-http1', 'twp-cli-intercept-http1',
-        'twp-cli-plus-waf-http1', 'twp-cli-plus-cidr-http1', 'twp-cli-plus-jwt-http1',
-        'twp-cli-plus-ratelimit-http1', 'twp-cli-plus-resilience-http1',
+        'twp-cli-plus-waf-http1', 'twp-cli-plus-waf-screen-http1', 'twp-cli-plus-cidr-http1', 'twp-cli-plus-jwt-http1',
+        'twp-cli-plus-ratelimit-http1', 'twp-cli-plus-fleet-ratelimit-http1', 'twp-cli-plus-resilience-http1',
         'twp-cli-plus-discovery-file-http1', 'twp-cli-plus-metrics-scrape-http1',
         'twp-cli-plus-cache-hit-http1', 'twp-cli-static-http1', 'twp-cli-logging-http1',
-        'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1',
+        'twp-cli-lb-leasttime-http1', 'twp-cli-dialect-twp-http1', 'twp-cli-extauth-http1',
+        'twp-cli-script-lua-noop-http1', 'twp-cli-script-lua-header-http1', 'twp-cli-script-wasm-noop-http1',
+        'twp-cli-slow-upstream-http1', 'twp-cli-script-lua-slow-upstream-http1', 'twp-cli-script-1in50-http1',
+        'twp-cli-plugin-dotnet-noop-http1',
+        'twp-cli-geo-http1', 'twp-cli-compress-h2-h2', 'twp-cli-compress-h3', 'twp-cli-health-grpc-http1',
+        'twp-cli-zoneaware-http1', 'twp-cli-tcp-tlsterm', 'twp-ws-h3', 'twp-cli-compress-zstd-http1',
+        'twp-cli-overload-http1', 'twp-cli-hotrestart-http1',
         'explicit-http1-multi', 'explicit-http2-multi')]
     [string] $Mode = 'compare',
 
@@ -87,7 +93,8 @@ param(
     [double] $LossPercent = 0,
     [switch] $SkipBuild,
     [switch] $BombardierCheck,
-    [switch] $NoStopOnSloFail
+    [switch] $NoStopOnSloFail,
+    [int]    $ArmTimeoutMin = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -116,6 +123,25 @@ if (-not $SkipBuild) {
         Write-Host 'Building Titanium.Cli Release...' -ForegroundColor Cyan
         & dotnet build -c Release $cliProj --warnaserror
         if ($LASTEXITCODE -ne 0) { throw 'Titanium.Cli build failed' }
+
+        # Script edition arms need Lua + Wasmtime natives beside titanium.dll (same as E2E CI).
+        $needsScriptNatives = $Mode -eq 'compare-editions' -or $Mode -match 'twp-cli-script-'
+        if ($needsScriptNatives) {
+            $cliDll = Get-ChildItem -Recurse -Filter titanium.dll (Join-Path $repoRoot 'src/Titanium.Cli/bin/Release') |
+                Select-Object -First 1
+            if (-not $cliDll) { throw 'titanium.dll not found after CLI build' }
+            $rid = if ($IsWindows) { 'win-x64' }
+                elseif ($IsMacOS) {
+                    if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' }
+                }
+                else {
+                    if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' }
+                }
+            $bundle = Join-Path $repoRoot 'tools/packaging/bundle-scripting-native.ps1'
+            Write-Host "Bundling scripting natives ($rid) beside CLI..." -ForegroundColor Cyan
+            & pwsh $bundle -Rid $rid -PublishDir $cliDll.DirectoryName -Strict
+            if ($LASTEXITCODE -ne 0) { throw 'bundle-scripting-native.ps1 failed' }
+        }
     }
 
     $needsPlus = $Mode -match '^(compare-editions|twp-cli-plus-)'
@@ -190,6 +216,9 @@ if ($EnvoyPath) {
 }
 if ($NoStopOnSloFail) {
     $probeArgs += '--no-stop-on-slo-fail'
+}
+if ($ArmTimeoutMin -gt 0) {
+    $probeArgs += @('--arm-timeout-min', $ArmTimeoutMin)
 }
 
 & $probeCmd @probeArgs

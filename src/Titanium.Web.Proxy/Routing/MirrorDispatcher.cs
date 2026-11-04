@@ -23,6 +23,13 @@ namespace Titanium.Web.Proxy.Routing;
 ///     Each route has its own queue and workers, so a slow mirror cluster cannot starve another route.
 ///     Buffered memory is bounded per route by 32 queued bodies of at most
 ///     <see cref="MirrorConfig.MaxAllowedBodyBytes" />.
+///     <para>
+///         Upstream TLS: a mirror copy ignores the cluster's <c>httpClient</c> TLS settings (client certificate,
+///         CA bundle, <c>serverName</c>, <c>verifyHostname</c>, <c>acceptAnyServerCertificate</c>). It dials with
+///         the machine trust store and the destination address as the TLS name. A mirror cluster that needs a
+///         private CA or mTLS therefore fails its copy (counted as failed) and never affects the client's response.
+///         This is deliberate: the copy is best effort and must not widen what the proxy trusts.
+///     </para>
 /// </summary>
 internal sealed class MirrorDispatcher : IDisposable
 {

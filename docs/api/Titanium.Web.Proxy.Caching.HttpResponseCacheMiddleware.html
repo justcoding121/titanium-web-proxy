@@ -9,7 +9,7 @@
       <meta name="viewport" content="width=device-width">
       <meta name="title" content="Class HttpResponseCacheMiddleware | Titanium Web Proxy ">
     
-    <meta name="description" content="GET/HEAD response cache middleware. Only allocated when placed in the middleware list; otherwise the hot path pays nothing.">
+    <meta name="description" content="Shared GET/HEAD response cache implementing an RFC 9111 subset (see ): freshness from s-maxage, max-age, Expires and Age (plus opt-in heuristic freshness), Vary secondary keys, conditional revalidation with 304 merge, stale-while-revalidate, stale-if-error, and request collapsing of concurrent misses. Only allocated when placed in the middleware list; otherwise the hot path pays nothing.">
       <link rel="shortcut icon" href="../favicon.ico">
       <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
       <link rel="stylesheet" href="../styles/docfx.css">
@@ -81,8 +81,10 @@
 
 
   <h1 id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware" class="text-break">Class HttpResponseCacheMiddleware</h1>
-  <div class="markdown level0 summary"><p>GET/HEAD response cache middleware. Only allocated when placed in the middleware list;
-otherwise the hot path pays nothing.</p>
+  <div class="markdown level0 summary"><p>Shared GET/HEAD response cache implementing an RFC 9111 subset (see <span class="xref">Titanium.Web.Proxy.Caching.HttpCachePolicy</span>): freshness from
+s-maxage, max-age, Expires and Age (plus opt-in heuristic freshness), <code>Vary</code> secondary keys, conditional
+revalidation with 304 merge, stale-while-revalidate, stale-if-error, and request collapsing of concurrent misses.
+Only allocated when placed in the middleware list; otherwise the hot path pays nothing.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -121,22 +123,28 @@ otherwise the hot path pays nothing.</p>
   <div class="codewrapper">
     <pre><code class="lang-csharp hljs">public sealed class HttpResponseCacheMiddleware : IProxyMiddleware</code></pre>
   </div>
+  <h5 id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_remarks"><strong>Remarks</strong></h5>
+  <div class="markdown level0 remarks"><p>Safety rules that never loosen: nothing is stored for a response with <code>Set-Cookie</code>, <code>Cache-Control</code>
+private / no-store / no-cache, or <code>Vary: *</code>; nothing is stored or served for a request carrying
+<code>Authorization</code> or <code>Cookie</code> (unless explicitly allowed); the scheme, host, path and query, the normalized
+Accept-Encoding and the headers a response names in <code>Vary</code> are the only things that select an entry.</p>
+</div>
   <h3 id="constructors">Constructors
 </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
-    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.%23ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache%2CSystem.Nullable%7BSystem.TimeSpan%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__System_Boolean_Titanium_Web_Proxy_Caching_ResponseCacheOptions_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.%23ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache%2CSystem.Nullable%7BSystem.TimeSpan%7D%2CSystem.Boolean%2CTitanium.Web.Proxy.Caching.ResponseCacheOptions)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L26">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L41">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor*"></a>
-  <h4 id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan})">HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?)</h4>
+  <h4 id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware__ctor_Titanium_Web_Proxy_Abstractions_Plugins_IHttpResponseCache_System_Nullable_System_TimeSpan__System_Boolean_Titanium_Web_Proxy_Caching_ResponseCacheOptions_" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.#ctor(Titanium.Web.Proxy.Abstractions.Plugins.IHttpResponseCache,System.Nullable{System.TimeSpan},System.Boolean,Titanium.Web.Proxy.Caching.ResponseCacheOptions)">HttpResponseCacheMiddleware(IHttpResponseCache, TimeSpan?, bool, ResponseCacheOptions?)</h4>
   <div class="markdown level1 summary"></div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public HttpResponseCacheMiddleware(IHttpResponseCache cache, TimeSpan? defaultTtl = null)</code></pre>
+    <pre><code class="lang-csharp hljs">public HttpResponseCacheMiddleware(IHttpResponseCache cache, TimeSpan? defaultTtl = null, bool allowAuthenticated = false, ResponseCacheOptions? options = null)</code></pre>
   </div>
   <h5 class="parameters">Parameters</h5>
   <table class="table table-bordered table-condensed">
@@ -158,6 +166,16 @@ otherwise the hot path pays nothing.</p>
         <td><span class="parametername">defaultTtl</span></td>
         <td></td>
       </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.boolean">bool</a></td>
+        <td><span class="parametername">allowAuthenticated</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="Titanium.Web.Proxy.Caching.ResponseCacheOptions.html">ResponseCacheOptions</a></td>
+        <td><span class="parametername">options</span></td>
+        <td></td>
+      </tr>
     </tbody>
   </table>
   <h3 id="methods">Methods
@@ -167,7 +185,7 @@ otherwise the hot path pays nothing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_InvokeAsync_Titanium_Web_Proxy_Abstractions_Middleware_ProxyMiddlewareContext_Titanium_Web_Proxy_Abstractions_Middleware_ProxyMiddlewareDelegate_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext%2CTitanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate%2CSystem.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L32">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L77">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_InvokeAsync_" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync*"></a>
   <h4 id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_InvokeAsync_Titanium_Web_Proxy_Abstractions_Middleware_ProxyMiddlewareContext_Titanium_Web_Proxy_Abstractions_Middleware_ProxyMiddlewareDelegate_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.InvokeAsync(Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareContext,Titanium.Web.Proxy.Abstractions.Middleware.ProxyMiddlewareDelegate,System.Threading.CancellationToken)">InvokeAsync(ProxyMiddlewareContext, ProxyMiddlewareDelegate, CancellationToken)</h4>
@@ -224,11 +242,11 @@ otherwise the hot path pays nothing.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_TryCacheCurrentResponse_Titanium_Web_Proxy_EventArguments_SessionEventArgs_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L98">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L910">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_TryCacheCurrentResponse_" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse*"></a>
   <h4 id="Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware_TryCacheCurrentResponse_Titanium_Web_Proxy_EventArguments_SessionEventArgs_" data-uid="Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware.TryCacheCurrentResponse(Titanium.Web.Proxy.EventArguments.SessionEventArgs)">TryCacheCurrentResponse(SessionEventArgs)</h4>
-  <div class="markdown level1 summary"><p>Call from the session response path when a small 200 body is already buffered.</p>
+  <div class="markdown level1 summary"><p>Call from the session response path when a small response is already buffered.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -268,7 +286,7 @@ otherwise the hot path pays nothing.</p>
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Caching_HttpResponseCacheMiddleware.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L18" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Caching/HttpResponseCacheMiddleware.cs/#L30" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>

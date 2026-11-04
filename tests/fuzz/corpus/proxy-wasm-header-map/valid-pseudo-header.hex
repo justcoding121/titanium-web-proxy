@@ -1,0 +1,3 @@
+# expect: parsed:1
+# reason: :path is an ordinary name to the decoder; Diff drops pseudo-headers later
+01 00 00 00 05 00 00 00 02 00 00 00 3a 70 61 74 68 00 2f 78 00

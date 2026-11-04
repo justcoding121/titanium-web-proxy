@@ -47,6 +47,12 @@
   color: var(--vp-c-brand-1);
 }
 
+.edition-card .license a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .rps-preview {
   margin: 0.75rem 0 1.5rem;
 }
@@ -76,6 +82,10 @@
   margin-top: 0.45rem;
   font-size: 0.85rem;
   color: var(--vp-c-text-2);
+}
+
+.quick-picks-alt {
+  font-size: 0.9em;
 }
 
 .download-grid {
@@ -121,4 +131,18 @@
 .vp-muted {
   color: var(--vp-c-text-2);
   font-size: 0.9rem;
+}
+
+/* The home page has twelve tiles. VitePress gives a multiple of three the grid-6 class (three per row);
+   keep the four-per-row layout the grid-4 class gives eight tiles. */
+@media (min-width: 768px) and (max-width: 959px) {
+  .VPFeatures.VPHomeFeatures .item.grid-6 {
+    width: calc(100% / 2);
+  }
+}
+
+@media (min-width: 960px) {
+  .VPFeatures.VPHomeFeatures .item.grid-6 {
+    width: calc(100% / 4);
+  }
 }

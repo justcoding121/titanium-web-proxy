@@ -1,0 +1,3 @@
+# expect: accept
+# reason: nack with error string
+{"fleet":"1","nodeId":"n1","configHash":"h","ok":false,"error":"apply failed"}\n

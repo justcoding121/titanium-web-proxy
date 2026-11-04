@@ -1,0 +1,9 @@
+# expect: reject
+# reason: duplicate Content-Length with different values
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 3\r\n
+Content-Length: 4\r\n
+\r\n
+abcd

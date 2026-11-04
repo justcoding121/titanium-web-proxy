@@ -1,0 +1,3 @@
+# expect: parsed:0
+# reason: a guest that passes no bytes sets an empty map
+

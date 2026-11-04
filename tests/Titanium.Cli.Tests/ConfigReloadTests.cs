@@ -1,10 +1,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Cli.Admin;
 using Titanium.Cli.Config;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
-using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -106,7 +106,6 @@ public class ConfigReloadTests
             routes,
             middleware: [],
             loadBalancer: new LoadBalancer(),
-            responseCache: new MemoryHttpResponseCache(),
             plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             getGrpc: static () => null,
             setGrpc: static _ => { },
@@ -164,7 +163,6 @@ public class ConfigReloadTests
                 routes,
                 middleware: [],
                 loadBalancer: new LoadBalancer(),
-                responseCache: new MemoryHttpResponseCache(),
                 plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 getGrpc: static () => null,
                 setGrpc: static _ => { },
@@ -220,7 +218,6 @@ public class ConfigReloadTests
             routes,
             middleware: [],
             loadBalancer: new LoadBalancer(),
-            responseCache: new MemoryHttpResponseCache(),
             plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             getGrpc: static () => null,
             setGrpc: static _ => { },
@@ -272,7 +269,6 @@ public class ConfigReloadTests
             routes,
             middleware: [],
             loadBalancer: new LoadBalancer(),
-            responseCache: new MemoryHttpResponseCache(),
             plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             getGrpc: static () => null,
             setGrpc: static _ => { },
@@ -302,8 +298,61 @@ public class ConfigReloadTests
             Interlocked.Increment(ref reloads);
             return Task.CompletedTask;
         };
-        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload])!;
+        // Args: token, path, watch, onReload, onStopRequested, extraWatchPaths, loadedConfigHash, onHandoverSignal, hotRestartPidFile
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, null, null, null])!;
         await Task.Delay(300);
+        cts.Cancel();
+        await waitTask;
+        Assert.AreEqual(0, reloads);
+    }
+
+    [TestMethod]
+    public async Task WaitForShutdownOrReloadAsync_ReloadsWhenTheFileChangedAfterItWasLoaded()
+    {
+        // A ConfigMap swap while a pod starts: the watcher's own baseline would already include the new content.
+        var path = Path.Combine(_tempDir, "swap-after-load.json");
+        File.WriteAllText(path, "{ \"schemaVersion\": \"7.0\", \"listeners\": [], \"routes\": [], \"clusters\": [] }");
+        var loadedHash = AdminHost.ComputeConfigHash(path);
+        File.WriteAllText(path, "{ \"schemaVersion\": \"7.0\", \"listeners\": [], \"routes\": [], \"clusters\": [], \"extra\": 1 }");
+        var method = typeof(RunCommand).GetMethod(
+            "WaitForShutdownOrReloadAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        using var cts = new CancellationTokenSource();
+        var reloads = 0;
+        Func<Task> onReload = () =>
+        {
+            Interlocked.Increment(ref reloads);
+            return Task.CompletedTask;
+        };
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, loadedHash, null, null])!;
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (Volatile.Read(ref reloads) == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
+
+        cts.Cancel();
+        await waitTask;
+        Assert.AreEqual(1, reloads);
+    }
+
+    [TestMethod]
+    public async Task WaitForShutdownOrReloadAsync_DoesNotReloadWhenTheFileIsUnchangedSinceTheLoad()
+    {
+        var path = Path.Combine(_tempDir, "unchanged-after-load.json");
+        File.WriteAllText(path, "{ \"schemaVersion\": \"7.0\", \"listeners\": [], \"routes\": [], \"clusters\": [] }");
+        var method = typeof(RunCommand).GetMethod(
+            "WaitForShutdownOrReloadAsync",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        using var cts = new CancellationTokenSource();
+        var reloads = 0;
+        Func<Task> onReload = () =>
+        {
+            Interlocked.Increment(ref reloads);
+            return Task.CompletedTask;
+        };
+        var waitTask = (Task)method.Invoke(null, [cts.Token, path, true, onReload, null, null, AdminHost.ComputeConfigHash(path), null, null])!;
+        await Task.Delay(500);
         cts.Cancel();
         await waitTask;
         Assert.AreEqual(0, reloads);

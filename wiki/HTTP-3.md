@@ -1,13 +1,11 @@
 # HTTP/3 (QUIC) Support
 
-> For operators enabling HTTP/3 on CLI/Inspector hosts, and for .NET library users opting into QUIC.
+> For CLI and Inspector operators, and for .NET library users.
 
-Titanium Web Proxy supports HTTP/3 as an **opt-in experimental** feature built on top of `System.Net.Quic`
-(which in turn uses the MsQuic native library).
+CLI and Inspector enable HTTP/3 when `System.Net.Quic.QuicListener.IsSupported` is true. The library property `EnableHttp3` stays off until the host turns it on. HTTP/3 is built on `System.Net.Quic` and the MsQuic native library.
 
-> **Experimental API:** The HTTP/3 public surface (`EnableHttp3`, `TransparentQuicProxyEndPoint`,
-> `TransparentProxyEndPoint.EnableHttp3`, `BeforeQuicAuthenticateEventArgs`) is marked
-> `[Experimental("TWP001")]`.  Consuming projects must suppress the diagnostic to opt in:
+> Library code that sets `EnableHttp3`, `TransparentQuicProxyEndPoint`,
+> `TransparentProxyEndPoint.EnableHttp3`, or `BeforeQuicAuthenticateEventArgs` suppresses `TWP001`:
 > ```csharp
 > #pragma warning disable TWP001
 > proxyServer.EnableHttp3 = true;
@@ -374,7 +372,7 @@ that endpoint receive `Alt-Svc: h3=":PORT"; ma=86400` when the origin did not al
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `EnableHttp3` | `false` | Opt-in dual-listen reverse H3. Requires `DecryptSsl = true`. |
+| `EnableHttp3` | `false` | Dual-listen reverse HTTP/3. Requires `DecryptSsl = true`. The CLI turns this on for a decrypting listener when QUIC is supported. |
 | `BeforeQuicAuthenticate` | — | Per-connection QUIC policy (same as transparent QUIC). |
 | `MaxInboundBidirectionalStreams` | `100` | Per QUIC connection stream limit. |
 | `HandshakeTimeout` / `IdleTimeout` | `30 s` / `60 s` | Same semantics as `TransparentQuicProxyEndPoint`. |

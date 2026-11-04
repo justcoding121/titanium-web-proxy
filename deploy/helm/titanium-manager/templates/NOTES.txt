@@ -1,0 +1,15 @@
+Titanium Manager {{ .Chart.AppVersion }} is deployed as {{ include "titanium-manager.fullname" . }} (single-instance).
+
+Service: {{ include "titanium-manager.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}
+Health:  GET /v1/healthz (unauthenticated)
+Admin:   Bearer token from Secret {{ include "titanium-manager.adminSecretName" . }}
+
+Read the admin token:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "titanium-manager.adminSecretName" . }} -o jsonpath='{.data.{{ .Values.admin.token.key }}}' | base64 -d
+
+Port-forward and probe:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "titanium-manager.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  curl -s http://127.0.0.1:{{ .Values.service.port }}/v1/healthz
+
+SQLite data is on PVC {{ include "titanium-manager.pvcName" . }} at {{ .Values.persistence.mountPath }}/manager.db.
+Do not scale above one replica.

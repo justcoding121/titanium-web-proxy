@@ -1,0 +1,3 @@
+# expect: parsed:1
+# reason: a zero-length name decodes; the header writer must cope with it
+01 00 00 00 00 00 00 00 01 00 00 00 00 61 00

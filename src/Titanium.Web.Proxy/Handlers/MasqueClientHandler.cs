@@ -47,12 +47,12 @@ public partial class ProxyServer
         {
             var options = new SslServerAuthenticationOptions
             {
-                EnabledSslProtocols = SupportedSslProtocols,
                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 ApplicationProtocols = endPoint.Options.AllowHttp11Upgrade
                     ? SslExtensions.Http2AndHttp11ProtocolAsList
                     : SslExtensions.Http2ProtocolAsList,
             };
+            ApplyListenerTlsPolicy(options);
             // A leaf minted outside this CertificateManager (or blocked by a same-subject root in the
             // OS store) can fail the offline chain build; fall back to presenting the leaf directly.
             CertificateManager.ConfigureServerCertificate(options, certificate);

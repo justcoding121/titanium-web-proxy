@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: /foo?x=1
+# reason: dotted form of a known attribute
+request.path

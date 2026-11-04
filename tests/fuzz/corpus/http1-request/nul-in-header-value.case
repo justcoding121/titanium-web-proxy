@@ -1,0 +1,6 @@
+# expect: reject
+# reason: NUL inside a header value
+GET / HTTP/1.1\r\n
+Host: a\r\n
+X-A: b\0c\r\n
+\r\n

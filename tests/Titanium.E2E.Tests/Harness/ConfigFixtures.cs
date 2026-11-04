@@ -71,6 +71,9 @@ public sealed class EchoOrigin : IDisposable
             var body = Encoding.UTF8.GetBytes($"echo:{path}:{ctx.Request.HttpMethod}");
             ctx.Response.StatusCode = 200;
             ctx.Response.ContentType = "text/plain";
+            // The response cache stores only what declares its own freshness; /cached* opts in.
+            if (path.StartsWith("/cached", StringComparison.Ordinal))
+                ctx.Response.Headers["Cache-Control"] = "max-age=60";
             ctx.Response.ContentLength64 = body.Length;
             ctx.Response.OutputStream.Write(body);
             ctx.Response.Close();
@@ -285,6 +288,63 @@ public static class ConfigFixtures
             staticFiles:
               root: "{staticRoot.Replace("\\", "/")}"
               enableGzip: true
+            """);
+        return path;
+    }
+
+    /// <summary>JSON config with a script plugin on the catch-all route (Lua or Wasm).</summary>
+    public static string WriteScriptPlugin(
+        string dir,
+        int listenPort,
+        int originPort,
+        string kind,
+        string scriptFileName,
+        string scriptSource)
+    {
+        var scriptPath = Path.Combine(dir, scriptFileName);
+        File.WriteAllText(scriptPath, scriptSource, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        var file = scriptPath.Replace("\\", "/", StringComparison.Ordinal);
+        var path = Path.Combine(dir, $"script-{kind}-{listenPort}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "logging": { "enabled": false, "enableConsole": false },
+              "listeners": [
+                {
+                  "host": "127.0.0.1",
+                  "port": {{listenPort}},
+                  "decryptSsl": false,
+                  "enableHttp2": false
+                }
+              ],
+              "plugins": [
+                {
+                  "name": "script",
+                  "kind": "{{kind}}",
+                  "file": "{{file}}",
+                  "failMode": "closed",
+                  "timeoutMs": 2000
+                }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "middleware": [ "script" ],
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{originPort}}, "useDestinationHost": true }
+                  ]
+                }
+              ]
+            }
             """);
         return path;
     }

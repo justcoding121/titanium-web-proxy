@@ -1,0 +1,3 @@
+# expect: any
+# reason: large payload must not hang or throw out of ValidateYaml
+%REPEAT(x: y\n,2000)%

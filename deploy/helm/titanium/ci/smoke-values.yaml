@@ -1,0 +1,21 @@
+# Used by the kind smoke workflow: one small pod pair in front of a throwaway backend Service named "backend".
+replicaCount: 2
+image:
+  repository: titanium-web-proxy
+  tag: ci
+  pullPolicy: Never
+admin:
+  preStopDelaySeconds: 2
+terminationGracePeriodSeconds: 20
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+config:
+  schemaVersion: "7.1"
+  listeners:
+    - host: "0.0.0.0"
+      port: 8080
+      decryptSsl: false
+      forwardHost: "backend"
+      forwardPort: 80

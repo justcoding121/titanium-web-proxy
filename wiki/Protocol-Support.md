@@ -17,12 +17,13 @@ policy and safety hardening work (HTTP/2 frame/header-list bounds, bounded body 
 over HTTP/2 including the h2-client-to-h1-origin bridge, the native h2↔h2 tunnel, and the h1-client-to-h2-origin
 bridge, WebSocket frame validation, Via header injection, multipart streaming, stacked Content-Encoding parsing,
 and authentication retry
-bounds), and the HTTP/3 (QUIC) opt-in feature — including the six HTTP/3 gap-closure features: request-lifecycle
+bounds), and HTTP/3 (QUIC) — including the six HTTP/3 gap-closure features: request-lifecycle
 timing, 1xx interim response relay, per-chunk streaming body hooks (`OnRequestBodyWrite`/`OnResponseBodyWrite`),
 upstream proxy chaining with TCP fallback, HTTPS/SVCB DNS discovery, and QPACK dynamic table (opt-in via
 `ProxyServer.EnableQpackDynamicTable`). HTTP/2 has gone through a full regression pass and is now **on by
-default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.1 only. HTTP/3 is
-`[Experimental("TWP001")]` and opt-in (`ProxyServer.EnableHttp3 = true`). If you find something inaccurate,
+default** (`ProxyServer.EnableHttp2 = true`); set it to `false` to force HTTP/1.1 only. The library property
+`ProxyServer.EnableHttp3` defaults to off. CLI and Inspector call `TryEnableHttp3IfSupported`, so HTTP/3 is
+on when `QuicListener.IsSupported` is true. If you find something inaccurate,
 please open an issue.
 
 ## Protocol bridges
@@ -35,21 +36,26 @@ TCP HTTP/1 origin.
 | Client | Origin | Kind | How |
 |--------|--------|------|-----|
 | HTTP/1.x | HTTP/1.x | Native | Default TCP pipeline. |
-| HTTP/2 | HTTP/2 | Native | TLS ALPN MITM (`EnableHttp2`, on by default). Prior-knowledge cleartext h2c on transparent reverse (`DecryptSsl: false`) for inbound clients; with `ForwardCleartext` + `UpstreamHttpProtocol.Http2`, origin is outbound h2c. |
+| HTTP/2 | HTTP/2 | Native or per-stream dispatch | TLS ALPN MITM (`EnableHttp2`, on by default). Prior-knowledge cleartext h2c on transparent reverse (`DecryptSsl: false`) for inbound clients; with `ForwardCleartext` + `UpstreamHttpProtocol.Http2`, origin is outbound h2c. When `ReverseProxyFastPath.RequiresPerRequestDispatch` is true, `SendHttp2ToHttp2DispatchBridge` leases one pooled `Http2OriginConnection` per client stream instead of a single native H2↔H2 relay. Forward-host-equivalent route tables keep the native relay. |
 | HTTP/3 | HTTP/3 | Native | `QuicConnectionPool` + QPACK when `EnableHttp3` is on. A failed QUIC exchange is not retried on another transport, except in Auto mode where a silent origin gets one TCP replay of a safe bodiless request; forced HTTP/3 never falls back. See [HTTP/3](HTTP-3#user-content-when-an-http3-origin-is-slow-or-unreachable). |
 | HTTP/1.1 | HTTP/2 | Bridge | `Http11ToHttp2BridgeHandler` when `UpstreamHttpProtocol.Http2` and `AllowHttpProtocolTranslation` are set (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`). |
 | HTTP/2 | HTTP/1.1 | Bridge | `Http2ToHttp11BridgeHandler` when `UpstreamHttpProtocol.Http11` and `AllowHttpProtocolTranslation` are set (TLS ALPN or inbound h2c client). |
 | HTTP/1.1 | HTTP/3 | Bridge | `Http3OriginBridge.ForwardAsync` when H3 is selected. |
 | HTTP/2 | HTTP/3 | Bridge | Cold CONNECT-time `SendHttp2ToHttp3Bridge` + `Http3OriginBridge.ForwardAsync` when H3 is selected (TLS ALPN or inbound h2c client). Mid-connection Alt-Svc upgrades on an existing H2↔H2 MITM relay are not taken. QUIC origins follow the same fallback rules as HTTP/3 → HTTP/3 above. |
 | HTTP/3 | HTTP/2 | Bridge | `Http3OriginBridge.ForwardOverHttp2Async` via `Http2OriginConnection` (TLS ALPN `h2`, or cleartext h2c when `ForwardCleartext`) when `UpstreamHttpProtocol.Http2` is set. |
-| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A gateway 502/503/504 on a bodiless request can replay once onto another destination when the route sets `retry.attempts`. An HTTP/3 client talking to an HTTP/2 origin is not retried. |
+| HTTP/3 | HTTP/1.1 | Bridge | `TcpConnectionFactory` with default ALPN negotiation. A retryable gateway status on a bodiless request can replay onto another destination when the route sets `retry.attempts` (see [Gateway status retry](#user-content-gateway-status-retry)). An HTTP/3 client talking to an HTTP/2 origin is not retried. |
 
 Not supported:
 
 - `Upgrade: h2c` (prior-knowledge only). Explicit-proxy inbound h2c is not implemented.
 - Mid-connection HTTP/2 → HTTP/3 on an already-open H2↔H2 MITM session.
-- WebSocket over HTTP/3 (RFC 9220).
 - Explicit QUIC proxying (inbound HTTP/3 is `TransparentQuicProxyEndPoint` only).
+
+WebSocket over HTTP/3 (RFC 9220) is supported when `EnableRfc8441 = true` (same switch as
+RFC 8441). The proxy advertises `SETTINGS_ENABLE_CONNECT_PROTOCOL` on HTTP/3 and bridges
+extended CONNECT (`:protocol = websocket`) to HTTP/1.1, HTTP/2, and HTTP/3 origins
+(HTTP/1.1 upgrade, or native extended CONNECT when the origin advertises the setting;
+otherwise HTTP/1.1 fallback).
 
 WebSocket over HTTP/2 (`EnableRfc8441`) reuses the HTTP/1.1 ↔ HTTP/2 bridges (plus a native h2↔h2 DATA
 tunnel). See [RFC 8441](#user-content-http2-safety-and-frame-validation) below. QUIC endpoint setup is on
@@ -86,8 +92,31 @@ Titanium Inspector's Protocol column and its throttle latency decision use them.
 
 ## Gateway status retry
 
-A route opts in with `retry.attempts` greater than 0. Before any request body byte is sent, a 502, 503,
-or 504 from the origin is replayed once onto another destination. The client sees the second answer.
+A route (or its cluster) opts in with `retry.attempts` greater than 0. Before the client has been sent a
+byte, a retryable answer from the origin is replayed onto another destination, up to `attempts` times. The
+client sees the last answer. Each replay picks a destination that has not been tried for this request.
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `attempts` | 0 (off) | Replays per request. A cluster needs at least that many other usable destinations. |
+| `statusCodes` | 502, 503, 504 | Statuses that trigger a replay. Accepts 429 and 500-599. |
+| `perTryTimeoutMilliseconds` | 0 (off) | Response-header deadline for every try but the last. A try that runs out counts as a 504. The last try uses the route's own deadline. Needs a cluster with more than one destination. |
+| `backoffMilliseconds` | 0 (none) | Wait before replay n of `backoff * 2^n`, capped at `maxBackoffMilliseconds`, plus jitter. |
+| `maxBackoffMilliseconds` | 1000 | Cap for backoff and for a honored `Retry-After`. |
+| `jitterPercent` | 20 | Random extra wait, 0 to this percent of the backoff. |
+| `honorRetryAfter` | false | Use a delta-seconds `Retry-After` from the origin instead of the backoff, capped at `maxBackoffMilliseconds`. An HTTP-date is ignored. |
+| `budgetPercent` | 0 (unlimited) | Replays in flight for a cluster may not exceed this percent of its in-flight requests. |
+| `budgetMinConcurrent` | 3 | Floor for the budget, so a quiet cluster can still retry. A replay over the limit is refused and counted as `twp.proxy.status.retries_refused` with `reason=budget`. |
+| `retryNonIdempotent` | false | Also replay POST and PATCH. Never retried otherwise. |
+| `maxBufferedBodyBytes` | 65,536 | Largest buffered body that may be sent again. |
+
+The wait before a replay is cancelled with the client request. `twp.proxy.status.retries` carries a `reason`
+tag: `status` for an answer, `timeout` for a per-try deadline.
+
+An HTTP/1.1 origin gets headers only, so a request with a body is never replayed to it. An HTTP/2 origin
+replays a request whose HEADERS frame ended the stream, or whose body was fully buffered within
+`maxBufferedBodyBytes` (for example read by a `BeforeRequest` handler). A body that is streaming to the
+origin cannot be sent again.
 
 | Path | Retried |
 |------|---------|
@@ -97,8 +126,9 @@ or 504 from the origin is replayed once onto another destination. The client see
 | HTTP/3 client to an HTTP/2 origin | No |
 | QUIC origins (HTTP/3 to HTTP/3, and HTTP/2 to HTTP/3) | No |
 | HTTP/2 to HTTP/2 native relay | No |
-| HTTP/1.1 client to an HTTP/2 origin | No |
-| CONNECT, WebSocket, a request that has a body, `Expect: 100-continue`, Windows authentication | Never |
+| HTTP/2 to HTTP/2 per-stream dispatch bridge | Yes |
+| HTTP/1.1 client to an HTTP/2 origin | Yes |
+| CONNECT, WebSocket, a streamed request body, `Expect: 100-continue`, Windows authentication | Never |
 
 ## Connections and framing
 
@@ -110,7 +140,7 @@ or 504 from the origin is replayed once onto another destination. The client see
 | `Expect: 100-continue` | Yes | Yes | N/A (no equivalent frame flow) | N/A | `ProxyServer.Enable100ContinueBehaviour`. Set `CompatibilityMode100Continue = true` to emit a synthetic `100 Continue` to clients that block on it when `Enable100ContinueBehaviour = false`. |
 | Other 1xx interim responses (e.g. 103 Early Hints) | N/A | Yes | Yes | Yes | Relayed for all protocol versions. HTTP/3: `Http3OriginBridge` loops on 1xx responses from the origin (up to 20 per request) and forwards each interim HEADERS frame to the client before the final response. |
 | HEADERS/CONTINUATION reassembly and re-splitting | N/A | N/A | Yes | N/A | HTTP/3 uses QPACK (no CONTINUATION frames); multi-frame header blocks do not exist in HTTP/3. |
-| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | N/A | HTTP/3 uses extended CONNECT (RFC 9220) for WebSocket — not yet implemented. |
+| `Upgrade` / WebSocket (101 Switching Protocols) | N/A | Yes | N/A | RFC 9220 | HTTP/3 uses extended CONNECT for WebSocket when `EnableRfc8441 = true`; HTTP/1.1, HTTP/2, and HTTP/3 origins. |
 | `CONNECT` tunneling | Yes | Yes | Yes (via `ExplicitProxyEndPoint`) | No | HTTP/3 transparent endpoint only; no explicit QUIC proxy yet (see [HTTP-3](HTTP-3) §Why no explicit endpoint). |
 | CONNECT-UDP (MASQUE, RFC 9298) | No | Opt-in `Upgrade: connect-udp` when `allowHttp11Upgrade` is true | Capsules on a `type: masque` listener | No | A decrypting hairpin is not implemented. Existing listener types still return 501 for `:protocol connect-udp`. See [MASQUE](MASQUE). |
 | ALPN-based protocol routing | N/A | N/A | Yes | Yes | HTTP/3 negotiates `h3` via QUIC TLS 1.3; the QUIC listener only accepts connections with `h3` ALPN. |
@@ -135,6 +165,10 @@ or 504 from the origin is replayed once onto another destination. The client see
 | Per-chunk streaming hooks - TLS-decrypted connections | Yes | Yes | Yes | Yes | Native H3→H3: `OnRequestBodyWrite` fires per DATA frame during live origin relay (after `BeforeRequest`); `Http3OriginBridge` fires `OnResponseBodyWrite` per origin DATA frame. One-frame lookahead keeps `IsLastChunk` accurate. H1→H3 / H2→H3 translation bridges still buffer the request body before forwarding. |
 | Synthetic streamed responses (`RespondStreaming`) | Yes | Yes | Yes | Yes | Chunked or fixed-length framing chosen automatically from the response headers you set. HTTP/2 runs the body on a background task so sibling multiplexed streams keep progressing. |
 | Automatic decompression for body inspection (gzip/deflate/brotli) | Yes | Yes | Yes | Yes | Stacked encodings (e.g. `gzip, deflate`) are unwrapped layer-by-layer. |
+| Buffered response compression (`server.responseCompression`, brotli/gzip) | Yes | Yes | H2→H1 bridge only | No | Opt-in. Buffers the body up to 1 MiB with a known `Content-Length`, sets `Content-Encoding` and `Vary: Accept-Encoding`, weakens a strong `ETag`. Not applied on H2↔H2, H3, or H1→H2 paths; `titanium validate` warns. |
+| Streaming response compression (`responseCompression.mode: streaming`, brotli/gzip) | No | Yes | H2→H1 bridge only | No | Opt-in. Compresses while relaying with a flush per upstream chunk, no size limit, chunked framing (H1) or DATA frames (H2 bridge). A slow client holds the origin back, so memory stays bounded; a client abort closes the origin connection. Not applied to `text/event-stream`, `Range`/`206`, `no-transform`, an already encoded body, or when a body hook or `GetResponseBody` needs the plain bytes. HTTP/1.0 clients get identity. Keeps terminate-lite off. |
+| Bounded request decompression (`server.requestDecompression`, gzip/br) | Yes | Yes | No | No | Opt-in. Decompresses a request body before the origin, drops `Content-Encoding`, sets `Content-Length`. A decompressed-size cap and a ratio limit answer `413`; a corrupt or truncated body answers `400`. Skips `Expect: 100-continue`, deflate and stacked encodings. Records `twp.body.decompressed_bytes` (`direction=request`). |
+| gRPC-Web translation (route `grpcWeb: true`) | No | Yes | Yes | No | Opt-in, binary only (`application/grpc-web` / `+proto`), unary and server-streaming. Rewrites the request to `application/grpc` and sends the origin trailers as a final length-prefixed frame with flag `0x80`. Needs an HTTP/2 origin: H2 clients use the per-stream dispatch bridge, H1.1 clients the H1→H2 bridge (`UpstreamHttpProtocol` + `AllowHttpProtocolTranslation`). `application/grpc-web-text` is not translated. Preflights use the route `cors` policy. |
 | Multipart/form-data boundary-aware streaming | Yes | Yes | Yes | Yes | Multipart request bodies are observed incrementally without buffering the full body. |
 | Bounded body streaming | Yes | Yes | Yes | Yes | `BoundedBodyPipe` wraps the underlying pipe; reads beyond `MaxBufferedBodyBytes` fail fast rather than OOM-ing the process. |
 
@@ -193,10 +227,10 @@ See also the advertised=enforced consolidation in [Migration from 4.x](Migration
 | `Via` header injection | Yes | Yes | `ViaHeaderPseudonym` defaults to `"titanium-web-proxy"`, appending `Via: {version} {pseudonym}` for all protocol versions including HTTP/3 (version token `"3.0"`). Loop detection checks across all `Via` fields and refuses with `508 Loop Detected`. |
 | Authentication retry bounds | Yes | N/A | NTLM/Negotiate 407/401 loops are capped at 3 round-trips for TCP protocols; not applicable to HTTP/3. |
 
-## HTTP/3 (QUIC) — opt-in, experimental
+## HTTP/3 (QUIC)
 
-HTTP/3 support is gated behind `ProxyServer.EnableHttp3 = true` (marked `[Experimental("TWP001")]`).
-A silent QUIC origin is replayed over TCP only for a safe bodiless request, and only when that QUIC
+The library property `ProxyServer.EnableHttp3` defaults to off. CLI and Inspector enable HTTP/3 when
+`QuicListener.IsSupported` is true. A silent QUIC origin is replayed over TCP only for a safe bodiless request, and only when that QUIC
 connection has not delivered a response in the last 30 seconds. A busy connection is left alone.
 The first request on an idle connection can still be replayed. Operators who do not want QUIC set
 an upstream policy of HTTP/2 or HTTP/1.1.
@@ -216,7 +250,7 @@ The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-co
 | Outbound H3→H1.1 bridge | Yes | Falls through to `TcpConnectionFactory` with default ALPN negotiation. |
 | Inbound H1.1/H2 → H3 origin bridge | Yes | H1.1: `RequestHandler` / `Http3OriginBridge.ForwardAsync` when H3 is selected. H2: cold CONNECT-time `SendHttp2ToHttp3Bridge` when H3 is selected; mid-connection upgrades on an existing H2↔H2 MITM relay are not taken. |
 | Alt-Svc discovery | Yes | Response `Alt-Svc: h3=":443"; ma=86400` headers are parsed and cached in `Http3OriginCapabilityCache` with the advertised max-age TTL, enabling H3 on later Auto-mode CONNECTs / new HTTP/1.1 requests. Background QUIC warm-up starts when the cache is filled. Mid-connection H2↔H2 streams are not upgraded. |
-| HTTPS/SVCB DNS discovery | Yes | Enable with `ProxyServer.EnableHttpsSvcbDnsDiscovery = true` (experimental; defaults to on when `EnableHttp3` is on). Auto-mode discovery is **background-only**: CONNECT/request paths consult `Http3OriginCapabilityCache` and never await DNS. `UdpSvcbDnsResolver` performs RFC 9460 HTTPS RR queries over UDP to `DnsServerEndPoint` (default: first usable OS-configured plain-UDP DNS server; never a public third-party fallback). NXDOMAIN / NOERROR-without-h3 are definitive negatives; SERVFAIL/REFUSED/timeouts use short transient backoff. |
+| HTTPS/SVCB DNS discovery | Yes | Defaults to on when `EnableHttp3` is on (`ProxyServer.EnableHttpsSvcbDnsDiscovery`). Auto-mode discovery is **background-only**: CONNECT/request paths consult `Http3OriginCapabilityCache` and never await DNS. `UdpSvcbDnsResolver` performs RFC 9460 HTTPS RR queries over UDP to `DnsServerEndPoint` (default: first usable OS-configured plain-UDP DNS server; never a public third-party fallback). NXDOMAIN / NOERROR-without-h3 are definitive negatives; SERVFAIL/REFUSED/timeouts use short transient backoff. |
 | `BeforeQuicAuthenticate` event | Yes | Fired once per accepted QUIC connection (analogous to `BeforeSslAuthenticate`); allows setting `UpstreamHttpProtocol`, custom cert validation, and `AllowHttpProtocolTranslation` per connection. |
 | `IOriginalDestinationResolver` | Yes | Plug-in interface for resolving the pre-NAT (real) destination of a transparently intercepted QUIC connection. |
 | QUIC connection pool drain on stop | Yes | `QuicConnectionPool.DrainAsync` is called during `ProxyServer.Stop`/`DrainAsync`/`Dispose`. |
@@ -232,8 +266,8 @@ The H3-related rows below are the HTTP/3 legs of the [protocol bridges](#user-co
 | `MaxWebSocketFramePayloadBytes` | 16,777,216 (16 MiB) | Maximum WebSocket frame payload size in intercepted sessions. Frames exceeding this are rejected. |
 | `ViaHeaderPseudonym` | `"titanium-web-proxy"` | Token appended to `Via` headers on forwarded requests and responses. Set to an empty string to disable. Loop detection rejects incoming requests whose `Via` already contains this token with `508 Loop Detected`. |
 | `CompatibilityMode100Continue` | `false` | Sends a synthetic `100 Continue` to the client before reading the request body when `Enable100ContinueBehaviour = false`, preventing deadlock with strict `Expect: 100-continue` clients. |
-| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 (RFC 8441). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 clients and also bridges HTTP/1.1 `Upgrade: websocket` onto h2 origins (extended CONNECT, or HTTP/1.1 fallback when the origin lacks the setting). For h2 clients: if the origin is HTTP/2 and advertises the setting, native h2↔h2 DATA relay is used; if the origin is HTTP/2 and does not, the stream is reset with `REFUSED_STREAM`; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge is used. |
-| `EnableHttp3` | `false` | Enables HTTP/3 (QUIC) support (opt-in, experimental — suppress `TWP001`). See [HTTP-3](HTTP-3) wiki page for full details. |
+| `EnableRfc8441` | `false` | Enables WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220). When enabled, the proxy advertises `ENABLE_CONNECT_PROTOCOL=1` to h2 and h3 clients and also bridges HTTP/1.1 `Upgrade: websocket` onto h2 origins (extended CONNECT, or HTTP/1.1 fallback when the origin lacks the setting). For h2 clients: if the origin is HTTP/2 and advertises the setting, native h2↔h2 DATA relay is used; if the origin is HTTP/2 and does not, the stream is reset with `REFUSED_STREAM`; if the origin is HTTP/1.1, the h2→h1 WebSocket upgrade bridge is used. For h3 clients: HTTP/1.1, HTTP/2, and HTTP/3 origins are bridged (native extended CONNECT when the origin advertises the setting; otherwise HTTP/1.1 fallback). |
+| `EnableHttp3` | `false` | Library default. CLI and Inspector turn HTTP/3 on when QUIC is supported. See [HTTP-3](HTTP-3). |
 | `EnableQpackDynamicTable` | `false` | Enables QPACK dynamic table synchronisation per RFC 9204 (full Base-relative decode). Requires `EnableHttp3 = true`. See [HTTP-3](HTTP-3) for details. |
 | `EnableHttpsSvcbDnsDiscovery` | inherits `EnableHttp3` | Enables proactive HTTP/3 capability discovery via HTTPS/SVCB DNS queries (RFC 9460). Background-only in Auto mode; first-connection H3 adoption otherwise comes from `Alt-Svc`. |
 | `PolicyModes[Http2RelayValidation]` | `Disabled` (`Balanced`) / `Enforce` (`PublicFacing`) | Controls HPACK semantic validation on the H2↔H2 compressed-relay path when interception is off. `Disabled` = verbatim HPACK relay (maximum throughput). `Observe` = decode and log without rejecting. `Enforce` = decode and `GOAWAY(PROTOCOL_ERROR)` on RFC 9113 §8.3 violations. |
