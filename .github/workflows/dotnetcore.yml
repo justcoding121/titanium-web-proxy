@@ -638,10 +638,10 @@ jobs:
         user: ${{ secrets.NUGET_USER }}
 
     - name: Publish Package
-      # MIT packages only -- never push Titanium.Plus or Titanium.Inspector
+      # MIT packages only -- never push PolyForm products (Plus, Inspector, Xds, GeoIp)
       run: |
         Get-ChildItem -Recurse -Filter *.nupkg |
-          Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*.symbols.nupkg' } |
+          Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*Xds*' -and $_.Name -notlike '*GeoIp*' -and $_.Name -notlike '*.symbols.nupkg' } |
           ForEach-Object {
             dotnet nuget push $_.FullName `
               --source https://api.nuget.org/v3/index.json `

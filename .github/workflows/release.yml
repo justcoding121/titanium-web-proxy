@@ -303,7 +303,7 @@ jobs:
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
       # Scripting natives (Lua + shim, Wasmtime). Hard-fail for every shipping RID: release zips must
       # ship both files so `titanium scripting-deps status` reports loaded. Lua needs a matching host
-      # (see matrix OS) or an Alpine container for musl RIDs.
+      # (see matrix OS), an Alpine container for linux-musl-x64, or musl-gcc for linux-musl-arm64.
       - name: Bundle scripting natives (Cli)
         if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
         shell: pwsh
@@ -311,7 +311,7 @@ jobs:
           $rid = "${{ matrix.rid }}"
           ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/cli/$rid" -Strict
       - name: Bundle scripting natives (Cli, musl via Alpine)
-        if: startsWith(matrix.rid, 'linux-musl-')
+        if: matrix.rid == 'linux-musl-x64'
         shell: bash
         run: |
           set -euo pipefail
@@ -319,15 +319,25 @@ jobs:
           out="artifacts/cli/$rid"
           # Wasmtime archive is RID-specific and downloads on any host; Lua must compile on musl.
           pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 -Rid "$rid" -PublishDir "$out" -SkipLua
-          platform=linux/amd64
-          if [[ "$rid" == *arm64 ]]; then platform=linux/arm64; fi
-          docker run --rm --platform "$platform" \
+          docker run --rm --platform linux/amd64 \
             -v "$PWD:/src" -w /src \
             mcr.microsoft.com/powershell:lts-alpine-3.17 \
             sh -c "apk add --no-cache build-base curl ca-certificates icu-libs \
               && pwsh -NoProfile -File tools/packaging/bundle-scripting-native.ps1 -Rid '$rid' -PublishDir '$out' -SkipWasmtime -Strict"
           test -f "$out/liblua54.so"
-          test -f "$out/libwasmtime.so"
+      - name: Bundle scripting natives (Cli, musl-arm64 via musl-gcc)
+        if: matrix.rid == 'linux-musl-arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          # PowerShell Alpine tags are linux/amd64 only, so this arm64 runner cannot start them.
+          export CC=musl-gcc
+          pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 \
+            -Rid linux-musl-arm64 -PublishDir artifacts/cli/linux-musl-arm64 -Strict
+          test -f artifacts/cli/linux-musl-arm64/liblua54.so
+          test -f artifacts/cli/linux-musl-arm64/libwasmtime.so
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3

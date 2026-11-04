@@ -24,7 +24,7 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 - Run the same engine as a reverse / edge proxy from the CLI — YAML routes, load balancing and failover, retries, rate limits, response compression, gRPC-Web, TCP and UDP relay, ACME, live reload, Lua 5.4 and proxy-wasm scripting (`titanium scripting-deps`)
 - Deploy on Kubernetes with a hardened container image, Helm charts (git, Release `.tgz`, or OCI), probes, a Gateway API / Ingress controller, and an optional Manager control plane; hot restart for TCP without a gap
 - Observe it with Prometheus text, OTLP traces and metrics, and an access log; Plus adds a dashboard, OpenID Connect login, a response cache, fleet rate limits, xDS, and WAF screening
-- Embed in .NET via NuGet (MIT); Inspector is free for personal and education use
+- Embed in .NET via NuGet (MIT); Inspector, Plus, and the xDS / GeoIP satellites are free for personal and education use (PolyForm Noncommercial)
 - When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 
 Full catalog: [Features](https://titaniumproxy.com/docs/features). What is supported, partial, and not supported: [capability coverage](https://titaniumproxy.com/docs/capabilities). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
@@ -156,5 +156,5 @@ Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector, Tita
 
 | Folder | License |
 |--------|---------|
-| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli` (except GeoIp), `src/Titanium.Manager`, examples, website | MIT |
+| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli`, `src/Titanium.Manager`, examples, website | MIT |
 | `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp` | PolyForm Noncommercial 1.0.0 |
