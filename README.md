@@ -156,5 +156,5 @@ Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector, Tita
 
 | Folder | License |
 |--------|---------|
-| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli` (except GeoIp), `src/Titanium.Manager`, examples, website | MIT |
+| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli`, `src/Titanium.Manager`, examples, website | MIT |
 | `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp` | PolyForm Noncommercial 1.0.0 |
