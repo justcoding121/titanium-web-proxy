@@ -12,12 +12,17 @@ Paired A/B spot checks for the Plus license-boundary work (cache seam, cache mov
 |-----|-------|
 | `BASELINE_SHA` | `c14228d207413cf81e2b1eac73fb5a7b86cf634a` |
 
-Spot-check arms: `twp-cli-reverse-http1` (default-off) and `twp-cli-plus-cache-hit-http1` (`compare-editions`). Checkpoint A is the last Phase 3a commit (`89d1b756`); Checkpoint B is the PR tip. Same default-off thresholds as the commercial-grade block below. Cache-hit arm: median RPS delta at least −2.0%, 95% CI lower bound at least −3.0%, p99 at most +3%, Gen0 per 100k within 1%, zero errors. Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+Spot-check arms: `twp-cli-reverse-http1` (default-off) and `twp-cli-plus-cache-hit-http1` (`compare-editions`). Checkpoint A is the last Phase 3a commit (`89d1b756`); Checkpoint B is the PR tip. Same default-off thresholds as the commercial-grade block below. Cache-hit arm: median RPS delta at least −2.0%, 95% CI lower bound at least −3.0%, p99 at most +3%, Gen0 per 100k within 1%, zero errors. `rps-ab` does not report Gen0 per 100k (only RPS, CPU per request, RSS, and p99), so that part of the cache-hit rule is not measured here. Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
 
 | Checkpoint | Arm filter | Run |
 |------------|------------|-----|
 | A (3a seam) | `twp-cli-reverse-http1` | [41723339664](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41723339664) |
-| B (PR tip) | `twp-cli-reverse-http1` / `twp-cli-plus-cache-hit-http1` | re-measure after merge tip pushes; see open PR |
+| Move replication | `twp-cli-plus-cache-hit-http1` (`89d1b756` vs `0837dc83`) | [41751218707](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41751218707) |
+| Loader isolation | `twp-cli-plus-cache-hit-http1` (`8b5b09fd` vs `d0836754`) | [41753472173](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41753472173) |
+| B cache-hit | `twp-cli-plus-cache-hit-http1` (`c14228d2` vs `d0836754`) | [41754938077](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41754938077) |
+| B default-off | `twp-cli-reverse-http1` (`c14228d2` vs `d0836754`) | [41756726214](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41756726214) |
+
+Plus loads in the default assembly context (`d0836754`) so cache middleware does not cross a collectible context. Cache-hit Checkpoint B met the RPS, CI, p99, and CPU floors above. Default-off median RPS stayed inside the −1% floor; its 95% interval was wider than the −2% bound (noise, not a measured drop).
 
 ## Commercial-grade parity baseline
 
