@@ -6,3 +6,7 @@
 /tests/Titanium.Plus.Tests/ @justcoding121
 /src/Titanium.Inspector/ @justcoding121
 /tests/Titanium.Inspector.Tests/ @justcoding121
+/src/Titanium.Xds/ @justcoding121
+/tests/Titanium.Xds.Tests/ @justcoding121
+/src/Titanium.Cli.GeoIp/ @justcoding121
+/tests/Titanium.Cli.GeoIp.Tests/ @justcoding121

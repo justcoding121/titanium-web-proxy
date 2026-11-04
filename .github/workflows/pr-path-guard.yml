@@ -47,7 +47,7 @@ jobs:
           while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             case "$path" in
-              src/Titanium.Plus/*|tests/Titanium.Plus.Tests/*|src/Titanium.Inspector/*|tests/Titanium.Inspector.Tests/*)
+              src/Titanium.Plus/*|tests/Titanium.Plus.Tests/*|src/Titanium.Inspector/*|tests/Titanium.Inspector.Tests/*|src/Titanium.Xds/*|tests/Titanium.Xds.Tests/*|src/Titanium.Cli.GeoIp/*|tests/Titanium.Cli.GeoIp.Tests/*)
                 NC_HIT=true
                 echo "NC path touched: $path"
                 ;;
@@ -55,7 +55,7 @@ jobs:
           done <<< "$CHANGED"
 
           if [[ "$NC_HIT" == "true" && "$is_maintainer" != "true" ]]; then
-            echo "::error::Changes to Titanium.Plus or Titanium.Inspector require a maintainer listed in TWP_NC_MAINTAINERS (actor=$ACTOR)."
+            echo "::error::Changes to PolyForm Noncommercial paths (Plus, Inspector, Xds, Cli.GeoIp) require a maintainer listed in TWP_NC_MAINTAINERS (actor=$ACTOR)."
             exit 1
           fi
           echo "Path guard passed (actor=$ACTOR, nc_hit=$NC_HIT)."

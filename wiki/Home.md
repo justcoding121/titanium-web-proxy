@@ -12,7 +12,7 @@ Product guides (Inspector, CLI, Plus) live on the **[website](https://titaniumpr
 - When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 - **HTTP/2** by default, optional **HTTP/3**, WebSocket / SSE / gRPC / GraphQL in the session grid
 - Same engine as a **reverse / edge CLI** (YAML, load balancing, ACME, live reload)
-- Embed via the **.NET library** (MIT); Inspector free for personal / education use (PolyForm Noncommercial)
+- Embed via the **.NET library** (MIT); Inspector, Plus, and the xDS / GeoIP satellites are free for personal / education use (PolyForm Noncommercial) — see [README License](https://github.com/justcoding121/titanium-web-proxy/blob/develop/README.md#license)
 
 Short catalog: [Features](Features) · full tables: [website Features](https://titaniumproxy.com/docs/features).
 

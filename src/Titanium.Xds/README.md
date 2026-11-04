@@ -16,7 +16,7 @@ Minimal `.proto` subsets under `protos/envoy/` are derived from the Apache-2.0 [
 | Secret (SDS) | `envoy/extensions/transport_sockets/tls/v3/secret.proto` | trimmed fields |
 | HCM / TCP proxy filters | `envoy/extensions/filters/network/...` | trimmed typed_config targets |
 
-License: Apache-2.0 (same as upstream data-plane API).
+Vendored proto license: Apache-2.0 (same as upstream data-plane API). The Titanium.Xds assembly itself is [PolyForm Noncommercial 1.0.0](../../licenses/PolyForm-Noncommercial-1.0.0.txt) (see [LICENSE](LICENSE)).
 
 ## Deviations
 
