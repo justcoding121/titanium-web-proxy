@@ -4,11 +4,16 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Compression;
+using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Tcp;
 
 namespace Titanium.Web.Proxy.UnitTests.Routing;
 
@@ -433,5 +438,58 @@ public class ResponseCompressionTests
         proxy.ResponseCompression = null;
         Assert.IsNull(proxy.CompressionPolicy);
         Assert.IsTrue(proxy.CanUseH1TerminateLite(ep, get, false, false, false, null));
+    }
+
+    [TestMethod]
+    public async Task BridgePaths_CompressABufferedBody_AndPlanStreaming()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.ResponseCompression = Enabled;
+        var session = BridgeSession(proxy, NewRequest());
+        var response = session.HttpClient.Response;
+        response.StatusCode = 200;
+        response.HttpVersion = HttpHeader.Version11;
+        response.Headers.AddHeader("Content-Type", "text/html");
+        response.Headers.AddHeader("Content-Length", "2048");
+        var body = Encoding.ASCII.GetBytes(new string('a', 2048));
+        var shape = new ProxyServer.BridgeCompressionShape(OriginLegIsHttp1: true, ClientIsHttp2: false, ClientIsHttp3: false);
+
+        Assert.IsNotNull(proxy.CompressionPolicy, "compression policy");
+        Assert.AreEqual(2048, response.ContentLength);
+        await proxy.TryCompressBridgeBufferedResponseAsync(session, shape, body);
+
+        var encoding = response.Headers.GetHeaderValueOrNull("Content-Encoding");
+        Assert.IsNotNull(encoding, $"status={response.StatusCode} locked={response.Locked} synthetic={response.IsSynthetic} len={response.ContentLength} type={response.ContentType}");
+        Assert.IsTrue(response.Body.Length < body.Length);
+
+        proxy.ResponseCompression = new ResponseCompressionConfig { Enabled = true, Mode = ResponseCompressionConfig.ModeStreaming };
+        var streaming = BridgeSession(proxy, NewRequest());
+        var streamingResponse = streaming.HttpClient.Response;
+        streamingResponse.StatusCode = 200;
+        streamingResponse.HttpVersion = HttpHeader.Version11;
+        streamingResponse.OriginalHasBody = true;
+        streamingResponse.Headers.AddHeader("Content-Type", "text/html");
+        streamingResponse.Headers.AddHeader("Content-Length", "2048");
+        var plan = proxy.TryBeginBridgeStreamingCompression(streaming, shape);
+        Assert.IsNotNull(plan);
+        Assert.AreEqual("br", streamingResponse.Headers.GetHeaderValueOrNull("Content-Encoding"));
+
+        await using var pump = new StreamBodyWriterPumpStream(async (sink, token) =>
+        {
+            await sink.WriteAsync(body, token).ConfigureAwait(false);
+        }, CancellationToken.None);
+        var read = new byte[64];
+        var n = await pump.ReadAsync(read).ConfigureAwait(false);
+        Assert.IsTrue(n > 0);
+    }
+
+    private static SessionEventArgs BridgeSession(ProxyServer proxy, Request request)
+    {
+        var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        var connection = new QuicClientConnection(
+            proxy, new IPEndPoint(IPAddress.Loopback, 4433), new IPEndPoint(IPAddress.Loopback, 12345));
+        var cts = new CancellationTokenSource();
+        var clientStream = new HttpClientStream(proxy, connection, Stream.Null, proxy.BufferPool, cts.Token);
+        return new SessionEventArgs(proxy, endPoint, clientStream, null, cts, request);
     }
 }
