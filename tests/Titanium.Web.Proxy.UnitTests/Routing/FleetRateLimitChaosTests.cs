@@ -129,25 +129,67 @@ public class FleetRateLimitChaosTests
         var store = new FakeFleetRateStore { AlwaysUnavailable = true };
         var options = Options(Fleet("local", limit: 8), store);
         await WaitStoreMarkedDownAsync(options, store);
-        Assert.IsFalse(Denied(options));
-        Assert.IsFalse(Denied(options));
-        Assert.IsTrue(Denied(options));
+
+        // limit 8 × localShare 0.25 → local burst 2. The warmup request may already have taken one
+        // token if it landed after the store was marked down, so the remaining allows are 1 or 2.
+        var allows = 0;
+        var deniedAfterAllow = false;
+        for (var i = 0; i < 100 && !deniedAfterAllow && allows < 3; i++)
+        {
+            if (Denied(options))
+            {
+                if (allows > 0)
+                {
+                    deniedAfterAllow = true;
+                    break;
+                }
+
+                // StoreAvailable is written after the lease log; keep waiting through those denials.
+                await Task.Delay(20);
+                continue;
+            }
+
+            allows++;
+        }
+
+        Assert.IsTrue(allows == 1 || allows == 2, $"local share should allow 1 or 2 requests, allowed {allows}");
+        Assert.IsTrue(deniedAfterAllow || Denied(options), "local share must deny once its bucket is empty");
     }
 
     /// <summary>
     /// Cold fleet reserves start with StoreAvailable=true and Tokens=0, so the first miss waits on refill
-    /// rather than fail-mode. Kick a lease and wait until AlwaysUnavailable flips the flag.
+    /// rather than fail-mode. Wait until the fake store has reported itself unavailable. The flag write
+    /// follows that log entry on the refill task, which can lag a loaded runner past a fixed 30 ms sleep.
     /// </summary>
     private static async Task WaitStoreMarkedDownAsync(ReverseProxyOptions options, FakeFleetRateStore store)
     {
         _ = Denied(options);
-        for (var i = 0; i < 50 && store.LeaseCalls == 0; i++)
+        for (var i = 0; i < 100; i++)
         {
+            if (StoreReportedDown(store))
+            {
+                await Task.Delay(50);
+                return;
+            }
+
             await Task.Delay(20);
         }
 
-        Assert.IsTrue(store.LeaseCalls > 0, "background refill must call the down store");
-        await Task.Delay(30);
+        Assert.Fail("background refill did not report the store down");
+    }
+
+    private static bool StoreReportedDown(FakeFleetRateStore store)
+    {
+        var log = store.LeaseLog;
+        for (var i = 0; i < log.Count; i++)
+        {
+            if (!log[i].StoreAvailable)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [TestMethod]
