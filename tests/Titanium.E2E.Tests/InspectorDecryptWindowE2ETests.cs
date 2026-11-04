@@ -3,6 +3,7 @@ using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Inspector.DesktopProbe.Shared;
 
 namespace Titanium.E2E.Tests;
 
@@ -43,10 +44,19 @@ public class InspectorDecryptWindowE2ETests
             using var automation = new UIA3Automation();
             var box = await FindCheckBoxAsync(automation, TimeSpan.FromSeconds(30));
             Assert.IsNotNull(box, "DecryptHttpsCheck was not in the window.");
+            await TrustInspectorRootAfterAutoStartAsync();
             var check = box!.AsCheckBox();
             if (check.ToggleState != ToggleState.On)
                 check.Toggle();
-            Assert.AreEqual(ToggleState.On, check.ToggleState);
+            var on = await WaitForToggleAsync(check, ToggleState.On, TimeSpan.FromSeconds(15));
+            if (!on)
+            {
+                ClickNamedButton(automation, "Start proxy");
+                ClickNamedButton(automation, "Install");
+                on = await WaitForToggleAsync(check, ToggleState.On, TimeSpan.FromSeconds(15));
+            }
+
+            Assert.IsTrue(on, "Decrypt HTTPS stayed off.");
         }
         finally
         {
@@ -66,6 +76,47 @@ public class InspectorDecryptWindowE2ETests
 
             proc?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Auto-start writes the Inspector root before the checkbox is clicked. Import it so the
+    /// toggle sees an already-trusted CA and does not open the install dialog.
+    /// </summary>
+    private static async Task TrustInspectorRootAfterAutoStartAsync()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var pfx = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "TitaniumInspector",
+            "rootCert.pfx");
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (!File.Exists(pfx) && DateTime.UtcNow < deadline)
+            await Task.Delay(250);
+
+        if (File.Exists(pfx))
+            RootTrustHelpers.TrustPfxInWindowsRootStore(pfx);
+    }
+
+    private static async Task<bool> WaitForToggleAsync(CheckBox check, ToggleState expected, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (check.ToggleState == expected)
+                return true;
+            await Task.Delay(250);
+        }
+
+        return check.ToggleState == expected;
+    }
+
+    private static void ClickNamedButton(UIA3Automation automation, string name)
+    {
+        var button = automation.GetDesktop().FindFirstDescendant(
+            cf => cf.ByControlType(ControlType.Button).And(cf.ByName(name)));
+        button?.AsButton().Invoke();
     }
 
     private static async Task<AutomationElement?> FindCheckBoxAsync(UIA3Automation automation, TimeSpan timeout)

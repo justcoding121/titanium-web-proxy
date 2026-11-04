@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Win32;
 using Titanium.Inspector.Services;
 using Titanium.Web.Proxy.Network;
 
@@ -42,7 +43,7 @@ public static class RootTrustHelpers
                    || interception.VerifyOsUserSslTrust());
     }
 
-    /// <summary>Silent Windows cleanup via certutil -delstore (no Add CryptUI).</summary>
+    /// <summary>Silent Windows cleanup. Registry delete avoids the Root-store CryptUI prompt.</summary>
     public static void UntrustRootSilent(InterceptionService interception)
     {
         if (!OperatingSystem.IsWindows())
@@ -51,26 +52,53 @@ public static class RootTrustHelpers
             return;
         }
 
-        var name = interception.RootCertificateName;
-        try
+        var thumb = interception.RootCertificate?.Thumbprint;
+        if (!string.IsNullOrEmpty(thumb))
         {
-            using var p = Process.Start(new ProcessStartInfo
+            DeleteRootRegistryKey(Registry.CurrentUser, thumb);
+            try
             {
-                FileName = "certutil",
-                Arguments = $"-user -delstore Root \"{name}\"",
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-            p?.WaitForExit(15000);
+                DeleteRootRegistryKey(Registry.LocalMachine, thumb);
+            }
+            catch
+            {
+                // LocalMachine is best-effort when the process is not elevated.
+            }
         }
-        catch
+
+        if (!string.IsNullOrEmpty(thumb) && IsTitaniumRootInCurrentUserStore(interception))
         {
-            // ignore
+            var certutil = Path.Combine(Environment.SystemDirectory, "certutil.exe");
+            RunCertUtil(certutil, "-user -delstore Root " + thumb, timeoutMs: 3000);
         }
 
         interception.VerifyOsUserSslTrust();
+    }
+
+    /// <summary>
+    /// Import a PFX's public certificate into the Windows user and machine Root stores.
+    /// Used when Inspector has already written its root and CryptUI cannot be answered.
+    /// </summary>
+    public static bool TrustPfxInWindowsRootStore(string pfxPath)
+    {
+        if (!OperatingSystem.IsWindows() || !File.Exists(pfxPath))
+            return false;
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(pfxPath);
+        }
+        catch
+        {
+            return false;
+        }
+
+        using var cert = X509CertificateLoader.LoadPkcs12(bytes, ReadOnlySpan<char>.Empty, X509KeyStorageFlags.Exportable);
+        TrustDerInWindowsRootStore(cert.Export(X509ContentType.Cert), cert.Thumbprint);
+        using var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+        store.Open(OpenFlags.ReadOnly);
+        return store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, validOnly: false).Count > 0;
     }
 
     private static bool IsEphemeralCiMachineTrust() =>
@@ -86,27 +114,37 @@ public static class RootTrustHelpers
         if (cert is null)
             return false;
 
-        var path = Path.Combine(Path.GetTempPath(), "titanium-ci-root-" + cert.Thumbprint + ".cer");
-        File.WriteAllBytes(path, cert.Export(X509ContentType.Cert));
+        return TrustDerInWindowsRootStore(cert.Export(X509ContentType.Cert), cert.Thumbprint)
+               && IsTitaniumRootInCurrentUserStore(interception)
+               && interception.VerifyOsUserSslTrust();
+    }
+
+    private static bool TrustDerInWindowsRootStore(byte[] der, string thumbprint)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "titanium-ci-root-" + thumbprint + ".cer");
+        File.WriteAllBytes(path, der);
         try
         {
             var certutil = Path.Combine(Environment.SystemDirectory, "certutil.exe");
-            RunCertUtil(certutil, "-user -addstore -f Root \"" + path + "\"");
-            RunCertUtil(certutil, "-addstore -f Root \"" + path + "\"");
+            RunCertUtil(certutil, "-user -addstore -f Root \"" + path + "\"", timeoutMs: 20000);
+            RunCertUtil(certutil, "-addstore -f Root \"" + path + "\"", timeoutMs: 20000);
         }
         finally
         {
             try { File.Delete(path); } catch { /* temp cert */ }
         }
 
-        if (!IsTitaniumRootInCurrentUserStore(interception))
-            return false;
-
-        interception.VerifyOsUserSslTrust();
         return true;
     }
 
-    private static void RunCertUtil(string certutil, string arguments)
+    private static void DeleteRootRegistryKey(RegistryKey hive, string thumbprint)
+    {
+        hive.DeleteSubKeyTree(
+            @"Software\Microsoft\SystemCertificates\Root\Certificates\" + thumbprint,
+            throwOnMissingSubKey: false);
+    }
+
+    private static void RunCertUtil(string certutil, string arguments, int timeoutMs)
     {
         using var process = Process.Start(new ProcessStartInfo
         {
@@ -117,6 +155,12 @@ public static class RootTrustHelpers
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         });
-        process?.WaitForExit(20000);
+        if (process is null)
+            return;
+
+        if (!process.WaitForExit(timeoutMs))
+        {
+            try { process.Kill(entireProcessTree: true); } catch { /* dialog hung */ }
+        }
     }
 }
