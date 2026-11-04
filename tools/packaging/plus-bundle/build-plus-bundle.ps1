@@ -122,7 +122,11 @@ try {
         $listEntry = $check.GetEntry("Titanium.Plus.files")
         if (-not $listEntry) { throw "Zip is missing Titanium.Plus.files." }
         $reader = New-Object System.IO.StreamReader($listEntry.Open())
-        try { $listed = @($reader.ReadToEnd().Split(@("`r`n", "`n", "`r"), [StringSplitOptions]::RemoveEmptyEntries)) }
+        try {
+            # String.Split(string[]) binds to the wrong overload in pwsh and returns one element.
+            $raw = $reader.ReadToEnd()
+            $listed = @($raw -split '\r?\n|\r' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        }
         finally { $reader.Dispose() }
 
         $entrySet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
