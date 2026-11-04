@@ -382,7 +382,7 @@ internal static class VersionCommand
     }
 }
 
-internal static class UpdateCommand
+internal static partial class UpdateCommand
 {
     private static readonly string CliIdentityPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -410,7 +410,7 @@ internal static class UpdateCommand
             {
                 AsyncConsole.WriteError(
                     "Warning: the Titanium OS service appears to be running. Stop it before removing Plus " +
-                    "(`titanium service stop`) — the DLL may be locked, and the in-process control plane " +
+                    "(`titanium service stop`) — Plus files may be locked, and the in-process control plane " +
                     "keeps running until the proxy restarts.");
             }
 
@@ -458,59 +458,15 @@ internal static class UpdateCommand
             titanium update [--plus] [--remove-plus] [--channel stable|beta]
 
               (default)      Download and install a newer CLI zip when the feed is ahead.
-              --plus         Install or update Titanium.Plus.dll beside the CLI.
-              --remove-plus  Delete Titanium.Plus.dll beside the CLI (no network).
+              --plus         Install or update the Plus bundle beside the CLI.
+              --remove-plus  Delete Plus files beside the CLI (no network).
               --channel      stable (default) or beta. Also: TITANIUM_UPDATE_CHANNEL.
 
             Does not use winget. If an OS service is running, stop it first so the exe can be replaced.
             Plus is PolyForm Noncommercial — not for commercial use. Disable in config with
-            plus.enabled: false; use --remove-plus to delete the DLL from disk.
+            plus.enabled: false; use --remove-plus to delete the Plus files from disk.
             """);
         CliHelp.WriteDocsFooter();
-        return 0;
-    }
-
-    /// <summary>
-    /// Deletes <c>Titanium.Plus.dll</c> (and <c>.bak</c> / <c>.new</c>) beside the CLI install.
-    /// Idempotent when Plus is already absent. <paramref name="installDir"/> is for tests.
-    /// </summary>
-    internal static int RemovePlus(string? installDir = null)
-    {
-        var dir = string.IsNullOrWhiteSpace(installDir)
-            ? AppContext.BaseDirectory
-            : installDir;
-        dir = dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var dest = Path.Combine(dir, "Titanium.Plus.dll");
-        var backup = dest + ".bak";
-        var staging = dest + ".new";
-
-        var removed = false;
-        try
-        {
-            foreach (var path in new[] { dest, backup, staging })
-            {
-                if (!File.Exists(path))
-                    continue;
-                File.Delete(path);
-                removed = true;
-            }
-        }
-        catch (Exception ex)
-        {
-            AsyncConsole.WriteError($"Plus remove failed: {ex.Message}");
-            return 1;
-        }
-
-        if (removed)
-            AsyncConsole.WriteLine("Removed Titanium.Plus.dll from the CLI install directory.");
-        else
-            AsyncConsole.WriteLine("Plus is not installed beside the CLI (nothing to remove).");
-
-        AsyncConsole.WriteLine(
-            "If a titanium run / OS service is still up with Plus loaded, stop and restart it so the " +
-            "control plane and dashboard unload (remove-plus does not stop them). " +
-            "If your config still has plus.enabled: true, set it to false (or remove the plus: block). " +
-            "Plus is PolyForm Noncommercial — not for commercial use.");
         return 0;
     }
 
@@ -643,75 +599,143 @@ internal static class UpdateCommand
 
     private static async Task<int> UpdatePlusAsync(ReleaseManifest manifest, string channelDisplay)
     {
-        var asset = manifest.Products?.Plus?.Asset;
-        if (asset?.Url is null)
+        if (manifest.Products?.Plus is not { } plus)
         {
             AsyncConsole.WriteError($"No Plus package on channel {channelDisplay}.");
             return 1;
         }
 
-        var remoteLabel = ReleaseVersion.NormalizeTag(
-            manifest.Products?.Plus?.Version ?? manifest.Version ?? "unknown");
-        var dest = Path.Combine(AppContext.BaseDirectory, "Titanium.Plus.dll");
-        var backup = dest + ".bak";
+        var bundle = plus.Bundle;
+        var asset = plus.Asset;
+        var useBundle = !string.IsNullOrWhiteSpace(bundle?.Url);
+        var package = useBundle ? bundle : asset;
+        if (package is null || string.IsNullOrWhiteSpace(package.Url))
+        {
+            AsyncConsole.WriteError($"No Plus package on channel {channelDisplay}.");
+            return 1;
+        }
+
+        var remoteLabel = ReleaseVersion.NormalizeTag(plus.Version ?? manifest.Version ?? "unknown");
+        var installDir = AppContext.BaseDirectory.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var plusLocal = VersionCommand.TryGetLocalPlusVersion();
         var plusInfo = VersionCommand.TryGetLocalPlusInformationalVersion();
-        var installing = plusLocal is null;
-
-        if (plusLocal is not null
-            && TryWritePlusAlreadyCurrent(asset, dest, plusLocal, remoteLabel, channelDisplay, plusInfo))
+        if (ShouldSkipPlusUpdate(useBundle, asset, installDir, plusLocal, remoteLabel, channelDisplay, plusInfo))
         {
             return 0;
         }
 
+        var installing = plusLocal is null;
         AsyncConsole.WriteLine(installing
-            ? $"Installing Titanium.Plus {remoteLabel} ({channelDisplay})…"
+            ? $"Installing Plus {remoteLabel} ({channelDisplay})…"
             : $"Updating Plus {ReleaseVersion.FormatDisplay(plusLocal)} → {remoteLabel} ({channelDisplay})…");
         AsyncConsole.WriteLine("Downloading…");
+
+        return await DownloadAndApplyPlusAsync(
+            package, installDir, useBundle, remoteLabel, channelDisplay, installing).ConfigureAwait(false);
+    }
+
+    private static bool ShouldSkipPlusUpdate(
+        bool useBundle,
+        AssetBlock? asset,
+        string installDir,
+        Version? plusLocal,
+        string remoteLabel,
+        string channelDisplay,
+        string? plusInfo)
+    {
+        if (plusLocal is null)
+        {
+            return false;
+        }
+
+        if (!useBundle
+            && asset is not null
+            && TryWritePlusAlreadyCurrent(
+                asset,
+                Path.Combine(installDir, "Titanium.Plus.dll"),
+                plusLocal,
+                remoteLabel,
+                channelDisplay,
+                plusInfo))
+        {
+            return true;
+        }
+
+        if (useBundle && !VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
+        {
+            WritePlusAlreadyCurrent(plusLocal, plusInfo, remoteLabel, channelDisplay);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static async Task<int> DownloadAndApplyPlusAsync(
+        AssetBlock package,
+        string installDir,
+        bool useBundle,
+        string remoteLabel,
+        string channelDisplay,
+        bool installing)
+    {
+        // Keep the download under the install directory (not Path.GetTempPath) — S5443.
+        var workDir = Path.Combine(installDir, ".plus-download-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workDir);
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("Titanium.Cli/7.0");
-            var bytes = await http.GetByteArrayAsync(asset.Url);
-            AsyncConsole.WriteLine("Verifying SHA256…");
-            if (!string.IsNullOrEmpty(asset.Sha256))
+            var downloadPath = Path.Combine(
+                workDir,
+                useBundle ? $"Titanium.Plus-{SanitizeFileToken(remoteLabel)}.zip" : "Titanium.Plus.dll");
+
+            var downloadRc = await DownloadVerifiedAssetAsync(
+                package, downloadPath, "SHA256 mismatch — aborting Plus update.").ConfigureAwait(false);
+            if (downloadRc != 0)
             {
-                var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-                if (!hash.Equals(asset.Sha256, StringComparison.OrdinalIgnoreCase))
-                {
-                    AsyncConsole.WriteError("SHA256 mismatch — aborting Plus update.");
-                    return 1;
-                }
+                return downloadRc;
             }
 
-            if (File.Exists(dest))
+            if (package.Size is > 0 && new FileInfo(downloadPath).Length != package.Size.Value)
             {
-                File.Copy(dest, backup, overwrite: true);
+                AsyncConsole.WriteError("Plus download size mismatch — aborting Plus update.");
+                return 1;
             }
 
-            var staging = dest + ".new";
-            await File.WriteAllBytesAsync(staging, bytes);
-            try
+            var applied = useBundle
+                ? ApplyPlusBundleZip(downloadPath, installDir)
+                : ApplyPlusLegacyDll(downloadPath, installDir);
+            if (applied != 0)
             {
-                File.Move(staging, dest, overwrite: true);
-            }
-            catch
-            {
-                TryRestorePlusBackup(dest, backup);
-                throw;
+                return applied;
             }
 
             AsyncConsole.WriteLine(installing
-                ? $"Installed Titanium.Plus.dll {remoteLabel} ({channelDisplay})."
-                : $"Updated Titanium.Plus.dll to {remoteLabel} ({channelDisplay}).");
+                ? $"Installed Plus {remoteLabel} ({channelDisplay})."
+                : $"Updated Plus to {remoteLabel} ({channelDisplay}).");
             return 0;
         }
-        catch (Exception ex)
+        finally
         {
-            TryRestorePlusBackup(dest, backup);
-            AsyncConsole.WriteError($"Plus update failed: {ex.Message}");
-            return 1;
+            try
+            {
+                if (Directory.Exists(workDir))
+                {
+                    Directory.Delete(workDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // Best-effort cleanup of the download directory beside the install.
+            }
         }
+    }
+
+    private static string SanitizeFileToken(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = value.Select(c => Array.IndexOf(invalid, c) >= 0 ? '-' : c).ToArray();
+        var text = new string(chars).Trim();
+        return string.IsNullOrWhiteSpace(text) ? "plus" : text;
     }
 
     private static bool TryWritePlusAlreadyCurrent(
@@ -730,8 +754,20 @@ internal static class UpdateCommand
         }
 
         if (VersionCommand.ShouldInstallPlusRelease(plusLocal, remoteLabel, plusInfo))
+        {
             return false;
+        }
 
+        WritePlusAlreadyCurrent(plusLocal, plusInfo, remoteLabel, channelDisplay);
+        return true;
+    }
+
+    private static void WritePlusAlreadyCurrent(
+        Version plusLocal,
+        string? plusInfo,
+        string remoteLabel,
+        string channelDisplay)
+    {
         var localLabel = ReleaseVersion.ResolveLocalReleaseLabel(plusLocal, plusInfo, null);
         if (ReleaseVersion.CompareReleaseTags(localLabel, remoteLabel) > 0)
         {
@@ -750,8 +786,6 @@ internal static class UpdateCommand
             AsyncConsole.WriteLine(
                 $"Plus is already at {remoteLabel} ({channelDisplay}).");
         }
-
-        return true;
     }
 
     private static bool FileSha256Matches(string path, string expectedHex)
@@ -1104,11 +1138,16 @@ internal sealed class InspectorBlock
 internal sealed class PlusProductBlock
 {
     public string? Version { get; set; }
+    /// <summary>Legacy single-DLL payload for older CLIs.</summary>
     public AssetBlock? Asset { get; set; }
+    /// <summary>Preferred zip of Plus + satellites + managed deps not in the MIT CLI zip.</summary>
+    public AssetBlock? Bundle { get; set; }
 }
 
 internal sealed class AssetBlock
 {
     public string? Url { get; set; }
     public string? Sha256 { get; set; }
+    /// <summary>Optional byte length. Checked after download when set on the Plus bundle.</summary>
+    public long? Size { get; set; }
 }

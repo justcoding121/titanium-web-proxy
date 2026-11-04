@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// The RFC 9111 subset the shared response cache implements, as pure functions of headers and a clock.
@@ -281,7 +282,7 @@ internal static class HttpCachePolicy
     // ---------------------------------------------------------------- storing
 
     /// <summary>What the cache decided to keep about one origin response.</summary>
-    internal sealed class StorePlan
+    internal sealed class StorePlan : CacheStorePlan
     {
         public required int StatusCode { get; init; }
         public required IReadOnlyList<KeyValuePair<string, string>> Headers { get; init; }

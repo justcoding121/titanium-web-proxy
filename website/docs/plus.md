@@ -29,7 +29,7 @@ File-based route/cluster reload (`titanium reload` / SIGHUP / `run --watch`) doe
 
 ## Install
 
-Plus is distributed as a sidecar next to the CLI. There is **no** public Plus download button on this site.
+Plus is distributed as a **bundle** next to the CLI (`Titanium.Plus.dll` plus the xDS and GeoIP satellites and their managed dependencies). There is **no** public Plus download button on this site. The MIT CLI zip does not include those satellites.
 
 ```shell
 titanium update --plus
@@ -39,7 +39,9 @@ titanium update --plus --channel beta
 titanium version --check --plus --channel beta
 ```
 
-`titanium version --check --plus` reports local → remote and exit code `2` when a newer Plus is available or Plus is missing. `titanium update --plus` installs or upgrades only when needed; if Plus is already current it prints that and skips the download.
+`titanium update --plus` prefers `products.plus.bundle` in the release manifest and falls back to the legacy single-DLL `products.plus.asset` for older CLIs. `titanium update --remove-plus` deletes the files listed in `Titanium.Plus.files`.
+
+`titanium version --check --plus` reports local → remote and exit code `2` when a newer Plus is available or Plus is missing. `titanium update --plus` installs or upgrades only when needed; if Plus is already current it prints that and skips the download. The install is a bundle (Plus, the xDS and GeoIP assemblies, and the libraries they need) placed beside the CLI. A feed that only publishes the legacy single-file asset still installs `Titanium.Plus.dll`.
 
 ## Enable / disable
 
@@ -70,7 +72,7 @@ To delete Plus from disk:
 titanium update --remove-plus
 ```
 
-This removes Plus beside the CLI (and `.bak` / `.new`). It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
+This removes exactly the files listed in `Titanium.Plus.files` (and their `.bak` / `.new` copies). When that list is missing, it removes `Titanium.Plus*.dll` only. It does **not** stop a running proxy, OS service, or the in-process Plus control plane / dashboard — stop `titanium run` or `titanium service stop`, then start again so Plus unloads. It does not edit your config; disable `plus.enabled` separately if it is still set. Re-install later with `titanium update --plus`.
 
 ## Dashboard
 

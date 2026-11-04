@@ -1,5 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Clusters;
+using Titanium.Plus.Clusters;
 
 namespace Titanium.Web.Proxy.UnitTests.Routing;
 

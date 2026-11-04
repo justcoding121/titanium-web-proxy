@@ -18,7 +18,6 @@ using Titanium.Web.Proxy.Abstractions.Network;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Abstractions.Scripting;
-using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
@@ -291,11 +290,6 @@ internal static class RunCommand
         TwpConfig? lastAppliedConfig = loaded.Config;
         CliConfigEditor? configEditor = null;
 
-        var cacheOptions = ParseResponseCacheOptions(plusOptions, AsyncConsole.WriteError);
-        var responseCache = new MemoryHttpResponseCache(cacheOptions.MaxBytes, cacheOptions.Entry.MaxEntryBytes);
-
-        ConfigureResponseCache(middleware, responseCache, plusOptions, cacheOptions.Entry, plusEnabled);
-
         IGrpcJsonTranscoder? grpcJsonTranscoder = null;
 
         clusterManager.AttachHealthTracker(loadBalancer.Health);
@@ -333,7 +327,6 @@ internal static class RunCommand
                     routes,
                     middleware,
                     loadBalancer,
-                    responseCache,
                     plusOptions,
                     () => grpcJsonTranscoder,
                     t => grpcJsonTranscoder = t,
@@ -411,7 +404,6 @@ internal static class RunCommand
             Policies = policies,
             Routes = routes,
             RefreshReverseProxy = RefreshReverseProxy,
-            ResponseCache = responseCache,
             LatencyRecorder = loadBalancer,
             Logger = proxy.Logger,
             ConfigApplier = configApplier,
@@ -701,7 +693,6 @@ internal static class RunCommand
         List<RouteConfig> routes,
         List<IProxyMiddleware> middleware,
         LoadBalancer loadBalancer,
-        MemoryHttpResponseCache responseCache,
         Dictionary<string, string> plusOptions,
         Func<IGrpcJsonTranscoder?> getGrpc,
         Action<IGrpcJsonTranscoder?> setGrpc,
@@ -858,7 +849,6 @@ internal static class RunCommand
         onApplied?.Invoke(loaded.Config);
         _ = middleware;
         _ = loadBalancer;
-        _ = responseCache;
         _ = plusOptions;
         _ = getGrpc;
         _ = setGrpc;
@@ -1453,103 +1443,6 @@ internal static class RunCommand
         }
     }
 
-    internal readonly record struct ParsedResponseCacheOptions(long MaxBytes, ResponseCacheOptions Entry);
-
-    /// <summary>
-    /// Reads the <c>cache.*</c> keys of <c>plus.options</c>. A value that is not a valid number (or is out of range)
-    /// is reported and replaced by its default, so a typo never disables or unbounds the cache.
-    /// </summary>
-    internal static ParsedResponseCacheOptions ParseResponseCacheOptions( // NOSONAR S3776 -- Option parsing keeps defaults and warnings colocated per key.
-        IReadOnlyDictionary<string, string> options,
-        Action<string> warn)
-    {
-        long maxBytes = MemoryHttpResponseCache.DefaultMaxBytes;
-        var entry = new ResponseCacheOptions();
-
-        long ReadLong(string key, long fallback, long min, long max)
-        {
-            if (!options.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
-            {
-                return fallback;
-            }
-
-            if (long.TryParse(raw.Trim(), System.Globalization.NumberStyles.None,
-                    System.Globalization.CultureInfo.InvariantCulture, out var value) && value >= min && value <= max)
-            {
-                return value;
-            }
-
-            warn($"warning: plus.options '{key}' must be an integer from {min} to {max}; using {fallback}.");
-            return fallback;
-        }
-
-        bool ReadFlag(string key, bool fallback)
-        {
-            if (!options.TryGetValue(key, out var raw) || string.IsNullOrWhiteSpace(raw))
-            {
-                return fallback;
-            }
-
-            if (raw.Equals("true", StringComparison.OrdinalIgnoreCase) || raw == "1" ||
-                raw.Equals("yes", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (raw.Equals("false", StringComparison.OrdinalIgnoreCase) || raw == "0" ||
-                raw.Equals("no", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            warn($"warning: plus.options '{key}' must be true or false; using {fallback.ToString().ToLowerInvariant()}.");
-            return fallback;
-        }
-
-        maxBytes = ReadLong("cache.maxBytes", maxBytes, 1024, long.MaxValue / 4);
-        var maxEntryBytes = (int)ReadLong("cache.maxEntryBytes", MemoryHttpResponseCache.DefaultMaxEntryBytes, 1,
-            int.MaxValue / 2);
-        if (maxEntryBytes > maxBytes)
-        {
-            warn($"warning: plus.options 'cache.maxEntryBytes' exceeds 'cache.maxBytes'; using {maxBytes}.");
-            maxEntryBytes = (int)Math.Min(maxBytes, int.MaxValue / 2);
-        }
-
-        var defaultTtlSeconds = ReadLong("cache.defaultTtlSeconds", 0, 0, 365L * 24 * 3600);
-        entry = new ResponseCacheOptions
-        {
-            MaxEntryBytes = maxEntryBytes,
-            DefaultTtl = defaultTtlSeconds > 0 ? TimeSpan.FromSeconds(defaultTtlSeconds) : null,
-            HeuristicFreshness = ReadFlag("cache.heuristicFreshness", false),
-            ExposeHeaders = ReadFlag("cache.exposeHeaders", false),
-            Collapse = ReadFlag("cache.collapse", true),
-            CollapseMaxWaiters = (int)ReadLong("cache.collapse.maxWaiters", entry.CollapseMaxWaiters, 0, 100_000),
-            CollapseTimeout = TimeSpan.FromMilliseconds(
-                ReadLong("cache.collapse.timeoutMs", (long)entry.CollapseTimeout.TotalMilliseconds, 1, 600_000)),
-            StaleRetention = TimeSpan.FromSeconds(
-                ReadLong("cache.staleRetentionSeconds", (long)entry.StaleRetention.TotalSeconds, 0, 7L * 24 * 3600)),
-        };
-        return new ParsedResponseCacheOptions(maxBytes, entry);
-    }
-
-    private static void ConfigureResponseCache(
-        List<IProxyMiddleware> middleware,
-        MemoryHttpResponseCache responseCache,
-        IReadOnlyDictionary<string, string> plusOptions,
-        ResponseCacheOptions cacheOptions,
-        bool plusEnabled)
-    {
-        if (!plusEnabled || !IsTruthy(plusOptions, "cache.enable"))
-        {
-            return;
-        }
-
-        // The cache middleware keeps the response side (revalidation, body tee, store) on the same hooks the
-        // reverse proxy already calls, so no BeforeResponse/AfterResponse subscription is added: those would force
-        // every request off H1 terminate-lite and a hit would no longer skip the origin.
-        middleware.Add(new HttpResponseCacheMiddleware(responseCache, options: cacheOptions));
-    }
-
     /// <summary>Returns true when the Plus module loaded and applied.</summary>
     private static async Task<bool> TryActivatePlusAsync(TwpConfig config, PlusActivationContext context)
     {
@@ -2110,12 +2003,6 @@ internal static class RunCommand
 
     private static bool ResolveListenerHttp3(ListenerConfig listener, bool decryptSsl) =>
         listener.EnableHttp3 ?? (decryptSsl && System.Net.Quic.QuicListener.IsSupported);
-
-    private static bool IsTruthy(IReadOnlyDictionary<string, string> options, string key) =>
-        options.TryGetValue(key, out var value) &&
-        (value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-         value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
-         value.Equals("yes", StringComparison.OrdinalIgnoreCase));
 
     internal static Dictionary<string, string> BuildPlusOptions(PlusConfig plus) // NOSONAR S3776 -- Plus option flattening mirrors config surface area.
     {

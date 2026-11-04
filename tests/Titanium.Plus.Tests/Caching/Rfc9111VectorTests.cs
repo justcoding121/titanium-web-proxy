@@ -5,9 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Web.Proxy.Caching;
+using Titanium.Plus.Caching;
 
-namespace Titanium.Web.Proxy.UnitTests.Caching;
+namespace Titanium.Plus.Tests;
 
 /// <summary>
 /// Runs <c>rfc9111-vectors.json</c> against the pure cache policy: whether a response is stored, for how long, and

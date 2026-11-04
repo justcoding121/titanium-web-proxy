@@ -1761,11 +1761,11 @@ public class SonarNewCodeCoverageTests
 
         var tryMw = typeof(ProxyServer).GetMethod("TryRunTerminateLiteMiddlewareAsync", PrivateInstance)!;
         var handled = new HandleAllMiddleware();
-        var (keep, _) = await (Task<(bool? Keep, Titanium.Web.Proxy.Caching.CacheRequestState? State)>)tryMw.Invoke(proxy,
+        var (keep, _) = await (Task<(bool? Keep, Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState? State)>)tryMw.Invoke(proxy,
             [ep, clientStream, req, new IProxyMiddleware[] { handled }, CancellationToken.None])!;
         Assert.IsNotNull(keep);
 
-        var (passthrough, _) = await (Task<(bool? Keep, Titanium.Web.Proxy.Caching.CacheRequestState? State)>)tryMw.Invoke(proxy,
+        var (passthrough, _) = await (Task<(bool? Keep, Titanium.Web.Proxy.Abstractions.Caching.ICacheRequestState? State)>)tryMw.Invoke(proxy,
             [ep, clientStream, req, Array.Empty<IProxyMiddleware>(), CancellationToken.None])!;
         Assert.IsNull(passthrough);
 

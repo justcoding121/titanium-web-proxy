@@ -8,7 +8,6 @@ using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Abstractions.Scripting;
-using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
@@ -158,7 +157,7 @@ public class ScriptWiringTests
             var plugins = Load("a");
             var refreshed = new List<string[]>();
             Task Reload() => RunCommand.ReloadConfigAsync(
-                path, proxy, clusterManager, routes, [], new LoadBalancer(), new MemoryHttpResponseCache(),
+                path, proxy, clusterManager, routes, [], new LoadBalancer(),
                 new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), static () => null, static _ => { },
                 () => refreshed.Add(pipeline.ToArray()), getPlugins: () => plugins, setPlugins: next => plugins = next,
                 scriptPipeline: pipeline);

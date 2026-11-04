@@ -859,15 +859,17 @@ public class PlusHardeningTests
             ["audit.path"] = auditPath,
         };
         var logger = new ListLogger();
+        var manager = new ClusterManager();
 
         new TitaniumPlusModule().Apply(new PlusActivationContext
         {
             ProxyServer = new object(),
-            ClusterManager = new ClusterManager(),
+            ClusterManager = manager,
             Routes = new List<RouteConfig>(),
             Options = options,
             Logger = logger,
         });
+        Assert.IsNotNull(manager.ActiveHealthProbeProvider);
 
         using var handler = new HttpClientHandler
         {

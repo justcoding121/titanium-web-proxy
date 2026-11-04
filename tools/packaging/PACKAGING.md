@@ -102,7 +102,21 @@ Manifest stubs live in `tools/packaging/winget/` (they still name an older versi
 
 **Windows CLI zip is a single file.** The `win-x64` CLI is published with `PublishSingleFile`, so `titanium.exe` and `twp.exe` are self-contained. winget's portable install creates symlinks in `WinGet\Links`, and the .NET apphost does not follow a symlink to find `titanium.dll`; the old multi-file layout failed there with "titanium.dll does not exist". `release.yml` runs [`winget/test-links-symlink.ps1`](winget/test-links-symlink.ps1) after "Zip Cli" and blocks the release if either command fails through a symlink. Run the same script locally against a zip before a winget submission (needs an elevated shell or Developer Mode for symlinks).
 
-Limitations under winget: update with `winget upgrade`, not `titanium update` (the exe lives in the package folder, not where the symlink is). `AppContext.BaseDirectory` may resolve to the `Links` folder rather than the package folder, so a downloaded `Titanium.Plus.dll` may be placed there; this is documented, not redesigned.
+Limitations under winget: update with `winget upgrade`, not `titanium update` (the exe lives in the package folder, not where the symlink is). `AppContext.BaseDirectory` may resolve to the `Links` folder rather than the package folder, so a downloaded Plus bundle may be placed there; this is documented, not redesigned.
+
+## Plus bundle
+
+The MIT CLI zip does not contain Titanium.Plus, Titanium.Xds, or Titanium.Cli.GeoIp. `titanium update --plus` prefers `products.plus.bundle` in the release manifest (a zip) and falls back to the legacy `products.plus.asset` single DLL when `bundle` is absent.
+
+Build the zip and the legacy DLL with [`plus-bundle/build-plus-bundle.ps1`](plus-bundle/build-plus-bundle.ps1):
+
+```powershell
+./tools/packaging/plus-bundle/build-plus-bundle.ps1 -Tag 8.0.0 -Version 8.0.0 -OutputDirectory .
+```
+
+The script publishes [`plus-bundle/PlusBundle.csproj`](plus-bundle/PlusBundle.csproj) framework-dependent (no RID) and a framework-dependent CLI, then keeps top-level files whose names are not in the CLI publish. It writes `Titanium.Plus.files` (one plain file name per line, including itself) into `Titanium.Plus-<tag>.zip`, and copies `Titanium.Plus-<tag>.dll` for older feeds. The zip also carries `THIRD-PARTY-PLUS.txt` and `Titanium.Xds.NOTICE`.
+
+`titanium update --plus` downloads the zip, checks SHA256 (and `size` when the manifest sets it), extracts to a temp directory beside the install, and swaps each file in with a `.new` / `.bak` pair. A failed swap rolls the set back. `titanium update --remove-plus` deletes exactly the names in `Titanium.Plus.files`. When that list is missing, it deletes `Titanium.Plus*.dll` only.
 
 ### Chocolatey (Windows)
 

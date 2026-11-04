@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
+using Titanium.Web.Proxy.Abstractions.Caching;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Options;
 
@@ -354,7 +356,7 @@ internal static class ProxyMetrics
     ///     Live response caches, held weakly like <see cref="LiveCertificateManagers" />, so the gauges below sum
     ///     whatever is alive in this process without keeping a cache (and its bodies) reachable.
     /// </summary>
-    private static readonly ConditionalWeakTable<Caching.MemoryHttpResponseCache, object?> LiveResponseCaches = new();
+    private static readonly ConditionalWeakTable<object, object?> LiveResponseCaches = new();
 
     private static readonly ObservableGauge<long> CacheBytes = // NOSONAR S1144 -- Strong reference keeps the observable instrument registered.
         Meter.CreateObservableGauge("twp.cache.bytes", ObserveCacheBytes, "By",
@@ -369,7 +371,10 @@ internal static class ProxyMetrics
         long total = 0;
         foreach (var pair in LiveResponseCaches)
         {
-            total += pair.Key.Bytes;
+            if (pair.Key is IHttpResponseCacheStats stats)
+            {
+                total += stats.Bytes;
+            }
         }
 
         yield return new Measurement<long>(total);
@@ -380,15 +385,19 @@ internal static class ProxyMetrics
         long total = 0;
         foreach (var pair in LiveResponseCaches)
         {
-            total += pair.Key.Count;
+            if (pair.Key is IHttpResponseCache cache)
+            {
+                total += cache.Count;
+            }
         }
 
         yield return new Measurement<long>(total);
     }
 
-    /// <summary>Called once by each <see cref="Caching.MemoryHttpResponseCache" /> constructor.</summary>
-    internal static void RegisterResponseCache(Caching.MemoryHttpResponseCache cache) =>
-        LiveResponseCaches.AddOrUpdate(cache, null);
+    /// <summary>Called once by each in-memory response cache constructor.</summary>
+    internal static void RegisterResponseCache<TCache>(TCache cache)
+        where TCache : class, IHttpResponseCache, IHttpResponseCacheStats
+        => LiveResponseCaches.AddOrUpdate(cache, null);
 
     /// <param name="result"><c>hit</c>, <c>miss</c>, <c>stale</c>, <c>bypass</c> or <c>revalidated</c>.</param>
     public static void RecordCacheRequest(string result)

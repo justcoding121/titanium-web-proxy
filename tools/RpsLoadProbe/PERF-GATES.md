@@ -4,6 +4,21 @@ Run on the release SHA via [`.github/workflows/rps-saturation.yml`](../../.githu
 
 Product version is **`8.0.0.0`**; gates block beta/stable tags, not feature commits.
 
+## Plus license boundary baseline
+
+Paired A/B spot checks for the Plus license-boundary work (cache seam, cache move, Plus bundle) compare against this SHA (the `develop` tip when `fix/plus-license-boundary` was cut):
+
+| Key | Value |
+|-----|-------|
+| `BASELINE_SHA` | `c14228d207413cf81e2b1eac73fb5a7b86cf634a` |
+
+Spot-check arms: `twp-cli-reverse-http1` (default-off) and `twp-cli-plus-cache-hit-http1` (`compare-editions`). Checkpoint A is the last Phase 3a commit (`89d1b756`); Checkpoint B is the PR tip. Same default-off thresholds as the commercial-grade block below. Cache-hit arm: median RPS delta at least −2.0%, 95% CI lower bound at least −3.0%, p99 at most +3%, Gen0 per 100k within 1%, zero errors. Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+
+| Checkpoint | Arm filter | Run |
+|------------|------------|-----|
+| A (3a seam) | `twp-cli-reverse-http1` | [41723339664](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41723339664) |
+| B (PR tip) | `twp-cli-reverse-http1` / `twp-cli-plus-cache-hit-http1` | re-measure after merge tip pushes; see open PR |
+
 ## Commercial-grade parity baseline
 
 Paired A/B for the `feat/commercial-grade-parity` work items compares each commit against this SHA (the `develop` tip before that branch):

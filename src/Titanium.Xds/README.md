@@ -26,4 +26,4 @@ License: Apache-2.0 (same as upstream data-plane API).
 
 ## Build size (informational)
 
-After `dotnet build -c Release`, `Titanium.Xds.dll` plus `Google.Protobuf` and `Grpc.Net.Client` satellites are copied beside `titanium` only when the xDS project is built; they are loaded at runtime only when `xds:` is configured.
+The MIT CLI zip does not include this assembly. `titanium update --plus` installs `Titanium.Xds.dll` and its libraries beside the CLI. They are loaded at runtime only when `xds:` is configured.

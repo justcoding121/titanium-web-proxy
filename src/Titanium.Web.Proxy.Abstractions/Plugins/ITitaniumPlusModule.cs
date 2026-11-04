@@ -19,8 +19,12 @@ public sealed class PlusActivationContext
     /// <summary>Invoked after routes/clusters change so the host can refresh <c>ReverseProxyOptions</c>.</summary>
     public Action? RefreshReverseProxy { get; init; }
 
-    /// <summary>Optional HTTP response cache for authenticated purge.</summary>
-    public IHttpResponseCache? ResponseCache { get; init; }
+    /// <summary>
+    /// In-memory HTTP response cache created by Plus during <see cref="ITitaniumPlusModule.Apply"/>.
+    /// Plus assigns it even when <c>cache.enable</c> is false so the control plane can purge.
+    /// Hosts leave this unset.
+    /// </summary>
+    public IHttpResponseCache? ResponseCache { get; set; }
 
     /// <summary>Host logger (typically <c>ProxyServer.Logger</c>). Prefer this over Console.</summary>
     public ILogger? Logger { get; init; }

@@ -113,25 +113,79 @@ public class CliMetaAndUpdateE2ETests
 
     [TestMethod]
     [TestCategory("E2E")]
-    public async Task Update_Plus_FromFakeFeed_InstallsDll()
+    public async Task Update_Plus_FromFakeFeed_InstallsBundle_RemoveRestores()
     {
         using var harness = CliProcessHarness.CreateIsolatedCopy(copyPlus: false);
         harness.EnsurePlusDllBesideCli(copy: false);
-        Assert.IsFalse(File.Exists(Path.Combine(harness.CliDirectory, "Titanium.Plus.dll")));
+        var dir = harness.CliDirectory;
+        Assert.IsFalse(File.Exists(Path.Combine(dir, "Titanium.Plus.dll")));
+        var before = SnapshotFileNames(dir);
 
         var plusSource = CliProcessHarness.LocatePlusDll();
-        using var feed = new FakeUpdateFeed(harness.CliDirectory, plusSource, version: "99.0.0");
+        using var feed = new FakeUpdateFeed(dir, plusSource, version: "99.0.0");
         var env = new Dictionary<string, string?> { ["TITANIUM_UPDATE_FEED"] = feed.ManifestUrl };
         var (code, stdout, stderr) = await harness.RunOnceAsync(
             ["update", "--plus"],
             timeout: TimeSpan.FromMinutes(2),
             env: env);
         Assert.AreEqual(0, code, stdout + stderr);
+        Assert.IsTrue(File.Exists(Path.Combine(dir, "Titanium.Plus.dll")), "Plus.dll should be installed");
+        Assert.IsTrue(File.Exists(Path.Combine(dir, "Titanium.Plus.files")), "bundle file list should be installed");
         Assert.IsTrue(
-            File.Exists(Path.Combine(harness.CliDirectory, "Titanium.Plus.dll")),
-            "Plus.dll should be installed beside isolated CLI");
+            File.Exists(Path.Combine(dir, "StackExchange.Redis.dll"))
+            || File.Exists(Path.Combine(dir, "Titanium.Xds.dll")),
+            "bundle should add a Plus dependency that the MIT CLI does not ship");
         StringAssert.Contains(stdout + stderr, "Plus", StringComparison.OrdinalIgnoreCase);
+
+        var (versionCode, versionOut, versionErr) = await harness.RunOnceAsync(
+            ["version", "--plus"],
+            env: env);
+        var versionText = versionOut + versionErr;
+        Assert.AreEqual(0, versionCode, versionText);
+        StringAssert.Contains(versionText, "RequiredAbstractions");
+        Assert.IsFalse(versionText.Contains("Failed to load", StringComparison.OrdinalIgnoreCase), versionText);
+        Assert.IsFalse(versionText.Contains("not present", StringComparison.OrdinalIgnoreCase), versionText);
+
+        var (removeCode, removeOut, removeErr) = await harness.RunOnceAsync(["update", "--remove-plus"]);
+        Assert.AreEqual(0, removeCode, removeOut + removeErr);
+        CollectionAssert.AreEqual(before, SnapshotFileNames(dir));
     }
+
+    [TestMethod]
+    [TestCategory("E2E")]
+    public async Task Update_Plus_LegacyAsset_InstallsDllOnly()
+    {
+        using var harness = CliProcessHarness.CreateIsolatedCopy(copyPlus: false);
+        harness.EnsurePlusDllBesideCli(copy: false);
+        var dir = harness.CliDirectory;
+        var before = SnapshotFileNames(dir);
+
+        var plusSource = CliProcessHarness.LocatePlusDll();
+        using var feed = new FakeUpdateFeed(
+            dir, plusSource, version: "99.0.0", layout: PlusFeedLayout.AssetOnly);
+        var env = new Dictionary<string, string?> { ["TITANIUM_UPDATE_FEED"] = feed.ManifestUrl };
+        var (code, stdout, stderr) = await harness.RunOnceAsync(
+            ["update", "--plus"],
+            timeout: TimeSpan.FromMinutes(2),
+            env: env);
+        Assert.AreEqual(0, code, stdout + stderr);
+        Assert.IsTrue(File.Exists(Path.Combine(dir, "Titanium.Plus.dll")));
+        Assert.IsFalse(
+            File.Exists(Path.Combine(dir, "Titanium.Plus.files")),
+            "legacy asset install must not write the bundle file list");
+
+        var (removeCode, removeOut, removeErr) = await harness.RunOnceAsync(["update", "--remove-plus"]);
+        Assert.AreEqual(0, removeCode, removeOut + removeErr);
+        CollectionAssert.AreEqual(before, SnapshotFileNames(dir));
+    }
+
+    private static string[] SnapshotFileNames(string directory) =>
+        Directory.GetFiles(directory)
+            .Select(Path.GetFileName)
+            .Where(static name => name is not null)
+            .Cast<string>()
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
 
     [TestMethod]
     [TestCategory("E2E")]

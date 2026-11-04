@@ -13,7 +13,7 @@ CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, hea
 
 ## License
 
-The Library and CLI are [MIT](https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE). Inspector and Plus are [PolyForm Noncommercial 1.0.0](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt).
+The Library and CLI are [MIT](https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE). Inspector, Plus, the xDS satellite (`Titanium.Xds`), and the GeoIP satellite (`Titanium.Cli.GeoIp`) are [PolyForm Noncommercial 1.0.0](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protocol definitions keep Apache-2.0 attribution in `src/Titanium.Xds/NOTICE`.
 
 Plus and Inspector may be used for personal, research, education, government, and charity purposes. Commercial use of those two products needs a separate agreement. They are not a paid SKU in the open repository.
 

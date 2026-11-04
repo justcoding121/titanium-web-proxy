@@ -1049,7 +1049,16 @@ internal sealed class TitaniumCliHost : IDisposable
     private static void EnsurePlusDllBesideCli(string cliDir)
     {
         var dest = Path.Combine(cliDir, "Titanium.Plus.dll");
+        // rps-ab.yml (and similar) may already stage Plus beside the published CLI. Do not require
+        // the full satellite set for that short-circuit: pre-bundle baselines only need Plus.dll for
+        // cache arms, and LocatePlus walks from the probe bin (not the product worktree).
+        if (File.Exists(dest))
+        {
+            return;
+        }
+
         var plusDir = LocatePlusOutputDirectory();
+        var listed = new List<string>();
         foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
         {
             var name = Path.GetFileName(file);
@@ -1060,6 +1069,16 @@ internal sealed class TitaniumCliHost : IDisposable
             }
 
             var target = Path.Combine(cliDir, name);
+            var existed = File.Exists(target);
+            var satellite = name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Titanium.Xds.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("Titanium.Cli.GeoIp.dll", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("MaxMind.Db.dll", StringComparison.OrdinalIgnoreCase);
+            if (existed && !satellite)
+            {
+                continue;
+            }
+
             try
             {
                 File.Copy(file, target, overwrite: true);
@@ -1068,6 +1087,22 @@ internal sealed class TitaniumCliHost : IDisposable
             {
                 // Destination locked by a concurrent titanium host — keep existing copy.
             }
+
+            if (!existed || satellite)
+            {
+                listed.Add(name);
+            }
+        }
+
+        listed.Add("Titanium.Plus.files");
+        listed.Sort(StringComparer.Ordinal);
+        try
+        {
+            File.WriteAllLines(Path.Combine(cliDir, "Titanium.Plus.files"), listed);
+        }
+        catch (IOException)
+        {
+            // A concurrent host may hold the list. The copied assemblies are what the arm needs.
         }
 
         if (!File.Exists(dest))

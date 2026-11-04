@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Plus.Clusters;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Http2;
@@ -16,7 +17,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 public class ClusterGrpcHealthProberTests
 {
     [TestCleanup]
-    public void Restore() => ClusterHealthProber.ProbeOverride = null;
+    public void Restore() => ActiveHealthProber.ProbeOverride = null;
 
     [TestMethod]
     [Timeout(60_000)]
@@ -62,11 +63,11 @@ public class ClusterGrpcHealthProberTests
         };
         var manager = new ClusterManager();
         await manager.ApplyAsync([new ClusterConfig { Id = cluster.Id, Destinations = cluster.Destinations }]);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
-        ClusterHealthProber.ProbeOverride = (_, _) => Task.FromResult(false);
+        using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
+        ActiveHealthProber.ProbeOverride = (_, _) => Task.FromResult(false);
         await prober.ProbeOnceAsync();
         Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("g"));
-        ClusterHealthProber.ProbeOverride = null;
+        ActiveHealthProber.ProbeOverride = null;
 
         // Cold h2c under CI load can miss the first real probe; a short retry stays in-test.
         DestinationState state = DestinationState.Unhealthy;

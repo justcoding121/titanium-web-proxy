@@ -587,16 +587,17 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     When <see langword="true"/>, the proxy enables RFC 8441 WebSocket-over-HTTP/2 and RFC 9220
-    ///     WebSocket-over-HTTP/3 (HTTP/1.1 origins only for HTTP/3 in this release):
+    ///     WebSocket-over-HTTP/3 (HTTP/1.1, HTTP/2, and HTTP/3 origins for HTTP/3 clients):
     ///     <list type="bullet">
     ///       <item>
     ///         <description>
     ///           Accepts extended CONNECT (<c>:protocol = websocket</c>) from h2 and h3 clients and
     ///           advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL=1</c> to them. Per origin: if the
-    ///           origin is HTTP/2 and advertises RFC 8441 support, DATA frames are relayed directly;
-    ///           if the origin is HTTP/2 and does not, the stream is reset with
-    ///           <c>REFUSED_STREAM</c>; if the origin is HTTP/1.1, the h2→h1 or h3→h1 WebSocket
-    ///           upgrade bridge is used.
+    ///           origin is HTTP/2 or HTTP/3 and advertises CONNECT-protocol support, DATA frames are
+    ///           relayed directly; if an h2 client reaches an HTTP/2 origin that does not, the stream
+    ///           is reset with <c>REFUSED_STREAM</c>; if an h3 client reaches an HTTP/2 or HTTP/3
+    ///           origin that does not, the proxy falls back to an HTTP/1.1 WebSocket upgrade; if the
+    ///           origin is HTTP/1.1, the h2→h1 or h3→h1 WebSocket upgrade bridge is used.
     ///         </description>
     ///       </item>
     ///       <item>

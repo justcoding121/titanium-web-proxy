@@ -17,11 +17,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions;
-using Titanium.Web.Proxy.Caching;
+using Titanium.Plus.Caching;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.IntegrationTests;
+namespace Titanium.Plus.Tests;
 
 /// <summary>
 /// The response cache against real sockets, on every response path the proxy has: the session-less terminate-lite

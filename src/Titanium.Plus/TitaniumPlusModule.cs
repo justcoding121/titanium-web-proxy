@@ -1,4 +1,6 @@
 using Titanium.Plus.Audit;
+using Titanium.Plus.Caching;
+using Titanium.Plus.Clusters;
 using Titanium.Plus.ControlPlane;
 using Titanium.Plus.Dashboard;
 using Titanium.Plus.Discovery;
@@ -11,6 +13,7 @@ using Titanium.Plus.Security;
 using Titanium.Plus.Security.Oidc;
 using Titanium.Plus.State;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Clusters;
 namespace Titanium.Plus;
 
 /// <summary>
@@ -26,6 +29,10 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
     public void Apply(PlusActivationContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        // Before the control plane (it purges this cache) and before access control, WAF, and shared state,
+        // so a cache hit stays ahead of those modules. The host's pre-Plus middleware, if any, is already in the list.
+        ResponseCacheConfiguration.Install(context);
 
         var options = context.Options ?? new Dictionary<string, string>();
         var secret = options.GetValueOrDefault("controlPlane.sharedSecret")
@@ -109,6 +116,12 @@ public sealed class TitaniumPlusModule : ITitaniumPlusModule
             });
         dashboard.Start();
         PlusLog.Info(context, $"Plus dashboard listening on {dashboard.Prefix}");
+
+        // healthCheck.active probes start for every loaded Plus module.
+        if (context.ClusterManager is ClusterManager clusters)
+        {
+            clusters.ActiveHealthProbeProvider = new ActiveHealthProbeProvider();
+        }
 
         // Stretch modules — activate only when configured.
         _ = ServiceDiscovery.TryStart(context, options);

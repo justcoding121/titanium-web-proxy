@@ -4,8 +4,10 @@ using System.Globalization;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Plugins;
+using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
@@ -13,7 +15,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Models;
 
-namespace Titanium.Web.Proxy.Caching;
+namespace Titanium.Plus.Caching;
 
 /// <summary>
 /// Shared GET/HEAD response cache implementing an RFC 9111 subset (see <see cref="HttpCachePolicy"/>): freshness from
@@ -27,12 +29,12 @@ namespace Titanium.Web.Proxy.Caching;
 /// <c>Authorization</c> or <c>Cookie</c> (unless explicitly allowed); the scheme, host, path and query, the normalized
 /// Accept-Encoding and the headers a response names in <c>Vary</c> are the only things that select an entry.
 /// </remarks>
-public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
+public sealed class HttpResponseCacheMiddleware : IProxyMiddleware, IResponseCacheEngine
 {
     /// <summary>Largest body the H1 terminate-lite path coalesces without a streaming tee.</summary>
-    internal const int MaxCachedBodyBytes = 64 * 1024;
+    internal const int MaxCachedBodyBytes = ResponseCacheLimits.MaxCachedBodyBytes;
 
-    internal const string StateItemKey = "twp.cache.state";
+    internal const string StateItemKey = ResponseCacheItems.StateKey;
 
     private readonly IHttpResponseCache _cache;
     private readonly ResponseCacheOptions _options;
@@ -65,7 +67,12 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
         }
     }
 
-    internal int MaxEntryBytes => _options.MaxEntryBytes;
+    /// <summary>Largest body this cache will store.</summary>
+    public int MaxEntryBytes => _options.MaxEntryBytes;
+
+    /// <inheritdoc />
+    public ICacheBodyTee CreateBodyTee(long expectedLength) =>
+        new ResponseBodyTee(MaxEntryBytes, expectedLength > 0 && expectedLength <= int.MaxValue ? (int)expectedLength : -1);
 
     internal bool ExposeHeaders => _options.ExposeHeaders;
 
@@ -516,32 +523,15 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
     }
 
     /// <summary>Answer a session with a cached response. Framing headers come from the cache; the body is already wire-encoded.</summary>
-    internal static void RespondFromCache(SessionEventArgs session, CachedServe serve, bool closeServerConnection)
-    {
-        var response = new GenericResponse((HttpStatusCode)serve.StatusCode);
-        response.HttpVersion = session.HttpClient.Request.HttpVersion;
-        Populate(response, serve.Headers, serve.Body);
-        session.Respond(response, closeServerConnection);
-    }
+    internal static void RespondFromCache(SessionEventArgs session, CachedServe serve, bool closeServerConnection) =>
+        CacheSessionSlot.RespondFromCache(session, serve, closeServerConnection);
 
-    /// <summary>
-    /// Fill a response from cached headers and an already wire-encoded body. The body goes first because assigning it
-    /// stamps a Content-Length; the stored one then replaces that, so a HEAD or 304 answer keeps the representation's
-    /// length with an empty body, and the body is never compressed a second time.
-    /// </summary>
+    /// <inheritdoc cref="CacheSessionSlot.Populate"/>
     internal static void Populate(
         Response response,
         IReadOnlyList<KeyValuePair<string, string>> headers,
-        byte[] body)
-    {
-        response.Body = body;
-        response.BodyIsWireEncoded = true;
-        response.Headers.RemoveHeader("Content-Length");
-        foreach (var h in headers)
-        {
-            response.Headers.AddHeader(h.Key, h.Value);
-        }
-    }
+        byte[] body) =>
+        CacheSessionSlot.Populate(response, headers, body);
 
     private static void RespondGatewayTimeout(ProxyMiddlewareContext context)
     {
@@ -567,56 +557,36 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
     }
 
     /// <summary>The cache state a terminate-lite request carries out of the middleware chain, if any.</summary>
-    internal static CacheRequestState? StateOf(ProxyMiddlewareContext context) =>
-        context.Items.TryGetValue(StateItemKey, out var value) ? value as CacheRequestState : null;
+    internal static ICacheRequestState? StateOf(ProxyMiddlewareContext context) =>
+        CacheSessionSlot.StateOf(context);
 
     /// <summary>Adds If-None-Match / If-Modified-Since from the stale entry to the request headed for the origin.</summary>
-    internal static void ApplyConditionalHeaders(CacheRequestState st, HeaderCollection headers)
+    internal static void ApplyConditionalHeaders(ICacheRequestState st, HeaderCollection headers) =>
+        CacheSessionSlot.ApplyConditionalHeaders(st, headers);
+
+    /// <inheritdoc cref="IResponseCacheEngine.ConditionalValidators"/>
+    public (string? IfNoneMatch, string? IfModifiedSince) ConditionalValidators(ICacheRequestState state)
     {
+        var st = (CacheRequestState)state;
         if (st.Stale is not { } stale || !st.Conditional)
         {
-            return;
+            return default;
         }
 
-        if (HttpCachePolicy.ETagOf(stale) is { } etag)
-        {
-            headers.RemoveHeader("If-None-Match");
-            headers.AddHeader("If-None-Match", etag);
-        }
-
-        if (HttpCachePolicy.LastModifiedOf(stale) is { } modified)
-        {
-            headers.RemoveHeader("If-Modified-Since");
-            headers.AddHeader("If-Modified-Since", modified);
-        }
+        return (HttpCachePolicy.ETagOf(stale), HttpCachePolicy.LastModifiedOf(stale));
     }
 
     // ------------------------------------------------------------------------------------------------ response side
 
-    internal enum OriginAction
-    {
-        /// <summary>Relay the origin response untouched.</summary>
-        Pass,
-
-        /// <summary>Send <see cref="OriginDecision.Serve"/> instead of the origin response.</summary>
-        Serve,
-
-        /// <summary>The body is small and known: read it whole, then call <see cref="CompleteStore"/>.</summary>
-        StoreBuffered,
-
-        /// <summary>The body streams: tee it while relaying, then call <see cref="CompleteStore"/> with the result.</summary>
-        StoreStreamed,
-    }
-
-    internal readonly struct OriginDecision
-    {
-        public OriginAction Action { get; init; }
-        public CachedServe? Serve { get; init; }
-        public HttpCachePolicy.StorePlan? Plan { get; init; }
-        public long ContentLength { get; init; }
-
-        public static OriginDecision Pass => default;
-    }
+    /// <inheritdoc cref="IResponseCacheEngine.OnOriginResponse"/>
+    public OriginDecision OnOriginResponse(
+        ICacheRequestState state,
+        int statusCode,
+        IReadOnlyList<KeyValuePair<string, string>> headers,
+        bool hasBody,
+        long contentLength,
+        bool chunked) =>
+        OnOriginResponse((CacheRequestState)state, statusCode, headers, hasBody, contentLength, chunked);
 
     /// <summary>
     /// Called with an origin response's status line and headers, before any of the body is relayed. Decides whether to
@@ -745,6 +715,10 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
                 notModified: false),
         };
     }
+
+    /// <inheritdoc cref="IResponseCacheEngine.CompleteStore"/>
+    public void CompleteStore(ICacheRequestState state, CacheStorePlan plan, byte[]? body, long expectedLength) =>
+        CompleteStore((CacheRequestState)state, (HttpCachePolicy.StorePlan)plan, body, expectedLength);
 
     /// <summary>Store the finished body for the request. A body whose length disagrees with a declared length is never stored.</summary>
     internal void CompleteStore(CacheRequestState st, HttpCachePolicy.StorePlan plan, byte[]? body, long expectedLength)
@@ -966,20 +940,12 @@ public sealed class HttpResponseCacheMiddleware : IProxyMiddleware
             });
     }
 
-    internal static List<KeyValuePair<string, string>> Snapshot(IEnumerable<HttpHeader> headers)
-    {
-        var list = new List<KeyValuePair<string, string>>();
-        foreach (var h in headers)
-        {
-            list.Add(new KeyValuePair<string, string>(h.Name, h.Value));
-        }
-
-        return list;
-    }
+    internal static List<KeyValuePair<string, string>> Snapshot(IEnumerable<HttpHeader> headers) =>
+        CacheSessionSlot.Snapshot(headers);
 }
 
 /// <summary>What the cache knows about one in-flight request between the middleware and the origin response.</summary>
-internal sealed class CacheRequestState
+internal sealed class CacheRequestState : ICacheRequestState
 {
     private readonly HttpResponseCacheMiddleware _owner;
     private int _abandoned;
@@ -987,6 +953,8 @@ internal sealed class CacheRequestState
     public CacheRequestState(HttpResponseCacheMiddleware owner) => _owner = owner;
 
     public HttpResponseCacheMiddleware Owner => _owner;
+
+    IResponseCacheEngine ICacheRequestState.Owner => _owner;
 
     public required bool IsHead { get; init; }
     public required string Host { get; init; }
@@ -1020,12 +988,4 @@ internal sealed class CacheRequestState
             _owner.ReleaseFlight(flight);
         }
     }
-}
-
-/// <summary>A cached response ready to be written to a client.</summary>
-internal sealed class CachedServe
-{
-    public required int StatusCode { get; init; }
-    public required List<KeyValuePair<string, string>> Headers { get; init; }
-    public required byte[] Body { get; init; }
 }

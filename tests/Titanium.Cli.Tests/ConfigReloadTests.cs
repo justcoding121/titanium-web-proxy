@@ -5,7 +5,6 @@ using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Abstractions.Routing;
-using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration.Models;
 
@@ -107,7 +106,6 @@ public class ConfigReloadTests
             routes,
             middleware: [],
             loadBalancer: new LoadBalancer(),
-            responseCache: new MemoryHttpResponseCache(),
             plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             getGrpc: static () => null,
             setGrpc: static _ => { },
@@ -165,7 +163,6 @@ public class ConfigReloadTests
                 routes,
                 middleware: [],
                 loadBalancer: new LoadBalancer(),
-                responseCache: new MemoryHttpResponseCache(),
                 plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 getGrpc: static () => null,
                 setGrpc: static _ => { },
@@ -221,7 +218,6 @@ public class ConfigReloadTests
             routes,
             middleware: [],
             loadBalancer: new LoadBalancer(),
-            responseCache: new MemoryHttpResponseCache(),
             plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             getGrpc: static () => null,
             setGrpc: static _ => { },
@@ -273,7 +269,6 @@ public class ConfigReloadTests
             routes,
             middleware: [],
             loadBalancer: new LoadBalancer(),
-            responseCache: new MemoryHttpResponseCache(),
             plusOptions: new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
             getGrpc: static () => null,
             setGrpc: static _ => { },

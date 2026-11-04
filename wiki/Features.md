@@ -10,7 +10,7 @@ Short catalog of what Titanium offers. Product how-tos live on the **[website Fe
 - **Kubernetes** — hardened container image, Helm chart, Gateway API and Ingress controller ([Kubernetes](Kubernetes), [Gateway API](Gateway-API))
 - **Per-route .NET plugins** — load your own `IProxyMiddleware` for chosen routes, with per-plugin timeout and fail-open or fail-closed isolation ([Plugins](https://titaniumproxy.com/docs/plugins))
 - **Library** — embed the same engine in .NET ([Library](https://titaniumproxy.com/docs/library)); wiki Home below covers the API in depth
-- **Plus** — optional dashboard (local users, OIDC SSO, break-glass), metrics, auth, OpenID Connect login, GeoIP, xDS ADS client, active health, fleet rate limits, managed fleet agent, response cache, WAF request screening (detect mode, anomaly scoring), gRPC-JSON ([Plus](https://titaniumproxy.com/docs/plus), [Manager](https://titaniumproxy.com/docs/manager))
+- **Plus** — optional dashboard (local users, OIDC SSO, break-glass), metrics, auth, OpenID Connect login, GeoIP, xDS ADS client, active health, fleet rate limits, managed fleet agent, response cache, WAF request screening (detect mode, anomaly scoring), gRPC-JSON. Install with `titanium update --plus` (bundle includes xDS/GeoIP satellites). ([Plus](https://titaniumproxy.com/docs/plus), [Manager](https://titaniumproxy.com/docs/manager), [Migration from 7.x](Migration-from-7.x))
 
 ## By product
 

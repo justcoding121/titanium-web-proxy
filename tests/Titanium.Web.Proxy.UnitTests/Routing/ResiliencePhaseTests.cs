@@ -40,43 +40,6 @@ public class ResiliencePhaseTests
     }
 
     [TestMethod]
-    public async Task ActiveProbe_EjectsAndRestoresOnlyDestinationsItMarked()
-    {
-        ClusterHealthProber.ProbeOverride = (_, _) => Task.FromResult(false);
-        try
-        {
-            var manager = new ClusterManager();
-            var cluster = Cluster();
-            cluster = new ClusterConfig
-            {
-                Id = "c",
-                Retry = cluster.Retry,
-                HealthCheck = new HealthCheckConfig
-                {
-                    Active = new ActiveHealthConfig { Enabled = true, HealthyThreshold = 1, UnhealthyThreshold = 1 },
-                },
-                Destinations = cluster.Destinations,
-            };
-            await manager.ApplyAsync([cluster]);
-            Assert.AreEqual(1, manager.ActiveBackgroundTaskCount);
-            await manager.ProbeActiveOnceAsync();
-            Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("a"));
-
-            manager.SetDestinationState("b", DestinationState.Maintenance);
-            ClusterHealthProber.ProbeOverride = (_, _) => Task.FromResult(true);
-            await manager.ProbeActiveOnceAsync();
-            Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("a"));
-            Assert.AreEqual(DestinationState.Maintenance, manager.GetDestinationState("b"));
-            await manager.DisposeAsync();
-            Assert.AreEqual(0, manager.ActiveBackgroundTaskCount);
-        }
-        finally
-        {
-            ClusterHealthProber.ProbeOverride = null;
-        }
-    }
-
-    [TestMethod]
     public async Task MaxConcurrent_AndPriority_AndSlowStart()
     {
         var time = new Support.ManualTimeProvider();

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Plus.Clusters;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Clusters;
 
@@ -17,7 +18,7 @@ namespace Titanium.Web.Proxy.UnitTests.Routing;
 public class ClusterHealthProberTests
 {
     [TestCleanup]
-    public void Restore() => ClusterHealthProber.ProbeOverride = null;
+    public void Restore() => ActiveHealthProber.ProbeOverride = null;
 
     private static ClusterConfig Cluster(ActiveHealthConfig active, params DestinationConfig[] destinations) => new()
     {
@@ -59,10 +60,10 @@ public class ClusterHealthProberTests
     public async Task ThresholdsDecideWhenADestinationLeavesAndRejoins()
     {
         var healthy = true;
-        ClusterHealthProber.ProbeOverride = (dest, _) => Task.FromResult(dest.Id == "a" || healthy);
+        ActiveHealthProber.ProbeOverride = (dest, _) => Task.FromResult(dest.Id == "a" || healthy);
         var cluster = Cluster(new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, UnhealthyThreshold = 2, HealthyThreshold = 2 }, Dest("a"), Dest("b"));
         var manager = await ManagerAsync(cluster);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+        using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
 
         healthy = false;
         await prober.ProbeOnceAsync();
@@ -81,11 +82,11 @@ public class ClusterHealthProberTests
     [TestMethod]
     public async Task ADestinationEjectedByAnotherSourceIsNotRestoredByTheProbe()
     {
-        ClusterHealthProber.ProbeOverride = (_, _) => Task.FromResult(true);
+        ActiveHealthProber.ProbeOverride = (_, _) => Task.FromResult(true);
         var cluster = Cluster(new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, HealthyThreshold = 1 }, Dest("a"));
         var manager = await ManagerAsync(cluster);
         manager.SetDestinationState("a", DestinationState.Maintenance);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+        using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
         await prober.ProbeOnceAsync();
         Assert.AreEqual(DestinationState.Maintenance, manager.GetDestinationState("a"));
     }
@@ -93,7 +94,7 @@ public class ClusterHealthProberTests
     [TestMethod]
     public async Task SlowDestinationsAreProbedTogether_NotOneAfterAnother()
     {
-        ClusterHealthProber.ProbeOverride = async (_, _) =>
+        ActiveHealthProber.ProbeOverride = async (_, _) =>
         {
             await Task.Delay(400, CancellationToken.None);
             return false;
@@ -102,7 +103,7 @@ public class ClusterHealthProberTests
             new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, UnhealthyThreshold = 1 },
             Dest("a"), Dest("b"), Dest("c"), Dest("d"));
         var manager = await ManagerAsync(cluster);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+        using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
 
         var watch = System.Diagnostics.Stopwatch.StartNew();
         await prober.ProbeOnceAsync();
@@ -134,7 +135,7 @@ public class ClusterHealthProberTests
                 new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, TimeoutSeconds = 2, UnhealthyThreshold = 1, HealthyThreshold = 1 },
                 new DestinationConfig { Id = "u", Address = "unix:" + path });
             var manager = await ManagerAsync(cluster);
-            using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+            using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
 
             await prober.ProbeOnceAsync();
             Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("u"));
@@ -157,14 +158,14 @@ public class ClusterHealthProberTests
     public async Task DisabledProbe_DoesNothing()
     {
         var calls = 0;
-        ClusterHealthProber.ProbeOverride = (_, _) =>
+        ActiveHealthProber.ProbeOverride = (_, _) =>
         {
             calls++;
             return Task.FromResult(false);
         };
         var cluster = Cluster(new ActiveHealthConfig { Enabled = false }, Dest("a"));
         var manager = await ManagerAsync(cluster);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+        using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
         await prober.ProbeOnceAsync();
         Assert.AreEqual(0, calls);
     }
@@ -179,7 +180,7 @@ public class ClusterHealthProberTests
             new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, Kind = ActiveHealthKind.Tcp, TimeoutSeconds = 2, UnhealthyThreshold = 1, HealthyThreshold = 1 },
             Dest("up", port));
         var manager = await ManagerAsync(cluster);
-        using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+        using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
         await prober.ProbeOnceAsync();
         Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("up"));
 
@@ -200,7 +201,7 @@ public class ClusterHealthProberTests
                 Dest("web", port));
             var manager = await ManagerAsync(cluster);
             manager.SetDestinationState("web", DestinationState.Unhealthy);
-            using var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+            using var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
             await prober.ProbeOnceAsync();
             await serve;
             Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("web"), "only probe-ejected destinations are restored");
@@ -222,14 +223,14 @@ public class ClusterHealthProberTests
                 new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, TimeoutSeconds = 3, ExpectedStatus = [204], Query = "?x=1", UnhealthyThreshold = 1 },
                 Dest("web", port));
             var manager = await ManagerAsync(strict);
-            using var prober = new ClusterHealthProber(manager, strict, TimeProvider.System);
+            using var prober = new ActiveHealthProber(manager, strict, TimeProvider.System);
             await prober.ProbeOnceAsync();
             Assert.AreEqual(DestinationState.Unhealthy, manager.GetDestinationState("web"), "200 is not in the expected list");
 
             var lenient = Cluster(
                 new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, TimeoutSeconds = 3, ExpectedStatus = [200, 204], UnhealthyThreshold = 1, HealthyThreshold = 1 },
                 Dest("web", port));
-            using var second = new ClusterHealthProber(manager, lenient, TimeProvider.System);
+            using var second = new ActiveHealthProber(manager, lenient, TimeProvider.System);
             await second.ProbeOnceAsync();
             await serve;
         }
@@ -244,7 +245,7 @@ public class ClusterHealthProberTests
     {
         var cluster = Cluster(new ActiveHealthConfig { Enabled = true, IntervalSeconds = 3600, JitterPercent = 50 }, Dest("a"));
         var manager = await ManagerAsync(cluster);
-        var prober = new ClusterHealthProber(manager, cluster, TimeProvider.System);
+        var prober = new ActiveHealthProber(manager, cluster, TimeProvider.System);
         await Task.Delay(30);
         prober.Dispose();
         Assert.IsTrue(prober.IsStoppedForTests, "the first dispose stops the probe loop");

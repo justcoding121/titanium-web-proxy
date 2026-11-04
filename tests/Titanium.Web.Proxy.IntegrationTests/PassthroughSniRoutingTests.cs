@@ -14,6 +14,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions;
+using Titanium.Plus.Clusters;
 using Titanium.Web.Proxy.Abstractions.Clusters;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Models;
@@ -430,6 +431,7 @@ public class PassthroughSniRoutingTests
             },
         };
         await using var rig = await Rig.StartAsync(_ => { }, cluster);
+        rig.Manager.ActiveHealthProbeProvider = new ActiveHealthProbeProvider();
 
         var bytes = await received.WaitAsync(Step);
 

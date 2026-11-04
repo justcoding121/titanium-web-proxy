@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Titanium.Cli.Config;
-using Titanium.Web.Proxy.Caching;
+using Titanium.Plus.Caching;
 
-namespace Titanium.Cli.Tests;
+
+namespace Titanium.Plus.Tests;
 
 [TestClass]
 public class ResponseCacheOptionsParsingTests
@@ -24,7 +24,7 @@ public class ResponseCacheOptionsParsingTests
     public void Defaults_Are64MiB_1MiB_AndConservative()
     {
         var warnings = new List<string>();
-        var parsed = RunCommand.ParseResponseCacheOptions(Opts(("cache.enable", "true")), warnings.Add);
+        var parsed = ResponseCacheConfiguration.Parse(Opts(("cache.enable", "true")), warnings.Add);
 
         Assert.AreEqual(64L * 1024 * 1024, parsed.MaxBytes);
         Assert.AreEqual(1024 * 1024, parsed.Entry.MaxEntryBytes);
@@ -39,7 +39,7 @@ public class ResponseCacheOptionsParsingTests
     public void Keys_AreApplied()
     {
         var warnings = new List<string>();
-        var parsed = RunCommand.ParseResponseCacheOptions(Opts(
+        var parsed = ResponseCacheConfiguration.Parse(Opts(
             ("cache.maxBytes", "1048576"),
             ("cache.maxEntryBytes", "65536"),
             ("cache.exposeHeaders", "true"),
@@ -72,7 +72,7 @@ public class ResponseCacheOptionsParsingTests
     public void InvalidValues_WarnAndFallBackToDefaults(string key, string value)
     {
         var warnings = new List<string>();
-        var parsed = RunCommand.ParseResponseCacheOptions(Opts((key, value)), warnings.Add);
+        var parsed = ResponseCacheConfiguration.Parse(Opts((key, value)), warnings.Add);
 
         Assert.AreEqual(1, warnings.Count, string.Join("|", warnings));
         StringAssert.Contains(warnings[0], key);
@@ -85,7 +85,7 @@ public class ResponseCacheOptionsParsingTests
     public void EntryLimit_AboveTheTotalBudget_IsClamped()
     {
         var warnings = new List<string>();
-        var parsed = RunCommand.ParseResponseCacheOptions(Opts(
+        var parsed = ResponseCacheConfiguration.Parse(Opts(
             ("cache.maxBytes", "65536"), ("cache.maxEntryBytes", "1048576")), warnings.Add);
 
         Assert.AreEqual(1, warnings.Count);

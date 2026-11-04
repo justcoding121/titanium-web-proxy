@@ -6,9 +6,7 @@ using Titanium.Cli.Config;
 using Titanium.Cli.Service;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Abstractions.Clusters;
-using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.Abstractions.Routing;
-using Titanium.Web.Proxy.Caching;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 
@@ -166,36 +164,12 @@ public class RunCommandListenerCoverageTests
 
         Assert.IsTrue((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = true }, true)!);
         Assert.IsFalse((bool)Invoke("ResolveListenerHttp3", new ListenerConfig { EnableHttp3 = false }, true)!);
-        Assert.IsTrue((bool)Invoke("IsTruthy",
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["k"] = "true" }, "k")!);
-        Assert.IsFalse((bool)Invoke("IsTruthy",
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["k"] = "0" }, "k")!);
 
         Invoke("StartAcmeIfConfigured", proxy, new TwpConfig());
         Invoke("StartAcmeIfConfigured", proxy, new TwpConfig
         {
             Certificates = new CertificatesConfig { AcmeEmail = "a@b.test", AcmeDomain = "b.test" },
         });
-        var middleware = new List<IProxyMiddleware>();
-        Invoke("ConfigureResponseCache", middleware, new MemoryHttpResponseCache(),
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["cache.enable"] = "true",
-                ["cache.maxEntries"] = "16",
-            }, new Titanium.Web.Proxy.Caching.ResponseCacheOptions(), true);
-        Assert.AreEqual(1, middleware.Count);
-        Assert.IsInstanceOfType<Titanium.Web.Proxy.Caching.HttpResponseCacheMiddleware>(middleware[0]);
-        var disabled = new List<IProxyMiddleware>();
-        Invoke("ConfigureResponseCache", disabled, new MemoryHttpResponseCache(),
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-            new Titanium.Web.Proxy.Caching.ResponseCacheOptions(), true);
-        Assert.AreEqual(0, disabled.Count);
-        var plusOff = new List<IProxyMiddleware>();
-        Invoke("ConfigureResponseCache", plusOff, new MemoryHttpResponseCache(),
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["cache.enable"] = "true" },
-            new Titanium.Web.Proxy.Caching.ResponseCacheOptions(), false);
-        Assert.AreEqual(0, plusOff.Count);
-
         RunCommand.ConfigureProxyFlags(proxy, new TwpConfig
         {
             Listeners = [new ListenerConfig { EnableHttp2 = false, EnableHttp3 = false }],

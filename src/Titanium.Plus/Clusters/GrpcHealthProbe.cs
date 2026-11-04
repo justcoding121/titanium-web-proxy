@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Titanium.Web.Proxy.Clusters;
+namespace Titanium.Plus.Clusters;
 
 /// <summary>Hand-coded grpc.health.v1.Health/Check for active probes (no protobuf dependency).</summary>
 internal static class GrpcHealthProbe

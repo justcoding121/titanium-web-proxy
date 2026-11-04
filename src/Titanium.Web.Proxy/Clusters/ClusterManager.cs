@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
@@ -20,7 +19,9 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
 {
     private ImmutableClusterSnapshot _snapshot = ImmutableClusterSnapshot.Empty;
     private readonly List<DestinationHealthTracker> _healthTrackers = new();
-    private readonly List<ClusterHealthProber> _probers = new();
+    private readonly object _backgroundGate = new();
+    private readonly List<IDisposable> _background = new();
+    private IActiveHealthProbeProvider? _activeHealthProbeProvider;
     private readonly ConcurrentDictionary<string, IPAddress> _resolved = new(StringComparer.Ordinal);
     private readonly TimeProvider _time;
     private string? _localZone;
@@ -82,8 +83,33 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
     internal bool TryGetResolved(string destinationId, out IPAddress address) =>
         _resolved.TryGetValue(destinationId, out address!);
 
-    /// <summary>Background probers and refreshers. Zero until a later phase starts one.</summary>
+    /// <summary>DNS refreshers plus active health probes. Zero when neither is running.</summary>
     internal int ActiveBackgroundTaskCount { get; private set; }
+
+    /// <summary>
+    ///     Active probes for <c>healthCheck.active</c>. When this is null, <c>healthCheck.active</c> stays inactive:
+    ///     core refreshes DNS and leaves destination health to passive checks and other callers.
+    ///     Assigning a provider reconciles the clusters already applied and starts a probe for each one whose
+    ///     active check is enabled. Titanium Plus assigns a provider when the Plus module loads.
+    /// </summary>
+    public IActiveHealthProbeProvider? ActiveHealthProbeProvider
+    {
+        get
+        {
+            lock (_backgroundGate)
+            {
+                return _activeHealthProbeProvider;
+            }
+        }
+        set
+        {
+            lock (_backgroundGate)
+            {
+                _activeHealthProbeProvider = value;
+                ReconcileProbersLocked(CurrentClusters());
+            }
+        }
+    }
 
     public void AttachHealthTracker(DestinationHealthTracker tracker)
     {
@@ -110,7 +136,6 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _ = reconcileBackground;
 
         // Read and parse each cluster's upstream TLS files now, so a request never does file I/O and the
         // pool key already holds the content fingerprint. A broken file is logged by the first request
@@ -137,7 +162,10 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
 
                 if (reconcileBackground)
                 {
-                    ReconcileProbers(clusters);
+                    lock (_backgroundGate)
+                    {
+                        ReconcileProbersLocked(clusters);
+                    }
                 }
 
                 return ValueTask.CompletedTask;
@@ -228,9 +256,18 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
 
     internal async Task ProbeActiveOnceAsync()
     {
-        foreach (var prober in _probers)
+        IDisposable[] sessions;
+        lock (_backgroundGate)
         {
-            await prober.ProbeOnceAsync().ConfigureAwait(false);
+            sessions = _background.ToArray();
+        }
+
+        foreach (var session in sessions)
+        {
+            if (session is IActiveHealthProbeSession probe)
+            {
+                await probe.ProbeOnceAsync().ConfigureAwait(false);
+            }
         }
     }
 
@@ -334,16 +371,43 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         return new ClusterRuntime(cluster, localZone);
     }
 
-    private void ReconcileProbers(IReadOnlyList<ClusterConfig> clusters)
+    private ClusterConfig[] CurrentClusters()
     {
-        StopProbers();
-        foreach (var cluster in clusters.Where(cluster =>
-                     cluster.HealthCheck?.Active is { Enabled: true } || ClusterRefreshesDns(cluster)))
+        var clusters = Snapshot.Clusters;
+        if (clusters.Count == 0)
         {
-            _probers.Add(new ClusterHealthProber(this, cluster, _time));
+            return Array.Empty<ClusterConfig>();
         }
 
-        ActiveBackgroundTaskCount = _probers.Count;
+        var list = new ClusterConfig[clusters.Count];
+        var index = 0;
+        foreach (var cluster in clusters.Values)
+        {
+            list[index++] = cluster;
+        }
+
+        return list;
+    }
+
+    /// <summary>Caller holds <see cref="_backgroundGate"/>.</summary>
+    private void ReconcileProbersLocked(IReadOnlyList<ClusterConfig> clusters)
+    {
+        StopProbersLocked();
+        var provider = _activeHealthProbeProvider;
+        foreach (var cluster in clusters)
+        {
+            if (ClusterRefreshesDns(cluster))
+            {
+                _background.Add(new ClusterDnsRefresher(this, cluster, _time));
+            }
+
+            if (cluster.HealthCheck?.Active is { Enabled: true } && provider is not null)
+            {
+                _background.Add(provider.Start(cluster, this));
+            }
+        }
+
+        ActiveBackgroundTaskCount = _background.Count;
     }
 
     private static bool ClusterRefreshesDns(ClusterConfig cluster)
@@ -359,20 +423,25 @@ public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, 
         return false;
     }
 
-    private void StopProbers()
+    /// <summary>Caller holds <see cref="_backgroundGate"/>.</summary>
+    private void StopProbersLocked()
     {
-        foreach (var prober in _probers)
+        foreach (var background in _background)
         {
-            prober.Dispose();
+            background.Dispose();
         }
 
-        _probers.Clear();
+        _background.Clear();
         ActiveBackgroundTaskCount = 0;
     }
 
     public async ValueTask DisposeAsync()
     {
-        StopProbers();
+        lock (_backgroundGate)
+        {
+            StopProbersLocked();
+        }
+
         await Task.CompletedTask;
     }
 }

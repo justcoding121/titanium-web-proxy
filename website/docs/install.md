@@ -29,7 +29,7 @@ titanium version --check
 
 Use `--channel beta` when you intentionally follow beta.
 
-**winget (Windows):** the Windows CLI is a single self-contained `titanium.exe` (plus `twp.exe`), so winget's `Links` shortcuts work. Update a winget install with `winget upgrade`, not `titanium update`. A downloaded Plus add-on may be placed beside the `Links` shortcut rather than the package folder.
+**winget (Windows):** the Windows CLI is a single self-contained `titanium.exe` (plus `twp.exe`), so winget's `Links` shortcuts work. Update a winget install with `winget upgrade`, not `titanium update`. A downloaded Plus bundle may be placed beside the `Links` shortcut rather than the package folder.
 
 ## Plus (optional ops add-on)
 
