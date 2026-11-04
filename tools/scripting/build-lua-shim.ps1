@@ -42,7 +42,7 @@ function Invoke-WebRequestWithRetry {
     for ($i = 1; $i -le $Attempts; $i++) {
         try {
             if (Test-Path $OutFile) { Remove-Item -Force $OutFile }
-            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec 45
             return
         }
         catch {

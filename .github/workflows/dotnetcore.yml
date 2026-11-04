@@ -249,10 +249,20 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
+    # Build only the projects this job tests. The full solution also builds the Lua shim,
+    # which downloads lua.org and has timed out this job before any Redis test ran.
     - name: Restore and build
       run: |
-        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
-        dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
+        set -euo pipefail
+        projects=(
+          tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj
+          tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj
+          tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj
+        )
+        for proj in "${projects[@]}"; do
+          dotnet restore "$proj" --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          dotnet build "$proj" --configuration Release --no-restore --warnaserror
+        done
     - name: Redis fleet rate-limit tests
       run: |
         dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Redis"
