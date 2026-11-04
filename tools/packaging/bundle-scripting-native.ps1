@@ -234,8 +234,12 @@ function Test-HostCanBuildRid {
         if (-not (Test-IsMacHost)) { return "$Rid must be built on macOS" }
     }
     elseif ($Rid -like "linux-musl-*") {
-        if (-not (Test-IsLinuxHost) -or -not (Test-Path "/etc/alpine-release")) {
-            return "$Rid must be built on an Alpine (musl) host/container"
+        if (-not (Test-IsLinuxHost)) { return "$Rid must be built on Linux" }
+        # Alpine container, or a musl cross/native compiler (musl-gcc) on a glibc runner.
+        # Microsoft's PowerShell Alpine images are amd64-only, so arm64 hosts use musl-gcc.
+        $muslCc = -not [string]::IsNullOrWhiteSpace($env:CC) -and ($env:CC -match 'musl')
+        if (-not (Test-Path "/etc/alpine-release") -and -not $muslCc) {
+            return "$Rid must be built on an Alpine (musl) host/container or with a musl CC"
         }
     }
     elseif ($Rid -like "linux-*") {
