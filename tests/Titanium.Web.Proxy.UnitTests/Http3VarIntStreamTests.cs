@@ -123,6 +123,23 @@ public class Http3VarIntStreamTests
         }
     }
 
+    [TestMethod]
+    public async Task ReadAsync_FourByteValue_OneByteAtATime()
+    {
+        var encoded = new byte[8];
+        var written = Http3VarInt.Write(encoded, 16384);
+        Assert.AreEqual(4, written);
+        var first = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var stream = new ScriptedReadStream(
+            first.Task,
+            Task.FromResult(new[] { encoded[1] }),
+            Task.FromResult(new[] { encoded[2] }),
+            Task.FromResult(new[] { encoded[3] }));
+        var pending = Http3VarInt.ReadAsync(stream, CancellationToken.None);
+        first.SetResult([encoded[0]]);
+        Assert.AreEqual(16384UL, await pending);
+    }
+
     private sealed class ScriptedReadStream : Stream
     {
         private readonly Queue<Task<byte[]>> chunks;

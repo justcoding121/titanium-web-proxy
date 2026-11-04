@@ -513,6 +513,27 @@ public class ResponseCompressionTests
         using var output = new MemoryStream();
         await response.StreamBodyWriter(output, CancellationToken.None).ConfigureAwait(false);
         Assert.IsTrue(output.Length > 0);
+
+        var h1 = BridgeSession(proxy, NewRequest("gzip"));
+        var h1Response = h1.HttpClient.Response;
+        h1Response.StatusCode = 200;
+        h1Response.HttpVersion = HttpHeader.Version20;
+        h1Response.OriginalHasBody = true;
+        h1Response.OriginalIsChunked = true;
+        h1Response.Headers.AddHeader("Content-Type", "text/html");
+        h1Response.Headers.AddHeader("Transfer-Encoding", "chunked");
+        var gzipBody = Encoding.ASCII.GetBytes(new string('c', 3000));
+        h1Response.StreamBodyWriter = async (sink, token) =>
+        {
+            await sink.WriteAsync(gzipBody, token).ConfigureAwait(false);
+        };
+
+        await proxy.ApplyH1ToH2BridgeResponseCompressionAsync(h1, null!, CancellationToken.None);
+
+        Assert.IsNotNull(h1Response.StreamBodyWriter);
+        using var h1Out = new MemoryStream();
+        await h1Response.StreamBodyWriter(h1Out, CancellationToken.None).ConfigureAwait(false);
+        Assert.IsTrue(h1Out.Length > 0);
     }
 
     private static SessionEventArgs BridgeSession(ProxyServer proxy, Request request)
