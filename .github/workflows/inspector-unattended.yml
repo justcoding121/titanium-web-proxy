@@ -25,7 +25,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Build
-        run: dotnet build src/Titanium.Web.Proxy.sln -c Release --nologo
+        run: |
+          dotnet build src/Titanium.Web.Proxy.sln -c Release --nologo
+          dotnet build tools/InspectorDesktopProbe/InspectorDesktopProbe.csproj -c Release --nologo
       - name: Install machine trust
         shell: pwsh
         run: dotnet run --project tools/InspectorDesktopProbe -c Release --no-build -- machine-trust install
@@ -54,5 +56,34 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
+      - name: Install libmsquic (Linux HTTP/3)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          . /etc/os-release
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+            -o packages-microsoft-prod.deb
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm -f packages-microsoft-prod.deb
+          sudo apt-get update
+          sudo apt-get install -y libmsquic
+      - name: Install MsQuic (macOS HTTP/3)
+        if: runner.os == 'macOS'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:HOMEBREW_NO_AUTO_UPDATE = '1'
+          $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
+          brew install openssl@3 libmsquic
+          $prefix = (& brew --prefix).Trim()
+          $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
+          $sslLib = Join-Path $prefix 'opt/openssl@3/lib'
+          $libDirs = @($msquicLib, $sslLib, (Join-Path $prefix 'lib')) |
+            Where-Object { Test-Path $_ } |
+            Select-Object -Unique
+          $dyld = ($libDirs -join ':')
+          Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld"
+          Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld"
       - name: Inspector headless suite
         run: dotnet test tests/Titanium.Inspector.Tests -c Release --filter "TestCategory=Headless|TestCategory=E2E-UI-Headless|TestCategory=Inspector-Stress"

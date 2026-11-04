@@ -263,11 +263,20 @@ jobs:
           done
           test "$programmed" = "True" || { kubectl -n gw-smoke describe gateway web; exit 1; }
 
+          # A new listener rolls the data plane. Programmed can flip before the new pods bind.
+          kubectl -n "$GW_NS" rollout status "deployment/${REL}-data" --timeout=180s
           kubectl -n "$GW_NS" port-forward "svc/${REL}-data" 28080:80 &
           pf=$!
-          sleep 3
-          curl -fsS -H 'Host: app.test' http://127.0.0.1:28080/ | grep -qi nginx
-          curl -fsS -H 'Host: shop.test' http://127.0.0.1:28080/ | grep -qi nginx
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS -H 'Host: app.test' http://127.0.0.1:28080/ | grep -qi nginx \
+              && curl -fsS -H 'Host: shop.test' http://127.0.0.1:28080/ | grep -qi nginx; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ok" = "1"
           kill "$pf" || true
 
           kubectl -n "$GW_NS" port-forward deployment/${REL}-controller 28081:8081 &
@@ -326,7 +335,7 @@ jobs:
       - name: Health and admin token
         run: |
           set -euo pipefail
-          TOKEN="$(kubectl -n "$NS" get secret "${REL}-admin" -o jsonpath='{.data.admin-token}' | base64 -d)"
+          TOKEN="$(kubectl -n "$NS" get secret "${REL}-titanium-manager-admin" -o jsonpath='{.data.admin-token}' | base64 -d)"
           test -n "$TOKEN"
           kubectl -n "$NS" port-forward "svc/${REL}-titanium-manager" 27700:7700 &
           pf=$!
