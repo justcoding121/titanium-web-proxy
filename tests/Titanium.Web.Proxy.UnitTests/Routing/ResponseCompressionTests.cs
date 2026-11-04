@@ -483,6 +483,38 @@ public class ResponseCompressionTests
         Assert.IsTrue(n > 0);
     }
 
+    [TestMethod]
+    public async Task Http3ClientCompression_RelaysThroughTheWrappedWriter()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.ResponseCompression = new ResponseCompressionConfig
+        {
+            Enabled = true,
+            Mode = ResponseCompressionConfig.ModeStreaming,
+        };
+        var request = NewRequest();
+        request.HttpVersion = HttpHeader.Version30;
+        var session = BridgeSession(proxy, request);
+        var response = session.HttpClient.Response;
+        response.StatusCode = 200;
+        response.HttpVersion = HttpHeader.Version11;
+        response.OriginalHasBody = true;
+        response.Headers.AddHeader("Content-Type", "text/html");
+        response.Headers.AddHeader("Transfer-Encoding", "chunked");
+        var payload = Encoding.ASCII.GetBytes(new string('b', 2048));
+        response.StreamBodyWriter = async (sink, token) =>
+        {
+            await sink.WriteAsync(payload, token).ConfigureAwait(false);
+        };
+
+        await proxy.ApplyHttp3ClientResponseCompressionAsync(session);
+
+        Assert.IsNotNull(response.StreamBodyWriter);
+        using var output = new MemoryStream();
+        await response.StreamBodyWriter(output, CancellationToken.None).ConfigureAwait(false);
+        Assert.IsTrue(output.Length > 0);
+    }
+
     private static SessionEventArgs BridgeSession(ProxyServer proxy, Request request)
     {
         var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
