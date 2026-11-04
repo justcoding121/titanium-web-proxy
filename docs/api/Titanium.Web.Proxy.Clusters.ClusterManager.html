@@ -130,7 +130,7 @@ in-flight sessions keep the previous snapshot reference.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager__ctor.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.%23ctor%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L35">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L36">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager__ctor_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.#ctor*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager__ctor" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.#ctor">ClusterManager()</h4>
@@ -144,10 +144,44 @@ in-flight sessions keep the previous snapshot reference.</p>
 </h3>
   <span class="small pull-right mobile-hide">
     <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_ActiveHealthProbeProvider.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.ActiveHealthProbeProvider%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L95">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Clusters_ClusterManager_ActiveHealthProbeProvider_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ActiveHealthProbeProvider*"></a>
+  <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_ActiveHealthProbeProvider" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ActiveHealthProbeProvider">ActiveHealthProbeProvider</h4>
+  <div class="markdown level1 summary"><p>Active probes for <code>healthCheck.active</code>. When this is null, <code>healthCheck.active</code> stays inactive:
+core refreshes DNS and leaves destination health to passive checks and other callers.
+Assigning a provider reconciles the clusters already applied and starts a probe for each one whose
+active check is enabled. Titanium Plus assigns a provider when the Plus module loads.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public IActiveHealthProbeProvider? ActiveHealthProbeProvider { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">IActiveHealthProbeProvider</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_LocalZone.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L29">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L30">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_LocalZone_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_LocalZone" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.LocalZone">LocalZone</h4>
@@ -178,7 +212,7 @@ in-flight sessions keep the previous snapshot reference.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_Snapshot.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L78">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L79">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_Snapshot_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_Snapshot" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.Snapshot">Snapshot</h4>
@@ -210,7 +244,7 @@ in-flight sessions keep the previous snapshot reference.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_ApplyAsync_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig__System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.ApplyAsync(System.Collections.Generic.IReadOnlyList%7BTitanium.Web.Proxy.Abstractions.Clusters.ClusterConfig%7D%2CSystem.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L100">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L126">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_ApplyAsync_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ApplyAsync*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_ApplyAsync_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig__System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ApplyAsync(System.Collections.Generic.IReadOnlyList{Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig},System.Threading.CancellationToken)">ApplyAsync(IReadOnlyList&lt;ClusterConfig&gt;, CancellationToken)</h4>
@@ -262,7 +296,7 @@ in-flight sessions keep the previous snapshot reference.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_ApplyCoreAsync_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig__System_Boolean_System_Threading_CancellationToken_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.ApplyCoreAsync(System.Collections.Generic.IReadOnlyList%7BTitanium.Web.Proxy.Abstractions.Clusters.ClusterConfig%7D%2CSystem.Boolean%2CSystem.Threading.CancellationToken)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L107">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L133">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_ApplyCoreAsync_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ApplyCoreAsync*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_ApplyCoreAsync_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Abstractions_Clusters_ClusterConfig__System_Boolean_System_Threading_CancellationToken_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ApplyCoreAsync(System.Collections.Generic.IReadOnlyList{Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig},System.Boolean,System.Threading.CancellationToken)">ApplyCoreAsync(IReadOnlyList&lt;ClusterConfig&gt;, bool, CancellationToken)</h4>
@@ -321,7 +355,7 @@ so probers start or stop only on the final apply.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_AttachHealthTracker_Titanium_Web_Proxy_Clusters_DestinationHealthTracker_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.AttachHealthTracker(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L88">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L114">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_AttachHealthTracker_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.AttachHealthTracker*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_AttachHealthTracker_Titanium_Web_Proxy_Clusters_DestinationHealthTracker_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.AttachHealthTracker(Titanium.Web.Proxy.Clusters.DestinationHealthTracker)">AttachHealthTracker(DestinationHealthTracker)</h4>
@@ -353,7 +387,7 @@ so probers start or stop only on the final apply.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_DisposeAsync.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.DisposeAsync%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L373">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L438">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_DisposeAsync_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.DisposeAsync*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_DisposeAsync" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.DisposeAsync">DisposeAsync()</h4>
@@ -386,7 +420,7 @@ resetting unmanaged resources asynchronously.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_GetDestinationState_System_String_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState(System.String)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L221">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L249">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_GetDestinationState_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_GetDestinationState_System_String_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.GetDestinationState(System.String)">GetDestinationState(string)</h4>
@@ -433,7 +467,7 @@ resetting unmanaged resources asynchronously.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_ReportHealthEvent_Titanium_Web_Proxy_Abstractions_Plugins_DestinationHealthEvent_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L55">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L56">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_ReportHealthEvent_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_ReportHealthEvent_Titanium_Web_Proxy_Abstractions_Plugins_DestinationHealthEvent_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.ReportHealthEvent(Titanium.Web.Proxy.Abstractions.Plugins.DestinationHealthEvent)">ReportHealthEvent(DestinationHealthEvent)</h4>
@@ -466,7 +500,7 @@ resetting unmanaged resources asynchronously.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_SetDestinationState_System_String_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(System.String%2CTitanium.Web.Proxy.Abstractions.Clusters.DestinationState)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L148">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L176">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_SetDestinationState_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_SetDestinationState_System_String_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.SetDestinationState(System.String,Titanium.Web.Proxy.Abstractions.Clusters.DestinationState)">SetDestinationState(string, DestinationState)</h4>
@@ -503,7 +537,7 @@ resetting unmanaged resources asynchronously.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_TrySetDestinationState_System_String_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState(System.String%2CTitanium.Web.Proxy.Abstractions.Clusters.DestinationState%2CTitanium.Web.Proxy.Abstractions.Clusters.DestinationState)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L182">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L210">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Clusters_ClusterManager_TrySetDestinationState_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState*"></a>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_TrySetDestinationState_System_String_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_Titanium_Web_Proxy_Abstractions_Clusters_DestinationState_" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.TrySetDestinationState(System.String,Titanium.Web.Proxy.Abstractions.Clusters.DestinationState,Titanium.Web.Proxy.Abstractions.Clusters.DestinationState)">TrySetDestinationState(string, DestinationState, DestinationState)</h4>
@@ -565,7 +599,7 @@ Returns false when the current state is not <code class="paramref">expected</cod
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager_HealthEvent.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L52">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L53">View Source</a>
   </span>
   <h4 id="Titanium_Web_Proxy_Clusters_ClusterManager_HealthEvent" data-uid="Titanium.Web.Proxy.Clusters.ClusterManager.HealthEvent">HealthEvent</h4>
   <div class="markdown level1 summary"><p>Raised when a destination is ejected, recovers, or fails an active probe. Handlers run on the thread
@@ -613,7 +647,7 @@ that decided (a request, a probe round, or a circuit breaker), so they must be q
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Clusters_ClusterManager.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Clusters.ClusterManager%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L19" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Clusters/ClusterManager.cs/#L18" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>
