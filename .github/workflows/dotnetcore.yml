@@ -514,7 +514,7 @@ jobs:
         if-no-files-found: ignore
 
   # Tiered RPS gates for beta/stable publish (parallel) â€” wall clock ~max of the two).
-  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITMÃ·Reverse) so a
+  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs the reference peer so a
   # uniform Core slowdown cannot hide behind green edition ratios.
   rps-publish-gate:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
@@ -546,7 +546,7 @@ jobs:
         if (-not $csv) { throw 'No CSV found for edition gate validation' }
         pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
-  # Parallel with rps-publish-gate: Core vs YARP on the release SHA (c=64 spot).
+  # Parallel with rps-publish-gate: Core vs the reference peer on the release SHA (c=64 spot).
   # Same validator as PR compare-spot / run-spot-matrix.ps1; does not extend wall clock
   # past editions (~60m).
   rps-peer-gate:
@@ -564,7 +564,7 @@ jobs:
           10.0.x
     - name: Ensure MsQuic
       uses: ./.github/actions/ensure-msquic
-    - name: compare-spot (CoreÃ·YARP + MITMÃ·Reverse)
+    - name: compare-spot (Core and reference peer)
       shell: pwsh
       run: |
         pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
