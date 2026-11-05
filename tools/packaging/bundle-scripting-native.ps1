@@ -97,6 +97,12 @@ function Download-Verified([string] $url, [string] $sha256, [string] $destPath) 
         Write-Info "cache hit $(Split-Path -Leaf $destPath)"
         return
     }
+    $vendored = Join-Path $scriptDir "third-party/$(Split-Path -Leaf $url)"
+    if ((Test-Path $vendored) -and ((Get-Sha256 $vendored) -eq $sha256.ToLowerInvariant())) {
+        Copy-Item -Force $vendored $destPath
+        Write-Info "using vendored $(Split-Path -Leaf $vendored)"
+        return
+    }
     Write-Info "download $url"
     $tmp = "$destPath.partial"
     $delaySec = 2

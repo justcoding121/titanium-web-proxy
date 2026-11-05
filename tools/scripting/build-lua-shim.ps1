@@ -41,9 +41,24 @@ function Invoke-WebRequestWithRetry {
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if ($curl) {
         if (Test-Path $OutFile) { Remove-Item -Force $OutFile }
-        # --ipv4: an unanswered AAAA record for lua.org or ziglang.org burns the whole timeout.
-        & $curl.Source --ipv4 --fail --location --retry $Attempts --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 180 -o $OutFile $Uri
-        if ($LASTEXITCODE -ne 0) { throw "download failed ($LASTEXITCODE): $Uri" }
+        # curl prints "error: ..." on a retry. The scripting test project runs this script from an
+        # MSBuild Exec task, which treats that text as a compiler error and fails the build even
+        # after a later attempt succeeds. Keep the bytes inside this process and rewrite the word.
+        $previousNative = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+        try {
+            # --ipv4: an unanswered AAAA record for lua.org or ziglang.org burns the whole timeout.
+            $lines = & $curl.Source --ipv4 --fail --location --silent --show-error --retry $Attempts --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 180 -o $OutFile $Uri 2>&1
+            $code = $LASTEXITCODE
+        }
+        finally {
+            $PSNativeCommandUseErrorActionPreference = $previousNative
+        }
+        foreach ($line in @($lines)) {
+            $text = "$line" -replace '(?i)(^|\s)error\s*:', '${1}failure:'
+            if ($text) { Write-Info $text }
+        }
+        if ($code -ne 0) { throw "download failed ($code): $Uri" }
         return
     }
     $delaySec = 2
@@ -112,16 +127,23 @@ $lua = $lock.rids.$rid.lua
 New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 $tarball = Join-Path $cacheDir (Split-Path -Leaf $lua.sourceUrl)
 $want = $lua.sha256.ToLowerInvariant()
+$vendored = Join-Path $repoRoot "tools/packaging/third-party/$(Split-Path -Leaf $lua.sourceUrl)"
 if (-not (Test-Path $tarball) -or (Get-FileHash -Algorithm SHA256 $tarball).Hash.ToLowerInvariant() -ne $want) {
-    Write-Info "download $($lua.sourceUrl)"
-    $tmp = "$tarball.partial"
-    Invoke-WebRequestWithRetry -Uri $lua.sourceUrl -OutFile $tmp
-    $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLowerInvariant()
-    if ($got -ne $want) {
-        Remove-Item -Force $tmp
-        throw "SHA256 mismatch for $($lua.sourceUrl): expected $want, got $got"
+    if ((Test-Path $vendored) -and (Get-FileHash -Algorithm SHA256 $vendored).Hash.ToLowerInvariant() -eq $want) {
+        Write-Info "using vendored $(Split-Path -Leaf $vendored)"
+        Copy-Item -Force $vendored $tarball
     }
-    Move-Item -Force $tmp $tarball
+    else {
+        Write-Info "download $($lua.sourceUrl)"
+        $tmp = "$tarball.partial"
+        Invoke-WebRequestWithRetry -Uri $lua.sourceUrl -OutFile $tmp
+        $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLowerInvariant()
+        if ($got -ne $want) {
+            Remove-Item -Force $tmp
+            throw "SHA256 mismatch for $($lua.sourceUrl): expected $want, got $got"
+        }
+        Move-Item -Force $tmp $tarball
+    }
 }
 
 $srcRoot = Join-Path $cacheDir $lua.sourceDir
