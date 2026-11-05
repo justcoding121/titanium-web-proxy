@@ -148,7 +148,6 @@ try {
             }
             $vcvarsall = if ($vs) { Join-Path $vs "VC/Auxiliary/Build/vcvarsall.bat" }
             $vcvars = if ($vs) { Join-Path $vs "VC/Auxiliary/Build/vcvars64.bat" }
-            $zig = Find-Zig
             if ($vcvarsall -and (Test-Path $vcvarsall) -and (Test-Path $vcvars)) {
                 $rsp = Join-Path $objDir "cl.rsp"
                 Set-Content -Path $rsp -Value (($clArgs | ForEach-Object { '"' + $_ + '"' }) -join "`n")
@@ -159,7 +158,7 @@ try {
                 & gcc -O2 -shared -DLUA_BUILD_AS_DLL "-I$srcDir" "-I$shimDir" -o $outPath @all -static-libgcc
                 if ($LASTEXITCODE -ne 0) { throw "gcc failed ($LASTEXITCODE)" }
             }
-            elseif ($zig) {
+            elseif ($zig = Find-Zig) {
                 Write-Info "using $zig"
                 & $zig cc -target x86_64-windows-gnu -O2 -shared -DLUA_BUILD_AS_DLL "-I$srcDir" "-I$shimDir" -o $outPath @all
                 if ($LASTEXITCODE -ne 0) { throw "zig cc failed ($LASTEXITCODE)" }
