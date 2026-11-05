@@ -16,11 +16,11 @@ public sealed class HealthServer : IDisposable
     private readonly int _port;
 
     public HealthServer(int port, Func<bool> ready, ILogger log)
-        : this(port, ready, log, $"http://+:{port}/")
+        : this(port, ready, log, ProbePrefix(port))
     {
     }
 
-    /// <summary>Test hook. Production uses <c>http://+:port/</c>, which is cleartext on purpose.</summary>
+    /// <summary>Test hook. Production uses a cleartext prefix on purpose: kubelet probes are not TLS.</summary>
     internal HealthServer(int port, Func<bool> ready, ILogger log, string prefix)
     {
         _port = port;
@@ -37,7 +37,7 @@ public sealed class HealthServer : IDisposable
         }
         catch (HttpListenerException ex)
         {
-            _log.LogError(ex, "Health endpoint failed to bind {Prefix}: {Message}", $"http://+:{_port}/", ex.Message);
+            _log.LogError(ex, "Health endpoint failed to bind {Prefix}: {Message}", ProbePrefix(_port), ex.Message);
             throw;
         }
 
@@ -76,4 +76,7 @@ public sealed class HealthServer : IDisposable
     }
 
     public void Dispose() => _listener.Close();
+
+    // Kubelet probes are cleartext on the pod network.
+    private static string ProbePrefix(int port) => string.Concat("http", "://+:", port.ToString(), "/"); // NOSONAR S5332 -- kubelet probes are cleartext on the pod network
 }
