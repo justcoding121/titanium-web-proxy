@@ -97,12 +97,12 @@ public partial class ProxyServer
         if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var extStreamState) &&
             extStreamState.IsExtendedConnect)
         {
-            if (!string.Equals(extStreamState.ExtendedConnectProtocol, "websocket",
-                    StringComparison.OrdinalIgnoreCase))
+            var connectSupport = ExtendedConnectSupport.ForProcess(EnableRfc8441);
+            if (!ExtendedConnectProtocols.IsSupported(extStreamState.ExtendedConnectProtocol, connectSupport))
             {
                 sessionArgs.GenericResponse(
-                    $"RFC 8441 extended CONNECT (protocol: {extStreamState.ExtendedConnectProtocol ?? "unknown"}) " +
-                    "is not supported by this proxy. Only 'websocket' is implemented.",
+                    ExtendedConnectProtocols.UnsupportedMessage(
+                        extStreamState.ExtendedConnectProtocol, connectSupport),
                     HttpStatusCode.NotImplemented);
                 return;
             }

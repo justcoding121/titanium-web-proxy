@@ -712,13 +712,13 @@ namespace Titanium.Web.Proxy.Http2
 
                             // Native h2↔h2 extended CONNECT path.
                             string? ecProto = ecTunnelState?.ExtendedConnectProtocol;
-                            if (!string.Equals(ecProto, "websocket", StringComparison.OrdinalIgnoreCase))
+                            var connectSupport = ExtendedConnectSupport.ForProcess(enableRfc8441);
+                            if (!ExtendedConnectProtocols.IsSupported(ecProto, connectSupport))
                             {
                                 // Only the 'websocket' protocol token is implemented. BeforeRequest ran
                                 // but did not synthesize a response - return 501 so the client can retry.
                                 sessionArgs.GenericResponse(
-                                    $"RFC 8441 extended CONNECT (protocol: {ecProto ?? "unknown"}) " +
-                                    "is not supported by this proxy. Only 'websocket' is implemented.",
+                                    ExtendedConnectProtocols.UnsupportedMessage(ecProto, connectSupport),
                                     HttpStatusCode.NotImplemented);
                                 syntheticStreams.TryAdd(hbStreamId, 0);
                                 connectionState.Streams.TryGetValue(hbStreamId, out var unknProtoState);

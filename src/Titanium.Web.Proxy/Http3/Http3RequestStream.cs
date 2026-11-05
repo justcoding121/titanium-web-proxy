@@ -122,8 +122,8 @@ internal static class Http3RequestStream
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
                 var isConnect = method == "CONNECT";
-                var isWsTunnel = protocol is not null &&
-                                 string.Equals(protocol, "websocket", StringComparison.OrdinalIgnoreCase);
+                var connectSupport = ExtendedConnectSupport.ForProcess(server.EnableRfc8441);
+                var isWsTunnel = ExtendedConnectProtocols.IsSupported(protocol, connectSupport);
                 var isUnsupportedEcProtocol = protocol is not null && !isWsTunnel;
                 if (!isConnect && path is null)
                     throw new Http3StreamException(Http3ErrorCode.MessageError,
@@ -179,8 +179,8 @@ internal static class Http3RequestStream
                 foreach (var (name, value) in regularHeaders)
                     request.Headers.AddHeader(new HttpHeader(name, value));
 
-                if (isWsTunnel)
-                    request.ExtendedConnectProtocol = "websocket";
+                if (protocol is not null)
+                    request.ExtendedConnectProtocol = protocol;
 
                 // Fast path when the server-wide interception gate is off: skip InterceptionContext
                 // alloc (hostname/port parse) — ShouldIntercept would always return false.
@@ -321,8 +321,7 @@ internal static class Http3RequestStream
                 if (isUnsupportedEcProtocol && !sessionArgs.HttpClient.HasResponse)
                 {
                     sessionArgs.GenericResponse(
-                        $"RFC 9220 extended CONNECT (protocol: {protocol ?? "unknown"}) " +
-                        "is not supported by this proxy. Only 'websocket' is implemented.",
+                        ExtendedConnectProtocols.UnsupportedMessage(protocol, connectSupport, rfc: "9220"),
                         HttpStatusCode.NotImplemented);
                 }
 

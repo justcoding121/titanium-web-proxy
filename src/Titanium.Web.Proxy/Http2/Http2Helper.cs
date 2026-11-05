@@ -214,9 +214,16 @@ namespace Titanium.Web.Proxy.Http2
             bool httpInterceptionEnabled = true,
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
             Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null,
-            bool forceStaticHpackForMitmUnchangedRelay = false)
+            bool forceStaticHpackForMitmUnchangedRelay = false,
+            bool advertisesConnectProtocol = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
+            // enableRfc8441 keeps its historical name. Together with advertisesConnectProtocol it
+            // means this connection advertises and classifies extended CONNECT. Pass the alias
+            // only into the SendHttp2 call that owns the listener (MASQUE does this via
+            // enableRfc8441: true). Never OR listener flags into ProxyServer.EnableRfc8441.
+            var connectionAdvertisesConnect = ExtendedConnectProtocols.ConnectionAdvertisesConnect(
+                enableRfc8441, advertisesConnectProtocol);
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
                 resourceLimits.MaxConcurrentStreamsPerConnection,
                 resourceLimits.MaxDeferredOutboundBytesPerStream,
@@ -240,11 +247,12 @@ namespace Titanium.Web.Proxy.Http2
                 new Http2FrameWriter(serverStream, connectionState.ServerWriteLock);
 
             Http2OriginRelayPool? originPool = null;
-            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441) can use compressed-relay topology.
-            // HEADER_TABLE_SIZE=0 is forced only for gate-off compressed-relay, or for transparent/
-            // socks MITM that can finish unchanged streams via compressed relay. Explicit MITM
-            // injects Via and re-encodes — keep the peer's table size (Chrome/YouTube HPACK).
-            var canCompressedRelayTopology = !enableRfc8441
+            // Same-protocol H2↔H2 (not NullOrigin / extended CONNECT) can use compressed-relay topology.
+            // The advertise bit is per connection. A masque listener that passes it does not change
+            // eligibility for any other listener. HEADER_TABLE_SIZE=0 is forced only for gate-off
+            // compressed-relay, or for transparent/socks MITM that can finish unchanged streams via
+            // compressed relay. Explicit MITM injects Via and re-encodes — keep the peer's table size.
+            var canCompressedRelayTopology = !connectionAdvertisesConnect
                 && originConnection != null
                 && serverStream is not NullOriginStream;
             // Multi-origin pool is for gate-off compressed-relay only. Under true MITM, unchanged
@@ -279,7 +287,7 @@ namespace Titanium.Web.Proxy.Http2
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
-                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
+                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, connectionAdvertisesConnect,
                     resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp,
                     forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
 
@@ -289,7 +297,7 @@ namespace Titanium.Web.Proxy.Http2
                 // Each origin leg has its own read loop; remaps origin stream ids back to the client.
                 receiveRelay = RunMultiOriginReceiveAsync(clientStream, connectionState, originPool,
                     sessionFactory, onBeforeResponse, onAfterResponse, cancellationTokenSource.Token, logger,
-                    maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, httpInterceptionEnabled,
+                    maxDecodedHeaderListBytes, connectionAdvertisesConnect, resourceLimits, httpInterceptionEnabled,
                     shouldInterceptHttp);
             }
             else
@@ -298,7 +306,7 @@ namespace Titanium.Web.Proxy.Http2
                     CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                         sessionFactory, onBeforeResponse, onAfterResponse, null, false,
                         cancellationTokenSource.Token,
-                        logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
+                        logger, maxDecodedHeaderListBytes, connectionAdvertisesConnect, resourceLimits, originConnection,
                         httpInterceptionEnabled, shouldInterceptHttp,
                         forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
             }

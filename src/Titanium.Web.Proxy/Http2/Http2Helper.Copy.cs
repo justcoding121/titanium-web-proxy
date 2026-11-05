@@ -62,9 +62,10 @@ namespace Titanium.Web.Proxy.Http2
             var maxHeaderBlockBytes = resourceLimits.MaxHttp2CompressedHeaderBlockBytes;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
-            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
-            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on (transparent/socks):
-            // decode + handlers, then relay compressed bytes when unchanged — requires static HPACK.
+            // Same-protocol H2↔H2 (not NullOrigin / extended CONNECT): compressed-relay topology.
+            // enableRfc8441 here is the per-connection advertise bit (SendHttp2 ORs the historical
+            // flag with advertisesConnectProtocol). Gate-off: full compressed-relay (no SessionEventArgs).
+            // Gate-on (transparent/socks): decode + handlers, then relay compressed bytes when unchanged.
             // Explicit MITM re-encodes (Via) and must not force HEADER_TABLE_SIZE=0.
             bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream

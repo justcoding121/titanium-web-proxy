@@ -241,7 +241,7 @@ public class Request : RequestResponseBase
         {
             // HTTP/2 extended CONNECT (RFC 8441)
             if (ExtendedConnectProtocol != null)
-                return string.Equals(ExtendedConnectProtocol, "websocket", StringComparison.OrdinalIgnoreCase);
+                return ExtendedConnectProtocols.IsWebSocket(ExtendedConnectProtocol);
 
             // HTTP/1.1 Upgrade header
             var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
