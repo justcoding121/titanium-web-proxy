@@ -6,6 +6,8 @@ name: inspector-unattended
 on:
   schedule:
     - cron: '23 4 * * *'
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
 
 permissions:

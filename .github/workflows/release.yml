@@ -58,20 +58,20 @@ jobs:
   release-readiness:
     needs: resolve-version
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
       contents: read
       actions: read
       issues: read
     steps:
-      - name: Latest nightly on this commit is green and under 24 hours
+      - name: Same-SHA readiness workflows are green
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, urllib.request
-          from datetime import datetime, timedelta, timezone
+          import json, os, sys, time, urllib.request
           token = os.environ["GH_TOKEN"]
           repo = os.environ["GITHUB_REPOSITORY"]
           sha = os.environ["SHA"]
@@ -83,49 +83,72 @@ jobs:
               "fuzz-nightly.yml",
               "dast.yml",
           ]
-          cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-          failed = []
-          for name in workflows:
-              url = f"https://api.github.com/repos/{repo}/actions/workflows/{name}/runs?per_page=20"
-              req = urllib.request.Request(url, headers={
-                  "Authorization": f"Bearer {token}",
-                  "Accept": "application/vnd.github+json",
-                  "X-GitHub-Api-Version": "2022-11-28",
-              })
-              with urllib.request.urlopen(req) as resp:
-                  runs = json.load(resp).get("workflow_runs", [])
-              match = None
-              for run in runs:
-                  if run.get("head_sha") != sha:
-                      continue
-                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
-                  if run.get("conclusion") == "success" and created >= cutoff:
-                      match = run
-                      break
-              if match is None:
-                  failed.append(name)
-              else:
-                  print(f"{name}: {match['html_url']}")
-          issues_url = f"https://api.github.com/repos/{repo}/issues?labels=escaped-defect&state=all&per_page=50"
-          ireq = urllib.request.Request(issues_url, headers={
+          headers = {
               "Authorization": f"Bearer {token}",
               "Accept": "application/vnd.github+json",
               "X-GitHub-Api-Version": "2022-11-28",
-          })
-          with urllib.request.urlopen(ireq) as resp:
-              issues = json.load(resp)
+          }
+
+          def get(url):
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req) as resp:
+                  return json.load(resp)
+
+          issues = get(f"https://api.github.com/repos/{repo}/issues?labels=escaped-defect&state=all&per_page=50")
+          defects = []
           for issue in issues:
               if "pull_request" in issue:
                   continue
               body = issue.get("body") or ""
               number = issue.get("number")
               if issue.get("state") == "open":
-                  failed.append(f"escaped-defect #{number} is still open")
+                  defects.append(f"escaped-defect #{number} is still open")
               elif "tests/" not in body:
-                  failed.append(f"escaped-defect #{number} was closed without a tests/ path in the body")
-          if failed:
-              print("::error::Nightly is missing, red, or older than 24 hours, or an escaped defect is unresolved: " + ", ".join(failed))
-              raise SystemExit(1)
+                  defects.append(f"escaped-defect #{number} was closed without a tests/ path in the body")
+          if defects:
+              print("::error::" + ", ".join(defects))
+              sys.exit(1)
+
+          started = time.time()
+          deadline = started + 150 * 60
+          seen = set()
+          while True:
+              failed = []
+              waiting = []
+              now = time.time()
+              for name in workflows:
+                  data = get(
+                      f"https://api.github.com/repos/{repo}/actions/workflows/{name}/runs"
+                      f"?head_sha={sha}&per_page=20"
+                  )
+                  runs = [r for r in data.get("workflow_runs", []) if r.get("head_sha") == sha]
+                  runs.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+                  run = runs[0] if runs else None
+                  if run is None:
+                      if now - started >= 10 * 60:
+                          failed.append(f"dispatch {name} on this SHA")
+                      else:
+                          waiting.append(name)
+                      continue
+                  if run.get("status") != "completed":
+                      waiting.append(name)
+                      continue
+                  if run.get("conclusion") != "success":
+                      failed.append(f"{name} {run.get('html_url')} conclusion={run.get('conclusion')}")
+                      continue
+                  if name not in seen:
+                      print(f"{name}: {run.get('html_url')}")
+                      seen.add(name)
+              if failed:
+                  print("::error::" + ", ".join(failed))
+                  sys.exit(1)
+              if not waiting:
+                  break
+              if now >= deadline:
+                  print("::error::still running after 150 minutes: " + ", ".join(waiting))
+                  sys.exit(1)
+              print("waiting: " + ", ".join(waiting))
+              time.sleep(60)
           PY
 
   test:
@@ -1315,9 +1338,85 @@ jobs:
           ignore-unfixed: true
           trivyignores: .trivyignore
 
+  publish-nuget:
+    needs: [resolve-version, publish-release]
+    if: needs.publish-release.result == 'success'
+    runs-on: windows-latest
+    environment: nuget-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+
+      - name: NuGet audit before pack
+        run: dotnet restore src/Titanium.Web.Proxy.sln -p:NuGetAudit=true -p:NuGetAuditLevel=high
+
+      - name: Pack Beta
+        if: needs.resolve-version.outputs.channel == 'beta'
+        run: |
+          dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release --version-suffix "beta"
+          dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release --version-suffix "beta"
+          dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
+
+      - name: Pack Stable
+        if: needs.resolve-version.outputs.channel == 'stable'
+        run: |
+          dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release
+          dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release
+          dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
+
+      - name: Generate CycloneDX SBOM for MIT packages
+        shell: pwsh
+        run: |
+          dotnet tool install --global CycloneDX --version 6.2.0
+          New-Item -ItemType Directory -Force -Path sbom | Out-Null
+          foreach ($proj in @(
+            'src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj',
+            'src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj',
+            'src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj'
+          )) {
+            $name = [IO.Path]::GetFileNameWithoutExtension($proj)
+            dotnet CycloneDX $proj -o "sbom" -F Json -fn "$name.cdx.json" -t --disable-package-restore
+          }
+
+      - name: Upload MIT package SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: mit-nuget-sbom
+          path: sbom/*.cdx.json
+          if-no-files-found: warn
+
+      - name: Log in to NuGet
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Publish Package
+        # MIT packages only -- never push PolyForm products (Plus, Inspector, Xds, GeoIp)
+        run: |
+          Get-ChildItem -Recurse -Filter *.nupkg |
+            Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*Xds*' -and $_.Name -notlike '*GeoIp*' -and $_.Name -notlike '*.symbols.nupkg' } |
+            ForEach-Object {
+              dotnet nuget push $_.FullName `
+                --source https://api.nuget.org/v3/index.json `
+                --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" `
+                --skip-duplicate
+            }
+
   yank-failed-release:
-    needs: [resolve-version, publish-release, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey, publish-charts, image-scan]
-    if: failure() && startsWith(github.ref, 'refs/tags/')
+    needs: [resolve-version, publish-release, publish-nuget, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey, publish-charts, image-scan]
+    if: failure() && needs.publish-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1330,4 +1429,4 @@ jobs:
         run: |
           set -euo pipefail
           gh release delete "$TAG" --yes --cleanup-tag || echo "No GitHub release to delete for $TAG"
-          gh issue create --title "Release ${TAG} yanked" --body "A publish job failed for ${TAG}. The GitHub release was deleted. Chocolatey and Homebrew versions need a manual unlist where those channels do not support an API yank."
+          gh issue create --title "Release ${TAG} yanked" --body "A publish job failed for ${TAG}. The GitHub release was deleted. NuGet packages cannot be yanked from this workflow; unlist Titanium.Web.Proxy, Titanium.Web.Proxy.Abstractions, and Titanium.Web.Proxy.Configuration for ${TAG} by hand if they were pushed. Chocolatey and Homebrew versions need a manual unlist where those channels do not support an API yank."
