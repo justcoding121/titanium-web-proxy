@@ -458,6 +458,9 @@ internal static class RunCommand
                 readiness,
                 metricsExposition,
                 () => AdminHost.BuildVersionInfo(configHash, plusActive));
+            // Subscribe before accept. A request that lands in the gap after Start() is served on the
+            // fast path, which never raises AfterResponse, so the access file stays empty.
+            accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
             proxy.Start();
             overloadHost.Apply(loaded.Config.Server?.Overload);
 
@@ -484,7 +487,6 @@ internal static class RunCommand
 
             StartAcmeIfConfigured(proxy, loaded.Config);
 
-            accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
             metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
 
             if (serviceMode)

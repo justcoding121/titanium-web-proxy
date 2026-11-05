@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Titanium.Web.Proxy.EventArguments;
@@ -88,7 +89,7 @@ public sealed class JsonAccessLogWriter : IDisposable
             Host = req.Host ?? req.RequestUri?.Host,
             Status = resp.StatusCode,
             DurationMs = durationMs,
-            ClientIp = session.ClientRemoteEndPoint.Address.ToString(),
+            ClientIp = TryClientIp(session),
             Route = session.MatchedRoute?.Id,
             Cluster = session.MatchedRoute?.ClusterId,
             Destination = session.UpstreamDestinationId,
@@ -98,6 +99,30 @@ public sealed class JsonAccessLogWriter : IDisposable
             RequestId = session.ProxyRequestId,
             TraceId = session.ProxyTraceId,
         });
+    }
+
+    /// <summary>
+    /// The peer address is read from the live socket. After the response bytes are sent that socket can
+    /// already be closed, and a throw here used to drop the whole line.
+    /// </summary>
+    private static string? TryClientIp(SessionEventArgs session)
+    {
+        try
+        {
+            return session.ClientRemoteEndPoint?.Address.ToString();
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+        catch (SocketException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     public void TryWrite(SessionEventArgs session)
