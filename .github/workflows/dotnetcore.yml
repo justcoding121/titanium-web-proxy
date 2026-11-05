@@ -144,6 +144,18 @@ jobs:
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --no-incremental --disable-build-servers
 
+    - name: Warm Helm
+      shell: pwsh
+      run: |
+        $helm = Get-Command helm -ErrorAction SilentlyContinue
+        if (-not $helm) {
+          Write-Host 'helm is not on PATH; chart tests stay inconclusive.'
+          exit 0
+        }
+        # First launch pays the Windows scan. Do that here so the chart tests are not the ones that time out.
+        & helm version
+        if ($LASTEXITCODE -ne 0) { throw "helm version exited $LASTEXITCODE" }
+
     - name: Test
       shell: pwsh
       run: |
