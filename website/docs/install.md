@@ -31,6 +31,8 @@ Use `--channel beta` when you intentionally follow beta.
 
 **winget (Windows):** the Windows CLI is a single self-contained `titanium.exe` (plus `twp.exe`), so winget's `Links` shortcuts work. Update a winget install with `winget upgrade`, not `titanium update`. A downloaded Plus bundle may be placed beside the `Links` shortcut rather than the package folder.
 
+**Chocolatey (Windows):** package ids are `titanium-cli` and `titanium-inspector`. A release push is accepted into moderation before it becomes the approved package. Until a moderator approves it, `choco search titanium-cli --exact` keeps showing the last approved version. `choco search titanium-cli --pre --exact` lists a beta package once that package is visible.
+
 ## Plus (optional ops add-on)
 
 After the CLI is installed:

@@ -64,6 +64,14 @@ helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-val
 
 Gateway API and Manager charts follow the same paths (`titanium-gateway`, `titanium-manager`).
 
+An empty image tag is the chart `appVersion`. Chart `1.0.0` ships `appVersion: 8.0.0`, so a beta install sets the tag or the pods pull `:8.0.0`:
+
+| Chart | Tag values |
+|-------|------------|
+| `titanium` | `image.tag` |
+| `titanium-gateway` | `controller.image.tag` and `dataPlane.image.tag`. `image.tag` on this chart is ignored. |
+| `titanium-manager` | `image.tag` |
+
 Minimal `my-values.yaml`:
 
 ```yaml

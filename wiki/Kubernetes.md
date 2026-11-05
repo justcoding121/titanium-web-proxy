@@ -22,6 +22,8 @@ helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-val
 
 `config` in the values is the whole `twp.yaml`. The chart owns `server.admin`; set those fields through the `admin.*` values. Mount the config and any Secret files as **directories**, never with `subPath`: a single-file mount does not see the `..data` swap.
 
+`image.tag` defaults to the chart `appVersion` (`8.0.0` on chart `1.0.0`). A beta install sets `image.tag: 8.0.0-beta`, or the pod pulls `:8.0.0`. The gateway chart uses `controller.image.tag` and `dataPlane.image.tag` instead.
+
 ## Optional resources
 
 PodDisruptionBudget (on), HorizontalPodAutoscaler, ServiceMonitor (needs the Prometheus Operator CRDs), a sample NetworkPolicy, and Titanium Plus wiring are switched on through values. `helm lint --strict` and kubeconform run on every pull request, and a kind smoke run covers probes, ConfigMap reload, and a rolling restart.
