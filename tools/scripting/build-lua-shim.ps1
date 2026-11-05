@@ -38,6 +38,14 @@ function Invoke-WebRequestWithRetry {
         [Parameter(Mandatory = $true)] [string] $OutFile,
         [int] $Attempts = 5
     )
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        if (Test-Path $OutFile) { Remove-Item -Force $OutFile }
+        # --ipv4: an unanswered AAAA record for lua.org or ziglang.org burns the whole timeout.
+        & $curl.Source --ipv4 --fail --location --retry $Attempts --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 180 -o $OutFile $Uri
+        if ($LASTEXITCODE -ne 0) { throw "download failed ($LASTEXITCODE): $Uri" }
+        return
+    }
     $delaySec = 2
     for ($i = 1; $i -le $Attempts; $i++) {
         try {
