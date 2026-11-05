@@ -573,7 +573,8 @@ public partial class ProxyServer
                                         // Transparent/socks MITM can finish unchanged H2↔H2 via compressed
                                         // relay (no Via). Requires static-table-only HPACK on both legs.
                                         forceStaticHpackForMitmUnchangedRelay: NeedsHttpInterception(endPoint),
-                                        advertisesConnectProtocol: AdvertisesConnectTcp(endPoint));
+                                        advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+                                        advertiseWebTransport: AdvertisesWebTransport(endPoint));
                                 }
                                 finally
                                 {
@@ -928,7 +929,8 @@ public partial class ProxyServer
                     remoteHostName, remotePort, http2ConnectHost, http2ConnectPort,
                     originIsHttps, negotiationSession, ct),
                 forceStaticHpackForMitmUnchangedRelay: NeedsHttpInterception(endPoint),
-                advertisesConnectProtocol: AdvertisesConnectTcp(endPoint));
+                advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+                advertiseWebTransport: AdvertisesWebTransport(endPoint));
         }
         finally
         {

@@ -49,7 +49,8 @@ public partial class ProxyServer
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
             httpInterceptionEnabled: NeedsHttpInterception(endPoint),
             shouldInterceptHttp: ShouldInterceptHttp,
-            advertisesConnectProtocol: AdvertisesConnectTcp(endPoint));
+            advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+            advertiseWebTransport: AdvertisesWebTransport(endPoint));
     }
 
     private async Task DispatchBridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx, // NOSONAR S3776

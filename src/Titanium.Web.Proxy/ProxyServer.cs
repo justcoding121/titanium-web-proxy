@@ -634,7 +634,27 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>Token allow-list for one connection on <paramref name="endPoint"/>.</summary>
     internal ExtendedConnectSupport ConnectSupportFor(ProxyEndPoint endPoint) =>
-        new(webSocket: EnableRfc8441, connectTcp: AdvertisesConnectTcp(endPoint));
+        new(webSocket: EnableRfc8441, webTransport: AdvertisesWebTransport(endPoint),
+            connectTcp: AdvertisesConnectTcp(endPoint));
+
+    /// <summary>
+    ///     When <see langword="true"/>, explicit listeners accept <c>:protocol=webtransport</c>
+    ///     on HTTP/1.1 and HTTP/2. Reverse listeners stay off unless
+    ///     <see cref="ProxyEndPoint.AcceptWebTransport"/> is set. HTTP/3 stays 501.
+    ///     Default: <see langword="false"/>.
+    /// </summary>
+    public bool EnableWebTransport { get; set; }
+
+    /// <summary>True when this listener accepts capsule WebTransport on HTTP/1.1 and HTTP/2.</summary>
+    internal bool AdvertisesWebTransport(ProxyEndPoint endPoint) =>
+        endPoint.AcceptWebTransport || (EnableWebTransport && endPoint is ExplicitProxyEndPoint);
+
+    /// <summary>
+    ///     Extended CONNECT advertisement for connect-tcp or WebTransport.
+    ///     Does not include <see cref="EnableRfc8441"/>; that flag is passed separately.
+    /// </summary>
+    internal bool AdvertisesExtendedConnect(ProxyEndPoint endPoint) =>
+        AdvertisesConnectTcp(endPoint) || AdvertisesWebTransport(endPoint);
 
     /// <summary>
     ///     Enable HTTP/3 (QUIC) support. When <see langword="true" />:

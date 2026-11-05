@@ -715,7 +715,8 @@ public partial class ProxyServer
                                         true, false, ct))!;
                                     return extra;
                                 },
-                                advertisesConnectProtocol: AdvertisesConnectTcp(endPoint));
+                                advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+                                advertiseWebTransport: AdvertisesWebTransport(endPoint));
                     }
                     finally
                     {

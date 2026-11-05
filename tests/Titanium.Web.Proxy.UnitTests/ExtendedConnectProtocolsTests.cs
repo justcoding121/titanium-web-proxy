@@ -41,7 +41,7 @@ public class ExtendedConnectProtocolsTests
         Assert.IsTrue(support.WebTransport);
         Assert.IsTrue(support.ConnectTcp);
         Assert.IsTrue(support.ConnectUdp);
-        Assert.IsFalse(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.WebTransport, support));
+        Assert.IsTrue(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.WebTransport, support));
         Assert.IsTrue(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.ConnectTcp, support));
         Assert.IsFalse(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.ConnectUdp, support));
         Assert.IsTrue(ExtendedConnectProtocols.IsWebTransport("WebTransport"));

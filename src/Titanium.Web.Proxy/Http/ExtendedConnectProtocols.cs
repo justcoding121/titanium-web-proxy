@@ -45,6 +45,8 @@ internal static class ExtendedConnectProtocols
     {
         if (IsWebSocket(protocol))
             return support.WebSocket;
+        if (IsWebTransport(protocol))
+            return support.WebTransport;
         if (IsConnectTcp(protocol))
             return support.ConnectTcp;
 

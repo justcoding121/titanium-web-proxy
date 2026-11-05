@@ -13,5 +13,11 @@ internal enum Http2SettingsId
     MaxHeaderListSize = 0x6,
 
     /// <summary>RFC 8441 §3: enables extended CONNECT (WebSocket-over-HTTP/2) on this connection.</summary>
-    EnableConnectProtocol = 0x8
+    EnableConnectProtocol = 0x8,
+
+    /// <summary>
+    ///     draft-ietf-webtrans-http2 SETTINGS_WT_MAX_SESSIONS. A positive value advertises WebTransport.
+    ///     The proxy sends 1 on connections that opt in.
+    /// </summary>
+    WtMaxSessions = 0x2b60
 }

@@ -2174,6 +2174,21 @@ namespace Titanium.Web.Proxy.Http2
                             // to receive. Store it so outbound header encoding can respect the peer's limit.
                             localSettings.MaxHeaderListSize = value > int.MaxValue ? int.MaxValue : (int)value;
                         }
+                        else if (identifier == (int)Http2SettingsId.WtMaxSessions)
+                        {
+                            if (isClient)
+                            {
+                                // Do not forward the client's WebTransport setting to the origin.
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = 0;
+                            }
+                            else
+                            {
+                                localSettings.WtMaxSessions = value < 0 ? 0 : value > int.MaxValue ? int.MaxValue : (int)value;
+                            }
+                        }
                         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
                         {
                             // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
@@ -2249,6 +2264,20 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 3] = 0;
                         buffer[length + 4] = 0;
                         buffer[length + 5] = 0;
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
+                    if (!isClient && !suppressConnectionFrameRelay && connectionState.AdvertiseWebTransport
+                        && (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length
+                        && localSettings.WtMaxSessions <= 0)
+                    {
+                        buffer[length] = (byte)(((int)Http2SettingsId.WtMaxSessions >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.WtMaxSessions & 0xff);
+                        buffer[length + 2] = 0;
+                        buffer[length + 3] = 0;
+                        buffer[length + 4] = 0;
+                        buffer[length + 5] = 1;
                         length += 6;
                         frameHeader.Length = length;
                     }

@@ -593,6 +593,15 @@ rows:
     docsLabel: 'Protocol support'
     note: 'HTTP/1.1, HTTP/2, and HTTP/3 clients reach origins that speak another version. Not every bridge covers every feature.'
   - area: 'Protocols'
+    capability: 'WebTransport over HTTP/1.1 and HTTP/2'
+    status: 'partial'
+    keys:
+      - 'server.enableWebTransport'
+      - 'listeners[].acceptWebTransport'
+    docs: '/docs/protocol-support'
+    docsLabel: 'Protocol support'
+    note: 'Capsule byte bridge. Off by default. HTTP/3 WebTransport is not implemented.'
+  - area: 'Protocols'
     capability: 'connect-tcp'
     status: 'partial'
     keys:

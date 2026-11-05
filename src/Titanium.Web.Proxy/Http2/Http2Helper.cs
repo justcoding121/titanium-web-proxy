@@ -215,7 +215,8 @@ namespace Titanium.Web.Proxy.Http2
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
             Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null,
             bool forceStaticHpackForMitmUnchangedRelay = false,
-            bool advertisesConnectProtocol = false)
+            bool advertisesConnectProtocol = false,
+            bool advertiseWebTransport = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
             // enableRfc8441 keeps its historical name. Together with advertisesConnectProtocol it
@@ -228,6 +229,7 @@ namespace Titanium.Web.Proxy.Http2
                 resourceLimits.MaxConcurrentStreamsPerConnection,
                 resourceLimits.MaxDeferredOutboundBytesPerStream,
                 resourceLimits.Http2WindowUpdateTimeoutSeconds);
+            connectionState.AdvertiseWebTransport = advertiseWebTransport;
 
             try
             {

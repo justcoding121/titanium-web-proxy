@@ -278,6 +278,9 @@ Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableDecryptFailureBypass.set -> void
 Titanium.Web.Proxy.ProxyServer.EnableConnectTcp.get -> bool
 Titanium.Web.Proxy.ProxyServer.EnableConnectTcp.set -> void
+Titanium.Web.Proxy.ProxyServer.EnableWebTransport.get -> bool
+Titanium.Web.Proxy.ProxyServer.EnableWebTransport.set -> void
+Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport.get -> bool
 Titanium.Web.Proxy.ProxyServer.ForceDecryptFailureBypass(string! host) -> bool
 Titanium.Web.Proxy.ProxyServer.GetDecryptFailureBypassEntries() -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.DecryptFailureBypassEntry!>!
 Titanium.Web.Proxy.ProxyServer.HttpResponseCacheFiller.get -> System.Action<Titanium.Web.Proxy.EventArguments.SessionEventArgs!>?
@@ -378,6 +381,8 @@ Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.get -> bool
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp.get -> bool
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport.get -> bool
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.get -> System.Collections.Generic.IReadOnlyList<string!>?
 Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.set -> void
 Titanium.Web.Proxy.Configuration.ProxyConfigHost.RememberAppliedClusters(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters) -> void

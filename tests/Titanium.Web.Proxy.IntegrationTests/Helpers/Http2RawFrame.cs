@@ -348,6 +348,21 @@ internal static class Http2RawFrame
         }
 
         /// <summary>
+        ///     SETTINGS_ENABLE_CONNECT_PROTOCOL=1 and SETTINGS_WT_MAX_SESSIONS=1.
+        /// </summary>
+        public Task SendInitialSettingsWithWebTransportAsync()
+        {
+            var payload = new byte[12];
+            payload[0] = (byte)(((int)Http2SettingsId.EnableConnectProtocol >> 8) & 0xff);
+            payload[1] = (byte)((int)Http2SettingsId.EnableConnectProtocol & 0xff);
+            payload[5] = 1;
+            payload[6] = (byte)(((int)Http2SettingsId.WtMaxSessions >> 8) & 0xff);
+            payload[7] = (byte)((int)Http2SettingsId.WtMaxSessions & 0xff);
+            payload[11] = 1;
+            return WriteFrameAsync(Http2FrameType.Settings, 0, 0, payload);
+        }
+
+        /// <summary>
         ///     Reads frames until a SETTINGS frame that is NOT a SETTINGS ACK is found, then returns
         ///     the decoded settings entries. Skips interleaved ACK, WINDOW_UPDATE, PING, etc.
         /// </summary>

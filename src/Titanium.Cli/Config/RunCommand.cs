@@ -2028,6 +2028,11 @@ internal static class RunCommand
             endPoint.AcceptConnectTcp = true;
         }
 
+        if (listener.AcceptWebTransport)
+        {
+            endPoint.AcceptWebTransport = true;
+        }
+
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
         {
             endPoint.ClientCertificateTrustedRoots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);

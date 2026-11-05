@@ -740,6 +740,32 @@ namespace Titanium.Web.Proxy.Http2
                                 if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
                                 pendingSynthetics.Track(synthTask501);
                             }
+                            else if (ExtendedConnectProtocols.IsWebTransport(ecProto)
+                                     && connectionState.ServerSettings.WtMaxSessions <= 0)
+                            {
+                                sessionArgs.GenericResponse(
+                                    "WebTransport refused: origin did not advertise SETTINGS_WT_MAX_SESSIONS.",
+                                    HttpStatusCode.NotImplemented);
+                                syntheticStreams.TryAdd(hbStreamId, 0);
+                                connectionState.Streams.TryGetValue(hbStreamId, out var wtProtoState);
+                                var linkedWt = wtProtoState != null
+                                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                        wtProtoState.Cancellation.Token)
+                                    : null;
+                                var wtToken = linkedWt?.Token ?? cancellationToken;
+                                var wtTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
+                                        connectionState, input, wtToken, onAfterResponse, logger)
+                                    .ContinueWith(t =>
+                                    {
+                                        linkedWt?.Dispose();
+                                        if (t.IsFaulted)
+                                            ReportException(logger, new ProxyHttpException(
+                                                SyntheticResponseFailedMessage,
+                                                t.Exception.GetBaseException(), sessionArgs));
+                                    }, TaskScheduler.Default);
+                                if (wtProtoState != null) wtProtoState.SyntheticTask = wtTask;
+                                pendingSynthetics.Track(wtTask);
+                            }
                             else if (!connectionState.ServerSettings.EnableConnectProtocol)
                             {
                                 // Origin did not advertise SETTINGS_ENABLE_CONNECT_PROTOCOL=1.

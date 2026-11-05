@@ -101,6 +101,9 @@ public sealed class ListenerConfig
     /// </summary>
     public bool AcceptConnectTcp { get; set; }
 
+    /// <summary>When true, this listener accepts HTTP/1.1 and HTTP/2 WebTransport.</summary>
+    public bool AcceptWebTransport { get; set; }
+
     /// <summary>
     /// When true, enables HTTP/3 on the proxy and transparent endpoints.
     /// When false, disables HTTP/3. Null inherits host default (on when the OS supports QUIC).

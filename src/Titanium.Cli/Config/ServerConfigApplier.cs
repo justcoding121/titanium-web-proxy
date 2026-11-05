@@ -159,6 +159,7 @@ internal static class ServerConfigApplier
 
         ApplyBool(server.EnableRfc8441, v => proxy.EnableRfc8441 = v);
         ApplyBool(server.EnableConnectTcp, v => proxy.EnableConnectTcp = v);
+        ApplyBool(server.EnableWebTransport, v => proxy.EnableWebTransport = v);
         ApplyBool(server.EnableQpackDynamicTable, v => proxy.EnableQpackDynamicTable = v);
         ApplyBool(server.EnableHttpsSvcbDnsDiscovery, v => proxy.EnableHttpsSvcbDnsDiscovery = v);
         ApplyBool(server.Enable100ContinueBehaviour, v => proxy.Enable100ContinueBehaviour = v);

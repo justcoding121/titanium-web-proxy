@@ -49,6 +49,9 @@ public sealed class ServerConfig
     /// </summary>
     public bool? EnableConnectTcp { get; set; }
 
+    /// <summary>When true, explicit listeners accept HTTP/1.1 and HTTP/2 WebTransport.</summary>
+    public bool? EnableWebTransport { get; set; }
+
     public bool? EnableQpackDynamicTable { get; set; }
 
     public bool? EnableHttpsSvcbDnsDiscovery { get; set; }

@@ -253,6 +253,21 @@ public class Request : RequestResponseBase
     }
 
     /// <summary>
+    ///     HTTP/1.1 <c>Upgrade: webtransport</c> or HTTP/2 <c>:protocol=webtransport</c>.
+    /// </summary>
+    public bool UpgradeToWebTransport
+    {
+        get
+        {
+            if (ExtendedConnectProtocols.IsWebTransport(ExtendedConnectProtocol))
+                return true;
+
+            var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+            return headerValue != null && headerValue.EqualsIgnoreCase("webtransport");
+        }
+    }
+
+    /// <summary>
     ///     Did server respond positively for 100 continue request?
     /// </summary>
     public bool ExpectationSucceeded { get; internal set; }

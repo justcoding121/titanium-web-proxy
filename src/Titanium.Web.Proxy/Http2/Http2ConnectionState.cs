@@ -237,6 +237,9 @@ internal sealed class Http2ConnectionState
     /// </summary>
     public volatile bool DownstreamAdvertisedEnableConnect;
 
+    /// <summary>This connection should advertise SETTINGS_WT_MAX_SESSIONS=1 to the client.</summary>
+    public bool AdvertiseWebTransport;
+
     /// <summary>
     ///     0 until the Chrome-sized connection WINDOW_UPDATE has been written to the origin on the H2↔H2
     ///     MITM path (after the browser's first non-ACK SETTINGS is relayed). CompareExchange-guarded so

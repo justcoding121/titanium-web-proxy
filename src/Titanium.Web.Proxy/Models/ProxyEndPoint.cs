@@ -73,6 +73,13 @@ public abstract class ProxyEndPoint
     public bool AcceptConnectTcp { get; set; }
 
     /// <summary>
+    ///     When <see langword="true"/>, this listener accepts HTTP/1.1 and HTTP/2 WebTransport
+    ///     (<c>Upgrade: webtransport</c> or <c>:protocol=webtransport</c>) and advertises
+    ///     extended CONNECT plus SETTINGS_WT_MAX_SESSIONS. Default <see langword="false"/>.
+    /// </summary>
+    public bool AcceptWebTransport { get; set; }
+
+    /// <summary>
     ///     Generic certificate to use for SSL decryption.
     /// </summary>
     public X509Certificate2? GenericCertificate { get; set; }
