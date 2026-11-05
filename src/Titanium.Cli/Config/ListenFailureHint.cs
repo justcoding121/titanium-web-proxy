@@ -18,17 +18,10 @@ internal static class ListenFailureHint
         Func<string, int?>? readPid = null)
     {
         var text = ex.Message;
-        var listeners = config.Listeners;
-        if (listeners is not null)
+        var listenerIndex = FindListenerIndex(config.Listeners, ex.Port);
+        if (listenerIndex >= 0)
         {
-            for (var i = 0; i < listeners.Count; i++)
-            {
-                if (listeners[i].Port == ex.Port)
-                {
-                    text += $" (config: listeners[{i}].port)";
-                    break;
-                }
-            }
+            text += $" (config: listeners[{listenerIndex}].port)";
         }
 
         if (!ex.IsAddressInUse)
@@ -47,5 +40,23 @@ internal static class ListenFailureHint
         }
 
         return text;
+    }
+
+    private static int FindListenerIndex(IList<ListenerConfig>? listeners, int port)
+    {
+        if (listeners is null)
+        {
+            return -1;
+        }
+
+        for (var i = 0; i < listeners.Count; i++)
+        {
+            if (listeners[i].Port == port)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 }

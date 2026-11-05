@@ -272,7 +272,7 @@ public class ProxyLifecycleTests
         second.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
         try
         {
-            var ex = Assert.ThrowsException<ProxyListenException>(() => second.Start());
+            var ex = Assert.ThrowsExactly<ProxyListenException>(() => second.Start());
             StringAssert.Contains(ex.Message, "address already in use");
             StringAssert.Contains(ex.Message, port.ToString(System.Globalization.CultureInfo.InvariantCulture));
             Assert.AreEqual(port, ex.Data["port"]);
@@ -312,7 +312,7 @@ public class ProxyLifecycleTests
         var failed = new ExplicitProxyEndPoint(IPAddress.Loopback, occupiedPort, false);
         try
         {
-            var ex = Assert.ThrowsException<ProxyListenException>(() => proxy.AddEndPoint(failed));
+            var ex = Assert.ThrowsExactly<ProxyListenException>(() => proxy.AddEndPoint(failed));
             StringAssert.Contains(ex.Message, "address already in use");
             Assert.IsFalse(proxy.ProxyEndPoints.Contains(failed));
             Assert.IsTrue(proxy.ProxyRunning);

@@ -497,11 +497,11 @@ internal static class RunCommand
                 return 1;
             }
 
-            foreach (var pair in runningListeners)
+            foreach (var running in runningListeners.Select(pair => pair.Value))
             {
-                if (pair.Value.Config.Port == 0)
+                if (running.Config.Port == 0)
                 {
-                    var bound = pair.Value.Endpoint;
+                    var bound = running.Endpoint;
                     AsyncConsole.WriteLine($"Listener {bound.IpAddress}:{bound.Port} resolved from port 0");
                 }
             }

@@ -37,7 +37,7 @@ public sealed class HealthServer : IDisposable
         }
         catch (HttpListenerException ex)
         {
-            _log.LogError(ex, "Health endpoint failed to bind {Prefix}: {Message}", ProbePrefix(_port), ex.Message);
+            _log.LogError("Health endpoint failed to bind {Prefix}: {Message}", ProbePrefix(_port), ex.Message);
             throw;
         }
 

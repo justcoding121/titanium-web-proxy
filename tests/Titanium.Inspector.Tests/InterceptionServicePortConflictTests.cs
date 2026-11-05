@@ -20,7 +20,7 @@ public class InterceptionServicePortConflictTests
             UseInMemoryTrustState = true,
         };
 
-        var failed = await Assert.ThrowsExceptionAsync<Titanium.Web.Proxy.Exceptions.ProxyListenException>(
+        var failed = await Assert.ThrowsExactlyAsync<Titanium.Web.Proxy.Exceptions.ProxyListenException>(
             () => interception.StartAsync(IPAddress.Loopback, port));
         Assert.IsTrue(failed.IsAddressInUse);
         Assert.IsFalse(interception.IsRunning);

@@ -1838,7 +1838,14 @@ public static class TwpConfigValidator
 
     private static void ValidateListenerOverlaps(TwpConfig config, List<string> errors)
     {
-        var listeners = config.Listeners ?? [];
+        var bound = CollectBoundListeners(config.Listeners ?? []);
+        ReportListenerPairOverlaps(errors, bound);
+        ReportServicePortOverlaps(config, errors, bound);
+    }
+
+    private static List<(int Index, string Protocol, string Host, int Port)> CollectBoundListeners(
+        IList<ListenerConfig> listeners)
+    {
         var bound = new List<(int Index, string Protocol, string Host, int Port)>();
         for (var i = 0; i < listeners.Count; i++)
         {
@@ -1848,20 +1855,26 @@ public static class TwpConfigValidator
                 continue;
             }
 
-            var protocol = IsUdpListener(listener)
-                           || string.Equals(listener.Type, "quic", StringComparison.OrdinalIgnoreCase)
-                ? "udp"
-                : "tcp";
-            bound.Add((i, protocol, NormalizeBindHost(listener.Host), listener.Port));
+            bound.Add((i, ListenerTransport(listener), NormalizeBindHost(listener.Host), listener.Port));
         }
 
+        return bound;
+    }
+
+    private static string ListenerTransport(ListenerConfig listener) =>
+        IsUdpListener(listener) || string.Equals(listener.Type, "quic", StringComparison.OrdinalIgnoreCase)
+            ? "udp"
+            : "tcp";
+
+    private static void ReportListenerPairOverlaps(
+        List<string> errors,
+        List<(int Index, string Protocol, string Host, int Port)> bound)
+    {
         for (var a = 0; a < bound.Count; a++)
         {
             for (var b = a + 1; b < bound.Count; b++)
             {
-                if (bound[a].Protocol != bound[b].Protocol
-                    || bound[a].Port != bound[b].Port
-                    || !BindHostsOverlap(bound[a].Host, bound[b].Host))
+                if (!ListenersConflict(bound[a], bound[b]))
                 {
                     continue;
                 }
@@ -1870,34 +1883,38 @@ public static class TwpConfigValidator
                     $"Listener port {bound[a].Port} (listeners[{bound[a].Index}]) conflicts with listeners[{bound[b].Index}]: both bind {bound[a].Protocol} on overlapping addresses.");
             }
         }
+    }
 
+    private static bool ListenersConflict(
+        (int Index, string Protocol, string Host, int Port) left,
+        (int Index, string Protocol, string Host, int Port) right) =>
+        left.Protocol == right.Protocol
+        && left.Port == right.Port
+        && BindHostsOverlap(left.Host, right.Host);
+
+    private static void ReportServicePortOverlaps(
+        TwpConfig config,
+        List<string> errors,
+        List<(int Index, string Protocol, string Host, int Port)> bound)
+    {
         if (config.Server?.Admin is { Enabled: true } admin && admin.Port is > 0)
         {
-            ReportTcpServiceOverlap(errors, bound, "server.admin", NormalizeBindHost(admin.Host ?? "127.0.0.1"), admin.Port.Value);
+            ReportTcpServiceOverlap(errors, bound, "server.admin", NormalizeBindHost(admin.Host ?? LoopbackIPv4), admin.Port.Value);
         }
 
-        if (config.Server?.Metrics is { Enabled: true } metrics)
+        if (config.Server?.Metrics is { Enabled: true } metrics && (metrics.Port ?? 9464) > 0)
         {
-            var port = metrics.Port ?? 9464;
-            if (port > 0)
-            {
-                ReportTcpServiceOverlap(errors, bound, "server.metrics", NormalizeBindHost(metrics.Host ?? "127.0.0.1"), port);
-            }
+            ReportTcpServiceOverlap(errors, bound, "server.metrics", NormalizeBindHost(metrics.Host ?? LoopbackIPv4), metrics.Port ?? 9464);
         }
 
-        if (config.Plus is { Enabled: true } plus)
+        if (config.Plus is { Enabled: true } plus && (plus.ControlPlane?.Port ?? 9080) > 0)
         {
-            var control = plus.ControlPlane;
-            var port = control?.Port ?? 9080;
-            if (port > 0)
-            {
-                ReportTcpServiceOverlap(
-                    errors,
-                    bound,
-                    "plus.controlPlane",
-                    NormalizeBindHost(control?.Host ?? "127.0.0.1"),
-                    port);
-            }
+            ReportTcpServiceOverlap(
+                errors,
+                bound,
+                "plus.controlPlane",
+                NormalizeBindHost(plus.ControlPlane?.Host ?? LoopbackIPv4),
+                plus.ControlPlane?.Port ?? 9080);
         }
     }
 
@@ -1926,9 +1943,9 @@ public static class TwpConfigValidator
             return "*";
         }
 
-        if (trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase) || trimmed == "127.0.0.1")
+        if (trimmed.Equals(LocalhostHostName, StringComparison.OrdinalIgnoreCase) || trimmed == LoopbackIPv4)
         {
-            return "127.0.0.1";
+            return LoopbackIPv4;
         }
 
         return trimmed.Trim('[', ']');

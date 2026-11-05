@@ -28,7 +28,7 @@ public class HealthServerBindTests
             }
 
             using var second = new HealthServer(port, () => true, NullLogger.Instance, prefix);
-            await Assert.ThrowsExceptionAsync<HttpListenerException>(() => second.RunAsync(CancellationToken.None));
+            await Assert.ThrowsExactlyAsync<HttpListenerException>(() => second.RunAsync(CancellationToken.None));
         }
         finally
         {
