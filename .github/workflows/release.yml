@@ -254,8 +254,9 @@ jobs:
             os: ubuntu-24.04-arm
           - rid: win-x64
             os: windows-latest
+          # osx-x64 Lua is compiled on the host, so this leg needs Intel. macos-13 no longer has runners.
           - rid: osx-x64
-            os: macos-13
+            os: macos-15-intel
           - rid: osx-arm64
             os: macos-latest
     steps:
