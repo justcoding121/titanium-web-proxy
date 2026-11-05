@@ -64,6 +64,11 @@ jobs:
           echo "nproc=$(nproc)"
           lscpu | sed -n '1,20p'
 
+      - name: Ensure MsQuic
+        uses: ./.github/actions/ensure-msquic
+        with:
+          require: "false"
+
       - name: Install profiling tools, nginx, HAProxy and libmsquic
         run: |
           set -euo pipefail
@@ -79,14 +84,6 @@ jobs:
           perf --version
           sudo apt-get install -y nginx haproxy || true
           sudo systemctl stop nginx haproxy || true
-          . /etc/os-release
-          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-            "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
-            -o packages-microsoft-prod.deb
-          sudo dpkg -i packages-microsoft-prod.deb
-          rm -f packages-microsoft-prod.deb
-          sudo apt-get update || true
-          sudo apt-get install -y libmsquic || true
           dotnet tool install -g dotnet-trace
           dotnet tool install -g dotnet-counters
           dotnet tool install -g dotnet-symbol

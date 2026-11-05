@@ -15,3 +15,9 @@ Pull requests run unit, integration, configuration, Plus, Gateway, scripting, Ma
 `.github/required-checks.json` is the only list of merge checks. On `beta` and `stable` the ruleset requires `merge-gate` (the `.NET` build, Redis fleet, and three-OS UI and CLI jobs), the three-OS RPS spot check, secret scan, dependency review, tests-or-waiver, the path guard, and the CLA check. `develop` does not enforce that list. Setting `CONFORMANCE_ENFORCE` or `GATEWAY_CONFORMANCE_ENFORCE` after a green nightly, and applying the ruleset, is a maintainer step. CI does not change those repository settings.
 
 Live Inspector decrypt on a developer PC still needs a person if the OS asks to install a root. CI uses an ephemeral machine and `machine-trust`, not a developer trust store.
+
+## Native dependencies in CI
+
+- Pull request: the surface works, or a dedicated gate fails. HTTP/3 runs on the Windows `build` job (in-box MsQuic, `TITANIUM_REQUIRE_QUIC=1`) and on `ui-portable` for Windows, Linux, and macOS via `.github/actions/ensure-msquic`. `cli-e2e` does not pre-install MsQuic, so `http3-deps install` exercises the real install path. Scripting natives are bundled beside the CLI in `cli-e2e`. Redis runs in `redis-fleet` with `TITANIUM_REQUIRE_REDIS=1`.
+- Release: the shipped zip loads its natives. `smoke-http3` and `smoke-scripting` both gate `publish-release`.
+- Nightly: soak, the RPS lab, inspector-unattended, and conformance. Conformance stays soft until `CONFORMANCE_ENFORCE` is set.

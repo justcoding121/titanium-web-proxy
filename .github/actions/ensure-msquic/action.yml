@@ -1,0 +1,116 @@
+name: Ensure MsQuic
+description: Assert in-box MsQuic on Windows, or install libmsquic on Linux and macOS, then check QuicListener.IsSupported.
+
+inputs:
+  require:
+    description: Fail the step when QuicListener.IsSupported is false after setup.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Assert in-box MsQuic (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        REQUIRE: ${{ inputs.require }}
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          if ($env:REQUIRE -eq 'true') {
+            throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+          }
+          Write-Warning 'QuicListener.IsSupported is false on windows-latest'
+        } else {
+          Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+        }
+
+    - name: Install libmsquic (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        REQUIRE: ${{ inputs.require }}
+      run: |
+        set -euo pipefail
+        . /etc/os-release
+        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
+          -o packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        rm -f packages-microsoft-prod.deb
+        sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
+        sudo apt-get update || true
+        sudo apt-get install -y libmsquic
+        if [[ "$REQUIRE" == "true" ]]; then
+          pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
+        else
+          pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { Write-Warning "QuicListener.IsSupported is false after libmsquic install" } else { Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)" }'
+        fi
+
+    - name: Install MsQuic (macOS)
+      if: runner.os == 'macOS'
+      shell: pwsh
+      env:
+        REQUIRE: ${{ inputs.require }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $env:HOMEBREW_NO_AUTO_UPDATE = '1'
+        $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
+        brew install openssl@3 libmsquic
+        $prefix = (& brew --prefix).Trim()
+        $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
+        $sslLib = Join-Path $prefix 'opt/openssl@3/lib'
+        $libDirs = @($msquicLib, $sslLib, (Join-Path $prefix 'lib')) |
+          Where-Object { Test-Path $_ } |
+          Select-Object -Unique
+        $dyld = ($libDirs -join ':')
+        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld"
+        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld"
+        $env:DYLD_LIBRARY_PATH = $dyld
+        $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld
+        Write-Host "DYLD_LIBRARY_PATH=$dyld"
+
+        function Test-QuicSupported {
+          $out = & pwsh -NoProfile -Command {
+            if (-not [System.Net.Quic.QuicListener]::IsSupported) { '0' } else { '1' }
+          }
+          return ($out.Trim() -eq '1')
+        }
+
+        if (-not (Test-QuicSupported)) {
+          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic drop'
+          $arch = (& uname -m).Trim()
+          $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
+          $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          $tag = 'v2.4.7'
+          $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_${rid}_$tag.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'msquic-osx.zip'
+          try {
+            & curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 $url -o $zip
+            if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
+            Expand-Archive -Path $zip -DestinationPath $dest -Force
+          } catch {
+            Write-Warning "Microsoft release download failed ($url): $_"
+          }
+          $found = Get-ChildItem -Path $dest -Recurse -Filter 'libmsquic*.dylib' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($found) {
+            $extra = $found.Directory.FullName
+            $dyld2 = "${extra}:${dyld}"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
+            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
+            $env:DYLD_LIBRARY_PATH = $dyld2
+            $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld2
+            Write-Host "Added Microsoft dylib dir: $extra"
+          }
+        }
+
+        if (-not (Test-QuicSupported)) {
+          if ($env:REQUIRE -eq 'true') {
+            throw 'QuicListener.IsSupported is false after macOS MsQuic install (brew + optional Microsoft drop)'
+          }
+          Write-Warning 'QuicListener.IsSupported is false after macOS MsQuic install'
+        } else {
+          Write-Host 'QuicListener.IsSupported=True'
+        }

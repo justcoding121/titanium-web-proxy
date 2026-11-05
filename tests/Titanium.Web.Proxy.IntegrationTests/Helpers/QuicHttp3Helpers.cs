@@ -11,6 +11,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.TestKit;
 using Titanium.Web.Proxy.Http3;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
@@ -21,6 +22,11 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 /// <summary>
 ///     Minimal HTTP/3 origin over <see cref="QuicListener" /> for end-to-end proxy tests.
 /// </summary>
+internal static class QuicHttp3Helpers
+{
+    internal static void RequireQuic() => QuicTestHelper.RequireQuic();
+}
+
 internal sealed class QuicHttp3OriginServer : IAsyncDisposable
 {
     private readonly X509Certificate2 certificate;
@@ -38,6 +44,7 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
     /// </param>
     public QuicHttp3OriginServer(X509Certificate2 certificate, int port = 0)
     {
+        QuicHttp3Helpers.RequireQuic();
         this.certificate = certificate;
         // HttpClient / the proxy resolve "localhost" to ::1 first, while QuicHttp3Client connects
         // to 127.0.0.1. Both families, same port, no wildcard. MsQuic still opens per-processor
