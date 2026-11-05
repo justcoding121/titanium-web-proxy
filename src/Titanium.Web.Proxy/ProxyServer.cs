@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
@@ -1105,9 +1106,9 @@ public partial class ProxyServer : IDisposable
     public int ListenerBackLog { get; set; } = 1024;
 
     /// <summary>
-    ///     When true (default), SO_REUSEADDR is requested where
-    ///     <see cref="Helpers.RunTime.IsSocketReuseAvailable" /> reports support (always on Windows; on
-    ///     non-Windows, .NET Core 3+ / compatible runtimes).
+    ///     When true (default), SO_REUSEADDR is requested on outbound sockets, and on non-Windows
+    ///     listeners, where <see cref="Helpers.RunTime.IsSocketReuseAvailable" /> reports support.
+    ///     Windows listeners omit it so a second process cannot bind the same port.
     /// </summary>
     public bool ReuseSocket { get; set; } = true;
 
@@ -1806,11 +1807,18 @@ public partial class ProxyServer : IDisposable
     {
         endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-        if (ReuseSocket && RunTime.IsSocketReuseAvailable())
-            endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-
         try
         {
+            // Windows: do not set SO_REUSEADDR. With it, a second process can bind the same
+            // address. SO_EXCLUSIVEADDRUSE would also block that, but it breaks overlapped
+            // AcceptAsync, so connections never complete. Leaving reuse off is enough for
+            // two listeners that both omit it, and the same process can bind the port again
+            // after Stop. Non-Windows keeps SO_REUSEADDR so a restart can bind through TIME_WAIT.
+            if (!OperatingSystem.IsWindows() && ReuseSocket && RunTime.IsSocketReuseAvailable())
+            {
+                endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            }
+
             // SO_REUSEPORT = 15. SetRawSocketOption talks to the kernel directly: SetSocketOption(ReusePort)
             // throws SocketException "Operation not supported" on some Linux hosts (the option is outside the try
             // that wraps Start, so the process used to exit before it was ready).
@@ -1834,13 +1842,28 @@ public partial class ProxyServer : IDisposable
         }
         catch (SocketException ex)
         {
-            var pex = new Exception(
-                $"Endpoint {endPoint} failed to start. Check inner exception and exception data for details.", ex);
-            pex.Data.Add("ipAddress", endPoint.IpAddress);
-            pex.Data.Add("port", endPoint.Port);
-            throw pex;
+            try
+            {
+                endPoint.Listener?.Server.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already released.
+            }
+
+            endPoint.Listener = null;
+            throw new ProxyListenException(DescribeEndPointKind(endPoint), endPoint.IpAddress, endPoint.Port, ex);
         }
     }
+
+    private static string DescribeEndPointKind(ProxyEndPoint endPoint) => endPoint switch
+    {
+        ExplicitProxyEndPoint => "explicit",
+        TransparentProxyEndPoint => "transparent",
+        SocksProxyEndPoint => "socks",
+        MasqueProxyEndPoint => "masque",
+        _ => endPoint.GetType().Name,
+    };
 
     /// <summary>
     ///     Verify if its safe to set this end point as system proxy.

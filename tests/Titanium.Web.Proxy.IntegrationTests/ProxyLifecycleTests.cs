@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
@@ -245,6 +246,85 @@ public class ProxyLifecycleTests
         finally
         {
             if (proxy.ProxyRunning) proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     Two proxy instances must not share a fixed port. Windows listeners omit SO_REUSEADDR,
+    ///     so the second Start fails instead of accepting traffic on the same address.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public void Start_Throws_WhenAnotherProxyServerHoldsTheSameFixedPort()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Inconclusive("Windows-specific bind semantics.");
+        }
+
+        var first = new ProxyServer(false, false, false);
+        first.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        first.Start();
+        var port = first.ProxyEndPoints[0].Port;
+
+        var second = new ProxyServer(false, false, false);
+        second.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
+        try
+        {
+            var ex = Assert.ThrowsException<ProxyListenException>(() => second.Start());
+            StringAssert.Contains(ex.Message, "address already in use");
+            StringAssert.Contains(ex.Message, port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Assert.AreEqual(port, ex.Data["port"]);
+            Assert.IsFalse(second.ProxyRunning, "A failed Start() must leave ProxyRunning false.");
+        }
+        finally
+        {
+            if (second.ProxyRunning)
+            {
+                second.Stop();
+            }
+
+            second.Dispose();
+            if (first.ProxyRunning)
+            {
+                first.Stop();
+            }
+
+            first.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     A failed AddEndPoint on a running proxy must not leave the endpoint registered.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30 * 1000)]
+    public void AddEndPoint_RemovesEndpoint_WhenListenFailsWhileRunning()
+    {
+        using var occupier = new TcpListener(IPAddress.Loopback, 0);
+        occupier.Start();
+        var occupiedPort = ((IPEndPoint)occupier.LocalEndpoint).Port;
+
+        var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.Start();
+        var failed = new ExplicitProxyEndPoint(IPAddress.Loopback, occupiedPort, false);
+        try
+        {
+            var ex = Assert.ThrowsException<ProxyListenException>(() => proxy.AddEndPoint(failed));
+            StringAssert.Contains(ex.Message, "address already in use");
+            Assert.IsFalse(proxy.ProxyEndPoints.Contains(failed));
+            Assert.IsTrue(proxy.ProxyRunning);
+        }
+        finally
+        {
+            occupier.Stop();
+            if (proxy.ProxyRunning)
+            {
+                proxy.Stop();
+            }
+
             proxy.Dispose();
         }
     }

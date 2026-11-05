@@ -13,13 +13,20 @@ public sealed class HealthServer : IDisposable
     private readonly HttpListener _listener = new();
     private readonly Func<bool> _ready;
     private readonly ILogger _log;
+    private readonly int _port;
 
     public HealthServer(int port, Func<bool> ready, ILogger log)
+        : this(port, ready, log, $"http://+:{port}/")
     {
+    }
+
+    /// <summary>Test hook. Production uses <c>http://+:port/</c>, which is cleartext on purpose.</summary>
+    internal HealthServer(int port, Func<bool> ready, ILogger log, string prefix)
+    {
+        _port = port;
         _ready = ready;
         _log = log;
-        // Controller health binds cleartext; kube probes expect http:// on the health port.
-        _listener.Prefixes.Add($"http://+:{port}/"); // NOSONAR S5332 -- health endpoint is intentionally cleartext.
+        _listener.Prefixes.Add(prefix);
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -30,8 +37,8 @@ public sealed class HealthServer : IDisposable
         }
         catch (HttpListenerException ex)
         {
-            _log.LogWarning(ex, "Health endpoint not started: {Message}", ex.Message);
-            return;
+            _log.LogError(ex, "Health endpoint failed to bind {Prefix}: {Message}", $"http://+:{_port}/", ex.Message);
+            throw;
         }
 
         using var registration = cancellationToken.Register(() => _listener.Stop());

@@ -56,6 +56,7 @@ public static class TwpConfigValidator
         var pluginNames = ValidatePlugins(config.Plugins, errors);
         ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners ?? [], clusterIds, errors);
+        ValidateListenerOverlaps(config, errors);
         ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
         ValidateZoneAware(config, errors);
@@ -1834,6 +1835,107 @@ public static class TwpConfigValidator
         RequirePositiveIfSet(limits.MaxBufferedBodyBytes, $"routes.{route.Id}.limits.maxBufferedBodyBytes", errors);
         RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
     }
+
+    private static void ValidateListenerOverlaps(TwpConfig config, List<string> errors)
+    {
+        var listeners = config.Listeners ?? [];
+        var bound = new List<(int Index, string Protocol, string Host, int Port)>();
+        for (var i = 0; i < listeners.Count; i++)
+        {
+            var listener = listeners[i];
+            if (listener.Port == 0)
+            {
+                continue;
+            }
+
+            var protocol = IsUdpListener(listener)
+                           || string.Equals(listener.Type, "quic", StringComparison.OrdinalIgnoreCase)
+                ? "udp"
+                : "tcp";
+            bound.Add((i, protocol, NormalizeBindHost(listener.Host), listener.Port));
+        }
+
+        for (var a = 0; a < bound.Count; a++)
+        {
+            for (var b = a + 1; b < bound.Count; b++)
+            {
+                if (bound[a].Protocol != bound[b].Protocol
+                    || bound[a].Port != bound[b].Port
+                    || !BindHostsOverlap(bound[a].Host, bound[b].Host))
+                {
+                    continue;
+                }
+
+                errors.Add(
+                    $"Listener port {bound[a].Port} (listeners[{bound[a].Index}]) conflicts with listeners[{bound[b].Index}]: both bind {bound[a].Protocol} on overlapping addresses.");
+            }
+        }
+
+        if (config.Server?.Admin is { Enabled: true } admin && admin.Port is > 0)
+        {
+            ReportTcpServiceOverlap(errors, bound, "server.admin", NormalizeBindHost(admin.Host ?? "127.0.0.1"), admin.Port.Value);
+        }
+
+        if (config.Server?.Metrics is { Enabled: true } metrics)
+        {
+            var port = metrics.Port ?? 9464;
+            if (port > 0)
+            {
+                ReportTcpServiceOverlap(errors, bound, "server.metrics", NormalizeBindHost(metrics.Host ?? "127.0.0.1"), port);
+            }
+        }
+
+        if (config.Plus is { Enabled: true } plus)
+        {
+            var control = plus.ControlPlane;
+            var port = control?.Port ?? 9080;
+            if (port > 0)
+            {
+                ReportTcpServiceOverlap(
+                    errors,
+                    bound,
+                    "plus.controlPlane",
+                    NormalizeBindHost(control?.Host ?? "127.0.0.1"),
+                    port);
+            }
+        }
+    }
+
+    private static void ReportTcpServiceOverlap(
+        List<string> errors,
+        List<(int Index, string Protocol, string Host, int Port)> listeners,
+        string key,
+        string host,
+        int port)
+    {
+        foreach (var listener in listeners)
+        {
+            if (listener.Protocol == "tcp" && listener.Port == port && BindHostsOverlap(listener.Host, host))
+            {
+                errors.Add(
+                    $"{key} port {port} conflicts with listeners[{listener.Index}]: both bind tcp on overlapping addresses.");
+            }
+        }
+    }
+
+    private static string NormalizeBindHost(string? host)
+    {
+        var trimmed = (host ?? string.Empty).Trim();
+        if (trimmed.Length == 0 || trimmed is "*" or "0.0.0.0" or "::" or "[::]")
+        {
+            return "*";
+        }
+
+        if (trimmed.Equals("localhost", StringComparison.OrdinalIgnoreCase) || trimmed == "127.0.0.1")
+        {
+            return "127.0.0.1";
+        }
+
+        return trimmed.Trim('[', ']');
+    }
+
+    private static bool BindHostsOverlap(string left, string right) =>
+        left == "*" || right == "*" || string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateListeners(
         IEnumerable<ListenerConfig> listeners, HashSet<string> clusterIds, List<string> errors)

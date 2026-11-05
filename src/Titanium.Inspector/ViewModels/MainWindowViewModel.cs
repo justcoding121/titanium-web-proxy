@@ -13,6 +13,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Network;
@@ -3729,6 +3730,13 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 SetSteadyStatus(StatusReady);
             }
         }
+        catch (ProxyListenException ex)
+        {
+            SetOutcomeStatus(
+                ex.IsAddressInUse ? PortInUseMessage(ex.Port) : ex.Message,
+                StatusSeverity.Error,
+                toastImportant: true);
+        }
         finally
         {
             _startBusy = false;
@@ -3829,6 +3837,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     internal static string InvalidBindPortMessage(string text) =>
         $"Invalid port '{text}'. Use 1–65535, or * (or empty) for an OS-chosen port.";
+
+    internal static string PortInUseMessage(int port) =>
+        $"Port {port} is already in use. Pick another port, or enter * for a free port, then start again.";
 
     internal static bool TryParseHttpStatus(string? text, out int status)
     {

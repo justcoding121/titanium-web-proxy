@@ -539,3 +539,12 @@ Titanium.Web.Proxy.ProxyServer.SetOverloadRuntime(bool enabled, int level, bool 
 Titanium.Web.Proxy.ProxyServer.StartHttp3Listener(Titanium.Web.Proxy.Models.TransparentProxyEndPoint! endPoint) -> void
 Titanium.Web.Proxy.ProxyServer.CloseTcpListeners() -> void
 Titanium.Web.Proxy.ProxyServer.StopAcceptingNewConnections() -> void
+Titanium.Web.Proxy.Exceptions.ProxyListenException
+Titanium.Web.Proxy.Exceptions.ProxyListenException.ProxyListenException(string! endpointKind, System.Net.IPAddress! ipAddress, int port, System.Net.Sockets.SocketException! inner) -> void
+Titanium.Web.Proxy.Exceptions.ProxyListenException.EndpointKind.get -> string!
+Titanium.Web.Proxy.Exceptions.ProxyListenException.IpAddress.get -> System.Net.IPAddress!
+Titanium.Web.Proxy.Exceptions.ProxyListenException.Port.get -> int
+Titanium.Web.Proxy.Exceptions.ProxyListenException.SocketError.get -> System.Net.Sockets.SocketError
+Titanium.Web.Proxy.Exceptions.ProxyListenException.NativeErrorCode.get -> int
+Titanium.Web.Proxy.Exceptions.ProxyListenException.IsAddressInUse.get -> bool
+override Titanium.Web.Proxy.Models.ProxyEndPoint.ToString() -> string!

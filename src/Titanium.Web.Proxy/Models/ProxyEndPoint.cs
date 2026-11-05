@@ -57,6 +57,9 @@ public abstract class ProxyEndPoint
     /// </summary>
     public int Port { get; internal set; }
 
+    /// <summary>Address and port, so a bind failure does not print only the type name.</summary>
+    public override string ToString() => $"{IpAddress}:{Port}";
+
     /// <summary>
     ///     Enable SSL?
     /// </summary>

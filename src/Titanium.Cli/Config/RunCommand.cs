@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,7 @@ using Titanium.Web.Proxy.Abstractions.Scripting;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Plugins;
 using Titanium.Web.Proxy.Routing;
@@ -461,7 +463,16 @@ internal static class RunCommand
             // Subscribe before accept. A request that lands in the gap after Start() is served on the
             // fast path, which never raises AfterResponse, so the access file stays empty.
             accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
-            proxy.Start();
+            try
+            {
+                proxy.Start();
+            }
+            catch (ProxyListenException ex)
+            {
+                AsyncConsole.WriteError(ListenFailureHint.Format(ex, loaded.Config, configPath));
+                return 1;
+            }
+
             overloadHost.Apply(loaded.Config.Server?.Overload);
 
             if (previousProcess is not null && udpListeners.Count > 0)
@@ -472,6 +483,29 @@ internal static class RunCommand
             }
 
             StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
+            try
+            {
+                metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
+            }
+            catch (Exception ex) when (ex is SocketException or HttpListenerException or InvalidOperationException)
+            {
+                var metrics = loaded.Config.Server?.Metrics;
+                var metricsHost = metrics?.Host ?? MetricsHttpEndpoint.DefaultHost;
+                var metricsPort = metrics?.Port ?? MetricsHttpEndpoint.DefaultPort;
+                AsyncConsole.WriteError(
+                    $"Failed to bind metrics endpoint {metricsHost}:{metricsPort}: {ex.Message}. Set server.metrics.port to a free port.");
+                return 1;
+            }
+
+            foreach (var pair in runningListeners)
+            {
+                if (pair.Value.Config.Port == 0)
+                {
+                    var bound = pair.Value.Endpoint;
+                    AsyncConsole.WriteLine($"Listener {bound.IpAddress}:{bound.Port} resolved from port 0");
+                }
+            }
+
             readiness.MarkListenersBound();
 
             // Bound and ready: only now is the previous process asked to drain, so a start that fails earlier
@@ -486,8 +520,6 @@ internal static class RunCommand
             }
 
             StartAcmeIfConfigured(proxy, loaded.Config);
-
-            metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
 
             if (serviceMode)
             {
