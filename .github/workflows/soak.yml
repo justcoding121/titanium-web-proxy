@@ -1,7 +1,7 @@
 name: soak
 
 # 60-minute soak of the shipped CLI as a reverse proxy at constant load, using the existing RpsLoadProbe.
-# Heavy by design: nightly and workflow_dispatch only, never on pull requests. It is not run locally.
+# Heavy by design: nightly, workflow_dispatch, and push to beta or stable. Never on pull requests. It is not run locally.
 #
 # What the job asserts (any failure fails the run; the numbers are in the step summary and the artifact):
 #   1. Errors:   error_rate_pct of the measured window is below SOAK_MAX_ERROR_PCT (default 0.01) and the probe's own
@@ -20,6 +20,8 @@ name: soak
 on:
   schedule:
     - cron: '41 2 * * *'
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
     inputs:
       minutes:

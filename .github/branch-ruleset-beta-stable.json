@@ -17,6 +17,7 @@
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_review_thread_resolution": true,
+        "require_extra_approval_for_unattributed_changes": true,
         "allowed_merge_methods": ["merge", "squash", "rebase"]
       }
     },
@@ -26,21 +27,38 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": ".NET / build" },
-          { "context": ".NET / ui-portable (windows-latest)" },
-          { "context": ".NET / ui-portable (ubuntu-latest)" },
-          { "context": ".NET / ui-portable (macos-latest)" },
-          { "context": ".NET / cli-e2e (windows-latest)" },
-          { "context": ".NET / cli-e2e (ubuntu-latest)" },
-          { "context": ".NET / cli-e2e (macos-latest)" },
-          { "context": "RPS saturation / rps (ubuntu-latest)" },
-          { "context": "RPS saturation / rps (windows-latest)" },
-          { "context": "RPS saturation / rps (macos-15)" }
+          { "context": "merge-gate", "integration_id": 15368 },
+          { "context": "rps (ubuntu-latest)", "integration_id": 15368 },
+          { "context": "rps (windows-latest)", "integration_id": 15368 },
+          { "context": "rps (macos-15)", "integration_id": 15368 },
+          { "context": "gitleaks", "integration_id": 15368 },
+          { "context": "dependency-review", "integration_id": 15368 },
+          { "context": "tests-or-waiver", "integration_id": 15368 },
+          { "context": "guard-nc-paths", "integration_id": 15368 },
+          { "context": "cla", "integration_id": 15368 }
+        ]
+      }
+    },
+    {
+      "type": "code_scanning",
+      "parameters": {
+        "code_scanning_tools": [
+          {
+            "tool": "CodeQL",
+            "security_alerts_threshold": "high_or_higher",
+            "alerts_threshold": "errors"
+          }
         ]
       }
     },
     { "type": "non_fast_forward" },
     { "type": "deletion" }
   ],
-  "bypass_actors": []
+  "bypass_actors": [
+    {
+      "actor_id": 5,
+      "actor_type": "RepositoryRole",
+      "bypass_mode": "pull_request"
+    }
+  ]
 }

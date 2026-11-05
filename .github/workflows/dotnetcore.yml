@@ -18,19 +18,53 @@ on:
         - develop
         - beta
         - stable
-    paths-ignore:
-      - 'website/**'
-      - 'wiki/**'
-      - 'docs/**'
-      - '*.md'
-      - '.github/workflows/deploy-website.yml'
-      - '.github/dns/**'
 
 permissions:
   contents: read
 
 jobs:
+  # Docs-only pull requests still have to report merge-gate. A paths-ignore on
+  # pull_request left the required checks waiting forever.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.paths.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: paths
+        name: Classify the diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+          code=false
+          while IFS= read -r f || [[ -n "$f" ]]; do
+            [[ -z "$f" ]] && continue
+            case "$f" in
+              website/*|wiki/*|docs/*|.github/dns/*|.github/workflows/deploy-website.yml) ;;
+              *.md)
+                case "$f" in
+                  */*) code=true ;;
+                esac
+                ;;
+              *) code=true ;;
+            esac
+            if [[ "$code" == "true" ]]; then
+              break
+            fi
+          done < changed.txt
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code=$code"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -45,6 +79,7 @@ jobs:
       TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
       TITANIUM_SKIP_ROOT_STORE_UI: 1
       TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
       QA_WAIVER: ${{ contains(github.event.pull_request.labels.*.name, 'qa-waiver') }}
     steps:
     - uses: actions/checkout@v7
@@ -56,6 +91,14 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
+
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
 
     - name: Install SonarScanner
       if: env.SONAR_TOKEN != ''
@@ -225,6 +268,8 @@ jobs:
 
   # Fleet Redis rate-limit store (Linux only: Actions service containers are not available on Windows).
   redis-fleet:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -272,6 +317,8 @@ jobs:
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
   # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).
   ui-portable:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     permissions:
@@ -287,90 +334,8 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
-    - name: Assert in-box MsQuic (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
-          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
-        }
-        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
-    - name: Install libmsquic (Linux HTTP/3)
-      if: runner.os == 'Linux'
-      run: |
-        set -euo pipefail
-        . /etc/os-release
-        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
-          -o packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        rm -f packages-microsoft-prod.deb
-        sudo apt-get update
-        sudo apt-get install -y libmsquic
-        pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
-    - name: Install MsQuic (macOS HTTP/3)
-      if: runner.os == 'macOS'
-      shell: pwsh
-      run: |
-        $ErrorActionPreference = 'Stop'
-        # Intel macOS bottles are sparse; do not force-upgrade openssl (no bottle â†’ job fail).
-        $env:HOMEBREW_NO_AUTO_UPDATE = '1'
-        $env:HOMEBREW_NO_INSTALL_UPGRADE = '1'
-        brew install openssl@3 libmsquic
-        $prefix = (& brew --prefix).Trim()
-        $msquicLib = Join-Path $prefix 'opt/libmsquic/lib'
-        $sslLib = Join-Path $prefix 'opt/openssl@3/lib'
-        $libDirs = @($msquicLib, $sslLib, (Join-Path $prefix 'lib')) |
-          Where-Object { Test-Path $_ } |
-          Select-Object -Unique
-        $dyld = ($libDirs -join ':')
-        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld"
-        Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld"
-        $env:DYLD_LIBRARY_PATH = $dyld
-        $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld
-        Write-Host "DYLD_LIBRARY_PATH=$dyld"
-
-        function Test-QuicSupported {
-          $out = & pwsh -NoProfile -Command {
-            if (-not [System.Net.Quic.QuicListener]::IsSupported) { '0' } else { '1' }
-          }
-          return ($out.Trim() -eq '1')
-        }
-
-        if (-not (Test-QuicSupported)) {
-          Write-Host 'QuicListener.IsSupported still false after brew; trying Microsoft libmsquic dropâ€¦'
-          $arch = (& uname -m).Trim()
-          $rid = if ($arch -eq 'arm64') { 'osx-arm64' } else { 'osx-x64' }
-          $dest = Join-Path $env:RUNNER_TEMP 'msquic-osx'
-          New-Item -ItemType Directory -Path $dest -Force | Out-Null
-          $tag = 'v2.4.7'
-          $url = "https://github.com/microsoft/msquic/releases/download/$tag/msquic_${rid}_$tag.zip"
-          $zip = Join-Path $env:RUNNER_TEMP 'msquic-osx.zip'
-          try {
-            & curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 $url -o $zip
-            if ($LASTEXITCODE -ne 0) { throw "curl exit $LASTEXITCODE" }
-            Expand-Archive -Path $zip -DestinationPath $dest -Force
-          } catch {
-            Write-Warning "Microsoft release download failed ($url): $_"
-          }
-          $found = Get-ChildItem -Path $dest -Recurse -Filter 'libmsquic*.dylib' -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-          if ($found) {
-            $extra = $found.Directory.FullName
-            # ${extra} â€” bare $extra: is parsed as a PowerShell drive-qualified variable.
-            $dyld2 = "${extra}:${dyld}"
-            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_LIBRARY_PATH=$dyld2"
-            Add-Content -Path $env:GITHUB_ENV -Value "DYLD_FALLBACK_LIBRARY_PATH=$dyld2"
-            $env:DYLD_LIBRARY_PATH = $dyld2
-            $env:DYLD_FALLBACK_LIBRARY_PATH = $dyld2
-            Write-Host "Added Microsoft dylib dir: $extra"
-          }
-        }
-
-        if (-not (Test-QuicSupported)) {
-          throw 'QuicListener.IsSupported is false after macOS MsQuic install (brew + optional Microsoft drop)'
-        }
-        Write-Host 'QuicListener.IsSupported=True'
+    - name: Ensure MsQuic
+      uses: ./.github/actions/ensure-msquic
     - name: Linux UI fonts + Playwright OS deps
       if: runner.os == 'Linux'
       run: |
@@ -397,6 +362,8 @@ jobs:
       run: |
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard|TestCategory=E2E-UI-Manager"
     - name: Inspector retention stress (spill + H3)
+      env:
+        TITANIUM_REQUIRE_QUIC: "1"
       run: |
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-restore --filter "TestCategory=Inspector-Stress|TestCategory=Inspector-Trust-Decision"
     - name: OS proxy-backend filters
@@ -425,9 +392,47 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
+  # One context for branch protection. Docs-only pull requests skip the four
+  # code jobs; a code change requires each of them to succeed.
+  merge-gate:
+    name: merge-gate
+    if: always()
+    needs: [changes, build, redis-fleet, ui-portable, cli-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the code jobs, or a docs-only skip
+        env:
+          CODE: ${{ needs.changes.outputs.code }}
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+          REDIS: ${{ needs.redis-fleet.result }}
+          UI: ${{ needs.ui-portable.result }}
+          CLI: ${{ needs.cli-e2e.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "changes=$CHANGES build=$BUILD redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
+          for result in "$CHANGES" "$BUILD" "$REDIS" "$UI" "$CLI"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::a required job finished as $result"
+              exit 1
+            fi
+          done
+          if [[ "$CODE" == "true" ]]; then
+            for result in "$BUILD" "$REDIS" "$UI" "$CLI"; do
+              if [[ "$result" != "success" ]]; then
+                echo "::error::a code change needs success from build, redis-fleet, ui-portable, and cli-e2e (got $result)"
+                exit 1
+              fi
+            done
+          fi
+          echo "merge-gate passed"
+
   # Full CLI + CLI Plus process E2E on all three OS (command tree, services, control plane).
   # Does not pre-install libmsquic so http3-deps install can exercise the real leaf when Quic is false.
   cli-e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -509,7 +514,7 @@ jobs:
         if-no-files-found: ignore
 
   # Tiered RPS gates for beta/stable publish (parallel) â€” wall clock ~max of the two).
-  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs YARP (+ MITMÃ·Reverse) so a
+  # Editions: CLI/Plus tax vs Core. Peer: Core reverse vs the reference peer so a
   # uniform Core slowdown cannot hide behind green edition ratios.
   rps-publish-gate:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
@@ -541,7 +546,7 @@ jobs:
         if (-not $csv) { throw 'No CSV found for edition gate validation' }
         pwsh tools/RpsLoadProbe/validate-edition-gates.ps1 -CsvPath $csv.FullName
 
-  # Parallel with rps-publish-gate: Core vs YARP on the release SHA (c=64 spot).
+  # Parallel with rps-publish-gate: Core vs the reference peer on the release SHA (c=64 spot).
   # Same validator as PR compare-spot / run-spot-matrix.ps1; does not extend wall clock
   # past editions (~60m).
   rps-peer-gate:
@@ -557,105 +562,21 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
-    - name: Install libmsquic (HTTP/3)
-      run: |
-        set -euo pipefail
-        . /etc/os-release
-        curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-          "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
-          -o packages-microsoft-prod.deb
-        sudo dpkg -i packages-microsoft-prod.deb
-        rm -f packages-microsoft-prod.deb
-        sudo apt-get update
-        sudo apt-get install -y libmsquic
-        pwsh -NoProfile -Command 'if (-not [System.Net.Quic.QuicListener]::IsSupported) { throw "QuicListener.IsSupported is false after libmsquic install" }; Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"'
-    - name: compare-spot (CoreÃ·YARP + MITMÃ·Reverse)
+    - name: Ensure MsQuic
+      uses: ./.github/actions/ensure-msquic
+    - name: compare-spot (Core and reference peer)
       shell: pwsh
       run: |
         pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
 
-  publish:
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, cli-e2e, rps-publish-gate, rps-peer-gate]
-    runs-on: windows-latest
-    environment: nuget-publish
-    permissions:
-      contents: write
-      id-token: write
-    steps:
-    - uses: actions/checkout@v7
-      with:
-        fetch-depth: 0
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v6
-      with:
-        dotnet-version: |
-          10.0.x
-
-    - name: NuGet audit before pack
-      run: dotnet restore src/Titanium.Web.Proxy.sln -p:NuGetAudit=true -p:NuGetAuditLevel=high
-
-    - name: Pack Beta
-      if: github.ref == 'refs/heads/beta'
-      run: |
-        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release --version-suffix "beta"
-        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release --version-suffix "beta"
-        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
-
-    - name: Pack Stable
-      if: github.ref == 'refs/heads/stable'
-      run: |
-        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release
-        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release
-        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
-
-    - name: Generate CycloneDX SBOM for MIT packages
-      shell: pwsh
-      run: |
-        dotnet tool install --global CycloneDX --version 6.2.0
-        New-Item -ItemType Directory -Force -Path sbom | Out-Null
-        foreach ($proj in @(
-          'src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj',
-          'src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj',
-          'src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj'
-        )) {
-          $name = [IO.Path]::GetFileNameWithoutExtension($proj)
-          dotnet CycloneDX $proj -o "sbom" -F Json -fn "$name.cdx.json" -t --disable-package-restore
-        }
-
-    - name: Upload MIT package SBOM
-      uses: actions/upload-artifact@v7
-      with:
-        name: mit-nuget-sbom
-        path: sbom/*.cdx.json
-        if-no-files-found: warn
-
-    - name: Log in to NuGet
-      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
-      id: login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-
-    - name: Publish Package
-      # MIT packages only -- never push PolyForm products (Plus, Inspector, Xds, GeoIp)
-      run: |
-        Get-ChildItem -Recurse -Filter *.nupkg |
-          Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*Xds*' -and $_.Name -notlike '*GeoIp*' -and $_.Name -notlike '*.symbols.nupkg' } |
-          ForEach-Object {
-            dotnet nuget push $_.FullName `
-              --source https://api.nuget.org/v3/index.json `
-              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" `
-              --skip-duplicate
-          }
-
-  # Product zips stay on release.yml (v* tags). After beta/stable merge, create/move the
+  # NuGet publish lives in release.yml (publish-nuget), after the GitHub Release.
+  # Product zips stay on release.yml. After a beta/stable merge, create/move the
   # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
   # release.yml also packs/pushes Chocolatey (titanium-cli / titanium-inspector) after the
   # GitHub Release exists — skipped while vars.SKIP_CATALOG_PUBLISH=true.
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, cli-e2e, rps-publish-gate, rps-peer-gate]
+    needs: [merge-gate, rps-publish-gate, rps-peer-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
