@@ -5,5 +5,6 @@ internal enum HttpCompression
     Unsupported,
     Gzip,
     Deflate,
-    Brotli
+    Brotli,
+    Zstd
 }

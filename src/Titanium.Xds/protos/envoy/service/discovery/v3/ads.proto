@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package envoy.service.discovery.v3;
+
+import "envoy/service/discovery/v3/discovery.proto";
+
+service AggregatedDiscoveryService {
+  rpc StreamAggregatedResources(stream DiscoveryRequest) returns (stream DiscoveryResponse) {
+  }
+}

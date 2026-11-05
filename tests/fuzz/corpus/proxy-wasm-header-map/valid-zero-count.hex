@@ -1,0 +1,3 @@
+# expect: parsed:0
+# reason: count 0 and nothing else
+00 00 00 00

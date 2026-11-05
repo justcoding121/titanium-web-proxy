@@ -20,12 +20,14 @@ Requires .NET 10 or later for the library. CLI and Inspector downloads are self-
 ## What you can do
 
 - Decrypt and inspect HTTPS in a native desktop Inspector on Windows, macOS, and Linux — AutoResponder, Map Local/Remote, breakpoints, Composer, HAR, curl/fetch
-- When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 - Speak modern HTTP — HTTP/2 by default, optional HTTP/3, WebSocket, gRPC, SSE, GraphQL rules in the same grid
-- Run the same engine as a reverse / edge proxy from the CLI (YAML, load balancing, ACME, live reload)
-- Embed in .NET via NuGet (MIT); Inspector is free for personal and education use
+- Run the same engine as a reverse / edge proxy from the CLI — YAML routes, load balancing and failover, retries, rate limits, response compression, gRPC-Web, TCP and UDP relay, ACME, live reload, Lua 5.4 and proxy-wasm scripting (`titanium scripting-deps`)
+- Deploy on Kubernetes with a hardened container image, Helm charts (git, Release `.tgz`, or OCI), probes, a Gateway API / Ingress controller, and an optional Manager control plane; hot restart for TCP without a gap
+- Observe it with Prometheus text, OTLP traces and metrics, and an access log; Plus adds a dashboard, OpenID Connect login, a response cache, fleet rate limits, xDS, and WAF screening
+- Embed in .NET via NuGet (MIT); Inspector, Plus, and the xDS / GeoIP satellites are free for personal and education use (PolyForm Noncommercial)
+- When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 
-Full catalog: [Features](https://titaniumproxy.com/docs/features). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
+Full catalog: [Features](https://titaniumproxy.com/docs/features). What is supported, partial, and not supported: [capability coverage](https://titaniumproxy.com/docs/capabilities). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
 
 ## Performance
 
@@ -55,6 +57,13 @@ titanium update
 `titanium run` is foreground (Ctrl+C to stop). Boot persistence: `titanium service install -c twp.yaml` — [CLI — service](https://titaniumproxy.com/docs/cli#service). Each CLI zip also includes a `twp` alias.
 
 **Optional Plus:** `titanium update --plus`, then `plus.enabled: true` — [Plus](https://titaniumproxy.com/docs/plus).
+
+**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64, with Lua/Wasmtime natives) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api). 7.x→8.0: [migration](docs/migration-7-to-8.md).
+
+```shell
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest
+helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
+```
 
 <img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
@@ -143,4 +152,9 @@ Actively maintained by [justcoding121](https://github.com/justcoding121). Past c
 
 ## License
 
-Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector and Titanium.Plus are [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt).
+Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector, Titanium.Plus, Titanium.Xds, and Titanium.Cli.GeoIp are [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protos keep their Apache-2.0 NOTICE under `src/Titanium.Xds/NOTICE`.
+
+| Folder | License |
+|--------|---------|
+| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli`, `src/Titanium.Manager`, examples, website | MIT |
+| `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp` | PolyForm Noncommercial 1.0.0 |

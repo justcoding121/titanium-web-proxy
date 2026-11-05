@@ -5,6 +5,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Titanium.Web.Proxy.Abstractions.Caching;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Exceptions;
@@ -36,7 +37,17 @@ public partial class ProxyServer
         try
         {
             // read response & headers from server (response-header deadline / idle-read for exempt paths)
-            await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            // A per-try deadline from the retry policy is handled below, not as a final 504.
+            ProxyTimeoutException? perTryTimeout = null;
+            try
+            {
+                await ReceiveOriginResponseWithTimeout(args, cancellationToken);
+            }
+            catch (ProxyTimeoutException ex) when (ex.Kind == ProxyTimeoutKind.ResponseHeader
+                                                   && args.Extras is { PerTryTimeoutActive: true })
+            {
+                perTryTimeout = ex;
+            }
 
             // Relay/consume every interim (1xx) response that precedes the final response on this connection.
             // 100 Continue is discarded exactly as before - per spec, "the client can simply discard this
@@ -61,19 +72,30 @@ public partial class ProxyServer
                 await ReceiveOriginResponseWithTimeout(args, cancellationToken);
             }
 
-            args.Timing?.MarkResponseHeadersReceived();
+            if (perTryTimeout is null)
+            {
+                args.Timing?.MarkResponseHeadersReceived();
+            }
 
             // Status retry is opt-in. Extras is null when the route has no retry policy, so the common
-            // path is one null check. The replay itself lives in ReplayGatewayStatusAsync.
-            if (args.Extras is not null
-                && !args.EnableWinAuth
-                && !args.HttpClient.Request.ExpectContinue
-                && !args.HttpClient.Request.UpgradeToWebSocket
-                && !args.IsClientResponseCommitted
-                && ReverseProxySessionDispatch.TryStageGatewayRetry(this, args))
+            // path is one null check. The replay itself lives in ReplayStagedGatewayRetriesAsync.
+            var stagedRetry = args.Extras is not null
+                              && (perTryTimeout is null
+                                  ? ReverseProxySessionDispatch.TryStageGatewayRetry(this, args)
+                                  : ReverseProxySessionDispatch.TryStageGatewayRetry(this, args, 504, timedOut: true));
+            if (perTryTimeout is not null && !stagedRetry)
             {
-                ProxyMetrics.RecordStatusRetry();
-                await ReplayGatewayStatusAsync(args, cancellationToken).ConfigureAwait(false);
+                await HandleProxyTimeoutAsync(args, perTryTimeout, cancellationToken);
+                return;
+            }
+
+            if (stagedRetry)
+            {
+                if (!await ReplayStagedGatewayRetriesAsync(args, cancellationToken).ConfigureAwait(false))
+                {
+                    return;
+                }
+
                 while (args.HttpClient.Response.StatusCode is >= 100 and <= 199
                        and not (int)HttpStatusCode.SwitchingProtocols)
                 {
@@ -148,11 +170,11 @@ public partial class ProxyServer
         MaybeInjectClientAltSvc(args);
 
         // if user requested call back then do it
-        if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args);
+        if (!response.Locked && !args.IsFastPath) await OnBeforeResponse(args, mayCompress: true);
 
         // it may changed in the user event
-        response = args.HttpClient.Response;
         await TryFillHttpResponseCacheAsync(args, cancellationToken);
+        response = args.HttpClient.Response; // the cache may have replaced it with a cached answer
         ApplyResponseHeaderContributor(response);
 
         var clientStream = args.ClientStream;
@@ -216,6 +238,11 @@ public partial class ProxyServer
             return;
         }
 
+        // Streaming compression decides last, so BeforeResponse handlers and the cache saw the origin's headers.
+        StreamingCompressionPlan? streamingCompression = null;
+        if (CompressionPolicy is { Streaming: true } streamingPolicy && !args.IsFastPath)
+            streamingCompression = TryBeginStreamingCompression(args, streamingPolicy, clientIsHttp2: false);
+
         response.Locked = true;
 
         // FramingValidator already ran wire CL/TE rules above. Explicit proxy still needs
@@ -257,8 +284,30 @@ public partial class ProxyServer
                         ResolveIdleReadTimeout(args), ProxyTimeoutKind.IdleRead);
                     try
                     {
-                        await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
-                            false, args, idleDeadline.Token);
+                        if (streamingCompression is { } compressionPlan)
+                        {
+                            var bodyWriter = new BodyStreamWriter(clientStream, isChunked: true);
+                            var relayed = await RelayCompressedBodyAsync(args, CompressionPolicy!, compressionPlan,
+                                bodyWriter, () => clientStream.IsWriteClosed, idleDeadline.Token);
+                            if (!relayed)
+                            {
+                                // The client went away mid-body: nothing more can be delivered, the partial body
+                                // is not cacheable, and the origin connection was marked for closing.
+                                args.ResponseCache?.State?.Abandon();
+                                response.IsBodyReceived = true;
+                                return;
+                            }
+
+                            await bodyWriter.CompleteAsync(
+                                response.HasTrailingHeaders ? response.TrailingHeaders : null, idleDeadline.Token);
+                        }
+                        else
+                        {
+                            await serverStream.CopyBodyAsync(response, false, clientStream, TransformationMode.None,
+                                false, args, idleDeadline.Token);
+                        }
+
+                        args.ResponseCache?.FinishStore();
                     }
                     catch (OperationCanceledException ex)
                     {
@@ -441,14 +490,34 @@ public partial class ProxyServer
     ///     Invoke before response if it is set.
     /// </summary>
     /// <param name="args"></param>
+    /// <param name="mayCompress">
+    ///     True only where the origin leg is HTTP/1.1 wire bytes (H1 session, H2-to-H1 bridge). Other
+    ///     paths (H2 or H3 origin, WebSocket tunnels, synthetic responses) never compress.
+    /// </param>
     /// <returns></returns>
-    private async Task OnBeforeResponse(SessionEventArgs args)
+    private Task OnBeforeResponse(SessionEventArgs args) => OnBeforeResponse(args, mayCompress: false);
+
+    /// <inheritdoc cref="OnBeforeResponse(SessionEventArgs)" />
+    private async Task OnBeforeResponse(SessionEventArgs args, bool mayCompress)
     {
         if (args.IsFastPath)
             return;
 
         // Staged ResponseHeaderSet/Remove from route transforms (null when unused).
         ReverseProxySessionDispatch.ApplyResponseTransforms(args);
+
+        // server.overload disableKeepAlive: one volatile bool read when overload protection is off.
+        if (_overloadEnabled)
+            ApplyOverloadConnectionCloseIfNeeded(args);
+
+        // Listener-wide script phases (response headers, buffered body, trailers). Null host: one check, nothing else.
+        if (ReverseProxy?.ScriptPipeline is { } scriptHost)
+            await ScriptPhaseDispatch.RunResponseAsync(scriptHost, args).ConfigureAwait(false);
+
+        // Buffered response compression (server.responseCompression). Null when off; streaming mode compresses
+        // later, while the body is relayed (see TryBeginStreamingCompression).
+        if (mayCompress && CompressionPolicy is { Streaming: false } compression)
+            await TryCompressResponseAsync(args, compression).ConfigureAwait(false);
 
         // Rewrite gRPC → JSON before user handlers when the request was transcoded.
         if (ReverseProxy?.GrpcJsonTranscoder is { } transcoder)
@@ -464,10 +533,146 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    /// Buffer a small known-length 200 and store it when a cache filler is set.
-    /// No-op when cache is off, so the hot path does not read the body.
+    ///     Buffers a small known-length origin response and replaces its body with a gzip / Brotli copy when
+    ///     every eligibility rule holds (see <see cref="Compression.ResponseCompressionPolicy.TrySelect" />).
+    ///     Leaves the response untouched otherwise, including when compression would not shrink it.
+    /// </summary>
+    private static async Task TryCompressResponseAsync(SessionEventArgs args,
+        Compression.ResponseCompressionPolicy policy)
+    {
+        var request = args.HttpClient.Request;
+        var response = args.HttpClient.Response;
+
+        if (response.Locked || response.IsBodyRead || response.IsSynthetic
+            || response.StreamBodyWriter != null || response.Http3RawBodyDrain != null
+            || response.HttpVersion.Major != 1 || request.HttpVersion.Major >= 3)
+            return;
+
+        if (Compression.ResponseCompressionPolicy.IsRouteOff(args.MatchedRoute))
+            return;
+
+        if (!policy.TrySelect(request, response, out var algorithm))
+            return;
+
+        // GetResponseBody enforces the buffered-body budget by throwing; stay below it instead.
+        var budget = args.MaxBufferedBodyBytes ?? args.Server.MaxBufferedBodyBytes;
+        if (budget > 0 && response.ContentLength > budget)
+            return;
+
+        var body = await args.GetResponseBody(args.CancellationToken).ConfigureAwait(false);
+        var compressed = policy.Compress(algorithm, body);
+        if (compressed.Length >= body.Length)
+            return;
+
+        Compression.ResponseCompressionPolicy.Apply(response, algorithm, compressed);
+    }
+
+    private IResponseCacheEngine? FindResponseCache()
+    {
+        var middleware = ReverseProxy?.Middleware;
+        if (middleware == null)
+            return null;
+
+        for (var i = 0; i < middleware.Count; i++)
+        {
+            if (middleware[i] is IResponseCacheEngine cache)
+                return cache;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Response-side half of the response cache for a session. A no-op (two null checks) when the cache is off or
+    /// declined the request. Otherwise it lets the cache answer a 304 revalidation or a stale-if-error, and arms the
+    /// body tee so a storable body is collected while it is relayed (see <c>FinishStore</c> after the body copy).
     /// </summary>
     private async Task TryFillHttpResponseCacheAsync(SessionEventArgs args, CancellationToken cancellationToken)
+    {
+        var slot = args.ResponseCache;
+        if (slot?.State is not { } state)
+        {
+            if (HttpResponseCacheFiller != null && FindResponseCache() == null)
+                await FillLegacyHttpResponseCacheAsync(args, cancellationToken).ConfigureAwait(false);
+
+            return;
+        }
+
+        var response = args.HttpClient.Response;
+        if (args.ReRequest)
+        {
+            args.ResponseCache = null;
+            slot.Dispose();
+            return;
+        }
+
+        if (response.IsSynthetic || response.StreamBodyWriter != null || HasOnResponseBodyWriteSubscribers)
+        {
+            state.Abandon();
+            return;
+        }
+
+        var decision = state.Owner.OnOriginResponse(state, response.StatusCode,
+            Caching.CacheSessionSlot.Snapshot(response.Headers), response.HasBody, response.ContentLength,
+            response.IsChunked);
+        ApplyOriginCacheDecision(args, slot, state, response, decision);
+    }
+
+    private static void ApplyOriginCacheDecision(
+        SessionEventArgs args,
+        Caching.CacheSessionSlot slot,
+        ICacheRequestState state,
+        Response response,
+        OriginDecision decision)
+    {
+        switch (decision.Action)
+        {
+            case OriginAction.Serve:
+                Caching.CacheSessionSlot.RespondFromCache(args, decision.Serve!,
+                    closeServerConnection: response.HasBody && !response.IsBodyRead);
+                break;
+
+            case OriginAction.StoreBuffered
+                or OriginAction.StoreStreamed:
+                ApplyStoreOriginCacheDecision(slot, state, response, decision);
+                break;
+        }
+    }
+
+    private static void ApplyStoreOriginCacheDecision(
+        Caching.CacheSessionSlot slot,
+        ICacheRequestState state,
+        Response response,
+        OriginDecision decision)
+    {
+        if (response.IsBodyRead)
+        {
+            if (response.ContentEncoding == null || response.BodyIsWireEncoded)
+            {
+                state.Owner.CompleteStore(state, decision.Plan!, response.Body, -1);
+            }
+            else
+            {
+                state.Abandon();
+            }
+
+            return;
+        }
+
+        if (!response.HasBody)
+        {
+            state.Owner.CompleteStore(state, decision.Plan!, [], 0);
+            return;
+        }
+
+        slot.BeginTee(state, decision.Plan!, decision.ContentLength);
+    }
+
+    /// <summary>
+    /// Buffer a small known-length 200 and store it when a cache filler is set without a cache middleware.
+    /// No-op when cache is off, so the hot path does not read the body.
+    /// </summary>
+    private async Task FillLegacyHttpResponseCacheAsync(SessionEventArgs args, CancellationToken cancellationToken)
     {
         var fill = HttpResponseCacheFiller;
         if (fill == null)
@@ -481,7 +686,7 @@ public partial class ProxyServer
             && response.HasBody
             && !response.IsChunked
             && !response.HasTrailingHeaders
-            && response.ContentLength is > 0 and <= Caching.HttpResponseCacheMiddleware.MaxCachedBodyBytes)
+            && response.ContentLength is > 0 and <= Caching.ResponseCacheLimits.MaxCachedBodyBytes)
         {
             try
             {
@@ -630,6 +835,21 @@ public partial class ProxyServer
     /// <returns></returns>
     private Task OnAfterResponse(SessionEventArgs args)
     {
+        // Log phase of a listener-wide script host. Null host: one check.
+        if (ReverseProxy?.ScriptPipeline is { } scriptHost)
+            return OnAfterResponseWithScriptLogAsync(args, scriptHost);
+
+        return OnAfterResponseCore(args);
+    }
+
+    private async Task OnAfterResponseWithScriptLogAsync(SessionEventArgs args, Abstractions.Scripting.IScriptPhaseHost scriptHost)
+    {
+        await ScriptPhaseDispatch.RunLogAsync(scriptHost, args).ConfigureAwait(false);
+        await OnAfterResponseCore(args).ConfigureAwait(false);
+    }
+
+    private Task OnAfterResponseCore(SessionEventArgs args)
+    {
         // Fast-path skips OnBeforeResponse; still learn HTTP blocks (no meta-refresh rewrite).
         if (args.IsFastPath && EnableDecryptFailureBypass &&
             Network.Tcp.DecryptFailureLearning.IsLearnableHttpBlock(args))
@@ -672,11 +892,14 @@ public partial class ProxyServer
     }
     internal bool ShouldCallBeforeResponseBodyWrite()
     {
-        return OnResponseBodyWrite != null;
+        return OnResponseBodyWrite != null || ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, false);
     }
 
     internal Task OnBeforeResponseBodyWrite(BeforeBodyWriteEventArgs args)
     {
+        if (ReverseProxy?.ScriptPipeline is { } script && StreamsBody(script, false))
+            return ScriptedBodyWriteAsync(script, args, isRequest: false);
+
         return OnResponseBodyWrite != null
             ? OnResponseBodyWrite.InvokeAsync(this, args, logger)
             : Task.CompletedTask;

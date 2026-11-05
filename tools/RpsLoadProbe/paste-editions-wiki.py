@@ -24,9 +24,12 @@ ROWS = [
     ("`twp-cli-plus-cache-http1` (cold) vs CLI", "twp-cli-plus-cache-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-intercept-http1` vs CLI", "twp-cli-intercept-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-waf-http1` vs CLI", "twp-cli-plus-waf-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-plus-waf-screen-http1` vs CLI", "twp-cli-plus-waf-screen-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-cidr-http1` vs CLI", "twp-cli-plus-cidr-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-jwt-http1` vs CLI", "twp-cli-plus-jwt-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-ratelimit-http1` vs CLI", "twp-cli-plus-ratelimit-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-plus-fleet-ratelimit-http1` vs CLI", "twp-cli-plus-fleet-ratelimit-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-plus-manager-agent-http1` vs CLI", "twp-cli-plus-manager-agent-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-resilience-http1` vs CLI", "twp-cli-plus-resilience-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-discovery-file-http1` vs CLI", "twp-cli-plus-discovery-file-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-metrics-scrape-http1` vs CLI", "twp-cli-plus-metrics-scrape-http1", "twp-cli-reverse-http1"),
@@ -34,10 +37,27 @@ ROWS = [
     ("`twp-cli-plus-cors-http1` vs CLI", "twp-cli-plus-cors-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-circuit-http1` vs CLI", "twp-cli-plus-circuit-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-plus-retry-http1` vs CLI", "twp-cli-plus-retry-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-extauth-http1` vs CLI", "twp-cli-extauth-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-static-http1` vs CLI", "twp-cli-static-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-logging-http1` vs CLI", "twp-cli-logging-http1", "twp-cli-reverse-http1"),
     ("`twp-cli-lb-leasttime-http1` vs route", "twp-cli-lb-leasttime-http1", "twp-cli-reverse-http1-route"),
     ("`twp-cli-dialect-twp-http1` vs CLI", "twp-cli-dialect-twp-http1", "twp-cli-reverse-http1"),
+    ("`twp-cli-script-lua-noop-http1` vs route", "twp-cli-script-lua-noop-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-script-lua-header-http1` vs route", "twp-cli-script-lua-header-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-script-wasm-noop-http1` vs route", "twp-cli-script-wasm-noop-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-script-lua-slow-upstream-http1` vs slow upstream", "twp-cli-script-lua-slow-upstream-http1", "twp-cli-slow-upstream-http1"),
+    ("`twp-cli-script-1in50-http1` vs route", "twp-cli-script-1in50-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-plugin-dotnet-noop-http1` vs route", "twp-cli-plugin-dotnet-noop-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-geo-http1` vs route", "twp-cli-geo-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-compress-h2-h2` vs route", "twp-cli-compress-h2-h2", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-compress-h3` vs route", "twp-cli-compress-h3", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-health-grpc-http1` vs route", "twp-cli-health-grpc-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-zoneaware-http1` vs route", "twp-cli-zoneaware-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-tcp-tlsterm` vs route", "twp-cli-tcp-tlsterm", "twp-cli-reverse-http1-route"),
+    ("`twp-ws-h3` vs route", "twp-ws-h3", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-compress-zstd-http1` vs route", "twp-cli-compress-zstd-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-overload-http1` vs route", "twp-cli-overload-http1", "twp-cli-reverse-http1-route"),
+    ("`twp-cli-hotrestart-http1` vs route", "twp-cli-hotrestart-http1", "twp-cli-reverse-http1-route"),
 ]
 
 
@@ -120,11 +140,16 @@ def main() -> None:
     table = "\n".join(lines)
 
     prior_sha = args.prior_sha
-    stayed = prior_sha or "the previous run"
+    if updated == len(ROWS):
+        coverage = f"Every edition row in the table was re-measured in that run."
+    elif prior_sha:
+        coverage = f"Other edition rows stay @ `{prior_sha}`."
+    else:
+        coverage = "Rows this run does not cover keep their prior Linux cells."
     header = (
         f"Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-measured @ `{args.head_sha}` "
         f"(Actions [{args.run}](https://github.com/justcoding121/titanium-web-proxy/actions/runs/{args.run})). "
-        f"Other edition rows stay @ `{stayed}`. "
+        f"{coverage} "
         f"Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. "
         f"**RPS cells** show sustain; `<sub>` holds peak (when higher) plus `(MiB / CPU%)`. "
         f"The Gate column is that script's floor."

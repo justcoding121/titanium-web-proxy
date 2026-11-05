@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: example.test
+# reason: :authority attribute
+request.host

@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "notes": "Pinned scripting natives for CLI/Inspector publish: Lua 5.4.7 (MIT, built from the pinned source tarball together with the Titanium Lua host shim from tools/scripting/lua-shim/) and the Wasmtime 50.0.0 C API (Apache-2.0 WITH LLVM-exception, prebuilt per-RID release archives). SHA-256 values for Wasmtime are the GitHub release asset digests; the Lua value is the checksum of lua-5.4.7.tar.gz from lua.org. Lua is compiled on the release runner that matches the RID (win-x64 needs cl or gcc; osx needs macOS); cross-building linux-arm64 / musl needs a native or emulated runner and is skipped with a warning otherwise. Do not commit downloaded or built binaries under .cache/.",
+  "luaVersion": "5.4.7",
+  "wasmtimeVersion": "50.0.0",
+  "rids": {
+    "win-x64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "lua54.dll",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into lua54.dll together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-x86_64-windows-c-api.zip",
+        "sha256": "3c3d04bc910d18fac9f85ad11293aab63ea023fff5021d39be858d4e3b9d058f",
+        "archive": "zip",
+        "archiveRoot": "wasmtime-v50.0.0-x86_64-windows-c-api",
+        "libPath": "lib/wasmtime.dll",
+        "output": "wasmtime.dll"
+      },
+      "requiredFiles": ["lua54.dll", "wasmtime.dll"]
+    },
+    "linux-x64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "liblua54.so",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into liblua54.so together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-x86_64-linux-c-api.tar.xz",
+        "sha256": "631643d8be5dac2a1abe026528f0ca18a515bce275bcfa7eb9731c9468a592f1",
+        "archive": "tar.xz",
+        "archiveRoot": "wasmtime-v50.0.0-x86_64-linux-c-api",
+        "libPath": "lib/libwasmtime.so",
+        "output": "libwasmtime.so"
+      },
+      "requiredFiles": ["liblua54.so", "libwasmtime.so"]
+    },
+    "linux-arm64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "liblua54.so",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into liblua54.so together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-aarch64-linux-c-api.tar.xz",
+        "sha256": "cf29164de6379e17f6175d42b6a828a8e045c56575cf84db8183337cc6c682cb",
+        "archive": "tar.xz",
+        "archiveRoot": "wasmtime-v50.0.0-aarch64-linux-c-api",
+        "libPath": "lib/libwasmtime.so",
+        "output": "libwasmtime.so"
+      },
+      "requiredFiles": ["liblua54.so", "libwasmtime.so"]
+    },
+    "linux-musl-x64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "liblua54.so",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into liblua54.so together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-x86_64-musl-c-api.tar.xz",
+        "sha256": "2f11950613fada61c033943c3dcc9d0eebcfcf260169f70efc391ca468ab5846",
+        "archive": "tar.xz",
+        "archiveRoot": "wasmtime-v50.0.0-x86_64-musl-c-api",
+        "libPath": "lib/libwasmtime.so",
+        "output": "libwasmtime.so"
+      },
+      "requiredFiles": ["liblua54.so", "libwasmtime.so"]
+    },
+    "linux-musl-arm64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "liblua54.so",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into liblua54.so together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-aarch64-musl-c-api.tar.xz",
+        "sha256": "4150ed7229a85eed6a5360bb5dbce17b0ab1bc81146ea6444ce83db855fb5163",
+        "archive": "tar.xz",
+        "archiveRoot": "wasmtime-v50.0.0-aarch64-musl-c-api",
+        "libPath": "lib/libwasmtime.so",
+        "output": "libwasmtime.so"
+      },
+      "requiredFiles": ["liblua54.so", "libwasmtime.so"]
+    },
+    "osx-x64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "liblua54.dylib",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into liblua54.dylib together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-x86_64-macos-c-api.tar.xz",
+        "sha256": "f521aa9e6fbb77a3cc25a8899ec9d407882edae219b2e4796a3a5ac2b8f44819",
+        "archive": "tar.xz",
+        "archiveRoot": "wasmtime-v50.0.0-x86_64-macos-c-api",
+        "libPath": "lib/libwasmtime.dylib",
+        "output": "libwasmtime.dylib"
+      },
+      "requiredFiles": ["liblua54.dylib", "libwasmtime.dylib"]
+    },
+    "osx-arm64": {
+      "lua": {
+        "mode": "build-from-source",
+        "version": "5.4.7",
+        "sourceUrl": "https://www.lua.org/ftp/lua-5.4.7.tar.gz",
+        "sha256": "9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30",
+        "sourceDir": "lua-5.4.7",
+        "output": "liblua54.dylib",
+        "shim": {
+          "source": "tools/scripting/lua-shim",
+          "notes": "Titanium Lua host shim (ctx + libraries). Compiled and linked into liblua54.dylib together with Lua core; skipped with a warning while the directory has no C sources."
+        }
+      },
+      "wasmtime": {
+        "mode": "download",
+        "version": "50.0.0",
+        "url": "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.0/wasmtime-v50.0.0-aarch64-macos-c-api.tar.xz",
+        "sha256": "bff3b03d2a68aeb26f0b4557c5fc442e3e60f31d68b9b72c5a9c2beafc799f44",
+        "archive": "tar.xz",
+        "archiveRoot": "wasmtime-v50.0.0-aarch64-macos-c-api",
+        "libPath": "lib/libwasmtime.dylib",
+        "output": "libwasmtime.dylib"
+      },
+      "requiredFiles": ["liblua54.dylib", "libwasmtime.dylib"]
+    }
+  }
+}

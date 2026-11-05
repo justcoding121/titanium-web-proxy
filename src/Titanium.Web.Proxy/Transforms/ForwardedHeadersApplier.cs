@@ -51,7 +51,7 @@ internal static class ForwardedHeadersApplier
         headers.SetOrAddHeaderValue(name, string.IsNullOrEmpty(current) ? value : current + ", " + value);
     }
 
-    private static bool IsTrusted(IPAddress address, IReadOnlyList<string>? proxies)
+    internal static bool IsTrusted(IPAddress address, IReadOnlyList<string>? proxies)
     {
         if (proxies is not { Count: > 0 })
         {

@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "7.0",
+  "listeners": [
+    {
+      "host": "0.0.0.0",
+      "port": 8080,
+      "decryptSsl": false,
+      "acceptProxyProtocol": false,
+      "trustedProxyProtocolSources": [],
+      "passthrough": false,
+      "terminateTls": false,
+      "sniRoutes": []
+    }
+  ],
+  "routes": [
+    {
+      "id": "api",
+      "clusterId": "api",
+      "match": {
+        "path": "/api",
+        "pathKind": "prefix",
+        "pathCaseSensitive": true
+      },
+      "order": 0,
+      "grpcWeb": false
+    },
+    {
+      "id": "default",
+      "clusterId": "web",
+      "match": {
+        "path": "/",
+        "pathKind": "prefix",
+        "pathCaseSensitive": true
+      },
+      "order": 1,
+      "grpcWeb": false
+    }
+  ],
+  "clusters": [
+    {
+      "id": "web",
+      "destinations": [
+        {
+          "id": "a",
+          "address": "backend-a.internal",
+          "port": 8080,
+          "useHttps": false,
+          "weight": 1,
+          "useDestinationHost": false,
+          "dnsRefreshSeconds": 0,
+          "priority": 0,
+          "backup": false,
+          "slowStartSeconds": 0
+        },
+        {
+          "id": "b",
+          "address": "backend-b.internal",
+          "port": 8080,
+          "useHttps": false,
+          "weight": 1,
+          "useDestinationHost": false,
+          "dnsRefreshSeconds": 0,
+          "priority": 0,
+          "backup": false,
+          "slowStartSeconds": 0
+        }
+      ],
+      "algorithm": "roundRobin",
+      "slowStartSeconds": 0
+    },
+    {
+      "id": "api",
+      "destinations": [
+        {
+          "id": "api1",
+          "address": "10.0.0.5",
+          "port": 9000,
+          "useHttps": false,
+          "weight": 1,
+          "useDestinationHost": false,
+          "dnsRefreshSeconds": 0,
+          "priority": 0,
+          "backup": false,
+          "slowStartSeconds": 0
+        }
+      ],
+      "algorithm": "roundRobin",
+      "slowStartSeconds": 0
+    }
+  ],
+  "policies": [],
+  "plus": {
+    "enabled": false
+  },
+  "staticFiles": {
+    "root": "./public",
+    "enableGzip": true,
+    "enableBrotli": false
+  }
+}

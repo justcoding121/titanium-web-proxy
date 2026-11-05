@@ -1,0 +1,3 @@
+# expect: reject
+# reason: hash without yaml
+{"configHash":"h1"}\n

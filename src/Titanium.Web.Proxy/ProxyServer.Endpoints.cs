@@ -68,6 +68,78 @@ public partial class ProxyServer : IDisposable
     }
 
     /// <summary>
+    ///     Starts the HTTP/3 (QUIC) side of a decrypting <see cref="TransparentProxyEndPoint" /> that is already added
+    ///     and listening over TCP, without touching its TCP listener. A host that must not hold the UDP port yet (a hot
+    ///     restart successor while the old process still owns it) adds the endpoint with
+    ///     <see cref="TransparentProxyEndPoint.EnableHttp3" /> off and calls this once the port is free. On failure
+    ///     the endpoint stays TCP only and the exception propagates.
+    /// </summary>
+    /// <param name="endPoint">An endpoint previously passed to <see cref="AddEndPoint" /> while the proxy is running.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     The proxy is not running, the endpoint was not added, it does not decrypt TLS, or
+    ///     <see cref="EnableHttp3" /> is off.
+    /// </exception>
+    public void StartHttp3Listener(TransparentProxyEndPoint endPoint)
+    {
+        ArgumentNullException.ThrowIfNull(endPoint);
+        if (!ProxyRunning)
+            throw new InvalidOperationException("The proxy must be running to start an HTTP/3 listener.");
+
+        if (!ProxyEndPoints.Contains(endPoint))
+            throw new InvalidOperationException("Cannot start HTTP/3 on an endpoint that was not added to the proxy.");
+
+        if (!endPoint.DecryptSsl)
+            throw new InvalidOperationException("TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
+
+#pragma warning disable TWP001
+        if (!EnableHttp3)
+            throw new InvalidOperationException("ProxyServer.EnableHttp3 is off.");
+#pragma warning restore TWP001
+
+        var wasEnabled = endPoint.EnableHttp3;
+        endPoint.EnableHttp3 = true;
+        try
+        {
+            quicListenerCts ??= new CancellationTokenSource();
+            ListenQuic(endPoint);
+        }
+        catch
+        {
+            endPoint.EnableHttp3 = wasEnabled;
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Closes every TCP listening socket and leaves everything else alone: endpoints stay registered, connections
+    ///     that were already accepted keep running, and QUIC listeners keep their UDP ports. A hot-restart predecessor
+    ///     calls this on the handover signal so the kernel stops distributing new connections to it (with
+    ///     SO_REUSEPORT its socket would otherwise keep receiving, and dropping, a share of them for the whole drain).
+    ///     Connections still queued unaccepted on a closed socket are reset by the OS. Not reversible until
+    ///     <see cref="Stop" /> and <see cref="Start" />.
+    /// </summary>
+    public void CloseTcpListeners()
+    {
+        foreach (var endPoint in ProxyEndPoints.ToList())
+        {
+            if (endPoint is TransparentQuicProxyEndPoint || endPoint.Listener is not { } listener)
+                continue;
+
+            // The accept loop ends on the disposed socket. AcceptLoopCts is left alone: cancelling it would also
+            // abort the passthrough relays that were accepted through this listener.
+            try
+            {
+                listener.Stop();
+                listener.Server.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already closed.
+            }
+        }
+    }
+
+    /// <summary>
     ///     Remove a proxy end point.
     ///     Will throw error if the end point doesn't exist.
     /// </summary>

@@ -26,7 +26,7 @@ Native HTTPS Inspector with AutoResponder, Map Local/Remote, breakpoints, Compos
 1. [Download](/download) the CLI for your OS and extract it (or Homebrew on macOS — see [Install](/docs/install)).
 2. Create `twp.yaml` that forwards to your backend (example: local port 8080):
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"

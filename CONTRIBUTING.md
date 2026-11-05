@@ -7,9 +7,9 @@ Thanks for contributing to Titanium Web Proxy.
 | Paths | License | External PRs |
 |-------|---------|--------------|
 | `src/Titanium.Web.Proxy/`, `src/Titanium.Web.Proxy.Abstractions/`, `src/Titanium.Web.Proxy.Configuration/`, `src/Titanium.Cli/`, related MIT tests/examples/tools/docs, `website/` | MIT | Welcome after CLA |
-| `src/Titanium.Plus/`, `src/Titanium.Inspector/`, `tests/Titanium.Plus.Tests/`, `tests/Titanium.Inspector.Tests/` | PolyForm Noncommercial | Maintainer allowlist only |
+| `src/Titanium.Plus/`, `src/Titanium.Inspector/`, `src/Titanium.Xds/`, `src/Titanium.Cli.GeoIp/`, `tests/Titanium.Plus.Tests/`, `tests/Titanium.Inspector.Tests/`, `tests/Titanium.Xds.Tests/`, `tests/Titanium.Cli.GeoIp.Tests/` | PolyForm Noncommercial | Maintainer allowlist only |
 
-See [CLA.md](CLA.md) and [README.md](README.md) Editions section.
+See [CLA.md](CLA.md) and the [README License](README.md#license) section.
 
 ## Before you open a PR
 
@@ -18,6 +18,8 @@ See [CLA.md](CLA.md) and [README.md](README.md) Editions section.
 3. Run `dotnet build src/Titanium.Web.Proxy.sln -c Release` and `dotnet test` for affected test projects.
 4. Do not introduce third-party product names of other proxies or traffic debuggers into source, tests, CLI help, or docs.
 5. Keep hot-path changes minimal; preserve `ForwardHost` terminate-lite eligibility when routes are unset or equivalent to a single sticky destination.
+6. A `yaml` example in `website/docs/*.md` or `wiki/*.md` that is a whole `twp.yaml` is tagged <code>```yaml twp</code>, and `dotnet test tests/Titanium.Web.Proxy.Configuration.Tests` loads, validates, and schema-checks it. A snippet that only makes sense inside a larger file is tagged <code>```yaml twp-fragment</code> and skipped. A wiki page does not start with a `#` heading that repeats its file name.
+7. A behavior change lands with the automated test that fails if the behavior is reverted. Run `tools/run-tests.ps1 -Project <name> -Verify` on Windows so a certificate prompt or firewall alert fails the run instead of waiting. Do not write Titanium certificates into the real user or machine store.
 
 ### Local QA tooling (maintainers)
 

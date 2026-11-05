@@ -260,14 +260,20 @@ internal enum ProbeMode
     TwpCliPlusCacheHttp1,
     /// <summary>CLI + route RequestHeaderSet transform (forces session / intercept path).</summary>
     TwpCliInterceptHttp1,
-    /// <summary>CLI + Plus WAF denyPaths that do not match probe traffic.</summary>
+    /// <summary>CLI + Plus WAF deny-list only (<c>waf.mode=off</c>) with denyPaths that do not match probe traffic.</summary>
     TwpCliPlusWafHttp1,
+    /// <summary>CLI + Plus WAF screening (<c>waf.mode=detect</c>, no denyPaths) on the session path.</summary>
+    TwpCliPlusWafScreenHttp1,
     /// <summary>CLI + Plus CIDR allow 127.0.0.0/8.</summary>
     TwpCliPlusCidrHttp1,
     /// <summary>CLI + Plus JWT (RS256 JWKS) with Authorization Bearer on every request.</summary>
     TwpCliPlusJwtHttp1,
     /// <summary>CLI + Plus in-memory rate limit with a very high ceiling.</summary>
     TwpCliPlusRateLimitHttp1,
+    /// <summary>CLI + fleet rateLimit (scope:fleet, local fail-mode, no Redis) with a very high ceiling.</summary>
+    TwpCliPlusFleetRateLimitHttp1,
+    /// <summary>CLI + Plus advisory manager agent against an unreachable manager (loop cost only).</summary>
+    TwpCliPlusManagerAgentHttp1,
     /// <summary>CLI + Plus active health against ForwardHost+cluster destinations.</summary>
     TwpCliPlusResilienceHttp1,
     /// <summary>CLI + Plus file discovery with mid-ramp rewrite.</summary>
@@ -304,7 +310,43 @@ internal enum ProbeMode
     /// <summary>CLI session-path status retry configured, origin always 200.</summary>
     TwpCliRetryHttp1,
     /// <summary>CLI concurrent upstream connection cap (budget allocated, high enough not to 503).</summary>
-    TwpCliConnCapHttp1
+    TwpCliConnCapHttp1,
+    /// <summary>CLI extAuth policy whose service allows every request, so each request pays one subrequest.</summary>
+    TwpCliExtAuthHttp1,
+    /// <summary>CLI route middleware: Lua plugin whose request-headers phase does nothing.</summary>
+    TwpCliScriptLuaNoopHttp1,
+    /// <summary>CLI route middleware: Lua plugin that sets one request header.</summary>
+    TwpCliScriptLuaHeaderHttp1,
+    /// <summary>CLI route middleware: proxy-wasm module that continues every request.</summary>
+    TwpCliScriptWasmNoopHttp1,
+    /// <summary>CLI route to a 20 ms origin, no script (baseline for the slow-upstream script arm).</summary>
+    TwpCliSlowUpstreamHttp1,
+    /// <summary>CLI no-op Lua plugin in front of the 20 ms origin (latency must stay flat).</summary>
+    TwpCliScriptLuaSlowUpstreamHttp1,
+    /// <summary>CLI with a Lua plugin on one of fifty routes while the load hits a plugin-free route.</summary>
+    TwpCliScript1In50Http1,
+    /// <summary>CLI route middleware: .NET PassthroughPlugin that only calls next.</summary>
+    TwpCliPluginDotNetNoopHttp1,
+    /// <summary>Leftover placeholder (F01): geo policy arm; same config as reverse-http1-route until P3.</summary>
+    TwpCliGeoHttp1,
+    /// <summary>Leftover placeholder (F01): H2-to-H2 compression; same as reverse-http1-route until P4.</summary>
+    TwpCliCompressH2H2,
+    /// <summary>Leftover placeholder (F01): H3 compression; same as reverse-http1-route until P4.</summary>
+    TwpCliCompressH3,
+    /// <summary>Leftover placeholder (F01): gRPC health probe; same as reverse-http1-route until P5a.</summary>
+    TwpCliHealthGrpcHttp1,
+    /// <summary>Leftover placeholder (F01): zone-aware LB; same as reverse-http1-route until P7.</summary>
+    TwpCliZoneAwareHttp1,
+    /// <summary>Leftover placeholder (F01): TCP TLS terminate; same as reverse-http1-route until P6.</summary>
+    TwpCliTcpTlsTerm,
+    /// <summary>Leftover placeholder (F01): WebSocket over HTTP/3; same as reverse-http1-route until P1.</summary>
+    TwpWsH3,
+    /// <summary>Leftover placeholder (F01): zstd compression; same as reverse-http1-route until P4.5.</summary>
+    TwpCliCompressZstdHttp1,
+    /// <summary>Leftover placeholder (F01): overload protection; same as reverse-http1-route until P12.</summary>
+    TwpCliOverloadHttp1,
+    /// <summary>Leftover placeholder (F01): hot restart; same as reverse-http1-route until P11.</summary>
+    TwpCliHotRestartHttp1
 }
 
 internal sealed class RampOptions
@@ -1374,12 +1416,18 @@ internal static class RampOrchestrator
                 [new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null)],
             ProbeMode.TwpCliPlusWafHttp1 =>
                 [new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null)],
+            ProbeMode.TwpCliPlusWafScreenHttp1 =>
+                [new("twp-cli-plus-waf-screen-http1", ProbeMode.TwpCliPlusWafScreenHttp1, null)],
             ProbeMode.TwpCliPlusCidrHttp1 =>
                 [new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null)],
             ProbeMode.TwpCliPlusJwtHttp1 =>
                 [new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null)],
             ProbeMode.TwpCliPlusRateLimitHttp1 =>
                 [new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null)],
+            ProbeMode.TwpCliPlusFleetRateLimitHttp1 =>
+                [new("twp-cli-plus-fleet-ratelimit-http1", ProbeMode.TwpCliPlusFleetRateLimitHttp1, null)],
+            ProbeMode.TwpCliPlusManagerAgentHttp1 =>
+                [new("twp-cli-plus-manager-agent-http1", ProbeMode.TwpCliPlusManagerAgentHttp1, null)],
             ProbeMode.TwpCliPlusResilienceHttp1 =>
                 [new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null)],
             ProbeMode.TwpCliPlusDiscoveryFileHttp1 =>
@@ -1415,6 +1463,42 @@ internal static class RampOrchestrator
                 [new("twp-cli-retry-http1", ProbeMode.TwpCliRetryHttp1, null)],
             ProbeMode.TwpCliConnCapHttp1 =>
                 [new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null)],
+            ProbeMode.TwpCliExtAuthHttp1 =>
+                [new("twp-cli-extauth-http1", ProbeMode.TwpCliExtAuthHttp1, null)],
+            ProbeMode.TwpCliScriptLuaNoopHttp1 =>
+                [new("twp-cli-script-lua-noop-http1", ProbeMode.TwpCliScriptLuaNoopHttp1, null)],
+            ProbeMode.TwpCliScriptLuaHeaderHttp1 =>
+                [new("twp-cli-script-lua-header-http1", ProbeMode.TwpCliScriptLuaHeaderHttp1, null)],
+            ProbeMode.TwpCliScriptWasmNoopHttp1 =>
+                [new("twp-cli-script-wasm-noop-http1", ProbeMode.TwpCliScriptWasmNoopHttp1, null)],
+            ProbeMode.TwpCliSlowUpstreamHttp1 =>
+                [new("twp-cli-slow-upstream-http1", ProbeMode.TwpCliSlowUpstreamHttp1, null)],
+            ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1 =>
+                [new("twp-cli-script-lua-slow-upstream-http1", ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1, null)],
+            ProbeMode.TwpCliScript1In50Http1 =>
+                [new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null)],
+            ProbeMode.TwpCliPluginDotNetNoopHttp1 =>
+                [new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null)],
+            ProbeMode.TwpCliGeoHttp1 =>
+                [new("twp-cli-geo-http1", ProbeMode.TwpCliGeoHttp1, null)],
+            ProbeMode.TwpCliCompressH2H2 =>
+                [new("twp-cli-compress-h2-h2", ProbeMode.TwpCliCompressH2H2, null)],
+            ProbeMode.TwpCliCompressH3 =>
+                [new("twp-cli-compress-h3", ProbeMode.TwpCliCompressH3, null)],
+            ProbeMode.TwpCliHealthGrpcHttp1 =>
+                [new("twp-cli-health-grpc-http1", ProbeMode.TwpCliHealthGrpcHttp1, null)],
+            ProbeMode.TwpCliZoneAwareHttp1 =>
+                [new("twp-cli-zoneaware-http1", ProbeMode.TwpCliZoneAwareHttp1, null)],
+            ProbeMode.TwpCliTcpTlsTerm =>
+                [new("twp-cli-tcp-tlsterm", ProbeMode.TwpCliTcpTlsTerm, null)],
+            ProbeMode.TwpWsH3 =>
+                [new("twp-ws-h3", ProbeMode.TwpWsH3, null)],
+            ProbeMode.TwpCliCompressZstdHttp1 =>
+                [new("twp-cli-compress-zstd-http1", ProbeMode.TwpCliCompressZstdHttp1, null)],
+            ProbeMode.TwpCliOverloadHttp1 =>
+                [new("twp-cli-overload-http1", ProbeMode.TwpCliOverloadHttp1, null)],
+            ProbeMode.TwpCliHotRestartHttp1 =>
+                [new("twp-cli-hotrestart-http1", ProbeMode.TwpCliHotRestartHttp1, null)],
             ProbeMode.CompareProduct =>
             [
                 ..BuildFullMatrixArms(nginxAvailable, nginxHttp3Available, haproxyAvailable, haproxyQuicAvailable,
@@ -1770,9 +1854,12 @@ internal static class RampOrchestrator
         new("twp-cli-plus-cache-http1", ProbeMode.TwpCliPlusCacheHttp1, null),
         new("twp-cli-intercept-http1", ProbeMode.TwpCliInterceptHttp1, null),
         new("twp-cli-plus-waf-http1", ProbeMode.TwpCliPlusWafHttp1, null),
+        new("twp-cli-plus-waf-screen-http1", ProbeMode.TwpCliPlusWafScreenHttp1, null),
         new("twp-cli-plus-cidr-http1", ProbeMode.TwpCliPlusCidrHttp1, null),
         new("twp-cli-plus-jwt-http1", ProbeMode.TwpCliPlusJwtHttp1, null),
         new("twp-cli-plus-ratelimit-http1", ProbeMode.TwpCliPlusRateLimitHttp1, null),
+        new("twp-cli-plus-fleet-ratelimit-http1", ProbeMode.TwpCliPlusFleetRateLimitHttp1, null),
+        new("twp-cli-plus-manager-agent-http1", ProbeMode.TwpCliPlusManagerAgentHttp1, null),
         new("twp-cli-plus-resilience-http1", ProbeMode.TwpCliPlusResilienceHttp1, null),
         new("twp-cli-plus-discovery-file-http1", ProbeMode.TwpCliPlusDiscoveryFileHttp1, null,
             RewriteDiscoveryMidRamp: true),
@@ -1790,7 +1877,25 @@ internal static class RampOrchestrator
         new("twp-cli-mirror-http1", ProbeMode.TwpCliMirrorHttp1, null),
         new("twp-cli-cluster-client-http1", ProbeMode.TwpCliClusterClientHttp1, null),
         new("twp-cli-retry-http1", ProbeMode.TwpCliRetryHttp1, null),
-        new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null)
+        new("twp-cli-conncap-http1", ProbeMode.TwpCliConnCapHttp1, null),
+        new("twp-cli-extauth-http1", ProbeMode.TwpCliExtAuthHttp1, null),
+        new("twp-cli-script-lua-noop-http1", ProbeMode.TwpCliScriptLuaNoopHttp1, null),
+        new("twp-cli-script-lua-header-http1", ProbeMode.TwpCliScriptLuaHeaderHttp1, null),
+        new("twp-cli-script-wasm-noop-http1", ProbeMode.TwpCliScriptWasmNoopHttp1, null),
+        new("twp-cli-slow-upstream-http1", ProbeMode.TwpCliSlowUpstreamHttp1, null),
+        new("twp-cli-script-lua-slow-upstream-http1", ProbeMode.TwpCliScriptLuaSlowUpstreamHttp1, null),
+        new("twp-cli-script-1in50-http1", ProbeMode.TwpCliScript1In50Http1, null),
+        new("twp-cli-plugin-dotnet-noop-http1", ProbeMode.TwpCliPluginDotNetNoopHttp1, null),
+        new("twp-cli-geo-http1", ProbeMode.TwpCliGeoHttp1, null),
+        new("twp-cli-compress-h2-h2", ProbeMode.TwpCliCompressH2H2, null),
+        new("twp-cli-compress-h3", ProbeMode.TwpCliCompressH3, null),
+        new("twp-cli-health-grpc-http1", ProbeMode.TwpCliHealthGrpcHttp1, null),
+        new("twp-cli-zoneaware-http1", ProbeMode.TwpCliZoneAwareHttp1, null),
+        new("twp-cli-tcp-tlsterm", ProbeMode.TwpCliTcpTlsTerm, null),
+        new("twp-ws-h3", ProbeMode.TwpWsH3, null),
+        new("twp-cli-compress-zstd-http1", ProbeMode.TwpCliCompressZstdHttp1, null),
+        new("twp-cli-overload-http1", ProbeMode.TwpCliOverloadHttp1, null),
+        new("twp-cli-hotrestart-http1", ProbeMode.TwpCliHotRestartHttp1, null)
     ];
 
     private static IReadOnlyList<ArmSpec> BuildFullMatrixArms(bool nginxAvailable, bool nginxHttp3Available,

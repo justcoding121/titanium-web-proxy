@@ -247,10 +247,10 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
     }
 
     /// <summary>
-    ///     Local address for the query socket, or <see langword="null"/> when the socket should stay
-    ///     unbound until <c>Connect</c>. Loopback resolvers use <c>127.0.0.1</c> / <c>::1</c>.
-    ///     A non-loopback resolver must not bind <see cref="IPAddress.Any"/> or
-    ///     <see cref="IPAddress.IPv6Any"/> — that listen prompts Windows Defender Firewall.
+    ///     Local address for the query socket, or <see langword="null"/> when the caller keeps the product
+    ///     path. Loopback resolvers use <c>127.0.0.1</c> / <c>::1</c>. A non-loopback resolver must not bind
+    ///     <see cref="IPAddress.Any"/> or <see cref="IPAddress.IPv6Any"/>, and an unbound connect is reported
+    ///     as those addresses too. A test host uses the confine overload instead of connecting unbound.
     /// </summary>
     internal static IPAddress? SelectClientBindAddress(IPAddress dnsServerAddress)
     {
@@ -263,6 +263,31 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
             ? IPAddress.IPv6Loopback
             : IPAddress.Loopback;
     }
+
+    /// <summary>
+    ///     Same as <see cref="SelectClientBindAddress(IPAddress)"/>, except
+    ///     <paramref name="confineNonLoopbackToLoopback"/> binds loopback for every resolver.
+    ///     An unbound UDP connect is reported as <c>0.0.0.0</c> or <c>::</c> and Windows Firewall prompts,
+    ///     so a developer test host confines the query and lets it fail closed.
+    /// </summary>
+    internal static IPAddress? SelectClientBindAddress(IPAddress dnsServerAddress, bool confineNonLoopbackToLoopback)
+    {
+        var selected = SelectClientBindAddress(dnsServerAddress);
+        if (selected is not null || !confineNonLoopbackToLoopback)
+            return selected;
+
+        return dnsServerAddress.AddressFamily == AddressFamily.InterNetworkV6
+            ? IPAddress.IPv6Loopback
+            : IPAddress.Loopback;
+    }
+
+    private static IPAddress? SelectClientBindAddressForProcess(IPAddress dnsServerAddress) =>
+        SelectClientBindAddress(dnsServerAddress, ConfineUdpToLoopback);
+
+    private static bool ConfineUdpToLoopback =>
+        OperatingSystem.IsWindows()
+        && string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1", StringComparison.Ordinal)
+        && !string.Equals(Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS"), "1", StringComparison.Ordinal);
 
     /// <summary>
     ///     Sends a DNS UDP query and parses the response.
@@ -281,10 +306,9 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
         var addrFamily = _dnsServerEndPoint.AddressFamily;
         using var socket = new Socket(addrFamily, SocketType.Dgram, ProtocolType.Udp);
 
-        // A wildcard bind (0.0.0.0 / ::) is an inbound listen. Windows Defender Firewall then
-        // prompts for the calling process, including testhost.exe during tests. Loopback resolvers
-        // bind 127.0.0.1 / ::1. Any other resolver stays unbound until Connect().
-        var bindAddress = SelectClientBindAddress(_dnsServerEndPoint.Address);
+        // A wildcard local address (0.0.0.0 / ::), including an unbound connect, prompts Windows Firewall.
+        // Loopback resolvers bind 127.0.0.1 / ::1. A developer test host does the same for any resolver.
+        var bindAddress = SelectClientBindAddressForProcess(_dnsServerEndPoint.Address);
         if (bindAddress != null)
         {
             socket.Bind(new IPEndPoint(bindAddress, 0));

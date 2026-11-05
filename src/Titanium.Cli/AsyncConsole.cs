@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Titanium.Cli.Config;
 
 namespace Titanium.Cli;
 
@@ -59,25 +60,25 @@ internal static class AsyncConsole
     public static void WriteLine(string message)
     {
         EnsureStarted();
-        Channel.Writer.TryWrite(new Entry { Text = message });
+        Channel.Writer.TryWrite(new Entry { Text = SecretRedactor.Redact(message) });
     }
 
     public static void Write(string message)
     {
         EnsureStarted();
-        Channel.Writer.TryWrite(new Entry { Text = message, NewLine = false });
+        Channel.Writer.TryWrite(new Entry { Text = SecretRedactor.Redact(message), NewLine = false });
     }
 
     public static void WriteError(string message)
     {
         EnsureStarted();
-        Channel.Writer.TryWrite(new Entry { IsError = true, Text = message });
+        Channel.Writer.TryWrite(new Entry { IsError = true, Text = SecretRedactor.Redact(message) });
     }
 
     public static void WriteErrorRaw(string message)
     {
         EnsureStarted();
-        Channel.Writer.TryWrite(new Entry { IsError = true, NewLine = false, Text = message });
+        Channel.Writer.TryWrite(new Entry { IsError = true, NewLine = false, Text = SecretRedactor.Redact(message) });
     }
 
     /// <summary>Wait until every entry enqueued so far has been written.</summary>

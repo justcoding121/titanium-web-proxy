@@ -14,6 +14,7 @@ using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Quic;
 using Titanium.Web.Proxy.Network.Tcp;
 using Titanium.Web.Proxy.Options;
@@ -76,7 +77,10 @@ internal static partial class Http3OriginBridge
         sessionArgs.CustomUpStreamProxy = upstreamProxy;
         sessionArgs.CustomUpStreamProxyUsed = upstreamProxy;
         upstreamProxy ??= server.UpStreamHttpsProxy;
-        var poolKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost, upstreamProxy, upStreamEndPoint);
+        // Null unless the cluster sets a client certificate, CA, SNI, hostname, or accept-any option.
+        var tlsMaterial = UpstreamTlsMaterial.For(sessionArgs.UpstreamHttpClient);
+        var poolKey = QuicConnectionFactory.GetCacheKey(connectHost, port, sniHost, upstreamProxy, upStreamEndPoint,
+            tlsMaterial?.Fingerprint);
 
         QuicServerConnection? quicConn = null;
         // When true, StreamBodyWriter owns originStream + quicConn release (do not dispose/release here).
@@ -123,6 +127,7 @@ internal static partial class Http3OriginBridge
                         UpStreamEndPoint = upStreamEndPoint,
                         UpstreamProxy = upstreamProxy,
                         PoolKey = poolKey,
+                        TlsMaterial = tlsMaterial,
                     },
                     cancellationToken);
                 if (tcpWon)
@@ -161,7 +166,8 @@ internal static partial class Http3OriginBridge
                         sniHost: sniHost,
                         failFastHandshake: !isForcedH3,
                         capabilityKey: coldCapabilityKey,
-                        precomputedCacheKey: poolKey);
+                        precomputedCacheKey: poolKey,
+                        tlsMaterial: tlsMaterial);
                 }
                 catch (OperationCanceledException ex) when (coldCapabilityKey != null
                                                             && !cancellationToken.IsCancellationRequested)

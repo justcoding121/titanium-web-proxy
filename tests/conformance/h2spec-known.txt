@@ -1,0 +1,7 @@
+# h2spec known gaps for the Titanium reverse listener (prior-knowledge h2c, plain TCP).
+# One entry per line, matched as a substring of "<package> | <classname> | <name>". '#' starts a comment.
+# Every entry needs an issue link and a reason. Remove the entry when the gap is fixed: the checker reports stale entries.
+#
+# The list is empty: the first nightly run on the runner is the baseline. Record any failure it reports here as
+#   http2/<section> # <issue placeholder: TWP-H2SPEC-NNN> <why this is accepted or when it will be fixed>
+# and do not add an entry without opening the issue first.

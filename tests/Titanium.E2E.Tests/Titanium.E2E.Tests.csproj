@@ -6,7 +6,8 @@
     <IsPackable>false</IsPackable>
     <RootNamespace>Titanium.E2E.Tests</RootNamespace>
     <!-- Headless Avalonia needs a desktop-compatible TFM; Windows runners are fine. -->
-    <NoWarn>$(NoWarn);CA1416;ASPDEPR004;ASPDEPR008</NoWarn>
+    <!-- FlaUI ships net461 assets; restore with warnaserror treats NU1701 as an error. -->
+    <NoWarn>$(NoWarn);CA1416;ASPDEPR004;ASPDEPR008;NU1701</NoWarn>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
@@ -28,11 +29,23 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Titanium.Cli\Titanium.Cli.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Plus\Titanium.Plus.csproj" />
+    <ProjectReference Include="..\..\src\Titanium.Manager\Titanium.Manager.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Inspector\Titanium.Inspector.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Abstractions\Titanium.Web.Proxy.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy.Configuration\Titanium.Web.Proxy.Configuration.csproj" />
     <ProjectReference Include="..\..\tools\InspectorDesktopProbe\Shared\Titanium.Inspector.DesktopProbe.Shared.csproj" />
+    <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OS)' != 'Windows_NT'">
+    <Compile Remove="InspectorDecryptWindowE2ETests.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(OS)' == 'Windows_NT'">
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <Reference Include="Accessibility" Condition="Exists('$(windir)\Microsoft.NET\Framework64\v4.0.30319\Accessibility.dll')">
+      <HintPath>$(windir)\Microsoft.NET\Framework64\v4.0.30319\Accessibility.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <None Include="Fixtures\GrpcTranscode\**\*" CopyToOutputDirectory="PreserveNewest" />

@@ -1,0 +1,7 @@
+# expect: reject
+# reason: whitespace inside the digits
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 1 2\r\n
+\r\n

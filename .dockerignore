@@ -1,0 +1,27 @@
+# Build context is the repository root; keep it small. The Dockerfile needs global.json, NuGet.config, src/,
+# plus tools/packaging + tools/scripting for Lua/Wasmtime natives in the CLI image.
+**/bin/
+**/obj/
+**/node_modules/
+.git/
+.github/
+.tmp/
+.tmp-rps/
+artifacts/
+BenchmarkDotNet.Artifacts/
+coverage/
+TestResults/
+tmp/
+website/
+wiki/
+docs/
+examples/
+benchmarks/
+tests/
+tools/*
+!tools/packaging/
+!tools/packaging/**
+!tools/scripting/
+!tools/scripting/**
+tools/packaging/.cache/
+*.log

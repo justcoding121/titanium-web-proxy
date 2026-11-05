@@ -1,0 +1,58 @@
+Third-party components bundled with Titanium CLI / Inspector for scripting
+==========================================================================
+
+Lua
+---
+Project: https://www.lua.org/
+Source:  https://www.lua.org/ftp/lua-5.4.7.tar.gz (version pinned in tools/packaging/scripting-native.lock.json)
+License: MIT
+Copyright (C) 1994-2024 Lua.org, PUC-Rio.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Lua is built from the pinned source tarball together with the Titanium Lua host
+shim (tools/scripting/lua-shim/, MIT, same license as Titanium Web Proxy) into
+lua54.dll / liblua54.so / liblua54.dylib.
+
+
+Wasmtime (C API)
+----------------
+Project: https://github.com/bytecodealliance/wasmtime
+Releases: https://github.com/bytecodealliance/wasmtime/releases
+License: Apache-2.0 WITH LLVM-exception
+  https://github.com/bytecodealliance/wasmtime/blob/main/LICENSE
+  https://www.apache.org/licenses/LICENSE-2.0
+Copyright (c) Bytecode Alliance contributors
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+As an exception to the Apache License, the "LLVM Exceptions" apply to portions
+of the software compiled into object form: the License's requirements in
+sections 4(a), 4(b) and 4(d) do not apply to redistributions in compiled form.
+
+The prebuilt wasmtime.dll / libwasmtime.so / libwasmtime.dylib shipped in RID
+zips are the unmodified "c-api" release artifacts; the upstream LICENSE file is
+copied next to them as LICENSE-WASMTIME.txt.

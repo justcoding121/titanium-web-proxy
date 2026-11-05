@@ -1,0 +1,39 @@
+# GOLDEN FILE - representative 8.0 product shape that stays loadable under schemaVersion 7.1.
+# Additive keys only (scripting plugin kind + fleet rateLimit). Do not edit to make a failing test pass.
+schemaVersion: "7.1"
+plus:
+  enabled: true
+  options:
+    state.redis: "127.0.0.1:6379"
+listeners:
+  - host: "127.0.0.1"
+    port: 8080
+    decryptSsl: false
+clusters:
+  - id: web
+    destinations:
+      - id: a
+        address: 127.0.0.1
+        port: 9000
+policies:
+  - name: fleet-bucket
+    kind: rateLimit
+    key: client
+    algorithm: tokenBucket
+    limit: 100
+    windowSeconds: 60
+    burst: 100
+    scope: fleet
+    fleetFailMode: local
+    localShare: 0.25
+routes:
+  - id: site
+    clusterId: web
+    match:
+      path: /
+    policies: [fleet-bucket]
+    middleware: [header-gate]
+plugins:
+  - name: header-gate
+    kind: lua
+    file: Compat/noop-header-gate.lua

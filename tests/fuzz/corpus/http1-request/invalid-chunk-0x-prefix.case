@@ -1,0 +1,10 @@
+# expect: reject
+# reason: a 0x prefix is not HEXDIG
+# reject-type: ProxyHttpException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+0x3\r\nabc\r\n
+0\r\n
+\r\n

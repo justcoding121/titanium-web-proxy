@@ -1,0 +1,6 @@
+# expect: reject
+# reason: a header line with an empty field name
+GET / HTTP/1.1\r\n
+Host: a\r\n
+: value\r\n
+\r\n

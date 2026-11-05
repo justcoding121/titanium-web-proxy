@@ -21,5 +21,5 @@ Titanium supports proxy authentication, mutual TLS, Kerberos, and NTLM. Configur
 ## Further reading
 
 - [Security-Considerations wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Security-Considerations)
-- [Plus](/docs/plus) for CIDR allow-lists, JWT/OIDC, and thin WAF options
+- [Plus](/docs/plus) for CIDR allow-lists, JWT/OIDC, and WAF request screening
 - [Editions](/docs/editions) for license boundaries

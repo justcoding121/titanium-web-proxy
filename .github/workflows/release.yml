@@ -55,14 +55,91 @@ jobs:
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "Resolved tag=$TAG version=$VERSION channel=$CHANNEL"
 
-  test:
+  release-readiness:
     needs: resolve-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+    steps:
+      - name: Latest nightly on this commit is green and under 24 hours
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timedelta, timezone
+          token = os.environ["GH_TOKEN"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["SHA"]
+          workflows = [
+              "conformance.yml",
+              "soak.yml",
+              "kubernetes-smoke.yml",
+              "inspector-unattended.yml",
+              "fuzz-nightly.yml",
+              "dast.yml",
+          ]
+          cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+          failed = []
+          for name in workflows:
+              url = f"https://api.github.com/repos/{repo}/actions/workflows/{name}/runs?per_page=20"
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              })
+              with urllib.request.urlopen(req) as resp:
+                  runs = json.load(resp).get("workflow_runs", [])
+              match = None
+              for run in runs:
+                  if run.get("head_sha") != sha:
+                      continue
+                  created = datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
+                  if run.get("conclusion") == "success" and created >= cutoff:
+                      match = run
+                      break
+              if match is None:
+                  failed.append(name)
+              else:
+                  print(f"{name}: {match['html_url']}")
+          issues_url = f"https://api.github.com/repos/{repo}/issues?labels=escaped-defect&state=all&per_page=50"
+          ireq = urllib.request.Request(issues_url, headers={
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          })
+          with urllib.request.urlopen(ireq) as resp:
+              issues = json.load(resp)
+          for issue in issues:
+              if "pull_request" in issue:
+                  continue
+              body = issue.get("body") or ""
+              number = issue.get("number")
+              if issue.get("state") == "open":
+                  failed.append(f"escaped-defect #{number} is still open")
+              elif "tests/" not in body:
+                  failed.append(f"escaped-defect #{number} was closed without a tests/ path in the body")
+          if failed:
+              print("::error::Nightly is missing, red, or older than 24 hours, or an escaped defect is unresolved: " + ", ".join(failed))
+              raise SystemExit(1)
+          PY
+
+  test:
+    needs: [resolve-version, release-readiness]
     runs-on: windows-latest
     # Whole-sln `dotnet test` can hang forever on shared Windows runners (integration/TLS);
     # keep a hard ceiling and match beta push gates (per-project + blame-hang).
     timeout-minutes: 90
     permissions:
       contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -81,10 +158,15 @@ jobs:
             'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj',
             'tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj',
             'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj',
-            'tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj'
+            'tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj',
+            'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj',
+            'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj',
+            'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj',
+            'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj',
+            'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'
           )) {
             Write-Host "=== $proj ==="
-            dotnet test $proj -c Release --no-build --no-restore --nologo --filter "TestCategory!=Slow&TestCategory!=E2E-UI-Window"
+            dotnet test $proj -c Release --no-build --no-restore --nologo --filter "TestCategory!=Slow&TestCategory!=E2E-UI-Window&TestCategory!=Fuzz-Nightly"
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
 
@@ -92,7 +174,7 @@ jobs:
           dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --no-restore --nologo --filter "TestCategory=E2E-UI"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $maxAttempts = 2
+          $maxAttempts = 3
           for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
             Write-Host "=== Integration attempt $attempt of $maxAttempts ==="
             dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj `
@@ -161,18 +243,20 @@ jobs:
       max-parallel: 2
       matrix:
         include:
+          # Lua shim builds only on a matching OS/arch host; arm/musl use native or Alpine runners.
           - rid: linux-x64
             os: ubuntu-latest
           - rid: linux-arm64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
           - rid: linux-musl-x64
             os: ubuntu-latest
           - rid: linux-musl-arm64
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
           - rid: win-x64
             os: windows-latest
+          # osx-x64 Lua is compiled on the host, so this leg needs Intel. macos-13 no longer has runners.
           - rid: osx-x64
-            os: macos-latest
+            os: macos-15-intel
           - rid: osx-arm64
             os: macos-latest
     steps:
@@ -189,8 +273,10 @@ jobs:
           dotnet-version: '10.0.x'
       - uses: actions/cache@v6
         with:
-          path: tools/packaging/.cache/http3-natives
-          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          path: |
+            tools/packaging/.cache/http3-natives
+            tools/packaging/.cache/scripting-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json', 'tools/packaging/scripting-native.lock.json') }}-${{ matrix.rid }}
           # Exact RID only — cross-RID restore-keys previously pulled linux-x64 into musl jobs.
       - name: Publish Cli
         shell: pwsh
@@ -216,6 +302,43 @@ jobs:
             Copy-Item "$out/titanium" "$out/twp"
           }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+      # Scripting natives (Lua + shim, Wasmtime). Hard-fail for every shipping RID: release zips must
+      # ship both files so `titanium scripting-deps status` reports loaded. Lua needs a matching host
+      # (see matrix OS), an Alpine container for linux-musl-x64, or musl-gcc for linux-musl-arm64.
+      - name: Bundle scripting natives (Cli)
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir "artifacts/cli/$rid" -Strict
+      - name: Bundle scripting natives (Cli, musl via Alpine)
+        if: matrix.rid == 'linux-musl-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          out="artifacts/cli/$rid"
+          # Wasmtime archive is RID-specific and downloads on any host; Lua must compile on musl.
+          pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 -Rid "$rid" -PublishDir "$out" -SkipLua
+          docker run --rm --platform linux/amd64 \
+            -v "$PWD:/src" -w /src \
+            mcr.microsoft.com/powershell:lts-alpine-3.17 \
+            sh -c "apk add --no-cache build-base curl ca-certificates icu-libs \
+              && pwsh -NoProfile -File tools/packaging/bundle-scripting-native.ps1 -Rid '$rid' -PublishDir '$out' -SkipWasmtime -Strict"
+          test -f "$out/liblua54.so"
+      - name: Bundle scripting natives (Cli, musl-arm64 via musl-gcc)
+        if: matrix.rid == 'linux-musl-arm64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          # PowerShell Alpine tags are linux/amd64 only, so this arm64 runner cannot start them.
+          export CC=musl-gcc
+          pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 \
+            -Rid linux-musl-arm64 -PublishDir artifacts/cli/linux-musl-arm64 -Strict
+          test -f artifacts/cli/linux-musl-arm64/liblua54.so
+          test -f artifacts/cli/linux-musl-arm64/libwasmtime.so
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3
@@ -245,6 +368,18 @@ jobs:
             Push-Location $out
             try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
           }
+      - name: Smoke the CLI zip
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'cli-zip-smoke'
+          Expand-Archive -Path "Titanium.Cli-win-x64.zip" -DestinationPath $dir -Force
+          Get-ChildItem -LiteralPath $dir -Recurse -File | Unblock-File
+          $exe = Join-Path $dir 'titanium.exe'
+          & $exe version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $exe healthcheck --help
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Winget symlink smoke (win-x64)
         # winget portable installs create WinGet\Links symlinks to titanium.exe and twp.exe.
         # A multi-file publish fails there; this gate runs before any GitHub Release is published.
@@ -321,19 +456,21 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Build Plus
+      - name: Build Plus bundle
+        shell: pwsh
         env:
           RELEASE_TAG: ${{ needs.resolve-version.outputs.release_tag }}
           RELEASE_VERSION: ${{ needs.resolve-version.outputs.version }}
         run: |
-          ver="${RELEASE_VERSION:-0.0.0}"
-          # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
-          dotnet build src/Titanium.Plus/Titanium.Plus.csproj -c Release -o artifacts/plus -p:Version="$ver"
-          cp artifacts/plus/Titanium.Plus.dll "Titanium.Plus-${RELEASE_TAG}.dll"
+          $tag = $env:RELEASE_TAG
+          if ([string]::IsNullOrWhiteSpace($tag)) { $tag = "0.0.0-dev" }
+          ./tools/packaging/plus-bundle/build-plus-bundle.ps1 -Tag $tag -Version $env:RELEASE_VERSION -OutputDirectory .
       - uses: actions/upload-artifact@v7
         with:
           name: plus
-          path: Titanium.Plus-*.dll
+          path: |
+            Titanium.Plus-*.zip
+            Titanium.Plus-*.dll
 
   build-inspector:
     needs: [resolve-version, test]
@@ -382,8 +519,10 @@ jobs:
           dotnet-version: '10.0.x'
       - uses: actions/cache@v6
         with:
-          path: tools/packaging/.cache/http3-natives
-          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+          path: |
+            tools/packaging/.cache/http3-natives
+            tools/packaging/.cache/scripting-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json', 'tools/packaging/scripting-native.lock.json') }}-${{ matrix.rid }}
           # Exact RID only — avoid cross-RID cache pollution (see build-cli).
       - name: Publish Inspector
         shell: pwsh
@@ -409,6 +548,7 @@ jobs:
             Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
             Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
           }
+      # Inspector does not register Lua/WASM engines; do not ship scripting natives in Inspector zips.
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'
         uses: azure/login@v3
@@ -569,6 +709,48 @@ jobs:
             grep -qi 'IsSupported' /cli/smoke-out.txt
             test -e /cli/libmsquic.so -o -e /cli/libmsquic.so.2 -o -e /cli/libmsquic.so.2.5.7
 
+  smoke-scripting:
+    needs: build-cli
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: win-x64
+            os: windows-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli-${{ matrix.rid }}
+          path: dist
+      - name: Smoke scripting natives (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          unzip -q dist/Titanium.Cli-${{ matrix.rid }}.zip -d cli
+          chmod +x cli/titanium
+          test -f cli/liblua54.so
+          test -f cli/libwasmtime.so
+          ./cli/titanium scripting-deps status | tee smoke-scripting.txt
+          grep -qi 'Lua: loaded' smoke-scripting.txt
+          grep -qi 'Wasmtime: loaded' smoke-scripting.txt
+      - name: Smoke scripting natives (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Expand-Archive -Path "dist/Titanium.Cli-${{ matrix.rid }}.zip" -DestinationPath cli -Force
+          if (-not (Test-Path cli/lua54.dll)) { throw 'lua54.dll missing from win-x64 CLI zip' }
+          if (-not (Test-Path cli/wasmtime.dll)) { throw 'wasmtime.dll missing from win-x64 CLI zip' }
+          & ./cli/titanium.exe scripting-deps status | Tee-Object -FilePath smoke-scripting.txt
+          $text = Get-Content -Raw smoke-scripting.txt
+          if ($text -notmatch 'Lua:\s*loaded') { throw 'Lua not loaded in scripting-deps status' }
+          if ($text -notmatch 'Wasmtime:\s*loaded') { throw 'Wasmtime not loaded in scripting-deps status' }
+
   # Stable-only Linux product RPS smoke (not wiki-grade 3-OS median-of-3).
   # Beta channel skips this; spot + editions already ran on the merge SHA.
   rps-product-smoke:
@@ -619,7 +801,7 @@ jobs:
           if-no-files-found: ignore
 
   publish-release:
-    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, rps-product-smoke]
+    needs: [resolve-version, build-cli, build-plus, build-inspector, smoke-http3, smoke-scripting, rps-product-smoke]
     if: |
       always() &&
       (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
@@ -628,6 +810,7 @@ jobs:
       needs.build-plus.result == 'success' &&
       needs.build-inspector.result == 'success' &&
       needs.smoke-http3.result == 'success' &&
+      needs.smoke-scripting.result == 'success' &&
       (needs.rps-product-smoke.result == 'success' || needs.rps-product-smoke.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
@@ -694,7 +877,7 @@ jobs:
             "abstractionsVersion": version.split("-")[0],
             "products": {
               "cli": {"assets": {}},
-              "plus": {"version": version, "requiredAbstractions": "7.0.0", "asset": None},
+              "plus": {"version": version, "requiredAbstractions": "8.0.0", "asset": None},
               "inspector": {"assets": {}},
             },
             "nuget": {
@@ -727,7 +910,12 @@ jobs:
                     key = rid if ext == ".zip" else f"{rid}{ext}"
                     put("inspector", key, entry)
                     break
-            elif name.startswith("Titanium.Plus"):
+            elif name.startswith("Titanium.Plus") and name.endswith(".zip"):
+              bundle = dict(entry)
+              bundle["size"] = pathlib.Path(meta["path"]).stat().st_size
+              manifest["products"]["plus"]["bundle"] = bundle
+              manifest["products"]["plus"]["version"] = version
+            elif name.startswith("Titanium.Plus") and name.endswith(".dll"):
               manifest["products"]["plus"]["asset"] = entry
               manifest["products"]["plus"]["version"] = version
           pathlib.Path("dist/release-manifest.json").write_text(json.dumps(manifest, indent=2))
@@ -804,6 +992,196 @@ jobs:
           echo "Dispatching deploy-website.yml --ref develop (channel=$RELEASE_CHANNEL)"
           gh workflow run deploy-website.yml --ref develop
 
+  # Multi-arch container image on GHCR with an SBOM, provenance, and a keyless cosign signature.
+  # Pull-request builds (no push) live in kubernetes-ci.yml.
+  publish-image:
+    needs: [resolve-version, test, cli-e2e]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing (OIDC)
+    env:
+      IMAGE: ghcr.io/justcoding121/titanium-web-proxy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
+          tags: |
+            type=raw,value=${{ needs.resolve-version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: tools/packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.resolve-version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image by digest (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+      - name: Verify the signature
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
+  # The Gateway API controller image, published the same way (SBOM, provenance, keyless signature).
+  publish-gateway-image:
+    needs: [resolve-version, test, cli-e2e]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing (OIDC)
+    env:
+      IMAGE: ghcr.io/justcoding121/titanium-gateway
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
+          tags: |
+            type=raw,value=${{ needs.resolve-version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: tools/packaging/docker/Dockerfile.gateway
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.resolve-version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image by digest (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+      - name: Verify the signature
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
+  # The Manager control-plane image, published the same way (SBOM, provenance, keyless signature).
+  publish-manager-image:
+    needs: [resolve-version, test, cli-e2e]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing (OIDC)
+    env:
+      IMAGE: ghcr.io/justcoding121/titanium-manager
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
+          tags: |
+            type=raw,value=${{ needs.resolve-version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=semver,pattern={{major}},value=${{ needs.resolve-version.outputs.release_tag }},enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+            type=raw,value=latest,enable=${{ needs.resolve-version.outputs.channel == 'stable' }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: tools/packaging/docker/Dockerfile.manager
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.resolve-version.outputs.version }}
+            COMMIT=${{ github.sha }}
+          # SPDX SBOM and SLSA provenance attestations are stored beside the image in the registry.
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image by digest (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+      - name: Verify the signature
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign verify "${IMAGE}@${DIGEST}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   publish-chocolatey:
     needs: [resolve-version, publish-release]
     if: |
@@ -872,3 +1250,81 @@ jobs:
           Get-ChildItem tools/packaging/chocolatey -Recurse -Filter *.nupkg | ForEach-Object {
             choco push $_.FullName --source https://push.chocolatey.org/ --api-key $env:CHOCOLATEY_API_KEY
           }
+
+  publish-charts:
+    needs: [resolve-version, publish-release]
+    if: needs.publish-release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.17.3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package charts onto the GitHub release and push OCI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve-version.outputs.release_tag }}
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+          CHANNEL: ${{ needs.resolve-version.outputs.channel }}
+        run: |
+          set -euo pipefail
+          mkdir -p charts
+          helm package deploy/helm/titanium -d charts
+          helm package deploy/helm/titanium-gateway -d charts
+          helm package deploy/helm/titanium-manager -d charts
+          gh release upload "$TAG" charts/*.tgz --clobber
+          # OCI registry: oci://ghcr.io/justcoding121/charts/<chart-name>
+          for tgz in charts/*.tgz; do
+            helm push "$tgz" oci://ghcr.io/justcoding121/charts
+          done
+          echo "Published Helm charts to GitHub release $TAG and oci://ghcr.io/justcoding121/charts (channel=$CHANNEL version=$VERSION)"
+
+  image-scan:
+    needs: [resolve-version, publish-image, publish-gateway-image, publish-manager-image]
+    if: needs.publish-image.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ghcr.io/justcoding121/titanium-web-proxy
+          - ghcr.io/justcoding121/titanium-gateway
+          - ghcr.io/justcoding121/titanium-manager
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:${{ needs.resolve-version.outputs.version }}
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+
+  yank-failed-release:
+    needs: [resolve-version, publish-release, publish-image, publish-gateway-image, publish-manager-image, publish-chocolatey, publish-charts, image-scan]
+    if: failure() && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Delete the GitHub release and open an incident
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.resolve-version.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release delete "$TAG" --yes --cleanup-tag || echo "No GitHub release to delete for $TAG"
+          gh issue create --title "Release ${TAG} yanked" --body "A publish job failed for ${TAG}. The GitHub release was deleted. Chocolatey and Homebrew versions need a manual unlist where those channels do not support an API yank."

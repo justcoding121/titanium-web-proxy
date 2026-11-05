@@ -1,0 +1,133 @@
+# Living map: supported product surfaces → automated smoke (process / UI / kind).
+# status: covered | missing
+# Update this file when adding a supported capability or its smoke test.
+# CI gate: tests/Titanium.Web.Proxy.Configuration.Tests/SmokeMatrixCoverageTests.cs
+
+version: 1
+jobs:
+  cli-e2e: "TestCategory=E2E on Win/Linux/macOS (.github/workflows/dotnetcore.yml)"
+  ui-portable: "E2E-UI* Playwright/Headless/Visual including E2E-UI-Manager"
+  kubernetes-smoke: ".github/workflows/kubernetes-smoke.yml (titanium, gateway, and manager jobs; PRs need k8s-smoke label)"
+  gateway-conformance: ".github/workflows/gateway-conformance.yml"
+  redis-fleet: "redis-fleet job in dotnetcore.yml"
+
+entries:
+  - id: cli-help-matrix
+    capability: CLI nested help
+    status: covered
+    test: Titanium.E2E.Tests.CliHelpMatrixE2ETests
+    job: cli-e2e
+
+  - id: cli-run-core
+    capability: titanium run proxy happy path
+    status: covered
+    test: Titanium.E2E.Tests.CliCommandE2ETests / HappyPathSanityE2ETests
+    job: cli-e2e
+
+  - id: cli-healthcheck
+    capability: titanium healthcheck
+    status: covered
+    test: Titanium.E2E.Tests.CliHealthcheckE2ETests
+    job: cli-e2e
+
+  - id: cli-reload
+    capability: titanium reload
+    status: covered
+    test: Titanium.E2E.Tests.CliReloadE2ETests
+    job: cli-e2e
+
+  - id: cli-plus-hash-password
+    capability: titanium plus hash-password
+    status: covered
+    test: Titanium.E2E.Tests.CliPlusHashPasswordE2ETests
+    job: cli-e2e
+
+  - id: cli-scripting-lua-wasm
+    capability: Lua / Wasm plugins via titanium run
+    status: covered
+    test: Titanium.E2E.Tests.CliScriptingE2ETests
+    job: cli-e2e
+
+  - id: cli-scripting-deps-install
+    capability: scripting-deps install
+    status: covered
+    test: Titanium.E2E.Tests.CliScriptingDepsE2ETests
+    job: cli-e2e
+
+  - id: plus-dashboard-secret
+    capability: Plus dashboard shared-secret login and drain
+    status: covered
+    test: Titanium.E2E.Tests.UiPlusDashboard.PlusDashboardPlaywrightTests
+    job: ui-portable
+
+  - id: plus-dashboard-oidc
+    capability: Plus dashboard OIDC / local users / reload / drift
+    status: covered
+    test: Titanium.E2E.Tests.UiPlusDashboard.PlusDashboardOidcPlaywrightTests
+    job: ui-portable
+
+  - id: plus-proxy-oidc-policy
+    capability: Plus route OIDC login policy
+    status: covered
+    test: Titanium.E2E.Tests.CliPlusOidcPolicyE2ETests
+    job: cli-e2e
+
+  - id: manager-ui
+    capability: titanium-manager HTML UI (fleet publish pause rollback)
+    status: covered
+    test: Titanium.E2E.Tests.UiManager.ManagerUiPlaywrightTests
+    job: ui-portable
+
+  - id: manager-agent-loop
+    capability: Manager publish → Plus agent ack / LKG
+    status: covered
+    test: Titanium.E2E.Tests.CliManagerAgentE2ETests
+    job: cli-e2e
+
+  - id: fleet-redis-rate-limit
+    capability: Fleet Redis rate limit via titanium run
+    status: covered
+    test: Titanium.E2E.Tests.CliFleetRateLimitE2ETests
+    job: redis-fleet
+
+  - id: inspector-headless
+    capability: Inspector AutomationId click/type
+    status: covered
+    test: Titanium.E2E.Tests.UiHeadless.AutomationIdCoverageHeadlessTests
+    job: ui-portable
+
+  - id: k8s-titanium-chart
+    capability: Helm titanium kind install / reload / drain
+    status: covered
+    test: .github/workflows/kubernetes-smoke.yml
+    job: kubernetes-smoke
+
+  - id: k8s-gateway-chart
+    capability: Helm titanium-gateway kind smoke + Ingress
+    status: covered
+    test: .github/workflows/kubernetes-smoke.yml (gateway job)
+    job: kubernetes-smoke
+
+  - id: k8s-manager-chart
+    capability: Helm titanium-manager kind smoke
+    status: covered
+    test: .github/workflows/kubernetes-smoke.yml (manager job)
+    job: kubernetes-smoke
+
+  - id: cli-udp
+    capability: UDP listener via titanium run
+    status: covered
+    test: Titanium.E2E.Tests.CliUdpListenerE2ETests
+    job: cli-e2e
+
+  - id: cli-otlp
+    capability: OTLP export via titanium run
+    status: covered
+    test: Titanium.E2E.Tests.CliOtlpE2ETests
+    job: cli-e2e
+
+  - id: cli-compression
+    capability: Response compression / request decompression CLI
+    status: covered
+    test: Titanium.E2E.Tests.CliCompressionE2ETests
+    job: cli-e2e

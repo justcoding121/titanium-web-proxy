@@ -4,6 +4,8 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using Titanium.Web.Proxy.Configuration;
+using Titanium.Web.Proxy.Configuration.Models;
 
 namespace Titanium.E2E.Tests.Harness;
 
@@ -193,29 +195,119 @@ public sealed partial class CliProcessHarness : IDisposable
 
     public void EnsurePlusDllBesideCli(bool copy)
     {
-        var dest = Path.Combine(CliDirectory, "Titanium.Plus.dll");
         if (!copy)
         {
-            if (File.Exists(dest))
-            {
-                File.Delete(dest);
-            }
-
+            RemoveHarnessPlusFiles(CliDirectory);
             return;
         }
 
         var plusDir = Path.GetDirectoryName(LocatePlusDll())!;
+        var listed = new List<string>();
         foreach (var file in Directory.EnumerateFiles(plusDir, "*.dll"))
         {
             var name = Path.GetFileName(file);
-            // Skip Core/Abstractions already provided by the CLI host.
-            if (name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase) &&
-                !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase))
+            if (IsCliOwnedAssembly(name))
             {
                 continue;
             }
 
-            File.Copy(file, Path.Combine(CliDirectory, name), overwrite: true);
+            var dest = Path.Combine(CliDirectory, name);
+            var existed = File.Exists(dest);
+            if (existed && !IsPlusSatellite(name))
+            {
+                // Leave assemblies the CLI already ships. Overwriting them and listing them would
+                // make --remove-plus delete a CLI file.
+                continue;
+            }
+
+            CopyWhenFree(file, dest);
+            if (!existed || IsPlusSatellite(name))
+            {
+                listed.Add(name);
+            }
+        }
+
+        listed.Add("Titanium.Plus.files");
+        listed.Sort(StringComparer.Ordinal);
+        File.WriteAllLines(Path.Combine(CliDirectory, "Titanium.Plus.files"), listed);
+    }
+
+    private static bool IsCliOwnedAssembly(string name) =>
+        name.StartsWith("Titanium.Web.Proxy", StringComparison.OrdinalIgnoreCase)
+        && !name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPlusSatellite(string name) =>
+        name.Equals("Titanium.Plus.dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Titanium.Xds.dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Titanium.Cli.GeoIp.dll", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("MaxMind.Db.dll", StringComparison.OrdinalIgnoreCase);
+
+    private static void RemoveHarnessPlusFiles(string directory)
+    {
+        var listPath = Path.Combine(directory, "Titanium.Plus.files");
+        if (File.Exists(listPath))
+        {
+            foreach (var raw in File.ReadAllLines(listPath))
+            {
+                var name = raw.Trim();
+                if (name.Length == 0 || name.IndexOfAny(['/', '\\', ':']) >= 0 || name.Contains("..", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                DeleteWhenFree(Path.Combine(directory, name));
+            }
+
+            DeleteWhenFree(listPath);
+            return;
+        }
+
+        DeleteWhenFree(Path.Combine(directory, "Titanium.Plus.dll"));
+    }
+
+    private static void DeleteWhenFree(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(250);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A CLI started by the previous test can still be releasing its assemblies. Retry briefly, and accept a
+    /// locked destination that already holds the same bytes length (it was copied by an earlier test).
+    /// </summary>
+    private static void CopyWhenFree(string source, string destination)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Copy(source, destination, overwrite: true);
+                return;
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                Thread.Sleep(250);
+            }
+            catch (IOException) when (File.Exists(destination) &&
+                                      new FileInfo(destination).Length == new FileInfo(source).Length)
+            {
+                return;
+            }
         }
     }
 
@@ -336,22 +428,90 @@ public sealed partial class CliProcessHarness : IDisposable
         return await WaitProcessAsync(process, timeout).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     A config passed to <c>titanium run</c> must bind loopback unless the machine opted into wildcard binds.
+    ///     A missing listener host loads as <c>0.0.0.0</c> and can raise the firewall prompt.
+    /// </summary>
+    public static void AssertLoopbackConfig(string configPath)
+    {
+        if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var text = File.ReadAllText(configPath);
+        if (text.Contains("hygiene-allow-non-loopback", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        TwpConfig config;
+        try
+        {
+            config = TwpConfigLoader.LoadFile(configPath);
+        }
+        catch (Exception)
+        {
+            // The CLI reports a config it cannot load. It does not bind.
+            return;
+        }
+
+        foreach (var listener in config.Listeners)
+        {
+            if (!IsLoopbackHost(listener.Host))
+            {
+                throw new InvalidOperationException(
+                    $"Listener {listener.Host}:{listener.Port} in {configPath} is not loopback. " +
+                    "Set host to 127.0.0.1 or ::1.");
+            }
+        }
+
+        if (config.Server?.Admin is { Enabled: true } admin && !IsLoopbackOrUnset(admin.Host))
+        {
+            throw new InvalidOperationException($"server.admin.host {admin.Host} in {configPath} is not loopback.");
+        }
+
+        if (config.Server?.Metrics is { Enabled: true } metrics && !IsLoopbackOrUnset(metrics.Host))
+        {
+            throw new InvalidOperationException($"server.metrics.host {metrics.Host} in {configPath} is not loopback.");
+        }
+
+        if (config.Plus?.ControlPlane is { } control && !IsLoopbackHost(control.Host))
+        {
+            throw new InvalidOperationException($"plus.controlPlane.host {control.Host} in {configPath} is not loopback.");
+        }
+    }
+
+    private static bool IsLoopbackOrUnset(string? host) =>
+        string.IsNullOrWhiteSpace(host) || IsLoopbackHost(host);
+
+    private static bool IsLoopbackHost(string? host) =>
+        host is "127.0.0.1" or "::1" or "localhost";
+
     public async Task StartRunAsync(
         string configPath,
         IDictionary<string, string?>? env = null,
         bool verbose = false,
         bool serviceMode = false,
-        string? serviceName = null)
+        string? serviceName = null,
+        bool watch = false)
     {
         if (_process is not null)
         {
             throw new InvalidOperationException("Already started.");
         }
 
+        AssertLoopbackConfig(configPath);
+
         var args = new List<string> { "run", "-c", configPath };
         if (verbose)
         {
             args.Add("-v");
+        }
+
+        if (watch)
+        {
+            args.Add("--watch");
         }
 
         if (serviceMode)
@@ -473,6 +633,9 @@ public sealed partial class CliProcessHarness : IDisposable
             _process = null;
         }
 
+        // The CLI child can leave CurrentUser\CA copies from SslStreamCertificateContext.Create.
+        Titanium.TestKit.Shared.TwpStoreLeakGuard.ScrubLeakedCertificates();
+
         if (_ownsIsolatedDirectory && _isolatedDirectory is not null)
         {
             try
@@ -576,6 +739,10 @@ public sealed partial class CliProcessHarness : IDisposable
                 }
             }
         }
+
+        // Child processes must not open a certificate dialog or a UAC relaunch, even if a test scrubs the environment.
+        psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
+        psi.Environment["TITANIUM_NO_ELEVATE"] = "1";
 
         var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start CLI.");
         process.OutputDataReceived += (_, e) =>

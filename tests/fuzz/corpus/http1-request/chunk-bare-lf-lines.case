@@ -1,0 +1,10 @@
+# expect: normalize
+# reason: chunked framing with bare LF is re-emitted with CRLF
+# assert-body-complete
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+3\nabc\n
+0\n
+\n

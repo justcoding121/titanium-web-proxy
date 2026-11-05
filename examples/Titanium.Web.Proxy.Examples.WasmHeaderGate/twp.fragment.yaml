@@ -1,0 +1,37 @@
+# Fragment of a twp.yaml. Merge `plugins` and the route's `middleware` into your own configuration.
+# Relative paths are relative to the directory of the twp.yaml.
+
+plugins:
+  - name: header-gate
+    kind: wasm
+    # header_gate.wat needs no toolchain (the engine compiles .wat itself). Swap in one of the builds when you want the
+    # header name from the configuration:
+    #   file: ./target/wasm32-wasip1/release/header_gate.wasm   (cargo build --release --target wasm32-wasip1)
+    #   file: ./tinygo/header_gate.wasm                          (tinygo build, see README.md)
+    file: ./header_gate.wat
+    failMode: closed
+    timeoutMs: 200
+    # The Rust and TinyGo builds read this in on_configure as the required header name; the .wat ignores it.
+    settings:
+      configuration: x-api-client
+    limits:
+      poolSize: 2                # VMs; a request uses one for its whole life
+      fuel: 5000000              # optional instruction budget per call
+
+routes:
+  - id: api
+    clusterId: backend
+    match: { path: /api, pathKind: Prefix }
+    middleware: [header-gate]    # runs the request-headers phase for this route only
+
+# To gate every route, use the listener-wide script pipeline instead. All HTTP phases of the module then run on every request:
+#
+# scriptPipeline: [header-gate]
+
+clusters:
+  - id: backend
+    destinations:
+      - { id: one, address: 127.0.0.1, port: 9000 }
+
+listeners:
+  - port: 8080

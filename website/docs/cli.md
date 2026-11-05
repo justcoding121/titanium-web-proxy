@@ -6,7 +6,7 @@ Standalone reverse / edge proxy for any backend stack. MIT licensed. For operato
 
 ## Quick start
 
-```yaml
+```yaml twp
 schemaVersion: "7.1"
 listeners:
   - host: "127.0.0.1"
@@ -28,12 +28,16 @@ Path-based routing and load balancing: [Configuration](/docs/configuration).
 ## Commands
 
 ```text
-titanium run -c <config> [-v|--verbose] [--service]
+titanium run -c <config> [-v|--verbose] [--watch] [--service]
+titanium reload -c <config>
+titanium restart -c <config>      # Linux hot restart, needs server.hotRestart
 titanium test -c <config>
+titanium healthcheck (-c <config> | --url <url>) [--timeout <seconds>]
 titanium service install|uninstall|start|stop|restart|status
 titanium version [--check] [--plus] [--channel beta]
 titanium update [--plus] [--remove-plus] [--channel beta]
 titanium http3-deps status|install
+titanium scripting-deps status|install
 ```
 
 Nested help: `titanium <command> --help` (and `titanium service install --help`, etc.).
@@ -41,22 +45,26 @@ Nested help: `titanium <command> --help` (and `titanium service install --help`,
 | Command | Purpose |
 |---------|---------|
 | `run` | Start the proxy from a config file |
+| `reload` | Ask a running proxy to reload its config in place; see [Reload without restart](#reload-without-restart) |
 | `test` | Validate config without serving traffic |
+| `healthcheck` | Probe the admin `/healthz` once (container `HEALTHCHECK`; exit `0` is healthy) |
 | `service` | Install / start / stop an OS service so the proxy survives reboot |
 | `version` | Print local version; `--check` compares to the update feed |
 | `update` | Self-update the CLI (download, verify SHA256, replace install); `--plus` installs/updates Plus; `--remove-plus` deletes it |
 | `http3-deps` | Report Quic availability; optionally install system MsQuic on edge hosts |
+| `scripting-deps` | Report whether the Lua and Wasmtime scripting natives load; `install` prints per-OS fixes |
 
 ### `run`
 
 ```text
-titanium run -c <config> [-v|--verbose] [--service] [--name <service-name>]
+titanium run -c <config> [-v|--verbose] [--watch] [--service] [--name <service-name>]
 ```
 
 | Flag | Meaning |
 |------|---------|
 | `-c`, `--config` | Path to config (required) |
 | `-v`, `--verbose` | Debug console logging |
+| `--watch` | Reload when the config (or a `*File` secret or certificate) changes, including Kubernetes ConfigMap and Secret `..data` symlink swaps. See [Kubernetes](/docs/kubernetes) |
 | `--service` | Service-worker mode (used by `titanium service install`; no “Press Ctrl+C” prompt; SIGTERM / SCM stop) |
 | `--name` | Windows SCM name when `--service` is set (default `titanium`) |
 
@@ -68,9 +76,18 @@ titanium test -c <config>
 
 Loads and validates the config without opening listeners. Exit `0` when OK; `1` when validation fails.
 
+### `healthcheck`
+
+```text
+titanium healthcheck -c <config>
+titanium healthcheck --url http://127.0.0.1:9901/healthz
+```
+
+With `-c`, the host and port come from `server.admin`; a wildcard bind is probed on loopback. It exits `0` without probing when `server.admin` is off or uses port `0`, so an image without an admin listener does not report unhealthy. `/healthz` needs no token.
+
 ### `service` {#service}
 
-Register the same `titanium run` binary with the OS so it starts at boot and restarts on failure (Windows Service, Linux systemd, or macOS launchd) — the same split nginx uses: one process, the OS supervises it.
+Register the same `titanium run` binary with the OS so it starts at boot and restarts on failure (Windows Service, Linux systemd, or macOS launchd): one process, the OS supervises it.
 
 ```text
 titanium service install -c <config> [--name titanium] [--user] [--no-start]
@@ -156,6 +173,14 @@ titanium http3-deps status|install
 
 Reports Quic support and optionally installs system MsQuic. Prefer the matching download zip, which already bundles natives — see [HTTP/3](/docs/http3).
 
+### `scripting-deps`
+
+```text
+titanium scripting-deps status|install
+```
+
+`status` reports whether the Lua (Titanium shim) and Wasmtime natives load (`Lua:` / `Wasmtime:` lines) and prints per-OS fixes; it exits 0 either way. `install` exits 0 when both load, otherwise prints the supported routes (matching RID zip, or `tools/packaging/bundle-scripting-native.ps1`) and exits 1 because nothing is installed through a system package manager.
+
 ## Plus sidecar
 
 ```shell
@@ -200,6 +225,10 @@ titanium reload -c twp.yaml
 **Needs a process restart:** listeners (bind/port), certificates / ACME, TLS material, enabling or disabling Plus plugins, static files root, access-log path.
 
 Unlike a typical YARP process recycle, Titanium keeps the process and in-flight sessions on the previous cluster snapshot until they finish.
+
+### Restart without dropping connections (Linux)
+
+Listener, certificate and plugin changes need a new process. With `server.hotRestart` on (see [Hot restart](/docs/configuration#hot-restart-linux)), `titanium restart -c twp.yaml` starts the new process beside the running one, waits until it is ready and owns the pid file, and reports. The old process then closes its TCP listeners, finishes what it accepted, and exits. If the new process fails to start, the old one keeps serving and the command exits `1` with the tail of `<pidFile>.log`. HTTP/3 and UDP listeners bind once the old process has exited.
 
 ## See also
 

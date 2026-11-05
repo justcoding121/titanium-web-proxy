@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Security.Authentication;
@@ -50,6 +51,35 @@ public class ServerConfigApplierTests
         Assert.IsTrue(proxy.BlockLoopbackDestinations);
     }
 
+    [TestMethod]
+    public void Apply_ListenerTlsPolicy_Omitted_LeavesTheEngineDefaults()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig { Tls = new TlsConfig() });
+
+        Assert.AreEqual(SslProtocols.None, proxy.ListenerMinimumSslProtocol);
+        Assert.IsNull(proxy.ListenerCipherSuites);
+        Assert.IsFalse(proxy.OcspStapling);
+    }
+
+    [TestMethod]
+    public void Apply_ListenerTlsPolicy_SetsMinimumSuitesAndStapling()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            Tls = new TlsConfig
+            {
+                MinVersion = "Tls13",
+                CipherSuites = ["TLS_AES_256_GCM_SHA384"],
+                OcspStapling = true,
+            },
+        });
+
+        Assert.AreEqual(SslProtocols.Tls13, proxy.ListenerMinimumSslProtocol);
+        CollectionAssert.AreEqual(new[] { System.Net.Security.TlsCipherSuite.TLS_AES_256_GCM_SHA384 }, proxy.ListenerCipherSuites!.ToArray());
+        Assert.IsTrue(proxy.OcspStapling);
+    }
     [TestMethod]
     public void Apply_NullServer_IsNoOp()
     {

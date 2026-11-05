@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Clusters;
 
@@ -14,13 +15,23 @@ namespace Titanium.Web.Proxy.Clusters;
 /// Thread-safe cluster manager. Snapshot swaps use compare-and-swap;
 /// in-flight sessions keep the previous snapshot reference.
 /// </summary>
-public sealed class ClusterManager : IClusterManager, IAsyncDisposable
+public sealed class ClusterManager : IClusterManager, IDestinationHealthEvents, IAsyncDisposable
 {
     private ImmutableClusterSnapshot _snapshot = ImmutableClusterSnapshot.Empty;
     private readonly List<DestinationHealthTracker> _healthTrackers = new();
-    private readonly List<ClusterHealthProber> _probers = new();
+    private readonly object _backgroundGate = new();
+    private readonly List<IDisposable> _background = new();
+    private IActiveHealthProbeProvider? _activeHealthProbeProvider;
     private readonly ConcurrentDictionary<string, IPAddress> _resolved = new(StringComparer.Ordinal);
     private readonly TimeProvider _time;
+    private string? _localZone;
+
+    /// <summary>Data-plane availability zone for zone-aware clusters. Empty disables zone filtering.</summary>
+    public string? LocalZone
+    {
+        get => Volatile.Read(ref _localZone);
+        set => Volatile.Write(ref _localZone, string.IsNullOrWhiteSpace(value) ? null : value.Trim());
+    }
 
     public ClusterManager()
         : this(TimeProvider.System)
@@ -29,8 +40,41 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
 
     internal ClusterManager(TimeProvider timeProvider) => _time = timeProvider;
 
+    /// <summary>Clock for waits that belong to routing, such as retry backoff.</summary>
+    internal TimeProvider Time => _time;
+
     /// <summary>Raised after a destination state value actually changes. Not raised on the request hot path.</summary>
     internal event Action<string, DestinationState, DestinationState>? StateChanged;
+
+    /// <summary>
+    ///     Raised when a destination is ejected, recovers, or fails an active probe. Handlers run on the thread
+    ///     that decided (a request, a probe round, or a circuit breaker), so they must be quick and must not throw.
+    /// </summary>
+    public event Action<DestinationHealthEvent>? HealthEvent;
+
+    /// <inheritdoc />
+    public void ReportHealthEvent(DestinationHealthEvent healthEvent)
+    {
+        ArgumentNullException.ThrowIfNull(healthEvent);
+        try
+        {
+            HealthEvent?.Invoke(healthEvent);
+        }
+        catch (Exception)
+        {
+            // A diagnostics subscriber must never break health bookkeeping on the request path.
+        }
+    }
+
+    internal void ReportHealthEvent(string destinationId, string kind, string source, string? detail) =>
+        ReportHealthEvent(new DestinationHealthEvent
+        {
+            Time = _time.GetUtcNow(),
+            DestinationId = destinationId,
+            Kind = kind,
+            Source = source,
+            Detail = detail,
+        });
 
     public ImmutableClusterSnapshot Snapshot => Volatile.Read(ref _snapshot);
 
@@ -39,8 +83,33 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     internal bool TryGetResolved(string destinationId, out IPAddress address) =>
         _resolved.TryGetValue(destinationId, out address!);
 
-    /// <summary>Background probers and refreshers. Zero until a later phase starts one.</summary>
+    /// <summary>DNS refreshers plus active health probes. Zero when neither is running.</summary>
     internal int ActiveBackgroundTaskCount { get; private set; }
+
+    /// <summary>
+    ///     Active probes for <c>healthCheck.active</c>. When this is null, <c>healthCheck.active</c> stays inactive:
+    ///     core refreshes DNS and leaves destination health to passive checks and other callers.
+    ///     Assigning a provider reconciles the clusters already applied and starts a probe for each one whose
+    ///     active check is enabled. Titanium Plus assigns a provider when the Plus module loads.
+    /// </summary>
+    public IActiveHealthProbeProvider? ActiveHealthProbeProvider
+    {
+        get
+        {
+            lock (_backgroundGate)
+            {
+                return _activeHealthProbeProvider;
+            }
+        }
+        set
+        {
+            lock (_backgroundGate)
+            {
+                _activeHealthProbeProvider = value;
+                ReconcileProbersLocked(CurrentClusters());
+            }
+        }
+    }
 
     public void AttachHealthTracker(DestinationHealthTracker tracker)
     {
@@ -67,11 +136,23 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        _ = reconcileBackground;
+
+        // Read and parse each cluster's upstream TLS files now, so a request never does file I/O and the
+        // pool key already holds the content fingerprint. A broken file is logged by the first request
+        // that needs it and fails closed there.
+        foreach (var cluster in clusters)
+        {
+            if (cluster.HttpClient is { } httpClient)
+            {
+                _ = UpstreamTlsMaterial.For(httpClient);
+                _ = httpClient.ConnectionKey;
+            }
+        }
+
         while (true)
         {
             var current = Volatile.Read(ref _snapshot);
-            var next = BuildSnapshot(current, clusters, out var restoredHealthy);
+            var next = BuildSnapshot(current, clusters, LocalZone, out var restoredHealthy);
             if (ReferenceEquals(Interlocked.CompareExchange(ref _snapshot, next, current), current))
             {
                 foreach (var id in restoredHealthy)
@@ -81,7 +162,10 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
 
                 if (reconcileBackground)
                 {
-                    ReconcileProbers(clusters);
+                    lock (_backgroundGate)
+                    {
+                        ReconcileProbersLocked(clusters);
+                    }
                 }
 
                 return ValueTask.CompletedTask;
@@ -172,9 +256,18 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
 
     internal async Task ProbeActiveOnceAsync()
     {
-        foreach (var prober in _probers)
+        IDisposable[] sessions;
+        lock (_backgroundGate)
         {
-            await prober.ProbeOnceAsync().ConfigureAwait(false);
+            sessions = _background.ToArray();
+        }
+
+        foreach (var session in sessions)
+        {
+            if (session is IActiveHealthProbeSession probe)
+            {
+                await probe.ProbeOnceAsync().ConfigureAwait(false);
+            }
         }
     }
 
@@ -197,6 +290,7 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
     private static ImmutableClusterSnapshot BuildSnapshot(
         ImmutableClusterSnapshot current,
         IReadOnlyList<ClusterConfig> clusters,
+        string? localZone,
         out List<string> restoredHealthy)
     {
         var map = new Dictionary<string, ClusterConfig>(StringComparer.Ordinal);
@@ -227,7 +321,7 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         var runtimes = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var pair in map)
         {
-            runtimes[pair.Key] = ReuseRuntime(current, pair.Key, pair.Value);
+            runtimes[pair.Key] = ReuseRuntime(current, pair.Key, pair.Value, localZone);
         }
 
         return new ImmutableClusterSnapshot(
@@ -260,28 +354,60 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         return DestinationState.Healthy;
     }
 
-    private static ClusterRuntime ReuseRuntime(ImmutableClusterSnapshot current, string clusterId, ClusterConfig cluster)
+    private static ClusterRuntime ReuseRuntime(
+        ImmutableClusterSnapshot current,
+        string clusterId,
+        ClusterConfig cluster,
+        string? localZone)
     {
         if (current.Runtimes.TryGetValue(clusterId, out var existing) &&
             existing is ClusterRuntime previous &&
-            ReferenceEquals(previous.Cluster, cluster))
+            ReferenceEquals(previous.Cluster, cluster) &&
+            string.Equals(previous.LocalZone, localZone, StringComparison.Ordinal))
         {
             return previous;
         }
 
-        return new ClusterRuntime(cluster);
+        return new ClusterRuntime(cluster, localZone);
     }
 
-    private void ReconcileProbers(IReadOnlyList<ClusterConfig> clusters)
+    private ClusterConfig[] CurrentClusters()
     {
-        StopProbers();
-        foreach (var cluster in clusters.Where(cluster =>
-                     cluster.HealthCheck?.Active is { Enabled: true } || ClusterRefreshesDns(cluster)))
+        var clusters = Snapshot.Clusters;
+        if (clusters.Count == 0)
         {
-            _probers.Add(new ClusterHealthProber(this, cluster, _time));
+            return Array.Empty<ClusterConfig>();
         }
 
-        ActiveBackgroundTaskCount = _probers.Count;
+        var list = new ClusterConfig[clusters.Count];
+        var index = 0;
+        foreach (var cluster in clusters.Values)
+        {
+            list[index++] = cluster;
+        }
+
+        return list;
+    }
+
+    /// <summary>Caller holds <see cref="_backgroundGate"/>.</summary>
+    private void ReconcileProbersLocked(IReadOnlyList<ClusterConfig> clusters)
+    {
+        StopProbersLocked();
+        var provider = _activeHealthProbeProvider;
+        foreach (var cluster in clusters)
+        {
+            if (ClusterRefreshesDns(cluster))
+            {
+                _background.Add(new ClusterDnsRefresher(this, cluster, _time));
+            }
+
+            if (cluster.HealthCheck?.Active is { Enabled: true } && provider is not null)
+            {
+                _background.Add(provider.Start(cluster, this));
+            }
+        }
+
+        ActiveBackgroundTaskCount = _background.Count;
     }
 
     private static bool ClusterRefreshesDns(ClusterConfig cluster)
@@ -297,20 +423,25 @@ public sealed class ClusterManager : IClusterManager, IAsyncDisposable
         return false;
     }
 
-    private void StopProbers()
+    /// <summary>Caller holds <see cref="_backgroundGate"/>.</summary>
+    private void StopProbersLocked()
     {
-        foreach (var prober in _probers)
+        foreach (var background in _background)
         {
-            prober.Dispose();
+            background.Dispose();
         }
 
-        _probers.Clear();
+        _background.Clear();
         ActiveBackgroundTaskCount = 0;
     }
 
     public async ValueTask DisposeAsync()
     {
-        StopProbers();
+        lock (_backgroundGate)
+        {
+            StopProbersLocked();
+        }
+
         await Task.CompletedTask;
     }
 }

@@ -1,0 +1,11 @@
+# expect: reject
+# reason: TE.CL - chunked must be the final coding
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: 4\r\n
+Transfer-Encoding: chunked, identity\r\n
+\r\n
+1\r\nZ\r\n
+0\r\n
+\r\n

@@ -13,7 +13,20 @@ namespace Titanium.E2E.Tests.UiPlusDashboard;
 [TestClass]
 public class CliHostedPlusDashboardPlaywrightTests : PageTest
 {
+    /// <summary>
+    ///     The dashboard CSP is <c>default-src 'self'</c>. Axe is injected by the test, so this
+    ///     context bypasses that policy. The product response is unchanged.
+    /// </summary>
+    public override BrowserNewContextOptions ContextOptions() =>
+        new()
+        {
+            BypassCSP = true,
+        };
+
     private const string Secret = "pw-cli-dashboard-secret";
+    private const string ViewerSecret = "pw-cli-dashboard-viewer-secret";
+
+    private static readonly string[] SnapshotPropertyNames = ["clusters", "destinationStates"];
 
     private string _tempDir = null!;
     private CliProcessHarness? _harness;
@@ -30,15 +43,14 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         var listen = CliProcessHarness.GetFreePort();
         var control = CliProcessHarness.GetFreePort();
         _dashboardPort = CliProcessHarness.GetFreePort();
-        var cfg = ConfigFixtures.WritePlusOptions(
+        var cfg = WriteCliHostedDashboardConfig(
             _tempDir,
             listen,
             _origin.Port,
             control,
             Secret,
-            new Dictionary<string, string>(),
-            useRoutes: true,
-            dashboardPort: _dashboardPort);
+            ViewerSecret,
+            _dashboardPort);
 
         _harness = new CliProcessHarness();
         _harness.EnsurePlusDllBesideCli(copy: true);
@@ -48,13 +60,13 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         });
 
         _prefix = $"http://127.0.0.1:{_dashboardPort}/";
-        using var probe = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        using var probe = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(2) };
         var deadline = DateTime.UtcNow.AddSeconds(30);
         while (DateTime.UtcNow < deadline)
         {
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Get, _prefix);
+                using var req = new HttpRequestMessage(HttpMethod.Get, _prefix + "api/snapshot");
                 req.Headers.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, Secret);
                 var resp = await probe.SendAsync(req);
                 if (resp.StatusCode == HttpStatusCode.OK)
@@ -69,11 +81,6 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
 
             await Task.Delay(200);
         }
-
-        await Page.SetExtraHTTPHeadersAsync(new Dictionary<string, string>
-        {
-            [ControlPlaneServer.SharedSecretHeader] = Secret,
-        });
     }
 
     [TestCleanup]
@@ -94,34 +101,74 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         }
     }
 
-    public override BrowserNewContextOptions ContextOptions() =>
-        new()
-        {
-            ExtraHTTPHeaders = new Dictionary<string, string>
-            {
-                [ControlPlaneServer.SharedSecretHeader] = Secret,
-            },
-        };
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_LoginAndDrainHealthy()
+    {
+        await LoginAsync(Secret);
+        await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
+        await Expect(Page.Locator("h1")).ToContainTextAsync("Titanium Plus");
+        await Expect(Page.GetByTestId("ov-rps")).ToBeVisibleAsync();
+
+        await Page.GotoAsync(_prefix + "routes");
+        await Expect(Page.GetByTestId("dest-row-d1")).ToBeVisibleAsync();
+
+        await Page.GetByTestId("btn-drain-d1").ClickAsync();
+        await Expect(Page.GetByTestId("dest-state-d1")).ToContainTextAsync("Draining");
+
+        await Page.GetByTestId("btn-healthy-d1").ClickAsync();
+        await Expect(Page.GetByTestId("dest-state-d1")).ToContainTextAsync("Healthy");
+    }
 
     [TestMethod]
     [TestCategory("E2E-UI-Plus-Dashboard")]
     [TestCategory("E2E")]
-    public async Task CliHosted_ShellAndDrainHealthy()
+    public async Task CliHosted_WrongSecret_IsRefused()
     {
-        Page.Dialog += async (_, dialog) => await dialog.AcceptAsync(Secret);
+        await LoginAsync("not-the-secret");
+        await Expect(Page.GetByTestId("login-error")).ToBeVisibleAsync();
+        Assert.AreEqual(0, (await Context.CookiesAsync()).Count(c => c.Name == "titanium_plus_session"));
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_ConfigAndCertificateViews_Render()
+    {
+        await LoginAsync(Secret);
+
+        await Page.GetByTestId("nav-config").ClickAsync();
+        await Expect(Page.GetByTestId("cfg-schema-version")).ToBeVisibleAsync();
+        await Expect(Page.GetByTestId("cfg-schema-version")).Not.ToHaveTextAsync("");
+
+        await Page.GetByTestId("nav-certs").ClickAsync();
+        await Expect(Page.GetByTestId("cert-table")).ToBeAttachedAsync();
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_SharedSecretHeader_WorksWithoutLogin()
+    {
+        await Page.SetExtraHTTPHeadersAsync(new Dictionary<string, string>
+        {
+            [ControlPlaneServer.SharedSecretHeader] = Secret,
+        });
 
         await Page.GotoAsync(_prefix);
         await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
-        await Expect(Page.Locator("h1")).ToContainTextAsync("Titanium Plus");
-        await Expect(Page.GetByTestId("dest-row-d1")).ToBeVisibleAsync();
+    }
 
-        await Page.GetByTestId("btn-drain-d1").ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByTestId("dest-state-d1")).ToContainTextAsync("Draining");
-
-        await Page.GetByTestId("btn-healthy-d1").ClickAsync();
-        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-        await Expect(Page.GetByTestId("dest-state-d1")).ToContainTextAsync("Healthy");
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_ViewerSecret_ShowsViewerRole()
+    {
+        await LoginAsync(ViewerSecret);
+        await Expect(Page.GetByTestId("whoami")).ToContainTextAsync("viewer");
+        await Page.GotoAsync(_prefix + "routes");
+        await Expect(Page.GetByTestId("btn-drain-d1")).ToBeDisabledAsync();
     }
 
     [TestMethod]
@@ -129,9 +176,109 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
     [TestCategory("E2E")]
     public async Task CliHosted_MetricsLink()
     {
-        await Page.GotoAsync(_prefix);
+        await LoginAsync(Secret);
         await Page.GetByTestId("link-metrics").ClickAsync();
         var metricsBody = await Page.InnerTextAsync("body");
         StringAssert.Contains(metricsBody, "titanium_destination_state");
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_ApiSnapshot_HasTheStableShape()
+    {
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.TryAddWithoutValidation(ControlPlaneServer.SharedSecretHeader, Secret);
+        using var doc = System.Text.Json.JsonDocument.Parse(await http.GetStringAsync(_prefix + "api/snapshot"));
+        var names = doc.RootElement.EnumerateObject().Select(property => property.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        CollectionAssert.AreEqual(SnapshotPropertyNames, names);
+    }
+
+    [TestMethod]
+    [TestCategory("E2E-UI-Plus-Dashboard")]
+    [TestCategory("E2E")]
+    public async Task CliHosted_Views_HaveNoSeriousAccessibilityViolations()
+    {
+        await LoginAsync(Secret);
+        foreach (var path in new[] { "", "routes" })
+        {
+            await Page.GotoAsync(_prefix + path);
+            await Page.AddScriptTagAsync(new PageAddScriptTagOptions
+            {
+                Url = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js",
+            });
+            var json = await Page.EvaluateAsync<string>(
+                "async () => JSON.stringify(await axe.run(document, { resultTypes: ['violations'] }))");
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var serious = doc.RootElement.GetProperty("violations").EnumerateArray()
+                .Where(violation =>
+                {
+                    var impact = violation.TryGetProperty("impact", out var value) ? value.GetString() : "";
+                    return impact is "serious" or "critical";
+                })
+                .Select(violation => violation.GetProperty("id").GetString())
+                .ToArray();
+            Assert.AreEqual(0, serious.Length, path + ": " + string.Join(", ", serious));
+        }
+    }
+
+    private async Task LoginAsync(string secret)
+    {
+        await Page.GotoAsync(_prefix);
+        await Expect(Page.GetByTestId("login-form")).ToBeVisibleAsync();
+        await Page.GetByTestId("login-secret").FillAsync(secret);
+        await Page.GetByTestId("login-submit").ClickAsync();
+        if (secret is Secret or ViewerSecret)
+        {
+            await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
+        }
+    }
+
+    private static string WriteCliHostedDashboardConfig(
+        string dir,
+        int listen,
+        int origin,
+        int control,
+        string secret,
+        string viewerSecret,
+        int dashboardPort)
+    {
+        var path = Path.Combine(dir, $"cli-dash-{listen}.json");
+        File.WriteAllText(path, $$"""
+            {
+              "schemaVersion": "7.0",
+              "listeners": [
+                { "host": "127.0.0.1", "port": {{listen}}, "decryptSsl": false }
+              ],
+              "routes": [
+                {
+                  "id": "r1",
+                  "clusterId": "c1",
+                  "order": 1,
+                  "match": { "path": "/", "pathKind": "Prefix" }
+                }
+              ],
+              "clusters": [
+                {
+                  "id": "c1",
+                  "algorithm": "RoundRobin",
+                  "destinations": [
+                    { "id": "d1", "address": "127.0.0.1", "port": {{origin}}, "useDestinationHost": true }
+                  ]
+                }
+              ],
+              "plus": {
+                "enabled": true,
+                "controlPlane": {
+                  "host": "127.0.0.1",
+                  "port": {{control}},
+                  "sharedSecret": "{{secret}}",
+                  "dashboardPort": {{dashboardPort}},
+                  "dashboardViewerSecret": "{{viewerSecret}}"
+                }
+              }
+            }
+            """);
+        return path;
     }
 }

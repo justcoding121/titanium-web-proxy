@@ -1,0 +1,9 @@
+# expect: reject
+# reason: a folded Content-Length hides a framing header from peers that do not unfold
+# reject-type: FormatException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+X-A: b\r\n
+ Content-Length: 5\r\n
+\r\n
+hello

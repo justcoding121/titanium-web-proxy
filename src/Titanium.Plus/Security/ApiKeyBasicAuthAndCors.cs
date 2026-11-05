@@ -6,40 +6,64 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Plus.Security;
 
-/// <summary>Opt-in API key header and/or HTTP Basic auth for reverse-proxy edge.</summary>
+/// <summary>
+/// Opt-in API key header and/or HTTP Basic auth for reverse-proxy edge. Basic passwords may be plaintext or
+/// <c>{bcrypt}</c> / <c>{pbkdf2}</c> hashes (<see cref="BasicUserStore"/>); every secret comparison is constant-time.
+/// With a throttle, a remote that keeps failing is answered 429 until its window clears.
+/// </summary>
 public sealed class ApiKeyBasicAuthMiddleware : IProxyMiddleware
 {
-    private readonly HashSet<string> _apiKeys;
-    private readonly Dictionary<string, string> _basicUsers;
+    private readonly List<byte[]> _apiKeyDigests;
+    private readonly BasicUserStore _basicUsers;
     private readonly string _apiKeyHeader;
+    private readonly AuthThrottle? _throttle;
 
     public ApiKeyBasicAuthMiddleware(
         IEnumerable<string>? apiKeys,
         IReadOnlyDictionary<string, string>? basicUsers,
-        string apiKeyHeader = "X-Api-Key")
+        string apiKeyHeader = "X-Api-Key",
+        AuthThrottle? throttle = null)
     {
-        _apiKeys = apiKeys is null
-            ? new HashSet<string>(StringComparer.Ordinal)
-            : new HashSet<string>(apiKeys.Where(k => !string.IsNullOrWhiteSpace(k)), StringComparer.Ordinal);
-        _basicUsers = basicUsers is null
-            ? new Dictionary<string, string>(StringComparer.Ordinal)
-            : new Dictionary<string, string>(basicUsers, StringComparer.Ordinal);
+        _apiKeyDigests = apiKeys is null
+            ? []
+            : apiKeys.Where(k => !string.IsNullOrWhiteSpace(k)).Distinct(StringComparer.Ordinal)
+                .Select(ConstantTime.Digest).ToList();
+        _basicUsers = new BasicUserStore(
+            basicUsers ?? new Dictionary<string, string>(StringComparer.Ordinal));
         _apiKeyHeader = string.IsNullOrWhiteSpace(apiKeyHeader) ? "X-Api-Key" : apiKeyHeader.Trim();
+        _throttle = throttle;
     }
+
+    /// <summary>User names that still carry a plaintext password (never the passwords).</summary>
+    public IReadOnlyList<string> PlaintextUsers => _basicUsers.PlaintextUsers;
 
     public ValueTask InvokeAsync(
         ProxyMiddlewareContext context,
         ProxyMiddlewareDelegate next,
         CancellationToken cancellationToken)
     {
-        if (_apiKeys.Count == 0 && _basicUsers.Count == 0)
+        if (_apiKeyDigests.Count == 0 && _basicUsers.Count == 0)
         {
             return next(context, cancellationToken);
+        }
+
+        var remote = ResolveRemote(context);
+        if (_throttle is not null && remote is not null &&
+            _throttle.IsBlocked(remote, out var retryAfter, out _))
+        {
+            context.HandledHeaders = [new KeyValuePair<string, string>("Retry-After", retryAfter.ToString())];
+            CidrAccessMiddleware.Deny(context, HttpStatusCode.TooManyRequests, "too many failed attempts");
+            return ValueTask.CompletedTask;
         }
 
         if (IsAuthorized(context))
         {
             return next(context, cancellationToken);
+        }
+
+        if (_throttle is not null && remote is not null)
+        {
+            _throttle.RecordFailure(remote);
         }
 
         CidrAccessMiddleware.Deny(context, HttpStatusCode.Unauthorized, "unauthorized");
@@ -48,10 +72,10 @@ public sealed class ApiKeyBasicAuthMiddleware : IProxyMiddleware
 
     public bool IsAuthorized(ProxyMiddlewareContext context)
     {
-        if (_apiKeys.Count > 0)
+        if (_apiKeyDigests.Count > 0)
         {
             var key = GetHeader(context, _apiKeyHeader);
-            if (key is not null && _apiKeys.Contains(key))
+            if (key is not null && MatchesAnyApiKey(key))
             {
                 return true;
             }
@@ -60,15 +84,36 @@ public sealed class ApiKeyBasicAuthMiddleware : IProxyMiddleware
         if (_basicUsers.Count > 0)
         {
             var auth = context.Request?.Authorization ?? GetHeader(context, "Authorization");
-            if (TryParseBasic(auth, out var user, out var pass) &&
-                _basicUsers.TryGetValue(user, out var expected) &&
-                string.Equals(expected, pass, StringComparison.Ordinal))
+            if (TryParseBasic(auth, out var user, out var pass) && _basicUsers.Verify(user, pass))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>Visits every configured key so the time taken does not reveal which one matched.</summary>
+    private bool MatchesAnyApiKey(string presented)
+    {
+        var digest = ConstantTime.Digest(presented);
+        var match = false;
+        foreach (var candidate in _apiKeyDigests)
+        {
+            match |= System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(digest, candidate);
+        }
+
+        return match;
+    }
+
+    private static string? ResolveRemote(ProxyMiddlewareContext context)
+    {
+        if (context.ClientRemoteEndPoint is { } ep)
+        {
+            return ep.Address.ToString();
+        }
+
+        return context.Session is SessionEventArgsBase args ? args.ClientRemoteEndPoint.Address.ToString() : null;
     }
 
     private static string? GetHeader(ProxyMiddlewareContext context, string name)
@@ -120,7 +165,6 @@ public sealed class ApiKeyBasicAuthMiddleware : IProxyMiddleware
         }
     }
 }
-
 /// <summary>Opt-in CORS preflight short-circuit + response header injection.</summary>
 public sealed class CorsMiddleware : IProxyMiddleware
 {

@@ -1,8 +1,48 @@
-# Perf gate checklist (7.0)
+# Perf gate checklist (8.0)
 
 Run on the release SHA via [`.github/workflows/rps-saturation.yml`](../../.github/workflows/rps-saturation.yml) (manual `workflow_dispatch`).
 
-Product version is **`7.0.0.0`**; gates block beta/stable tags, not feature commits.
+Product version is **`8.0.0.0`**; gates block beta/stable tags, not feature commits.
+
+## Plus license boundary baseline
+
+Paired A/B spot checks for the Plus license-boundary work (cache seam, cache move, Plus bundle) compare against this SHA (the `develop` tip when `fix/plus-license-boundary` was cut):
+
+| Key | Value |
+|-----|-------|
+| `BASELINE_SHA` | `c14228d207413cf81e2b1eac73fb5a7b86cf634a` |
+
+Spot-check arms: `twp-cli-reverse-http1` (default-off) and `twp-cli-plus-cache-hit-http1` (`compare-editions`). Checkpoint A is the last Phase 3a commit (`89d1b756`); Checkpoint B is the PR tip. Same default-off thresholds as the commercial-grade block below. Cache-hit arm: median RPS delta at least −2.0%, 95% CI lower bound at least −3.0%, p99 at most +3%, Gen0 per 100k within 1%, zero errors. `rps-ab` does not report Gen0 per 100k (only RPS, CPU per request, RSS, and p99), so that part of the cache-hit rule is not measured here. Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+
+| Checkpoint | Arm filter | Run |
+|------------|------------|-----|
+| A (3a seam) | `twp-cli-reverse-http1` | [41723339664](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41723339664) |
+| Move replication | `twp-cli-plus-cache-hit-http1` (`89d1b756` vs `0837dc83`) | [41751218707](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41751218707) |
+| Loader isolation | `twp-cli-plus-cache-hit-http1` (`8b5b09fd` vs `d0836754`) | [41753472173](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41753472173) |
+| B cache-hit | `twp-cli-plus-cache-hit-http1` (`c14228d2` vs `d0836754`) | [41754938077](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41754938077) |
+| B default-off | `twp-cli-reverse-http1` (`c14228d2` vs `d0836754`) | [41756726214](https://github.com/justcoding121/titanium-web-proxy/actions/runs/41756726214) |
+
+Plus loads in the default assembly context (`d0836754`) so cache middleware does not cross a collectible context. Cache-hit Checkpoint B met the RPS, CI, p99, and CPU floors above. Default-off median RPS stayed inside the −1% floor; its 95% interval was wider than the −2% bound (noise, not a measured drop).
+
+## Commercial-grade parity baseline
+
+Paired A/B for the `feat/commercial-grade-parity` work items compares each commit against this SHA (the `develop` tip before that branch):
+
+| Key | Value |
+|-----|-------|
+| `BASELINE_SHA` | `a6b341d704fb06f9f194080e4908985a90469204` |
+
+Pass thresholds for the default configuration (feature off): median RPS delta at least −1.0%, lower bound of the 95% interval at least −2.0%, p99 latency at most +3%, RSS after warm-up at most +2%, Gen0 collections per 100k requests within 1%, error count zero. Never loosen a floor in [`validate-edition-gates.ps1`](validate-edition-gates.ps1) (floors stay at or above 0.50). Maintainers run `rps-ab.yml`; PR text links the run and does not paste numbers.
+
+## Leftovers baseline
+
+Paired A/B for the `feat/production-parity` work items compares each checkpoint against this SHA (the `develop` tip before that branch):
+
+| Key | Value |
+|-----|-------|
+| `BASELINE_SHA` | `46163c95ce7df6e6d3271fc1d2cf26c655fca0aa` |
+
+Same default-off thresholds as the commercial-grade block above. Feature-on arms target at least 0.90× of their named baseline (floors in `validate-edition-gates.ps1` stay at 0.50 unless a stricter bar is named in the feature). Placeholder leftover arms land in F01 with the same config as their baseline so they already run; later features edit only their arm's config.
 
 ## Branch policy + CI gates (beta / stable)
 
@@ -102,7 +142,8 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 | `twp-cli-plus-base-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plus-cache-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-intercept-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
-| `twp-cli-plus-waf-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
+| `twp-cli-plus-waf-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** (deny-list only: `waf.mode=off`) |
+| `twp-cli-plus-waf-screen-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** (screening: `waf.mode=detect`, session path) |
 | `twp-cli-plus-cidr-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plus-jwt-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-plus-ratelimit-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
@@ -114,6 +155,25 @@ Terminate smoke (peak RPS; routes unset): TWP H1 TLS win **34273**, ubuntu **241
 | `twp-cli-logging-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
 | `twp-cli-lb-leasttime-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
 | `twp-cli-dialect-twp-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
+| `twp-cli-script-lua-noop-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
+| `twp-cli-script-lua-header-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
+| `twp-cli-script-wasm-noop-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
+| `twp-cli-script-lua-slow-upstream-http1` | `twp-cli-slow-upstream-http1` (same 20 ms origin, no script) | ≥ **0.50×** |
+| `twp-cli-script-1in50-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
+| `twp-cli-extauth-http1` | `twp-cli-reverse-http1` | ≥ **0.50×** |
+| `twp-cli-plugin-dotnet-noop-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** |
+| `twp-cli-geo-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-compress-h2-h2` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-compress-h3` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-health-grpc-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-zoneaware-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-tcp-tlsterm` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-ws-h3` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-compress-zstd-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder) |
+| `twp-cli-overload-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder; feature targets 0.98×) |
+| `twp-cli-hotrestart-http1` | `twp-cli-reverse-http1-route` | ≥ **0.50×** (F01 placeholder; Linux) |
+
+**Scripting arms (S9).** Each script arm is a route with a `plugins:` entry named in `middleware:`, so the route arm is its baseline. The script lives in the arm's work directory (`script.lua` or `script.wat`). The Lua and Wasmtime natives must be beside the CLI (or in `TITANIUM_SCRIPTING_NATIVE_DIR`); without them the arm fails to start rather than silently measuring a 503. The slow-upstream pair fronts a 20 ms origin: the ratio stays near 1.0 only if script cost does not add to upstream wait. The 1-in-50 arm has the plugin on `/n/1` among 50 routes while the load hits the catch-all, so it catches a plugin on one route taxing every route. A default-off configuration needs no arm of its own: the existing reverse arms run without the natives (`ScriptingNothingLoadedTests` fails if that stops being true). `validate-edition-gates.ps1` rejects any gate below 0.50.
 
 Do not retune the harness to pass a gate — fix Core / CLI / Plus instead. Never adjust a gate threshold without a written reason here and a commit message. Thresholds lock after a clean Win+Linux compare-editions pass.
 

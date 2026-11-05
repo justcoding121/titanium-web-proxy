@@ -1,0 +1,3 @@
+# expect: accept
+# reason: nested objects and large yaml must still parse when hash+yaml present
+{"configHash":"h","yaml":"%REPEAT(a,500)%","config":{"x":[1,2,{"y":null}]},"extra":true}\n

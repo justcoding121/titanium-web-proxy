@@ -1,0 +1,7 @@
+# expect: reject
+# reason: a header line without a colon
+# reject-type: FormatException
+GET / HTTP/1.1\r\n
+Host: a\r\n
+NoColonHere\r\n
+\r\n

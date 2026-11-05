@@ -1,0 +1,12 @@
+<Project>
+  <!-- TestKit and the plugin fixture are not test hosts. Every other project under tests/ is. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'Titanium.TestKit' and '$(MSBuildProjectName)' != 'Titanium.Web.Proxy.TestPlugins'">
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)test.runsettings</RunSettingsFilePath>
+    <IsTestHost>true</IsTestHost>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestHost)' == 'true'">
+    <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\SuppressRootStoreUiModuleInit.cs" Link="Shared\SuppressRootStoreUiModuleInit.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Titanium.TestKit\Shared\TwpStoreLeakGuard.cs" Link="Shared\TwpStoreLeakGuard.cs" />
+  </ItemGroup>
+</Project>

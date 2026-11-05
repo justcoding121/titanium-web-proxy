@@ -1,0 +1,9 @@
+# Reverse listener in front of the Autobahn fuzzingserver. The client in tests/conformance/autobahn connects to
+# 9102 as if it were the fuzzingserver; the WebSocket upgrade and frames go through the proxy to 9001.
+schemaVersion: "7.1"
+listeners:
+  - host: "127.0.0.1"
+    port: 9102
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 9001

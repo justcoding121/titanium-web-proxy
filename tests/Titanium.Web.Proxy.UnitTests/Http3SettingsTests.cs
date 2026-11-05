@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http3;
 
@@ -65,6 +66,22 @@ public class Http3SettingsTests
 
         Assert.AreEqual(1UL, parsed.MaxFieldSectionSize);
         Assert.AreEqual(1, parsed.Parameters.Count);
+    }
+
+    [TestMethod]
+    public void SetEnableConnectProtocol_SerializesAndParses()
+    {
+        var on = new Http3Settings();
+        on.SetEnableConnectProtocol(true);
+        var parsedOn = Http3Settings.Parse(on.Serialize());
+        Assert.IsTrue(parsedOn.EnableConnectProtocol);
+        Assert.IsTrue(parsedOn.Parameters.Any(p => p.Id == Http3SettingsId.EnableConnectProtocol && p.Value == 1));
+
+        var off = new Http3Settings();
+        off.SetEnableConnectProtocol(false);
+        var parsedOff = Http3Settings.Parse(off.Serialize());
+        Assert.IsFalse(parsedOff.EnableConnectProtocol);
+        Assert.IsFalse(parsedOff.Parameters.Any(p => p.Id == Http3SettingsId.EnableConnectProtocol));
     }
 
     [TestMethod]

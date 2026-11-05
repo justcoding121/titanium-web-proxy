@@ -1,0 +1,7 @@
+# expect: reject
+# reason: negative Content-Length
+# reject-type: Http1FramingException
+POST / HTTP/1.1\r\n
+Host: a\r\n
+Content-Length: -1\r\n
+\r\n

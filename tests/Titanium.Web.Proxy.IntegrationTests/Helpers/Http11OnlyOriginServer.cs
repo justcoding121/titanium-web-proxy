@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.IntegrationTests.Helpers;
 /// </summary>
 internal sealed class Http11OnlyOriginServer : IDisposable
 {
-    private readonly TcpListener listener;
+    private readonly TcpListener[] listeners;
     private readonly X509Certificate2 certificate;
     private readonly TimeSpan handshakeDelay;
     private bool disposed;
@@ -25,14 +25,14 @@ internal sealed class Http11OnlyOriginServer : IDisposable
     {
         this.certificate = certificate;
         this.handshakeDelay = handshakeDelay;
-        listener = TcpListener.Create(0);
-        listener.Start();
-        _ = AcceptLoopAsync();
+        listeners = LoopbackTcpListen.Start();
+        foreach (var listener in listeners)
+            _ = AcceptLoopAsync(listener);
     }
 
-    public int Port => ((IPEndPoint)listener.LocalEndpoint).Port;
+    public int Port => ((IPEndPoint)listeners[0].LocalEndpoint).Port;
 
-    private async Task AcceptLoopAsync()
+    private async Task AcceptLoopAsync(TcpListener listener)
     {
         while (!disposed)
         {
@@ -92,6 +92,7 @@ internal sealed class Http11OnlyOriginServer : IDisposable
     public void Dispose()
     {
         disposed = true;
-        listener.Stop();
+        foreach (var listener in listeners)
+            listener.Stop();
     }
 }

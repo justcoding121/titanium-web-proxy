@@ -1,0 +1,4 @@
+# expect: any
+# expect-http: /foo
+# reason: query string stripped
+request.url_path

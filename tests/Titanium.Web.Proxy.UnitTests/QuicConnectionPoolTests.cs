@@ -254,7 +254,8 @@ public class QuicConnectionPoolTests
             string connectHost, string sniHost, int port, IPEndPoint? upStreamEndPoint,
             IExternalProxy? upStreamProxy, string cacheKey,
             RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
-            CancellationToken cancellationToken, bool failFastHandshake = true)
+            CancellationToken cancellationToken, bool failFastHandshake = true,
+            Titanium.Web.Proxy.Network.UpstreamTlsMaterial? tlsMaterial = null)
         {
             Interlocked.Increment(ref _createCount);
             if (FailAfter > TimeSpan.Zero)
@@ -353,7 +354,8 @@ public class QuicConnectionPoolTests
             string cacheKey,
             RemoteCertificateValidationCallback? remoteCertificateValidationCallback,
             CancellationToken cancellationToken,
-            bool failFastHandshake = true)
+            bool failFastHandshake = true,
+            Titanium.Web.Proxy.Network.UpstreamTlsMaterial? tlsMaterial = null)
         {
             Interlocked.Increment(ref _createCount);
             if (HandshakeDelay > TimeSpan.Zero)

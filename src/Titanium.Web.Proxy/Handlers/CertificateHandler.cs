@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Extensions;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy;
 
@@ -23,6 +24,16 @@ public partial class ProxyServer
         X509Certificate? certificate, X509Chain? chain,
         SslPolicyErrors sslPolicyErrors)
     {
+        // Per-cluster upstream TLS policy. One place for TCP and QUIC, so AcceptAny and the custom CA
+        // behave the same on every transport. Null for every cluster that sets none of them.
+        var material = UpstreamTlsMaterial.For(sessionArgs?.UpstreamHttpClient);
+        if (material != null)
+        {
+            if (material.Error != null) return false;
+            if (material.AcceptAny) return true;
+            sslPolicyErrors = material.ApplyPolicy(certificate, chain, sslPolicyErrors, CheckCertificateRevocation);
+        }
+
         // if user callback is registered then do it
         if (ServerCertificateValidationCallback != null && sessionArgs != null)
         {
@@ -66,11 +77,12 @@ public partial class ProxyServer
         X509CertificateCollection? localCertificates,
         X509Certificate? remoteCertificate, string[]? acceptableIssuers)
     {
-        X509Certificate? clientCertificate = null;
+        // The cluster's own identity wins over the machine store; the user callback below can still replace it.
+        X509Certificate? clientCertificate = UpstreamTlsMaterial.For(sessionArgs?.UpstreamHttpClient)?.ClientCertificate;
 
         //fallback to the first client certificate from proxy machine certificate store
-        if (acceptableIssuers != null && acceptableIssuers.Length > 0 && localCertificates != null &&
-            localCertificates.Count > 0)
+        if (clientCertificate == null && acceptableIssuers != null && acceptableIssuers.Length > 0 &&
+            localCertificates != null && localCertificates.Count > 0)
             foreach (var certificate in localCertificates)
             {
                 var issuer = certificate.Issuer;

@@ -1,0 +1,11 @@
+# expect: normalize
+# reason: coding names are case-insensitive; the forwarded form is canonical
+# assert-header: Transfer-Encoding=chunked
+# assert-body-complete
+POST / HTTP/1.1\r\n
+host: a\r\n
+transfer-encoding: CHUNKED\r\n
+\r\n
+3\r\nabc\r\n
+0\r\n
+\r\n

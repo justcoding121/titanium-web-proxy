@@ -1,0 +1,37 @@
+name: ai-qa
+
+# Exploratory charter. Not a merge gate. A failure here becomes a dated regression test in a later change.
+
+on:
+  schedule:
+    - cron: '47 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cli-charter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Help, unknown flag, and a rejected config
+        run: |
+          set -euo pipefail
+          dotnet build src/Titanium.Cli/Titanium.Cli.csproj -c Release --nologo
+          dotnet run --project src/Titanium.Cli -c Release --no-build -- help
+          set +e
+          dotnet run --project src/Titanium.Cli -c Release --no-build -- not-a-command
+          code=$?
+          set -e
+          test "$code" -ne 0
+          dir=$(mktemp -d)
+          printf 'listeners:\n  - port: -1\n' > "$dir/bad.yaml"
+          set +e
+          dotnet run --project src/Titanium.Cli -c Release --no-build -- test -c "$dir/bad.yaml"
+          code=$?
+          set -e
+          test "$code" -ne 0

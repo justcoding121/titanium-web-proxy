@@ -62,6 +62,12 @@ internal partial class HttpStream : Stream, IHttpStreamWriter, IHttpStreamReader
     public bool IsClosed { get; private set; }
 
     /// <summary>
+    ///     True once a write to the peer failed and was swallowed (a network stream drops later writes). A relay
+    ///     that would otherwise keep reading an origin for a vanished client polls this to stop early.
+    /// </summary>
+    internal bool IsWriteClosed => closedWrite;
+
+    /// <summary>
     ///     First transport failure this stream swallowed (client reset, TLS alert). Null on the success path.
     ///     Consulted once, after the first decrypted read, to tell a certificate rejection from a clean close.
     /// </summary>
