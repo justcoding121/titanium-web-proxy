@@ -160,7 +160,7 @@ Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistrib
 
 See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 
-- Matrix RID × matching runner (`windows-latest` for `win-x64`; `ubuntu-24.04-arm` for linux-arm64 / musl-arm64; `macos-13` for `osx-x64`; `macos-latest` for `osx-arm64`; Alpine container for musl Lua).
+- Matrix RID × matching runner (`windows-latest` for `win-x64`; `ubuntu-24.04-arm` for linux-arm64 / musl-arm64; `macos-15-intel` for `osx-x64`; `macos-latest` for `osx-arm64`; Alpine container for musl Lua).
 - Azure Artifact Signing on Windows; optional Apple notarize when secrets exist; optional GPG on checksums.
 - Smoke: `linux-x64` / `linux-musl-x64` HTTP/3; `linux-x64` + `win-x64` scripting (`titanium scripting-deps status` + native files).
 - Helm: package three charts onto the Release and `helm push` to OCI (`setup-helm` v5).
