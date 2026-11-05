@@ -38,14 +38,15 @@ internal static class ExtendedConnectProtocols
         enableRfc8441 || advertisesConnectProtocol;
 
     /// <summary>
-    ///     Token allow-list for this connection. Unknown tokens, including
-    ///     <c>webtransport</c>, <c>connect-tcp</c>, and <c>connect-udp</c>, are refused.
-    ///     Later slices accept those tokens only when the matching support flag is set.
+    ///     Token allow-list for this connection. <c>websocket</c> and <c>connect-tcp</c> follow
+    ///     their support flags. <c>webtransport</c> and <c>connect-udp</c> stay refused.
     /// </summary>
     public static bool IsSupported(string? protocol, ExtendedConnectSupport support)
     {
         if (IsWebSocket(protocol))
             return support.WebSocket;
+        if (IsConnectTcp(protocol))
+            return support.ConnectTcp;
 
         return false;
     }
@@ -86,7 +87,7 @@ internal readonly struct ExtendedConnectSupport
     /// <summary>Reserved for the WebTransport slice. Not accepted yet.</summary>
     public bool WebTransport { get; }
 
-    /// <summary>Reserved for the connect-tcp slice. Not accepted yet.</summary>
+    /// <summary>Accept <c>connect-tcp</c> on this connection.</summary>
     public bool ConnectTcp { get; }
 
     /// <summary>Reserved for CONNECT-UDP on an existing listener. Not accepted yet.</summary>

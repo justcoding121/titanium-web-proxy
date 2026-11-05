@@ -712,7 +712,7 @@ namespace Titanium.Web.Proxy.Http2
 
                             // Native h2↔h2 extended CONNECT path.
                             string? ecProto = ecTunnelState?.ExtendedConnectProtocol;
-                            var connectSupport = ExtendedConnectSupport.ForProcess(enableRfc8441);
+                            var connectSupport = sessionArgs.Server.ConnectSupportFor(sessionArgs.ProxyEndPoint);
                             if (!ExtendedConnectProtocols.IsSupported(ecProto, connectSupport))
                             {
                                 // Only the 'websocket' protocol token is implemented. BeforeRequest ran

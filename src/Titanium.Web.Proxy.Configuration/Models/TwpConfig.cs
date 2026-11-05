@@ -96,6 +96,12 @@ public sealed class ListenerConfig
     public bool? EnableHttp2 { get; set; }
 
     /// <summary>
+    ///     When true, this listener accepts <c>:protocol=connect-tcp</c> and advertises extended CONNECT.
+    ///     Default false. Not implied by <c>server.enableConnectTcp</c> on reverse or SOCKS listeners.
+    /// </summary>
+    public bool AcceptConnectTcp { get; set; }
+
+    /// <summary>
     /// When true, enables HTTP/3 on the proxy and transparent endpoints.
     /// When false, disables HTTP/3. Null inherits host default (on when the OS supports QUIC).
     /// </summary>

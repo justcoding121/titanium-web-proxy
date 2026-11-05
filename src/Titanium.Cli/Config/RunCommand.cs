@@ -2023,6 +2023,11 @@ internal static class RunCommand
             endPoint.MaxConcurrentClients = maxClients;
         }
 
+        if (listener.AcceptConnectTcp)
+        {
+            endPoint.AcceptConnectTcp = true;
+        }
+
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
         {
             endPoint.ClientCertificateTrustedRoots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);

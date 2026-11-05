@@ -323,6 +323,8 @@ Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableQpackDynamicTable.get
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableQpackDynamicTable.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableRfc8441.set -> void
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableConnectTcp.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableConnectTcp.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.EnableWinAuth.set -> void
 Titanium.Web.Proxy.Configuration.Models.ServerConfig.IgnoreServerCertificateErrors.get -> bool?
@@ -497,6 +499,8 @@ Titanium.Web.Proxy.Configuration.Models.CertificatesConfig.Items.get -> System.C
 Titanium.Web.Proxy.Configuration.Models.CertificatesConfig.Items.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptProxyProtocol.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptConnectTcp.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptConnectTcp.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TerminateTls.get -> bool

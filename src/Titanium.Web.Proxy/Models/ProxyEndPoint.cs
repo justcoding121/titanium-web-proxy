@@ -66,6 +66,13 @@ public abstract class ProxyEndPoint
     public bool DecryptSsl { get; }
 
     /// <summary>
+    ///     When <see langword="true"/>, HTTP/2 on this listener accepts
+    ///     <c>:protocol = connect-tcp</c> and advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>.
+    ///     Default <see langword="false"/>. Does not imply <see cref="ProxyServer.EnableRfc8441"/>.
+    /// </summary>
+    public bool AcceptConnectTcp { get; set; }
+
+    /// <summary>
     ///     Generic certificate to use for SSL decryption.
     /// </summary>
     public X509Certificate2? GenericCertificate { get; set; }

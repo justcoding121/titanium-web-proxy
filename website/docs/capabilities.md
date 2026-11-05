@@ -146,6 +146,7 @@ Upgrading a 7.x install: [Migrating from 7.x to 8.0](/docs/migration-7-to-8).
 | HTTP/1.1 and HTTP/2 | supported | `server.enableHttp2`, `listeners[].enableHttp2` | HTTP/2 is on by default. | [Protocol support](/docs/protocol-support) |
 | HTTP/3 over QUIC | supported | `server.enableHttp3`, `listeners[].enableHttp3` | On when QUIC is available. The container image has no libmsquic. | [HTTP/3](/docs/http3) |
 | Bridging between HTTP versions | supported | `server.originHttpVersionPolicy` | HTTP/1.1, HTTP/2, and HTTP/3 clients reach origins that speak another version. Not every bridge covers every feature. | [Protocol support](/docs/protocol-support#protocol-bridges) |
+| connect-tcp | partial | `server.enableConnectTcp`, `listeners[].acceptConnectTcp` | Off by default. Explicit listeners follow the server flag. Reverse listeners advertise extended CONNECT only when `acceptConnectTcp` is set. HTTP/3 still returns 501. | [Protocol support](/docs/protocol-support) |
 | WebSocket over HTTP/1.1 and HTTP/2 | supported | `server.enableRfc8441` | HTTP/1.1 upgrade always; RFC 8441 extended CONNECT when enabled. | [Protocol support](/docs/protocol-support#connections-and-framing-high-level) |
 | gRPC-Web to native gRPC | supported | `routes[].grpcWeb` | Binary unary and server-streaming calls to an HTTP/2 origin. | [gRPC-Web](/docs/configuration#grpc-web-route-grpcweb) |
 | gRPC and JSON transcoding | supported | `plus.options: grpc.transcode.enabled` | REST and JSON to gRPC through a descriptor set (Plus). | [gRPC-JSON transcoding](/docs/grpc-json-transcoding) |

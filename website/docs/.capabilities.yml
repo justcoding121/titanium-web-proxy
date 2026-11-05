@@ -593,6 +593,15 @@ rows:
     docsLabel: 'Protocol support'
     note: 'HTTP/1.1, HTTP/2, and HTTP/3 clients reach origins that speak another version. Not every bridge covers every feature.'
   - area: 'Protocols'
+    capability: 'connect-tcp'
+    status: 'partial'
+    keys:
+      - 'server.enableConnectTcp'
+      - 'listeners[].acceptConnectTcp'
+    docs: '/docs/protocol-support'
+    docsLabel: 'Protocol support'
+    note: 'Off by default. Explicit listeners can opt in with server.enableConnectTcp. Any listener can set acceptConnectTcp. HTTP/3 still returns 501.'
+  - area: 'Protocols'
     capability: 'WebSocket over HTTP/1.1 and HTTP/2'
     status: 'supported'
     keys:

@@ -631,6 +631,7 @@ server:
   enableHttp2: true
   enableHttp3: null
   enableRfc8441: false
+  enableConnectTcp: false   # explicit listeners only; reverse uses listeners[].acceptConnectTcp
   enableQpackDynamicTable: false
   enableHttpsSvcbDnsDiscovery: null
   enable100ContinueBehaviour: false

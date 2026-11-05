@@ -42,7 +42,7 @@ public class ExtendedConnectProtocolsTests
         Assert.IsTrue(support.ConnectTcp);
         Assert.IsTrue(support.ConnectUdp);
         Assert.IsFalse(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.WebTransport, support));
-        Assert.IsFalse(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.ConnectTcp, support));
+        Assert.IsTrue(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.ConnectTcp, support));
         Assert.IsFalse(ExtendedConnectProtocols.IsSupported(ExtendedConnectProtocols.ConnectUdp, support));
         Assert.IsTrue(ExtendedConnectProtocols.IsWebTransport("WebTransport"));
         Assert.IsTrue(ExtendedConnectProtocols.IsConnectTcp("CONNECT-TCP"));
@@ -84,5 +84,24 @@ public class ExtendedConnectProtocolsTests
             "A masque listener advertises CONNECT only on its own SendHttp2 call.");
         Assert.IsFalse(ExtendedConnectProtocols.ConnectionAdvertisesConnect(proxy.EnableRfc8441, false),
             "Other listeners keep compressed-relay eligibility when the process flag stays false.");
+    }
+
+    [TestMethod]
+    public void ConnectTcp_ProcessFlag_AppliesToExplicitListenersOnly()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.EnableConnectTcp = true;
+        var explicitEp = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false);
+        var reverseEp = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false);
+
+        Assert.IsTrue(proxy.AdvertisesConnectTcp(explicitEp));
+        Assert.IsFalse(proxy.AdvertisesConnectTcp(reverseEp),
+            "server.enableConnectTcp must not advertise CONNECT on a reverse listener.");
+        Assert.IsTrue(proxy.ConnectSupportFor(explicitEp).ConnectTcp);
+        Assert.IsFalse(proxy.ConnectSupportFor(reverseEp).WebSocket);
+
+        reverseEp.AcceptConnectTcp = true;
+        Assert.IsTrue(proxy.AdvertisesConnectTcp(reverseEp));
+        Assert.IsFalse(proxy.EnableRfc8441);
     }
 }

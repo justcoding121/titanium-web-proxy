@@ -43,6 +43,12 @@ public sealed class ServerConfig
 
     public bool? EnableRfc8441 { get; set; }
 
+    /// <summary>
+    ///     When true, explicit listeners accept <c>:protocol=connect-tcp</c>.
+    ///     Reverse listeners stay off unless <c>listeners[].acceptConnectTcp</c> is set.
+    /// </summary>
+    public bool? EnableConnectTcp { get; set; }
+
     public bool? EnableQpackDynamicTable { get; set; }
 
     public bool? EnableHttpsSvcbDnsDiscovery { get; set; }

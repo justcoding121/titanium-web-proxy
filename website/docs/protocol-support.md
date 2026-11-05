@@ -31,6 +31,7 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 | Chunked / DATA frames | N/A / Yes | Yes | DATA | DATA |
 | Trailers | N/A | Yes | Yes | Yes |
 | WebSocket | Yes | Yes | RFC 8441 | RFC 9220 (H1/H2/H3 origin) |
+| connect-tcp | No | No | Opt-in (`enableConnectTcp` / `acceptConnectTcp`) | 501 | HTTP/2 byte relay. Reverse listeners do not advertise extended CONNECT unless they opt in. |
 
 For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, auth), see the [Protocol-Support wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support).
 

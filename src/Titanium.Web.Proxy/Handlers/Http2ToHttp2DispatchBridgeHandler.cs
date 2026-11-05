@@ -48,7 +48,8 @@ public partial class ProxyServer
             cancellationTokenSource, clientStream.Connection.Id, logger,
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
             httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-            shouldInterceptHttp: ShouldInterceptHttp);
+            shouldInterceptHttp: ShouldInterceptHttp,
+            advertisesConnectProtocol: AdvertisesConnectTcp(endPoint));
     }
 
     private async Task DispatchBridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx, // NOSONAR S3776
@@ -97,7 +98,7 @@ public partial class ProxyServer
         if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var extStreamState) &&
             extStreamState.IsExtendedConnect)
         {
-            var connectSupport = ExtendedConnectSupport.ForProcess(EnableRfc8441);
+            var connectSupport = ConnectSupportFor(sessionArgs.ProxyEndPoint);
             if (!ExtendedConnectProtocols.IsSupported(extStreamState.ExtendedConnectProtocol, connectSupport))
             {
                 sessionArgs.GenericResponse(

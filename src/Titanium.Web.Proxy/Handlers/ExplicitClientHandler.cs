@@ -714,7 +714,8 @@ public partial class ProxyServer
                                         true, SslExtensions.Http2ProtocolAsList,
                                         true, false, ct))!;
                                     return extra;
-                                });
+                                },
+                                advertisesConnectProtocol: AdvertisesConnectTcp(endPoint));
                     }
                     finally
                     {
