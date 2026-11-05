@@ -89,7 +89,7 @@ public sealed class JsonAccessLogWriter : IDisposable
             Host = req.Host ?? req.RequestUri?.Host,
             Status = resp.StatusCode,
             DurationMs = durationMs,
-            ClientIp = TryClientIp(session),
+            ClientIp = ReadClientIp(() => session.ClientRemoteEndPoint?.Address.ToString()),
             Route = session.MatchedRoute?.Id,
             Cluster = session.MatchedRoute?.ClusterId,
             Destination = session.UpstreamDestinationId,
@@ -105,11 +105,11 @@ public sealed class JsonAccessLogWriter : IDisposable
     /// The peer address is read from the live socket. After the response bytes are sent that socket can
     /// already be closed, and a throw here used to drop the whole line.
     /// </summary>
-    private static string? TryClientIp(SessionEventArgs session)
+    internal static string? ReadClientIp(Func<string?> read)
     {
         try
         {
-            return session.ClientRemoteEndPoint?.Address.ToString();
+            return read();
         }
         catch (ObjectDisposedException)
         {
