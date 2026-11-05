@@ -1184,7 +1184,9 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   publish-chocolatey:
     needs: [resolve-version, publish-release]
+    # always(): a skipped ancestor (beta skips rps-product-smoke) skips this job without it.
     if: |
+      always() &&
       needs.publish-release.result == 'success' &&
       vars.SKIP_CATALOG_PUBLISH != 'true' &&
       (github.event_name != 'workflow_dispatch' || github.event.inputs.skip_catalog_publish != 'true')
@@ -1253,7 +1255,8 @@ jobs:
 
   publish-charts:
     needs: [resolve-version, publish-release]
-    if: needs.publish-release.result == 'success'
+    # always(): a skipped ancestor (beta skips rps-product-smoke) skips this job without it.
+    if: always() && needs.publish-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
