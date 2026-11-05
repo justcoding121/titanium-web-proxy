@@ -151,8 +151,62 @@ jobs:
               time.sleep(60)
           PY
 
-  test:
+  gate-evidence:
     needs: [resolve-version, release-readiness]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      green: ${{ steps.evidence.outputs.green }}
+    steps:
+      - id: evidence
+        name: Push run already passed the release SHA gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, urllib.request
+          token = os.environ["GH_TOKEN"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          sha = os.environ["SHA"]
+          headers = {
+              "Authorization": f"Bearer {token}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          def get(url):
+              req = urllib.request.Request(url, headers=headers)
+              with urllib.request.urlopen(req) as resp:
+                  return json.load(resp)
+          data = get(
+              f"https://api.github.com/repos/{repo}/actions/workflows/dotnetcore.yml/runs"
+              f"?head_sha={sha}&event=push&status=completed&per_page=20"
+          )
+          runs = [r for r in data.get("workflow_runs", []) if r.get("head_sha") == sha and r.get("event") == "push"]
+          runs.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+          green = False
+          if runs:
+              jobs = get(f"https://api.github.com/repos/{repo}/actions/runs/{runs[0]['id']}/jobs?per_page=100")
+              wanted = {"merge-gate", "rps-publish-gate", "rps-peer-gate"}
+              found = {}
+              for job in jobs.get("jobs", []):
+                  if job.get("name") in wanted:
+                      found[job["name"]] = job.get("conclusion")
+              green = all(found.get(name) == "success" for name in wanted)
+              print("push jobs:", found, "run:", runs[0].get("html_url"))
+          else:
+              print("no completed push run of dotnetcore.yml on this SHA")
+          path = os.environ["GITHUB_OUTPUT"]
+          with open(path, "a", encoding="utf-8") as handle:
+              handle.write(f"green={'true' if green else 'false'}\n")
+          PY
+
+  test:
+    needs: [resolve-version, release-readiness, gate-evidence]
+    if: needs.gate-evidence.outputs.green != 'true'
     runs-on: windows-latest
     # Whole-sln `dotnet test` can hang forever on shared Windows runners (integration/TLS);
     # keep a hard ceiling and match beta push gates (per-project + blame-hang).
@@ -217,7 +271,8 @@ jobs:
 
 
   cli-e2e:
-    needs: resolve-version
+    needs: [resolve-version, release-readiness, gate-evidence]
+    if: needs.gate-evidence.outputs.green != 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -251,8 +306,39 @@ jobs:
         run: |
           dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj -c Release --no-build --no-restore --nologo --filter "TestCategory=E2E"
 
+  release-gate:
+    name: release-gate
+    needs: [resolve-version, release-readiness, gate-evidence, test, cli-e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Accept a green push run or a green re-test
+        env:
+          READY: ${{ needs.release-readiness.result }}
+          EVIDENCE: ${{ needs.gate-evidence.result }}
+          GREEN: ${{ needs.gate-evidence.outputs.green }}
+          TEST: ${{ needs.test.result }}
+          CLI: ${{ needs.cli-e2e.result }}
+        run: |
+          set -euo pipefail
+          echo "readiness=$READY evidence=$EVIDENCE green=$GREEN test=$TEST cli-e2e=$CLI"
+          if [[ "$READY" != "success" || "$EVIDENCE" != "success" ]]; then
+            echo "::error::release-readiness=$READY gate-evidence=$EVIDENCE"
+            exit 1
+          fi
+          for result in "$TEST" "$CLI"; do
+            if [[ "$result" == "success" ]]; then
+              continue
+            fi
+            if [[ "$result" == "skipped" && "$GREEN" == "true" ]]; then
+              continue
+            fi
+            echo "::error::re-test finished as $result (push evidence green=$GREEN)"
+            exit 1
+          done
+
   build-cli:
-    needs: [resolve-version, test, cli-e2e]
+    needs: [resolve-version, release-gate]
     runs-on: ${{ matrix.os }}
     # win-x64 uses environment "signing" for Azure OIDC (federated cred).
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
@@ -470,7 +556,7 @@ jobs:
           path: staged-cli-${{ matrix.rid }}/
           if-no-files-found: error
   build-plus:
-    needs: [resolve-version, test, cli-e2e]
+    needs: [resolve-version, release-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -496,7 +582,7 @@ jobs:
             Titanium.Plus-*.dll
 
   build-inspector:
-    needs: [resolve-version, test]
+    needs: [resolve-version, release-gate]
     runs-on: ${{ matrix.os }}
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
     permissions:
@@ -1018,7 +1104,7 @@ jobs:
   # Multi-arch container image on GHCR with an SBOM, provenance, and a keyless cosign signature.
   # Pull-request builds (no push) live in kubernetes-ci.yml.
   publish-image:
-    needs: [resolve-version, test, cli-e2e]
+    needs: [resolve-version, release-gate]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -1081,7 +1167,7 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   # The Gateway API controller image, published the same way (SBOM, provenance, keyless signature).
   publish-gateway-image:
-    needs: [resolve-version, test, cli-e2e]
+    needs: [resolve-version, release-gate]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -1144,7 +1230,7 @@ jobs:
             --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@"
   # The Manager control-plane image, published the same way (SBOM, provenance, keyless signature).
   publish-manager-image:
-    needs: [resolve-version, test, cli-e2e]
+    needs: [resolve-version, release-gate]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 60
