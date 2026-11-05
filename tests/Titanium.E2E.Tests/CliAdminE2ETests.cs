@@ -199,7 +199,7 @@ public partial class CliAdminE2ETests
             }
             catch (HttpRequestException)
             {
-                break;
+                // The accept socket can reset once while /readyz flips to draining. Keep probing.
             }
 
             await Task.Delay(50);
