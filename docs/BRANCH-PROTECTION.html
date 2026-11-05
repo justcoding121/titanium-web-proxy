@@ -72,7 +72,8 @@
             <article class="content wrap" id="_content" data-uid="">
 <h1 id="branch-protection-beta--stable">Branch protection (beta / stable)</h1>
 
-<p>Configure in GitHub <strong>Settings → Rules → Rulesets</strong> (or classic branch protection).</p>
+<p>Configure in GitHub <strong>Settings → Rules → Rulesets</strong>. Classic branch protection is not used. <code>develop</code> has no required checks: direct push stays allowed.</p>
+<p>The only list of check contexts is <a href="required-checks.json"><code>.github/required-checks.json</code></a>. <a href="branch-ruleset-beta-stable.json"><code>.github/branch-ruleset-beta-stable.json</code></a> is the ruleset body for <code>release-lines</code> (ruleset id <code>24311415</code>). <a href="workflows/required-checks.yml"><code>.github/workflows/required-checks.yml</code></a> fails when those two files disagree, or when a context does not match a workflow job. On a schedule it also compares the live rules for <code>beta</code> and <code>stable</code>.</p>
 <h2 id="ruleset-release-lines-beta-stable">Ruleset: <code>release-lines</code> (<code>beta</code>, <code>stable</code>)</h2>
 <table>
 <thead>
@@ -83,10 +84,6 @@
 </thead>
 <tbody>
 <tr>
-<td>Restrict creations</td>
-<td>optional</td>
-</tr>
-<tr>
 <td>Restrict updates / deletions</td>
 <td>yes</td>
 </tr>
@@ -96,39 +93,39 @@
 </tr>
 <tr>
 <td>Require a pull request before merging</td>
-<td><strong>yes</strong></td>
-</tr>
-<tr>
-<td>Require approvals</td>
-<td>recommended (≥1 maintainer)</td>
-</tr>
-<tr>
-<td>Require conversation resolution</td>
-<td>recommended</td>
+<td><strong>yes</strong> (1 approval, stale reviews dismissed, threads resolved)</td>
 </tr>
 <tr>
 <td>Require status checks to pass</td>
-<td><strong>yes</strong></td>
+<td><strong>yes</strong>, strict</td>
 </tr>
 <tr>
 <td>Required checks</td>
-<td><code>.NET / build</code>, <code>.NET / ui-portable</code> (all 3 OS), <code>.NET / cli-e2e</code> (all 3 OS), <code>RPS saturation / rps</code> (all 3 OS on PR <code>compare-spot</code>)</td>
+<td><code>merge-gate</code>, <code>rps (ubuntu-latest)</code>, <code>rps (windows-latest)</code>, <code>rps (macos-15)</code>, <code>gitleaks</code>, <code>dependency-review</code>, <code>tests-or-waiver</code>, <code>guard-nc-paths</code>, <code>cla</code></td>
 </tr>
 <tr>
-<td>Allow bypass</td>
-<td>admins only for emergencies</td>
+<td>Code scanning</td>
+<td>CodeQL, high-or-higher security alerts, error alerts</td>
+</tr>
+<tr>
+<td>Admin bypass</td>
+<td>repository admin role, <strong>pull request only</strong> (no direct push)</td>
 </tr>
 </tbody>
 </table>
-<p>Exact check names must match the Actions job names as shown on a PR (including matrix suffixes). The checked-in template is <a href="branch-ruleset-beta-stable.json"><code>.github/branch-ruleset-beta-stable.json</code></a> — after the first green PR, confirm the matrix suffixes in the Actions UI and adjust the JSON if GitHub renamed a leg.</p>
-<h2 id="develop"><code>develop</code></h2>
-<p>Keep lighter rules for velocity (direct push OK if that is current practice). Do <strong>not</strong> require full <code>compare-product</code> on every feature PR.</p>
-<h2 id="applying-via-gh-optional">Applying via <code>gh</code> (optional)</h2>
-<pre><code class="lang-bash"># Example — adjust org/repo and exact check names from Actions UI after first green run
-gh api repos/{owner}/{repo}/rulesets --input .github/branch-ruleset-beta-stable.json
+<p><code>merge-gate</code> is the single <code>.NET</code> context. It passes when <code>build</code>, <code>redis-fleet</code>, <code>ui-portable</code> (all three OS), and <code>cli-e2e</code> (all three OS) succeed. A docs-only pull request skips those four jobs and <code>merge-gate</code> still reports success, so the ruleset does not wait forever. <code>build</code>, <code>ui-portable (...)</code>, and <code>cli-e2e (...)</code> are not required contexts: <code>Deploy website</code> also has a job named <code>build</code>.</p>
+<p>Apply after a promotion pull request has shown <code>merge-gate</code> green:</p>
+<pre><code class="lang-bash">gh api -X PUT repos/justcoding121/titanium-web-proxy/rulesets/24311415 --input .github/branch-ruleset-beta-stable.json
 </code></pre>
-<h2 id="stable-release-rps">Stable release RPS</h2>
-<p>After merge to <code>stable</code>, <a href="workflows/release.yml"><code>release.yml</code></a> runs Linux <strong><code>compare-product-smoke</code></strong> before the GA GitHub Release. Full 3-OS wiki-grade <code>compare-product</code> stays a maintainer <code>workflow_dispatch</code> on <a href="workflows/rps-saturation.yml"><code>rps-saturation.yml</code></a>.</p>
+<h2 id="release-ladder">Release ladder</h2>
+<ol>
+<li><strong>Pull request into <code>beta</code> or <code>stable</code>.</strong> The ruleset above, plus the CodeQL rule. <code>rps</code> runs <code>compare-spot</code> on three OS.</li>
+<li><strong>Push to <code>beta</code> or <code>stable</code>.</strong> <code>.NET</code> runs <code>merge-gate</code>, then <code>rps-publish-gate</code> (edition comparison) and <code>rps-peer-gate</code> (spot matrix) on the merge commit. Those push jobs are the evidence on the release SHA, because pull-request checks attach to the PR head, not the merge commit. <code>cut-product-tag</code> then dispatches <code>release.yml</code>. The six readiness workflows (<code>conformance</code>, <code>soak</code>, <code>kubernetes-smoke</code>, <code>inspector-unattended</code>, <code>fuzz-nightly</code>, <code>dast</code>) also run on that push.</li>
+<li><strong><code>release.yml</code>.</strong> <code>release-readiness</code> waits for those six workflows on the same SHA. <code>gate-evidence</code> records whether the push <code>.NET</code> run already passed <code>merge-gate</code>, <code>rps-publish-gate</code>, and <code>rps-peer-gate</code>. <code>test</code> and <code>cli-e2e</code> run only when that evidence is missing. <code>release-gate</code> then unlocks the CLI, Plus, and Inspector builds. <code>smoke-http3</code> and <code>smoke-scripting</code> must pass. <code>rps-product-smoke</code> runs on stable only. <code>publish-release</code> creates the GitHub Release. <code>publish-nuget</code> runs only after that. Images, Chocolatey, charts, and the image scan follow.</li>
+</ol>
+<p><code>publish-charts.yml</code>, <code>chocolatey-publish.yml</code>, and <code>packaging-catalog-smoke.yml</code> are manual fallbacks. They are not a second release pipeline.</p>
+<h2 id="develop"><code>develop</code></h2>
+<p>Keep lighter rules. Do not require <code>compare-product</code> on a feature pull request. Advisory checks (not enforced) are <code>merge-gate</code>, <code>gitleaks</code>, <code>dependency-review</code>, <code>tests-or-waiver</code>, <code>guard-nc-paths</code>, and <code>cla</code>.</p>
 
 </article>
           </div>
