@@ -18,19 +18,53 @@ on:
         - develop
         - beta
         - stable
-    paths-ignore:
-      - 'website/**'
-      - 'wiki/**'
-      - 'docs/**'
-      - '*.md'
-      - '.github/workflows/deploy-website.yml'
-      - '.github/dns/**'
 
 permissions:
   contents: read
 
 jobs:
+  # Docs-only pull requests still have to report merge-gate. A paths-ignore on
+  # pull_request left the required checks waiting forever.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.paths.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: paths
+        name: Classify the diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" > changed.txt
+          code=false
+          while IFS= read -r f || [[ -n "$f" ]]; do
+            [[ -z "$f" ]] && continue
+            case "$f" in
+              website/*|wiki/*|docs/*|.github/dns/*|.github/workflows/deploy-website.yml) ;;
+              *.md)
+                case "$f" in
+                  */*) code=true ;;
+                esac
+                ;;
+              *) code=true ;;
+            esac
+            if [[ "$code" == "true" ]]; then
+              break
+            fi
+          done < changed.txt
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code=$code"
+
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 60
     permissions:
@@ -225,6 +259,8 @@ jobs:
 
   # Fleet Redis rate-limit store (Linux only: Actions service containers are not available on Windows).
   redis-fleet:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -272,6 +308,8 @@ jobs:
   # Cross-OS Inspector + Plus dashboard UI gates (Headless / Visual / Playwright).
   # Inspector unit suite stays on Windows `build` only except Inspector-Stress / Inspector-Trust-Decision (below).
   ui-portable:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     permissions:
@@ -425,9 +463,47 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
+  # One context for branch protection. Docs-only pull requests skip the four
+  # code jobs; a code change requires each of them to succeed.
+  merge-gate:
+    name: merge-gate
+    if: always()
+    needs: [changes, build, redis-fleet, ui-portable, cli-e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the code jobs, or a docs-only skip
+        env:
+          CODE: ${{ needs.changes.outputs.code }}
+          CHANGES: ${{ needs.changes.result }}
+          BUILD: ${{ needs.build.result }}
+          REDIS: ${{ needs.redis-fleet.result }}
+          UI: ${{ needs.ui-portable.result }}
+          CLI: ${{ needs.cli-e2e.result }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "changes=$CHANGES build=$BUILD redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
+          for result in "$CHANGES" "$BUILD" "$REDIS" "$UI" "$CLI"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::a required job finished as $result"
+              exit 1
+            fi
+          done
+          if [[ "$CODE" == "true" ]]; then
+            for result in "$BUILD" "$REDIS" "$UI" "$CLI"; do
+              if [[ "$result" != "success" ]]; then
+                echo "::error::a code change needs success from build, redis-fleet, ui-portable, and cli-e2e (got $result)"
+                exit 1
+              fi
+            done
+          fi
+          echo "merge-gate passed"
+
   # Full CLI + CLI Plus process E2E on all three OS (command tree, services, control plane).
   # Does not pre-install libmsquic so http3-deps install can exercise the real leaf when Quic is false.
   cli-e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -576,7 +652,7 @@ jobs:
 
   publish:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, cli-e2e, rps-publish-gate, rps-peer-gate]
+    needs: [merge-gate, rps-publish-gate, rps-peer-gate]
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
@@ -655,7 +731,7 @@ jobs:
   # GitHub Release exists — skipped while vars.SKIP_CATALOG_PUBLISH=true.
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
-    needs: [build, ui-portable, cli-e2e, rps-publish-gate, rps-peer-gate]
+    needs: [merge-gate, rps-publish-gate, rps-peer-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
