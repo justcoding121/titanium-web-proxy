@@ -105,7 +105,9 @@ public partial class ProxyServer
             cancellationTokenSource, clientStream.Connection.Id, logger,
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
             httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-            shouldInterceptHttp: ShouldInterceptHttp);
+            shouldInterceptHttp: ShouldInterceptHttp,
+            advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+            advertiseWebTransport: AdvertisesWebTransport(endPoint));
     }
 
     /// <summary>
@@ -180,12 +182,12 @@ public partial class ProxyServer
         if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var extStreamState) &&
             extStreamState.IsExtendedConnect)
         {
-            if (!string.Equals(extStreamState.ExtendedConnectProtocol, "websocket",
-                    StringComparison.OrdinalIgnoreCase))
+            var connectSupport = ConnectSupportFor(sessionArgs.ProxyEndPoint);
+            if (!ExtendedConnectProtocols.IsSupported(extStreamState.ExtendedConnectProtocol, connectSupport))
             {
                 sessionArgs.GenericResponse(
-                    $"RFC 8441 extended CONNECT (protocol: {extStreamState.ExtendedConnectProtocol ?? "unknown"}) " +
-                    "is not supported by this proxy. Only 'websocket' is implemented.",
+                    ExtendedConnectProtocols.UnsupportedMessage(
+                        extStreamState.ExtendedConnectProtocol, connectSupport),
                     HttpStatusCode.NotImplemented);
                 return;
             }
@@ -524,6 +526,21 @@ public partial class ProxyServer
                 && !request.BodyAvailable
                 && !Enable100ContinueBehaviour
                 && IsH2BridgeLiteMethod(request.Method);
+
+            if (requestBodyChannel is not null
+                && RequestDecompressionPolicy is not null
+                && request.ExtendedConnectProtocol is null)
+            {
+                if (!await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
+                        cancellationToken).ConfigureAwait(false);
+                    return BridgeAttemptResult.Completed;
+                }
+
+                requestBodyChannel = null;
+            }
 
             byte[]? body = null;
             var streamRequestBody = requestBodyChannel != null && !request.IsBodyRead;
@@ -1005,6 +1022,154 @@ public partial class ProxyServer
     }
 
     /// <summary>
+    ///     connect-tcp (draft-ietf-httpbis-connect-tcp): open a raw TCP socket to the request
+    ///     authority, or an HTTP CONNECT through a configured upstream proxy, then relay bytes.
+    ///     No WebSocket upgrade framing.
+    /// </summary>
+    private async Task<TcpServerConnection?> OpenWebTransportHttp11Async(
+        SessionEventArgs sessionArgs, string remoteHostName, int remotePort, CancellationToken cancellationToken)
+    {
+        var request = sessionArgs.HttpClient.Request;
+        var capsule = request.Headers.GetFirstHeader("capsule-protocol")?.Value;
+        if (capsule != null && !string.Equals(capsule, "?1", StringComparison.Ordinal))
+        {
+            sessionArgs.GenericResponse("capsule-protocol must be ?1", HttpStatusCode.BadRequest);
+            return null;
+        }
+
+        var customUpStreamProxy = sessionArgs.CustomUpStreamProxy;
+        if (customUpStreamProxy == null && GetCustomUpStreamProxyFunc != null)
+            customUpStreamProxy = await GetCustomUpStreamProxyFunc(sessionArgs);
+        sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
+
+        var (host, port) = request.GetOriginHostPort(remotePort);
+        if (string.IsNullOrEmpty(host))
+        {
+            host = remoteHostName;
+            port = remotePort;
+        }
+
+        var isHttps = request.IsHttps;
+        var opened = await TcpConnectionFactory.GetServerConnection(this, host, port,
+            HttpHeader.Version11, isHttps, SslExtensions.Http11ProtocolAsList, false, sessionArgs,
+            sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
+            customUpStreamProxy ?? (isHttps ? UpStreamHttpsProxy : UpStreamHttpProxy),
+            true, false, cancellationToken, host, port)
+            ?? throw new InvalidOperationException(
+                $"Failed to open HTTP/1.1 to '{host}:{port}' for WebTransport.");
+
+        var path = request.RequestUri.PathAndQuery;
+        if (string.IsNullOrEmpty(path))
+            path = "/";
+        if (HttpHeaderHygiene.ContainsForbiddenDelimiter(path))
+            throw new InvalidOperationException("Request path contains CR, LF, or NUL.");
+        var authority = request.Host
+            ?? (request.Authority.Length > 0 ? request.Authority.GetString() : null)
+            ?? $"{host}:{port}";
+        if (HttpHeaderHygiene.ContainsForbiddenDelimiter(authority))
+            throw new InvalidOperationException("Authority contains CR, LF, or NUL.");
+
+        var sb = new StringBuilder();
+        sb.Append($"GET {path} HTTP/1.1\r\n");
+        sb.Append($"Host: {authority}\r\n");
+        sb.Append("Connection: Upgrade\r\n");
+        sb.Append("Upgrade: webtransport\r\n");
+        sb.Append("Capsule-Protocol: ?1\r\n\r\n");
+        var bytes = Encoding.ASCII.GetBytes(sb.ToString());
+        await opened.Stream.WriteAsync(bytes, cancellationToken);
+        await opened.Stream.FlushAsync(cancellationToken);
+
+        var statusLine = await ReadLineAsync(opened.Stream, cancellationToken);
+        if (!TryParseHttp11StatusLine(statusLine, out var status) || status != 101)
+        {
+            sessionArgs.GenericResponse(
+                $"WebTransport upgrade failed: {statusLine ?? "no response from origin"}",
+                status > 0 ? (HttpStatusCode)status : HttpStatusCode.BadGateway);
+            await TcpConnectionFactory.Release(opened, true);
+            return null;
+        }
+
+        while (await ReadLineAsync(opened.Stream, cancellationToken) is { Length: > 0 })
+        {
+            // Drain origin response headers. Capsules follow the blank line.
+        }
+
+        return opened;
+    }
+
+    private async Task<TcpServerConnection> OpenConnectTcpOriginAsync(
+        SessionEventArgs sessionArgs, string remoteHostName, int remotePort,
+        CancellationToken cancellationToken)
+    {
+        var customUpStreamProxy = sessionArgs.CustomUpStreamProxy;
+        if (customUpStreamProxy == null && GetCustomUpStreamProxyFunc != null)
+            customUpStreamProxy = await GetCustomUpStreamProxyFunc(sessionArgs);
+        sessionArgs.CustomUpStreamProxyUsed = customUpStreamProxy;
+
+        var request = sessionArgs.HttpClient.Request;
+        var (host, port) = request.GetOriginHostPort(remotePort);
+        if (string.IsNullOrEmpty(host))
+        {
+            host = remoteHostName;
+            port = remotePort;
+        }
+
+        var opened = await TcpConnectionFactory.GetServerConnection(this, host, port,
+            HttpHeader.Version11, false, null, true, sessionArgs,
+            sessionArgs.HttpClient.UpStreamEndPoint ?? UpStreamEndPoint,
+            customUpStreamProxy ?? UpStreamHttpProxy, true, false, cancellationToken, host, port);
+        return opened ?? throw new InvalidOperationException(
+            $"Failed to open a TCP connection to '{host}:{port}' for connect-tcp.");
+    }
+
+    private async Task EstablishConnectTcpAndRelayAsync(
+        SessionEventArgs sessionArgs, Http2StreamContext ctx, Http2StreamState streamState,
+        Stream originStream, CancellationToken cancellationToken)
+    {
+        var response200 = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            StatusDescription = "OK"
+        };
+        sessionArgs.HttpClient.Response = response200;
+        await OnBeforeResponse(sessionArgs);
+        var intercepted = sessionArgs.HttpClient.Response;
+        if (!ReferenceEquals(intercepted, response200) || intercepted.StatusCode is < 200 or >= 300)
+        {
+            await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
+                ctx.ConnectionState, ctx.ClientStream, cancellationToken);
+            return;
+        }
+
+        if (!sessionArgs.IsTransparent && !sessionArgs.IsSocks && !string.IsNullOrEmpty(ViaHeaderPseudonym))
+            AddViaHeader(response200.Headers, HttpHeader.Version11, ViaHeaderPseudonym);
+
+        sessionArgs.RespondStreaming(response200, async (bodyStream, ct) =>
+        {
+            using var relayCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var toOriginTask = RelayChannelToStreamAsync(
+                streamState.InboundTunnelChannel!.Reader, originStream, sessionArgs, relayCts.Token).AsTask();
+            var toClientTask = RelayStreamToClientAsync(originStream, bodyStream, sessionArgs, ct).AsTask();
+            await Task.WhenAny(toOriginTask, toClientTask);
+            await relayCts.CancelAsync();
+            try { originStream.Close(); }
+            catch (Exception closeEx)
+            {
+                ProxyDiagnostics.ReportCaught(logger,
+                    "connect-tcp best-effort origin close", closeEx);
+            }
+
+            await Task.WhenAll(
+                toOriginTask.ContinueWith(_ => { }, TaskScheduler.Default),
+                toClientTask.ContinueWith(_ => { }, TaskScheduler.Default));
+        });
+
+        await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
+            ctx.ConnectionState, ctx.ClientStream, cancellationToken);
+    }
+
+    /// <summary>
     ///     Implements the RFC 8441 h2-client → HTTP/1.1-origin WebSocket tunnel. Opens a dedicated
     ///     HTTP/1.1 TCP connection to the origin, performs the WebSocket upgrade handshake (GET +
     ///     Upgrade: websocket), and if the origin responds 101, signals the h2 client with 200 OK and
@@ -1028,6 +1193,32 @@ public partial class ProxyServer
 
         try
         {
+            if (ExtendedConnectProtocols.IsConnectUdp(sessionArgs.HttpClient.Request.ExtendedConnectProtocol))
+            {
+                await RunConnectUdpOnListenerAsync(sessionArgs, ctx, streamState, cancellationToken);
+                return;
+            }
+
+            if (ExtendedConnectProtocols.IsWebTransport(sessionArgs.HttpClient.Request.ExtendedConnectProtocol))
+            {
+                connection = await OpenWebTransportHttp11Async(sessionArgs, remoteHostName, remotePort, cancellationToken);
+                if (connection == null)
+                {
+                    await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, ctx.StreamId,
+                        ctx.ConnectionState, ctx.ClientStream, cancellationToken);
+                    return;
+                }
+                await EstablishConnectTcpAndRelayAsync(sessionArgs, ctx, streamState, connection.Stream, cancellationToken);
+                return;
+            }
+
+            if (ExtendedConnectProtocols.IsConnectTcp(sessionArgs.HttpClient.Request.ExtendedConnectProtocol))
+            {
+                connection = await OpenConnectTcpOriginAsync(sessionArgs, remoteHostName, remotePort, cancellationToken);
+                await EstablishConnectTcpAndRelayAsync(sessionArgs, ctx, streamState, connection.Stream, cancellationToken);
+                return;
+            }
+
             var customUpStreamProxy = sessionArgs.CustomUpStreamProxy;
             if (customUpStreamProxy == null && GetCustomUpStreamProxyFunc != null)
                 customUpStreamProxy = await GetCustomUpStreamProxyFunc(sessionArgs);

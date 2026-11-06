@@ -616,6 +616,47 @@ public partial class ProxyServer : IDisposable
     public bool EnableRfc8441 { get; set; } = false;
 
     /// <summary>
+    ///     When <see langword="true"/>, explicit listeners accept
+    ///     <c>:protocol = connect-tcp</c> and advertise <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>
+    ///     on those connections only. Reverse and SOCKS listeners stay unchanged unless
+    ///     <see cref="ProxyEndPoint.AcceptConnectTcp"/> is set on that listener.
+    ///     Default: <see langword="false"/>.
+    /// </summary>
+    public bool EnableConnectTcp { get; set; } = false;
+
+    /// <summary>
+    ///     True when this listener should advertise and accept connect-tcp.
+    ///     The process flag applies to explicit listeners only, so a reverse tiny-GET listener
+    ///     does not lose compressed-relay topology.
+    /// </summary>
+    internal bool AdvertisesConnectTcp(ProxyEndPoint endPoint) =>
+        endPoint.AcceptConnectTcp || (EnableConnectTcp && endPoint is ExplicitProxyEndPoint);
+
+    /// <summary>Token allow-list for one connection on <paramref name="endPoint"/>.</summary>
+    internal ExtendedConnectSupport ConnectSupportFor(ProxyEndPoint endPoint) =>
+        new(webSocket: EnableRfc8441, webTransport: AdvertisesWebTransport(endPoint),
+            connectTcp: AdvertisesConnectTcp(endPoint), connectUdp: endPoint.AcceptConnectUdp);
+
+    /// <summary>
+    ///     When <see langword="true"/>, explicit listeners accept <c>:protocol=webtransport</c>
+    ///     on HTTP/1.1 and HTTP/2. Reverse listeners stay off unless
+    ///     <see cref="ProxyEndPoint.AcceptWebTransport"/> is set. HTTP/3 stays 501.
+    ///     Default: <see langword="false"/>.
+    /// </summary>
+    public bool EnableWebTransport { get; set; }
+
+    /// <summary>True when this listener accepts capsule WebTransport on HTTP/1.1 and HTTP/2.</summary>
+    internal bool AdvertisesWebTransport(ProxyEndPoint endPoint) =>
+        endPoint.AcceptWebTransport || (EnableWebTransport && endPoint is ExplicitProxyEndPoint);
+
+    /// <summary>
+    ///     Extended CONNECT advertisement for connect-tcp or WebTransport.
+    ///     Does not include <see cref="EnableRfc8441"/>; that flag is passed separately.
+    /// </summary>
+    internal bool AdvertisesExtendedConnect(ProxyEndPoint endPoint) =>
+        AdvertisesConnectTcp(endPoint) || AdvertisesWebTransport(endPoint) || endPoint.AcceptConnectUdp;
+
+    /// <summary>
     ///     Enable HTTP/3 (QUIC) support. When <see langword="true" />:
     ///     <list type="bullet">
     ///       <item>
@@ -1700,7 +1741,6 @@ public partial class ProxyServer : IDisposable
         || RequestIdHeader is not null
         || ForwardedHeaders is not null
         || CompressionPolicy is not null
-        || RequestDecompressionPolicy is not null
         || ReverseProxy is { HasGrpcWebRoutes: true }
         || ReverseProxy is { HasHandledPolicies: true }
         || ReverseProxy is { HasRoutePlugins: true }
@@ -1862,6 +1902,7 @@ public partial class ProxyServer : IDisposable
         TransparentProxyEndPoint => "transparent",
         SocksProxyEndPoint => "socks",
         MasqueProxyEndPoint => "masque",
+        WebTransportProxyEndPoint => "webtransport",
         _ => endPoint.GetType().Name,
     };
 
@@ -2295,6 +2336,8 @@ public partial class ProxyServer : IDisposable
                 await HandleClient(tep, clientConnection);
             else if (endPoint is SocksProxyEndPoint sep) await HandleClient(sep, clientConnection);
             else if (endPoint is MasqueProxyEndPoint masque) await HandleMasqueClient(masque, clientConnection);
+            else if (endPoint is WebTransportProxyEndPoint webTransport)
+                await HandleWebTransportClient(webTransport, clientConnection);
         }
     }
 

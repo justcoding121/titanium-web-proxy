@@ -75,7 +75,9 @@ public partial class ProxyServer
             cancellationTokenSource, clientStream.Connection.Id, logger,
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
             httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-            shouldInterceptHttp: ShouldInterceptHttp);
+            shouldInterceptHttp: ShouldInterceptHttp,
+            advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+            advertiseWebTransport: AdvertisesWebTransport(endPoint));
     }
 
     /// <summary>

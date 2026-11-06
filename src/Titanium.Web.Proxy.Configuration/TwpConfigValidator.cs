@@ -26,7 +26,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownListenerTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explicit", "transparent", "socks", "quic", "masque", "udp",
+        "explicit", "transparent", "socks", "quic", "masque", "udp", "webtransport",
     };
 
     private static readonly HashSet<string> KnownProxyTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -1962,6 +1962,7 @@ public static class TwpConfigValidator
             ValidateListenerBounds(listener, errors);
             ValidatePassthrough(listener, clusterIds, errors);
             ValidateMasqueListener(listener, errors);
+            ValidateWebTransportListener(listener, errors);
             ValidateUdpListener(listener, clusterIds, errors);
             ValidateClientCertificate(listener, errors);
             ValidateTrustedProxySources(listener, errors);
@@ -2082,7 +2083,7 @@ public static class TwpConfigValidator
 
         if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
         {
-            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque, udp).");
+            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque, udp, webtransport).");
         }
 
         if (listener.MaxCachedConnections is <= 0)
@@ -2225,6 +2226,14 @@ public static class TwpConfigValidator
                 $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
         }
 
+        if (listener.AcceptConnectUdp
+            && listener.Masque?.RequireAuth != false
+            && listener.Masque?.Credentials is not { Count: > 0 })
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: acceptConnectUdp requires credentials or masque.requireAuth: false.");
+        }
+
         if (listener.Masque is not { } masque)
         {
             return;
@@ -2279,6 +2288,45 @@ public static class TwpConfigValidator
         AddUnless(errors, listener.Port, "masque.idleTimeoutSeconds must be positive.", masque.IdleTimeoutSeconds is <= 0);
         AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be positive.", masque.MaxDatagramsPerSecond is <= 0);
         AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be positive.", masque.MaxBytesPerSecond is <= 0);
+    }
+
+    private static void ValidateWebTransportListener(ListenerConfig listener, List<string> errors)
+    {
+        var isWebTransport = string.Equals(listener.Type, "webtransport", StringComparison.OrdinalIgnoreCase);
+        if (!isWebTransport)
+        {
+            if (listener.WebTransport is not null)
+            {
+                errors.Add($"Listener port {listener.Port}: webtransport settings require type: webtransport.");
+            }
+
+            return;
+        }
+
+        if (listener.WebTransport?.RequireAuth != false && listener.WebTransport?.Credentials is not { Count: > 0 })
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport listener requires credentials or requireAuth: false.");
+        }
+
+        if (string.IsNullOrWhiteSpace(listener.WebTransport?.OriginHost))
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport listener requires originHost.");
+        }
+
+        if (listener.WebTransport?.OriginPort is <= 0 or > 65535)
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport.originPort is out of range.");
+        }
+
+        if (listener.WebTransport?.MaxSessions is <= 0)
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport.maxSessions must be positive.");
+        }
+
+        if (listener.WebTransport?.MaxSessionsPerClient is <= 0)
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport.maxSessionsPerClient must be positive.");
+        }
     }
 
     private static void AddUnless(List<string> errors, int port, string message, bool failed)
@@ -3181,9 +3229,9 @@ public static class TwpConfigValidator
         if (config.Server?.RequestDecompression is { Enabled: true })
         {
             warnings.Add(
-                "server.requestDecompression decompresses HTTP/1.x request bodies on the full session path only. " +
-                "HTTP/2 and HTTP/3 request bodies, Expect: 100-continue requests, deflate and stacked encodings " +
-                "are forwarded as sent.");
+                "server.requestDecompression decompresses gzip and brotli HTTP/1.x, HTTP/2, and HTTP/3 request bodies " +
+                "on the session path after headers are decoded. Extended CONNECT, the compressed fast path, " +
+                "Expect: 100-continue, deflate and stacked encodings are forwarded as sent.");
         }
 
         CollectPluginWarnings(config, warnings);
@@ -3216,6 +3264,14 @@ public static class TwpConfigValidator
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: masque authentication is off on a non-loopback address.");
+            }
+
+            if (string.Equals(listener.Type, "webtransport", StringComparison.OrdinalIgnoreCase)
+                && listener.WebTransport?.RequireAuth == false
+                && listener.Host is not (LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName))
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: webtransport authentication is off on a non-loopback address.");
             }
 
             if (IsUdpListener(listener) && listener.Host is not (LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName))

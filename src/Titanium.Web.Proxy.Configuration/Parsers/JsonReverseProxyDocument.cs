@@ -118,6 +118,7 @@ public static class JsonReverseProxyDocument
                     ForwardPort = l.ForwardPort,
                     EnableHttp2 = l.EnableHttp2,
                     EnableHttp3 = l.EnableHttp3,
+                    AcceptConnectTcp = l.AcceptConnectTcp ?? false,
                 });
             }
         }
@@ -198,6 +199,7 @@ public static class JsonReverseProxyDocument
         public int? ForwardPort { get; set; }
         public bool? EnableHttp2 { get; set; }
         public bool? EnableHttp3 { get; set; }
+        public bool? AcceptConnectTcp { get; set; }
     }
 
     private sealed class RouteDto

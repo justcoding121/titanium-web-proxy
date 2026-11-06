@@ -47,7 +47,7 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `host` | string | Bind address. Default `0.0.0.0` (all IPv4 interfaces). `*` is the same as `0.0.0.0`. Use `127.0.0.1` for localhost only. |
 | `port` | int | Default `8000`. `0` is an OS-chosen (ephemeral) port. Inspector toolbar `*` / empty means the same. |
 | `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
-| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, or `udp` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
+| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, `udp`, or `webtransport` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `webtransport` terminates a capsule session and opens a pinned HTTP origin. `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
 | `enableHttp3` | bool? | Per-listener; any `false` disables global H3 |
@@ -631,6 +631,8 @@ server:
   enableHttp2: true
   enableHttp3: null
   enableRfc8441: false
+  enableConnectTcp: false   # explicit listeners only; reverse uses listeners[].acceptConnectTcp
+  enableWebTransport: false # explicit listeners only; reverse uses listeners[].acceptWebTransport
   enableQpackDynamicTable: false
   enableHttpsSvcbDnsDiscovery: null
   enable100ContinueBehaviour: false
@@ -917,7 +919,7 @@ Both the compressed and the decompressed body are held in memory, so two limits 
 
 A body that breaches either limit is answered with `413` and the connection is closed. A body that is corrupt or cut short is answered with `400`. Truncation is detected for both codings (gzip by its length trailer, brotli by the decoder state). Only single-member gzip is accepted. Every decompressed body is recorded in the `twp.body.decompressed_bytes` histogram, tagged `direction=request`; see [Metrics](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics).
 
-Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium test` warns about that.
+Scope: gzip and brotli request bodies on the session path, after the headers are decoded, including HTTP/2 and HTTP/3. Extended CONNECT and the compressed fast path are left unchanged. `Expect: 100-continue`, `deflate`, and stacked encodings are forwarded as sent.
 
 ### Graceful reload
 

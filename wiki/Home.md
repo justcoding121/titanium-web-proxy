@@ -152,7 +152,7 @@ proxyServer.AddEndPoint(new SocksProxyEndPoint(IPAddress.Loopback, 1080));
 
 ## SOCKS endpoint
 
-`SocksProxyEndPoint` accepts SOCKS4 and SOCKS5 connections. The client is unaware it is communicating with a proxy; traffic is typically redirected here via a local application configuration or system-level routing.
+`SocksProxyEndPoint` accepts SOCKS4 and SOCKS5 connections. The client is unaware it is communicating with a proxy; traffic is typically redirected here via a local application configuration or system-level routing. SOCKS5 UDP ASSOCIATE (command 3) opens a UDP relay and answers with that relay's bound address. The relay stops when the TCP control connection closes. Fragments are dropped. The UDP source must match the TCP client.
 
 **Protocol routing after the SOCKS handshake:**
 

@@ -168,6 +168,8 @@ internal sealed class Http2OriginConnection : IDisposable
     /// </summary>
     internal bool EnableConnectProtocol => originSettings.EnableConnectProtocol;
 
+    internal bool WebTransportAdvertised => originSettings.WtMaxSessions > 0;
+
     /// <summary>
     ///     The underlying TCP connection, exposed so callers can attribute
     ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> timing (connection id, reuse, and
@@ -1476,6 +1478,8 @@ internal sealed class Http2OriginConnection : IDisposable
             originSettings.MaxConcurrentStreams = value;
         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
             ApplyEnableConnectProtocolSetting(value);
+        else if (identifier == (int)Http2SettingsId.WtMaxSessions)
+            originSettings.WtMaxSessions = value < 0 ? 0 : value;
 
         return true;
     }

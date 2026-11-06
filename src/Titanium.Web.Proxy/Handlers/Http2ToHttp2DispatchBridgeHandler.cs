@@ -48,7 +48,9 @@ public partial class ProxyServer
             cancellationTokenSource, clientStream.Connection.Id, logger,
             MaxDecodedHeaderListBytes, EnableRfc8441, ResourceLimits,
             httpInterceptionEnabled: NeedsHttpInterception(endPoint),
-            shouldInterceptHttp: ShouldInterceptHttp);
+            shouldInterceptHttp: ShouldInterceptHttp,
+            advertisesConnectProtocol: AdvertisesExtendedConnect(endPoint),
+            advertiseWebTransport: AdvertisesWebTransport(endPoint));
     }
 
     private async Task DispatchBridgeOnBeforeRequest(SessionEventArgs sessionArgs, Http2StreamContext ctx, // NOSONAR S3776
@@ -97,12 +99,12 @@ public partial class ProxyServer
         if (ctx.ConnectionState.Streams.TryGetValue(ctx.StreamId, out var extStreamState) &&
             extStreamState.IsExtendedConnect)
         {
-            if (!string.Equals(extStreamState.ExtendedConnectProtocol, "websocket",
-                    StringComparison.OrdinalIgnoreCase))
+            var connectSupport = ConnectSupportFor(sessionArgs.ProxyEndPoint);
+            if (!ExtendedConnectProtocols.IsSupported(extStreamState.ExtendedConnectProtocol, connectSupport))
             {
                 sessionArgs.GenericResponse(
-                    $"RFC 8441 extended CONNECT (protocol: {extStreamState.ExtendedConnectProtocol ?? "unknown"}) " +
-                    "is not supported by this proxy. Only 'websocket' is implemented.",
+                    ExtendedConnectProtocols.UnsupportedMessage(
+                        extStreamState.ExtendedConnectProtocol, connectSupport),
                     HttpStatusCode.NotImplemented);
                 return;
             }
@@ -260,6 +262,17 @@ public partial class ProxyServer
                 var combinedCookie = string.Join("; ", cookieLines.Select(h => h.Value));
                 sessionArgs.HttpClient.Request.Headers.RemoveHeader("Cookie");
                 sessionArgs.HttpClient.Request.Headers.AddHeader("Cookie", combinedCookie);
+            }
+
+            if (requestBodyChannel is not null
+                && RequestDecompressionPolicy is not null
+                && sessionArgs.HttpClient.Request.ExtendedConnectProtocol is null
+                && !await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
+                    cancellationToken).ConfigureAwait(false);
+                return BridgeAttemptResult.Completed;
             }
 
             Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>?

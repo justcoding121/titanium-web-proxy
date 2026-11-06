@@ -62,9 +62,10 @@ namespace Titanium.Web.Proxy.Http2
             var maxHeaderBlockBytes = resourceLimits.MaxHttp2CompressedHeaderBlockBytes;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
-            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
-            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on (transparent/socks):
-            // decode + handlers, then relay compressed bytes when unchanged — requires static HPACK.
+            // Same-protocol H2↔H2 (not NullOrigin / extended CONNECT): compressed-relay topology.
+            // enableRfc8441 here is the per-connection advertise bit (SendHttp2 ORs the historical
+            // flag with advertisesConnectProtocol). Gate-off: full compressed-relay (no SessionEventArgs).
+            // Gate-on (transparent/socks): decode + handlers, then relay compressed bytes when unchanged.
             // Explicit MITM re-encodes (Via) and must not force HEADER_TABLE_SIZE=0.
             bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream
@@ -2173,6 +2174,21 @@ namespace Titanium.Web.Proxy.Http2
                             // to receive. Store it so outbound header encoding can respect the peer's limit.
                             localSettings.MaxHeaderListSize = value > int.MaxValue ? int.MaxValue : (int)value;
                         }
+                        else if (identifier == (int)Http2SettingsId.WtMaxSessions)
+                        {
+                            if (isClient)
+                            {
+                                // Do not forward the client's WebTransport setting to the origin.
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = 0;
+                            }
+                            else
+                            {
+                                localSettings.WtMaxSessions = (int)Math.Clamp(value, 0L, (long)int.MaxValue);
+                            }
+                        }
                         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
                         {
                             // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
@@ -2248,6 +2264,20 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 3] = 0;
                         buffer[length + 4] = 0;
                         buffer[length + 5] = 0;
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
+                    if (!isClient && !suppressConnectionFrameRelay && connectionState.AdvertiseWebTransport
+                        && (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length
+                        && localSettings.WtMaxSessions <= 0)
+                    {
+                        buffer[length] = (byte)(((int)Http2SettingsId.WtMaxSessions >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.WtMaxSessions & 0xff);
+                        buffer[length + 2] = 0;
+                        buffer[length + 3] = 0;
+                        buffer[length + 4] = 0;
+                        buffer[length + 5] = 1;
                         length += 6;
                         frameHeader.Length = length;
                     }

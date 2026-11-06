@@ -38,6 +38,12 @@ internal sealed class CapsuleReader
 
     public int Dropped { get; private set; }
 
+    /// <summary>
+    ///     Bridge mode. Invoked for capsule types other than DATAGRAM (0). The memory is valid only
+    ///     for the duration of the call. MASQUE leaves this unset and keeps context-0 datagram delivery.
+    /// </summary>
+    public Action<long, ReadOnlyMemory<byte>>? OnUnknownCapsule { get; set; }
+
     public void Feed(ReadOnlySpan<byte> data, DatagramHandler onDatagram)
     {
         var index = 0;
@@ -168,6 +174,7 @@ internal sealed class CapsuleReader
     {
         if (capsuleType != 0)
         {
+            OnUnknownCapsule?.Invoke(capsuleType, value.AsMemory(0, valueNeed));
             return;
         }
 

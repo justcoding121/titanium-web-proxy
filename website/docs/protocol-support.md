@@ -31,6 +31,7 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 | Chunked / DATA frames | N/A / Yes | Yes | DATA | DATA |
 | Trailers | N/A | Yes | Yes | Yes |
 | WebSocket | Yes | Yes | RFC 8441 | RFC 9220 (H1/H2/H3 origin) |
+| connect-tcp | No | No | Opt-in (`enableConnectTcp` / `acceptConnectTcp`) | 501 | HTTP/2 byte relay. Reverse listeners do not advertise extended CONNECT unless they opt in. |
 
 For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, auth), see the [Protocol-Support wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support).
 
@@ -46,7 +47,7 @@ Opt-in `server.responseCompression` compresses origin responses (brotli or gzip)
 | HTTP/3 | No |
 | HTTP/1.1 client, HTTP/2 origin | No |
 
-Opt-in `server.requestDecompression` decompresses gzip and brotli request bodies before they reach the origin, with a decompressed-size cap and a ratio limit; a breach answers `413`, a corrupt body `400`. It applies to HTTP/1.x requests on the session path only. See [Configuration](/docs/configuration#request-decompression-server-requestdecompression).
+Opt-in `server.requestDecompression` decompresses gzip and brotli request bodies before they reach the origin, with a decompressed-size cap and a ratio limit; a breach answers `413`, a corrupt body `400`. It runs on the session path after the headers are decoded, including HTTP/2 and HTTP/3. Extended CONNECT and the compressed fast path are left unchanged. See [Configuration](/docs/configuration#request-decompression-server-requestdecompression).
 
 ## gRPC-Web
 

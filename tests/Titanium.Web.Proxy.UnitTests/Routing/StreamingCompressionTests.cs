@@ -694,7 +694,7 @@ public class StreamingCompressionTests
     // ---- server wiring ---------------------------------------------------------------------------------
 
     [TestMethod]
-    public void ProxyServer_RequestDecompression_IsOffByDefault_AndForcesTheSessionPathWhenOn()
+    public void ProxyServer_RequestDecompression_IsOffByDefault_AndDoesNotForceInterception()
     {
         using var proxy = new ProxyServer(false, false, false);
         Assert.IsNull(proxy.RequestDecompression);
@@ -707,7 +707,7 @@ public class StreamingCompressionTests
 
         proxy.RequestDecompression = new RequestDecompressionConfig { Enabled = true };
         Assert.IsNotNull(proxy.RequestDecompressionPolicy);
-        Assert.IsTrue(proxy.NeedsHttpInterception());
+        Assert.IsFalse(proxy.NeedsHttpInterception());
 
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
         {

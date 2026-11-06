@@ -712,13 +712,32 @@ namespace Titanium.Web.Proxy.Http2
 
                             // Native h2↔h2 extended CONNECT path.
                             string? ecProto = ecTunnelState?.ExtendedConnectProtocol;
-                            if (!string.Equals(ecProto, "websocket", StringComparison.OrdinalIgnoreCase))
+                            var connectSupport = sessionArgs.Server.ConnectSupportFor(sessionArgs.ProxyEndPoint);
+                            if (ExtendedConnectProtocols.IsConnectUdp(ecProto) && connectSupport.ConnectUdp)
+                            {
+                                syntheticStreams.TryAdd(hbStreamId, 0);
+                                connectionState.Streams.TryGetValue(hbStreamId, out var udpState);
+                                if (udpState != null)
+                                {
+                                    var udpTask = sessionArgs.Server.RelayConnectUdpAsync(
+                                            sessionArgs, hbStreamId, connectionState, input, udpState, cancellationToken)
+                                        .ContinueWith(t =>
+                                        {
+                                            if (t.IsFaulted)
+                                                ReportException(logger, new ProxyHttpException(
+                                                    SyntheticResponseFailedMessage,
+                                                    t.Exception.GetBaseException(), sessionArgs));
+                                        }, TaskScheduler.Default);
+                                    udpState.SyntheticTask = udpTask;
+                                    pendingSynthetics.Track(udpTask);
+                                }
+                            }
+                            else if (!ExtendedConnectProtocols.IsSupported(ecProto, connectSupport))
                             {
                                 // Only the 'websocket' protocol token is implemented. BeforeRequest ran
                                 // but did not synthesize a response - return 501 so the client can retry.
                                 sessionArgs.GenericResponse(
-                                    $"RFC 8441 extended CONNECT (protocol: {ecProto ?? "unknown"}) " +
-                                    "is not supported by this proxy. Only 'websocket' is implemented.",
+                                    ExtendedConnectProtocols.UnsupportedMessage(ecProto, connectSupport),
                                     HttpStatusCode.NotImplemented);
                                 syntheticStreams.TryAdd(hbStreamId, 0);
                                 connectionState.Streams.TryGetValue(hbStreamId, out var unknProtoState);
@@ -739,6 +758,32 @@ namespace Titanium.Web.Proxy.Http2
                                     }, TaskScheduler.Default);
                                 if (unknProtoState != null) unknProtoState.SyntheticTask = synthTask501;
                                 pendingSynthetics.Track(synthTask501);
+                            }
+                            else if (ExtendedConnectProtocols.IsWebTransport(ecProto)
+                                     && connectionState.ServerSettings.WtMaxSessions <= 0)
+                            {
+                                sessionArgs.GenericResponse(
+                                    "WebTransport refused: origin did not advertise SETTINGS_WT_MAX_SESSIONS.",
+                                    HttpStatusCode.NotImplemented);
+                                syntheticStreams.TryAdd(hbStreamId, 0);
+                                connectionState.Streams.TryGetValue(hbStreamId, out var wtProtoState);
+                                var linkedWt = wtProtoState != null
+                                    ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,
+                                        wtProtoState.Cancellation.Token)
+                                    : null;
+                                var wtToken = linkedWt?.Token ?? cancellationToken;
+                                var wtTask = EmitSyntheticResponseAsync(sessionArgs, hbStreamId,
+                                        connectionState, input, wtToken, onAfterResponse, logger)
+                                    .ContinueWith(t =>
+                                    {
+                                        linkedWt?.Dispose();
+                                        if (t.IsFaulted)
+                                            ReportException(logger, new ProxyHttpException(
+                                                SyntheticResponseFailedMessage,
+                                                t.Exception.GetBaseException(), sessionArgs));
+                                    }, TaskScheduler.Default);
+                                if (wtProtoState != null) wtProtoState.SyntheticTask = wtTask;
+                                pendingSynthetics.Track(wtTask);
                             }
                             else if (!connectionState.ServerSettings.EnableConnectProtocol)
                             {
