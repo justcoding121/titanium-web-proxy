@@ -2118,7 +2118,7 @@ internal static class RunCommand
         if (listener.AcceptConnectUdp)
         {
             endPoint.AcceptConnectUdp = true;
-            endPoint.ConnectUdpHost.Options = CreateMasqueEndPoint(IPAddress.Loopback, listener).Options;
+            endPoint.ConnectUdpOptions = CreateMasqueEndPoint(IPAddress.Loopback, listener).Options;
         }
 
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))

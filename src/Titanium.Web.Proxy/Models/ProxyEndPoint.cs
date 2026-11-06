@@ -88,6 +88,17 @@ public abstract class ProxyEndPoint
 
     private MasqueProxyEndPoint? connectUdpHost;
 
+    /// <summary>
+    ///     Target policy used when <see cref="AcceptConnectUdp"/> is true. The same object a MASQUE
+    ///     listener uses: authentication, allowed ports, and private-target blocking.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public MasqueOptions ConnectUdpOptions
+    {
+        get => ConnectUdpHost.Options;
+        set => ConnectUdpHost.Options = value;
+    }
+
     /// <summary>Policy and admission for <see cref="AcceptConnectUdp"/>. Created on first use.</summary>
     internal MasqueProxyEndPoint ConnectUdpHost
     {
