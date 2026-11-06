@@ -3229,9 +3229,9 @@ public static class TwpConfigValidator
         if (config.Server?.RequestDecompression is { Enabled: true })
         {
             warnings.Add(
-                "server.requestDecompression decompresses gzip and brotli request bodies on the session path " +
-                "after headers are decoded. Extended CONNECT, the compressed fast path, Expect: 100-continue, " +
-                "deflate and stacked encodings are forwarded as sent.");
+                "server.requestDecompression decompresses gzip and brotli HTTP/1.x, HTTP/2, and HTTP/3 request bodies " +
+                "on the session path after headers are decoded. Extended CONNECT, the compressed fast path, " +
+                "Expect: 100-continue, deflate and stacked encodings are forwarded as sent.");
         }
 
         CollectPluginWarnings(config, warnings);
