@@ -266,15 +266,13 @@ public partial class ProxyServer
 
             if (requestBodyChannel is not null
                 && RequestDecompressionPolicy is not null
-                && sessionArgs.HttpClient.Request.ExtendedConnectProtocol is null)
+                && sessionArgs.HttpClient.Request.ExtendedConnectProtocol is null
+                && !await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
+                    .ConfigureAwait(false))
             {
-                if (!await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
-                        .ConfigureAwait(false))
-                {
-                    await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
-                        cancellationToken).ConfigureAwait(false);
-                    return BridgeAttemptResult.Completed;
-                }
+                await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
+                    cancellationToken).ConfigureAwait(false);
+                return BridgeAttemptResult.Completed;
             }
 
             Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>?

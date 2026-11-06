@@ -1089,8 +1089,7 @@ public partial class ProxyServer
             return null;
         }
 
-        string? line;
-        while ((line = await ReadLineAsync(opened.Stream, cancellationToken)) is { Length: > 0 })
+        while (await ReadLineAsync(opened.Stream, cancellationToken) is { Length: > 0 })
         {
             // Drain origin response headers. Capsules follow the blank line.
         }

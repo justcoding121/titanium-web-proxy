@@ -15,7 +15,7 @@ public partial class ProxyServer
     ///     SOCKS5 UDP ASSOCIATE (RFC 1928). The TCP connection is the control channel.
     ///     Closing it tears the relay down. This is not <c>UdpRelayListener</c>.
     /// </summary>
-    private async Task RunSocks5UdpAssociateAsync(System.IO.Stream control, TcpClientConnection client,
+    private static async Task RunSocks5UdpAssociateAsync(System.IO.Stream control, TcpClientConnection client,
         IPAddress? requestedClient, CancellationToken cancellationToken)
     {
         var local = client.LocalEndPoint as IPEndPoint;
@@ -107,73 +107,20 @@ public partial class ProxyServer
     {
         var buffer = ArrayPool<byte>.Shared.Rent(65535);
         var outbound = ArrayPool<byte>.Shared.Rent(65535);
-        EndPoint client = null!;
-        var haveClient = false;
+        IPEndPoint? client = null;
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                EndPoint remote = relay.AddressFamily == AddressFamily.InterNetworkV6
-                    ? new IPEndPoint(IPAddress.IPv6Any, 0)
-                    : new IPEndPoint(IPAddress.Any, 0);
-                SocketReceiveFromResult received;
-                try
-                {
-                    received = await relay.ReceiveFromAsync(buffer.AsMemory(0, 65535), SocketFlags.None, remote,
-                        cancellationToken).ConfigureAwait(false);
-                }
-                catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset
-                                                     or SocketError.MessageSize)
-                {
-                    continue;
-                }
-                if (received.RemoteEndPoint is not IPEndPoint from)
+                var received = await ReceiveSocksDatagramAsync(relay, buffer, cancellationToken).ConfigureAwait(false);
+                if (received is null)
                 {
                     continue;
                 }
 
-                if (!haveClient)
-                {
-                    if (expectedClient is not null && !from.Address.Equals(expectedClient))
-                    {
-                        continue;
-                    }
-
-                    client = from;
-                    haveClient = true;
-                }
-
-                if (from.Equals(client))
-                {
-                    if (!TryParseSocksUdp(buffer.AsSpan(0, received.ReceivedBytes), out var host, out var port,
-                            out var headerLength))
-                    {
-                        continue;
-                    }
-
-                    var payloadLength = received.ReceivedBytes - headerLength;
-                    if (!IPAddress.TryParse(host, out var targetAddress))
-                    {
-                        var resolved = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
-                        if (resolved.Length == 0)
-                        {
-                            continue;
-                        }
-
-                        targetAddress = resolved[0];
-                    }
-
-                    await relay.SendToAsync(buffer.AsMemory(headerLength, payloadLength), SocketFlags.None,
-                        new IPEndPoint(targetAddress, port), cancellationToken).ConfigureAwait(false);
-                    continue;
-                }
-
-                var wrapped = WriteSocksUdp(outbound, from, buffer.AsSpan(0, received.ReceivedBytes));
-                if (wrapped > 0 && haveClient)
-                {
-                    await relay.SendToAsync(outbound.AsMemory(0, wrapped), SocketFlags.None, client, cancellationToken)
-                        .ConfigureAwait(false);
-                }
+                client = await DispatchSocksDatagramAsync(
+                    relay, expectedClient, client, buffer, outbound, received.Value, cancellationToken)
+                    .ConfigureAwait(false);
             }
         }
         finally
@@ -181,6 +128,94 @@ public partial class ProxyServer
             ArrayPool<byte>.Shared.Return(buffer);
             ArrayPool<byte>.Shared.Return(outbound);
         }
+    }
+
+    private static async Task<SocketReceiveFromResult?> ReceiveSocksDatagramAsync(
+        Socket relay, byte[] buffer, CancellationToken cancellationToken)
+    {
+        EndPoint remote = relay.AddressFamily == AddressFamily.InterNetworkV6
+            ? new IPEndPoint(IPAddress.IPv6Any, 0)
+            : new IPEndPoint(IPAddress.Any, 0);
+        try
+        {
+            return await relay.ReceiveFromAsync(buffer.AsMemory(0, 65535), SocketFlags.None, remote, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset or SocketError.MessageSize)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<IPEndPoint?> DispatchSocksDatagramAsync(
+        Socket relay, IPAddress? expectedClient, IPEndPoint? client, byte[] buffer, byte[] outbound,
+        SocketReceiveFromResult received, CancellationToken cancellationToken)
+    {
+        if (received.RemoteEndPoint is not IPEndPoint from)
+        {
+            return client;
+        }
+
+        if (client is null)
+        {
+            if (expectedClient is not null && !from.Address.Equals(expectedClient))
+            {
+                return null;
+            }
+
+            client = from;
+        }
+
+        if (from.Equals(client))
+        {
+            await SendClientSocksDatagramAsync(relay, buffer, received.ReceivedBytes, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await SendTargetSocksReplyAsync(relay, outbound, buffer, received.ReceivedBytes, from, client, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return client;
+    }
+
+    private static async Task SendClientSocksDatagramAsync(
+        Socket relay, byte[] buffer, int receivedBytes, CancellationToken cancellationToken)
+    {
+        if (!TryParseSocksUdp(buffer.AsSpan(0, receivedBytes), out var host, out var port, out var headerLength))
+        {
+            return;
+        }
+
+        var payloadLength = receivedBytes - headerLength;
+        if (!IPAddress.TryParse(host, out var targetAddress))
+        {
+            var resolved = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
+            if (resolved.Length == 0)
+            {
+                return;
+            }
+
+            targetAddress = resolved[0];
+        }
+
+        await relay.SendToAsync(buffer.AsMemory(headerLength, payloadLength), SocketFlags.None,
+            new IPEndPoint(targetAddress, port), cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task SendTargetSocksReplyAsync(
+        Socket relay, byte[] outbound, byte[] buffer, int receivedBytes, IPEndPoint from, IPEndPoint client,
+        CancellationToken cancellationToken)
+    {
+        var wrapped = WriteSocksUdp(outbound, from, buffer.AsSpan(0, receivedBytes));
+        if (wrapped <= 0)
+        {
+            return;
+        }
+
+        await relay.SendToAsync(outbound.AsMemory(0, wrapped), SocketFlags.None, client, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     internal static bool TryParseSocksUdp(ReadOnlySpan<byte> packet, out string host, out int port, out int headerLength)

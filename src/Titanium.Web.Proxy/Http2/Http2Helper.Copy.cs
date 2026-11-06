@@ -2186,7 +2186,7 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
-                                localSettings.WtMaxSessions = value < 0 ? 0 : value > int.MaxValue ? int.MaxValue : (int)value;
+                                localSettings.WtMaxSessions = (int)Math.Clamp(value, 0L, (long)int.MaxValue);
                             }
                         }
                         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)

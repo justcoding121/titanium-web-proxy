@@ -71,28 +71,8 @@ internal static partial class Http3OriginBridge
 
             try
             {
-                var host = connectHost;
-                var destinationPort = quicPort;
-                while (true)
-                {
-                    if (sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
-                    {
-                        host = routedHost;
-                        if (sessionArgs.UpstreamConnectPort is int routedPort && routedPort > 0)
-                            destinationPort = routedPort;
-                    }
-
-                    var retry = await ForwardOverQuicAsync(
-                        sessionArgs, server,
-                        host, sniHost, destinationPort, route.ForcedH3,
-                        logger, cancellationToken, onInterimResponse, copyRequestBody);
-                    if (!retry)
-                        break;
-
-                    await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(
-                        server, sessionArgs, cancellationToken);
-                    await sessionArgs.ClearResponse(cancellationToken);
-                }
+                await ForwardQuicWithStatusRetryAsync(sessionArgs, server, connectHost, sniHost, quicPort,
+                    route.ForcedH3, logger, cancellationToken, onInterimResponse, copyRequestBody);
             }
             finally
             {
@@ -106,6 +86,42 @@ internal static partial class Http3OriginBridge
         // An HTTP/2 client stays on HTTP/2. Dropping it to HTTP/1.1 is what left Google on a
         // one-request-per-connection fallback after the airplane blackholed UDP.
         await FallbackToTcpOriginAsync(sessionArgs, server, logger, cancellationToken, onInterimResponse);
+    }
+
+    private static async Task ForwardQuicWithStatusRetryAsync(
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        string connectHost,
+        string sniHost,
+        int quicPort,
+        bool forcedH3,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse,
+        Func<QuicStream, CancellationToken, Task>? copyRequestBody)
+    {
+        var host = connectHost;
+        var destinationPort = quicPort;
+        while (true)
+        {
+            if (sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
+            {
+                host = routedHost;
+                if (sessionArgs.UpstreamConnectPort is int routedPort && routedPort > 0)
+                    destinationPort = routedPort;
+            }
+
+            var retry = await ForwardOverQuicAsync(
+                sessionArgs, server,
+                host, sniHost, destinationPort, forcedH3,
+                logger, cancellationToken, onInterimResponse, copyRequestBody);
+            if (!retry)
+                break;
+
+            await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(
+                server, sessionArgs, cancellationToken);
+            await sessionArgs.ClearResponse(cancellationToken);
+        }
     }
 
     /// <summary>

@@ -61,7 +61,7 @@ public class Socks5UdpAssociateTests
             await Task.Delay(200);
             await client.SendToAsync(header, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, relayPort));
             client.ReceiveTimeout = 500;
-            await Assert.ThrowsExceptionAsync<SocketException>(async () =>
+            await Assert.ThrowsExactlyAsync<SocketException>(async () =>
                 await client.ReceiveFromAsync(received, SocketFlags.None, new IPEndPoint(IPAddress.Loopback, 0)));
         }
         finally
