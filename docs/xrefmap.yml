@@ -4966,6 +4966,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Http.Request.UpgradeToWebSocket
   nameWithType: Request.UpgradeToWebSocket
+- uid: Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport
+  name: UpgradeToWebTransport
+  href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_UpgradeToWebTransport
+  commentId: P:Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport
+  fullName: Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport
+  nameWithType: Request.UpgradeToWebTransport
+- uid: Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport*
+  name: UpgradeToWebTransport
+  href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_UpgradeToWebTransport_
+  commentId: Overload:Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Http.Request.UpgradeToWebTransport
+  nameWithType: Request.UpgradeToWebTransport
 - uid: Titanium.Web.Proxy.Http.Request.Url
   name: Url
   href: api/Titanium.Web.Proxy.Http.Request.html#Titanium_Web_Proxy_Http_Request_Url
@@ -7000,6 +7013,32 @@ references:
   fullName.vb: Titanium.Web.Proxy.Models.ProxyEndPoint.New
   nameWithType: ProxyEndPoint.ProxyEndPoint
   nameWithType.vb: ProxyEndPoint.New
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp
+  name: AcceptConnectTcp
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptConnectTcp
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp
+  nameWithType: ProxyEndPoint.AcceptConnectTcp
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp*
+  name: AcceptConnectTcp
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptConnectTcp_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp
+  nameWithType: ProxyEndPoint.AcceptConnectTcp
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp
+  name: AcceptConnectUdp
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptConnectUdp
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp
+  nameWithType: ProxyEndPoint.AcceptConnectUdp
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp*
+  name: AcceptConnectUdp
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptConnectUdp_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp
+  nameWithType: ProxyEndPoint.AcceptConnectUdp
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol
   name: AcceptProxyProtocol
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptProxyProtocol
@@ -7013,6 +7052,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptProxyProtocol
   nameWithType: ProxyEndPoint.AcceptProxyProtocol
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport
+  name: AcceptWebTransport
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptWebTransport
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport
+  nameWithType: ProxyEndPoint.AcceptWebTransport
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport*
+  name: AcceptWebTransport
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AcceptWebTransport_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport
+  nameWithType: ProxyEndPoint.AcceptWebTransport
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.AdmittedClientCount
   name: AdmittedClientCount
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_AdmittedClientCount
@@ -7052,6 +7104,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ClientCertificateTrustedRoots
   nameWithType: ProxyEndPoint.ClientCertificateTrustedRoots
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.ConnectUdpOptions
+  name: ConnectUdpOptions
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ConnectUdpOptions
+  commentId: P:Titanium.Web.Proxy.Models.ProxyEndPoint.ConnectUdpOptions
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ConnectUdpOptions
+  nameWithType: ProxyEndPoint.ConnectUdpOptions
+- uid: Titanium.Web.Proxy.Models.ProxyEndPoint.ConnectUdpOptions*
+  name: ConnectUdpOptions
+  href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_ConnectUdpOptions_
+  commentId: Overload:Titanium.Web.Proxy.Models.ProxyEndPoint.ConnectUdpOptions
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.ProxyEndPoint.ConnectUdpOptions
+  nameWithType: ProxyEndPoint.ConnectUdpOptions
 - uid: Titanium.Web.Proxy.Models.ProxyEndPoint.DecryptSsl
   name: DecryptSsl
   href: api/Titanium.Web.Proxy.Models.ProxyEndPoint.html#Titanium_Web_Proxy_Models_ProxyEndPoint_DecryptSsl
@@ -7829,6 +7894,154 @@ references:
   commentId: F:Titanium.Web.Proxy.Models.UpstreamHttpProtocol.Http3
   fullName: Titanium.Web.Proxy.Models.UpstreamHttpProtocol.Http3
   nameWithType: UpstreamHttpProtocol.Http3
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions
+  name: WebTransportOptions
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html
+  commentId: T:Titanium.Web.Proxy.Models.WebTransportOptions
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions
+  nameWithType: WebTransportOptions
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade
+  name: AllowHttp11Upgrade
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_AllowHttp11Upgrade
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade
+  nameWithType: WebTransportOptions.AllowHttp11Upgrade
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade*
+  name: AllowHttp11Upgrade
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_AllowHttp11Upgrade_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade
+  nameWithType: WebTransportOptions.AllowHttp11Upgrade
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc
+  name: AuthenticateFunc
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_AuthenticateFunc
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc
+  nameWithType: WebTransportOptions.AuthenticateFunc
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc*
+  name: AuthenticateFunc
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_AuthenticateFunc_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc
+  nameWithType: WebTransportOptions.AuthenticateFunc
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions
+  name: MaxSessions
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_MaxSessions
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions
+  nameWithType: WebTransportOptions.MaxSessions
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions*
+  name: MaxSessions
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_MaxSessions_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions
+  nameWithType: WebTransportOptions.MaxSessions
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient
+  name: MaxSessionsPerClient
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_MaxSessionsPerClient
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient
+  nameWithType: WebTransportOptions.MaxSessionsPerClient
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient*
+  name: MaxSessionsPerClient
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_MaxSessionsPerClient_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient
+  nameWithType: WebTransportOptions.MaxSessionsPerClient
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost
+  name: OriginHost
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_OriginHost
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost
+  nameWithType: WebTransportOptions.OriginHost
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost*
+  name: OriginHost
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_OriginHost_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost
+  nameWithType: WebTransportOptions.OriginHost
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps
+  name: OriginHttps
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_OriginHttps
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps
+  nameWithType: WebTransportOptions.OriginHttps
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps*
+  name: OriginHttps
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_OriginHttps_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps
+  nameWithType: WebTransportOptions.OriginHttps
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort
+  name: OriginPort
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_OriginPort
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort
+  nameWithType: WebTransportOptions.OriginPort
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort*
+  name: OriginPort
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_OriginPort_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort
+  nameWithType: WebTransportOptions.OriginPort
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth
+  name: RequireAuth
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_RequireAuth
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth
+  nameWithType: WebTransportOptions.RequireAuth
+- uid: Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth*
+  name: RequireAuth
+  href: api/Titanium.Web.Proxy.Models.WebTransportOptions.html#Titanium_Web_Proxy_Models_WebTransportOptions_RequireAuth_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth
+  nameWithType: WebTransportOptions.RequireAuth
+- uid: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint
+  name: WebTransportProxyEndPoint
+  href: api/Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.html
+  commentId: T:Titanium.Web.Proxy.Models.WebTransportProxyEndPoint
+  fullName: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint
+  nameWithType: WebTransportProxyEndPoint
+- uid: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.#ctor(System.Net.IPAddress,System.Int32)
+  name: WebTransportProxyEndPoint(IPAddress, int)
+  href: api/Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.html#Titanium_Web_Proxy_Models_WebTransportProxyEndPoint__ctor_System_Net_IPAddress_System_Int32_
+  commentId: M:Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.#ctor(System.Net.IPAddress,System.Int32)
+  name.vb: New(IPAddress, Integer)
+  fullName: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.WebTransportProxyEndPoint(System.Net.IPAddress, int)
+  fullName.vb: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.New(System.Net.IPAddress, Integer)
+  nameWithType: WebTransportProxyEndPoint.WebTransportProxyEndPoint(IPAddress, int)
+  nameWithType.vb: WebTransportProxyEndPoint.New(IPAddress, Integer)
+- uid: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.#ctor*
+  name: WebTransportProxyEndPoint
+  href: api/Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.html#Titanium_Web_Proxy_Models_WebTransportProxyEndPoint__ctor_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.#ctor
+  isSpec: "True"
+  name.vb: New
+  fullName: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.WebTransportProxyEndPoint
+  fullName.vb: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.New
+  nameWithType: WebTransportProxyEndPoint.WebTransportProxyEndPoint
+  nameWithType.vb: WebTransportProxyEndPoint.New
+- uid: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options
+  name: Options
+  href: api/Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.html#Titanium_Web_Proxy_Models_WebTransportProxyEndPoint_Options
+  commentId: P:Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options
+  fullName: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options
+  nameWithType: WebTransportProxyEndPoint.Options
+- uid: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options*
+  name: Options
+  href: api/Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.html#Titanium_Web_Proxy_Models_WebTransportProxyEndPoint_Options_
+  commentId: Overload:Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options
+  nameWithType: WebTransportProxyEndPoint.Options
 - uid: Titanium.Web.Proxy.Models.WinAuthCredentials
   name: WinAuthCredentials
   href: api/Titanium.Web.Proxy.Models.WinAuthCredentials.html
@@ -11088,6 +11301,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.Enable100ContinueBehaviour
   nameWithType: ProxyServer.Enable100ContinueBehaviour
+- uid: Titanium.Web.Proxy.ProxyServer.EnableConnectTcp
+  name: EnableConnectTcp
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectTcp
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableConnectTcp
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectTcp
+  nameWithType: ProxyServer.EnableConnectTcp
+- uid: Titanium.Web.Proxy.ProxyServer.EnableConnectTcp*
+  name: EnableConnectTcp
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectTcp_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableConnectTcp
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableConnectTcp
+  nameWithType: ProxyServer.EnableConnectTcp
 - uid: Titanium.Web.Proxy.ProxyServer.EnableConnectionPool
   name: EnableConnectionPool
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableConnectionPool
@@ -11244,6 +11470,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.EnableTcpServerConnectionPrefetch
   nameWithType: ProxyServer.EnableTcpServerConnectionPrefetch
+- uid: Titanium.Web.Proxy.ProxyServer.EnableWebTransport
+  name: EnableWebTransport
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWebTransport
+  commentId: P:Titanium.Web.Proxy.ProxyServer.EnableWebTransport
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableWebTransport
+  nameWithType: ProxyServer.EnableWebTransport
+- uid: Titanium.Web.Proxy.ProxyServer.EnableWebTransport*
+  name: EnableWebTransport
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWebTransport_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.EnableWebTransport
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.EnableWebTransport
+  nameWithType: ProxyServer.EnableWebTransport
 - uid: Titanium.Web.Proxy.ProxyServer.EnableWinAuth
   name: EnableWinAuth
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_EnableWinAuth
