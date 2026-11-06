@@ -20,7 +20,7 @@ HTTP/1.1 Upgrade (RFC 9298 section 3.3) stays off unless `allowHttp11Upgrade` is
 
 HTTP/3 between the client and the proxy is not available. `System.Net.Quic` has no datagram API (dotnet/runtime#53533), and this listener does not call MsQuic. Capsules on a reliable stream have head-of-line blocking. That is inherent to CONNECT-UDP over HTTP/2.
 
-Existing explicit, transparent, SOCKS, and QUIC listeners reject `connect-udp` with 501 unless `acceptConnectUdp` is true. That flag uses the same `masque` policy block: authentication fails closed, ports default to 443, and private targets stay blocked. It does not follow from WebSocket or WebTransport settings. This listener does not advertise Alt-Svc, and it does not implement CONNECT-IP or SOCKS5 UDP ASSOCIATE. WebTransport is a separate listener.
+Existing explicit, transparent, SOCKS, and QUIC listeners reject `connect-udp` with 501 unless `acceptConnectUdp` is true. That flag uses the same `masque` policy block: authentication fails closed, ports default to 443, and private targets stay blocked. It does not follow from WebSocket or WebTransport settings. On HTTP/3 the capsules ride the request stream, so a large body delays the next datagram (head-of-line). The proxy does not send a datagram setting. This listener does not advertise Alt-Svc, and it does not implement CONNECT-IP or SOCKS5 UDP ASSOCIATE. WebTransport is a separate listener.
 
 Client support for CONNECT-UDP over HTTP/2 is not verified against a shipping MASQUE client. The relay is covered by raw HTTP/2 tests. Treat production use as experimental (`TWP001`) until a real client is confirmed.
 

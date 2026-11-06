@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Http3;
 ///         fire AfterResponse.
 ///     </para>
 /// </summary>
-internal static class Http3RequestStream
+internal static partial class Http3RequestStream
 {
     /// <summary>
     ///     Processes one HTTP/3 bidirectional stream from receipt of the initial HEADERS frame through
@@ -103,7 +103,11 @@ internal static class Http3RequestStream
                     if (method != "CONNECT")
                         throw new Http3StreamException(Http3ErrorCode.MessageError,
                             ":protocol is only valid on CONNECT requests.");
-                    if (!server.EnableRfc8441)
+                    // AcceptConnectUdp advertises ENABLE_CONNECT on this connection only.
+                    // It does not set ProxyServer.EnableRfc8441, so the tiny-GET path below stays open.
+                    var connectUdpOnListener = ExtendedConnectProtocols.IsConnectUdp(protocol)
+                                               && endPoint.AcceptConnectUdp;
+                    if (!server.EnableRfc8441 && !connectUdpOnListener)
                         throw new Http3StreamException(Http3ErrorCode.MessageError,
                             ":protocol requires SETTINGS_ENABLE_CONNECT_PROTOCOL to be advertised.");
                     if (string.IsNullOrEmpty(scheme) || string.IsNullOrEmpty(path) ||
@@ -122,9 +126,10 @@ internal static class Http3RequestStream
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
                 var isConnect = method == "CONNECT";
-                var connectSupport = ExtendedConnectSupport.ForProcess(server.EnableRfc8441);
-                var isWsTunnel = ExtendedConnectProtocols.IsSupported(protocol, connectSupport);
-                var isUnsupportedEcProtocol = protocol is not null && !isWsTunnel;
+                var connectSupport = server.ConnectSupportFor(endPoint);
+                var isWsTunnel = ExtendedConnectProtocols.IsWebSocket(protocol) && connectSupport.WebSocket;
+                var isConnectUdpTunnel = ExtendedConnectProtocols.IsConnectUdp(protocol) && connectSupport.ConnectUdp;
+                var isUnsupportedEcProtocol = protocol is not null && !isWsTunnel && !isConnectUdpTunnel;
                 if (!isConnect && path is null)
                     throw new Http3StreamException(Http3ErrorCode.MessageError,
                         "RFC 9114 §4.3.1: non-CONNECT requests must include :path.");
@@ -363,6 +368,14 @@ internal static class Http3RequestStream
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                }
+                else if (isConnectUdpTunnel)
+                {
+                    // Capsules stay on this request stream. Ordinary GET/HEAD never reach here,
+                    // so the session-less tiny-GET path is unchanged.
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+                    await RunHttp3ConnectUdpAsync(stream, sessionArgs, qpackContext, cancellationToken);
                 }
                 else if (isWsTunnel)
                 {

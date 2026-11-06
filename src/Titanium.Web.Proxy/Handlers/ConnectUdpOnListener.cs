@@ -22,12 +22,72 @@ public partial class ProxyServer
         Http2ConnectionState connectionState, System.IO.Stream clientStream, Http2StreamState streamState,
         CancellationToken cancellationToken)
     {
+        var admission = await TryOpenConnectUdpAsync(session, cancellationToken).ConfigureAwait(false);
+        if (admission is null)
+        {
+            await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken);
+            return;
+        }
+
+        if (streamState.InboundTunnelChannel == null)
+        {
+            streamState.InboundTunnelChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(new BoundedChannelOptions(256)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait,
+            });
+        }
+
+        streamState.IsExtendedConnect = true;
+        var released = 0;
+        void ReleaseOnce()
+        {
+            if (Interlocked.Exchange(ref released, 1) != 0)
+            {
+                return;
+            }
+
+            streamState.InboundTunnelChannel.Writer.TryComplete();
+            admission.Release();
+        }
+
+        streamState.Cancellation.Token.Register(ReleaseOnce);
+        var response = new Response
+        {
+            HttpVersion = HttpHeader.Version20,
+            StatusCode = 200,
+            StatusDescription = "OK",
+        };
+        response.Headers.AddHeader("capsule-protocol", "?1");
+        session.RespondStreaming(response, async (body, token) =>
+        {
+            try
+            {
+                await MasqueTunnel.RelayAsync(admission.Host, streamState.InboundTunnelChannel.Reader, body,
+                    admission.Open.Socket, logger, token).ConfigureAwait(false);
+            }
+            finally
+            {
+                ReleaseOnce();
+            }
+        });
+        await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Auth, path, admit, and UDP connect for one CONNECT-UDP request.
+    ///     On failure the session already holds the synthetic response and the return is null.
+    /// </summary>
+    internal async Task<ConnectUdpAdmission?> TryOpenConnectUdpAsync(SessionEventArgs session,
+        CancellationToken cancellationToken)
+    {
         var endPoint = session.ProxyEndPoint;
         if (!endPoint.AcceptConnectUdp)
         {
             session.GenericResponse("connect-udp is not enabled on this listener", HttpStatusCode.NotImplemented);
-            await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken);
-            return;
+            return null;
         }
 
         var host = endPoint.ConnectUdpHost;
@@ -35,16 +95,14 @@ public partial class ProxyServer
         {
             session.GenericResponse("proxy authentication required", HttpStatusCode.ProxyAuthenticationRequired,
                 [new HttpHeader("proxy-authenticate", "Basic realm=\"masque\"")]);
-            await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken);
-            return;
+            return null;
         }
 
         var request = session.HttpClient.Request;
         if (!ConnectUdpPath.TryParse(request.RequestUriString, out var targetHost, out var targetPort))
         {
             session.GenericResponse("connect-udp path is not /.well-known/masque/udp/{host}/{port}/", HttpStatusCode.BadRequest);
-            await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken);
-            return;
+            return null;
         }
 
         var client = MasqueProxyEndPoint.ClientKey(session.ClientRemoteEndPoint.Address);
@@ -52,77 +110,19 @@ public partial class ProxyServer
         {
             session.GenericResponse("too many connect-udp tunnels", (HttpStatusCode)429,
                 [new HttpHeader("retry-after", "1")]);
-            await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken);
-            return;
+            return null;
         }
 
-        var ownsSlot = true;
-        try
+        var (status, reason, opened) = await MasqueTunnel.OpenAsync(
+            host, targetHost, targetPort, logger, cancellationToken).ConfigureAwait(false);
+        if (opened is null)
         {
-            var (status, reason, opened) = await MasqueTunnel.OpenAsync(
-                host, targetHost, targetPort, logger, cancellationToken).ConfigureAwait(false);
-            if (opened is null)
-            {
-                session.GenericResponse(reason ?? "connect-udp target was rejected", (HttpStatusCode)(status == 0 ? 502 : status));
-                await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken);
-                return;
-            }
-
-            if (streamState.InboundTunnelChannel == null)
-            {
-                streamState.InboundTunnelChannel = Channel.CreateBounded<ReadOnlyMemory<byte>>(new BoundedChannelOptions(256)
-                {
-                    SingleReader = true,
-                    SingleWriter = true,
-                    FullMode = BoundedChannelFullMode.Wait,
-                });
-            }
-
-            streamState.IsExtendedConnect = true;
-            var released = 0;
-            void ReleaseOnce()
-            {
-                if (Interlocked.Exchange(ref released, 1) != 0)
-                {
-                    return;
-                }
-
-                streamState.InboundTunnelChannel.Writer.TryComplete();
-                opened.Release();
-                host.ReleaseTunnel(client);
-            }
-
-            streamState.Cancellation.Token.Register(ReleaseOnce);
-            var response = new Response
-            {
-                HttpVersion = HttpHeader.Version20,
-                StatusCode = 200,
-                StatusDescription = "OK",
-            };
-            response.Headers.AddHeader("capsule-protocol", "?1");
-            ownsSlot = false;
-            session.RespondStreaming(response, async (body, token) =>
-            {
-                try
-                {
-                    await MasqueTunnel.RelayAsync(host, streamState.InboundTunnelChannel.Reader, body, opened.Socket, logger, token)
-                        .ConfigureAwait(false);
-                }
-                finally
-                {
-                    ReleaseOnce();
-                }
-            });
-            await Http2Helper.EmitSyntheticResponseAsync(session, streamId, connectionState, clientStream, cancellationToken)
-                .ConfigureAwait(false);
+            host.ReleaseTunnel(client);
+            session.GenericResponse(reason ?? "connect-udp target was rejected", (HttpStatusCode)(status == 0 ? 502 : status));
+            return null;
         }
-        finally
-        {
-            if (ownsSlot)
-            {
-                host.ReleaseTunnel(client);
-            }
-        }
+
+        return new ConnectUdpAdmission(host, opened, client);
     }
 
     private async Task<bool> ConnectUdpAuthenticatedAsync(MasqueProxyEndPoint endPoint, SessionEventArgs session)
@@ -166,5 +166,35 @@ public partial class ProxyServer
     {
         await RelayConnectUdpAsync(session, ctx.StreamId, ctx.ConnectionState, ctx.ClientStream, streamState, cancellationToken)
             .ConfigureAwait(false);
+    }
+}
+
+/// <summary>One admitted CONNECT-UDP socket. Release returns the admit slot and closes the socket.</summary>
+internal sealed class ConnectUdpAdmission
+{
+    private int released;
+
+    internal ConnectUdpAdmission(MasqueProxyEndPoint host, MasqueTunnelOpen open, System.Net.IPAddress client)
+    {
+        Host = host;
+        Open = open;
+        Client = client;
+    }
+
+    internal MasqueProxyEndPoint Host { get; }
+
+    internal MasqueTunnelOpen Open { get; }
+
+    internal System.Net.IPAddress Client { get; }
+
+    internal void Release()
+    {
+        if (Interlocked.Exchange(ref released, 1) != 0)
+        {
+            return;
+        }
+
+        Open.Release();
+        Host.ReleaseTunnel(Client);
     }
 }
