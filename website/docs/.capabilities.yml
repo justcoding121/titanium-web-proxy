@@ -412,7 +412,7 @@ rows:
       - 'server.requestDecompression'
     docs: '/docs/configuration#request-decompression-server-requestdecompression'
     docsLabel: 'Request decompression'
-    note: 'gzip and brotli request bodies on HTTP/1.x, with a decompressed-size cap and a zip-bomb ratio limit.'
+    note: 'gzip and brotli request bodies on the session path, with a decompressed-size cap and a zip-bomb ratio limit. Extended CONNECT is skipped.'
   - area: 'WAF'
     capability: 'Signature screening with detect mode and anomaly scoring'
     status: 'supported'

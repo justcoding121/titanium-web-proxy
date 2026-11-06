@@ -264,6 +264,19 @@ public partial class ProxyServer
                 sessionArgs.HttpClient.Request.Headers.AddHeader("Cookie", combinedCookie);
             }
 
+            if (requestBodyChannel is not null
+                && RequestDecompressionPolicy is not null
+                && sessionArgs.HttpClient.Request.ExtendedConnectProtocol is null)
+            {
+                if (!await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
+                        cancellationToken).ConfigureAwait(false);
+                    return BridgeAttemptResult.Completed;
+                }
+            }
+
             Func<Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask>, CancellationToken, Task>?
                 copyRequestBody = null;
             if (requestBodyChannel != null && !sessionArgs.HttpClient.Request.IsBodyRead)

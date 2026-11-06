@@ -1,5 +1,6 @@
 #pragma warning disable CA1416
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Quic;
 using System.Threading;
@@ -98,6 +99,29 @@ internal static partial class Http3RequestStream
         {
             writer.TryComplete();
         }
+    }
+
+    private static bool DeclaresDecompressibleBody(ProxyServer server,
+        List<(string Name, string Value)> headers)
+    {
+        if (server.RequestDecompressionPolicy is null)
+            return false;
+
+        foreach (var (name, value) in headers)
+        {
+            if (!name.Equals("content-encoding", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var coding = value.Trim();
+            if (coding.Equals("gzip", StringComparison.OrdinalIgnoreCase)
+                || coding.Equals("x-gzip", StringComparison.OrdinalIgnoreCase)
+                || coding.Equals("br", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Flushes each capsule so the client can read it before the relay ends.</summary>

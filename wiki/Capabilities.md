@@ -102,7 +102,7 @@
 | Capability | Status | Config key | Notes | Docs |
 |------------|--------|------------|-------|------|
 | Response compression (gzip, brotli, optional zstd) | partial | `server.responseCompression`, `routes[].compression` | Buffered or streaming on HTTP/1.1 clients, HTTP/2 clients, and HTTP/3 clients across H1/H2/H3 origin bridges when interception is on. Optional `zstd` is registered by the CLI when listed in `algorithms`. Fast-path passthrough stays identity. | [Response compression](https://titaniumproxy.com/docs/configuration#response-compression-server-responsecompression) |
-| Request decompression with size and ratio limits | supported | `server.requestDecompression` | gzip and brotli request bodies on HTTP/1.x, with a decompressed-size cap and a zip-bomb ratio limit. | [Request decompression](https://titaniumproxy.com/docs/configuration#request-decompression-server-requestdecompression) |
+| Request decompression with size and ratio limits | supported | `server.requestDecompression` | gzip and brotli request bodies on the session path, with a decompressed-size cap and a zip-bomb ratio limit. Extended CONNECT is skipped. | [Request decompression](https://titaniumproxy.com/docs/configuration#request-decompression-server-requestdecompression) |
 
 ## WAF
 

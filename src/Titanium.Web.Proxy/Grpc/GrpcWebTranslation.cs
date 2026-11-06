@@ -107,6 +107,32 @@ internal static class GrpcWebTranslation
         };
     }
 
+    /// <summary>
+    ///     Shapes a buffered HTTP/3 response after <see cref="TryTranslateRequest"/>.
+    ///     A streaming body and a native gRPC response are left unchanged.
+    /// </summary>
+    internal static void TranslateBufferedResponse(SessionEventArgs args)
+    {
+        if (args.GrpcWebClientContentType is not { } clientType)
+            return;
+
+        var response = args.HttpClient.Response;
+        if (response.StreamBodyWriter != null || !GrpcWebAdapter.IsNativeGrpc(response.ContentType))
+            return;
+
+        response.ContentType = clientType;
+        if (!response.IsBodyRead || response.Body is null)
+            return;
+
+        var frame = GrpcWebAdapter.EncodeTrailerFrame(
+            TrailerSource(response, response.HasTrailingHeaders ? response.TrailingHeaders : null));
+        var body = new byte[response.Body.Length + frame.Length];
+        response.Body.CopyTo(body, 0);
+        frame.CopyTo(body, response.Body.Length);
+        response.Body = body;
+        response.ContentLength = body.Length;
+    }
+
     private static void AppendTrailerFrameToBufferedBody(Response response, Http2OriginExchange exchange,
         HeaderCollection? originTrailers)
     {

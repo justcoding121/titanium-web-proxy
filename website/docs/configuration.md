@@ -919,7 +919,7 @@ Both the compressed and the decompressed body are held in memory, so two limits 
 
 A body that breaches either limit is answered with `413` and the connection is closed. A body that is corrupt or cut short is answered with `400`. Truncation is detected for both codings (gzip by its length trailer, brotli by the decoder state). Only single-member gzip is accepted. Every decompressed body is recorded in the `twp.body.decompressed_bytes` histogram, tagged `direction=request`; see [Metrics](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics).
 
-Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium test` warns about that.
+Scope: gzip and brotli request bodies on the session path, after the headers are decoded, including HTTP/2 and HTTP/3. Extended CONNECT and the compressed fast path are left unchanged. `Expect: 100-continue`, `deflate`, and stacked encodings are forwarded as sent.
 
 ### Graceful reload
 

@@ -1741,7 +1741,6 @@ public partial class ProxyServer : IDisposable
         || RequestIdHeader is not null
         || ForwardedHeaders is not null
         || CompressionPolicy is not null
-        || RequestDecompressionPolicy is not null
         || ReverseProxy is { HasGrpcWebRoutes: true }
         || ReverseProxy is { HasHandledPolicies: true }
         || ReverseProxy is { HasRoutePlugins: true }

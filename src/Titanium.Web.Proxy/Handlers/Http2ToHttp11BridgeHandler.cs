@@ -527,6 +527,21 @@ public partial class ProxyServer
                 && !Enable100ContinueBehaviour
                 && IsH2BridgeLiteMethod(request.Method);
 
+            if (requestBodyChannel is not null
+                && RequestDecompressionPolicy is not null
+                && request.ExtendedConnectProtocol is null)
+            {
+                if (!await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
+                        cancellationToken).ConfigureAwait(false);
+                    return BridgeAttemptResult.Completed;
+                }
+
+                requestBodyChannel = null;
+            }
+
             byte[]? body = null;
             var streamRequestBody = requestBodyChannel != null && !request.IsBodyRead;
             if (useH2H1LiteWire)

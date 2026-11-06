@@ -142,6 +142,7 @@ internal static partial class Http3RequestStream
                 // Proxy authentication needs a session to answer 407, so those listeners skip this path.
                 if (interceptionOff
                     && !server.ProxyAuthenticationRequired
+                    && !DeclaresDecompressibleBody(server, regularHeaders)
                     && !Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(server.ReverseProxy, endPoint)
                     && !server.EnableRfc8441
                     && method is "GET" or "HEAD" or "DELETE" or "OPTIONS"
@@ -504,6 +505,26 @@ internal static partial class Http3RequestStream
                 {
                     // Lock after BeforeRequest so GetResponseBody (TCP fallback) and API contracts
                     // agree the request has been committed to the origin pipeline.
+                    if (server.RequestDecompressionPolicy is { } decompression
+                        && request.ExtendedConnectProtocol is null
+                        && request.HasBody)
+                    {
+                        var outcome = await sessionArgs.DecompressRequestBodyAsync(decompression, cancellationToken);
+                        if (outcome is { } failed && failed != Compression.RequestDecompressionOutcome.Decompressed)
+                        {
+                            sessionArgs.GenericResponse("request body could not be decompressed",
+                                failed == Compression.RequestDecompressionOutcome.Corrupt
+                                    ? HttpStatusCode.BadRequest
+                                    : HttpStatusCode.RequestEntityTooLarge);
+                            await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                            return;
+                        }
+                    }
+
+                    // gRPC-Web only when this request's route opted in. Native gRPC is left alone.
+                    if (!sessionArgs.IsFastPath)
+                        Grpc.GrpcWebTranslation.TryTranslateRequest(sessionArgs);
+
                     sessionArgs.HttpClient.Request.Locked = true;
 
                     // Stream unread client DATA to the origin when the body was not buffered
@@ -535,6 +556,9 @@ internal static partial class Http3RequestStream
                     await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken,
                         onInterimResponse: onInterimResponse,
                         copyRequestBody: copyRequestBody);
+
+                    if (!sessionArgs.IsFastPath)
+                        Grpc.GrpcWebTranslation.TranslateBufferedResponse(sessionArgs);
 
                     // If the TCP fallback buffered via GetRequestBody / drain, RequestClosed may
                     // already be set; otherwise the copy callback set it.
