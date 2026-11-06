@@ -214,6 +214,10 @@ When `ProxyBasicAuthenticateFunc` or `ProxySchemeAuthenticateFunc` is set, HTTP/
 `proxy-authenticate` and no `proxy-connection` header. Those listeners skip the session-less fast path,
 because the 407 needs a session. Listeners that leave authentication unset keep the fast path.
 
+An HTTP/3 to HTTP/3 forward can replay a gateway status (502, 503, 504, or the cluster list) onto the
+next destination when the body was not half-sent. Extended CONNECT is never replayed. The session-less
+fast path has no session, so it does not take this retry.
+
 ## Alt-Svc automatic discovery
 
 When a response is received from an origin that advertises HTTP/3 via the `Alt-Svc` header, the proxy

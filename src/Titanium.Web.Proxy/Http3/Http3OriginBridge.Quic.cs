@@ -53,7 +53,8 @@ internal static partial class Http3OriginBridge
     ///     When <see langword="true" />, QUIC failures are terminal (return 502); no TCP fallback.
     ///     When <see langword="false" /> (Auto policy), evict the stale cache entry and fall back to TCP.
     /// </param>
-    private static async Task ForwardOverQuicAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    /// <returns>True when a gateway status retry was staged and the caller should send the request again.</returns>
+    private static async Task<bool> ForwardOverQuicAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         string connectHost,
@@ -142,7 +143,7 @@ internal static partial class Http3OriginBridge
                         sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
                     }
 
-                    return;
+                    return false;
                 }
 
                 quicConn = racedConn!; // non-null whenever TCP did not win
@@ -254,7 +255,7 @@ internal static partial class Http3OriginBridge
                     quicConn = null;
                     await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
                         sniHost, port, cancellationToken, onInterimResponse);
-                    return;
+                    return false;
                 }
 
                 responseHeadersFrame = responseRead.Frame;
@@ -315,6 +316,25 @@ internal static partial class Http3OriginBridge
 
             var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
             response.RequestMethod = request.Method;
+            if (QuicStatusRetryEligible(request, requestSent)
+                && sessionArgs.Extras is not null
+                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(
+                    server, sessionArgs, finalStatus, response, bufferedBodyReplayable: true))
+            {
+                if (originStream != null)
+                {
+                    await originStream.DisposeAsync().ConfigureAwait(false);
+                    originStream = null;
+                }
+
+                if (quicConn != null)
+                {
+                    await QuicConnectionPool.ReleaseAsync(quicConn).ConfigureAwait(false);
+                    quicConn = null;
+                }
+
+                return true;
+            }
 
             // Cache Alt-Svc from response headers immediately (no need to wait for the body).
             var altSvcHeaders = response.Headers.GetHeaders("Alt-Svc");
@@ -590,11 +610,11 @@ internal static partial class Http3OriginBridge
                     sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
                 }
 
-                return;
+                return false;
             }
 
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse("QUIC cannot be routed via the configured upstream proxy (forced Http3).");
-            return;
+            return false;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -658,7 +678,7 @@ internal static partial class Http3OriginBridge
                         $"QUIC failed: {ex.Message}; TCP fallback failed: {tcpEx.Message}");
                 }
 
-                return;
+                return false;
             }
 
             // Forced H3, or Auto after the request was already on the wire: surface as a 502 —
@@ -670,7 +690,7 @@ internal static partial class Http3OriginBridge
             }
 
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
-            return;
+            return false;
         }
         } // end retry loop
         }
@@ -685,7 +705,16 @@ internal static partial class Http3OriginBridge
             if (!streamHandedOff && quicConn != null)
                 await QuicConnectionPool.ReleaseAsync(quicConn);
         }
+
+        return false;
     }
+
+    /// <summary>
+    ///     A status retry is safe when the body was not half-sent. A bodiless request can be sent
+    ///     again. A body can be sent again only when it is already fully buffered.
+    /// </summary>
+    private static bool QuicStatusRetryEligible(Request request, bool requestSent) =>
+        !requestSent || !request.HasBody || (request.IsBodyRead && request.BodyAvailable);
 
     // ────────────────────────────────────────────────────────────────────────────────────────
     // H3 → H2 (TLS ALPN h2, or cleartext h2c when ForwardCleartext)
