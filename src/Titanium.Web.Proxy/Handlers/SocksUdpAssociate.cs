@@ -183,7 +183,7 @@ public partial class ProxyServer
         }
     }
 
-    private static bool TryParseSocksUdp(ReadOnlySpan<byte> packet, out string host, out int port, out int headerLength)
+    internal static bool TryParseSocksUdp(ReadOnlySpan<byte> packet, out string host, out int port, out int headerLength)
     {
         host = string.Empty;
         port = 0;
@@ -221,7 +221,7 @@ public partial class ProxyServer
         }
     }
 
-    private static int WriteSocksUdp(Span<byte> destination, IPEndPoint from, ReadOnlySpan<byte> payload)
+    internal static int WriteSocksUdp(Span<byte> destination, IPEndPoint from, ReadOnlySpan<byte> payload)
     {
         var address = from.Address.GetAddressBytes();
         var header = 4 + address.Length + 2;
