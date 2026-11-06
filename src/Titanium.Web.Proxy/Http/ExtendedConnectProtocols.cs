@@ -38,6 +38,14 @@ internal static class ExtendedConnectProtocols
         enableRfc8441 || advertisesConnectProtocol;
 
     /// <summary>
+    ///     HTTP/3 SETTINGS_ENABLE_CONNECT_PROTOCOL is sent when RFC 8441 is on or this listener
+    ///     accepts connect-udp. Unknown <c>:protocol</c> must then 501 after BeforeRequest, not a
+    ///     stream error that claims SETTINGS was omitted.
+    /// </summary>
+    public static bool AdvertisesHttp3ConnectProtocol(bool enableRfc8441, bool acceptConnectUdp) =>
+        enableRfc8441 || acceptConnectUdp;
+
+    /// <summary>
     ///     Token allow-list for this connection. Each token follows its own support flag.
     /// </summary>
     public static bool IsSupported(string? protocol, ExtendedConnectSupport support)
@@ -87,7 +95,7 @@ internal readonly struct ExtendedConnectSupport
 
     public bool WebSocket { get; }
 
-    /// <summary>Reserved for the WebTransport slice. Not accepted yet.</summary>
+    /// <summary>Accept <c>webtransport</c> on this connection.</summary>
     public bool WebTransport { get; }
 
     /// <summary>Accept <c>connect-tcp</c> on this connection.</summary>

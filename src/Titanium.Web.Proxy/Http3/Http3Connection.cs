@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
@@ -155,10 +156,12 @@ internal sealed class Http3Connection
             _serverControlStream = await _connection.OpenOutboundStreamAsync(
                 QuicStreamType.Unidirectional, _connectionCts.Token);
             // ENABLE_CONNECT on this connection when the listener accepts connect-udp.
+            // Admission of :protocol must use the same predicate so unknown tokens 501.
             // No SETTINGS_H3_DATAGRAM: capsules share the request stream. Tiny-GET still
             // keys off ProxyServer.EnableRfc8441, which this does not set.
             await SendServerSettingsAsync(_serverControlStream, _qpackContext,
-                _server.EnableRfc8441 || _endPoint.AcceptConnectUdp,
+                ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(
+                    _server.EnableRfc8441, _endPoint.AcceptConnectUdp),
                 _connectionCts.Token);
 
             // When dynamic table is enabled, open outbound QPACK encoder and decoder streams and

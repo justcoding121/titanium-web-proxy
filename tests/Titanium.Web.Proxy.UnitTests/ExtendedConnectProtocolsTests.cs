@@ -58,6 +58,16 @@ public class ExtendedConnectProtocolsTests
     }
 
     [TestMethod]
+    public void AdvertisesHttp3ConnectProtocol_MatchesSettingsNotTheToken()
+    {
+        Assert.IsFalse(ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(false, false));
+        Assert.IsTrue(ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(true, false));
+        Assert.IsTrue(ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(false, true),
+            "AcceptConnectUdp advertises SETTINGS_ENABLE_CONNECT_PROTOCOL; unknown :protocol must 501.");
+        Assert.IsTrue(ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(true, true));
+    }
+
+    [TestMethod]
     public void UnsupportedMessage_KeepsHistoricalWebsocketOnlyText()
     {
         var support = ExtendedConnectSupport.ForProcess(false);
