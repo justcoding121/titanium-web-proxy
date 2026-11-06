@@ -102,6 +102,57 @@ public class Http3ConnectUdpTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task AcceptConnectUdp_UnknownProtocol_Returns501()
+    {
+        if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
+        {
+            Assert.Inconclusive("MsQuic / System.Net.Quic is not supported on this platform.");
+        }
+
+        using var testSuite = new TestSuite();
+        var quicEp = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = testSuite.GetServer().HttpsListeningPort,
+            AcceptConnectUdp = true,
+        };
+        quicEp.ConnectUdpHost.Options.RequireAuth = false;
+        var proxy = new ProxyServer(false, false, false)
+        {
+            EnableHttp3 = true,
+            EnableHttpsSvcbDnsDiscovery = false,
+            EnableRfc8441 = false,
+        };
+        proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
+        proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
+        proxy.CertificateManager.SaveFakeCertificates = false;
+        proxy.AddEndPoint(quicEp);
+        proxy.Start();
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            await client.WaitForPeerSettingsAsync();
+            Assert.IsTrue(client.PeerSettings.TryGetValue(8, out var enableConnect) && enableConnect == 1);
+            Assert.IsFalse(proxy.EnableRfc8441);
+
+            await using var unknown = await client.OpenExtendedConnectAsync(
+                "localhost", "/app", "webtransport");
+            Assert.AreEqual(501, unknown.Status);
+
+            await using var websocket = await client.OpenExtendedConnectAsync(
+                "localhost", "/ws", "websocket");
+            Assert.AreEqual(501, websocket.Status);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task ConnectUdp_WithoutTheListenerFlag_Returns501()
     {
         if (!QuicListener.IsSupported || !QuicConnection.IsSupported)

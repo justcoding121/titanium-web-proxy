@@ -103,11 +103,11 @@ internal static partial class Http3RequestStream
                     if (method != "CONNECT")
                         throw new Http3StreamException(Http3ErrorCode.MessageError,
                             ":protocol is only valid on CONNECT requests.");
-                    // AcceptConnectUdp advertises ENABLE_CONNECT on this connection only.
-                    // It does not set ProxyServer.EnableRfc8441, so the tiny-GET path below stays open.
-                    var connectUdpOnListener = ExtendedConnectProtocols.IsConnectUdp(protocol)
-                                               && endPoint.AcceptConnectUdp;
-                    if (!server.EnableRfc8441 && !connectUdpOnListener)
+                    // Match SETTINGS_ENABLE_CONNECT_PROTOCOL on this connection. AcceptConnectUdp
+                    // advertises the setting without flipping ProxyServer.EnableRfc8441, so tiny-GET
+                    // stays open for GET/HEAD. Unsupported tokens still 501 after BeforeRequest.
+                    if (!ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(
+                            server.EnableRfc8441, endPoint.AcceptConnectUdp))
                         throw new Http3StreamException(Http3ErrorCode.MessageError,
                             ":protocol requires SETTINGS_ENABLE_CONNECT_PROTOCOL to be advertised.");
                     if (string.IsNullOrEmpty(scheme) || string.IsNullOrEmpty(path) ||
