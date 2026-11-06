@@ -713,7 +713,26 @@ namespace Titanium.Web.Proxy.Http2
                             // Native h2↔h2 extended CONNECT path.
                             string? ecProto = ecTunnelState?.ExtendedConnectProtocol;
                             var connectSupport = sessionArgs.Server.ConnectSupportFor(sessionArgs.ProxyEndPoint);
-                            if (!ExtendedConnectProtocols.IsSupported(ecProto, connectSupport))
+                            if (ExtendedConnectProtocols.IsConnectUdp(ecProto) && connectSupport.ConnectUdp)
+                            {
+                                syntheticStreams.TryAdd(hbStreamId, 0);
+                                connectionState.Streams.TryGetValue(hbStreamId, out var udpState);
+                                if (udpState != null)
+                                {
+                                    var udpTask = sessionArgs.Server.RelayConnectUdpAsync(
+                                            sessionArgs, hbStreamId, connectionState, input, udpState, cancellationToken)
+                                        .ContinueWith(t =>
+                                        {
+                                            if (t.IsFaulted)
+                                                ReportException(logger, new ProxyHttpException(
+                                                    SyntheticResponseFailedMessage,
+                                                    t.Exception.GetBaseException(), sessionArgs));
+                                        }, TaskScheduler.Default);
+                                    udpState.SyntheticTask = udpTask;
+                                    pendingSynthetics.Track(udpTask);
+                                }
+                            }
+                            else if (!ExtendedConnectProtocols.IsSupported(ecProto, connectSupport))
                             {
                                 // Only the 'websocket' protocol token is implemented. BeforeRequest ran
                                 // but did not synthesize a response - return 501 so the client can retry.

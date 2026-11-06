@@ -382,6 +382,9 @@
           "acceptConnectTcp": {
             "type": "boolean"
           },
+          "acceptConnectUdp": {
+            "type": "boolean"
+          },
           "acceptProxyProtocol": {
             "type": "boolean"
           },

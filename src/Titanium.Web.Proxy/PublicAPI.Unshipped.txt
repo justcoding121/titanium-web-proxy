@@ -383,6 +383,8 @@ Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp.get -> bool
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectTcp.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport.get -> bool
 Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptWebTransport.set -> void
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp.get -> bool
+Titanium.Web.Proxy.Models.ProxyEndPoint.AcceptConnectUdp.set -> void
 Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.get -> System.Collections.Generic.IReadOnlyList<string!>?
 Titanium.Web.Proxy.Models.ProxyEndPoint.TrustedProxyProtocolSources.set -> void
 Titanium.Web.Proxy.Configuration.ProxyConfigHost.RememberAppliedClusters(System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ClusterConfig!>! clusters) -> void

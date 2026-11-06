@@ -2226,6 +2226,14 @@ public static class TwpConfigValidator
                 $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
         }
 
+        if (listener.AcceptConnectUdp
+            && listener.Masque?.RequireAuth != false
+            && listener.Masque?.Credentials is not { Count: > 0 })
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: acceptConnectUdp requires credentials or masque.requireAuth: false.");
+        }
+
         if (listener.Masque is not { } masque)
         {
             return;

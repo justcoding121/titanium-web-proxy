@@ -80,6 +80,25 @@ public abstract class ProxyEndPoint
     public bool AcceptWebTransport { get; set; }
 
     /// <summary>
+    ///     When <see langword="true"/>, this listener accepts <c>:protocol=connect-udp</c> and relays
+    ///     it with the same target policy, authentication, and caps as a MASQUE listener.
+    ///     Default <see langword="false"/>. Not implied by WebSocket or WebTransport flags.
+    /// </summary>
+    public bool AcceptConnectUdp { get; set; }
+
+    private MasqueProxyEndPoint? connectUdpHost;
+
+    /// <summary>Policy and admission for <see cref="AcceptConnectUdp"/>. Created on first use.</summary>
+    internal MasqueProxyEndPoint ConnectUdpHost
+    {
+        get
+        {
+            connectUdpHost ??= new MasqueProxyEndPoint(IPAddress.Loopback, 0);
+            return connectUdpHost;
+        }
+    }
+
+    /// <summary>
     ///     Generic certificate to use for SSL decryption.
     /// </summary>
     public X509Certificate2? GenericCertificate { get; set; }

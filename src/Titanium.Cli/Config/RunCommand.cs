@@ -2115,6 +2115,12 @@ internal static class RunCommand
             endPoint.AcceptWebTransport = true;
         }
 
+        if (listener.AcceptConnectUdp)
+        {
+            endPoint.AcceptConnectUdp = true;
+            endPoint.ConnectUdpHost.Options = CreateMasqueEndPoint(IPAddress.Loopback, listener).Options;
+        }
+
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))
         {
             endPoint.ClientCertificateTrustedRoots = ClientCertificateAuthorityFiles.Load(listener.ClientCertificateCaPath);

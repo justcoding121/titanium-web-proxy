@@ -1179,6 +1179,12 @@ public partial class ProxyServer
 
         try
         {
+            if (ExtendedConnectProtocols.IsConnectUdp(sessionArgs.HttpClient.Request.ExtendedConnectProtocol))
+            {
+                await RunConnectUdpOnListenerAsync(sessionArgs, ctx, streamState, cancellationToken);
+                return;
+            }
+
             if (ExtendedConnectProtocols.IsWebTransport(sessionArgs.HttpClient.Request.ExtendedConnectProtocol))
             {
                 connection = await OpenWebTransportHttp11Async(sessionArgs, remoteHostName, remotePort, cancellationToken);

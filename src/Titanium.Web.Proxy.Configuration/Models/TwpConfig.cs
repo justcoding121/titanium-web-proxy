@@ -105,6 +105,12 @@ public sealed class ListenerConfig
     public bool AcceptWebTransport { get; set; }
 
     /// <summary>
+    ///     When true, this listener accepts <c>:protocol=connect-udp</c> using the <c>masque</c> policy block.
+    ///     Default false. Not implied by WebSocket or WebTransport.
+    /// </summary>
+    public bool AcceptConnectUdp { get; set; }
+
+    /// <summary>
     /// When true, enables HTTP/3 on the proxy and transparent endpoints.
     /// When false, disables HTTP/3. Null inherits host default (on when the OS supports QUIC).
     /// </summary>

@@ -505,6 +505,8 @@ Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptConnectTcp.get -> b
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptConnectTcp.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptWebTransport.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptWebTransport.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptConnectUdp.get -> bool
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.AcceptConnectUdp.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.get -> bool
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.Passthrough.set -> void
 Titanium.Web.Proxy.Configuration.Models.ListenerConfig.TerminateTls.get -> bool
