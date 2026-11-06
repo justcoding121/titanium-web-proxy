@@ -557,3 +557,25 @@ Titanium.Web.Proxy.Exceptions.ProxyListenException.SocketError.get -> System.Net
 Titanium.Web.Proxy.Exceptions.ProxyListenException.NativeErrorCode.get -> int
 Titanium.Web.Proxy.Exceptions.ProxyListenException.IsAddressInUse.get -> bool
 override Titanium.Web.Proxy.Models.ProxyEndPoint.ToString() -> string!
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.WebTransportOptions() -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.AllowHttp11Upgrade.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc.get -> System.Func<string!, string!, System.Threading.Tasks.Task<bool>!>?
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.AuthenticateFunc.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions.get -> int
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessions.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient.get -> int
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.MaxSessionsPerClient.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost.get -> string?
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.OriginHost.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.OriginHttps.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort.get -> int
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.OriginPort.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth.get -> bool
+[TWP001]Titanium.Web.Proxy.Models.WebTransportOptions.RequireAuth.set -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint
+[TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.WebTransportProxyEndPoint(System.Net.IPAddress! ipAddress, int port) -> void
+[TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options.get -> Titanium.Web.Proxy.Models.WebTransportOptions!
+[TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options.set -> void

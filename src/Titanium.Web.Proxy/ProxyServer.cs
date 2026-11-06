@@ -1903,6 +1903,7 @@ public partial class ProxyServer : IDisposable
         TransparentProxyEndPoint => "transparent",
         SocksProxyEndPoint => "socks",
         MasqueProxyEndPoint => "masque",
+        WebTransportProxyEndPoint => "webtransport",
         _ => endPoint.GetType().Name,
     };
 
@@ -2336,6 +2337,8 @@ public partial class ProxyServer : IDisposable
                 await HandleClient(tep, clientConnection);
             else if (endPoint is SocksProxyEndPoint sep) await HandleClient(sep, clientConnection);
             else if (endPoint is MasqueProxyEndPoint masque) await HandleMasqueClient(masque, clientConnection);
+            else if (endPoint is WebTransportProxyEndPoint webTransport)
+                await HandleWebTransportClient(webTransport, clientConnection);
         }
     }
 

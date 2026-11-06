@@ -379,7 +379,13 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "acceptConnectTcp": {
+            "type": "boolean"
+          },
           "acceptProxyProtocol": {
+            "type": "boolean"
+          },
+          "acceptWebTransport": {
             "type": "boolean"
           },
           "alpn": {
@@ -601,6 +607,52 @@
           },
           "type": {
             "type": "string"
+          },
+          "webTransport": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "allowHttp11Upgrade": {
+                "type": "boolean"
+              },
+              "credentials": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "username",
+                    "passwordEnv"
+                  ],
+                  "properties": {
+                    "passwordEnv": {
+                      "type": "string"
+                    },
+                    "username": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "maxSessions": {
+                "type": "integer"
+              },
+              "maxSessionsPerClient": {
+                "type": "integer"
+              },
+              "originHost": {
+                "type": "string"
+              },
+              "originHttps": {
+                "type": "boolean"
+              },
+              "originPort": {
+                "type": "integer"
+              },
+              "requireAuth": {
+                "type": "boolean"
+              }
+            }
           }
         }
       }
@@ -1521,6 +1573,9 @@
         "enable100ContinueBehaviour": {
           "type": "boolean"
         },
+        "enableConnectTcp": {
+          "type": "boolean"
+        },
         "enableDecryptFailureBypass": {
           "type": "boolean"
         },
@@ -1537,6 +1592,9 @@
           "type": "boolean"
         },
         "enableRfc8441": {
+          "type": "boolean"
+        },
+        "enableWebTransport": {
           "type": "boolean"
         },
         "enableWinAuth": {

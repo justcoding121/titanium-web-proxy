@@ -47,7 +47,7 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `host` | string | Bind address. Default `0.0.0.0` (all IPv4 interfaces). `*` is the same as `0.0.0.0`. Use `127.0.0.1` for localhost only. |
 | `port` | int | Default `8000`. `0` is an OS-chosen (ephemeral) port. Inspector toolbar `*` / empty means the same. |
 | `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
-| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, or `udp` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
+| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, `udp`, or `webtransport` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `webtransport` terminates a capsule session and opens a pinned HTTP origin. `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
 | `enableHttp3` | bool? | Per-listener; any `false` disables global H3 |

@@ -6,4 +6,6 @@ Opaque capsule bridge. Both sides that already speak capsules are copied as byte
 
 HTTP/3 WebTransport stays refused until a QUIC datagram channel exists. Do not parse capsules on the HTTP/3 tiny-GET path.
 
+`type: webtransport` terminates the client session and opens `Upgrade: webtransport` on `Options.OriginHost`. It does not call `MasqueTunnel` or parse `ConnectUdpPath`. Extended CONNECT is enabled only inside that listener's `SendHttp2` call.
+
 This is not MASQUE. Do not parse `ConnectUdpPath` and do not call `MasqueTunnel` for `:protocol=webtransport`.

@@ -598,9 +598,10 @@ rows:
     keys:
       - 'server.enableWebTransport'
       - 'listeners[].acceptWebTransport'
+      - 'listeners[].webTransport'
     docs: '/docs/protocol-support'
     docsLabel: 'Protocol support'
-    note: 'Capsule byte bridge. Off by default. HTTP/3 WebTransport is not implemented.'
+    note: 'Capsule byte bridge, plus a type: webtransport terminate listener with a pinned HTTP origin. Off by default. HTTP/3 WebTransport is not implemented.'
   - area: 'Protocols'
     capability: 'connect-tcp'
     status: 'partial'

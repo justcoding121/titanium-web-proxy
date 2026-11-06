@@ -788,3 +788,23 @@ Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.OverlayPath.get -> st
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.OverlayPath.set -> void
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SnapshotValidation.get -> Titanium.Web.Proxy.Configuration.Models.SnapshotValidationMode?
 Titanium.Web.Proxy.Configuration.Models.ControlPlaneConfig.SnapshotValidation.set -> void
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.WebTransport.get -> Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig?
+Titanium.Web.Proxy.Configuration.Models.ListenerConfig.WebTransport.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.WebTransportListenerConfig() -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.AllowHttp11Upgrade.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.AllowHttp11Upgrade.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.Credentials.get -> System.Collections.Generic.IList<Titanium.Web.Proxy.Configuration.Models.MasqueCredentialConfig!>?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.Credentials.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.MaxSessions.get -> int?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.MaxSessions.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.MaxSessionsPerClient.get -> int?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.MaxSessionsPerClient.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.OriginHost.get -> string?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.OriginHost.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.OriginHttps.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.OriginHttps.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.OriginPort.get -> int?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.OriginPort.set -> void
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.RequireAuth.get -> bool?
+Titanium.Web.Proxy.Configuration.Models.WebTransportListenerConfig.RequireAuth.set -> void

@@ -1677,6 +1677,7 @@ internal static class RunCommand
             "quic" => CreateQuicEndPoint(ip, listener),
             "transparent" => CreateTransparentEndPoint(ip, listener),
             "masque" => CreateMasqueEndPoint(ip, listener),
+            "webtransport" => CreateWebTransportEndPoint(ip, listener),
             _ when !string.IsNullOrEmpty(listener.ForwardHost) => CreateTransparentEndPoint(ip, listener),
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
@@ -1900,6 +1901,87 @@ internal static class RunCommand
         }
 
         return ep;
+    }
+
+    private static WebTransportProxyEndPoint CreateWebTransportEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new WebTransportProxyEndPoint(ip, listener.Port);
+        var webTransport = listener.WebTransport;
+        if (webTransport is null)
+        {
+            return ep;
+        }
+
+        if (webTransport.RequireAuth is bool requireAuth)
+        {
+            ep.Options.RequireAuth = requireAuth;
+        }
+
+        if (webTransport.AllowHttp11Upgrade is bool allowHttp11)
+        {
+            ep.Options.AllowHttp11Upgrade = allowHttp11;
+        }
+
+        if (!string.IsNullOrWhiteSpace(webTransport.OriginHost))
+        {
+            ep.Options.OriginHost = webTransport.OriginHost;
+        }
+
+        if (webTransport.OriginPort is int originPort)
+        {
+            ep.Options.OriginPort = originPort;
+        }
+
+        if (webTransport.OriginHttps is bool originHttps)
+        {
+            ep.Options.OriginHttps = originHttps;
+        }
+
+        if (webTransport.MaxSessions is int maxSessions)
+        {
+            ep.Options.MaxSessions = maxSessions;
+        }
+
+        if (webTransport.MaxSessionsPerClient is int perClient)
+        {
+            ep.Options.MaxSessionsPerClient = perClient;
+        }
+
+        if (webTransport.Credentials is { Count: > 0 } credentials)
+        {
+            ep.Options.AuthenticateFunc = BuildCredentialCheck(listener, credentials);
+        }
+
+        return ep;
+    }
+
+    private static Func<string, string, Task<bool>> BuildCredentialCheck(ListenerConfig listener,
+        IList<MasqueCredentialConfig> credentials)
+    {
+        var hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        foreach (var credential in credentials)
+        {
+            var password = Environment.GetEnvironmentVariable(credential.PasswordEnv ?? string.Empty);
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new InvalidOperationException(
+                    $"Listener port {listener.Port}: credential '{credential.Username}' passwordEnv '{credential.PasswordEnv}' is missing or empty.");
+            }
+
+            hashes[credential.Username ?? string.Empty] = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(password));
+        }
+
+        var unknown = new byte[32];
+        return (user, password) =>
+        {
+            var supplied = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(password));
+            var known = hashes.TryGetValue(user, out var expected);
+            var match = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                supplied, known ? expected! : unknown);
+            return Task.FromResult(known && match);
+        };
     }
 
     private static void ApplyMasqueLimits(MasqueProxyEndPoint ep, MasqueListenerConfig masque)

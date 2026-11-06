@@ -17,4 +17,22 @@ Off unless `server.enableWebTransport` is true (explicit listeners only) or `lis
 
 ## What is not shipped
 
-No `WT_STREAM` state machine and no HTTP/3 WebTransport. A dedicated terminate listener is a separate listener type, not a MASQUE UDP socket.
+No `WT_STREAM` state machine and no HTTP/3 WebTransport.
+
+## Terminate listener
+
+`type: webtransport` is a TLS endpoint that accepts only `:protocol=webtransport` (or `Upgrade: webtransport` when `allowHttp11Upgrade` is true). It opens `GET` with `Upgrade: webtransport` on the pinned `originHost`. The client path is forwarded. The client does not choose the origin host, and the listener does not open a UDP socket.
+
+```yaml twp-fragment
+listeners:
+  - type: webtransport
+    host: 127.0.0.1
+    port: 443
+    webtransport:
+      requireAuth: false
+      originHost: 127.0.0.1
+      originPort: 8443
+      originHttps: false
+```
+
+`connect-udp` and `websocket` on this listener are `501`. Authentication fails closed unless `requireAuth` is false or credentials are set. The listener passes extended CONNECT into its own HTTP/2 session. It does not set `server.enableRfc8441`.

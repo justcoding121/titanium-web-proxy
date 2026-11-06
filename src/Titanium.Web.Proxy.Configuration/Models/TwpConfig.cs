@@ -83,7 +83,7 @@ public sealed class ListenerConfig
 
     /// <summary>
     ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
-    ///     <c>socks</c>, <c>quic</c>, <c>masque</c>, or <c>udp</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    ///     <c>socks</c>, <c>quic</c>, <c>masque</c>, <c>udp</c>, or <c>webtransport</c>. When null, classic ForwardHost rules choose transparent vs explicit.
     /// </summary>
     public string? Type { get; set; }
 
@@ -194,6 +194,9 @@ public sealed class ListenerConfig
     /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
     public MasqueListenerConfig? Masque { get; set; }
 
+    /// <summary>Pinned origin for a <c>type: webtransport</c> listener.</summary>
+    public WebTransportListenerConfig? WebTransport { get; set; }
+
     /// <summary>
     /// <c>type: udp</c> only. Cluster whose load balancer picks the upstream once per new session.
     /// Set this or <see cref="ForwardHost"/> (with <see cref="ForwardPort"/>), not both.
@@ -269,6 +272,26 @@ public sealed class MasqueListenerConfig
     public int? MaxDatagramsPerSecond { get; set; }
 
     public int? MaxBytesPerSecond { get; set; }
+}
+
+/// <summary>Pinned HTTP origin for a WebTransport terminate listener. The client does not choose the host.</summary>
+public sealed class WebTransportListenerConfig
+{
+    public bool? RequireAuth { get; set; }
+
+    public bool? AllowHttp11Upgrade { get; set; }
+
+    public IList<MasqueCredentialConfig>? Credentials { get; set; }
+
+    public string? OriginHost { get; set; }
+
+    public int? OriginPort { get; set; }
+
+    public bool? OriginHttps { get; set; }
+
+    public int? MaxSessions { get; set; }
+
+    public int? MaxSessionsPerClient { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>
