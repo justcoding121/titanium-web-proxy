@@ -139,7 +139,9 @@ internal static partial class Http3RequestStream
 
                 // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
                 // Keep only the Request, for HPACK/QPACK encoding. Covers forced H3→H2 / H3→H3 / H3→H1 reverse.
+                // Proxy authentication needs a session to answer 407, so those listeners skip this path.
                 if (interceptionOff
+                    && !server.ProxyAuthenticationRequired
                     && !Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(server.ReverseProxy, endPoint)
                     && !server.EnableRfc8441
                     && method is "GET" or "HEAD" or "DELETE" or "OPTIONS"
@@ -275,6 +277,16 @@ internal static partial class Http3RequestStream
                         await StreamRequestBodyToWriteAsync(stream, writeData, server, sessionArgs, ct);
                         streamState.RequestClosed = true;
                     };
+                }
+
+                // Proxy Basic / scheme auth. HTTP/3 407 has no Proxy-Connection header.
+                if (!await server.CheckHttp3AuthorizationAsync(sessionArgs))
+                {
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+                    stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                    await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                    return;
                 }
 
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
