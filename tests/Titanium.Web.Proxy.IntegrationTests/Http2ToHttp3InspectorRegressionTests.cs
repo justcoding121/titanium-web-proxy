@@ -220,7 +220,10 @@ public class Http2ToHttp3InspectorRegressionTests
     public async Task Post_EncodedBody_IsDecompressedBeforeTheHttp3Origin(bool warm, bool brotli)
     {
         RequireQuic();
-        var plain = Encoding.UTF8.GetBytes("{\"k\":\"" + new string('d', 70_000) + "\"}");
+        // Realistic ratio: a highly repetitive body would trip the default decompression ratio limit.
+        var plain = Encoding.UTF8.GetBytes("{\"items\":["
+                                           + string.Join(",", Enumerable.Range(0, 9_000).Select(i => $"{{\"i\":{i * 7919 % 10007}}}"))
+                                           + "]}");
         byte[]? seen = null;
         await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
         origin.HandleRequest(req =>
