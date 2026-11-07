@@ -199,7 +199,7 @@ public class Http2ToHttp3InspectorRegressionTests
         return ms.ToArray();
     }
 
-    private static HttpContent EncodedContent(byte[] wire, string encoding)
+    private static ByteArrayContent EncodedContent(byte[] wire, string encoding)
     {
         var content = new ByteArrayContent(wire);
         content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
