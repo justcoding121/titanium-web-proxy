@@ -41,6 +41,8 @@ internal sealed class CapsuleReader
     /// <summary>
     ///     Bridge mode. Invoked for capsule types other than DATAGRAM (0). The memory is valid only
     ///     for the duration of the call. MASQUE leaves this unset and keeps context-0 datagram delivery.
+    ///     The WebTransport bridges do not parse capsules at all: they copy DATA bytes, so unknown
+    ///     capsule types pass through without this hook.
     /// </summary>
     public Action<long, ReadOnlyMemory<byte>>? OnUnknownCapsule { get; set; }
 

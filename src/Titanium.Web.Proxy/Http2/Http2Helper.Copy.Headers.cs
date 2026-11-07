@@ -734,7 +734,7 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else if (!ExtendedConnectProtocols.IsSupported(ecProto, connectSupport))
                             {
-                                // Only the 'websocket' protocol token is implemented. BeforeRequest ran
+                                // This connection does not accept the token (see ConnectSupportFor). BeforeRequest ran
                                 // but did not synthesize a response - return 501 so the client can retry.
                                 sessionArgs.GenericResponse(
                                     ExtendedConnectProtocols.UnsupportedMessage(ecProto, connectSupport),

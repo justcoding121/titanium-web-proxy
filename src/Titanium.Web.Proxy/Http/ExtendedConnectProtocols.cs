@@ -73,8 +73,12 @@ internal static class ExtendedConnectProtocols
             && (IsWebTransport(protocol) || IsConnectTcp(protocol) || IsConnectUdp(protocol) || support.HasReservedTokens))
             shown = "unknown";
 
-        return $"RFC {rfc} extended CONNECT (protocol: {shown}) " +
-               "is not supported by this proxy. Only 'websocket' is implemented.";
+        // When a listener opted in to another token, say which tokens it does accept instead of
+        // claiming only websocket exists.
+        var tail = support.HasReservedTokens
+            ? $"is not supported on this listener. Accepted: {support.AcceptedTokens()}."
+            : "is not supported by this proxy. Only 'websocket' is implemented.";
+        return $"RFC {rfc} extended CONNECT (protocol: {shown}) {tail}";
     }
 }
 
@@ -110,9 +114,21 @@ internal readonly struct ExtendedConnectSupport
     /// </summary>
     public static ExtendedConnectSupport ForProcess(bool enableRfc8441) => new(webSocket: enableRfc8441);
 
-    /// <summary>
-    ///     True when a later-slice flag is set. Those tokens are still refused; the read keeps the
-    ///     reserved flags observable for the characterization tests and for the next slices.
-    /// </summary>
+    /// <summary>True when this connection accepts a token other than <c>websocket</c>.</summary>
     public bool HasReservedTokens => WebTransport || ConnectTcp || ConnectUdp;
+
+    /// <summary>Comma-separated tokens this connection accepts, for the 501 body.</summary>
+    public string AcceptedTokens()
+    {
+        var tokens = new System.Collections.Generic.List<string>(4);
+        if (WebSocket)
+            tokens.Add(ExtendedConnectProtocols.WebSocket);
+        if (WebTransport)
+            tokens.Add(ExtendedConnectProtocols.WebTransport);
+        if (ConnectTcp)
+            tokens.Add(ExtendedConnectProtocols.ConnectTcp);
+        if (ConnectUdp)
+            tokens.Add(ExtendedConnectProtocols.ConnectUdp);
+        return string.Join(", ", tokens);
+    }
 }

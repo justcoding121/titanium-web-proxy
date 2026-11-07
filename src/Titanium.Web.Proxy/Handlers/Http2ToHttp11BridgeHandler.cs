@@ -1022,9 +1022,9 @@ public partial class ProxyServer
     }
 
     /// <summary>
-    ///     connect-tcp (draft-ietf-httpbis-connect-tcp): open a raw TCP socket to the request
-    ///     authority, or an HTTP CONNECT through a configured upstream proxy, then relay bytes.
-    ///     No WebSocket upgrade framing.
+    ///     webtransport over HTTP/1.1 (RFC 9297): send <c>Upgrade: webtransport</c> with
+    ///     <c>Capsule-Protocol: ?1</c> to the origin and return the connection after a 101.
+    ///     The caller then relays capsule bytes unchanged.
     /// </summary>
     private async Task<TcpServerConnection?> OpenWebTransportHttp11Async(
         SessionEventArgs sessionArgs, string remoteHostName, int remotePort, CancellationToken cancellationToken)
