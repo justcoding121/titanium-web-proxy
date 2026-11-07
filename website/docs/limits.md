@@ -88,6 +88,7 @@ These stay constant. They are protocol limits or anti-wrap guards, not traffic y
 - HTTP/2 `MAX_FRAME_SIZE` we accept is 16384. We do not advertise a larger value, and a larger value in a relayed SETTINGS frame is rewritten to 16384.
 - HTTP/2 `SETTINGS_MAX_HEADER_LIST_SIZE` and HTTP/3 `SETTINGS_MAX_FIELD_SECTION_SIZE` are advertised at `maxDecodedHeaderListBytes` (clamp-or-inject). A compliant peer may refuse an over-cap header list itself instead of getting the proxy's RST/502 that names the config key.
 - HTTP/3 control-stream frames are 16 KiB.
+- QPACK dynamic-table capacity is 4096 when `EnableQpackDynamicTable` is on; inbound Required Insert Count decoding and encoder-stream Set Capacity stay at that advertised cap.
 - QPACK acknowledgement capacity.
 - The 1 GiB chunk-size guard (stops a wrapped chunk length).
 - SOCKS hostnames are 255 bytes (RFC 1928).

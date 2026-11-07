@@ -337,6 +337,9 @@ When enabled, per accepted QUIC connection:
 - The proxy opens the QPACK encoder and decoder unidirectional control streams.
 - It advertises `SETTINGS_QPACK_MAX_TABLE_CAPACITY = 4096` and `SETTINGS_QPACK_BLOCKED_STREAMS = 0`
   to the client - the proxy never blocks a stream waiting for dynamic-table insertions.
+  Inbound Required Insert Count decoding and encoder-stream Set Capacity instructions are capped at
+  that advertised 4096 (advertise-what-you-enforce); a larger Set Capacity is
+  `QPACK_ENCODER_STREAM_ERROR`.
 - A `QpackDynamicTable` (thread-safe via `ReaderWriterLockSlim`) tracks inbound and outbound table entries
   as absolute indices, per RFC 9204 §3.
 - Because `SETTINGS_QPACK_BLOCKED_STREAMS = 0` is advertised, decoding an incoming HEADERS block whose
