@@ -31,7 +31,11 @@ HTTP/2 is **on by default**. HTTP/3 is **on by default** in the CLI and Inspecto
 | Chunked / DATA frames | N/A / Yes | Yes | DATA | DATA |
 | Trailers | N/A | Yes | Yes | Yes |
 | WebSocket | Yes | Yes | RFC 8441 | RFC 9220 (H1/H2/H3 origin) |
-| connect-tcp | No | No | Opt-in (`enableConnectTcp` / `acceptConnectTcp`) | 501 | HTTP/2 byte relay. Reverse listeners do not advertise extended CONNECT unless they opt in. |
+| connect-tcp | No | No | Opt-in (`enableConnectTcp` / `acceptConnectTcp`) | 501 |
+| WebTransport | No | Opt-in `Upgrade: webtransport` | Opt-in `:protocol=webtransport` | 501 |
+| CONNECT-UDP (MASQUE) | No | Opt-in upgrade on a MASQUE listener | `type: masque` or `acceptConnectUdp` | Stream capsules only |
+
+`connect-tcp` is a byte relay after 2xx; reverse listeners do not advertise extended CONNECT unless they opt in. WebTransport is an HTTP resource session (capsule bytes), not a UDP relay — see the [WebTransport wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/WebTransport) and [WebTransport listeners](/docs/configuration#webtransport-listeners). CONNECT-UDP stays on the MASQUE policy; see the [MASQUE wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE).
 
 For the full matrix (headers, flow control, SETTINGS/PING/GOAWAY, streaming, auth), see the [Protocol-Support wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support).
 

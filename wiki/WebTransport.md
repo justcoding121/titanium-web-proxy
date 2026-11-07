@@ -11,6 +11,7 @@ Off unless `server.enableWebTransport` is true (explicit listeners only) or `lis
 | HTTP/2 to HTTP/2 | `:protocol=webtransport` is forwarded. After 2xx, DATA frames are copied as capsule bytes. |
 | HTTP/2 to HTTP/1.1 | The origin receives `GET` with `Upgrade: webtransport` and `Capsule-Protocol: ?1`. A `101` becomes `200` toward the HTTP/2 client, then capsule bytes are copied. |
 | HTTP/1.1 to HTTP/2 | `Upgrade: webtransport` becomes extended CONNECT when the origin advertises WebTransport. The client receives `101`. |
+| HTTP/1.1 terminate | On a `type: webtransport` listener, `Upgrade: webtransport` (when `allowHttp11Upgrade` is true) opens the pinned origin. |
 | HTTP/3 | `501`. Datagrams are not available. |
 
 `capsule-protocol` must be absent or `?1`. A later `HEADERS` frame on an established HTTP/2 tunnel is `PROTOCOL_ERROR`.

@@ -31,6 +31,8 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 - [Limits and escape hatches](Limits-and-Escape-Hatches)
 - [Why did my request fail](Troubleshooting)
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#user-content-protocol-bridges))
+- [WebTransport](WebTransport) — opt-in HTTP/1.1 and HTTP/2 capsule sessions (HTTP/3 needs datagrams)
+- [MASQUE](MASQUE) — opt-in CONNECT-UDP relay
 - [Migrating from 4.x](Migration-from-4.x)
 - [Migrating from 7.x](Migration-from-7.x)
 
