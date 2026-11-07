@@ -15,7 +15,7 @@ public partial class ProxyServer
     ///     SOCKS5 UDP ASSOCIATE (RFC 1928). The TCP connection is the control channel.
     ///     Closing it tears the relay down. This is not <c>UdpRelayListener</c>.
     /// </summary>
-    private static async Task RunSocks5UdpAssociateAsync(System.IO.Stream control, TcpClientConnection client,
+    private async Task RunSocks5UdpAssociateAsync(System.IO.Stream control, TcpClientConnection client,
         IPAddress? requestedClient, CancellationToken cancellationToken)
     {
         var local = client.LocalEndPoint as IPEndPoint;
@@ -103,7 +103,7 @@ public partial class ProxyServer
         }
     }
 
-    private static async Task RelaySocksUdpAsync(Socket relay, IPAddress? expectedClient, CancellationToken cancellationToken)
+    private async Task RelaySocksUdpAsync(Socket relay, IPAddress? expectedClient, CancellationToken cancellationToken)
     {
         var buffer = ArrayPool<byte>.Shared.Rent(65535);
         var outbound = ArrayPool<byte>.Shared.Rent(65535);
@@ -147,7 +147,7 @@ public partial class ProxyServer
         }
     }
 
-    private static async Task<IPEndPoint?> DispatchSocksDatagramAsync(
+    private async Task<IPEndPoint?> DispatchSocksDatagramAsync(
         Socket relay, IPAddress? expectedClient, IPEndPoint? client, byte[] buffer, byte[] outbound,
         SocketReceiveFromResult received, CancellationToken cancellationToken)
     {
@@ -180,7 +180,7 @@ public partial class ProxyServer
         return client;
     }
 
-    private static async Task SendClientSocksDatagramAsync(
+    private async Task SendClientSocksDatagramAsync(
         Socket relay, byte[] buffer, int receivedBytes, CancellationToken cancellationToken)
     {
         if (!TryParseSocksUdp(buffer.AsSpan(0, receivedBytes), out var host, out var port, out var headerLength))
@@ -198,6 +198,13 @@ public partial class ProxyServer
             }
 
             targetAddress = resolved[0];
+        }
+
+        // Same server-wide destination policy as SOCKS CONNECT: a hardened profile must not be
+        // bypassed by sending UDP to a private or loopback address.
+        if (IsUdpDestinationBlocked(targetAddress))
+        {
+            return;
         }
 
         await relay.SendToAsync(buffer.AsMemory(headerLength, payloadLength), SocketFlags.None,

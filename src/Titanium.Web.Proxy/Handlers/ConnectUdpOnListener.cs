@@ -114,7 +114,7 @@ public partial class ProxyServer
         }
 
         var (status, reason, opened) = await MasqueTunnel.OpenAsync(
-            host, targetHost, targetPort, logger, cancellationToken).ConfigureAwait(false);
+            host, targetHost, targetPort, logger, cancellationToken, IsUdpDestinationBlocked).ConfigureAwait(false);
         if (opened is null)
         {
             host.ReleaseTunnel(client);
@@ -124,6 +124,14 @@ public partial class ProxyServer
 
         return new ConnectUdpAdmission(host, opened, client);
     }
+
+    /// <summary>
+    ///     Server-wide outbound destination policy for UDP relays (CONNECT-UDP and SOCKS5 UDP ASSOCIATE).
+    ///     Mirrors the TCP rule so a hardened profile is not bypassed through a UDP relay.
+    /// </summary>
+    internal bool IsUdpDestinationBlocked(IPAddress address) =>
+        (BlockPrivateNetworkDestinations && Helpers.PrivateNetworkGuard.IsBlocked(address))
+        || (BlockLoopbackDestinations && Helpers.PrivateNetworkGuard.IsLoopback(address));
 
     private async Task<bool> ConnectUdpAuthenticatedAsync(MasqueProxyEndPoint endPoint, SessionEventArgs session)
     {

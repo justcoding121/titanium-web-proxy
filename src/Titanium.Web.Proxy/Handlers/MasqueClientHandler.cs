@@ -160,7 +160,7 @@ public partial class ProxyServer
 
             admitted = true;
             var (status, reason, open) = await MasqueTunnel.OpenAsync(
-                endPoint, host, port, logger, cancellationToken).ConfigureAwait(false);
+                endPoint, host, port, logger, cancellationToken, IsUdpDestinationBlocked).ConfigureAwait(false);
             opened = open;
             if (opened is null)
             {
@@ -431,7 +431,7 @@ public partial class ProxyServer
         }
 
         var (status, reason, opened) = await MasqueTunnel.OpenAsync(
-            endPoint, host, port, logger, ctx.CancellationToken).ConfigureAwait(false);
+            endPoint, host, port, logger, ctx.CancellationToken, IsUdpDestinationBlocked).ConfigureAwait(false);
         if (opened is null)
         {
             Reject(session, endPoint, status, reason ?? "connect-udp target was rejected");
