@@ -70,4 +70,26 @@ public class Http2HelperStartupAndNullOriginTests
         cts.Cancel();
         await Assert.ThrowsExactlyAsync<TaskCanceledException>(async () => await blocked);
     }
+
+    [TestMethod]
+    public async Task NullOriginStream_SharesCachedSettingsFrameForSameListenerKey()
+    {
+        using var cts = new CancellationTokenSource();
+        var a = new NullOriginStream(cts.Token, advertiseConnectProtocol: false, maxDecodedHeaderListBytes: 64 * 1024);
+        var b = new NullOriginStream(cts.Token, advertiseConnectProtocol: false, maxDecodedHeaderListBytes: 64 * 1024);
+        var c = new NullOriginStream(cts.Token, advertiseConnectProtocol: true, maxDecodedHeaderListBytes: 64 * 1024);
+
+        var bufA = new byte[40];
+        var bufB = new byte[40];
+        var bufC = new byte[40];
+        var nA = await a.ReadAsync(bufA);
+        var nB = await b.ReadAsync(bufB);
+        var nC = await c.ReadAsync(bufC);
+
+        Assert.AreEqual(nA, nB);
+        CollectionAssert.AreEqual(bufA.AsSpan(0, nA).ToArray(), bufB.AsSpan(0, nB).ToArray());
+        Assert.AreEqual(27, nA);
+        Assert.AreEqual(33, nC); // + ENABLE_CONNECT_PROTOCOL entry
+        Assert.AreNotEqual(nA, nC);
+    }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,6 +43,9 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class NullOriginStream : Stream
 {
+    // One or two keys for the whole process (default decode cap ± CONNECT advertise).
+    private static readonly ConcurrentDictionary<(bool Connect, int Limit), byte[]> FrameCache = new();
+
     private readonly CancellationToken cancellationToken;
     private readonly byte[] settingsFrame;
     private int settingsBytesServed;
@@ -79,7 +83,9 @@ internal sealed class NullOriginStream : Stream
         int maxDecodedHeaderListBytes = 64 * 1024)
     {
         this.cancellationToken = cancellationToken;
-        settingsFrame = BuildClientFacingSettingsFrame(advertiseConnectProtocol, maxDecodedHeaderListBytes);
+        var lim = maxDecodedHeaderListBytes > 0 ? maxDecodedHeaderListBytes : 64 * 1024;
+        settingsFrame = FrameCache.GetOrAdd((advertiseConnectProtocol, lim),
+            static k => BuildClientFacingSettingsFrame(k.Connect, k.Limit));
     }
 
     public override bool CanRead => true;
