@@ -47,6 +47,29 @@ public class QpackBaseRelativeDecodingTests
     }
 
     [TestMethod]
+    public void Decode_RequiredInsertCount_UsesLocalMaxTableCapacity_NotPeerLimit()
+    {
+        // Peer advertised 0 (static-only outbound). Inbound RIC must still decode against the
+        // 4096 this connection advertised, not the peer's encoder limit.
+        var context = new QpackContext(4096);
+        context.MaxTableCapacityFromPeer = 0;
+        context.InboundDecoderTable.Insert("x-custom", "one");
+
+        var block = new byte[]
+        {
+            0x02, // encoded RIC for absolute count 1 against MaxEntries=128
+            0x00,
+            0x80
+        };
+
+        var decoded = QpackDecoder.Decode(block.AsMemory(), context);
+
+        Assert.AreEqual(1, decoded.Count);
+        Assert.AreEqual("x-custom", decoded[0].Name);
+        Assert.AreEqual("one", decoded[0].Value);
+    }
+
+    [TestMethod]
     public void Decode_PostBaseIndexed_BaseZero_ResolvesAbsoluteZero()
     {
         // RIC=1, S=1, ΔBase=0 → Base = 1−(0+1) = 0. Post-base wireIndex=0 → abs=0.

@@ -762,8 +762,10 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     When <see langword="true" />, enables RFC 9204 QPACK dynamic table encoding and decoding for
     ///     inbound HTTP/3 connections. Each connection gets its own <see cref="Http3.Qpack.QpackContext" />
-    ///     with two independent 4096-byte tables (one inbound, one outbound). Defaults to
-    ///     <see langword="false" /> (static-table-only); existing deployments are unaffected.
+    ///     with two independent 4096-byte tables (one inbound, one outbound). Inbound Required Insert
+    ///     Count decoding and encoder-stream Set Capacity instructions are capped at that advertised
+    ///     4096. Defaults to <see langword="false" /> (static-table-only); existing deployments are
+    ///     unaffected.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableQpackDynamicTable { get; set; } = false;
