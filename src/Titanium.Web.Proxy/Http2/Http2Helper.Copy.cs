@@ -2202,7 +2202,12 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
                         {
-                            // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
+                            // Wire value is this connection's own capability
+                            // (ConnectionAdvertisesConnect / enableRfc8441), not the origin's.
+                            // Proxy-served tokens (connect-udp, and listener-gated webtransport /
+                            // connect-tcp) need the client to see 1 even when the origin sent 0.
+                            // Tokens that require a supporting origin (websocket) still get
+                            // REFUSED_STREAM from the HEADERS path — the RFC 8441 fallback signal.
                             sawEnableConnectProtocol = true;
 
                             // RFC 8441 §3: value MUST be 0 or 1; any other value is a connection error.
@@ -2226,7 +2231,6 @@ namespace Titanium.Web.Proxy.Http2
                                 localSettings.EnableConnectProtocol = (value == 1);
                                 if (value == 1) localSettings.EnableConnectProtocolEverSet = true;
 
-                                // Overwrite with what the proxy chooses to advertise to the client.
                                 int wireValue = enableRfc8441 ? 1 : 0;
                                 buffer[valueOffset] = 0;
                                 buffer[valueOffset + 1] = 0;
