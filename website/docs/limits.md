@@ -98,4 +98,3 @@ These stay constant. They are protocol limits or anti-wrap guards, not traffic y
 
 - [Why did my request fail](/docs/troubleshooting)
 - [Configuration](/docs/configuration)
-- [WebSocket large messages (design)](/docs/websocket-large-messages)

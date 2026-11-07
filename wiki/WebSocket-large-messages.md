@@ -1,5 +1,3 @@
-# WebSocket large messages
-
 > Design only. The relay behavior below is what the code does today. Do not implement the chunk callback until this spec is approved.
 
 ## What the relay does today
