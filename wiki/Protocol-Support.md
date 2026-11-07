@@ -189,7 +189,7 @@ origin cannot be sent again.
 
 | Feature | HTTP/2 | Notes |
 |---|---|---|
-| Frame size bounds | Yes | Frames exceeding the negotiated `SETTINGS_MAX_FRAME_SIZE` (or the hard cap) are rejected with a `FRAME_SIZE_ERROR` connection error. |
+| Frame size bounds | Yes | Frames longer than 16384 bytes are rejected with a `FRAME_SIZE_ERROR` connection error. A relayed `SETTINGS_MAX_FRAME_SIZE` is rewritten to 16384 so neither peer is told a larger value is acceptable. |
 | SETTINGS parameter validation | Yes | Unknown parameters are silently ignored per RFC 7540 §6.5; out-of-range values for known parameters (`INITIAL_WINDOW_SIZE`, `MAX_FRAME_SIZE`, `HEADER_TABLE_SIZE`) trigger a `PROTOCOL_ERROR`. |
 | CONTINUATION frame safety | Yes | A HEADERS frame with `END_HEADERS` clear must be followed by CONTINUATION frames on the same stream; any intervening frame triggers a `PROTOCOL_ERROR` connection error, closing the connection. |
 | Decoded header list size limit | Yes | HPACK-decoded header list bytes (name + value + 32-byte overhead per entry, per RFC 7541 §4.1) that exceed `MaxDecodedHeaderListBytes` (default 64 KiB) cause the stream to be reset with `RST_STREAM(ENHANCE_YOUR_CALM)` rather than forwarded. |

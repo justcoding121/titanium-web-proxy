@@ -116,11 +116,11 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     The largest frame payload this proxy will accept from either peer. Neither leg is ever told
-        ///     (via a proxy-originated SETTINGS frame) that a larger value is acceptable, so this is the
-        ///     value a conformant peer will honor; a peer that ignores it and sends a larger frame anyway is
-        ///     treated as a protocol violation (FRAME_SIZE_ERROR) rather than risking an unbounded/undersized
-        ///     buffer allocation.
+        ///     The largest frame payload this proxy will accept from either peer. No leg is told a larger
+        ///     value is acceptable: proxy-originated SETTINGS omit the setting (RFC default 16384), and a
+        ///     larger <c>SETTINGS_MAX_FRAME_SIZE</c> in a relayed peer SETTINGS frame is rewritten to this
+        ///     value. A peer that ignores it and sends a larger frame anyway is treated as a protocol
+        ///     violation (FRAME_SIZE_ERROR) rather than risking an unbounded buffer allocation.
         /// </summary>
         private const int MaxAcceptableFrameSize = 16384;
 

@@ -41,6 +41,6 @@ Balanced (default) enforces header limits and allows 1000 concurrent streams, wi
 
 HTTP/3 rents at most 256 KiB until payload bytes arrive. Worst-case parked HTTP/2 DATA is concurrent streams times `maxDeferredOutboundBytesPerStream`.
 
-Fixed on purpose: HTTP/2 max frame 16384, HTTP/3 control frames 16 KiB, QPACK ack capacity, the 1 GiB chunk-size guard, SOCKS hostnames of 255 bytes. 431 is a real header-limit status. 414 and 421 are not limit codes.
+Fixed on purpose: HTTP/2 max frame 16384 (a larger relayed peer value is rewritten to 16384), HTTP/3 control frames 16 KiB, QPACK ack capacity, the 1 GiB chunk-size guard, SOCKS hostnames of 255 bytes. 431 is a real header-limit status. 414 and 421 are not limit codes.
 
 Misspelled keys are warned at startup and on reload. `titanium test --strict` exits 1 when any unknown key is present.

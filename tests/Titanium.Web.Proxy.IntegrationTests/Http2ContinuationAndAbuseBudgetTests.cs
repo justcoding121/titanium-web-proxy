@@ -74,6 +74,17 @@ public class Http2ContinuationAndAbuseBudgetTests
         return payload;
     }
 
+    private static byte[] MaxFrameSizePayload(int value)
+    {
+        var id = (int)Http2SettingsId.MaxFrameSize;
+        return
+        [
+            (byte)((id >> 8) & 0xff), (byte)(id & 0xff),
+            (byte)((value >> 24) & 0xff), (byte)((value >> 16) & 0xff),
+            (byte)((value >> 8) & 0xff), (byte)(value & 0xff)
+        ];
+    }
+
     /// <summary>Reads frames until a GOAWAY arrives (or the timeout elapses), skipping everything else.</summary>
     private static async Task<Http2ErrorCode> ReadUntilGoAwayAsync(Http2RawFrame.Connection connection,
         TimeSpan timeout)
@@ -283,6 +294,153 @@ public class Http2ContinuationAndAbuseBudgetTests
         Assert.AreEqual(5, relayedSettings[(int)Http2SettingsId.MaxConcurrentStreams],
             "The value relayed to the client must be clamped to the proxy-owned cap, not the origin's " +
             "own (larger) advertised value.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SETTINGS_MAX_FRAME_SIZE: the proxy accepts 16384-byte frames and must
+    // rewrite a larger relayed value to that cap in both directions (#1151).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [TestMethod]
+    [Timeout(20_000)]
+    [DataRow(16384)]
+    [DataRow(16385)]
+    [DataRow(1_048_576)]
+    [DataRow(16_777_215)]
+    public async Task Origin_AdvertisingLargerMaxFrameSize_IsRewrittenTo16384BeforeRelayToClient(int advertised)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxFrameSizePayload(advertised));
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        var relayed = await rawClient.Connection.ReadSettingsAsync();
+        cts.Cancel();
+
+        Assert.IsTrue(relayed.ContainsKey((int)Http2SettingsId.MaxFrameSize),
+            "The relayed SETTINGS frame must carry an explicit SETTINGS_MAX_FRAME_SIZE entry.");
+        Assert.AreEqual(16384, relayed[(int)Http2SettingsId.MaxFrameSize],
+            "The value relayed to the client must be the proxy's 16384-byte accept cap, not the origin's " +
+            "own (larger) advertised value.");
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task Client_AdvertisingLargerMaxFrameSize_IsRewrittenTo16384BeforeRelayToOrigin()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var seen = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            try
+            {
+                Dictionary<int, int> settings;
+                do
+                {
+                    settings = await connection.ReadSettingsAsync();
+                } while (!settings.ContainsKey((int)Http2SettingsId.MaxFrameSize));
+
+                seen.TrySetResult(settings[(int)Http2SettingsId.MaxFrameSize]);
+            }
+            catch (Exception ex)
+            {
+                seen.TrySetException(ex);
+            }
+
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxFrameSizePayload(1_048_576));
+
+        var relayed = await seen.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        cts.Cancel();
+
+        Assert.AreEqual(16384, relayed,
+            "The value relayed to the origin must be the proxy's 16384-byte accept cap, not the client's " +
+            "own (larger) advertised value.");
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task Origin_AdvertisingLargeMaxFrameSize_ClientObeyingRelayedValueUploadsWithoutGoAway()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var received = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            try
+            {
+                await connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxFrameSizePayload(1_048_576));
+                var (_, _, body) = await connection.ReadRequestAsync();
+                received.TrySetResult(body.Length);
+            }
+            catch (Exception ex)
+            {
+                received.TrySetException(ex);
+            }
+
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        var relayed = await rawClient.Connection.ReadSettingsAsync();
+        Assert.IsTrue(relayed.ContainsKey((int)Http2SettingsId.MaxFrameSize));
+        var maxFrame = relayed[(int)Http2SettingsId.MaxFrameSize];
+        Assert.IsTrue(maxFrame > 0);
+
+        const int bodyLength = 40_000;
+        var headers = rawClient.Connection.EncodeHeaders(
+            new[]
+            {
+                (":method", "POST"), (":scheme", "https"),
+                (":authority", $"{serverUri.Host}:{serverUri.Port}"), (":path", "/")
+            },
+            new[] { ("content-length", bodyLength.ToString()) });
+        await rawClient.Connection.WriteHeaderBlockAsync(1, headers, endStream: false);
+
+        var body = new byte[bodyLength];
+        var pos = 0;
+        while (pos < body.Length)
+        {
+            var chunkLength = Math.Min(maxFrame, body.Length - pos);
+            var isLast = pos + chunkLength >= body.Length;
+            var chunk = body.AsSpan(pos, chunkLength).ToArray();
+            await rawClient.Connection.WriteFrameAsync(
+                Http2FrameType.Data, 1, isLast ? Http2FrameFlag.EndStream : 0, chunk);
+            pos += chunkLength;
+        }
+
+        var length = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        cts.Cancel();
+        Assert.AreEqual(bodyLength, length);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

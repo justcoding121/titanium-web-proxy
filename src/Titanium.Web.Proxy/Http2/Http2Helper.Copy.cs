@@ -527,9 +527,10 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (length > MaxAcceptableFrameSize)
                 {
-                    // RFC 9113 §4.2: a frame larger than what we (implicitly, by never advertising anything
-                    // else) declared we would accept is a connection-level FRAME_SIZE_ERROR. Reject before
-                    // attempting to buffer/read the (potentially huge, up to 2^24-1 byte) payload.
+                    // RFC 9113 §4.2: a frame larger than MaxAcceptableFrameSize is a connection-level
+                    // FRAME_SIZE_ERROR. Relayed SETTINGS_MAX_FRAME_SIZE is rewritten to that cap, so a
+                    // larger frame is a peer that ignored what it was told. Reject before attempting to
+                    // buffer/read the (potentially huge, up to 2^24-1 byte) payload.
                     ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: frame of type {type} exceeded the maximum accepted frame size.",
                         null, null));
@@ -2060,7 +2061,17 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
+                                // Real peer limit: still governs frames this proxy writes TO that peer.
                                 localSettings.MaxFrameSize = (int)value;
+
+                                // Advertise-what-you-enforce (#1151): this proxy reads frames up to
+                                // MaxAcceptableFrameSize on every leg, so the value relayed on to the other
+                                // peer must never exceed it. A validated value is always >= 16384, so this
+                                // is a clamp-down or a no-op, never a raise.
+                                buffer[valueOffset] = (byte)((MaxAcceptableFrameSize >> 24) & 0xff);
+                                buffer[valueOffset + 1] = (byte)((MaxAcceptableFrameSize >> 16) & 0xff);
+                                buffer[valueOffset + 2] = (byte)((MaxAcceptableFrameSize >> 8) & 0xff);
+                                buffer[valueOffset + 3] = (byte)(MaxAcceptableFrameSize & 0xff);
                             }
                         }
                         else if (identifier == (int)Http2SettingsId.InitialWindowSize)

@@ -85,7 +85,7 @@ HTTP/3 frame reads rent at most 256 KiB until bytes arrive, then grow. A peer th
 
 These stay constant. They are protocol limits or anti-wrap guards, not traffic you should raise:
 
-- HTTP/2 `MAX_FRAME_SIZE` we accept is 16384. We do not advertise a larger value.
+- HTTP/2 `MAX_FRAME_SIZE` we accept is 16384. We do not advertise a larger value, and a larger value in a relayed SETTINGS frame is rewritten to 16384.
 - HTTP/3 control-stream frames are 16 KiB.
 - QPACK acknowledgement capacity.
 - The 1 GiB chunk-size guard (stops a wrapped chunk length).
