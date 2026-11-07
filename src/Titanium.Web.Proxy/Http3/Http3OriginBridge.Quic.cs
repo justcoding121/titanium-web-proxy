@@ -364,6 +364,7 @@ internal static partial class Http3OriginBridge
             }
 
             var maxPayload = server.ResourceLimits.MaxHttp3FramePayloadBytes;
+            var fieldSectionLimit = server.MaxDecodedHeaderListBytes;
 
             // Stream large / unknown-length bodies as DATA arrives (TTFB on big HTML). Tiny known-CL
             // must materialize first: H1 WriteResponseAsync + StreamBodyWriter emits a header-only
@@ -397,10 +398,13 @@ internal static partial class Http3OriginBridge
                 var offset = 0;
                 while (offset < bodyBytes.Length)
                 {
-                    var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
-                        cancellationToken);
-                    if (frame == null)
+                    var header = await Http3Frame.ReadFrameHeaderAsync(originStream, cancellationToken);
+                    if (header is null)
                         break;
+                    var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                        header.Value.Type, fieldSectionLimit, maxPayload);
+                    var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                        originStream, header.Value, payloadLimit, cancellationToken);
                     try
                     {
                         if (frame.Type == Http3FrameType.Headers)
@@ -430,10 +434,13 @@ internal static partial class Http3OriginBridge
                 // connection and forces a new handshake per request under load.
                 while (true)
                 {
-                    var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
-                        cancellationToken);
-                    if (frame == null)
+                    var header = await Http3Frame.ReadFrameHeaderAsync(originStream, cancellationToken);
+                    if (header is null)
                         break;
+                    var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                        header.Value.Type, fieldSectionLimit, maxPayload);
+                    var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                        originStream, header.Value, payloadLimit, cancellationToken);
                     frame.ReturnPayload();
                 }
 
@@ -485,8 +492,10 @@ internal static partial class Http3OriginBridge
                         continue;
                     }
 
+                    var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                        header.Value.Type, fieldSectionLimit, maxPayload);
                     var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
-                        streamToClient, header.Value, maxPayload, ct);
+                        streamToClient, header.Value, payloadLimit, ct);
                     try
                     {
                         if (frame.Type == Http3FrameType.Headers)
@@ -531,10 +540,20 @@ internal static partial class Http3OriginBridge
                     }
                     else
                     {
-                        var current = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
+                        async ValueTask<Http3Frame?> ReadBodyOrTrailerFrameAsync()
+                        {
+                            var hdr = await Http3Frame.ReadFrameHeaderAsync(streamToClient, ct);
+                            if (hdr is null) return null;
+                            var limit = Http3Frame.PayloadLimitForFrameType(
+                                hdr.Value.Type, fieldSectionLimit, maxPayload);
+                            return await Http3Frame.ReadPayloadAfterHeaderAsync(
+                                streamToClient, hdr.Value, limit, ct);
+                        }
+
+                        var current = await ReadBodyOrTrailerFrameAsync();
                         while (current != null)
                         {
-                            var next = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
+                            var next = await ReadBodyOrTrailerFrameAsync();
                             var isLast = next == null || next.Type == Http3FrameType.Headers;
 
                             try
@@ -822,7 +841,7 @@ internal static partial class Http3OriginBridge
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
                     // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
                     const int relayCoalesceMaxBytes = 16 * 1024;
-                    var maxPayload = Math.Max(server.ResourceLimits.MaxHttp3FramePayloadBytes, server.MaxDecodedHeaderListBytes);
+                    var fieldSectionLimit = server.MaxDecodedHeaderListBytes;
                     var captureForMitm = clientStream is null;
                     var sawFinalHeaders = false;
                     var frameCap = server.ResourceLimits.MaxHttp3FramePayloadBytes;
@@ -849,8 +868,10 @@ internal static partial class Http3OriginBridge
                             continue;
                         }
 
+                        var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                            header.Value.Type, fieldSectionLimit, frameCap);
                         var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
-                            originStream, header.Value, maxPayload, cancellationToken);
+                            originStream, header.Value, payloadLimit, cancellationToken);
                         try
                         {
                             if (frame.Type == Http3FrameType.Headers)
@@ -880,7 +901,10 @@ internal static partial class Http3OriginBridge
 
                                     var next = nextHeader is { } present
                                         ? await Http3Frame.ReadPayloadAfterHeaderAsync(
-                                            originStream, present, maxPayload, cancellationToken)
+                                            originStream, present,
+                                            Http3Frame.PayloadLimitForFrameType(
+                                                present.Type, fieldSectionLimit, frameCap),
+                                            cancellationToken)
                                         : null;
                                     if (next is { Type: Http3FrameType.Data }
                                         && headersPayload.Length + next.Payload.Length <= relayCoalesceMaxBytes)

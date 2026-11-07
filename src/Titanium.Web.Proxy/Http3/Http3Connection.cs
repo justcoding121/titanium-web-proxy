@@ -162,6 +162,7 @@ internal sealed class Http3Connection
             await SendServerSettingsAsync(_serverControlStream, _qpackContext,
                 ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(
                     _server.EnableRfc8441, _endPoint.AcceptConnectUdp),
+                _server.MaxDecodedHeaderListBytes,
                 _connectionCts.Token);
 
             // When dynamic table is enabled, open outbound QPACK encoder and decoder streams and
@@ -290,7 +291,7 @@ internal sealed class Http3Connection
     ///     Opens the server-side outbound control stream and sends the SETTINGS frame.
     /// </summary>
     private static async Task SendServerSettingsAsync(QuicStream controlStream, QpackContext? qpackContext,
-        bool enableConnectProtocol, CancellationToken ct)
+        bool enableConnectProtocol, int maxDecodedHeaderListBytes, CancellationToken ct)
     {
         // Write the stream type byte (0x00 = control stream).
         var streamTypeBuf = new byte[1];
@@ -299,6 +300,9 @@ internal sealed class Http3Connection
 
         // Build SETTINGS payload.
         var settings = new Http3Settings();
+
+        // Advertise-what-you-enforce: HEADERS / trailers payloads are capped at this size.
+        settings.SetMaxFieldSectionSize((ulong)Math.Max(0, maxDecodedHeaderListBytes));
 
         if (qpackContext != null)
         {

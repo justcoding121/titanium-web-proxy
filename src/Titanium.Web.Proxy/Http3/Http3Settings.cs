@@ -82,6 +82,12 @@ internal sealed class Http3Settings
     /// <summary>Adds SETTINGS_QPACK_BLOCKED_STREAMS to this settings object.</summary>
     public void SetQpackBlockedStreams(uint count) => Add(Http3SettingsId.QpackBlockedStreams, count);
 
+    /// <summary>
+    ///     Adds SETTINGS_MAX_FIELD_SECTION_SIZE. Advertise the same value the connection
+    ///     enforces as the compressed HEADERS / trailers payload cap.
+    /// </summary>
+    public void SetMaxFieldSectionSize(ulong size) => Add(Http3SettingsId.MaxFieldSectionSize, size);
+
     /// <summary>Adds SETTINGS_ENABLE_CONNECT_PROTOCOL (0x08) when enabled.</summary>
     public void SetEnableConnectProtocol(bool enabled)
     {

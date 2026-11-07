@@ -44,6 +44,16 @@ internal sealed class Http3Frame
     /// </summary>
     internal const int RelayUnitBytes = 16 * 1024;
 
+    /// <summary>
+    ///     Payload byte cap for one frame. HEADERS (including trailers) use
+    ///     <paramref name="fieldSectionLimit"/> — the same value advertised as
+    ///     SETTINGS_MAX_FIELD_SECTION_SIZE. Other frames use <paramref name="dataFrameLimit"/>.
+    ///     Decoded field-section size is intentionally not enforced separately: with static-only
+    ///     QPACK the compressed size bounds expansion for compliant peers.
+    /// </summary>
+    internal static long PayloadLimitForFrameType(ulong frameType, long fieldSectionLimit, long dataFrameLimit) =>
+        frameType == Http3FrameType.Headers ? fieldSectionLimit : dataFrameLimit;
+
     public ulong Type { get; }
     public ReadOnlyMemory<byte> Payload { get; }
 

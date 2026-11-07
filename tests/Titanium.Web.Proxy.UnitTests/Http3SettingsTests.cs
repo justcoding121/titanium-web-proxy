@@ -85,6 +85,17 @@ public class Http3SettingsTests
     }
 
     [TestMethod]
+    public void SetMaxFieldSectionSize_SerializesAndParses()
+    {
+        var settings = new Http3Settings();
+        settings.SetMaxFieldSectionSize(65536);
+        var parsed = Http3Settings.Parse(settings.Serialize());
+
+        Assert.AreEqual(65536UL, parsed.MaxFieldSectionSize);
+        Assert.IsTrue(parsed.Parameters.Any(p => p.Id == Http3SettingsId.MaxFieldSectionSize && p.Value == 65536));
+    }
+
+    [TestMethod]
     public void Add_QpackMaxTableCapacity_ClampsToUIntMax()
     {
         var settings = new Http3Settings();

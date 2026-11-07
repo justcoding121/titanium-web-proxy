@@ -1142,13 +1142,18 @@ internal static partial class Http3RequestStream
         var body = new MemoryStream();
         var maxBufferedBodyBytes = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
         var maxFrame = server.ResourceLimits.MaxHttp3FramePayloadBytes;
+        var fieldSectionLimit = server.MaxDecodedHeaderListBytes;
         var boundedBody = new BoundedWriteStream(body, maxBufferedBodyBytes, server.PolicyModes[PolicyFamily.BodyBudget]);
         try
         {
             while (true)
             {
-                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: maxFrame, ct);
-                if (frame is null) break;
+                var header = await Http3Frame.ReadFrameHeaderAsync(stream, ct);
+                if (header is null) break;
+                var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                    header.Value.Type, fieldSectionLimit, maxFrame);
+                var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                    stream, header.Value, payloadLimit, ct);
                 try
                 {
                     switch (frame.Type)
