@@ -318,7 +318,8 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
             // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
-            await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
+            await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken,
+                instance.maxDecodedHeaderListBytes);
             instance.AttachExclusiveFrameWriter();
 
             _ = instance.ReadLoopAsync(instance.connectionCts.Token);

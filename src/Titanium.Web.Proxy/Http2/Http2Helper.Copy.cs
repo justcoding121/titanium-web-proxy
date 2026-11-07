@@ -2014,6 +2014,7 @@ namespace Titanium.Web.Proxy.Http2
                     bool sawEnablePush = false;
                     bool sawEnableConnectProtocol = false;
                     bool sawMaxConcurrentStreams = false;
+                    bool sawMaxHeaderListSize = false;
                     bool sawInitialWindowSize = false;
                     bool sawHeaderTableSize = false;
 
@@ -2181,9 +2182,22 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else if (identifier == (int)Http2SettingsId.MaxHeaderListSize)
                         {
-                            // RFC 7540 §6.5.2: advisory limit on the header list size this peer is willing
-                            // to receive. Store it so outbound header encoding can respect the peer's limit.
+                            // Peer’s advertised receive limit. Recorded for completeness; outbound
+                            // encode does not yet enforce it (that would add per-request hot-path
+                            // work). The wire value toward the other leg is clamp-or-kept to
+                            // maxDecodedHeaderListBytes — advertise-what-you-enforce (#1153).
+                            sawMaxHeaderListSize = true;
                             localSettings.MaxHeaderListSize = value > int.MaxValue ? int.MaxValue : (int)value;
+
+                            if (!suppressConnectionFrameRelay && maxDecodedHeaderListBytes > 0
+                                && value > (uint)maxDecodedHeaderListBytes)
+                            {
+                                var lim = maxDecodedHeaderListBytes;
+                                buffer[valueOffset] = (byte)((lim >> 24) & 0xff);
+                                buffer[valueOffset + 1] = (byte)((lim >> 16) & 0xff);
+                                buffer[valueOffset + 2] = (byte)((lim >> 8) & 0xff);
+                                buffer[valueOffset + 3] = (byte)(lim & 0xff);
+                            }
                         }
                         else if (identifier == (int)Http2SettingsId.WtMaxSessions)
                         {
@@ -2347,6 +2361,22 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 3] = (byte)((effective >> 16) & 0xff);
                         buffer[length + 4] = (byte)((effective >> 8) & 0xff);
                         buffer[length + 5] = (byte)(effective & 0xff);
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
+                    if (!suppressConnectionFrameRelay && !sawMaxHeaderListSize && maxDecodedHeaderListBytes > 0 &&
+                        (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
+                    {
+                        // Peer omitted SETTINGS_MAX_HEADER_LIST_SIZE. Inject the decode cap so both
+                        // legs know what this proxy will refuse with ENHANCE_YOUR_CALM / 502.
+                        var lim = maxDecodedHeaderListBytes;
+                        buffer[length] = (byte)(((int)Http2SettingsId.MaxHeaderListSize >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.MaxHeaderListSize & 0xff);
+                        buffer[length + 2] = (byte)((lim >> 24) & 0xff);
+                        buffer[length + 3] = (byte)((lim >> 16) & 0xff);
+                        buffer[length + 4] = (byte)((lim >> 8) & 0xff);
+                        buffer[length + 5] = (byte)(lim & 0xff);
                         length += 6;
                         frameHeader.Length = length;
                     }

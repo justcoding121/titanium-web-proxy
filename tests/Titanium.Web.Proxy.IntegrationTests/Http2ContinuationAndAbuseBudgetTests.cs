@@ -444,6 +444,176 @@ public class Http2ContinuationAndAbuseBudgetTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // SETTINGS_MAX_HEADER_LIST_SIZE: advertise-what-you-enforce for the decoded
+    // header-list cap in both directions (#1153).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static byte[] MaxHeaderListSizePayload(int value)
+    {
+        var id = (int)Http2SettingsId.MaxHeaderListSize;
+        return
+        [
+            (byte)((id >> 8) & 0xff),
+            (byte)(id & 0xff),
+            (byte)((value >> 24) & 0xff),
+            (byte)((value >> 16) & 0xff),
+            (byte)((value >> 8) & 0xff),
+            (byte)(value & 0xff)
+        ];
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    [DataRow(1_048_576, 65536)]
+    [DataRow(1000, 1000)]
+    public async Task Origin_AdvertisingMaxHeaderListSize_IsClampedOrKeptBeforeRelayToClient(
+        int advertised, int expected)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxHeaderListSizePayload(advertised));
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        var relayed = await rawClient.Connection.ReadSettingsAsync();
+        cts.Cancel();
+
+        Assert.IsTrue(relayed.ContainsKey((int)Http2SettingsId.MaxHeaderListSize));
+        Assert.AreEqual(expected, relayed[(int)Http2SettingsId.MaxHeaderListSize]);
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task Origin_OmittingMaxHeaderListSize_Injects65536TowardClient()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        var relayed = await rawClient.Connection.ReadSettingsAsync();
+        cts.Cancel();
+
+        Assert.IsTrue(relayed.ContainsKey((int)Http2SettingsId.MaxHeaderListSize),
+            "Omitted SETTINGS_MAX_HEADER_LIST_SIZE must be injected at the proxy decode cap.");
+        Assert.AreEqual(65536, relayed[(int)Http2SettingsId.MaxHeaderListSize]);
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    [DataRow(1_048_576, 65536)]
+    [DataRow(1000, 1000)]
+    public async Task Client_AdvertisingMaxHeaderListSize_IsClampedOrKeptBeforeRelayToOrigin(
+        int advertised, int expected)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var seen = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            try
+            {
+                // Drain the proxy-owned startup SETTINGS (already carries MAX_HEADER_LIST_SIZE),
+                // then wait for the relayed client SETTINGS that carries the advertised value.
+                _ = await connection.ReadSettingsAsync();
+                Dictionary<int, int> settings;
+                do
+                {
+                    settings = await connection.ReadSettingsAsync();
+                } while (!settings.ContainsKey((int)Http2SettingsId.MaxHeaderListSize));
+
+                seen.TrySetResult(settings[(int)Http2SettingsId.MaxHeaderListSize]);
+            }
+            catch (Exception ex)
+            {
+                seen.TrySetException(ex);
+            }
+
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        await rawClient.Connection.WriteFrameAsync(Http2FrameType.Settings, 0, 0, MaxHeaderListSizePayload(advertised));
+
+        var relayed = await seen.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        cts.Cancel();
+
+        Assert.AreEqual(expected, relayed);
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task Client_OmittingMaxHeaderListSize_Injects65536TowardOrigin()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var seen = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var rawServer = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawServer.HandleConnection(async connection =>
+        {
+            try
+            {
+                Dictionary<int, int> settings;
+                do
+                {
+                    settings = await connection.ReadSettingsAsync();
+                } while (!settings.ContainsKey((int)Http2SettingsId.MaxHeaderListSize));
+
+                seen.TrySetResult(settings[(int)Http2SettingsId.MaxHeaderListSize]);
+            }
+            catch (Exception ex)
+            {
+                seen.TrySetException(ex);
+            }
+
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var serverUri = new Uri(rawServer.Url);
+        using var rawClient =
+            await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, serverUri.Host, serverUri.Port);
+
+        // Client already sent initial SETTINGS without MAX_HEADER_LIST_SIZE in ConnectAsync.
+        // Force a second empty SETTINGS (no entries) so the inject path runs on a relayed frame
+        // that still omits the id — or wait for the preface SETTINGS from ConnectAsync.
+        var relayed = await seen.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        cts.Cancel();
+
+        Assert.AreEqual(65536, relayed);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // ACK-gated enforcement: after SETTINGS is advertised toward the client,
     // MaxConcurrentStreams admission must not refuse until the client ACKs
     // (RFC 9113). After ACK, over-cap streams get REFUSED_STREAM.

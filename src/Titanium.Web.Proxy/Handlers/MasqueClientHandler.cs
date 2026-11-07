@@ -362,7 +362,8 @@ public partial class ProxyServer
     private async Task SendMasqueAsync(HttpClientStream clientStream, MasqueProxyEndPoint endPoint,
         CancellationTokenSource cancellationTokenSource)
     {
-        var origin = new NullOriginStream(cancellationTokenSource.Token, advertiseConnectProtocol: true);
+        var origin = new NullOriginStream(cancellationTokenSource.Token, advertiseConnectProtocol: true,
+            maxDecodedHeaderListBytes: MaxDecodedHeaderListBytes);
         await ConsumeHttp2ConnectionPrefaceAsync(clientStream, cancellationTokenSource.Token).ConfigureAwait(false);
         await Http2Helper.SendHttp2(clientStream, origin,
             () => new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource),

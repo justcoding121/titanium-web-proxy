@@ -82,23 +82,29 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         /// <param name="originStream">Origin HTTP/2 stream (preface already written).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="maxDecodedHeaderListBytes">
+        ///     Value advertised as <c>SETTINGS_MAX_HEADER_LIST_SIZE</c>. Pass the same decode cap
+        ///     enforced on this connection (default 64 KiB).
+        /// </param>
         internal static async Task SendHttp2ClientConnectionStartupAsync(Stream originStream,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, int maxDecodedHeaderListBytes = 64 * 1024)
         {
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
             // SETTINGS: ENABLE_PUSH=0 + HEADER_TABLE_SIZE=0 (static-table-only for compressed relay /
-            // origin connections the proxy owns) + the 768 KiB INITIAL_WINDOW_SIZE. The stream
-            // window must be at least ReceiveCreditBatchThreshold or the batched receive-credit grants
-            // never flush and a >64 KiB response body deadlocks on the RFC-default 65,535 window.
+            // origin connections the proxy owns) + the 768 KiB INITIAL_WINDOW_SIZE +
+            // MAX_HEADER_LIST_SIZE = decode cap. The stream window must be at least
+            // ReceiveCreditBatchThreshold or the batched receive-credit grants never flush and a
+            // >64 KiB response body deadlocks on the RFC-default 65,535 window.
+            var lim = maxDecodedHeaderListBytes > 0 ? maxDecodedHeaderListBytes : 64 * 1024;
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.Settings;
             frameHeader.Flags = 0;
-            frameHeader.Length = 18;
+            frameHeader.Length = 24;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
 
-            var settingsPayload = new byte[18];
+            var settingsPayload = new byte[24];
             BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.HeaderTableSize);
             BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
             BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(6, 2), (ushort)Http2SettingsId.EnablePush);
@@ -106,6 +112,9 @@ namespace Titanium.Web.Proxy.Http2
             BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(12, 2),
                 (ushort)Http2SettingsId.InitialWindowSize);
             BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(14, 4), ClientInitialStreamWindowSize);
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(18, 2),
+                (ushort)Http2SettingsId.MaxHeaderListSize);
+            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(20, 4), (uint)lim);
 
             await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
             await originStream.WriteAsync(settingsPayload, cancellationToken);
@@ -277,7 +286,7 @@ namespace Titanium.Web.Proxy.Http2
                 connectionState.ServerFrameWriter = null;
 
                 originPool = new Http2OriginRelayPool(originConnection!, openOriginConnectionAsync!,
-                    resourceLimits, logger, connectionState.ServerWriteLock);
+                    resourceLimits, logger, connectionState.ServerWriteLock, maxDecodedHeaderListBytes);
                 connectionState.OriginRelayPool = originPool;
             }
 

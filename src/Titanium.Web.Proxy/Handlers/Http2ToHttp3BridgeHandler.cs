@@ -55,7 +55,8 @@ public partial class ProxyServer
         UpstreamHttpProtocol? upstreamHttpProtocol = null)
     {
         var cancellationToken = cancellationTokenSource.Token;
-        var originStream = new NullOriginStream(cancellationToken);
+        var originStream = new NullOriginStream(cancellationToken,
+            maxDecodedHeaderListBytes: MaxDecodedHeaderListBytes);
 
         await Http2Helper.SendHttp2(
             clientStream, originStream,

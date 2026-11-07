@@ -29,7 +29,8 @@ public partial class ProxyServer
         string? connectHost, int? connectPort, CancellationTokenSource cancellationTokenSource)
     {
         var cancellationToken = cancellationTokenSource.Token;
-        var originStream = new NullOriginStream(cancellationToken);
+        var originStream = new NullOriginStream(cancellationToken,
+            maxDecodedHeaderListBytes: MaxDecodedHeaderListBytes);
 
         await Http2Helper.SendHttp2(clientStream, originStream,
             () => new SessionEventArgs(this, endPoint, clientStream, connectRequest, cancellationTokenSource)

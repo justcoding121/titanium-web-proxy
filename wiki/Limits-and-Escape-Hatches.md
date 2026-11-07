@@ -26,7 +26,7 @@ Balanced (default) enforces header limits and allows 1000 concurrent streams, wi
 | Header line | 64 KiB | `server.limits.maxHeaderLineBytes` |
 | HTTP/3 frame payload | 4 MiB (ceiling 64 MiB) | `server.limits.maxHttp3FramePayloadBytes` |
 | HTTP/2 deferred DATA per stream | 4 MiB + 16 KiB (ceiling 64 MiB) | `server.limits.maxDeferredOutboundBytesPerStream` |
-| Decoded header list | 64 KiB | `server.limits.maxDecodedHeaderListBytes` |
+| Decoded header list | 64 KiB | `server.limits.maxDecodedHeaderListBytes` (also advertised as HTTP/2 `SETTINGS_MAX_HEADER_LIST_SIZE` / HTTP/3 `SETTINGS_MAX_FIELD_SECTION_SIZE`) |
 | Trailer count / block | 100 / 16 KiB | `server.limits.maxTrailerHeaderCount`, `server.limits.maxTrailerHeaderBlockBytes` |
 | Compressed HTTP/2 header block | 256 KiB | `server.limits.maxHttp2CompressedHeaderBlockBytes` |
 | Interim responses | 20 | `server.limits.maxInterimResponses` |
