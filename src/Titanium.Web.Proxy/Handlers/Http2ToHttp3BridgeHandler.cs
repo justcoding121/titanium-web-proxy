@@ -293,6 +293,19 @@ public partial class ProxyServer
 
         try
         {
+            // Opt-in request decompression, same contract as the H2->H1 and H2->H2 bridges: the body
+            // is replaced by the decoded bytes and then sent from memory.
+            if (requestBodyChannel is not null
+                && RequestDecompressionPolicy is not null
+                && sessionArgs.HttpClient.Request.ExtendedConnectProtocol is null
+                && !await TryDecompressChannelBodyAsync(sessionArgs, requestBodyChannel, cancellationToken)
+                    .ConfigureAwait(false))
+            {
+                await Http2Helper.EmitSyntheticResponseAsync(sessionArgs, streamId, connectionState, clientStream,
+                    cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             Func<System.Net.Quic.QuicStream, CancellationToken, Task>? copyRequestBody = null;
             if (requestBodyChannel != null && !sessionArgs.HttpClient.Request.IsBodyRead)
             {
