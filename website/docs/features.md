@@ -24,7 +24,7 @@ Desktop HTTP(S) debugger on Windows, macOS, and Linux. [Inspector guide](/docs/i
 | Streaming-safe capture | Large known-length bodies are not buffered so downloads keep flowing |
 | Scripts | Line directives (`set-header`, `set-status`, `abort`) — not JavaScript or C# |
 
-Free for personal, research, education, government, and charity use ([PolyForm Noncommercial](/docs/editions#license)). Commercial use needs a separate agreement.
+Non-commercial use only ([PolyForm Noncommercial](/docs/editions#license)).
 
 ## CLI
 
@@ -81,7 +81,7 @@ Optional ops sidecar for the CLI (and Inspector panels). [Plus guide](/docs/plus
 | xDS | ADS dataplane client for listeners, routes, clusters, endpoints, and secrets ([guide](/docs/xds); needs `plus.enabled`) |
 | gRPC-JSON | REST/JSON ↔ gRPC transcoding ([guide](/docs/grpc-json-transcoding)) |
 
-Same Noncommercial license as Inspector — see [Editions](/docs/editions).
+Non-commercial use only — see [Editions](/docs/editions).
 
 ## Library
 

@@ -1,6 +1,6 @@
 # Plus
 
-Optional ops plugin for the CLI (and Inspector panels). For operators who want a dashboard, metrics, auth, and signature-based request screening (WAF) without writing custom code.
+Optional ops plugin for the CLI (and Inspector panels). Non-commercial use only. For operators who want a dashboard, metrics, auth, and signature-based request screening (WAF) without writing custom code.
 
 **Next:** install with `titanium update --plus`, enable in YAML, open the dashboard.
 
