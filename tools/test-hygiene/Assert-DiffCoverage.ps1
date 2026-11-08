@@ -34,22 +34,37 @@ if ($LASTEXITCODE -ne 0) {
 
 $changed = @{}
 $file = ''
+$nextLine = 0
+$inHunk = $false
 foreach ($line in $diff) {
     if ($line.StartsWith('+++ b/')) {
         $file = ($line.Substring(6) -replace '\\', '/')
+        $inHunk = $false
         continue
     }
     if ($line.StartsWith('@@')) {
-        # Score the first line of each added hunk (stable vs the previous gate).
-        $match = [regex]::Match($line, '\+(\d+)')
+        # Score every added line in the hunk so method signatures alone cannot sink the gate.
+        $match = [regex]::Match($line, '\+(\d+)(?:,(\d+))?')
         if ($match.Success -and $file) {
-            $start = [int]$match.Groups[1].Value
-            if (-not $changed.ContainsKey($file)) {
-                $changed[$file] = New-Object System.Collections.Generic.List[int]
-            }
-            $changed[$file].Add($start)
+            $nextLine = [int]$match.Groups[1].Value
+            $inHunk = $true
         }
+        continue
     }
+    if (-not $inHunk -or -not $file) { continue }
+    if ($line.StartsWith('+') -and -not $line.StartsWith('+++')) {
+        if (-not $changed.ContainsKey($file)) {
+            $changed[$file] = New-Object System.Collections.Generic.List[int]
+        }
+        $changed[$file].Add($nextLine)
+        $nextLine++
+        continue
+    }
+    if ($line.StartsWith('-') -and -not $line.StartsWith('---')) {
+        continue
+    }
+    # context line
+    $nextLine++
 }
 
 if ($changed.Count -eq 0) {
