@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   review:
+    name: dependency-review
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

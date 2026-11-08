@@ -815,11 +815,28 @@ public partial class ProxyServer
 
             if (h3Route.UseH3)
             {
-                // Buffer the client request body before leaving the H1 pipeline. Without this, the
-                // body remains unread on the client stream (corrupting keep-alive reuse) and
-                // Http3OriginBridge forwards an empty Body to the H3 origin.
-                if (args.HttpClient.Request.HasBody && !args.HttpClient.Request.IsBodyRead)
+                // A known length is copied onto the HTTP/3 request stream, so the HTTP/1.1 socket
+                // stops at the next request line without holding the body. GET and HEAD have no body.
+                // Chunked and unknown lengths are still buffered so the framing is consumed exactly.
+                Func<System.Net.Quic.QuicStream, CancellationToken, Task>? copyBody = null;
+                var h3Request = args.HttpClient.Request;
+                if (h3Request.HasBody && !h3Request.IsBodyRead
+                    && h3Request.Method is not "GET" and not "HEAD"
+                    && h3Request.ContentLength > 0 && !h3Request.IsChunked)
+                {
+                    var length = h3Request.ContentLength;
+                    var client = args.ClientStream;
+                    copyBody = async (origin, token) =>
+                    {
+                        await Http3.Http3RequestBodyForwarder.CopyContentLengthAsync(client, length, origin, token);
+                        h3Request.IsBodyRead = true;
+                        h3Request.IsBodyReceived = true;
+                    };
+                }
+                else if (h3Request.HasBody && !h3Request.IsBodyRead)
+                {
                     await args.GetRequestBody(cancellationToken);
+                }
 
                 args.HttpClient.Request.Locked = true;
 
@@ -828,7 +845,8 @@ public partial class ProxyServer
                     {
                         interim.HttpVersion = args.HttpClient.Request.HttpVersion;
                         await args.ClientStream.WriteResponseAsync(interim, ct);
-                    });
+                    },
+                    copyRequestBody: copyBody);
 
                 // Http3OriginBridge only fetches/buffers the origin response into args.HttpClient.Response -
                 // unlike the TCP path below, it never touches args.ClientStream. Mirror the H2->H3 bridge's

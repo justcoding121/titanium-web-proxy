@@ -183,6 +183,61 @@ public class Rfc8441H2ToH2TunnelTests
     }
 
     /// <summary>
+    ///     Origin explicit ENABLE_CONNECT_PROTOCOL=0 must still be rewritten to 1 on the client leg when
+    ///     the connection advertises RFC 8441 (proxy-served tokens need that bit). A websocket
+    ///     extended CONNECT toward that origin still gets REFUSED_STREAM.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ExtendedConnect_H2ToH2_OriginExplicitZero_ClientSeesOne_WebsocketRefused()
+    {
+        using var rawOrigin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        rawOrigin.HandleConnection(async originConn =>
+        {
+            var payload = new byte[6];
+            payload[0] = (byte)(((int)Http2SettingsId.EnableConnectProtocol >> 8) & 0xff);
+            payload[1] = (byte)((int)Http2SettingsId.EnableConnectProtocol & 0xff);
+            // Explicit 0 — valid, but means this origin does not support extended CONNECT.
+            payload[5] = 0;
+            await originConn.WriteFrameAsync(Http2FrameType.Settings, 0, 0, payload);
+
+            try
+            {
+                while (true)
+                    _ = await originConn.ReadFrameAsync();
+            }
+            catch { /* expected on connection close */ }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableRfc8441 = true;
+
+        using var rawClient = await Http2RawClient.ConnectAsync(
+            proxy.ProxyEndPoints[0].Port, "localhost", rawOrigin.Port);
+
+        var settings = await rawClient.Connection.ReadSettingsAsync();
+        Assert.IsTrue(settings.TryGetValue((int)Http2SettingsId.EnableConnectProtocol, out var wireValue),
+            "Client must receive ENABLE_CONNECT_PROTOCOL when EnableRfc8441 is on.");
+        Assert.AreEqual(1, wireValue,
+            "Wire value is the proxy's connection capability, not the origin's explicit 0.");
+
+        var requestHeaders = rawClient.Connection.EncodeHeaders(
+            new[]
+            {
+                (":method", "CONNECT"), (":protocol", "websocket"), (":scheme", "https"),
+                (":authority", $"localhost:{rawOrigin.Port}"), (":path", "/ws")
+            },
+            Array.Empty<(string, string)>());
+        await rawClient.Connection.WriteHeaderBlockAsync(1, requestHeaders, false);
+
+        var errorCode = await rawClient.Connection.ReadRstOrGoAwayErrorCodeAsync(1);
+        Assert.AreEqual(Http2ErrorCode.RefusedStream, errorCode,
+            "Websocket toward an origin that sent ENABLE_CONNECT_PROTOCOL=0 must get REFUSED_STREAM.");
+    }
+
+    /// <summary>
     ///     If the origin sends SETTINGS_ENABLE_CONNECT_PROTOCOL with an invalid value (neither 0 nor 1),
     ///     the proxy must treat it as a connection error and send GOAWAY(PROTOCOL_ERROR).
     /// </summary>

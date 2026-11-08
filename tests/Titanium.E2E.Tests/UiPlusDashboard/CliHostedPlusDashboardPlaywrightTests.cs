@@ -111,7 +111,7 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         await Expect(Page.Locator("h1")).ToContainTextAsync("Titanium Plus");
         await Expect(Page.GetByTestId("ov-rps")).ToBeVisibleAsync();
 
-        await Page.GotoAsync(_prefix + "routes");
+        await OpenAsync(_prefix + "routes");
         await Expect(Page.GetByTestId("dest-row-d1")).ToBeVisibleAsync();
 
         await Page.GetByTestId("btn-drain-d1").ClickAsync();
@@ -156,7 +156,7 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
             [ControlPlaneServer.SharedSecretHeader] = Secret,
         });
 
-        await Page.GotoAsync(_prefix);
+        await OpenAsync(_prefix);
         await Expect(Page.GetByTestId("plus-dashboard")).ToBeVisibleAsync();
     }
 
@@ -167,7 +167,7 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
     {
         await LoginAsync(ViewerSecret);
         await Expect(Page.GetByTestId("whoami")).ToContainTextAsync("viewer");
-        await Page.GotoAsync(_prefix + "routes");
+        await OpenAsync(_prefix + "routes");
         await Expect(Page.GetByTestId("btn-drain-d1")).ToBeDisabledAsync();
     }
 
@@ -202,7 +202,7 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         await LoginAsync(Secret);
         foreach (var path in new[] { "", "routes" })
         {
-            await Page.GotoAsync(_prefix + path);
+            await OpenAsync(_prefix + path);
             await Page.AddScriptTagAsync(new PageAddScriptTagOptions
             {
                 Url = "https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.3/axe.min.js",
@@ -222,9 +222,12 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         }
     }
 
+    private Task<IResponse?> OpenAsync(string url) =>
+        Page.GotoAsync(url, new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded });
+
     private async Task LoginAsync(string secret)
     {
-        await Page.GotoAsync(_prefix);
+        await OpenAsync(_prefix);
         await Expect(Page.GetByTestId("login-form")).ToBeVisibleAsync();
         await Page.GetByTestId("login-secret").FillAsync(secret);
         await Page.GetByTestId("login-submit").ClickAsync();

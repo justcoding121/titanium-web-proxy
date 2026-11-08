@@ -1,8 +1,8 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Gateway.Model;
 using Titanium.Gateway.Translation;
+using Titanium.TestKit;
 using Titanium.Web.Proxy.Configuration;
 using YamlDotNet.RepresentationModel;
 
@@ -209,24 +209,24 @@ public sealed partial class GatewayChartTests
             return;
         }
 
-        var (lintExit, lintOut) = Run(helm, $"lint \"{ChartDir}\" --strict");
+        var (lintExit, lintOut) = HelmProcess.Run(helm, $"lint \"{ChartDir}\" --strict");
         Assert.AreEqual(0, lintExit, lintOut);
 
-        var (exit, rendered) = Run(helm, $"template rel \"{ChartDir}\" --namespace gw");
+        var (exit, rendered) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\" --namespace gw");
         Assert.AreEqual(0, exit, rendered);
         StringAssert.Contains(rendered, "kind: GatewayClass");
         StringAssert.Contains(rendered, "name: rel-titanium-gateway-data");
         StringAssert.Contains(rendered, "TITANIUM_GATEWAY_PORT_MAP");
         Assert.IsFalse(rendered.Contains("kind: Role\nmetadata:\n  name: rel-titanium-gateway-controller-secrets", StringComparison.Ordinal));
 
-        var (scopedExit, scoped) = Run(helm, $"template rel \"{ChartDir}\" --namespace gw --set controller.secretNamespaces={{a,b}}");
+        var (scopedExit, scoped) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\" --namespace gw --set controller.secretNamespaces={{a,b}}");
         Assert.AreEqual(0, scopedExit, scoped);
         Assert.AreEqual(2, ScopedSecretRoleRegex().Count(scoped));
         StringAssert.Contains(scoped, "TITANIUM_GATEWAY_SECRET_NAMESPACES");
         Assert.IsFalse(ClusterSecretRuleBeforeBindingRegex().IsMatch(scoped),
             "with secretNamespaces the ClusterRole carries no Secret rule");
 
-        var (graceExit, grace) = Run(helm, $"template rel \"{ChartDir}\" --set dataPlane.terminationGracePeriodSeconds=3");
+        var (graceExit, grace) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\" --set dataPlane.terminationGracePeriodSeconds=3");
         Assert.AreNotEqual(0, graceExit);
         StringAssert.Contains(grace, "terminationGracePeriodSeconds");
     }
@@ -253,21 +253,6 @@ public sealed partial class GatewayChartTests
         }
 
         return null;
-    }
-
-    private static (int Exit, string Output) Run(string file, string arguments)
-    {
-        var info = new ProcessStartInfo(file, arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        using var process = Process.Start(info)!;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        Assert.IsTrue(process.WaitForExit(60_000), "helm timed out");
-        return (process.ExitCode, stdout.Result + stderr.Result);
     }
 
     private static string FindRepoRoot()

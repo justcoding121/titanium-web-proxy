@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Titanium.Web.Proxy.Extensions;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Network.Quic;
 
 namespace Titanium.Web.Proxy;
 
@@ -27,43 +28,77 @@ public partial class ProxyServer : IDisposable
 
         ProxyEndPoints.Add(endPoint);
 
-        if (ProxyRunning && endPoint is TransparentQuicProxyEndPoint quicEndPoint)
+        if (!ProxyRunning)
         {
-            quicListenerCts ??= new CancellationTokenSource();
-            ListenQuic(quicEndPoint);
+            return;
         }
-        else if (ProxyRunning)
+
+        try
         {
-            var wantDualQuic = EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true };
-            var ephemeralDual = wantDualQuic && endPoint.Port == 0;
-            var dualAttempts = 0;
-            while (true)
+            if (endPoint is TransparentQuicProxyEndPoint quicEndPoint)
             {
-                dualAttempts++;
-                Listen(endPoint);
-
-                if (!wantDualQuic)
-                    break;
-
-                var dualListen = (TransparentProxyEndPoint)endPoint;
-                if (!dualListen.DecryptSsl)
-                    throw new InvalidOperationException(
-                        "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
-
-                try
+                quicListenerCts ??= new CancellationTokenSource();
+                ListenQuic(quicEndPoint);
+            }
+            else
+            {
+                var wantDualQuic = EnableHttp3 && endPoint is TransparentProxyEndPoint { EnableHttp3: true };
+                var ephemeralDual = wantDualQuic && endPoint.Port == 0;
+                var dualAttempts = 0;
+                while (true)
                 {
-                    quicListenerCts ??= new CancellationTokenSource();
-                    ListenQuic(dualListen);
-                    break;
-                }
-                catch (Exception ex) when (ephemeralDual && dualAttempts < MaxEphemeralDualListenAttempts
-                                           && IsAddressAlreadyInUse(ex))
-                {
-                    QuitListenQuic(dualListen);
-                    QuitListen(endPoint);
-                    endPoint.Port = 0;
+                    dualAttempts++;
+                    Listen(endPoint);
+
+                    if (!wantDualQuic)
+                        break;
+
+                    var dualListen = (TransparentProxyEndPoint)endPoint;
+                    if (!dualListen.DecryptSsl)
+                        throw new InvalidOperationException(
+                            "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
+
+                    try
+                    {
+                        quicListenerCts ??= new CancellationTokenSource();
+                        ListenQuic(dualListen);
+                        break;
+                    }
+                    catch (Exception ex) when (ephemeralDual && dualAttempts < MaxEphemeralDualListenAttempts
+                                               && IsAddressAlreadyInUse(ex))
+                    {
+                        QuitListenQuic(dualListen);
+                        QuitListen(endPoint);
+                        endPoint.Port = 0;
+                    }
                 }
             }
+        }
+        catch
+        {
+            try
+            {
+                QuitListen(endPoint);
+            }
+            catch (Exception)
+            {
+                // The listener may already have been released by the failed bind.
+            }
+
+            if (endPoint is IQuicInboundEndPoint quic)
+            {
+                try
+                {
+                    QuitListenQuic(quic);
+                }
+                catch (Exception)
+                {
+                    // The UDP listener may not have been opened.
+                }
+            }
+
+            ProxyEndPoints.Remove(endPoint);
+            throw;
         }
     }
 

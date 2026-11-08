@@ -5,7 +5,7 @@ name: conformance
 #   parser-and-chaos  every PR that touches the HTTP parsers, the proxy core or these tests; runs in a few minutes
 #   h2spec            nightly + workflow_dispatch: h2spec against a prior-knowledge h2c reverse listener
 #   autobahn          nightly + workflow_dispatch: Autobahn|Testsuite client cases through a reverse listener
-#   real-peer         nightly + workflow_dispatch: the reverse listener in front of a stock nginx container
+#   real-peer         nightly + workflow_dispatch: the reverse listener in front of an external reference peer container
 #
 # The three heavy jobs follow the gateway-conformance precedent: they report from the first run on, but they only
 # fail the workflow once the repository variable CONFORMANCE_ENFORCE is 'true'. Until then the report (and the
@@ -30,6 +30,8 @@ on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+  push:
+    branches: [beta, stable]
 
 permissions:
   contents: read
@@ -207,10 +209,12 @@ jobs:
           path: artifacts/autobahn
           if-no-files-found: ignore
 
-  # Real-peer row: the listener in front of a stock nginx. The checks compare what the client gets through the
-  # proxy with what nginx sends directly, so a framing, header or body regression shows up against a server we
-  # did not write. Envoy joins the matrix the same way: add `envoy` below with its container and port mapping.
+  # Real-peer row: the listener in front of an external reference peer. The checks compare what the client
+  # gets through the proxy with what that server sends directly, so a framing, header, or body regression
+  # shows up against a server we did not write. Another peer joins the matrix the same way: add its id below
+  # with its container and port mapping.
   real-peer:
+    name: real-peer (external reference peer)
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -230,11 +234,12 @@ jobs:
       - name: Pull the peer image
         id: tool
         run: |
+          # external reference peer image
           if docker pull nginx:stable; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::nginx:stable could not be pulled; skipping the real-peer job."
+            echo "::notice::external reference peer image could not be pulled; skipping the real-peer job."
           fi
 
       - name: Publish the CLI

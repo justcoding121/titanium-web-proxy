@@ -14,6 +14,33 @@ namespace Titanium.Web.Proxy.UnitTests;
 public class Http3FrameTests
 {
     [TestMethod]
+    public void PayloadLimitForFrameType_HeadersUsesFieldSectionLimit()
+    {
+        Assert.AreEqual(65536,
+            Http3Frame.PayloadLimitForFrameType(Http3FrameType.Headers, 65536, 1_048_576));
+        Assert.AreEqual(1_048_576,
+            Http3Frame.PayloadLimitForFrameType(Http3FrameType.Data, 65536, 1_048_576));
+    }
+
+    [TestMethod]
+    public async Task ReadPayloadAfterHeaderAsync_HeadersOverFieldSectionLimit_ThrowsExcessiveLoad()
+    {
+        await using var ms = new MemoryStream();
+        var payload = new byte[100];
+        await Http3Frame.WriteAsync(ms, Http3FrameType.Headers, payload, CancellationToken.None);
+        ms.Position = 0;
+
+        var header = await Http3Frame.ReadFrameHeaderAsync(ms, CancellationToken.None);
+        Assert.IsNotNull(header);
+        var limit = Http3Frame.PayloadLimitForFrameType(header!.Value.Type, 64, 1_048_576);
+
+        var ex = await Assert.ThrowsExactlyAsync<Http3ConnectionException>(
+            () => Http3Frame.ReadPayloadAfterHeaderAsync(ms, header.Value, limit, CancellationToken.None)
+                .AsTask());
+        Assert.AreEqual(Http3ErrorCode.ExcessiveLoad, ex.ErrorCode);
+    }
+
+    [TestMethod]
     public async Task WriteThenRead_RoundTripsTypeAndPayload()
     {
         await using var ms = new MemoryStream();

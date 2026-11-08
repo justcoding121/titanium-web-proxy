@@ -88,6 +88,11 @@ internal class Http2Settings
     public bool EnableConnectProtocolEverSet { get; set; } = false;
 
     /// <summary>
+    ///     draft-ietf-webtrans-http2 SETTINGS_WT_MAX_SESSIONS. Zero means this peer did not advertise WebTransport.
+    /// </summary>
+    public int WtMaxSessions { get; set; }
+
+    /// <summary>
     ///     The HPACK encoder (and its dynamic table) used for header blocks sent in the direction this
     ///     settings instance represents the peer for. Lazily created and persisted for the life of the
     ///     connection - see the comment in <c>Http2Helper.SendHeader</c>.

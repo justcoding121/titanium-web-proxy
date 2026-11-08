@@ -64,6 +64,14 @@ helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-val
 
 Gateway API and Manager charts follow the same paths (`titanium-gateway`, `titanium-manager`).
 
+An empty image tag is the chart `appVersion`. Chart `1.0.1` ships `appVersion: 8.0.1`, so a beta install sets the tag or the pods pull `:8.0.1`:
+
+| Chart | Tag values |
+|-------|------------|
+| `titanium` | `image.tag` |
+| `titanium-gateway` | `controller.image.tag` and `dataPlane.image.tag`. `image.tag` on this chart is ignored. |
+| `titanium-manager` | `image.tag` |
+
 Minimal `my-values.yaml`:
 
 ```yaml
@@ -109,7 +117,7 @@ Build an image that already contains the Plus bundle, then set `image.repository
 
 ```dockerfile
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS plus
-ARG PLUS_ZIP=Titanium.Plus-8.0.0.zip
+ARG PLUS_ZIP=Titanium.Plus-8.0.1.zip
 COPY ${PLUS_ZIP} /tmp/plus.zip
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unzip \
@@ -118,7 +126,7 @@ RUN apt-get update \
     && test -f /plus/Titanium.Plus.dll \
     && test -f /plus/Titanium.Plus.files
 
-FROM ghcr.io/justcoding121/titanium-web-proxy:8.0.0
+FROM ghcr.io/justcoding121/titanium-web-proxy:8.0.1
 COPY --from=plus --chown=1654:1654 /plus/ /app/
 ```
 

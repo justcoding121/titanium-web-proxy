@@ -326,6 +326,36 @@ public partial class ProxyServer
                             closeConnection = true;
                             keepGoing = false;
                         }
+                        else if (keepGoing && request.UpgradeToWebTransport)
+                        {
+                            if (!AdvertisesWebTransport(args.ProxyEndPoint))
+                            {
+                                args.GenericResponse(
+                                    "WebTransport upgrade is not enabled on this listener.",
+                                    HttpStatusCode.NotImplemented);
+                                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                            }
+                            else
+                            {
+                                var poolKey = cachedPoolKey ??= ResolveHttp11ToHttp2PoolKey(args, remoteHostName,
+                                    remotePort, streamConnectHost, streamConnectPort);
+                                var originConnection = await Http2OriginConnectionPool.RentAsync(poolKey,
+                                    openFactory, cancellationToken);
+                                if (originConnection.EnableConnectProtocol && originConnection.WebTransportAdvertised)
+                                    await RunHttp11ToHttp2WebTransportTunnelAsync(args, originConnection,
+                                        cancellationTokenSource, cancellationToken);
+                                else
+                                {
+                                    args.GenericResponse(
+                                        "WebTransport refused: origin did not advertise SETTINGS_WT_MAX_SESSIONS.",
+                                        HttpStatusCode.NotImplemented);
+                                    await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+                                }
+                            }
+
+                            closeConnection = true;
+                            keepGoing = false;
+                        }
 
                         if (keepGoing)
                         {
@@ -1037,6 +1067,61 @@ public partial class ProxyServer
         }
 
         return buffered.ToArray();
+    }
+
+    private async Task RunHttp11ToHttp2WebTransportTunnelAsync(SessionEventArgs args,
+        Http2OriginConnection originConnection, CancellationTokenSource cancellationTokenSource,
+        CancellationToken cancellationToken)
+    {
+        var request = args.HttpClient.Request;
+        var clientStream = args.ClientStream;
+        PrepareWebTransportUpgradeForHttp2Origin(request);
+        var tunnelResult = await OpenWebSocketTunnelOrBadGatewayAsync(args, originConnection, cancellationToken);
+        if (tunnelResult == null)
+            return;
+        if (!tunnelResult.IsEstablished || tunnelResult.Stream == null)
+        {
+            await WriteRejectedTunnelResponseAsync(args, tunnelResult.Response, cancellationToken);
+            return;
+        }
+
+        using var tunnelStream = tunnelResult.Stream;
+        var response101 = new Response
+        {
+            HttpVersion = HttpHeader.Version11,
+            StatusCode = 101,
+            StatusDescription = "Switching Protocols"
+        };
+        response101.Headers.AddHeader(KnownHeaders.Upgrade, "webtransport");
+        response101.Headers.AddHeader(KnownHeaders.Connection, "Upgrade");
+        response101.Headers.AddHeader("Capsule-Protocol", "?1");
+        args.HttpClient.Response = response101;
+        if (!args.HttpClient.Response.Locked)
+            await OnBeforeResponse(args);
+        args.HttpClient.Response.Locked = true;
+        await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+        args.IsClientResponseCommitted = true;
+        await TcpHelper.SendRaw(clientStream, tunnelStream, BufferPool, args.OnDataSent, args.OnDataReceived,
+            cancellationTokenSource, logger);
+    }
+
+    private static void PrepareWebTransportUpgradeForHttp2Origin(Request request)
+    {
+        if (request.Authority.Length == 0)
+        {
+            var hostHeader = request.Host;
+            if (!string.IsNullOrEmpty(hostHeader))
+                request.Authority = hostHeader.GetByteString();
+        }
+
+        request.Method = "CONNECT";
+        request.ExtendedConnectProtocol = ExtendedConnectProtocols.WebTransport;
+        request.Headers.RemoveHeader(KnownHeaders.Connection);
+        request.Headers.RemoveHeader(KnownHeaders.Upgrade);
+        request.Headers.RemoveHeader(KnownHeaders.Host);
+        request.Headers.RemoveHeader("Capsule-Protocol");
+        LowercaseHeaderNames(request.Headers);
+        request.HeaderNamesAreHttp2Normalized = true;
     }
 
     private async Task RunHttp11ToHttp2WebSocketTunnelAsync(SessionEventArgs args,

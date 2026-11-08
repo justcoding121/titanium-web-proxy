@@ -6,6 +6,8 @@ name: kubernetes-smoke
 on:
   schedule:
     - cron: '17 3 * * *'
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
   pull_request:
     types: [labeled, synchronize]

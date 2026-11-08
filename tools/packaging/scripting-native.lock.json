@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "notes": "Pinned scripting natives for CLI/Inspector publish: Lua 5.4.7 (MIT, built from the pinned source tarball together with the Titanium Lua host shim from tools/scripting/lua-shim/) and the Wasmtime 50.0.0 C API (Apache-2.0 WITH LLVM-exception, prebuilt per-RID release archives). SHA-256 values for Wasmtime are the GitHub release asset digests; the Lua value is the checksum of lua-5.4.7.tar.gz from lua.org. Lua is compiled on the release runner that matches the RID (win-x64 needs cl or gcc; osx needs macOS); cross-building linux-arm64 / musl needs a native or emulated runner and is skipped with a warning otherwise. Do not commit downloaded or built binaries under .cache/.",
+  "notes": "Pinned scripting natives for CLI/Inspector publish: Lua 5.4.7 (MIT, built from the pinned source tarball together with the Titanium Lua host shim from tools/scripting/lua-shim/) and the Wasmtime 50.0.0 C API (Apache-2.0 WITH LLVM-exception, prebuilt per-RID release archives). SHA-256 values for Wasmtime are the GitHub release asset digests; the Lua value is the checksum of lua-5.4.7.tar.gz. The same tarball is committed at tools/packaging/third-party/lua-5.4.7.tar.gz so a build does not have to reach lua.org. Lua is compiled on the release runner that matches the RID (win-x64 needs cl or gcc; osx needs macOS); cross-building linux-arm64 / musl needs a native or emulated runner and is skipped with a warning otherwise. Do not commit downloaded or built binaries under .cache/.",
   "luaVersion": "5.4.7",
   "wasmtimeVersion": "50.0.0",
   "rids": {

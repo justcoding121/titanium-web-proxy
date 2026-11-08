@@ -196,8 +196,10 @@ internal sealed class Http3OriginClientSession : IAsyncDisposable
         // Stream type 0x00 = control (RFC 9114 §6.2.1).
         await _controlStream.WriteAsync(new byte[] { (byte)Http3StreamType.Control }, ct);
 
-        // Empty SETTINGS is valid; we advertise no QPACK dynamic table (static-only default).
+        // Advertise SETTINGS_MAX_FIELD_SECTION_SIZE to match the compressed HEADERS cap enforced
+        // on this origin session. No QPACK dynamic table (static-only default).
         var settings = new Http3Settings();
+        settings.SetMaxFieldSectionSize((ulong)Math.Max(0, _proxyServer.MaxDecodedHeaderListBytes));
         await Http3Frame.WriteAsync(_controlStream, Http3FrameType.Settings, settings.Serialize(), ct);
         await _controlStream.FlushAsync(ct);
 

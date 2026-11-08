@@ -10,6 +10,8 @@ jobs:
   kubernetes-smoke: ".github/workflows/kubernetes-smoke.yml (titanium, gateway, and manager jobs; PRs need k8s-smoke label)"
   gateway-conformance: ".github/workflows/gateway-conformance.yml"
   redis-fleet: "redis-fleet job in dotnetcore.yml"
+  build: ".NET build job (Windows)"
+  release-smoke: ".github/workflows/release.yml smoke-http3 and smoke-scripting"
 
 entries:
   - id: cli-help-matrix
@@ -131,3 +133,33 @@ entries:
     status: covered
     test: Titanium.E2E.Tests.CliCompressionE2ETests
     job: cli-e2e
+
+  - id: cli-http3-deps
+    capability: HTTP/3 native dependency install
+    status: covered
+    test: Titanium.E2E.Tests.CliHttp3DepsE2ETests
+    job: cli-e2e
+
+  - id: proxy-http3-integration
+    capability: HTTP/3 proxy integration
+    status: covered
+    test: tests/Titanium.Web.Proxy.IntegrationTests/Http3*.cs
+    job: build
+
+  - id: inspector-http3-stress
+    capability: Inspector HTTP/3 retention stress
+    status: covered
+    test: Titanium.Inspector.Tests TestCategory=Inspector-Stress
+    job: ui-portable
+
+  - id: release-http3-packaging
+    capability: Shipped CLI loads HTTP/3 natives
+    status: covered
+    test: .github/workflows/release.yml smoke-http3
+    job: release-smoke
+
+  - id: release-scripting-packaging
+    capability: Shipped CLI loads Lua and Wasm natives
+    status: covered
+    test: .github/workflows/release.yml smoke-scripting
+    job: release-smoke

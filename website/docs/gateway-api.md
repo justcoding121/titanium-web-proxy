@@ -25,7 +25,13 @@ The chart installs, in one release:
 
 Helm installs the CRDs on `helm install` and never upgrades them. To move to another Gateway API release, apply that release's standard-channel CRDs with `kubectl apply --server-side`, then upgrade the chart.
 
-The data-plane Service is a `LoadBalancer` by default. Its load balancer address becomes `Gateway.status.addresses`. Set `dataPlane.service.type=ClusterIP` on clusters without a load balancer.
+The controller lists `referencegrants.gateway.networking.k8s.io` at **v1**. On a cluster whose ReferenceGrant CRD only serves `v1beta1`, the process stays up and `/healthz` answers `200`, but `/readyz` stays `503` (`caches not synced`) and the pod never becomes Ready. Helm will not replace that CRD. Apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side` before expecting the 8.0.1 controller to become Ready.
+
+There is no single `image.tag` on this chart. Set `controller.image.tag` and `dataPlane.image.tag`. An empty tag is the chart `appVersion` (`8.0.1` on chart `1.0.1`), so a beta install sets both to `8.0.1-beta`. `--set image.tag=...` does not change either image.
+
+A cluster that already has GatewayClass `titanium` needs a second release to set its own `gatewayClass.name`, `ingressClass.name`, `controller.controllerName`, and `controller.ingressControllerName`. Two controllers must not own the same class.
+
+The data-plane Service is a `LoadBalancer` by default. A load balancer address becomes `Gateway.status.addresses`. With `dataPlane.service.type=ClusterIP`, or before a load balancer address exists, the controller uses the Service cluster IP, and `Programmed` can still become `True`.
 
 ## Quick start
 
@@ -101,7 +107,7 @@ A `certificateRef` in another namespace needs a `ReferenceGrant`.
 | `GatewayClass` | `controllerName`. Status `Accepted`. |
 | `Gateway` | Listeners with protocol `HTTP` or `HTTPS` (TLS mode `Terminate`), `hostname`, `allowedRoutes` (`namespaces.from` Same, All, or Selector, and `kinds`), `certificateRefs`. Status `Accepted`, `Programmed`, per-listener `attachedRoutes`, `ResolvedRefs`, `Conflicted`, and addresses from the data-plane Service. |
 | `HTTPRoute` | `parentRefs` (with `sectionName` and `port`), `hostnames`, and `rules` with the matches, filters, and backends below. Status per parent: `Accepted`, `ResolvedRefs`. |
-| `ReferenceGrant` | Cross-namespace `backendRefs`, `RequestMirror` backends, and `certificateRefs` (`v1beta1`). |
+| `ReferenceGrant` | Cross-namespace `backendRefs`, `RequestMirror` backends, and `certificateRefs`. The controller watches **v1**. |
 
 **Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
 

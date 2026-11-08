@@ -657,7 +657,14 @@ internal static class ReverseProxySessionDispatch
         }
 
         var request = session.HttpClient.Request;
-        if (request.ExpectContinue || request.UpgradeToWebSocket || session is SessionEventArgs { EnableWinAuth: true })
+        // Extended CONNECT (WebSocket, WebTransport, connect-tcp, connect-udp) is not replayable.
+        // A body that has been started and not fully buffered cannot be sent again.
+        // Compressed HTTP/2 relay never reaches here: that path has no session.
+        if (request.ExpectContinue
+            || request.UpgradeToWebSocket
+            || request.ExtendedConnectProtocol is not null
+            || (request.HasBody && !request.IsBodyRead)
+            || session is SessionEventArgs { EnableWinAuth: true })
         {
             return false;
         }

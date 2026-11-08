@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -152,6 +153,17 @@ public sealed class ControlPlaneServer : IDisposable
         try
         {
             server.Start();
+        }
+        catch (SocketException se)
+        {
+            server.Dispose();
+            certificate?.Dispose();
+            var reason = se.SocketErrorCode == SocketError.AddressAlreadyInUse
+                ? "address already in use"
+                : se.Message;
+            throw new InvalidOperationException(
+                $"Failed to bind Plus control plane {_host}:{_port}: {reason}. Set plus.controlPlane.port to a free port.",
+                se);
         }
         catch
         {

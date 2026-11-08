@@ -31,8 +31,15 @@ internal sealed class QpackContext : IAsyncDisposable
     internal QpackDynamicTable OutboundEncoderTable { get; }
 
     /// <summary>
+    ///     Maximum table capacity this connection advertised in
+    ///     <c>SETTINGS_QPACK_MAX_TABLE_CAPACITY</c>. Inbound Required Insert Count decoding and
+    ///     encoder-stream Set Capacity instructions are bounded by this value (advertise-what-you-enforce).
+    /// </summary>
+    internal uint LocalMaxTableCapacity { get; }
+
+    /// <summary>
     ///     Maximum table capacity advertised by the peer in <c>SETTINGS_QPACK_MAX_TABLE_CAPACITY</c>.
-    ///     The encoder must not insert entries that would exceed this limit.
+    ///     The outbound encoder must not insert entries that would exceed this limit.
     /// </summary>
     internal uint MaxTableCapacityFromPeer { get; set; }
 
@@ -73,6 +80,7 @@ internal sealed class QpackContext : IAsyncDisposable
 
     internal QpackContext(uint tableCapacity)
     {
+        LocalMaxTableCapacity = tableCapacity;
         InboundDecoderTable = new QpackDynamicTable(tableCapacity);
         OutboundEncoderTable = new QpackDynamicTable(tableCapacity);
     }

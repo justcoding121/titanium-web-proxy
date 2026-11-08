@@ -168,6 +168,8 @@ internal sealed class Http2OriginConnection : IDisposable
     /// </summary>
     internal bool EnableConnectProtocol => originSettings.EnableConnectProtocol;
 
+    internal bool WebTransportAdvertised => originSettings.WtMaxSessions > 0;
+
     /// <summary>
     ///     The underlying TCP connection, exposed so callers can attribute
     ///     <see cref="ProxyServer.EnableRequestTimingCapture" /> timing (connection id, reuse, and
@@ -316,7 +318,8 @@ internal sealed class Http2OriginConnection : IDisposable
         {
             await instance.socket.WriteAsync(preface.AsMemory(), cancellationToken);
             // Shared with the H2↔H2 MITM path (SendHttp2ClientConnectionStartupAsync).
-            await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken);
+            await Http2Helper.SendHttp2ClientConnectionStartupAsync(instance.socket, cancellationToken,
+                instance.maxDecodedHeaderListBytes);
             instance.AttachExclusiveFrameWriter();
 
             _ = instance.ReadLoopAsync(instance.connectionCts.Token);
@@ -1476,6 +1479,8 @@ internal sealed class Http2OriginConnection : IDisposable
             originSettings.MaxConcurrentStreams = value;
         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
             ApplyEnableConnectProtocolSetting(value);
+        else if (identifier == (int)Http2SettingsId.WtMaxSessions)
+            originSettings.WtMaxSessions = value < 0 ? 0 : value;
 
         return true;
     }

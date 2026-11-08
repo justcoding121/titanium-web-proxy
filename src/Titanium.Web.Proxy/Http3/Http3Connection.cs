@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.EventArguments;
+using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.Http3.Qpack;
 using Titanium.Web.Proxy.Logging;
@@ -154,7 +155,14 @@ internal sealed class Http3Connection
             // Open our outbound control stream and send SETTINGS.
             _serverControlStream = await _connection.OpenOutboundStreamAsync(
                 QuicStreamType.Unidirectional, _connectionCts.Token);
-            await SendServerSettingsAsync(_serverControlStream, _qpackContext, _server.EnableRfc8441,
+            // ENABLE_CONNECT on this connection when the listener accepts connect-udp.
+            // Admission of :protocol must use the same predicate so unknown tokens 501.
+            // No SETTINGS_H3_DATAGRAM: capsules share the request stream. Tiny-GET still
+            // keys off ProxyServer.EnableRfc8441, which this does not set.
+            await SendServerSettingsAsync(_serverControlStream, _qpackContext,
+                ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(
+                    _server.EnableRfc8441, _endPoint.AcceptConnectUdp),
+                _server.MaxDecodedHeaderListBytes,
                 _connectionCts.Token);
 
             // When dynamic table is enabled, open outbound QPACK encoder and decoder streams and
@@ -283,7 +291,7 @@ internal sealed class Http3Connection
     ///     Opens the server-side outbound control stream and sends the SETTINGS frame.
     /// </summary>
     private static async Task SendServerSettingsAsync(QuicStream controlStream, QpackContext? qpackContext,
-        bool enableConnectProtocol, CancellationToken ct)
+        bool enableConnectProtocol, int maxDecodedHeaderListBytes, CancellationToken ct)
     {
         // Write the stream type byte (0x00 = control stream).
         var streamTypeBuf = new byte[1];
@@ -292,6 +300,9 @@ internal sealed class Http3Connection
 
         // Build SETTINGS payload.
         var settings = new Http3Settings();
+
+        // Advertise-what-you-enforce: HEADERS / trailers payloads are capped at this size.
+        settings.SetMaxFieldSectionSize((ulong)Math.Max(0, maxDecodedHeaderListBytes));
 
         if (qpackContext != null)
         {

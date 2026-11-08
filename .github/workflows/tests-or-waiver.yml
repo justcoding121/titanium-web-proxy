@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   check:
+    name: tests-or-waiver
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

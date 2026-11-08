@@ -26,7 +26,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownListenerTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "explicit", "transparent", "socks", "quic", "masque", "udp",
+        "explicit", "transparent", "socks", "quic", "masque", "udp", "webtransport",
     };
 
     private static readonly HashSet<string> KnownProxyTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -56,6 +56,7 @@ public static class TwpConfigValidator
         var pluginNames = ValidatePlugins(config.Plugins, errors);
         ValidateRoutes(config.Routes ?? [], clusterIds, policyNames, pluginNames, errors);
         ValidateListeners(config.Listeners ?? [], clusterIds, errors);
+        ValidateListenerOverlaps(config, errors);
         ValidateScriptWiring(config, errors);
         ValidateServer(config.Server, errors);
         ValidateZoneAware(config, errors);
@@ -1835,6 +1836,124 @@ public static class TwpConfigValidator
         RequirePositiveIfSet(limits.MaxWebSocketFramePayloadBytes, $"routes.{route.Id}.limits.maxWebSocketFramePayloadBytes", errors);
     }
 
+    private static void ValidateListenerOverlaps(TwpConfig config, List<string> errors)
+    {
+        var bound = CollectBoundListeners(config.Listeners ?? []);
+        ReportListenerPairOverlaps(errors, bound);
+        ReportServicePortOverlaps(config, errors, bound);
+    }
+
+    private static List<(int Index, string Protocol, string Host, int Port)> CollectBoundListeners(
+        IList<ListenerConfig> listeners)
+    {
+        var bound = new List<(int Index, string Protocol, string Host, int Port)>();
+        for (var i = 0; i < listeners.Count; i++)
+        {
+            var listener = listeners[i];
+            if (listener.Port == 0)
+            {
+                continue;
+            }
+
+            bound.Add((i, ListenerTransport(listener), NormalizeBindHost(listener.Host), listener.Port));
+        }
+
+        return bound;
+    }
+
+    private static string ListenerTransport(ListenerConfig listener) =>
+        IsUdpListener(listener) || string.Equals(listener.Type, "quic", StringComparison.OrdinalIgnoreCase)
+            ? "udp"
+            : "tcp";
+
+    private static void ReportListenerPairOverlaps(
+        List<string> errors,
+        List<(int Index, string Protocol, string Host, int Port)> bound)
+    {
+        for (var a = 0; a < bound.Count; a++)
+        {
+            for (var b = a + 1; b < bound.Count; b++)
+            {
+                if (!ListenersConflict(bound[a], bound[b]))
+                {
+                    continue;
+                }
+
+                errors.Add(
+                    $"Listener port {bound[a].Port} (listeners[{bound[a].Index}]) conflicts with listeners[{bound[b].Index}]: both bind {bound[a].Protocol} on overlapping addresses.");
+            }
+        }
+    }
+
+    private static bool ListenersConflict(
+        (int Index, string Protocol, string Host, int Port) left,
+        (int Index, string Protocol, string Host, int Port) right) =>
+        left.Protocol == right.Protocol
+        && left.Port == right.Port
+        && BindHostsOverlap(left.Host, right.Host);
+
+    private static void ReportServicePortOverlaps(
+        TwpConfig config,
+        List<string> errors,
+        List<(int Index, string Protocol, string Host, int Port)> bound)
+    {
+        if (config.Server?.Admin is { Enabled: true } admin && admin.Port is > 0)
+        {
+            ReportTcpServiceOverlap(errors, bound, "server.admin", NormalizeBindHost(admin.Host ?? LoopbackIPv4), admin.Port.Value);
+        }
+
+        if (config.Server?.Metrics is { Enabled: true } metrics && (metrics.Port ?? 9464) > 0)
+        {
+            ReportTcpServiceOverlap(errors, bound, "server.metrics", NormalizeBindHost(metrics.Host ?? LoopbackIPv4), metrics.Port ?? 9464);
+        }
+
+        if (config.Plus is { Enabled: true } plus && (plus.ControlPlane?.Port ?? 9080) > 0)
+        {
+            ReportTcpServiceOverlap(
+                errors,
+                bound,
+                "plus.controlPlane",
+                NormalizeBindHost(plus.ControlPlane?.Host ?? LoopbackIPv4),
+                plus.ControlPlane?.Port ?? 9080);
+        }
+    }
+
+    private static void ReportTcpServiceOverlap(
+        List<string> errors,
+        List<(int Index, string Protocol, string Host, int Port)> listeners,
+        string key,
+        string host,
+        int port)
+    {
+        foreach (var listener in listeners)
+        {
+            if (listener.Protocol == "tcp" && listener.Port == port && BindHostsOverlap(listener.Host, host))
+            {
+                errors.Add(
+                    $"{key} port {port} conflicts with listeners[{listener.Index}]: both bind tcp on overlapping addresses.");
+            }
+        }
+    }
+
+    private static string NormalizeBindHost(string? host)
+    {
+        var trimmed = (host ?? string.Empty).Trim();
+        if (trimmed.Length == 0 || trimmed is "*" or "0.0.0.0" or "::" or "[::]")
+        {
+            return "*";
+        }
+
+        if (trimmed.Equals(LocalhostHostName, StringComparison.OrdinalIgnoreCase) || trimmed == LoopbackIPv4)
+        {
+            return LoopbackIPv4;
+        }
+
+        return trimmed.Trim('[', ']');
+    }
+
+    private static bool BindHostsOverlap(string left, string right) =>
+        left == "*" || right == "*" || string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+
     private static void ValidateListeners(
         IEnumerable<ListenerConfig> listeners, HashSet<string> clusterIds, List<string> errors)
     {
@@ -1843,6 +1962,7 @@ public static class TwpConfigValidator
             ValidateListenerBounds(listener, errors);
             ValidatePassthrough(listener, clusterIds, errors);
             ValidateMasqueListener(listener, errors);
+            ValidateWebTransportListener(listener, errors);
             ValidateUdpListener(listener, clusterIds, errors);
             ValidateClientCertificate(listener, errors);
             ValidateTrustedProxySources(listener, errors);
@@ -1963,7 +2083,7 @@ public static class TwpConfigValidator
 
         if (!string.IsNullOrWhiteSpace(listener.Type) && !KnownListenerTypes.Contains(listener.Type))
         {
-            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque, udp).");
+            errors.Add($"Listener type '{listener.Type}' is unknown (explicit, transparent, socks, quic, masque, udp, webtransport).");
         }
 
         if (listener.MaxCachedConnections is <= 0)
@@ -2106,6 +2226,14 @@ public static class TwpConfigValidator
                 $"Listener port {listener.Port}: masque listener requires credentials or requireAuth: false.");
         }
 
+        if (listener.AcceptConnectUdp
+            && listener.Masque?.RequireAuth != false
+            && listener.Masque?.Credentials is not { Count: > 0 })
+        {
+            errors.Add(
+                $"Listener port {listener.Port}: acceptConnectUdp requires credentials or masque.requireAuth: false.");
+        }
+
         if (listener.Masque is not { } masque)
         {
             return;
@@ -2160,6 +2288,45 @@ public static class TwpConfigValidator
         AddUnless(errors, listener.Port, "masque.idleTimeoutSeconds must be positive.", masque.IdleTimeoutSeconds is <= 0);
         AddUnless(errors, listener.Port, "masque.maxDatagramsPerSecond must be positive.", masque.MaxDatagramsPerSecond is <= 0);
         AddUnless(errors, listener.Port, "masque.maxBytesPerSecond must be positive.", masque.MaxBytesPerSecond is <= 0);
+    }
+
+    private static void ValidateWebTransportListener(ListenerConfig listener, List<string> errors)
+    {
+        var isWebTransport = string.Equals(listener.Type, "webtransport", StringComparison.OrdinalIgnoreCase);
+        if (!isWebTransport)
+        {
+            if (listener.WebTransport is not null)
+            {
+                errors.Add($"Listener port {listener.Port}: webtransport settings require type: webtransport.");
+            }
+
+            return;
+        }
+
+        if (listener.WebTransport?.RequireAuth != false && listener.WebTransport?.Credentials is not { Count: > 0 })
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport listener requires credentials or requireAuth: false.");
+        }
+
+        if (string.IsNullOrWhiteSpace(listener.WebTransport?.OriginHost))
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport listener requires originHost.");
+        }
+
+        if (listener.WebTransport?.OriginPort is <= 0 or > 65535)
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport.originPort is out of range.");
+        }
+
+        if (listener.WebTransport?.MaxSessions is <= 0)
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport.maxSessions must be positive.");
+        }
+
+        if (listener.WebTransport?.MaxSessionsPerClient is <= 0)
+        {
+            errors.Add($"Listener port {listener.Port}: webtransport.maxSessionsPerClient must be positive.");
+        }
     }
 
     private static void AddUnless(List<string> errors, int port, string message, bool failed)
@@ -3062,9 +3229,9 @@ public static class TwpConfigValidator
         if (config.Server?.RequestDecompression is { Enabled: true })
         {
             warnings.Add(
-                "server.requestDecompression decompresses HTTP/1.x request bodies on the full session path only. " +
-                "HTTP/2 and HTTP/3 request bodies, Expect: 100-continue requests, deflate and stacked encodings " +
-                "are forwarded as sent.");
+                "server.requestDecompression decompresses gzip and brotli HTTP/1.x, HTTP/2, and HTTP/3 request bodies " +
+                "on the session path after headers are decoded. Extended CONNECT, the compressed fast path, " +
+                "Expect: 100-continue, deflate and stacked encodings are forwarded as sent.");
         }
 
         CollectPluginWarnings(config, warnings);
@@ -3097,6 +3264,14 @@ public static class TwpConfigValidator
             {
                 warnings.Add(
                     $"Listener port {listener.Port}: masque authentication is off on a non-loopback address.");
+            }
+
+            if (string.Equals(listener.Type, "webtransport", StringComparison.OrdinalIgnoreCase)
+                && listener.WebTransport?.RequireAuth == false
+                && listener.Host is not (LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName))
+            {
+                warnings.Add(
+                    $"Listener port {listener.Port}: webtransport authentication is off on a non-loopback address.");
             }
 
             if (IsUdpListener(listener) && listener.Host is not (LoopbackIPv4 or LoopbackIPv6 or LocalhostHostName))

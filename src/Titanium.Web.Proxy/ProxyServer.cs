@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Titanium.Web.Proxy.Diagnostics;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Helpers.WinHttp;
@@ -615,6 +616,47 @@ public partial class ProxyServer : IDisposable
     public bool EnableRfc8441 { get; set; } = false;
 
     /// <summary>
+    ///     When <see langword="true"/>, explicit listeners accept
+    ///     <c>:protocol = connect-tcp</c> and advertise <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>
+    ///     on those connections only. Reverse and SOCKS listeners stay unchanged unless
+    ///     <see cref="ProxyEndPoint.AcceptConnectTcp"/> is set on that listener.
+    ///     Default: <see langword="false"/>.
+    /// </summary>
+    public bool EnableConnectTcp { get; set; } = false;
+
+    /// <summary>
+    ///     True when this listener should advertise and accept connect-tcp.
+    ///     The process flag applies to explicit listeners only, so a reverse tiny-GET listener
+    ///     does not lose compressed-relay topology.
+    /// </summary>
+    internal bool AdvertisesConnectTcp(ProxyEndPoint endPoint) =>
+        endPoint.AcceptConnectTcp || (EnableConnectTcp && endPoint is ExplicitProxyEndPoint);
+
+    /// <summary>Token allow-list for one connection on <paramref name="endPoint"/>.</summary>
+    internal ExtendedConnectSupport ConnectSupportFor(ProxyEndPoint endPoint) =>
+        new(webSocket: EnableRfc8441, webTransport: AdvertisesWebTransport(endPoint),
+            connectTcp: AdvertisesConnectTcp(endPoint), connectUdp: endPoint.AcceptConnectUdp);
+
+    /// <summary>
+    ///     When <see langword="true"/>, explicit listeners accept <c>:protocol=webtransport</c>
+    ///     on HTTP/1.1 and HTTP/2. Reverse listeners stay off unless
+    ///     <see cref="ProxyEndPoint.AcceptWebTransport"/> is set. HTTP/3 stays 501.
+    ///     Default: <see langword="false"/>.
+    /// </summary>
+    public bool EnableWebTransport { get; set; }
+
+    /// <summary>True when this listener accepts capsule WebTransport on HTTP/1.1 and HTTP/2.</summary>
+    internal bool AdvertisesWebTransport(ProxyEndPoint endPoint) =>
+        endPoint.AcceptWebTransport || (EnableWebTransport && endPoint is ExplicitProxyEndPoint);
+
+    /// <summary>
+    ///     Extended CONNECT advertisement for connect-tcp or WebTransport.
+    ///     Does not include <see cref="EnableRfc8441"/>; that flag is passed separately.
+    /// </summary>
+    internal bool AdvertisesExtendedConnect(ProxyEndPoint endPoint) =>
+        AdvertisesConnectTcp(endPoint) || AdvertisesWebTransport(endPoint) || endPoint.AcceptConnectUdp;
+
+    /// <summary>
     ///     Enable HTTP/3 (QUIC) support. When <see langword="true" />:
     ///     <list type="bullet">
     ///       <item>
@@ -720,8 +762,10 @@ public partial class ProxyServer : IDisposable
     /// <summary>
     ///     When <see langword="true" />, enables RFC 9204 QPACK dynamic table encoding and decoding for
     ///     inbound HTTP/3 connections. Each connection gets its own <see cref="Http3.Qpack.QpackContext" />
-    ///     with two independent 4096-byte tables (one inbound, one outbound). Defaults to
-    ///     <see langword="false" /> (static-table-only); existing deployments are unaffected.
+    ///     with two independent 4096-byte tables (one inbound, one outbound). Inbound Required Insert
+    ///     Count decoding and encoder-stream Set Capacity instructions are capped at that advertised
+    ///     4096. Defaults to <see langword="false" /> (static-table-only); existing deployments are
+    ///     unaffected.
     /// </summary>
     [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
     public bool EnableQpackDynamicTable { get; set; } = false;
@@ -1105,9 +1149,9 @@ public partial class ProxyServer : IDisposable
     public int ListenerBackLog { get; set; } = 1024;
 
     /// <summary>
-    ///     When true (default), SO_REUSEADDR is requested where
-    ///     <see cref="Helpers.RunTime.IsSocketReuseAvailable" /> reports support (always on Windows; on
-    ///     non-Windows, .NET Core 3+ / compatible runtimes).
+    ///     When true (default), SO_REUSEADDR is requested on outbound sockets, and on non-Windows
+    ///     listeners, where <see cref="Helpers.RunTime.IsSocketReuseAvailable" /> reports support.
+    ///     Windows listeners omit it so a second process cannot bind the same port.
     /// </summary>
     public bool ReuseSocket { get; set; } = true;
 
@@ -1699,7 +1743,6 @@ public partial class ProxyServer : IDisposable
         || RequestIdHeader is not null
         || ForwardedHeaders is not null
         || CompressionPolicy is not null
-        || RequestDecompressionPolicy is not null
         || ReverseProxy is { HasGrpcWebRoutes: true }
         || ReverseProxy is { HasHandledPolicies: true }
         || ReverseProxy is { HasRoutePlugins: true }
@@ -1806,11 +1849,18 @@ public partial class ProxyServer : IDisposable
     {
         endPoint.Listener = new TcpListener(endPoint.IpAddress, endPoint.Port);
 
-        if (ReuseSocket && RunTime.IsSocketReuseAvailable())
-            endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-
         try
         {
+            // Windows: do not set SO_REUSEADDR. With it, a second process can bind the same
+            // address. SO_EXCLUSIVEADDRUSE would also block that, but it breaks overlapped
+            // AcceptAsync, so connections never complete. Leaving reuse off is enough for
+            // two listeners that both omit it, and the same process can bind the port again
+            // after Stop. Non-Windows keeps SO_REUSEADDR so a restart can bind through TIME_WAIT.
+            if (!OperatingSystem.IsWindows() && ReuseSocket && RunTime.IsSocketReuseAvailable())
+            {
+                endPoint.Listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            }
+
             // SO_REUSEPORT = 15. SetRawSocketOption talks to the kernel directly: SetSocketOption(ReusePort)
             // throws SocketException "Operation not supported" on some Linux hosts (the option is outside the try
             // that wraps Start, so the process used to exit before it was ready).
@@ -1834,13 +1884,29 @@ public partial class ProxyServer : IDisposable
         }
         catch (SocketException ex)
         {
-            var pex = new Exception(
-                $"Endpoint {endPoint} failed to start. Check inner exception and exception data for details.", ex);
-            pex.Data.Add("ipAddress", endPoint.IpAddress);
-            pex.Data.Add("port", endPoint.Port);
-            throw pex;
+            try
+            {
+                endPoint.Listener?.Server.Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already released.
+            }
+
+            endPoint.Listener = null;
+            throw new ProxyListenException(DescribeEndPointKind(endPoint), endPoint.IpAddress, endPoint.Port, ex);
         }
     }
+
+    private static string DescribeEndPointKind(ProxyEndPoint endPoint) => endPoint switch
+    {
+        ExplicitProxyEndPoint => "explicit",
+        TransparentProxyEndPoint => "transparent",
+        SocksProxyEndPoint => "socks",
+        MasqueProxyEndPoint => "masque",
+        WebTransportProxyEndPoint => "webtransport",
+        _ => endPoint.GetType().Name,
+    };
 
     /// <summary>
     ///     Verify if its safe to set this end point as system proxy.
@@ -2272,6 +2338,8 @@ public partial class ProxyServer : IDisposable
                 await HandleClient(tep, clientConnection);
             else if (endPoint is SocksProxyEndPoint sep) await HandleClient(sep, clientConnection);
             else if (endPoint is MasqueProxyEndPoint masque) await HandleMasqueClient(masque, clientConnection);
+            else if (endPoint is WebTransportProxyEndPoint webTransport)
+                await HandleWebTransportClient(webTransport, clientConnection);
         }
     }
 

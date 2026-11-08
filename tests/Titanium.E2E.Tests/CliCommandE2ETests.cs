@@ -140,7 +140,7 @@ public class CliCommandE2ETests
         using var harness = new CliProcessHarness();
         var (code, stdout, _) = await harness.RunOnceAsync(["version"]);
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout, "8.0.0");
+        StringAssert.Contains(stdout, "8.0.1");
     }
 
     [TestMethod]
@@ -197,9 +197,9 @@ public class CliCommandE2ETests
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
             var response = await http.GetAsync($"http://127.0.0.1:{listen}/access-log");
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-            await Task.Delay(400);
-            Assert.IsTrue(File.Exists(accessPath), "access log file missing");
-            var text = await ReadSharedTextAsync(accessPath);
+            // AfterResponse runs once the response bytes are already on the wire, so the line can land
+            // after GetAsync returns. Wait for the line instead of a fixed delay.
+            var text = await WaitForAccessLineAsync(accessPath, TimeSpan.FromSeconds(10));
             StringAssert.Contains(text, "access-log");
             StringAssert.Contains(text, "\"method\"");
             StringAssert.Contains(text, "\"status\"");
@@ -517,7 +517,7 @@ public class CliCommandE2ETests
         var combined = stdout + stderr;
         // 0 = up to date, 2 = update available, 1 = feed unreachable (transient CI / network).
         Assert.IsTrue(code is 0 or 1 or 2, $"Unexpected exit {code}. Output: {combined}");
-        StringAssert.Contains(combined, "8.0.0");
+        StringAssert.Contains(combined, "8.0.1");
         if (code == 1)
         {
             Assert.IsTrue(
@@ -562,6 +562,28 @@ public class CliCommandE2ETests
         File.WriteAllText(certPath, PemEncoding.WriteString("CERTIFICATE", cert.RawData));
         File.WriteAllText(keyPath, PemEncoding.WriteString("PRIVATE KEY", rsa.ExportPkcs8PrivateKey()));
         return (certPath, keyPath);
+    }
+
+    private static async Task<string> WaitForAccessLineAsync(string path, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        var text = string.Empty;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (File.Exists(path))
+            {
+                text = await ReadSharedTextAsync(path);
+                if (text.Contains("access-log", StringComparison.Ordinal))
+                {
+                    return text;
+                }
+            }
+
+            await Task.Delay(50);
+        }
+
+        Assert.Fail($"access log did not contain the request within {timeout.TotalSeconds:0}s. contents='{text}'");
+        return text;
     }
 
     private static async Task<string> ReadSharedTextAsync(string path)

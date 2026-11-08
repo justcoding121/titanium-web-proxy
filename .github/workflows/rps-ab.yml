@@ -99,18 +99,8 @@ jobs:
           echo "nproc=$(nproc)"
           lscpu | sed -n '1,20p'
 
-      - name: Install libmsquic (HTTP/3 arms)
-        run: |
-          set -euo pipefail
-          . /etc/os-release
-          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-            "https://packages.microsoft.com/config/${ID}/${VERSION_ID}/packages-microsoft-prod.deb" \
-            -o packages-microsoft-prod.deb
-          sudo dpkg -i packages-microsoft-prod.deb
-          rm -f packages-microsoft-prod.deb
-          sudo find /etc/apt -type f \( -iname '*chrome*' -o -iname '*google*chrome*' \) -print -delete || true
-          sudo apt-get update || true
-          sudo apt-get install -y libmsquic
+      - name: Ensure MsQuic
+        uses: ./.github/actions/ensure-msquic
 
       - name: Check out baseline and candidate worktrees
         run: |

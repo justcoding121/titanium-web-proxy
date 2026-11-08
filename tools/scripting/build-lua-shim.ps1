@@ -38,6 +38,29 @@ function Invoke-WebRequestWithRetry {
         [Parameter(Mandatory = $true)] [string] $OutFile,
         [int] $Attempts = 5
     )
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        if (Test-Path $OutFile) { Remove-Item -Force $OutFile }
+        # curl prints "error: ..." on a retry. The scripting test project runs this script from an
+        # MSBuild Exec task, which treats that text as a compiler error and fails the build even
+        # after a later attempt succeeds. Keep the bytes inside this process and rewrite the word.
+        $previousNative = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+        try {
+            # --ipv4: an unanswered AAAA record for lua.org or ziglang.org burns the whole timeout.
+            $lines = & $curl.Source --ipv4 --fail --location --silent --show-error --retry $Attempts --retry-all-errors --retry-delay 2 --connect-timeout 20 --max-time 180 -o $OutFile $Uri 2>&1
+            $code = $LASTEXITCODE
+        }
+        finally {
+            $PSNativeCommandUseErrorActionPreference = $previousNative
+        }
+        foreach ($line in @($lines)) {
+            $text = "$line" -replace '(?i)(^|\s)error\s*:', '${1}failure:'
+            if ($text) { Write-Info $text }
+        }
+        if ($code -ne 0) { throw "download failed ($code): $Uri" }
+        return
+    }
     $delaySec = 2
     for ($i = 1; $i -le $Attempts; $i++) {
         try {
@@ -104,16 +127,23 @@ $lua = $lock.rids.$rid.lua
 New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
 $tarball = Join-Path $cacheDir (Split-Path -Leaf $lua.sourceUrl)
 $want = $lua.sha256.ToLowerInvariant()
+$vendored = Join-Path $repoRoot "tools/packaging/third-party/$(Split-Path -Leaf $lua.sourceUrl)"
 if (-not (Test-Path $tarball) -or (Get-FileHash -Algorithm SHA256 $tarball).Hash.ToLowerInvariant() -ne $want) {
-    Write-Info "download $($lua.sourceUrl)"
-    $tmp = "$tarball.partial"
-    Invoke-WebRequestWithRetry -Uri $lua.sourceUrl -OutFile $tmp
-    $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLowerInvariant()
-    if ($got -ne $want) {
-        Remove-Item -Force $tmp
-        throw "SHA256 mismatch for $($lua.sourceUrl): expected $want, got $got"
+    if ((Test-Path $vendored) -and (Get-FileHash -Algorithm SHA256 $vendored).Hash.ToLowerInvariant() -eq $want) {
+        Write-Info "using vendored $(Split-Path -Leaf $vendored)"
+        Copy-Item -Force $vendored $tarball
     }
-    Move-Item -Force $tmp $tarball
+    else {
+        Write-Info "download $($lua.sourceUrl)"
+        $tmp = "$tarball.partial"
+        Invoke-WebRequestWithRetry -Uri $lua.sourceUrl -OutFile $tmp
+        $got = (Get-FileHash -Algorithm SHA256 $tmp).Hash.ToLowerInvariant()
+        if ($got -ne $want) {
+            Remove-Item -Force $tmp
+            throw "SHA256 mismatch for $($lua.sourceUrl): expected $want, got $got"
+        }
+        Move-Item -Force $tmp $tarball
+    }
 }
 
 $srcRoot = Join-Path $cacheDir $lua.sourceDir
@@ -148,7 +178,6 @@ try {
             }
             $vcvarsall = if ($vs) { Join-Path $vs "VC/Auxiliary/Build/vcvarsall.bat" }
             $vcvars = if ($vs) { Join-Path $vs "VC/Auxiliary/Build/vcvars64.bat" }
-            $zig = Find-Zig
             if ($vcvarsall -and (Test-Path $vcvarsall) -and (Test-Path $vcvars)) {
                 $rsp = Join-Path $objDir "cl.rsp"
                 Set-Content -Path $rsp -Value (($clArgs | ForEach-Object { '"' + $_ + '"' }) -join "`n")
@@ -159,7 +188,7 @@ try {
                 & gcc -O2 -shared -DLUA_BUILD_AS_DLL "-I$srcDir" "-I$shimDir" -o $outPath @all -static-libgcc
                 if ($LASTEXITCODE -ne 0) { throw "gcc failed ($LASTEXITCODE)" }
             }
-            elseif ($zig) {
+            elseif ($zig = Find-Zig) {
                 Write-Info "using $zig"
                 & $zig cc -target x86_64-windows-gnu -O2 -shared -DLUA_BUILD_AS_DLL "-I$srcDir" "-I$shimDir" -o $outPath @all
                 if ($LASTEXITCODE -ne 0) { throw "zig cc failed ($LASTEXITCODE)" }

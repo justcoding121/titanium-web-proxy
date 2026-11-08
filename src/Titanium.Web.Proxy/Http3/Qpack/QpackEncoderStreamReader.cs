@@ -119,6 +119,11 @@ internal static class QpackEncoderStreamReader
         {
             // Set Dynamic Table Capacity: 01 Capacity(6)
             if (!TryReadPrefixedInt(data, 6, out var newCapacity, out consumed)) { consumed = 0; return false; }
+            // RFC 9204 §3.2.2: capacity must not exceed the decoder's SETTINGS_QPACK_MAX_TABLE_CAPACITY.
+            if (newCapacity > context.LocalMaxTableCapacity)
+                throw new Http3ConnectionException(Http3ErrorCode.QpackEncoderStreamError,
+                    $"QPACK Set Capacity {newCapacity} exceeds the advertised " +
+                    $"SETTINGS_QPACK_MAX_TABLE_CAPACITY of {context.LocalMaxTableCapacity}.");
             context.InboundDecoderTable.SetCapacity((uint)Math.Min(newCapacity, uint.MaxValue));
             return true;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,12 +15,13 @@ namespace Titanium.Web.Proxy.Http2;
 ///     generic relay loop that nothing on the client=>server leg ever appears to fail or hang unexpectedly:
 ///     <list type="bullet">
 ///         <item>
-///             Exactly one connection SETTINGS frame is produced on the first read (ENABLE_PUSH=0 and
-///             INITIAL_WINDOW_SIZE = 768 KiB), because the client=>server relay direction
-///             requires one before it will emit any client-facing HEADERS (see
-///             <see cref="Http2ConnectionState.ServerSettingsRelayed" />) - including the bridge's own synthetic
-///             responses, which reuse that exact signal. The large INITIAL_WINDOW_SIZE is relayed to the
-///             client so concurrent 64 KiB uploads are not capped at the RFC default 65535.
+///             Exactly one connection SETTINGS frame is produced on the first read (ENABLE_PUSH=0,
+///             INITIAL_WINDOW_SIZE = 768 KiB, and SETTINGS_MAX_HEADER_LIST_SIZE = the decode cap),
+///             because the client=>server relay direction requires one before it will emit any
+///             client-facing HEADERS (see <see cref="Http2ConnectionState.ServerSettingsRelayed" />)
+///             - including the bridge's own synthetic responses, which reuse that exact signal. The
+///             large INITIAL_WINDOW_SIZE is relayed to the client so concurrent 64 KiB uploads are
+///             not capped at the RFC default 65535.
 ///             <see cref="Http2Helper" /> appends <c>SETTINGS_MAX_CONCURRENT_STREAMS</c> from
 ///             <see cref="Options.ProxyResourceLimits.MaxConcurrentStreamsPerConnection" /> when omitted —
 ///             set that limit to 8 under lossy/HOL workloads so clients spread across TCP connections.
@@ -41,45 +43,49 @@ namespace Titanium.Web.Proxy.Http2;
 /// </summary>
 internal sealed class NullOriginStream : Stream
 {
-    /// <summary>
-    ///     SETTINGS frame: ENABLE_PUSH=0 (6 bytes) + INITIAL_WINDOW_SIZE=768 KiB (6 bytes).
-    ///     Length = 12, type = SETTINGS, flags = 0, stream id = 0.
-    /// </summary>
-    private static readonly byte[] ClientFacingSettingsFrame = BuildClientFacingSettingsFrame(advertiseConnectProtocol: false);
-    private static readonly byte[] ConnectProtocolSettingsFrame = BuildClientFacingSettingsFrame(advertiseConnectProtocol: true);
+    // One or two keys for the whole process (default decode cap ± CONNECT advertise).
+    private static readonly ConcurrentDictionary<(bool Connect, int Limit), byte[]> FrameCache = new();
 
     private readonly CancellationToken cancellationToken;
     private readonly byte[] settingsFrame;
     private int settingsBytesServed;
 
-    private static byte[] BuildClientFacingSettingsFrame(bool advertiseConnectProtocol)
+    private static byte[] BuildClientFacingSettingsFrame(bool advertiseConnectProtocol,
+        int maxDecodedHeaderListBytes)
     {
         // 9-byte header + 6 bytes per SETTINGS entry.
-        var entries = advertiseConnectProtocol ? 3 : 2;
+        // ENABLE_PUSH + INITIAL_WINDOW_SIZE + MAX_HEADER_LIST_SIZE [+ ENABLE_CONNECT_PROTOCOL].
+        var entries = advertiseConnectProtocol ? 4 : 3;
         var payloadLength = entries * 6;
         var frame = new byte[9 + payloadLength];
         frame[2] = (byte)payloadLength;
         frame[3] = (byte)Http2FrameType.Settings;
 
+        var lim = maxDecodedHeaderListBytes > 0 ? maxDecodedHeaderListBytes : 64 * 1024;
         var payload = frame.AsSpan(9);
         BinaryPrimitives.WriteUInt16BigEndian(payload, (ushort)Http2SettingsId.EnablePush);
         BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(2), 0);
         BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(6), (ushort)Http2SettingsId.InitialWindowSize);
         BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(8), (uint)Http2Helper.ClientInitialStreamWindowSize);
+        BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(12), (ushort)Http2SettingsId.MaxHeaderListSize);
+        BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(14), (uint)lim);
         if (advertiseConnectProtocol)
         {
             // RFC 8441. The relay keeps this value only when enableRfc8441 is set on the session.
-            BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(12), (ushort)Http2SettingsId.EnableConnectProtocol);
-            BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(14), 1);
+            BinaryPrimitives.WriteUInt16BigEndian(payload.Slice(18), (ushort)Http2SettingsId.EnableConnectProtocol);
+            BinaryPrimitives.WriteUInt32BigEndian(payload.Slice(20), 1);
         }
 
         return frame;
     }
 
-    internal NullOriginStream(CancellationToken cancellationToken, bool advertiseConnectProtocol = false)
+    internal NullOriginStream(CancellationToken cancellationToken, bool advertiseConnectProtocol = false,
+        int maxDecodedHeaderListBytes = 64 * 1024)
     {
         this.cancellationToken = cancellationToken;
-        settingsFrame = advertiseConnectProtocol ? ConnectProtocolSettingsFrame : ClientFacingSettingsFrame;
+        var lim = maxDecodedHeaderListBytes > 0 ? maxDecodedHeaderListBytes : 64 * 1024;
+        settingsFrame = FrameCache.GetOrAdd((advertiseConnectProtocol, lim),
+            static k => BuildClientFacingSettingsFrame(k.Connect, k.Limit));
     }
 
     public override bool CanRead => true;

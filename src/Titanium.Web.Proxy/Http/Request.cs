@@ -241,7 +241,7 @@ public class Request : RequestResponseBase
         {
             // HTTP/2 extended CONNECT (RFC 8441)
             if (ExtendedConnectProtocol != null)
-                return string.Equals(ExtendedConnectProtocol, "websocket", StringComparison.OrdinalIgnoreCase);
+                return ExtendedConnectProtocols.IsWebSocket(ExtendedConnectProtocol);
 
             // HTTP/1.1 Upgrade header
             var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
@@ -249,6 +249,21 @@ public class Request : RequestResponseBase
             if (headerValue == null) return false;
 
             return headerValue.EqualsIgnoreCase(KnownHeaders.UpgradeWebsocket.String);
+        }
+    }
+
+    /// <summary>
+    ///     HTTP/1.1 <c>Upgrade: webtransport</c> or HTTP/2 <c>:protocol=webtransport</c>.
+    /// </summary>
+    public bool UpgradeToWebTransport
+    {
+        get
+        {
+            if (ExtendedConnectProtocols.IsWebTransport(ExtendedConnectProtocol))
+                return true;
+
+            var headerValue = Headers.GetHeaderValueOrNull(KnownHeaders.Upgrade);
+            return headerValue != null && headerValue.EqualsIgnoreCase("webtransport");
         }
     }
 

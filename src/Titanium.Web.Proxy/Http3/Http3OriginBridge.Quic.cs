@@ -53,7 +53,8 @@ internal static partial class Http3OriginBridge
     ///     When <see langword="true" />, QUIC failures are terminal (return 502); no TCP fallback.
     ///     When <see langword="false" /> (Auto policy), evict the stale cache entry and fall back to TCP.
     /// </param>
-    private static async Task ForwardOverQuicAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    /// <returns>True when a gateway status retry was staged and the caller should send the request again.</returns>
+    private static async Task<bool> ForwardOverQuicAsync( // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
         SessionEventArgs sessionArgs,
         ProxyServer server,
         string connectHost,
@@ -142,7 +143,7 @@ internal static partial class Http3OriginBridge
                         sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
                     }
 
-                    return;
+                    return false;
                 }
 
                 quicConn = racedConn!; // non-null whenever TCP did not win
@@ -254,7 +255,7 @@ internal static partial class Http3OriginBridge
                     quicConn = null;
                     await ReplayStalledRequestOverTcpAsync(sessionArgs, server, logger, originStream, stalledConn,
                         sniHost, port, cancellationToken, onInterimResponse);
-                    return;
+                    return false;
                 }
 
                 responseHeadersFrame = responseRead.Frame;
@@ -315,6 +316,25 @@ internal static partial class Http3OriginBridge
 
             var response = BuildResponseFromHeaders(decodedResponseHeaders, HttpHeader.Version30);
             response.RequestMethod = request.Method;
+            if (QuicStatusRetryEligible(request, requestSent)
+                && sessionArgs.Extras is not null
+                && Routing.ReverseProxySessionDispatch.TryStageGatewayRetry(
+                    server, sessionArgs, finalStatus, response, bufferedBodyReplayable: true))
+            {
+                if (originStream != null)
+                {
+                    await originStream.DisposeAsync().ConfigureAwait(false);
+                    originStream = null;
+                }
+
+                if (quicConn != null)
+                {
+                    await QuicConnectionPool.ReleaseAsync(quicConn).ConfigureAwait(false);
+                    quicConn = null;
+                }
+
+                return true;
+            }
 
             // Cache Alt-Svc from response headers immediately (no need to wait for the body).
             var altSvcHeaders = response.Headers.GetHeaders("Alt-Svc");
@@ -344,6 +364,7 @@ internal static partial class Http3OriginBridge
             }
 
             var maxPayload = server.ResourceLimits.MaxHttp3FramePayloadBytes;
+            var fieldSectionLimit = server.MaxDecodedHeaderListBytes;
 
             // Stream large / unknown-length bodies as DATA arrives (TTFB on big HTML). Tiny known-CL
             // must materialize first: H1 WriteResponseAsync + StreamBodyWriter emits a header-only
@@ -377,10 +398,13 @@ internal static partial class Http3OriginBridge
                 var offset = 0;
                 while (offset < bodyBytes.Length)
                 {
-                    var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
-                        cancellationToken);
-                    if (frame == null)
+                    var header = await Http3Frame.ReadFrameHeaderAsync(originStream, cancellationToken);
+                    if (header is null)
                         break;
+                    var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                        header.Value.Type, fieldSectionLimit, maxPayload);
+                    var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                        originStream, header.Value, payloadLimit, cancellationToken);
                     try
                     {
                         if (frame.Type == Http3FrameType.Headers)
@@ -410,10 +434,13 @@ internal static partial class Http3OriginBridge
                 // connection and forces a new handshake per request under load.
                 while (true)
                 {
-                    var frame = await Http3Frame.ReadAsync(originStream, maxPayloadBytes: maxPayload,
-                        cancellationToken);
-                    if (frame == null)
+                    var header = await Http3Frame.ReadFrameHeaderAsync(originStream, cancellationToken);
+                    if (header is null)
                         break;
+                    var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                        header.Value.Type, fieldSectionLimit, maxPayload);
+                    var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                        originStream, header.Value, payloadLimit, cancellationToken);
                     frame.ReturnPayload();
                 }
 
@@ -465,8 +492,10 @@ internal static partial class Http3OriginBridge
                         continue;
                     }
 
+                    var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                        header.Value.Type, fieldSectionLimit, maxPayload);
                     var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
-                        streamToClient, header.Value, maxPayload, ct);
+                        streamToClient, header.Value, payloadLimit, ct);
                     try
                     {
                         if (frame.Type == Http3FrameType.Headers)
@@ -511,10 +540,20 @@ internal static partial class Http3OriginBridge
                     }
                     else
                     {
-                        var current = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
+                        async ValueTask<Http3Frame?> ReadBodyOrTrailerFrameAsync()
+                        {
+                            var hdr = await Http3Frame.ReadFrameHeaderAsync(streamToClient, ct);
+                            if (hdr is null) return null;
+                            var limit = Http3Frame.PayloadLimitForFrameType(
+                                hdr.Value.Type, fieldSectionLimit, maxPayload);
+                            return await Http3Frame.ReadPayloadAfterHeaderAsync(
+                                streamToClient, hdr.Value, limit, ct);
+                        }
+
+                        var current = await ReadBodyOrTrailerFrameAsync();
                         while (current != null)
                         {
-                            var next = await Http3Frame.ReadAsync(streamToClient, maxPayloadBytes: maxPayload, ct);
+                            var next = await ReadBodyOrTrailerFrameAsync();
                             var isLast = next == null || next.Type == Http3FrameType.Headers;
 
                             try
@@ -590,11 +629,11 @@ internal static partial class Http3OriginBridge
                     sessionArgs.HttpClient.Response = MakeBadGatewayResponse(tcpEx.Message);
                 }
 
-                return;
+                return false;
             }
 
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse("QUIC cannot be routed via the configured upstream proxy (forced Http3).");
-            return;
+            return false;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -658,7 +697,7 @@ internal static partial class Http3OriginBridge
                         $"QUIC failed: {ex.Message}; TCP fallback failed: {tcpEx.Message}");
                 }
 
-                return;
+                return false;
             }
 
             // Forced H3, or Auto after the request was already on the wire: surface as a 502 —
@@ -670,7 +709,7 @@ internal static partial class Http3OriginBridge
             }
 
             sessionArgs.HttpClient.Response = MakeBadGatewayResponse(ex.Message);
-            return;
+            return false;
         }
         } // end retry loop
         }
@@ -685,7 +724,16 @@ internal static partial class Http3OriginBridge
             if (!streamHandedOff && quicConn != null)
                 await QuicConnectionPool.ReleaseAsync(quicConn);
         }
+
+        return false;
     }
+
+    /// <summary>
+    ///     A status retry is safe when the body was not half-sent. A bodiless request can be sent
+    ///     again. A body can be sent again only when it is already fully buffered.
+    /// </summary>
+    private static bool QuicStatusRetryEligible(Request request, bool requestSent) =>
+        !requestSent || !request.HasBody || (request.IsBodyRead && request.BodyAvailable);
 
     // ────────────────────────────────────────────────────────────────────────────────────────
     // H3 → H2 (TLS ALPN h2, or cleartext h2c when ForwardCleartext)
@@ -793,7 +841,7 @@ internal static partial class Http3OriginBridge
                     // Verbatim origin→client frame copy, or MITM capture when clientStream is null.
                     // Tiny GET: coalesce HEADERS+DATA into one Quic write (origin probe sends both).
                     const int relayCoalesceMaxBytes = 16 * 1024;
-                    var maxPayload = Math.Max(server.ResourceLimits.MaxHttp3FramePayloadBytes, server.MaxDecodedHeaderListBytes);
+                    var fieldSectionLimit = server.MaxDecodedHeaderListBytes;
                     var captureForMitm = clientStream is null;
                     var sawFinalHeaders = false;
                     var frameCap = server.ResourceLimits.MaxHttp3FramePayloadBytes;
@@ -820,8 +868,10 @@ internal static partial class Http3OriginBridge
                             continue;
                         }
 
+                        var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                            header.Value.Type, fieldSectionLimit, frameCap);
                         var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
-                            originStream, header.Value, maxPayload, cancellationToken);
+                            originStream, header.Value, payloadLimit, cancellationToken);
                         try
                         {
                             if (frame.Type == Http3FrameType.Headers)
@@ -851,7 +901,10 @@ internal static partial class Http3OriginBridge
 
                                     var next = nextHeader is { } present
                                         ? await Http3Frame.ReadPayloadAfterHeaderAsync(
-                                            originStream, present, maxPayload, cancellationToken)
+                                            originStream, present,
+                                            Http3Frame.PayloadLimitForFrameType(
+                                                present.Type, fieldSectionLimit, frameCap),
+                                            cancellationToken)
                                         : null;
                                     if (next is { Type: Http3FrameType.Data }
                                         && headersPayload.Length + next.Payload.Length <= relayCoalesceMaxBytes)

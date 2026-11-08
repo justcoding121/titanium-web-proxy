@@ -57,10 +57,57 @@ public abstract class ProxyEndPoint
     /// </summary>
     public int Port { get; internal set; }
 
+    /// <summary>Address and port, so a bind failure does not print only the type name.</summary>
+    public override string ToString() => $"{IpAddress}:{Port}";
+
     /// <summary>
     ///     Enable SSL?
     /// </summary>
     public bool DecryptSsl { get; }
+
+    /// <summary>
+    ///     When <see langword="true"/>, HTTP/2 on this listener accepts
+    ///     <c>:protocol = connect-tcp</c> and advertises <c>SETTINGS_ENABLE_CONNECT_PROTOCOL</c>.
+    ///     Default <see langword="false"/>. Does not imply <see cref="ProxyServer.EnableRfc8441"/>.
+    /// </summary>
+    public bool AcceptConnectTcp { get; set; }
+
+    /// <summary>
+    ///     When <see langword="true"/>, this listener accepts HTTP/1.1 and HTTP/2 WebTransport
+    ///     (<c>Upgrade: webtransport</c> or <c>:protocol=webtransport</c>) and advertises
+    ///     extended CONNECT plus SETTINGS_WT_MAX_SESSIONS. Default <see langword="false"/>.
+    /// </summary>
+    public bool AcceptWebTransport { get; set; }
+
+    /// <summary>
+    ///     When <see langword="true"/>, this listener accepts <c>:protocol=connect-udp</c> and relays
+    ///     it with the same target policy, authentication, and caps as a MASQUE listener.
+    ///     Default <see langword="false"/>. Not implied by WebSocket or WebTransport flags.
+    /// </summary>
+    public bool AcceptConnectUdp { get; set; }
+
+    private MasqueProxyEndPoint? connectUdpHost;
+
+    /// <summary>
+    ///     Target policy used when <see cref="AcceptConnectUdp"/> is true. The same object a MASQUE
+    ///     listener uses: authentication, allowed ports, and private-target blocking.
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.Experimental("TWP001")]
+    public MasqueOptions ConnectUdpOptions
+    {
+        get => ConnectUdpHost.Options;
+        set => ConnectUdpHost.Options = value;
+    }
+
+    /// <summary>Policy and admission for <see cref="AcceptConnectUdp"/>. Created on first use.</summary>
+    internal MasqueProxyEndPoint ConnectUdpHost
+    {
+        get
+        {
+            connectUdpHost ??= new MasqueProxyEndPoint(IPAddress.Loopback, 0);
+            return connectUdpHost;
+        }
+    }
 
     /// <summary>
     ///     Generic certificate to use for SSL decryption.

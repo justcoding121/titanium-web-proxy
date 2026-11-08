@@ -2,8 +2,8 @@ apiVersion: v2
 name: titanium
 description: Titanium Web Proxy CLI as a Kubernetes Deployment, with probes, graceful drain, and ConfigMap reload.
 type: application
-version: 1.0.0
-appVersion: "8.0.0"
+version: 1.0.1
+appVersion: "8.0.1"
 kubeVersion: ">=1.27.0-0"
 home: https://titaniumproxy.com/docs/kubernetes
 sources:

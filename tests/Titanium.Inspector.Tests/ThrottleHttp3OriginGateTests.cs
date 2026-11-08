@@ -29,10 +29,7 @@ public class ThrottleHttp3OriginGateTests
 
     private static void RequireQuic()
     {
-        if (!QuicListener.IsSupported || !QuicConnection.IsSupported)
-        {
-            Assert.Inconclusive("MsQuic / System.Net.Quic is not supported on this platform.");
-        }
+        QuicHttp3Helpers.RequireQuic();
     }
 
     [TestMethod]

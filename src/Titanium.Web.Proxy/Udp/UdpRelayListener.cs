@@ -125,6 +125,11 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
 
             ConnResetDisabled = DisableConnReset(created);
 
+            if (OperatingSystem.IsWindows())
+            {
+                created.ExclusiveAddressUse = true;
+            }
+
             // A burst of first datagrams from many clients lands here while the single loop is busy opening
             // sessions. The default buffer on some systems is only a few kilobytes, which drops them silently.
             created.ReceiveBufferSize = ListenerBufferBytes;

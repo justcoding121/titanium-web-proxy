@@ -69,10 +69,18 @@ internal static partial class Http3OriginBridge
                 quicPort = forwardPort;
             }
 
-            await ForwardOverQuicAsync(
-                sessionArgs, server,
-                connectHost, sniHost, quicPort, route.ForcedH3,
-                logger, cancellationToken, onInterimResponse, copyRequestBody);
+            try
+            {
+                await ForwardQuicWithStatusRetryAsync(
+                    sessionArgs, server,
+                    new QuicRetryTarget(connectHost, sniHost, quicPort, route.ForcedH3),
+                    logger, cancellationToken, onInterimResponse, copyRequestBody);
+            }
+            finally
+            {
+                Routing.ReverseProxySessionDispatch.EndGatewayRetry(sessionArgs);
+            }
+
             return;
         }
 
@@ -113,6 +121,41 @@ internal static partial class Http3OriginBridge
 
         await ForwardAsync(sessionArgs, server, route, logger, cancellationToken, onInterimResponse,
             copyRequestBody);
+    }
+
+    private readonly record struct QuicRetryTarget(string Host, string SniHost, int Port, bool Forced);
+
+    private static async Task ForwardQuicWithStatusRetryAsync(
+        SessionEventArgs sessionArgs,
+        ProxyServer server,
+        QuicRetryTarget target,
+        ILogger logger,
+        CancellationToken cancellationToken,
+        Func<Response, CancellationToken, Task>? onInterimResponse,
+        Func<QuicStream, CancellationToken, Task>? copyRequestBody)
+    {
+        var host = target.Host;
+        var destinationPort = target.Port;
+        while (true)
+        {
+            if (sessionArgs.UpstreamConnectHost is { Length: > 0 } routedHost)
+            {
+                host = routedHost;
+                if (sessionArgs.UpstreamConnectPort is int routedPort && routedPort > 0)
+                    destinationPort = routedPort;
+            }
+
+            var retry = await ForwardOverQuicAsync(
+                sessionArgs, server,
+                host, target.SniHost, destinationPort, target.Forced,
+                logger, cancellationToken, onInterimResponse, copyRequestBody);
+            if (!retry)
+                break;
+
+            await Routing.ReverseProxySessionDispatch.WaitBeforeRetryAsync(
+                server, sessionArgs, cancellationToken);
+            await sessionArgs.ClearResponse(cancellationToken);
+        }
     }
 
     /// <summary>

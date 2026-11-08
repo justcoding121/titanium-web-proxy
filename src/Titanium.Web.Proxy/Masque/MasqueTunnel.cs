@@ -53,9 +53,23 @@ internal static class MasqueTunnel
 {
     /// <summary>Returns a rejection status. Zero means the returned <c>Open</c> owns the socket.</summary>
     public static async Task<(int Status, string? Body, MasqueTunnelOpen? Open)> OpenAsync(
-        MasqueProxyEndPoint endPoint, string host, int port, ILogger logger, CancellationToken cancellationToken)
+        MasqueProxyEndPoint endPoint, string host, int port, ILogger logger, CancellationToken cancellationToken,
+        Func<IPAddress, bool>? serverBlocked = null)
     {
         var resolved = await ResolveHostAsync(endPoint, host, logger, cancellationToken).ConfigureAwait(false);
+
+        // Server-wide outbound policy (BlockPrivateNetworkDestinations / BlockLoopbackDestinations)
+        // applies on top of the listener's own MASQUE policy. The listener cannot loosen it.
+        if (serverBlocked is not null && resolved.Length > 0)
+        {
+            var permitted = Array.FindAll(resolved, address => !serverBlocked(address));
+            if (permitted.Length == 0)
+            {
+                return (403, "connect-udp target was rejected", null);
+            }
+
+            resolved = permitted;
+        }
 
         var allowed = MasqueTargetPolicy.SelectAll(port, endPoint.Options.AllowedPorts,
             endPoint.Options.BlockPrivateTargets, resolved, out var rejection);

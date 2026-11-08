@@ -5,9 +5,9 @@ kind: PodDisruptionBudget
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 spec:
   minAvailable: 1
@@ -23,9 +23,9 @@ kind: PodDisruptionBudget
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 spec:
   maxUnavailable: 1
@@ -43,9 +43,9 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -58,9 +58,9 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -73,9 +73,9 @@ kind: Secret
 metadata:
   name: rel-titanium-gateway-data-tls
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -90,9 +90,9 @@ kind: Secret
 metadata:
   name: rel-titanium-gateway-admin
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 type: Opaque
 data:
@@ -104,9 +104,9 @@ kind: ConfigMap
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -123,9 +123,9 @@ kind: ClusterRole
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 rules:
   - apiGroups: ["gateway.networking.k8s.io"]
@@ -162,9 +162,9 @@ kind: ClusterRoleBinding
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -181,9 +181,9 @@ kind: Role
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 rules:
   # Leader election.
@@ -220,9 +220,9 @@ kind: RoleBinding
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -240,9 +240,9 @@ kind: Service
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -269,9 +269,9 @@ kind: Deployment
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -286,9 +286,9 @@ spec:
   template:
     metadata:
       labels:
-        helm.sh/chart: titanium-gateway-1.0.0
+        helm.sh/chart: titanium-gateway-1.0.1
         app.kubernetes.io/part-of: titanium-gateway
-        app.kubernetes.io/version: "8.0.0"
+        app.kubernetes.io/version: "8.0.1"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: titanium-gateway
         app.kubernetes.io/instance: rel
@@ -306,7 +306,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: controller
-          image: "ghcr.io/justcoding121/titanium-gateway:8.0.0"
+          image: "ghcr.io/justcoding121/titanium-gateway:8.0.1"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -393,9 +393,9 @@ kind: Deployment
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -415,9 +415,9 @@ spec:
   template:
     metadata:
       labels:
-        helm.sh/chart: titanium-gateway-1.0.0
+        helm.sh/chart: titanium-gateway-1.0.1
         app.kubernetes.io/part-of: titanium-gateway
-        app.kubernetes.io/version: "8.0.0"
+        app.kubernetes.io/version: "8.0.1"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: titanium-gateway
         app.kubernetes.io/instance: rel
@@ -436,7 +436,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: titanium
-          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.0"
+          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.1"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -518,9 +518,9 @@ kind: IngressClass
 metadata:
   name: titanium
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 spec:
   controller: titanium.io/ingress-controller
@@ -531,9 +531,9 @@ kind: GatewayClass
 metadata:
   name: titanium
   labels:
-    helm.sh/chart: titanium-gateway-1.0.0
+    helm.sh/chart: titanium-gateway-1.0.1
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.0"
+    app.kubernetes.io/version: "8.0.1"
     app.kubernetes.io/managed-by: Helm
 spec:
   controllerName: titaniumproxy.com/gateway-controller

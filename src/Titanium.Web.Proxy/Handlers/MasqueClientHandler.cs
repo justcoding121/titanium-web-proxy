@@ -160,7 +160,7 @@ public partial class ProxyServer
 
             admitted = true;
             var (status, reason, open) = await MasqueTunnel.OpenAsync(
-                endPoint, host, port, logger, cancellationToken).ConfigureAwait(false);
+                endPoint, host, port, logger, cancellationToken, IsUdpDestinationBlocked).ConfigureAwait(false);
             opened = open;
             if (opened is null)
             {
@@ -362,7 +362,8 @@ public partial class ProxyServer
     private async Task SendMasqueAsync(HttpClientStream clientStream, MasqueProxyEndPoint endPoint,
         CancellationTokenSource cancellationTokenSource)
     {
-        var origin = new NullOriginStream(cancellationTokenSource.Token, advertiseConnectProtocol: true);
+        var origin = new NullOriginStream(cancellationTokenSource.Token, advertiseConnectProtocol: true,
+            maxDecodedHeaderListBytes: MaxDecodedHeaderListBytes);
         await ConsumeHttp2ConnectionPrefaceAsync(clientStream, cancellationTokenSource.Token).ConfigureAwait(false);
         await Http2Helper.SendHttp2(clientStream, origin,
             () => new SessionEventArgs(this, endPoint, clientStream, null, cancellationTokenSource),
@@ -431,7 +432,7 @@ public partial class ProxyServer
         }
 
         var (status, reason, opened) = await MasqueTunnel.OpenAsync(
-            endPoint, host, port, logger, ctx.CancellationToken).ConfigureAwait(false);
+            endPoint, host, port, logger, ctx.CancellationToken, IsUdpDestinationBlocked).ConfigureAwait(false);
         if (opened is null)
         {
             Reject(session, endPoint, status, reason ?? "connect-udp target was rejected");

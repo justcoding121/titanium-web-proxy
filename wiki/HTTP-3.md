@@ -210,6 +210,14 @@ How the proxy reacts depends on whether HTTP/3 was **chosen** (Auto) or **forced
 session path and the lightweight forced-H3 fast path used by reverse routes. A dead QUIC origin returns an
 error to the client rather than silently changing transport.
 
+When `ProxyBasicAuthenticateFunc` or `ProxySchemeAuthenticateFunc` is set, HTTP/3 answers 407 with
+`proxy-authenticate` and no `proxy-connection` header. Those listeners skip the session-less fast path,
+because the 407 needs a session. Listeners that leave authentication unset keep the fast path.
+
+An HTTP/3 to HTTP/3 forward can replay a gateway status (502, 503, 504, or the cluster list) onto the
+next destination when the body was not half-sent. Extended CONNECT is never replayed. The session-less
+fast path has no session, so it does not take this retry.
+
 ## Alt-Svc automatic discovery
 
 When a response is received from an origin that advertises HTTP/3 via the `Alt-Svc` header, the proxy
@@ -329,6 +337,9 @@ When enabled, per accepted QUIC connection:
 - The proxy opens the QPACK encoder and decoder unidirectional control streams.
 - It advertises `SETTINGS_QPACK_MAX_TABLE_CAPACITY = 4096` and `SETTINGS_QPACK_BLOCKED_STREAMS = 0`
   to the client - the proxy never blocks a stream waiting for dynamic-table insertions.
+  Inbound Required Insert Count decoding and encoder-stream Set Capacity instructions are capped at
+  that advertised 4096 (advertise-what-you-enforce); a larger Set Capacity is
+  `QPACK_ENCODER_STREAM_ERROR`.
 - A `QpackDynamicTable` (thread-safe via `ReaderWriterLockSlim`) tracks inbound and outbound table entries
   as absolute indices, per RFC 9204 §3.
 - Because `SETTINGS_QPACK_BLOCKED_STREAMS = 0` is advertised, decoding an incoming HEADERS block whose
