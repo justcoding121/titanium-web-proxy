@@ -118,6 +118,22 @@ jobs:
         dotnet tool install --global docfx
         Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
+    - name: Detect scripting RID
+      id: build-scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+
+    - name: Cache scripting natives for coverage
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.build-scripting-rid.outputs.rid }}
+
     - name: Restore
       run: |
         # Fail restore on high/critical vulnerable packages (NuGet audit via MSBuild).
@@ -125,6 +141,26 @@ jobs:
 
     - name: Build
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
+
+    - name: Bundle scripting natives for coverage tests
+      shell: pwsh
+      run: |
+        # NativeLibrary loads wasmtime next to Titanium.Web.Proxy.Scripting.dll (test output copy).
+        $rid = '${{ steps.build-scripting-rid.outputs.rid }}'
+        $dirs = @(
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.dll src/Titanium.Web.Proxy.Scripting/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.Tests.dll tests/Titanium.Web.Proxy.Scripting.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter titanium.dll src/Titanium.Cli/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Cli.Tests.dll tests/Titanium.Cli.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+        ) | Where-Object { $_ } | Select-Object -Unique
+        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
+        foreach ($out in $dirs) {
+          Write-Host "Bundling scripting natives into $out"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
+          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
+            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
+          }
+        }
 
     - name: Begin SonarCloud analysis
       id: sonar_begin
