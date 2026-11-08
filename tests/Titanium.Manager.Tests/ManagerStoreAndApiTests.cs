@@ -693,5 +693,30 @@ public class ManagerStoreAndApiTests
         Assert.Fail("wave2 never received the new revision after wave1 bake");
     }
 
+    [TestMethod]
+    public async Task Api_PauseAndResumeRollout_ThroughHttp()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        var (fleetId, _, _, _, rolloutId) = await StartTwoWaveAsync(host, admin, bakeSeconds: 30);
+
+        var pause = await admin.PostAsync(
+            $"/v1/fleets/{fleetId}/rollouts/{rolloutId}/pause", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.OK, pause.StatusCode);
+        using var paused = await ManagerTestHost.ReadJsonAsync(pause);
+        Assert.AreEqual("paused", paused.RootElement.GetProperty("state").GetString());
+        Assert.AreEqual("manual", paused.RootElement.GetProperty("pauseReason").GetString());
+
+        var resume = await admin.PostAsync(
+            $"/v1/fleets/{fleetId}/rollouts/{rolloutId}/resume", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.OK, resume.StatusCode);
+        using var resumed = await ManagerTestHost.ReadJsonAsync(resume);
+        Assert.AreEqual("running", resumed.RootElement.GetProperty("state").GetString());
+
+        var missing = await admin.PostAsync(
+            $"/v1/fleets/{fleetId}/rollouts/999999/pause", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
     private static string TempDb() => Path.Combine(Path.GetTempPath(), $"twp-mgr-store-{Guid.NewGuid():N}.db");
 }
