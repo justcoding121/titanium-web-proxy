@@ -106,7 +106,7 @@ Upgrading a 7.x install: [Migrating from 7.x to 8.0](/docs/migration-7-to-8).
 | Capability | Status | Config key | Notes | Docs |
 |------------|--------|------------|-------|------|
 | Response compression (gzip, brotli, optional zstd) | partial | `server.responseCompression`, `routes[].compression` | Buffered or streaming on HTTP/1.1 clients, HTTP/2 clients, and HTTP/3 clients across H1/H2/H3 origin bridges when interception is on. Optional `zstd` is registered by the CLI when listed in `algorithms`. Fast-path passthrough stays identity. | [Response compression](/docs/configuration#response-compression-server-responsecompression) |
-| Request decompression with size and ratio limits | supported | `server.requestDecompression` | gzip and brotli request bodies on HTTP/1.x, with a decompressed-size cap and a zip-bomb ratio limit. | [Request decompression](/docs/configuration#request-decompression-server-requestdecompression) |
+| Request decompression with size and ratio limits | supported | `server.requestDecompression` | gzip and brotli request bodies on the session path, with a decompressed-size cap and a zip-bomb ratio limit. Extended CONNECT is skipped. | [Request decompression](/docs/configuration#request-decompression-server-requestdecompression) |
 
 ## WAF
 
@@ -146,11 +146,13 @@ Upgrading a 7.x install: [Migrating from 7.x to 8.0](/docs/migration-7-to-8).
 | HTTP/1.1 and HTTP/2 | supported | `server.enableHttp2`, `listeners[].enableHttp2` | HTTP/2 is on by default. | [Protocol support](/docs/protocol-support) |
 | HTTP/3 over QUIC | supported | `server.enableHttp3`, `listeners[].enableHttp3` | On when QUIC is available. The container image has no libmsquic. | [HTTP/3](/docs/http3) |
 | Bridging between HTTP versions | supported | `server.originHttpVersionPolicy` | HTTP/1.1, HTTP/2, and HTTP/3 clients reach origins that speak another version. Not every bridge covers every feature. | [Protocol support](/docs/protocol-support#protocol-bridges) |
+| WebTransport over HTTP/1.1 and HTTP/2 | partial | `server.enableWebTransport`, `listeners[].acceptWebTransport`, `listeners[].webTransport` | Capsule byte bridge, plus a type: webtransport terminate listener with a pinned HTTP origin. Off by default. HTTP/3 WebTransport is not implemented. | [WebTransport listeners](/docs/configuration#webtransport-listeners) |
+| connect-tcp | partial | `server.enableConnectTcp`, `listeners[].acceptConnectTcp` | Off by default. Explicit listeners can opt in with server.enableConnectTcp. Any listener can set acceptConnectTcp. HTTP/3 still returns 501. | [Protocol support](/docs/protocol-support) |
 | WebSocket over HTTP/1.1 and HTTP/2 | supported | `server.enableRfc8441` | HTTP/1.1 upgrade always; RFC 8441 extended CONNECT when enabled. | [Protocol support](/docs/protocol-support#connections-and-framing-high-level) |
 | gRPC-Web to native gRPC | supported | `routes[].grpcWeb` | Binary unary and server-streaming calls to an HTTP/2 origin. | [gRPC-Web](/docs/configuration#grpc-web-route-grpcweb) |
 | gRPC and JSON transcoding | supported | `plus.options: grpc.transcode.enabled` | REST and JSON to gRPC through a descriptor set (Plus). | [gRPC-JSON transcoding](/docs/grpc-json-transcoding) |
 | PROXY protocol from a load balancer | supported | `listeners[].acceptProxyProtocol`, `listeners[].trustedProxyProtocolSources` | Reads the preamble only from the sources you trust. | [Configuration](/docs/configuration#routes-clusters) |
-| CONNECT-UDP relay (MASQUE) | supported | `listeners[].masque` | Opt-in listener type. It relays datagrams opaquely, with authentication, tunnel caps, and a private-target block. | [Listeners](/docs/configuration#listeners) |
+| CONNECT-UDP relay (MASQUE) | supported | `listeners[].masque`, `listeners[].acceptConnectUdp` | Opt-in listener type, or acceptConnectUdp on an existing listener with the same masque policy. Authentication, tunnel caps, and a private-target block still apply. | [Listeners](/docs/configuration#listeners) |
 | WebSocket over HTTP/3 | supported | `server.enableRfc8441` | RFC 9220. HTTP/3 clients reach HTTP/1.1, HTTP/2 and HTTP/3 origins. | [Protocol support](/docs/protocol-support) |
 | Explicit-proxy h2c Upgrade | not supported | — | Upgrade: h2c is not handled. Cleartext HTTP/2 works with prior knowledge only. | [Protocol support](/docs/protocol-support) |
 | Decrypting QUIC inside CONNECT-UDP | not supported | — | The relay forwards each datagram as it came, so the payload stays encrypted end to end. There is no switch to decrypt it. | [Listeners](/docs/configuration#listeners) |

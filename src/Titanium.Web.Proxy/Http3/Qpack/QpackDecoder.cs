@@ -51,7 +51,7 @@ internal static class QpackDecoder
         {
             // Decode the RequiredInsertCount per RFC 9204 §4.5.1.1.
             var requiredInsertCount = DecodeRequiredInsertCount(
-                encodedRic, context.InboundDecoderTable.InsertCount, context.MaxTableCapacityFromPeer);
+                encodedRic, context.InboundDecoderTable.InsertCount, context.LocalMaxTableCapacity);
             if (requiredInsertCount > context.InboundDecoderTable.InsertCount)
                 throw new Http3ConnectionException(Http3ErrorCode.QpackDecompressionFailed,
                     $"QPACK header block requires insert count {requiredInsertCount}, but the inbound " +
@@ -118,7 +118,7 @@ internal static class QpackDecoder
             resolvedRic = DecodeRequiredInsertCount(
                 requiredInsertCount,
                 context.InboundDecoderTable.InsertCount,
-                context.MaxTableCapacityFromPeer);
+                context.LocalMaxTableCapacity);
         }
 
         // Static-only path (resolvedRic == 0): Base is unused; keep the hot path allocation-free.

@@ -75,7 +75,7 @@ features:
   <div class="edition-card">
     <h3>Inspect traffic</h3>
     <p class="license"><a href="/download#stable-inspector">Inspector</a> · Windows / macOS / Linux</p>
-    <p>Desktop debugger for HTTP and HTTPS. Free for personal and education use (<a href="/docs/editions">PolyForm Noncommercial</a>); commercial use needs a separate license. <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
+    <p>Desktop debugger for HTTP and HTTPS. Non-commercial use only (<a href="/docs/editions">PolyForm Noncommercial</a>). <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Run a reverse proxy</h3>
@@ -85,7 +85,7 @@ features:
   <div class="edition-card">
     <h3>Ops add-on</h3>
     <p class="license"><a href="/docs/plus">Plus</a> · optional</p>
-    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
+    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. Non-commercial use only. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Embed in .NET</h3>

@@ -73,7 +73,7 @@ public class HealthcheckCommandTests
         var exposition = new MetricsExposition();
         using var server = new AdminServer(
             IPAddress.Loopback, 0, readiness, exposition,
-            () => new AdminVersionInfo("8.0.0", "abc", ".NET", "community", "h"), "t");
+            () => new AdminVersionInfo("8.0.1", "abc", ".NET", "community", "h"), "t");
         server.Start();
 
         Assert.AreEqual(0, await HealthcheckCommand.ExecuteAsync(

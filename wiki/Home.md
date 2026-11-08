@@ -12,7 +12,7 @@ Product guides (Inspector, CLI, Plus) live on the **[website](https://titaniumpr
 - When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic
 - **HTTP/2** by default, optional **HTTP/3**, WebSocket / SSE / gRPC / GraphQL in the session grid
 - Same engine as a **reverse / edge CLI** (YAML, load balancing, ACME, live reload)
-- Embed via the **.NET library** (MIT); Inspector, Plus, and the xDS / GeoIP satellites are free for personal / education use (PolyForm Noncommercial) — see [README License](https://github.com/justcoding121/titanium-web-proxy/blob/develop/README.md#license)
+- Embed via the **.NET library** (MIT); Inspector, Plus, and the xDS / GeoIP satellites are non-commercial use only (PolyForm Noncommercial) — see [README License](https://github.com/justcoding121/titanium-web-proxy/blob/develop/README.md#license)
 
 Short catalog: [Features](Features) · full tables: [website Features](https://titaniumproxy.com/docs/features).
 
@@ -31,6 +31,8 @@ Short catalog: [Features](Features) · full tables: [website Features](https://t
 - [Limits and escape hatches](Limits-and-Escape-Hatches)
 - [Why did my request fail](Troubleshooting)
 - [Protocol feature support](Protocol-Support) ([bridges](Protocol-Support#user-content-protocol-bridges))
+- [WebTransport](WebTransport) — opt-in HTTP/1.1 and HTTP/2 capsule sessions (HTTP/3 needs datagrams)
+- [MASQUE](MASQUE) — opt-in CONNECT-UDP relay
 - [Migrating from 4.x](Migration-from-4.x)
 - [Migrating from 7.x](Migration-from-7.x)
 
@@ -152,7 +154,7 @@ proxyServer.AddEndPoint(new SocksProxyEndPoint(IPAddress.Loopback, 1080));
 
 ## SOCKS endpoint
 
-`SocksProxyEndPoint` accepts SOCKS4 and SOCKS5 connections. The client is unaware it is communicating with a proxy; traffic is typically redirected here via a local application configuration or system-level routing.
+`SocksProxyEndPoint` accepts SOCKS4 and SOCKS5 connections. The client is unaware it is communicating with a proxy; traffic is typically redirected here via a local application configuration or system-level routing. SOCKS5 UDP ASSOCIATE (command 3) opens a UDP relay and answers with that relay's bound address. The relay stops when the TCP control connection closes. Fragments are dropped. The UDP source must match the TCP client.
 
 **Protocol routing after the SOCKS handshake:**
 

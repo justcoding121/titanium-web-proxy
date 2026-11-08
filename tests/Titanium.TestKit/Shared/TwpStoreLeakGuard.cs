@@ -7,8 +7,8 @@ namespace Titanium.TestKit.Shared;
 
 /// <summary>
 ///     Fails the assembly if a test left a Titanium or TWP certificate in a real Windows trust store
-///     (Root or Personal). Intermediate CA copies left by <c>SslStreamCertificateContext.Create</c>
-///     are scrubbed best-effort and do not fail the run once removed or when removal is denied.
+///     (Root or Personal). Root is only counted: opening it for write shows a Trusted Root install
+///     or delete dialog. Intermediate CA and Personal copies are scrubbed best-effort.
 /// </summary>
 [TestClass]
 public static class TwpStoreLeakGuard
@@ -52,7 +52,9 @@ public static class TwpStoreLeakGuard
 
         foreach (var location in new[] { StoreLocation.CurrentUser, StoreLocation.LocalMachine })
         {
-            foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority, StoreName.Root })
+            // Root Remove shows a Trusted Root delete dialog. Count that store read-only
+            // and fail the run if it grew; never open it for write from a test host.
+            foreach (var name in new[] { StoreName.My, StoreName.CertificateAuthority })
             {
                 try
                 {

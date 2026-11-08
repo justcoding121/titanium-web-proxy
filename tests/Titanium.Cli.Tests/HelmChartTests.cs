@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Admin;
+using Titanium.TestKit;
 using Titanium.Web.Proxy.Configuration;
 using YamlDotNet.RepresentationModel;
 
@@ -142,10 +142,10 @@ public class HelmChartTests
         foreach (var values in new[] { null, "ci/full-values.yaml", "ci/smoke-values.yaml" })
         {
             var valuesArgs = values is null ? string.Empty : $" -f \"{Path.Combine(ChartDir, values)}\"";
-            var (lintExit, lintOut) = Run(helm, $"lint \"{ChartDir}\"{valuesArgs}");
+            var (lintExit, lintOut) = HelmProcess.Run(helm, $"lint \"{ChartDir}\"{valuesArgs}");
             Assert.AreEqual(0, lintExit, lintOut);
 
-            var (templateExit, rendered) = Run(helm, $"template rel \"{ChartDir}\"{valuesArgs}");
+            var (templateExit, rendered) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\"{valuesArgs}");
             Assert.AreEqual(0, templateExit, rendered);
 
             var yaml = ConfigMapTwpYaml(rendered);
@@ -173,12 +173,12 @@ public class HelmChartTests
             return;
         }
 
-        var (graceExit, graceOut) = Run(helm,
+        var (graceExit, graceOut) = HelmProcess.Run(helm,
             $"template rel \"{ChartDir}\" --set terminationGracePeriodSeconds=5 --set admin.preStopDelaySeconds=10");
         Assert.AreNotEqual(0, graceExit);
         StringAssert.Contains(graceOut, "terminationGracePeriodSeconds must be greater");
 
-        var (plusExit, plusOut) = Run(helm, $"template rel \"{ChartDir}\" --set plus.enabled=true");
+        var (plusExit, plusOut) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\" --set plus.enabled=true");
         Assert.AreNotEqual(0, plusExit);
         StringAssert.Contains(plusOut, "plus.controlPlane.sharedSecret.existingSecret is required");
     }
@@ -268,20 +268,6 @@ public class HelmChartTests
         }
 
         return null;
-    }
-
-    private static (int ExitCode, string Output) Run(string fileName, string arguments)
-    {
-        using var process = Process.Start(new ProcessStartInfo(fileName, arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        })!;
-        var stderr = process.StandardError.ReadToEndAsync();
-        var stdout = process.StandardOutput.ReadToEnd();
-        Assert.IsTrue(process.WaitForExit(60_000), "helm timed out");
-        return (process.ExitCode, stdout + stderr.GetAwaiter().GetResult());
     }
 
     private static string FindRepoRoot()

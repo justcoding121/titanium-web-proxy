@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,7 @@ using Titanium.Web.Proxy.Abstractions.Scripting;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.Configuration;
 using Titanium.Web.Proxy.Configuration.Models;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Plugins;
 using Titanium.Web.Proxy.Routing;
@@ -458,7 +460,19 @@ internal static class RunCommand
                 readiness,
                 metricsExposition,
                 () => AdminHost.BuildVersionInfo(configHash, plusActive));
-            proxy.Start();
+            // Subscribe before accept. A request that lands in the gap after Start() is served on the
+            // fast path, which never raises AfterResponse, so the access file stays empty.
+            accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
+            try
+            {
+                proxy.Start();
+            }
+            catch (ProxyListenException ex)
+            {
+                AsyncConsole.WriteError(ListenFailureHint.Format(ex, loaded.Config, configPath));
+                return 1;
+            }
+
             overloadHost.Apply(loaded.Config.Server?.Overload);
 
             if (previousProcess is not null && udpListeners.Count > 0)
@@ -469,6 +483,29 @@ internal static class RunCommand
             }
 
             StartUdpRelays(udpListeners, udpRelays, clusterManager, loadBalancer);
+            try
+            {
+                metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
+            }
+            catch (Exception ex) when (ex is SocketException or HttpListenerException or InvalidOperationException)
+            {
+                var metrics = loaded.Config.Server?.Metrics;
+                var metricsHost = metrics?.Host ?? MetricsHttpEndpoint.DefaultHost;
+                var metricsPort = metrics?.Port ?? MetricsHttpEndpoint.DefaultPort;
+                AsyncConsole.WriteError(
+                    $"Failed to bind metrics endpoint {metricsHost}:{metricsPort}: {ex.Message}. Set server.metrics.port to a free port.");
+                return 1;
+            }
+
+            foreach (var running in runningListeners.Select(pair => pair.Value))
+            {
+                if (running.Config.Port == 0)
+                {
+                    var bound = running.Endpoint;
+                    AsyncConsole.WriteLine($"Listener {bound.IpAddress}:{bound.Port} resolved from port 0");
+                }
+            }
+
             readiness.MarkListenersBound();
 
             // Bound and ready: only now is the previous process asked to drain, so a start that fails earlier
@@ -483,9 +520,6 @@ internal static class RunCommand
             }
 
             StartAcmeIfConfigured(proxy, loaded.Config);
-
-            accessLog = TryStartAccessLog(proxy, loaded.Config.Server);
-            metricsEndpoint = TryStartMetrics(metricsExposition, loaded.Config.Server);
 
             if (serviceMode)
             {
@@ -1643,6 +1677,7 @@ internal static class RunCommand
             "quic" => CreateQuicEndPoint(ip, listener),
             "transparent" => CreateTransparentEndPoint(ip, listener),
             "masque" => CreateMasqueEndPoint(ip, listener),
+            "webtransport" => CreateWebTransportEndPoint(ip, listener),
             _ when !string.IsNullOrEmpty(listener.ForwardHost) => CreateTransparentEndPoint(ip, listener),
             _ => new ExplicitProxyEndPoint(ip, listener.Port, listener.DecryptSsl),
         };
@@ -1868,6 +1903,87 @@ internal static class RunCommand
         return ep;
     }
 
+    private static WebTransportProxyEndPoint CreateWebTransportEndPoint(IPAddress ip, ListenerConfig listener)
+    {
+        var ep = new WebTransportProxyEndPoint(ip, listener.Port);
+        var webTransport = listener.WebTransport;
+        if (webTransport is null)
+        {
+            return ep;
+        }
+
+        if (webTransport.RequireAuth is bool requireAuth)
+        {
+            ep.Options.RequireAuth = requireAuth;
+        }
+
+        if (webTransport.AllowHttp11Upgrade is bool allowHttp11)
+        {
+            ep.Options.AllowHttp11Upgrade = allowHttp11;
+        }
+
+        if (!string.IsNullOrWhiteSpace(webTransport.OriginHost))
+        {
+            ep.Options.OriginHost = webTransport.OriginHost;
+        }
+
+        if (webTransport.OriginPort is int originPort)
+        {
+            ep.Options.OriginPort = originPort;
+        }
+
+        if (webTransport.OriginHttps is bool originHttps)
+        {
+            ep.Options.OriginHttps = originHttps;
+        }
+
+        if (webTransport.MaxSessions is int maxSessions)
+        {
+            ep.Options.MaxSessions = maxSessions;
+        }
+
+        if (webTransport.MaxSessionsPerClient is int perClient)
+        {
+            ep.Options.MaxSessionsPerClient = perClient;
+        }
+
+        if (webTransport.Credentials is { Count: > 0 } credentials)
+        {
+            ep.Options.AuthenticateFunc = BuildCredentialCheck(listener, credentials);
+        }
+
+        return ep;
+    }
+
+    private static Func<string, string, Task<bool>> BuildCredentialCheck(ListenerConfig listener,
+        IList<MasqueCredentialConfig> credentials)
+    {
+        var hashes = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        foreach (var credential in credentials)
+        {
+            var password = Environment.GetEnvironmentVariable(credential.PasswordEnv ?? string.Empty);
+            if (string.IsNullOrEmpty(password))
+            {
+                throw new InvalidOperationException(
+                    $"Listener port {listener.Port}: credential '{credential.Username}' passwordEnv '{credential.PasswordEnv}' is missing or empty.");
+            }
+
+            hashes[credential.Username ?? string.Empty] = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(password));
+        }
+
+        var unknown = new byte[32];
+        return (user, password) =>
+        {
+            var supplied = System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(password));
+            var known = hashes.TryGetValue(user, out var expected);
+            var match = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                supplied, known ? expected! : unknown);
+            return Task.FromResult(known && match);
+        };
+    }
+
     private static void ApplyMasqueLimits(MasqueProxyEndPoint ep, MasqueListenerConfig masque)
     {
         if (masque.MaxTunnels is int maxTunnels)
@@ -1987,6 +2103,22 @@ internal static class RunCommand
         if (listener.MaxConcurrentClients is int maxClients)
         {
             endPoint.MaxConcurrentClients = maxClients;
+        }
+
+        if (listener.AcceptConnectTcp)
+        {
+            endPoint.AcceptConnectTcp = true;
+        }
+
+        if (listener.AcceptWebTransport)
+        {
+            endPoint.AcceptWebTransport = true;
+        }
+
+        if (listener.AcceptConnectUdp)
+        {
+            endPoint.AcceptConnectUdp = true;
+            endPoint.ConnectUdpOptions = CreateMasqueEndPoint(IPAddress.Loopback, listener).Options;
         }
 
         if (!string.IsNullOrWhiteSpace(listener.ClientCertificateCaPath))

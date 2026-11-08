@@ -414,6 +414,10 @@ still reject loopback (`127.0.0.0/8`, `::1`, including IPv4-mapped forms). Assig
 sites as the coarse flag (not on origin HTTP/3 / QUIC dials). Link-local and cloud metadata addresses
 remain allowed under this flag alone. CLI: `server.blockLoopbackDestinations` in `twp.yaml`.
 
+Both flags also apply to UDP relays: SOCKS5 UDP ASSOCIATE datagrams to a blocked address are dropped,
+and CONNECT-UDP (MASQUE listeners and `AcceptConnectUdp` listeners) answers `403` when every resolved
+address is blocked. The listener's own MASQUE target policy still applies on top.
+
 ---
 
 ## Policy profiles and observe/enforce modes (additive)

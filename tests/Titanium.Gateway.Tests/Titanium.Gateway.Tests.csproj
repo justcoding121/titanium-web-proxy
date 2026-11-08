@@ -11,6 +11,7 @@
     <PackageReference Include="MSTest.TestFramework" Version="3.9.3" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Titanium.TestKit\Titanium.TestKit.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Gateway\Titanium.Gateway.csproj" />
     <ProjectReference Include="..\..\src\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />
   </ItemGroup>

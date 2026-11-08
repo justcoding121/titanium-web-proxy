@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.AccessLog;
@@ -26,6 +27,15 @@ public class JsonAccessLogTests
         Assert.AreEqual("GET", doc.RootElement.GetProperty("method").GetString());
         Assert.AreEqual(200, doc.RootElement.GetProperty("status").GetInt32());
         Assert.IsFalse(json.Contains("body", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ReadClientIp_ReturnsNullWhenTheSocketIsAlreadyGone()
+    {
+        Assert.IsNull(JsonAccessLogWriter.ReadClientIp(() => throw new ObjectDisposedException("socket")));
+        Assert.IsNull(JsonAccessLogWriter.ReadClientIp(() => throw new SocketException()));
+        Assert.IsNull(JsonAccessLogWriter.ReadClientIp(() => throw new InvalidOperationException("closed")));
+        Assert.AreEqual("127.0.0.1", JsonAccessLogWriter.ReadClientIp(() => "127.0.0.1"));
     }
 
     [TestMethod]

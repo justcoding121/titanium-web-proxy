@@ -3,6 +3,8 @@ name: dast
 on:
   schedule:
     - cron: '37 1 * * *'
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
 
 permissions:

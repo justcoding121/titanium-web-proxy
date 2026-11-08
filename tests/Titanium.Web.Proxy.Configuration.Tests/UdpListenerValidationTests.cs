@@ -258,7 +258,7 @@ public class UdpListenerValidationTests
         Assert.IsFalse(Errors(ByCluster()).Contains("is unknown", StringComparison.Ordinal));
         var unknown = ByCluster();
         unknown.Type = "dgram";
-        AssertError(unknown, "is unknown (explicit, transparent, socks, quic, masque, udp)");
+        AssertError(unknown, "is unknown (explicit, transparent, socks, quic, masque, udp, webtransport)");
     }
 
     private static ListenerConfig With(Action<ListenerConfig> mutate)

@@ -82,23 +82,29 @@ namespace Titanium.Web.Proxy.Http2
         /// </summary>
         /// <param name="originStream">Origin HTTP/2 stream (preface already written).</param>
         /// <param name="cancellationToken">Cancellation token.</param>
+        /// <param name="maxDecodedHeaderListBytes">
+        ///     Value advertised as <c>SETTINGS_MAX_HEADER_LIST_SIZE</c>. Pass the same decode cap
+        ///     enforced on this connection (default 64 KiB).
+        /// </param>
         internal static async Task SendHttp2ClientConnectionStartupAsync(Stream originStream,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, int maxDecodedHeaderListBytes = 64 * 1024)
         {
             var frameHeader = new Http2FrameHeader();
             var frameHeaderBuffer = new byte[9];
 
             // SETTINGS: ENABLE_PUSH=0 + HEADER_TABLE_SIZE=0 (static-table-only for compressed relay /
-            // origin connections the proxy owns) + the 768 KiB INITIAL_WINDOW_SIZE. The stream
-            // window must be at least ReceiveCreditBatchThreshold or the batched receive-credit grants
-            // never flush and a >64 KiB response body deadlocks on the RFC-default 65,535 window.
+            // origin connections the proxy owns) + the 768 KiB INITIAL_WINDOW_SIZE +
+            // MAX_HEADER_LIST_SIZE = decode cap. The stream window must be at least
+            // ReceiveCreditBatchThreshold or the batched receive-credit grants never flush and a
+            // >64 KiB response body deadlocks on the RFC-default 65,535 window.
+            var lim = maxDecodedHeaderListBytes > 0 ? maxDecodedHeaderListBytes : 64 * 1024;
             frameHeader.StreamId = 0;
             frameHeader.Type = Http2FrameType.Settings;
             frameHeader.Flags = 0;
-            frameHeader.Length = 18;
+            frameHeader.Length = 24;
             frameHeader.CopyToBuffer(frameHeaderBuffer);
 
-            var settingsPayload = new byte[18];
+            var settingsPayload = new byte[24];
             BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(0, 2), (ushort)Http2SettingsId.HeaderTableSize);
             BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(2, 4), 0);
             BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(6, 2), (ushort)Http2SettingsId.EnablePush);
@@ -106,6 +112,9 @@ namespace Titanium.Web.Proxy.Http2
             BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(12, 2),
                 (ushort)Http2SettingsId.InitialWindowSize);
             BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(14, 4), ClientInitialStreamWindowSize);
+            BinaryPrimitives.WriteUInt16BigEndian(settingsPayload.AsSpan(18, 2),
+                (ushort)Http2SettingsId.MaxHeaderListSize);
+            BinaryPrimitives.WriteUInt32BigEndian(settingsPayload.AsSpan(20, 4), (uint)lim);
 
             await originStream.WriteAsync(frameHeaderBuffer, cancellationToken);
             await originStream.WriteAsync(settingsPayload, cancellationToken);
@@ -116,11 +125,11 @@ namespace Titanium.Web.Proxy.Http2
         }
 
         /// <summary>
-        ///     The largest frame payload this proxy will accept from either peer. Neither leg is ever told
-        ///     (via a proxy-originated SETTINGS frame) that a larger value is acceptable, so this is the
-        ///     value a conformant peer will honor; a peer that ignores it and sends a larger frame anyway is
-        ///     treated as a protocol violation (FRAME_SIZE_ERROR) rather than risking an unbounded/undersized
-        ///     buffer allocation.
+        ///     The largest frame payload this proxy will accept from either peer. No leg is told a larger
+        ///     value is acceptable: proxy-originated SETTINGS omit the setting (RFC default 16384), and a
+        ///     larger <c>SETTINGS_MAX_FRAME_SIZE</c> in a relayed peer SETTINGS frame is rewritten to this
+        ///     value. A peer that ignores it and sends a larger frame anyway is treated as a protocol
+        ///     violation (FRAME_SIZE_ERROR) rather than risking an unbounded buffer allocation.
         /// </summary>
         private const int MaxAcceptableFrameSize = 16384;
 
@@ -214,13 +223,22 @@ namespace Titanium.Web.Proxy.Http2
             bool httpInterceptionEnabled = true,
             Func<HttpInterceptionContext, bool>? shouldInterceptHttp = null,
             Func<CancellationToken, Task<TcpServerConnection>>? openOriginConnectionAsync = null,
-            bool forceStaticHpackForMitmUnchangedRelay = false)
+            bool forceStaticHpackForMitmUnchangedRelay = false,
+            bool advertisesConnectProtocol = false,
+            bool advertiseWebTransport = false)
         {
             resourceLimits ??= ProxyResourceLimits.Default;
+            // enableRfc8441 keeps its historical name. Together with advertisesConnectProtocol it
+            // means this connection advertises and classifies extended CONNECT. Pass the alias
+            // only into the SendHttp2 call that owns the listener (MASQUE does this via
+            // enableRfc8441: true). Never OR listener flags into ProxyServer.EnableRfc8441.
+            var connectionAdvertisesConnect = ExtendedConnectProtocols.ConnectionAdvertisesConnect(
+                enableRfc8441, advertisesConnectProtocol);
             var connectionState = new Http2ConnectionState(connectionId, cancellationTokenSource,
                 resourceLimits.MaxConcurrentStreamsPerConnection,
                 resourceLimits.MaxDeferredOutboundBytesPerStream,
                 resourceLimits.Http2WindowUpdateTimeoutSeconds);
+            connectionState.AdvertiseWebTransport = advertiseWebTransport;
 
             try
             {
@@ -240,11 +258,12 @@ namespace Titanium.Web.Proxy.Http2
                 new Http2FrameWriter(serverStream, connectionState.ServerWriteLock);
 
             Http2OriginRelayPool? originPool = null;
-            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441) can use compressed-relay topology.
-            // HEADER_TABLE_SIZE=0 is forced only for gate-off compressed-relay, or for transparent/
-            // socks MITM that can finish unchanged streams via compressed relay. Explicit MITM
-            // injects Via and re-encodes — keep the peer's table size (Chrome/YouTube HPACK).
-            var canCompressedRelayTopology = !enableRfc8441
+            // Same-protocol H2↔H2 (not NullOrigin / extended CONNECT) can use compressed-relay topology.
+            // The advertise bit is per connection. A masque listener that passes it does not change
+            // eligibility for any other listener. HEADER_TABLE_SIZE=0 is forced only for gate-off
+            // compressed-relay, or for transparent/socks MITM that can finish unchanged streams via
+            // compressed relay. Explicit MITM injects Via and re-encodes — keep the peer's table size.
+            var canCompressedRelayTopology = !connectionAdvertisesConnect
                 && originConnection != null
                 && serverStream is not NullOriginStream;
             // Multi-origin pool is for gate-off compressed-relay only. Under true MITM, unchanged
@@ -267,7 +286,7 @@ namespace Titanium.Web.Proxy.Http2
                 connectionState.ServerFrameWriter = null;
 
                 originPool = new Http2OriginRelayPool(originConnection!, openOriginConnectionAsync!,
-                    resourceLimits, logger, connectionState.ServerWriteLock);
+                    resourceLimits, logger, connectionState.ServerWriteLock, maxDecodedHeaderListBytes);
                 connectionState.OriginRelayPool = originPool;
             }
 
@@ -279,7 +298,7 @@ namespace Titanium.Web.Proxy.Http2
             var sendRelay =
                 CopyHttp2FrameAsync(clientStream, serverStream, connectionState,
                     sessionFactory, onBeforeRequest, onAfterResponse, prepareRequestHeaders, true,
-                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, enableRfc8441,
+                    cancellationTokenSource.Token, logger, maxDecodedHeaderListBytes, connectionAdvertisesConnect,
                     resourceLimits, originConnection, httpInterceptionEnabled, shouldInterceptHttp,
                     forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
 
@@ -289,7 +308,7 @@ namespace Titanium.Web.Proxy.Http2
                 // Each origin leg has its own read loop; remaps origin stream ids back to the client.
                 receiveRelay = RunMultiOriginReceiveAsync(clientStream, connectionState, originPool,
                     sessionFactory, onBeforeResponse, onAfterResponse, cancellationTokenSource.Token, logger,
-                    maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, httpInterceptionEnabled,
+                    maxDecodedHeaderListBytes, connectionAdvertisesConnect, resourceLimits, httpInterceptionEnabled,
                     shouldInterceptHttp);
             }
             else
@@ -298,7 +317,7 @@ namespace Titanium.Web.Proxy.Http2
                     CopyHttp2FrameAsync(serverStream, clientStream, connectionState,
                         sessionFactory, onBeforeResponse, onAfterResponse, null, false,
                         cancellationTokenSource.Token,
-                        logger, maxDecodedHeaderListBytes, enableRfc8441, resourceLimits, originConnection,
+                        logger, maxDecodedHeaderListBytes, connectionAdvertisesConnect, resourceLimits, originConnection,
                         httpInterceptionEnabled, shouldInterceptHttp,
                         forceStaticHpackForMitmUnchangedRelay: forceStaticHpackForMitmUnchangedRelay);
             }

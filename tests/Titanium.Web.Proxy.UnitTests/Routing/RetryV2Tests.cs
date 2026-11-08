@@ -87,6 +87,34 @@ public class RetryV2Tests
     }
 
     [TestMethod]
+    public async Task ExtendedConnect_IsNeverRetried()
+    {
+        var (proxy, _) = await StartAsync(new RetryConfig { Attempts = 2 });
+        using var _p = proxy;
+        var session = Session(proxy, "CONNECT");
+        ReverseProxySessionDispatch.Apply(proxy, session);
+        session.HttpClient.Request.ExtendedConnectProtocol = "webtransport";
+        session.HttpClient.Response.StatusCode = 503;
+        Assert.IsFalse(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, session));
+        Assert.AreEqual(0, session.Extras!.StatusRetries);
+    }
+
+    [TestMethod]
+    public async Task HalfConsumedBody_IsNeverRetried()
+    {
+        var (proxy, _) = await StartAsync(new RetryConfig { Attempts = 2, RetryNonIdempotent = true });
+        using var _p = proxy;
+        var session = Session(proxy, "POST");
+        ReverseProxySessionDispatch.Apply(proxy, session);
+        var request = session.HttpClient.Request;
+        request.ContentLength = 4;
+        request.OriginalHasBody = true;
+        session.HttpClient.Response.StatusCode = 503;
+        Assert.IsFalse(request.IsBodyRead);
+        Assert.IsFalse(ReverseProxySessionDispatch.TryStageGatewayRetry(proxy, session, bufferedBodyReplayable: true));
+    }
+
+    [TestMethod]
     public async Task NonIdempotent_IsNeverRetried_WithoutTheFlag()
     {
         var (proxy, _) = await StartAsync(new RetryConfig { Attempts = 2 });

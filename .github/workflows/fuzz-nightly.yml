@@ -3,6 +3,8 @@ name: fuzz-nightly
 on:
   schedule:
     - cron: '29 1 * * *'
+  push:
+    branches: [beta, stable]
   workflow_dispatch:
 
 permissions:

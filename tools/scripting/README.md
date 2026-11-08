@@ -32,7 +32,7 @@ dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r win-x64 --self
 ./tools/scripting/build-lua-shim.ps1 -OutDir src/Titanium.Cli/bin/Debug/net10.0
 ```
 
-The script downloads and verifies the pinned Lua tarball, then compiles it with the shim into one library in `-OutDir`.
+The script verifies the pinned Lua tarball (the copy in `tools/packaging/third-party/`, otherwise the lua.org URL), then compiles it with the shim into one library in `-OutDir`.
 It skips the build when the output is newer than every shim source (`-Force` rebuilds). On Windows it uses `cl` from
 `PATH`, then Visual Studio C++ tools found with `vswhere`, then MinGW `gcc`, then Zig. A machine with none of them can
 pass `-FetchZig` to download the pinned Zig toolchain (SHA-256 verified) into `tools/packaging/.cache/toolchains/`.

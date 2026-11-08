@@ -28,6 +28,34 @@ public class QpackEncoderStreamReaderTests
     }
 
     [TestMethod]
+    public async Task TryParse_SetDynamicTableCapacity_AtAdvertisedLimit_Applies()
+    {
+        await using var ctx = new QpackContext(4096);
+        Assert.AreEqual(4096u, ctx.LocalMaxTableCapacity);
+
+        // Set Capacity 4096: 0x7F + (4096-63)=4033 as 7-bit chunks → 0xC1, 0x1F.
+        byte[] instruction = [0x7F, 0xC1, 0x1F];
+
+        Assert.IsTrue(QpackEncoderStreamReader.TryParseOneInstruction(instruction, ctx, out var consumed));
+        Assert.AreEqual(3, consumed);
+        Assert.AreEqual(4096u, ctx.InboundDecoderTable.Capacity);
+    }
+
+    [TestMethod]
+    public async Task TryParse_SetDynamicTableCapacity_AboveAdvertisedLimit_ThrowsQpackEncoderStreamError()
+    {
+        await using var ctx = new QpackContext(4096);
+
+        // Set Capacity 4097: 0x7F + (4097-63)=4034 → 0xC2, 0x1F.
+        byte[] instruction = [0x7F, 0xC2, 0x1F];
+
+        var ex = Assert.ThrowsExactly<Http3ConnectionException>(
+            () => QpackEncoderStreamReader.TryParseOneInstruction(instruction, ctx, out _));
+        Assert.AreEqual(Http3ErrorCode.QpackEncoderStreamError, ex.ErrorCode);
+        Assert.AreEqual(4096u, ctx.InboundDecoderTable.Capacity);
+    }
+
+    [TestMethod]
     public async Task TryParse_InsertWithLiteralName_InsertsEntry()
     {
         await using var ctx = new QpackContext(4096);

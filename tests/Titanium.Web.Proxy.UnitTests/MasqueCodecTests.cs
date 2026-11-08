@@ -49,6 +49,32 @@ public class MasqueCodecTests
     }
 
     [TestMethod]
+    public void UnknownType_IsForwardedWhenBridgeCallbackIsSet()
+    {
+        Span<byte> buffer = stackalloc byte[32];
+        var written = CapsuleReader.WriteVarint(buffer, 7);
+        written += CapsuleReader.WriteVarint(buffer[written..], 3);
+        buffer[written++] = 1;
+        buffer[written++] = 2;
+        buffer[written++] = 3;
+        written += CapsuleReader.WriteDatagram(buffer[written..], "ab"u8);
+        var reader = new CapsuleReader();
+        long seenType = -1;
+        byte[]? seen = null;
+        reader.OnUnknownCapsule = (type, body) =>
+        {
+            seenType = type;
+            seen = body.ToArray();
+        };
+        var got = new List<byte[]>();
+        reader.Feed(buffer[..written], span => got.Add(span.ToArray()));
+        Assert.AreEqual(7, seenType);
+        CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, seen);
+        Assert.AreEqual(1, got.Count);
+        CollectionAssert.AreEqual("ab"u8.ToArray(), got[0]);
+    }
+
+    [TestMethod]
     public void NonZeroContextId_IsCountedAsDropped()
     {
         Span<byte> buffer = stackalloc byte[16];

@@ -30,7 +30,7 @@ namespace Titanium.Web.Proxy.Http3;
 ///         fire AfterResponse.
 ///     </para>
 /// </summary>
-internal static class Http3RequestStream
+internal static partial class Http3RequestStream
 {
     /// <summary>
     ///     Processes one HTTP/3 bidirectional stream from receipt of the initial HEADERS frame through
@@ -103,7 +103,11 @@ internal static class Http3RequestStream
                     if (method != "CONNECT")
                         throw new Http3StreamException(Http3ErrorCode.MessageError,
                             ":protocol is only valid on CONNECT requests.");
-                    if (!server.EnableRfc8441)
+                    // Match SETTINGS_ENABLE_CONNECT_PROTOCOL on this connection. AcceptConnectUdp
+                    // advertises the setting without flipping ProxyServer.EnableRfc8441, so tiny-GET
+                    // stays open for GET/HEAD. Unsupported tokens still 501 after BeforeRequest.
+                    if (!ExtendedConnectProtocols.AdvertisesHttp3ConnectProtocol(
+                            server.EnableRfc8441, endPoint.AcceptConnectUdp))
                         throw new Http3StreamException(Http3ErrorCode.MessageError,
                             ":protocol requires SETTINGS_ENABLE_CONNECT_PROTOCOL to be advertised.");
                     if (string.IsNullOrEmpty(scheme) || string.IsNullOrEmpty(path) ||
@@ -122,9 +126,10 @@ internal static class Http3RequestStream
                 // Fast path gate is known before session construction when interception is off.
                 var interceptionOff = !server.NeedsHttpInterception(endPoint);
                 var isConnect = method == "CONNECT";
-                var isWsTunnel = protocol is not null &&
-                                 string.Equals(protocol, "websocket", StringComparison.OrdinalIgnoreCase);
-                var isUnsupportedEcProtocol = protocol is not null && !isWsTunnel;
+                var connectSupport = server.ConnectSupportFor(endPoint);
+                var isWsTunnel = ExtendedConnectProtocols.IsWebSocket(protocol) && connectSupport.WebSocket;
+                var isConnectUdpTunnel = ExtendedConnectProtocols.IsConnectUdp(protocol) && connectSupport.ConnectUdp;
+                var isUnsupportedEcProtocol = protocol is not null && !isWsTunnel && !isConnectUdpTunnel;
                 if (!isConnect && path is null)
                     throw new Http3StreamException(Http3ErrorCode.MessageError,
                         "RFC 9114 §4.3.1: non-CONNECT requests must include :path.");
@@ -134,7 +139,10 @@ internal static class Http3RequestStream
 
                 // Session-less H3→origin reverse tiny-GET: no SessionEventArgs / HttpWebClient / Null stream.
                 // Keep only the Request, for HPACK/QPACK encoding. Covers forced H3→H2 / H3→H3 / H3→H1 reverse.
+                // Proxy authentication needs a session to answer 407, so those listeners skip this path.
                 if (interceptionOff
+                    && !server.ProxyAuthenticationRequired
+                    && !DeclaresDecompressibleBody(server, regularHeaders)
                     && !Routing.ReverseProxyFastPath.RequiresPerRequestDispatch(server.ReverseProxy, endPoint)
                     && !server.EnableRfc8441
                     && method is "GET" or "HEAD" or "DELETE" or "OPTIONS"
@@ -179,8 +187,8 @@ internal static class Http3RequestStream
                 foreach (var (name, value) in regularHeaders)
                     request.Headers.AddHeader(new HttpHeader(name, value));
 
-                if (isWsTunnel)
-                    request.ExtendedConnectProtocol = "websocket";
+                if (protocol is not null)
+                    request.ExtendedConnectProtocol = protocol;
 
                 // Fast path when the server-wide interception gate is off: skip InterceptionContext
                 // alloc (hostname/port parse) — ShouldIntercept would always return false.
@@ -272,6 +280,16 @@ internal static class Http3RequestStream
                     };
                 }
 
+                // Proxy Basic / scheme auth. HTTP/3 407 has no Proxy-Connection header.
+                if (!await server.CheckHttp3AuthorizationAsync(sessionArgs))
+                {
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+                    stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.RequestCancelled);
+                    await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                    return;
+                }
+
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
                 request.Headers.ArmMitmRelayBaseline();
                 var capturedRequestMethod = request.Method;
@@ -321,8 +339,7 @@ internal static class Http3RequestStream
                 if (isUnsupportedEcProtocol && !sessionArgs.HttpClient.HasResponse)
                 {
                     sessionArgs.GenericResponse(
-                        $"RFC 9220 extended CONNECT (protocol: {protocol ?? "unknown"}) " +
-                        "is not supported by this proxy. Only 'websocket' is implemented.",
+                        ExtendedConnectProtocols.UnsupportedMessage(protocol, connectSupport, rfc: "9220"),
                         HttpStatusCode.NotImplemented);
                 }
 
@@ -364,6 +381,14 @@ internal static class Http3RequestStream
                         sessionArgs.HttpClient.Response.Headers.AddHeader(
                             new HttpHeader("via", $"3.0 {server.ViaHeaderPseudonym}"));
                     await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                }
+                else if (isConnectUdpTunnel)
+                {
+                    // Capsules stay on this request stream. Ordinary GET/HEAD never reach here,
+                    // so the session-less tiny-GET path is unchanged.
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+                    await RunHttp3ConnectUdpAsync(stream, sessionArgs, qpackContext, cancellationToken);
                 }
                 else if (isWsTunnel)
                 {
@@ -480,6 +505,26 @@ internal static class Http3RequestStream
                 {
                     // Lock after BeforeRequest so GetResponseBody (TCP fallback) and API contracts
                     // agree the request has been committed to the origin pipeline.
+                    if (server.RequestDecompressionPolicy is { } decompression
+                        && request.ExtendedConnectProtocol is null
+                        && request.HasBody)
+                    {
+                        var outcome = await sessionArgs.DecompressRequestBodyAsync(decompression, cancellationToken);
+                        if (outcome is { } failed && failed != Compression.RequestDecompressionOutcome.Decompressed)
+                        {
+                            sessionArgs.GenericResponse("request body could not be decompressed",
+                                failed == Compression.RequestDecompressionOutcome.Corrupt
+                                    ? HttpStatusCode.BadRequest
+                                    : HttpStatusCode.RequestEntityTooLarge);
+                            await SendResponseAsync(stream, sessionArgs.HttpClient.Response, qpackContext, cancellationToken);
+                            return;
+                        }
+                    }
+
+                    // gRPC-Web only when this request's route opted in. Native gRPC is left alone.
+                    if (!sessionArgs.IsFastPath)
+                        Grpc.GrpcWebTranslation.TryTranslateRequest(sessionArgs);
+
                     sessionArgs.HttpClient.Request.Locked = true;
 
                     // Stream unread client DATA to the origin when the body was not buffered
@@ -511,6 +556,9 @@ internal static class Http3RequestStream
                     await Http3OriginBridge.ForwardAsync(sessionArgs, server, logger, cancellationToken,
                         onInterimResponse: onInterimResponse,
                         copyRequestBody: copyRequestBody);
+
+                    if (!sessionArgs.IsFastPath)
+                        Grpc.GrpcWebTranslation.TranslateBufferedResponse(sessionArgs);
 
                     // If the TCP fallback buffered via GetRequestBody / drain, RequestClosed may
                     // already be set; otherwise the copy callback set it.
@@ -1094,13 +1142,18 @@ internal static class Http3RequestStream
         var body = new MemoryStream();
         var maxBufferedBodyBytes = sessionArgs.MaxBufferedBodyBytes ?? server.MaxBufferedBodyBytes;
         var maxFrame = server.ResourceLimits.MaxHttp3FramePayloadBytes;
+        var fieldSectionLimit = server.MaxDecodedHeaderListBytes;
         var boundedBody = new BoundedWriteStream(body, maxBufferedBodyBytes, server.PolicyModes[PolicyFamily.BodyBudget]);
         try
         {
             while (true)
             {
-                var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: maxFrame, ct);
-                if (frame is null) break;
+                var header = await Http3Frame.ReadFrameHeaderAsync(stream, ct);
+                if (header is null) break;
+                var payloadLimit = Http3Frame.PayloadLimitForFrameType(
+                    header.Value.Type, fieldSectionLimit, maxFrame);
+                var frame = await Http3Frame.ReadPayloadAfterHeaderAsync(
+                    stream, header.Value, payloadLimit, ct);
                 try
                 {
                     switch (frame.Type)

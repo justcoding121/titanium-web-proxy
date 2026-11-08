@@ -47,7 +47,12 @@ Engine knobs live under `server:` ([reference](#server-reference)). Plus feature
 | `host` | string | Bind address. Default `0.0.0.0` (all IPv4 interfaces). `*` is the same as `0.0.0.0`. Use `127.0.0.1` for localhost only. |
 | `port` | int | Default `8000`. `0` is an OS-chosen (ephemeral) port. Inspector toolbar `*` / empty means the same. |
 | `decryptSsl` | bool | Terminate TLS / decrypt HTTPS (man-in-the-middle when used for MITM) |
-| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, or `udp` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
+| `type` | string? | `explicit`, `transparent`, `socks`, `quic`, `masque`, `udp`, or `webtransport` (null uses ForwardHost heuristics). `masque` is an opt-in CONNECT-UDP relay; see the [MASQUE wiki page](https://github.com/justcoding121/titanium-web-proxy/wiki/MASQUE). `webtransport` terminates a capsule session and opens a pinned HTTP origin; see [WebTransport listeners](#webtransport-listeners). `udp` is a datagram relay; see [UDP listeners](#udp-listeners) |
+| `acceptConnectTcp` | bool | Opt-in `:protocol=connect-tcp` on this listener. Explicit listeners may also inherit `server.enableConnectTcp`. HTTP/3 still answers 501. |
+| `acceptWebTransport` | bool | Opt-in `:protocol=webtransport` / `Upgrade: webtransport` on this listener. Explicit listeners may also inherit `server.enableWebTransport`. HTTP/3 still answers 501. |
+| `acceptConnectUdp` | bool | Opt-in `:protocol=connect-udp` on a non-`masque` listener, using the same `masque` policy block. Authentication fails closed unless credentials are set or `masque.requireAuth` is false. |
+| `masque` | object? | CONNECT-UDP policy (`requireAuth`, `credentials`, `allowedPorts`, `blockPrivateTargets`, tunnel caps). Required shape when `type` is `masque` or `acceptConnectUdp` is true. |
+| `webTransport` | object? | Terminate-listener options when `type` is `webtransport` (`originHost`, `originPort`, `originHttps`, `requireAuth`, `credentials`, session caps, `allowHttp11Upgrade`). |
 | `forwardHost` / `forwardPort` | string / int | Classic single-origin reverse (no route table) |
 | `enableHttp2` | bool? | `false` forces H1 globally; null inherits `server` / proxy default |
 | `enableHttp3` | bool? | Per-listener; any `false` disables global H3 |
@@ -121,6 +126,29 @@ The clusters are ordinary clusters, defined as in [Routes & clusters](#routes-cl
 - **Metrics.** `twp.passthrough.connections{route,result}` counts finished connections. `route` is the matching `serverName` pattern, `default`, or `forward`. `result` is `ok`, `idle_timeout`, `grace_expired`, `connect_failed`, `no_destination`, `no_route`, `client_closed`, `cancelled`, or `error`. `twp.passthrough.bytes{direction}` counts bytes relayed (`in` is client to upstream, `out` is upstream to client).
 
 Without `sniRoutes` and `sniDefaultClusterId`, a passthrough listener behaves as before: every connection goes to `forwardHost` and nothing is read ahead.
+
+### WebTransport listeners
+
+WebTransport here is an HTTP resource session (`:path` is the application path, or `Upgrade: webtransport` on HTTP/1.1). It is not a UDP relay. CONNECT-UDP stays on a `type: masque` listener or `acceptConnectUdp`.
+
+Off unless `server.enableWebTransport` is true (explicit listeners only) or `listeners[].acceptWebTransport` is true. Those connections advertise `SETTINGS_ENABLE_CONNECT_PROTOCOL` and `SETTINGS_WT_MAX_SESSIONS=1`. HTTP/3 WebTransport answers `501` until the runtime exposes QUIC datagrams. Full bridge matrix: [WebTransport wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/WebTransport).
+
+`type: webtransport` is a TLS endpoint that accepts only WebTransport and opens a pinned HTTP origin. The client path is forwarded; the client does not choose the origin host.
+
+```yaml twp-fragment
+listeners:
+  - type: webtransport
+    host: 127.0.0.1
+    port: 443
+    webTransport:
+      requireAuth: false
+      originHost: 127.0.0.1
+      originPort: 8443
+      originHttps: false
+      allowHttp11Upgrade: false
+```
+
+`connect-udp` and `websocket` on this listener are `501`. Authentication fails closed unless `requireAuth` is false or credentials are set. The listener does not set `server.enableRfc8441`.
 
 ### UDP listeners
 
@@ -631,6 +659,8 @@ server:
   enableHttp2: true
   enableHttp3: null
   enableRfc8441: false
+  enableConnectTcp: false   # explicit listeners only; reverse uses listeners[].acceptConnectTcp
+  enableWebTransport: false # explicit listeners only; reverse uses listeners[].acceptWebTransport
   enableQpackDynamicTable: false
   enableHttpsSvcbDnsDiscovery: null
   enable100ContinueBehaviour: false
@@ -917,7 +947,7 @@ Both the compressed and the decompressed body are held in memory, so two limits 
 
 A body that breaches either limit is answered with `413` and the connection is closed. A body that is corrupt or cut short is answered with `400`. Truncation is detected for both codings (gzip by its length trailer, brotli by the decoder state). Only single-member gzip is accepted. Every decompressed body is recorded in the `twp.body.decompressed_bytes` histogram, tagged `direction=request`; see [Metrics](https://github.com/justcoding121/titanium-web-proxy/wiki/Metrics).
 
-Scope: HTTP/1.x requests on the full session path. HTTP/2 and HTTP/3 request bodies, requests with `Expect: 100-continue`, `deflate` and stacked encodings (`gzip, br`) are forwarded exactly as sent; `titanium test` warns about that.
+Scope: gzip and brotli request bodies on the session path, after the headers are decoded, including HTTP/2 and HTTP/3. Extended CONNECT and the compressed fast path are left unchanged. `Expect: 100-continue`, `deflate`, and stacked encodings are forwarded as sent.
 
 ### Graceful reload
 

@@ -83,7 +83,7 @@ public sealed class ListenerConfig
 
     /// <summary>
     ///     Endpoint kind: <c>explicit</c> (default when no forwardHost), <c>transparent</c>,
-    ///     <c>socks</c>, <c>quic</c>, <c>masque</c>, or <c>udp</c>. When null, classic ForwardHost rules choose transparent vs explicit.
+    ///     <c>socks</c>, <c>quic</c>, <c>masque</c>, <c>udp</c>, or <c>webtransport</c>. When null, classic ForwardHost rules choose transparent vs explicit.
     /// </summary>
     public string? Type { get; set; }
 
@@ -94,6 +94,21 @@ public sealed class ListenerConfig
 
     /// <summary>When false, forces <c>ProxyServer.EnableHttp2=false</c>. Null inherits proxy default.</summary>
     public bool? EnableHttp2 { get; set; }
+
+    /// <summary>
+    ///     When true, this listener accepts <c>:protocol=connect-tcp</c> and advertises extended CONNECT.
+    ///     Default false. Not implied by <c>server.enableConnectTcp</c> on reverse or SOCKS listeners.
+    /// </summary>
+    public bool AcceptConnectTcp { get; set; }
+
+    /// <summary>When true, this listener accepts HTTP/1.1 and HTTP/2 WebTransport.</summary>
+    public bool AcceptWebTransport { get; set; }
+
+    /// <summary>
+    ///     When true, this listener accepts <c>:protocol=connect-udp</c> using the <c>masque</c> policy block.
+    ///     Default false. Not implied by WebSocket or WebTransport.
+    /// </summary>
+    public bool AcceptConnectUdp { get; set; }
 
     /// <summary>
     /// When true, enables HTTP/3 on the proxy and transparent endpoints.
@@ -185,6 +200,9 @@ public sealed class ListenerConfig
     /// <summary>CONNECT-UDP limits for a <c>type: masque</c> listener. Null keeps the safe defaults.</summary>
     public MasqueListenerConfig? Masque { get; set; }
 
+    /// <summary>Pinned origin for a <c>type: webtransport</c> listener.</summary>
+    public WebTransportListenerConfig? WebTransport { get; set; }
+
     /// <summary>
     /// <c>type: udp</c> only. Cluster whose load balancer picks the upstream once per new session.
     /// Set this or <see cref="ForwardHost"/> (with <see cref="ForwardPort"/>), not both.
@@ -260,6 +278,26 @@ public sealed class MasqueListenerConfig
     public int? MaxDatagramsPerSecond { get; set; }
 
     public int? MaxBytesPerSecond { get; set; }
+}
+
+/// <summary>Pinned HTTP origin for a WebTransport terminate listener. The client does not choose the host.</summary>
+public sealed class WebTransportListenerConfig
+{
+    public bool? RequireAuth { get; set; }
+
+    public bool? AllowHttp11Upgrade { get; set; }
+
+    public IList<MasqueCredentialConfig>? Credentials { get; set; }
+
+    public string? OriginHost { get; set; }
+
+    public int? OriginPort { get; set; }
+
+    public bool? OriginHttps { get; set; }
+
+    public int? MaxSessions { get; set; }
+
+    public int? MaxSessionsPerClient { get; set; }
 }
 
 /// <summary>Static file serving options.</summary>

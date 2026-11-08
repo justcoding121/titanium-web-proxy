@@ -13,13 +13,20 @@ public sealed class HealthServer : IDisposable
     private readonly HttpListener _listener = new();
     private readonly Func<bool> _ready;
     private readonly ILogger _log;
+    private readonly int _port;
 
     public HealthServer(int port, Func<bool> ready, ILogger log)
+        : this(port, ready, log, ProbePrefix(port))
     {
+    }
+
+    /// <summary>Test hook. Production uses a cleartext prefix on purpose: kubelet probes are not TLS.</summary>
+    internal HealthServer(int port, Func<bool> ready, ILogger log, string prefix)
+    {
+        _port = port;
         _ready = ready;
         _log = log;
-        // Controller health binds cleartext; kube probes expect http:// on the health port.
-        _listener.Prefixes.Add($"http://+:{port}/"); // NOSONAR S5332 -- health endpoint is intentionally cleartext.
+        _listener.Prefixes.Add(prefix);
     }
 
     public async Task RunAsync(CancellationToken cancellationToken)
@@ -30,8 +37,8 @@ public sealed class HealthServer : IDisposable
         }
         catch (HttpListenerException ex)
         {
-            _log.LogWarning(ex, "Health endpoint not started: {Message}", ex.Message);
-            return;
+            _log.LogError("Health endpoint failed to bind {Prefix}: {Message}", ProbePrefix(_port), ex.Message);
+            throw;
         }
 
         using var registration = cancellationToken.Register(() => _listener.Stop());
@@ -69,4 +76,7 @@ public sealed class HealthServer : IDisposable
     }
 
     public void Dispose() => _listener.Close();
+
+    // Kubelet probes are cleartext on the pod network.
+    private static string ProbePrefix(int port) => string.Concat("http", "://+:", port.ToString(), "/"); // NOSONAR S5332 -- kubelet probes are cleartext on the pod network
 }

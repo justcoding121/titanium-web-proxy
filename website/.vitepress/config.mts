@@ -46,7 +46,6 @@ export default defineConfig({
             { text: 'Getting started', link: '/docs/getting-started' },
             { text: 'Features', link: '/docs/features' },
             { text: 'Capability coverage', link: '/docs/capabilities' },
-            { text: 'Parity re-audit', link: '/docs/parity-reaudit' },
             { text: 'Install', link: '/docs/install' },
             { text: 'Editions & licenses', link: '/docs/editions' },
             { text: 'Migrating from 7.x', link: '/docs/migration-7-to-8' },

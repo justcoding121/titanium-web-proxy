@@ -18,7 +18,18 @@ public partial class ProxyServer
     /// </summary>
     /// <param name="session">The session event arguments.</param>
     /// <returns>True if authorized.</returns>
-    private async Task<bool> CheckAuthorization(SessionEventArgsBase session)
+    /// <summary>
+    ///     True when this process requires proxy authentication. HTTP/3 then skips the session-less
+    ///     tiny-GET path, because a 407 needs a session. Listeners with authentication left unset
+    ///     keep the fast path.
+    /// </summary>
+    internal bool ProxyAuthenticationRequired =>
+        ProxyBasicAuthenticateFunc is not null || ProxySchemeAuthenticateFunc is not null;
+
+    internal Task<bool> CheckHttp3AuthorizationAsync(SessionEventArgs session) =>
+        CheckAuthorization(session, http3: true);
+
+    private async Task<bool> CheckAuthorization(SessionEventArgsBase session, bool http3 = false)
     {
         var basicAuthenticate = ProxyBasicAuthenticateFunc;
         var schemeAuthenticate = ProxySchemeAuthenticateFunc;
@@ -33,7 +44,7 @@ public partial class ProxyServer
             var headerObj = httpHeaders.GetFirstHeader(KnownHeaders.ProxyAuthorization);
             if (headerObj == null)
             {
-                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Required");
+                session.HttpClient.Response = CreateAuthentication407Response("Proxy Authentication Required", http3: http3);
                 return false;
             }
 
@@ -44,7 +55,7 @@ public partial class ProxyServer
             if (firstSpace == -1 || header.IndexOf(' ', firstSpace + 1) != -1)
             {
                 // Return not authorized
-                session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
+                session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid, http3: http3);
                 return false;
             }
 
@@ -54,7 +65,7 @@ public partial class ProxyServer
             // Prefer basic when configured; otherwise use scheme auth.
             if (basicAuthenticate is not null)
                 return await AuthenticateUserBasic(session, authenticationType, credentials,
-                    basicAuthenticate);
+                    basicAuthenticate, http3);
 
             // Dual-null returned above and basic path returned above ⇒ schemeAuthenticate is set.
             // Nullable flow does not carry that proof across the early return, so silence CS8602
@@ -67,7 +78,7 @@ public partial class ProxyServer
             if (result.Result == ProxyAuthenticationResult.ContinuationNeeded)
             {
                 session.HttpClient.Response =
-                    CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation);
+                    CreateAuthentication407Response(ProxyAuthenticationInvalid, result.Continuation, http3);
 
                 return false;
             }
@@ -80,19 +91,20 @@ public partial class ProxyServer
                 httpHeaders));
 
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid, http3: http3);
             return false;
         }
     }
 
     private async Task<bool> AuthenticateUserBasic(SessionEventArgsBase session,
         ReadOnlyMemory<char> authenticationType, ReadOnlyMemory<char> credentials,
-        Func<SessionEventArgsBase, string, string, Task<bool>> proxyBasicAuthenticateFunc)
+        Func<SessionEventArgsBase, string, string, Task<bool>> proxyBasicAuthenticateFunc,
+        bool http3)
     {
         if (!KnownHeaders.ProxyAuthorizationBasic.Equals(authenticationType.Span))
         {
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid, http3: http3);
             return false;
         }
 
@@ -101,7 +113,7 @@ public partial class ProxyServer
         if (colonIndex == -1)
         {
             // Return not authorized
-            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid, http3: http3);
             return false;
         }
 
@@ -109,7 +121,7 @@ public partial class ProxyServer
         var password = decoded.Substring(colonIndex + 1);
         var authenticated = await proxyBasicAuthenticateFunc(session, username, password);
         if (!authenticated)
-            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid);
+            session.HttpClient.Response = CreateAuthentication407Response(ProxyAuthenticationInvalid, http3: http3);
 
         return authenticated;
     }
@@ -120,16 +132,19 @@ public partial class ProxyServer
     /// <param name="description">Response description.</param>
     /// <param name="continuation">The continuation.</param>
     /// <returns></returns>
-    private Response CreateAuthentication407Response(string description, string? continuation = null)
+    private Response CreateAuthentication407Response(string description, string? continuation = null, bool http3 = false)
     {
         var response = new Response
         {
-            HttpVersion = HttpHeader.Version11,
+            HttpVersion = http3 ? HttpHeader.Version30 : HttpHeader.Version11,
             StatusCode = (int)HttpStatusCode.ProxyAuthenticationRequired,
             StatusDescription = description
         };
 
-        if (!string.IsNullOrWhiteSpace(continuation)) return CreateContinuationResponse(response, continuation);
+        if (!string.IsNullOrWhiteSpace(continuation))
+            return http3
+                ? CreateHttp3ContinuationResponse(response, continuation)
+                : CreateContinuationResponse(response, continuation);
 
         if (ProxyBasicAuthenticateFunc != null)
             response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, $"Basic realm=\"{ProxyAuthenticationRealm}\"");
@@ -138,8 +153,17 @@ public partial class ProxyServer
             foreach (var scheme in ProxyAuthenticationSchemes)
                 response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, scheme);
 
-        response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ProxyConnectionClose);
+        // HTTP/3 has no Proxy-Connection. That header is the HTTP/1.1 close signal.
+        if (!http3)
+            response.Headers.AddHeader(KnownHeaders.ProxyConnection, KnownHeaders.ProxyConnectionClose);
 
+        response.Headers.FixProxyHeaders();
+        return response;
+    }
+
+    private static Response CreateHttp3ContinuationResponse(Response response, string continuation)
+    {
+        response.Headers.AddHeader(KnownHeaders.ProxyAuthenticate, continuation);
         response.Headers.FixProxyHeaders();
         return response;
     }

@@ -189,6 +189,108 @@ public class Http2ToHttp3InspectorRegressionTests
         }
     }
 
+    private static byte[] Compress(byte[] plain, bool brotli)
+    {
+        using var ms = new MemoryStream();
+        using (Stream encoder = brotli
+                   ? new BrotliStream(ms, CompressionLevel.Fastest, leaveOpen: true)
+                   : new GZipStream(ms, CompressionLevel.Fastest, leaveOpen: true))
+            encoder.Write(plain);
+        return ms.ToArray();
+    }
+
+    private static ByteArrayContent EncodedContent(byte[] wire, string encoding)
+    {
+        var content = new ByteArrayContent(wire);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        content.Headers.ContentEncoding.Add(encoding);
+        return content;
+    }
+
+    /// <summary>
+    ///     Opt-in request decompression on the H2 client to H3 origin bridge: the origin must see the
+    ///     decoded bytes and no <c>content-encoding</c>.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    [DataRow(false, false)]
+    [DataRow(true, false)]
+    [DataRow(false, true)]
+    [DataRow(true, true)]
+    public async Task Post_EncodedBody_IsDecompressedBeforeTheHttp3Origin(bool warm, bool brotli)
+    {
+        RequireQuic();
+        // Realistic ratio: a highly repetitive body would trip the default decompression ratio limit.
+        var plain = Encoding.UTF8.GetBytes("{\"items\":["
+                                           + string.Join(",", Enumerable.Range(0, 9_000).Select(i => $"{{\"i\":{i * 7919 % 10007}}}"))
+                                           + "]}");
+        byte[]? seen = null;
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(req =>
+        {
+            seen = req.Body;
+            return Task.FromResult(new QuicHttp3Response(200, "len=" + req.Body.Length));
+        });
+
+        var (suite, proxy, client) = Start(origin, warm);
+        proxy.RequestDecompression = new Abstractions.Routing.RequestDecompressionConfig { Enabled = true };
+        using (suite)
+        using (client)
+        {
+            using var content = EncodedContent(Compress(plain, brotli), brotli ? "br" : "gzip");
+            var response = await client.PostAsync($"https://localhost:{origin.Port}/upload", content);
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            Assert.AreEqual($"len={plain.Length}", await response.Content.ReadAsStringAsync());
+            CollectionAssert.AreEqual(plain, seen);
+        }
+    }
+
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Post_CorruptOrOversizedEncodedBody_IsRejectedBeforeTheHttp3Origin(bool warm)
+    {
+        RequireQuic();
+        var originHits = 0;
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ =>
+        {
+            Interlocked.Increment(ref originHits);
+            return Task.FromResult(new QuicHttp3Response(200, "origin"));
+        });
+
+        var (suite, proxy, client) = Start(origin, warm);
+        proxy.RequestDecompression = new Abstractions.Routing.RequestDecompressionConfig
+        {
+            Enabled = true,
+            MaxDecompressedBytes = 4096,
+        };
+        using (suite)
+        using (client)
+        {
+            var url = $"https://localhost:{origin.Port}/upload";
+
+            using var corrupt = EncodedContent(Encoding.UTF8.GetBytes("this is not gzip data"), "gzip");
+            Assert.AreEqual(HttpStatusCode.BadRequest, (await client.PostAsync(url, corrupt)).StatusCode);
+
+            // Compressed form fits, but the decoded body is over the limit.
+            using var bomb = EncodedContent(Compress(new byte[200_000], brotli: false), "gzip");
+            Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, (await client.PostAsync(url, bomb)).StatusCode);
+
+            // The encoded bytes themselves are over the limit.
+            var noise = new byte[8192];
+            new Random(7).NextBytes(noise);
+            using var huge = EncodedContent(noise, "gzip");
+            Assert.AreEqual(HttpStatusCode.RequestEntityTooLarge, (await client.PostAsync(url, huge)).StatusCode);
+
+            // The H2 connection keeps working, and the origin never saw a rejected body.
+            using var healthy = EncodedContent(Compress(Encoding.UTF8.GetBytes("{}"), brotli: false), "gzip");
+            Assert.AreEqual(HttpStatusCode.OK, (await client.PostAsync(url, healthy)).StatusCode);
+            Assert.AreEqual(1, originHits);
+        }
+    }
+
     [TestMethod]
     [Timeout(60 * 1000)]
     [DataRow(false)]

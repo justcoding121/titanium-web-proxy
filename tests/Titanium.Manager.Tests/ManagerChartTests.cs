@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.TestKit;
 using YamlDotNet.RepresentationModel;
 
 namespace Titanium.Manager.Tests;
@@ -99,16 +99,16 @@ public sealed partial class ManagerChartTests
             var valuesArgs = values is null
                 ? string.Empty
                 : $" -f \"{Path.Combine(ChartDir, values)}\"";
-            var (lintExit, lintOut) = Run(helm, $"lint \"{ChartDir}\" --strict{valuesArgs}");
+            var (lintExit, lintOut) = HelmProcess.Run(helm, $"lint \"{ChartDir}\" --strict{valuesArgs}");
             Assert.AreEqual(0, lintExit, lintOut);
 
-            var (templateExit, rendered) = Run(helm, $"template rel \"{ChartDir}\"{valuesArgs}");
+            var (templateExit, rendered) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\"{valuesArgs}");
             Assert.AreEqual(0, templateExit, rendered);
             StringAssert.Contains(rendered, "path: /v1/healthz");
             StringAssert.Contains(rendered, "kind: PersistentVolumeClaim");
         }
 
-        var (multiExit, multiOut) = Run(helm, $"template rel \"{ChartDir}\" --set replicaCount=2");
+        var (multiExit, multiOut) = HelmProcess.Run(helm, $"template rel \"{ChartDir}\" --set replicaCount=2");
         Assert.AreNotEqual(0, multiExit);
         // Helm schema messages vary by version; accept the chart's wording or the JSON-schema ceiling.
         StringAssert.Matches(multiOut, ReplicaCeilingMessage());
@@ -136,21 +136,6 @@ public sealed partial class ManagerChartTests
         }
 
         return null;
-    }
-
-    private static (int Exit, string Output) Run(string file, string arguments)
-    {
-        var info = new ProcessStartInfo(file, arguments)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        using var process = Process.Start(info)!;
-        var stdout = process.StandardOutput.ReadToEndAsync();
-        var stderr = process.StandardError.ReadToEndAsync();
-        Assert.IsTrue(process.WaitForExit(60_000), "helm timed out");
-        return (process.ExitCode, stdout.Result + stderr.Result);
     }
 
     private static string FindRepoRoot()

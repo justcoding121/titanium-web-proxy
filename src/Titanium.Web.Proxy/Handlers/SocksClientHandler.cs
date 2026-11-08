@@ -118,9 +118,15 @@ public partial class ProxyServer
                     if (!success) return;
                 }
 
-                // CONNECT request header: VER CMD RSV ATYP
+                // Request header: VER CMD RSV ATYP. CMD 1 is CONNECT. CMD 3 is UDP ASSOCIATE.
                 if (!await TryReadExactAsync(stream, buffer, 0, 4, cancellationToken)) return;
-                if (buffer[0] != 5 || buffer[1] != 1) return;
+                if (buffer[0] != 5 || (buffer[1] != 1 && buffer[1] != 3))
+                {
+                    await stream.WriteAsync(new byte[] { 5, 7, 0, 1, 0, 0, 0, 0, 0, 0 }, cancellationToken);
+                    return;
+                }
+
+                var udpAssociate = buffer[1] == 3;
 
                 int addressLength;
                 switch (buffer[3])
@@ -155,6 +161,19 @@ public partial class ProxyServer
                         break;
                     default:
                         return;
+                }
+
+                if (udpAssociate)
+                {
+                    IPAddress? requested = null;
+                    if (IPAddress.TryParse(targetHost, out var parsed) &&
+                        !parsed.Equals(IPAddress.Any) && !parsed.Equals(IPAddress.IPv6Any))
+                    {
+                        requested = parsed;
+                    }
+
+                    await RunSocks5UdpAssociateAsync(stream, clientConnection, requested, cancellationToken);
+                    return;
                 }
 
                 // Echo request with REP=succeeded (bound address = request address).

@@ -99,7 +99,13 @@ internal static class TestCertificateAuthority
 
         // Clone via PKCS12 so the returned instance is independent of CertificateManager's
         // lifetime (the temporary proxy is disposed at the end of this method).
+        // EphemeralKeySet: Exportable alone persists a CA private key, and Windows then asks
+        // "Do you want to install this certificate?" for the Trusted Root store. The root is
+        // an in-memory trust anchor and signer, not a Schannel server certificate.
         var bytes = proxy.CertificateManager.RootCertificate.Export(X509ContentType.Pkcs12);
-        return X509CertificateLoader.LoadPkcs12(bytes, null, X509KeyStorageFlags.Exportable);
+        return X509CertificateLoader.LoadPkcs12(
+            bytes,
+            null,
+            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
     }
 }

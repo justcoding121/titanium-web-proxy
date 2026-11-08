@@ -371,7 +371,7 @@ public class WebSocketDecoderTests
     public void Decode_Rsv1_IsDropped_SoPermessageDeflateIsNotInflated()
     {
         // Today's decoder does not keep RSV bits, so a permessage-deflate opener is a normal
-        // data frame and message tracking reports it uncompressed. See websocket-large-messages.md.
+        // data frame and message tracking reports it uncompressed. See wiki/WebSocket-large-messages.md.
         var decoder = CreateDecoder();
         var raw = BuildFrame(WebsocketOpCode.Text, Encoding.UTF8.GetBytes("hello"));
         raw[0] |= 0x40;

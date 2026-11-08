@@ -13,6 +13,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Inspector.Views;
 using Titanium.Web.Proxy;
 using Titanium.Web.Proxy.Network;
@@ -3683,56 +3684,74 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 async () => await _interception.StartAsync(address, port, token).ConfigureAwait(false),
                 token);
 
-            // Stay on UI sync context when present so StatusText / Capturing bind correctly.
-            // (ConfigureAwait(false) here left StatusText stuck on Busy in production.)
-            if (_interception.BoundPort > 0)
-            {
-                BindPort = _interception.BoundPort;
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
-            }
-
-            Capturing = true;
-            RefreshEndpointAndBindUi();
-
-            var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
-            _reenableSystemProxyOnStart = false;
-            var showedSystemProxyGuidance = false;
-            if (wantSystemProxy && !SystemProxy)
-            {
-                // Optimistic SystemProxy path — WinINET applies off UI.
-                SystemProxy = true;
-                showedSystemProxyGuidance = SystemProxy;
-            }
-
-            // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
-            if (_decryptHttps && !_interception.IsRootTrusted)
-            {
-                await ForceDecryptHttpsOffAsync();
-                SetStatus(
-                    SystemProxy
-                        ? $"Proxy running on {FormatBindDisplay()}:{BindPort}; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-                        : $"Proxy running on {FormatBindDisplay()}:{BindPort} — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.",
-                    StatusSeverity.Warning);
-                return;
-            }
-
-            // Decrypt was bound while IsRootTrusted was still false. Refresh the pip now that
-            // StartAsync has read the store, or a trusted root stays labeled "CA not trusted".
-            NotifyDecryptTrustHealth();
-
-            // Keep the system-proxy restart guidance visible; do not replace it with Ready.
-            // Also do not clobber a newer status if the user already acted during start
-            // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).
-            if (!showedSystemProxyGuidance &&
-                (IsStatusBusy || StatusText.StartsWith("Starting proxy", StringComparison.Ordinal)))
-            {
-                SetSteadyStatus(StatusReady);
-            }
+            await PublishRunningCaptureAsync();
+        }
+        catch (ProxyListenException ex)
+        {
+            SetOutcomeStatus(
+                ex.IsAddressInUse ? PortInUseMessage(ex.Port) : ex.Message,
+                StatusSeverity.Error,
+                toastImportant: true);
         }
         finally
         {
             _startBusy = false;
         }
+    }
+
+    /// <summary>
+    ///     Applies the bound port and running status after the listener has started. Stays on the UI
+    ///     sync context so StatusText and Capturing bind correctly.
+    /// </summary>
+    private async Task PublishRunningCaptureAsync()
+    {
+        if (_interception.BoundPort > 0)
+        {
+            BindPort = _interception.BoundPort;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(BindPort)));
+        }
+
+        Capturing = true;
+        RefreshEndpointAndBindUi();
+
+        var wantSystemProxy = _reenableSystemProxyOnStart || AutoSystemProxyOnStart;
+        _reenableSystemProxyOnStart = false;
+        var showedSystemProxyGuidance = false;
+        if (wantSystemProxy && !SystemProxy)
+        {
+            // Optimistic SystemProxy path — WinINET applies off UI.
+            SystemProxy = true;
+            showedSystemProxyGuidance = SystemProxy;
+        }
+
+        // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
+        if (_decryptHttps && !_interception.IsRootTrusted)
+        {
+            await ForceDecryptHttpsOffAsync();
+            SetStatus(UntrustedRootStatus(), StatusSeverity.Warning);
+            return;
+        }
+
+        // Decrypt was bound while IsRootTrusted was still false. Refresh the pip now that
+        // StartAsync has read the store, or a trusted root stays labeled "CA not trusted".
+        NotifyDecryptTrustHealth();
+
+        // Keep the system-proxy restart guidance visible; do not replace it with Ready.
+        // Also do not clobber a newer status if the user already acted during start
+        // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).
+        if (!showedSystemProxyGuidance &&
+            (IsStatusBusy || StatusText.StartsWith("Starting proxy", StringComparison.Ordinal)))
+        {
+            SetSteadyStatus(StatusReady);
+        }
+    }
+
+    private string UntrustedRootStatus()
+    {
+        var where = $"Proxy running on {FormatBindDisplay()}:{BindPort}";
+        return SystemProxy
+            ? where + "; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
+            : where + " — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
     }
 
     /// <summary>Parses bind address/port for start; shows error status and returns false on invalid input.</summary>
@@ -3829,6 +3848,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     internal static string InvalidBindPortMessage(string text) =>
         $"Invalid port '{text}'. Use 1–65535, or * (or empty) for an OS-chosen port.";
+
+    internal static string PortInUseMessage(int port) =>
+        $"Port {port} is already in use. Pick another port, or enter * for a free port, then start again.";
 
     internal static bool TryParseHttpStatus(string? text, out int status)
     {

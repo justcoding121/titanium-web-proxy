@@ -32,3 +32,13 @@ A CONNECT tunnel is answered with `200` before the origin is dialed, so an unrea
 If an origin closes the connection before sending its declared `Content-Length` bytes, the proxy does not rewrite the response as complete. It closes the client connection (a 502 if no response byte was sent yet, or `RST_STREAM` on HTTP/2 once headers are out), so the browser reports a failed load instead of keeping a short body.
 
 If several `Titanium Root Certificate Authority` roots are in the trust store, new roots now carry a Subject Key Identifier and their leaves an Authority Key Identifier, so chains pick the right root. In the Inspector, **Remove old root CAs…** removes every one except the current root.
+
+## Address already in use
+
+A configured port that is already taken fails the start. The process exits 1 and the message names the address, the port, and `listeners[N].port` when that listener is in the config file.
+
+`port: 0` asks the operating system for a free port. The start log prints the port it chose. A configured port is never moved to a different one.
+
+If the message also names a process id, that process was started with the same config file. Use `titanium reload -c <file>` or `titanium restart -c <file>` for that copy. Linux hot restart is the only time two processes share a port on purpose.
+
+On Windows, "access denied" on bind usually means the port is privileged or inside a reserved or excluded range.

@@ -391,6 +391,7 @@ public class SessionEventArgs : SessionEventArgsBase
     {
         var request = HttpClient.Request;
         if (request.IsBodyRead || !request.HasBody || request.ExpectContinue || request.UpgradeToWebSocket
+            || request.ExtendedConnectProtocol is not null
             || !RequestDecompressionPolicy.TryGetEncoding(request, out var encoding))
             return null;
 

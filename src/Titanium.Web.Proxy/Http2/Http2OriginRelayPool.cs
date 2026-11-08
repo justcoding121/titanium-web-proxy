@@ -23,6 +23,7 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
     private readonly ConcurrentDictionary<int, StreamAssignment> clientToOrigin = new();
     private readonly Func<CancellationToken, Task<TcpServerConnection>> openOriginAsync;
     private readonly ProxyResourceLimits resourceLimits;
+    private readonly int maxDecodedHeaderListBytes;
     private readonly ILogger logger;
     private readonly CancellationTokenSource poolCts = new();
     private int rrCursor;
@@ -33,10 +34,12 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
         Func<CancellationToken, Task<TcpServerConnection>> openOriginAsync,
         ProxyResourceLimits resourceLimits,
         ILogger logger,
-        SemaphoreSlim primaryWriteLock)
+        SemaphoreSlim primaryWriteLock,
+        int maxDecodedHeaderListBytes = 64 * 1024)
     {
         this.openOriginAsync = openOriginAsync;
         this.resourceLimits = resourceLimits;
+        this.maxDecodedHeaderListBytes = maxDecodedHeaderListBytes > 0 ? maxDecodedHeaderListBytes : 64 * 1024;
         this.logger = logger;
         legs.Add(CreateLeg(primary, primaryWriteLock, ownsWriteLock: false));
     }
@@ -237,8 +240,8 @@ internal sealed class Http2OriginRelayPool : IAsyncDisposable
             connection.Http2SessionStarted = true;
             await connection.Stream.WriteAsync(Http2Helper.ConnectionPreface.AsMemory(), cancellationToken)
                 .ConfigureAwait(false);
-            await Http2Helper.SendHttp2ClientConnectionStartupAsync(connection.Stream, cancellationToken)
-                .ConfigureAwait(false);
+            await Http2Helper.SendHttp2ClientConnectionStartupAsync(connection.Stream, cancellationToken,
+                    maxDecodedHeaderListBytes).ConfigureAwait(false);
 
             var writeLock = new SemaphoreSlim(1, 1);
             var leg = CreateLeg(connection, writeLock, ownsWriteLock: true);

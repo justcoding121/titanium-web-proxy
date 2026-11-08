@@ -1349,17 +1349,20 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Removes CurrentUser My/CA/Root entries whose subject or issuer looks like a Titanium test
-    ///     certificate. Used only when interactive root-store mutations are suppressed.
+    ///     Removes CurrentUser My and Intermediate CA entries whose subject or issuer looks like a
+    ///     Titanium test certificate. Does not open the Root store: Root Add shows an install dialog
+    ///     and Root Remove shows a delete dialog. Used only when interactive root-store mutations
+    ///     are suppressed.
     /// </summary>
     private static void ScrubTestHostUserStores()
     {
         if (!OperatingSystem.IsWindows() || !ShouldSuppressInteractiveRootStoreMutations)
             return;
 
+        // My and Intermediate CA removes do not show a dialog. Root Remove shows
+        // "Do you want to DELETE the following certificate from the Root Store?"
         ScrubStore(StoreName.My);
         ScrubStore(StoreName.CertificateAuthority);
-        ScrubStore(StoreName.Root);
     }
 
     private static void ScrubStore(StoreName name)

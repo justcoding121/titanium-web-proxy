@@ -304,6 +304,8 @@ public sealed class InterceptionService : IDisposable
 
         Interlocked.Exchange(ref _nextId, 0);
 
+        try
+        {
         // Explicit trust flags: do not silently install into the user store on start.
         // Callers must InstallRootCertificate (or set AutoTrustRootOnStart) so UI can report success/failure.
         _proxy = new ProxyServer(userTrustRootCertificate: false, machineTrustRootCertificate: false);
@@ -349,6 +351,24 @@ public sealed class InterceptionService : IDisposable
         _proxy.AddEndPoint(_endPoint);
         using (InspectorUxTrace.Scope("Interception.ProxyServer.Start"))
             _proxy.Start();
+        }
+        catch
+        {
+            try
+            {
+                _proxy?.Dispose();
+            }
+            catch (Exception)
+            {
+                // The failed instance is dropped either way.
+            }
+
+            _proxy = null;
+            _endPoint = null;
+            BoundPort = 0;
+            throw;
+        }
+
         BoundPort = _endPoint.Port;
         StartProcessResolveWorker();
 

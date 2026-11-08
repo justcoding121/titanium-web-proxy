@@ -62,9 +62,10 @@ namespace Titanium.Web.Proxy.Http2
             var maxHeaderBlockBytes = resourceLimits.MaxHttp2CompressedHeaderBlockBytes;
             var cancellationTokenSource = connectionState.CancellationTokenSource;
 
-            // Same-protocol H2↔H2 (not NullOrigin / RFC 8441): compressed-relay topology.
-            // Gate-off: full compressed-relay (no SessionEventArgs). Gate-on (transparent/socks):
-            // decode + handlers, then relay compressed bytes when unchanged — requires static HPACK.
+            // Same-protocol H2↔H2 (not NullOrigin / extended CONNECT): compressed-relay topology.
+            // enableRfc8441 here is the per-connection advertise bit (SendHttp2 ORs the historical
+            // flag with advertisesConnectProtocol). Gate-off: full compressed-relay (no SessionEventArgs).
+            // Gate-on (transparent/socks): decode + handlers, then relay compressed bytes when unchanged.
             // Explicit MITM re-encodes (Via) and must not force HEADER_TABLE_SIZE=0.
             bool canCompressedRelayTopology = !enableRfc8441
                 && output is not NullOriginStream
@@ -526,9 +527,10 @@ namespace Titanium.Web.Proxy.Http2
 
                 if (length > MaxAcceptableFrameSize)
                 {
-                    // RFC 9113 §4.2: a frame larger than what we (implicitly, by never advertising anything
-                    // else) declared we would accept is a connection-level FRAME_SIZE_ERROR. Reject before
-                    // attempting to buffer/read the (potentially huge, up to 2^24-1 byte) payload.
+                    // RFC 9113 §4.2: a frame larger than MaxAcceptableFrameSize is a connection-level
+                    // FRAME_SIZE_ERROR. Relayed SETTINGS_MAX_FRAME_SIZE is rewritten to that cap, so a
+                    // larger frame is a peer that ignored what it was told. Reject before attempting to
+                    // buffer/read the (potentially huge, up to 2^24-1 byte) payload.
                     ReportException(logger, new ProxyHttpException(
                         $"HTTP/2 protocol error: frame of type {type} exceeded the maximum accepted frame size.",
                         null, null));
@@ -2012,6 +2014,7 @@ namespace Titanium.Web.Proxy.Http2
                     bool sawEnablePush = false;
                     bool sawEnableConnectProtocol = false;
                     bool sawMaxConcurrentStreams = false;
+                    bool sawMaxHeaderListSize = false;
                     bool sawInitialWindowSize = false;
                     bool sawHeaderTableSize = false;
 
@@ -2059,7 +2062,17 @@ namespace Titanium.Web.Proxy.Http2
                             }
                             else
                             {
+                                // Real peer limit: still governs frames this proxy writes TO that peer.
                                 localSettings.MaxFrameSize = (int)value;
+
+                                // Advertise-what-you-enforce (#1151): this proxy reads frames up to
+                                // MaxAcceptableFrameSize on every leg, so the value relayed on to the other
+                                // peer must never exceed it. A validated value is always >= 16384, so this
+                                // is a clamp-down or a no-op, never a raise.
+                                buffer[valueOffset] = (byte)((MaxAcceptableFrameSize >> 24) & 0xff);
+                                buffer[valueOffset + 1] = (byte)((MaxAcceptableFrameSize >> 16) & 0xff);
+                                buffer[valueOffset + 2] = (byte)((MaxAcceptableFrameSize >> 8) & 0xff);
+                                buffer[valueOffset + 3] = (byte)(MaxAcceptableFrameSize & 0xff);
                             }
                         }
                         else if (identifier == (int)Http2SettingsId.InitialWindowSize)
@@ -2169,13 +2182,46 @@ namespace Titanium.Web.Proxy.Http2
                         }
                         else if (identifier == (int)Http2SettingsId.MaxHeaderListSize)
                         {
-                            // RFC 7540 §6.5.2: advisory limit on the header list size this peer is willing
-                            // to receive. Store it so outbound header encoding can respect the peer's limit.
+                            // Peer’s advertised receive limit. Recorded for completeness; outbound
+                            // encode does not yet enforce it (that would add per-request hot-path
+                            // work). The wire value toward the other leg is clamp-or-kept to
+                            // maxDecodedHeaderListBytes — advertise-what-you-enforce (#1153).
+                            sawMaxHeaderListSize = true;
                             localSettings.MaxHeaderListSize = value > int.MaxValue ? int.MaxValue : (int)value;
+
+                            if (!suppressConnectionFrameRelay && maxDecodedHeaderListBytes > 0
+                                && value > (uint)maxDecodedHeaderListBytes)
+                            {
+                                var lim = maxDecodedHeaderListBytes;
+                                buffer[valueOffset] = (byte)((lim >> 24) & 0xff);
+                                buffer[valueOffset + 1] = (byte)((lim >> 16) & 0xff);
+                                buffer[valueOffset + 2] = (byte)((lim >> 8) & 0xff);
+                                buffer[valueOffset + 3] = (byte)(lim & 0xff);
+                            }
+                        }
+                        else if (identifier == (int)Http2SettingsId.WtMaxSessions)
+                        {
+                            if (isClient)
+                            {
+                                // Do not forward the client's WebTransport setting to the origin.
+                                buffer[valueOffset] = 0;
+                                buffer[valueOffset + 1] = 0;
+                                buffer[valueOffset + 2] = 0;
+                                buffer[valueOffset + 3] = 0;
+                            }
+                            else
+                            {
+                                localSettings.WtMaxSessions = (int)Math.Clamp(value, 0L, (long)int.MaxValue);
+                            }
                         }
                         else if (identifier == (int)Http2SettingsId.EnableConnectProtocol)
                         {
-                            // RFC 8441 §3: the proxy manages ENABLE_CONNECT_PROTOCOL independently per leg.
+                            // Wire value is this connection's own capability
+                            // (ConnectionAdvertisesConnect / enableRfc8441), not the origin's.
+                            // Proxy-served tokens (connect-udp, and listener-gated webtransport /
+                            // connect-tcp) need the client to see 1 even when the origin sent 0.
+                            // Tokens that require a supporting origin (websocket) still get
+                            // REFUSED_STREAM from the HEADERS path — the RFC 8441 fallback signal.
                             sawEnableConnectProtocol = true;
 
                             // RFC 8441 §3: value MUST be 0 or 1; any other value is a connection error.
@@ -2199,7 +2245,6 @@ namespace Titanium.Web.Proxy.Http2
                                 localSettings.EnableConnectProtocol = (value == 1);
                                 if (value == 1) localSettings.EnableConnectProtocolEverSet = true;
 
-                                // Overwrite with what the proxy chooses to advertise to the client.
                                 int wireValue = enableRfc8441 ? 1 : 0;
                                 buffer[valueOffset] = 0;
                                 buffer[valueOffset + 1] = 0;
@@ -2248,6 +2293,20 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 3] = 0;
                         buffer[length + 4] = 0;
                         buffer[length + 5] = 0;
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
+                    if (!isClient && !suppressConnectionFrameRelay && connectionState.AdvertiseWebTransport
+                        && (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length
+                        && localSettings.WtMaxSessions <= 0)
+                    {
+                        buffer[length] = (byte)(((int)Http2SettingsId.WtMaxSessions >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.WtMaxSessions & 0xff);
+                        buffer[length + 2] = 0;
+                        buffer[length + 3] = 0;
+                        buffer[length + 4] = 0;
+                        buffer[length + 5] = 1;
                         length += 6;
                         frameHeader.Length = length;
                     }
@@ -2302,6 +2361,22 @@ namespace Titanium.Web.Proxy.Http2
                         buffer[length + 3] = (byte)((effective >> 16) & 0xff);
                         buffer[length + 4] = (byte)((effective >> 8) & 0xff);
                         buffer[length + 5] = (byte)(effective & 0xff);
+                        length += 6;
+                        frameHeader.Length = length;
+                    }
+
+                    if (!suppressConnectionFrameRelay && !sawMaxHeaderListSize && maxDecodedHeaderListBytes > 0 &&
+                        (flags & Http2FrameFlag.Ack) == 0 && length + 6 <= buffer.Length)
+                    {
+                        // Peer omitted SETTINGS_MAX_HEADER_LIST_SIZE. Inject the decode cap so both
+                        // legs know what this proxy will refuse with ENHANCE_YOUR_CALM / 502.
+                        var lim = maxDecodedHeaderListBytes;
+                        buffer[length] = (byte)(((int)Http2SettingsId.MaxHeaderListSize >> 8) & 0xff);
+                        buffer[length + 1] = (byte)((int)Http2SettingsId.MaxHeaderListSize & 0xff);
+                        buffer[length + 2] = (byte)((lim >> 24) & 0xff);
+                        buffer[length + 3] = (byte)((lim >> 16) & 0xff);
+                        buffer[length + 4] = (byte)((lim >> 8) & 0xff);
+                        buffer[length + 5] = (byte)(lim & 0xff);
                         length += 6;
                         frameHeader.Length = length;
                     }

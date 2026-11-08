@@ -92,6 +92,72 @@ public class RunCommandListenerCoverageTests
             },
         });
 
+        var webTransport = (WebTransportProxyEndPoint)Invoke("AddListener", proxy, new ListenerConfig
+        {
+            Host = "127.0.0.1",
+            Port = 0,
+            Type = "webtransport",
+            AcceptConnectTcp = true,
+            AcceptWebTransport = true,
+            AcceptConnectUdp = true,
+            WebTransport = new WebTransportListenerConfig
+            {
+                RequireAuth = false,
+                AllowHttp11Upgrade = true,
+                OriginHost = "origin.test",
+                OriginPort = 8443,
+                OriginHttps = false,
+                MaxSessions = 4,
+                MaxSessionsPerClient = 2,
+            },
+        })!;
+        Assert.AreEqual("origin.test", webTransport.Options.OriginHost);
+        Assert.AreEqual(8443, webTransport.Options.OriginPort);
+        Assert.IsFalse(webTransport.Options.OriginHttps);
+        Assert.IsTrue(webTransport.Options.AllowHttp11Upgrade);
+        Assert.AreEqual(4, webTransport.Options.MaxSessions);
+        Assert.IsTrue(webTransport.AcceptConnectTcp);
+        Assert.IsTrue(webTransport.AcceptWebTransport);
+        Assert.IsTrue(webTransport.AcceptConnectUdp);
+
+        var bare = (WebTransportProxyEndPoint)Invoke("CreateWebTransportEndPoint", IPAddress.Loopback, new ListenerConfig
+        {
+            Port = 0,
+            Type = "webtransport",
+        })!;
+        Assert.IsTrue(bare.Options.RequireAuth);
+
+        var wtPasswordEnv = "TWP_WT_TEST_PASSWORD_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(wtPasswordEnv, "secret");
+        try
+        {
+            var authed = (WebTransportProxyEndPoint)Invoke("CreateWebTransportEndPoint", IPAddress.Loopback, new ListenerConfig
+            {
+                Port = 0,
+                WebTransport = new WebTransportListenerConfig
+                {
+                    Credentials = [new MasqueCredentialConfig { Username = "ada", PasswordEnv = wtPasswordEnv }],
+                },
+            })!;
+            Assert.IsTrue(authed.Options.AuthenticateFunc!("ada", "secret").GetAwaiter().GetResult());
+            Assert.IsFalse(authed.Options.AuthenticateFunc("ada", "nope").GetAwaiter().GetResult());
+            Assert.IsFalse(authed.Options.AuthenticateFunc("other", "secret").GetAwaiter().GetResult());
+            var missing = Assert.ThrowsExactly<TargetInvocationException>(() =>
+                Invoke("CreateWebTransportEndPoint", IPAddress.Loopback, new ListenerConfig
+                {
+                    Port = 9,
+                    WebTransport = new WebTransportListenerConfig
+                    {
+                        Credentials = [new MasqueCredentialConfig { Username = "ada", PasswordEnv = wtPasswordEnv + "_missing" }],
+                    },
+                }));
+            Assert.IsInstanceOfType<InvalidOperationException>(missing.InnerException);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(wtPasswordEnv, null);
+        }
+
         Assert.IsTrue(proxy.ProxyEndPoints.Count >= 6);
         Assert.AreEqual("socks", (string)Invoke("ResolveListenerKind", new ListenerConfig { Type = "SOCKS" })!);
         Assert.AreEqual("explicit", (string)Invoke("ResolveListenerKind", new ListenerConfig())!);

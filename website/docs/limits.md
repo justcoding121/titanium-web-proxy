@@ -56,7 +56,7 @@ PublicFacing idle and request deadlines cut long-lived SSE, gRPC streaming, and 
 | Header line | 64 KiB | — | `server.limits.maxHeaderLineBytes` |
 | HTTP/3 frame payload | 4 MiB | 64 MiB | `server.limits.maxHttp3FramePayloadBytes` |
 | HTTP/2 deferred DATA per stream | 4 MiB + 16 KiB | 64 MiB | `server.limits.maxDeferredOutboundBytesPerStream` |
-| Decoded header list | 64 KiB | — | `server.limits.maxDecodedHeaderListBytes` |
+| Decoded header list | 64 KiB | — | `server.limits.maxDecodedHeaderListBytes` (advertised as HTTP/2 `SETTINGS_MAX_HEADER_LIST_SIZE` / HTTP/3 `SETTINGS_MAX_FIELD_SECTION_SIZE`) |
 | Trailer count | 100 | 10000 | `server.limits.maxTrailerHeaderCount` |
 | Trailer block | 16 KiB | 1 MiB | `server.limits.maxTrailerHeaderBlockBytes` |
 | Compressed HTTP/2 header block | 256 KiB | 16 MiB | `server.limits.maxHttp2CompressedHeaderBlockBytes` |
@@ -85,8 +85,10 @@ HTTP/3 frame reads rent at most 256 KiB until bytes arrive, then grow. A peer th
 
 These stay constant. They are protocol limits or anti-wrap guards, not traffic you should raise:
 
-- HTTP/2 `MAX_FRAME_SIZE` we accept is 16384. We do not advertise a larger value.
+- HTTP/2 `MAX_FRAME_SIZE` we accept is 16384. We do not advertise a larger value, and a larger value in a relayed SETTINGS frame is rewritten to 16384.
+- HTTP/2 `SETTINGS_MAX_HEADER_LIST_SIZE` and HTTP/3 `SETTINGS_MAX_FIELD_SECTION_SIZE` are advertised at `maxDecodedHeaderListBytes` (clamp-or-inject). A compliant peer may refuse an over-cap header list itself instead of getting the proxy's RST/502 that names the config key.
 - HTTP/3 control-stream frames are 16 KiB.
+- QPACK dynamic-table capacity is 4096 when `EnableQpackDynamicTable` is on; inbound Required Insert Count decoding and encoder-stream Set Capacity stay at that advertised cap.
 - QPACK acknowledgement capacity.
 - The 1 GiB chunk-size guard (stops a wrapped chunk length).
 - SOCKS hostnames are 255 bytes (RFC 1928).
@@ -97,4 +99,3 @@ These stay constant. They are protocol limits or anti-wrap guards, not traffic y
 
 - [Why did my request fail](/docs/troubleshooting)
 - [Configuration](/docs/configuration)
-- [WebSocket large messages (design)](/docs/websocket-large-messages)
