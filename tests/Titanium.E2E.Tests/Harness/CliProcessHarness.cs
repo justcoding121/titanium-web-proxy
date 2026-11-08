@@ -155,10 +155,7 @@ public sealed partial class CliProcessHarness : IDisposable
     /// </summary>
     public static int[] GetFreePorts(int count)
     {
-        if (count < 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(count));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
 
         var listeners = new TcpListener[count];
         var ports = new int[count];
