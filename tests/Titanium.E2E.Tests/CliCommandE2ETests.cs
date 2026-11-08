@@ -115,6 +115,7 @@ public class CliCommandE2ETests
     {
         var path = Path.Combine(_tempDir, "wildcard.yaml");
         File.WriteAllText(path, """
+            schemaVersion: "7.1"
             listeners:
               - host: "0.0.0.0"
                 port: 9

@@ -230,7 +230,8 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         # Attribute CLI process E2E coverage to the build merge (cli-e2e matrix stays the OS gate).
         # Natives were already bundled beside titanium.dll for scripting coverage above.
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E&FullyQualifiedName~Cli" --collect:"Code Coverage" --results-directory coverage/cli-e2e
+        # Exclude CliHosted* Playwright leaves — those need Chromium (ui-portable / cli-e2e install it).
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --collect:"Code Coverage" --results-directory coverage/cli-e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
