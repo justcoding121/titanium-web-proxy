@@ -147,13 +147,44 @@ public sealed partial class CliProcessHarness : IDisposable
         }
     }
 
-    public static int GetFreePort()
+    public static int GetFreePort() => GetFreePorts(1)[0];
+
+    /// <summary>
+    /// Reserve several loopback ports while the sockets stay bound, so a second call cannot
+    /// reuse a port that was just released (listen + controlPlane TOCTOU on busy runners).
+    /// </summary>
+    public static int[] GetFreePorts(int count)
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
+
+        var listeners = new TcpListener[count];
+        var ports = new int[count];
+        try
+        {
+            for (var i = 0; i < count; i++)
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                listeners[i] = listener;
+                ports[i] = ((IPEndPoint)listener.LocalEndpoint!).Port;
+            }
+
+            return ports;
+        }
+        finally
+        {
+            foreach (var listener in listeners)
+            {
+                try
+                {
+                    listener?.Stop();
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+        }
     }
 
     /// <summary>

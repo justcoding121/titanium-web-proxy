@@ -115,12 +115,23 @@ public class CliCommandE2ETests
     {
         var path = Path.Combine(_tempDir, "wildcard.yaml");
         File.WriteAllText(path, """
+            schemaVersion: "7.1"
             listeners:
               - host: "0.0.0.0"
                 port: 9
             """);
-        var error = Assert.ThrowsExactly<InvalidOperationException>(() => CliProcessHarness.AssertLoopbackConfig(path));
-        StringAssert.Contains(error.Message, "127.0.0.1");
+        // CI sets TITANIUM_ALLOW_WILDCARD_BIND_TESTS=1 so other leaves can bind; this guard must still reject.
+        var previous = Environment.GetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS");
+        try
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", null);
+            var error = Assert.ThrowsExactly<InvalidOperationException>(() => CliProcessHarness.AssertLoopbackConfig(path));
+            StringAssert.Contains(error.Message, "127.0.0.1");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_ALLOW_WILDCARD_BIND_TESTS", previous);
+        }
     }
 
     [TestMethod]

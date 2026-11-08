@@ -25,6 +25,7 @@ internal sealed class ManagerTestHost : IAsyncDisposable
     public string BaseUrl => _server.BaseUrl;
     public string AdminToken => _adminToken;
     public ManagerStore Store => _store;
+    public ConfigWaitHub WaitHub => _server.WaitHub;
 
     public static async Task<ManagerTestHost> StartAsync()
     {

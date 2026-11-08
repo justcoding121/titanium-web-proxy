@@ -41,8 +41,9 @@ public class CliPlusE2ETests
     public async Task PlusMissing_Warns_AndStillProxies()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         var cfg = ConfigFixtures.WritePlus(_tempDir, listen, origin.Port, control, "e2e-secret");
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: false);
@@ -71,8 +72,9 @@ public class CliPlusE2ETests
     public async Task PlusLoaded_ControlPlaneAuth_AndMetrics()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         var dashboard = CliProcessHarness.GetFreePort();
         const string secret = "e2e-plus-secret";
         var cfg = ConfigFixtures.WritePlus(_tempDir, listen, origin.Port, control, secret, dashboard);
@@ -161,8 +163,9 @@ public class CliPlusE2ETests
     {
         using var originA = new EchoOrigin();
         using var originB = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-reroute";
         var cfg = ConfigFixtures.WritePlusRoutes(_tempDir, listen, originA.Port, control, secret);
         using var harness = new CliProcessHarness();
@@ -231,8 +234,9 @@ public class CliPlusE2ETests
     public async Task Plus_WafDeniesPath_AndCidrAllow()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         var dashboard = CliProcessHarness.GetFreePort();
         const string secret = "e2e-waf";
         var cfg = ConfigFixtures.WritePlusOptions(_tempDir, listen, origin.Port, control, secret,
@@ -308,8 +312,9 @@ public class CliPlusE2ETests
     public async Task Plus_DiscoveryFile_AppliesCluster()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-disc";
         var discFile = Path.Combine(_tempDir, "clusters.json");
         await File.WriteAllTextAsync(discFile, $$"""
@@ -359,8 +364,9 @@ public class CliPlusE2ETests
     public async Task GrpcTranscode_MissingDescriptor_ExitsOnStart()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-grpc-secret";
         var missingPb = Path.Combine(_tempDir, "does-not-exist.pb");
         var cfg = ConfigFixtures.WritePlusOptions(
@@ -397,8 +403,9 @@ public class CliPlusE2ETests
     public async Task Plus_ApiKeyAuth_AndCors()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-auth-cors";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -461,8 +468,9 @@ public class CliPlusE2ETests
     public async Task Plus_CircuitEjects_AfterOrigin5xx()
     {
         using var origin = new FlakyEchoOrigin(failCount: 3);
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-circuit";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,

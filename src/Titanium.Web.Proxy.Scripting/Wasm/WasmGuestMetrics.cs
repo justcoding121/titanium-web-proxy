@@ -6,7 +6,7 @@ namespace Titanium.Web.Proxy.Scripting.Wasm;
 /// Metrics a guest defines with <c>proxy_define_metric</c>. They are published on the scripting meter as three fixed
 /// instruments (<c>twp.scripting.wasm.guest.counter</c>, <c>.gauge</c>, <c>.histogram</c>) tagged with the metric name and
 /// <c>vm_id</c>, so guest-chosen names never create instruments. A name defined again in the same scope (another VM, a
-/// reload) gets the same id and keeps its value.
+/// reload) gets the same id and keeps its value. Types match the Proxy-Wasm metric ABI.
 /// </summary>
 internal static class WasmGuestMetrics
 {

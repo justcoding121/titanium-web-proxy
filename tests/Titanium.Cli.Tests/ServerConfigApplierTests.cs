@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
@@ -492,5 +493,39 @@ public class ServerConfigApplierTests
         Assert.AreEqual(9, proxy.IdleReadTimeoutSeconds);
         Assert.AreEqual(5, proxy.RequestTimeoutSeconds);
         Assert.IsTrue(proxy.BlockPrivateNetworkDestinations);
+    }
+
+    [TestMethod]
+    public void Apply_IdentityTracingAndDecryptBypass_SurfaceOnTheProxy()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true));
+
+        ServerConfigApplier.Apply(proxy, new ServerConfig
+        {
+            ProxyAuthenticationRealm = "titanium-tests",
+            RequestId = new RequestIdConfig { Enabled = true, Header = " " },
+            Tracing = new TracingConfig { Enabled = true, Propagate = true },
+            ForwardedHeaders = new ForwardedHeadersConfig { XForwardedFor = ForwardedHeaderAction.Set },
+            RequestDecompression = new RequestDecompressionConfig { Enabled = true },
+            EnableDecryptFailureBypass = true,
+            DecryptFailureBypassTtlMinutes = 15,
+            DecryptFailureBypassMaxEntries = 64,
+            DecryptFailureBypassThreshold = 3,
+            DecryptSkipHosts = ["skip.example"],
+            DecryptOnlyHosts = ["only.example"],
+        });
+
+        Assert.AreEqual("titanium-tests", proxy.ProxyAuthenticationRealm);
+        Assert.AreEqual("X-Request-Id", proxy.RequestIdHeader);
+        Assert.IsTrue(proxy.TracingEnabled);
+        Assert.IsTrue(proxy.PropagateTraceContext);
+        Assert.IsNotNull(proxy.ForwardedHeaders);
+        Assert.AreEqual(ForwardedHeaderAction.Set, proxy.ForwardedHeaders.XForwardedFor);
+        Assert.IsTrue(proxy.RequestDecompression is { Enabled: true });
+        Assert.IsTrue(proxy.EnableDecryptFailureBypass);
+        Assert.AreEqual(TimeSpan.FromMinutes(15), proxy.DecryptFailureBypassTtl);
+        Assert.AreEqual(64, proxy.DecryptFailureBypassMaxEntries);
+        Assert.AreEqual(3, proxy.DecryptFailureBypassThreshold);
     }
 }

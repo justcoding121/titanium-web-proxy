@@ -92,6 +92,9 @@ public sealed class MmdbGeoIpResolver : IGeoIpResolver, IDisposable
         return null;
     }
 
+    /// <summary>Test hook for country / registered_country ISO parsing without a full MMDB tree.</summary>
+    internal static string? ReadCountryCodeForTests(Dictionary<string, object>? data) => ReadCountryCode(data);
+
     private static bool TryNestedIso(Dictionary<string, object> data, string key, out string code)
     {
         code = string.Empty;

@@ -40,8 +40,9 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
         _tempDir = Path.Combine(Path.GetTempPath(), "twp-pw-cli-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         _dashboardPort = CliProcessHarness.GetFreePort();
         var cfg = WriteCliHostedDashboardConfig(
             _tempDir,

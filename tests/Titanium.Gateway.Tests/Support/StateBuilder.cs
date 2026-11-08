@@ -19,6 +19,14 @@ internal sealed class StateBuilder
 
     public List<HttpRoute> Routes { get; } = [];
 
+    public List<TlsRoute> TlsRoutes { get; } = [];
+
+    public List<TcpRoute> TcpRoutes { get; } = [];
+
+    public List<UdpRoute> UdpRoutes { get; } = [];
+
+    public List<GrpcRoute> GrpcRoutes { get; } = [];
+
     public List<ReferenceGrant> Grants { get; } = [];
 
     public List<NamespaceInfo> Namespaces { get; } = [];
@@ -88,6 +96,21 @@ internal sealed class StateBuilder
         },
     };
 
+    public static GatewayListener TlsPassthrough(string name, int port, string? hostname = null) => new()
+    {
+        Name = name,
+        Port = port,
+        Protocol = "TLS",
+        Hostname = hostname,
+        Tls = new ListenerTls { Mode = "Passthrough" },
+    };
+
+    public static GatewayListener Tcp(string name, int port) =>
+        new() { Name = name, Port = port, Protocol = "TCP" };
+
+    public static GatewayListener Udp(string name, int port) =>
+        new() { Name = name, Port = port, Protocol = "UDP" };
+
     public static HttpRoute Route(string name, string ns, string[]? hostnames, params HttpRouteRule[] rules) => new()
     {
         Metadata = new ObjectMeta { Name = name, Namespace = ns, Generation = 1, CreationTimestamp = T0 },
@@ -111,7 +134,67 @@ internal sealed class StateBuilder
     public static HttpRouteMatch PathExact(string value) =>
         new() { Path = new HttpPathMatch { Type = "Exact", Value = value } };
 
-    public void AddService(string ns, string name, int port, params string[] readyAddresses)
+    public static ParentReference ParentGw(string name = "gw", string? ns = null, string? section = null) =>
+        new() { Name = name, Namespace = ns, SectionName = section };
+
+    public static TlsRoute TlsRoute(string name, string ns, string[]? hostnames, params HttpBackendRef[] backends) => new()
+    {
+        Metadata = new ObjectMeta { Name = name, Namespace = ns, Generation = 1, CreationTimestamp = T0 },
+        Spec = new L4RouteSpec
+        {
+            ParentRefs = [ParentGw(ns: ns == "default" ? null : "default")],
+            Hostnames = hostnames?.ToList(),
+            Rules = [new L4RouteRule { BackendRefs = backends.ToList() }],
+        },
+    };
+
+    public static TcpRoute TcpRoute(string name, string ns, params HttpBackendRef[] backends) => new()
+    {
+        Metadata = new ObjectMeta { Name = name, Namespace = ns, Generation = 1, CreationTimestamp = T0 },
+        Spec = new TcpUdpRouteSpec
+        {
+            ParentRefs = [ParentGw(ns: ns == "default" ? null : "default")],
+            Rules = [new L4RouteRule { BackendRefs = backends.ToList() }],
+        },
+    };
+
+    public static UdpRoute UdpRoute(string name, string ns, params HttpBackendRef[] backends) => new()
+    {
+        Metadata = new ObjectMeta { Name = name, Namespace = ns, Generation = 1, CreationTimestamp = T0 },
+        Spec = new TcpUdpRouteSpec
+        {
+            ParentRefs = [ParentGw(ns: ns == "default" ? null : "default")],
+            Rules = [new L4RouteRule { BackendRefs = backends.ToList() }],
+        },
+    };
+
+    public static HttpBackendRef Backend(string service, int port = 8080) =>
+        new() { Name = service, Port = port };
+
+    public static GrpcRoute GrpcRoute(string name, string ns, string[]? hostnames, params GrpcRouteRule[] rules) => new()
+    {
+        Metadata = new ObjectMeta { Name = name, Namespace = ns, Generation = 1, CreationTimestamp = T0 },
+        Spec = new GrpcRouteSpec
+        {
+            ParentRefs = [ParentGw(ns: ns == "default" ? null : "default")],
+            Hostnames = hostnames?.ToList(),
+            Rules = rules.ToList(),
+        },
+    };
+
+    public static GrpcRouteRule GrpcRule(string service, int port = 8080, params GrpcRouteMatch[] matches) => new()
+    {
+        Matches = matches.Length == 0 ? null : matches.ToList(),
+        BackendRefs = [Backend(service, port)],
+    };
+
+    public void AddService(string ns, string name, int port, params string[] readyAddresses) =>
+        SetService(ns, name, port, "TCP", readyAddresses);
+
+    public void AddUdpService(string ns, string name, int port, params string[] readyAddresses) =>
+        SetService(ns, name, port, "UDP", readyAddresses);
+
+    private void SetService(string ns, string name, int port, string protocol, string[] readyAddresses)
     {
         Services.RemoveAll(s => s.Namespace == ns && s.Name == name);
         Services.Add(new ServiceInfo(ns, name, "ClusterIP", "10.96.1.1", [new ServicePortInfo(null, port, port, null)], [], NoServiceAnnotations));
@@ -121,7 +204,7 @@ internal sealed class StateBuilder
             name + "-abc",
             name,
             "IPv4",
-            [new EndpointPortInfo(null, port, "TCP")],
+            [new EndpointPortInfo(null, port, protocol)],
             readyAddresses.Select(a => new EndpointInfo([a], true)).ToList()));
     }
 
@@ -130,6 +213,10 @@ internal sealed class StateBuilder
         GatewayClasses = Classes,
         Gateways = Gateways,
         HttpRoutes = Routes,
+        TlsRoutes = TlsRoutes,
+        TcpRoutes = TcpRoutes,
+        UdpRoutes = UdpRoutes,
+        GrpcRoutes = GrpcRoutes,
         ReferenceGrants = Grants,
         Namespaces = Namespaces,
         Services = Services,

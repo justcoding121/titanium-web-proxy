@@ -129,6 +129,22 @@ jobs:
         dotnet tool install --global docfx
         Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
+    - name: Detect scripting RID
+      id: build-scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+
+    - name: Cache scripting natives for coverage
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.build-scripting-rid.outputs.rid }}
+
     - name: Restore
       run: |
         # Fail restore on high/critical vulnerable packages (NuGet audit via MSBuild).
@@ -136,6 +152,26 @@ jobs:
 
     - name: Build
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
+
+    - name: Bundle scripting natives for coverage tests
+      shell: pwsh
+      run: |
+        # NativeLibrary loads wasmtime next to Titanium.Web.Proxy.Scripting.dll (test output copy).
+        $rid = '${{ steps.build-scripting-rid.outputs.rid }}'
+        $dirs = @(
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.dll src/Titanium.Web.Proxy.Scripting/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.Tests.dll tests/Titanium.Web.Proxy.Scripting.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter titanium.dll src/Titanium.Cli/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Cli.Tests.dll tests/Titanium.Cli.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+        ) | Where-Object { $_ } | Select-Object -Unique
+        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
+        foreach ($out in $dirs) {
+          Write-Host "Bundling scripting natives into $out"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
+          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
+            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
+          }
+        }
 
     - name: Begin SonarCloud analysis
       id: sonar_begin
@@ -192,7 +228,11 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/geoip
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        # CLI process E2E (TestCategory=E2E) runs on the cli-e2e OS matrix — avoid doubling Windows.
+        # Attribute CLI process E2E coverage to the build merge (cli-e2e matrix stays the OS gate).
+        # Natives were already bundled beside titanium.dll for scripting coverage above.
+        # Exclude CliHosted* Playwright leaves — those need Chromium (ui-portable / cli-e2e install it).
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --collect:"Code Coverage" --results-directory coverage/cli-e2e
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -228,18 +268,29 @@ jobs:
         .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml
         if (-not (Test-Path -LiteralPath coverage/coverage.xml)) { Write-Error "coverage merge produced no coverage.xml"; exit 1 }
         if ((Get-Item -LiteralPath coverage/coverage.xml).Length -lt 100) { Write-Error "coverage.xml is empty"; exit 1 }
-        powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-CoverageFloors.ps1 -CoverageXml coverage/coverage.xml
         if ('${{ github.base_ref }}' -ne '') { git fetch origin '${{ github.base_ref }}' --depth=1 }
         dotnet tool install --global dotnet-reportgenerator-globaltool
         reportgenerator "-reports:coverage/coverage.xml" "-targetdir:coverage/report" "-reporttypes:MarkdownSummaryGithub"
         if (Test-Path coverage/report/SummaryGithub.md) { Get-Content coverage/report/SummaryGithub.md | Out-File -Append $env:GITHUB_STEP_SUMMARY }
         powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-DiffCoverage.ps1 -CoverageXml coverage/coverage.xml -BaseRef "${{ github.base_ref }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Complete SonarCloud analysis
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       continue-on-error: true
       shell: pwsh
       run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+
+    - name: Assert coverage floors
+      shell: pwsh
+      env:
+        TWP_SONAR_PULL_REQUEST: ${{ github.event.pull_request.number }}
+        TWP_SONAR_BRANCH: ${{ github.ref_name }}
+      run: |
+        # Prefer Sonar component coverage (same bar as the merge gate). Give the upload a moment to publish.
+        if ($env:SONAR_TOKEN) { Start-Sleep -Seconds 90 }
+        powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-CoverageFloors.ps1 -CoverageXml coverage/coverage.xml -PullRequest "$env:TWP_SONAR_PULL_REQUEST" -Branch "$env:TWP_SONAR_BRANCH"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     # DocFX output races other develop pushes (incl. concurrent "Update documentation").
     # Sync to origin/develop, regenerate, commit docs-only, retry push â€” never fail the

@@ -45,8 +45,9 @@ public class CliManagerAgentE2ETests
         var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
 
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
 
         // Published YAML must reload cleanly in place of the agent node's boot config.
         var publishedYaml = $$"""
