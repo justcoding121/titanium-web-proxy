@@ -82,10 +82,15 @@ foreach ($range in @($doc.SelectNodes('//range'))) {
 function Find-SourceIds([string]$repoPath) {
     $ids = New-Object System.Collections.Generic.List[string]
     $normalized = $repoPath.TrimStart('./')
+    $fileName = [System.IO.Path]::GetFileName($normalized)
     foreach ($entry in $sourcesById.GetEnumerator()) {
         $coveragePath = $entry.Value
         if ($coveragePath.EndsWith($normalized, [StringComparison]::OrdinalIgnoreCase) -or
-            $coveragePath.EndsWith('/' + $normalized, [StringComparison]::OrdinalIgnoreCase)) {
+            $coveragePath.EndsWith('/' + $normalized, [StringComparison]::OrdinalIgnoreCase) -or
+            ($fileName -and (
+                $coveragePath.EndsWith('/' + $fileName, [StringComparison]::OrdinalIgnoreCase) -or
+                $coveragePath.EndsWith('\' + $fileName, [StringComparison]::OrdinalIgnoreCase) -or
+                $coveragePath.Equals($fileName, [StringComparison]::OrdinalIgnoreCase)))) {
             $ids.Add($entry.Key)
         }
     }
