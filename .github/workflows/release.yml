@@ -339,6 +339,8 @@ jobs:
 
   build-cli:
     needs: [resolve-version, release-gate]
+    # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
+    if: always() && needs.release-gate.result == 'success'
     runs-on: ${{ matrix.os }}
     # win-x64 uses environment "signing" for Azure OIDC (federated cred).
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
@@ -557,6 +559,8 @@ jobs:
           if-no-files-found: error
   build-plus:
     needs: [resolve-version, release-gate]
+    # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
+    if: always() && needs.release-gate.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -583,6 +587,8 @@ jobs:
 
   build-inspector:
     needs: [resolve-version, release-gate]
+    # always(): a skipped ancestor (green push evidence skips test/cli-e2e) skips this job without it.
+    if: always() && needs.release-gate.result == 'success'
     runs-on: ${{ matrix.os }}
     environment: ${{ matrix.rid == 'win-x64' && 'signing' || '' }}
     permissions:
@@ -776,6 +782,8 @@ jobs:
 
   smoke-http3:
     needs: build-cli
+    # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
+    if: always() && needs.build-cli.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -820,6 +828,8 @@ jobs:
 
   smoke-scripting:
     needs: build-cli
+    # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
+    if: always() && needs.build-cli.result == 'success'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -1095,7 +1105,11 @@ jobs:
   # Pull-request builds (no push) live in kubernetes-ci.yml.
   publish-image:
     needs: [resolve-version, release-gate]
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1158,7 +1172,11 @@ jobs:
   # The Gateway API controller image, published the same way (SBOM, provenance, keyless signature).
   publish-gateway-image:
     needs: [resolve-version, release-gate]
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1221,7 +1239,11 @@ jobs:
   # The Manager control-plane image, published the same way (SBOM, provenance, keyless signature).
   publish-manager-image:
     needs: [resolve-version, release-gate]
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
+    if: |
+      always() &&
+      needs.release-gate.result == 'success' &&
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -1391,7 +1413,8 @@ jobs:
 
   image-scan:
     needs: [resolve-version, publish-image, publish-gateway-image, publish-manager-image]
-    if: needs.publish-image.result == 'success'
+    # always(): skipped test/cli-e2e ancestors otherwise skip this job after a green push path.
+    if: always() && needs.publish-image.result == 'success'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -1416,7 +1439,8 @@ jobs:
 
   publish-nuget:
     needs: [resolve-version, publish-release]
-    if: needs.publish-release.result == 'success'
+    # always(): skipped rps-product-smoke / test ancestors otherwise skip this job.
+    if: always() && needs.publish-release.result == 'success'
     runs-on: windows-latest
     environment: nuget-publish
     permissions:
