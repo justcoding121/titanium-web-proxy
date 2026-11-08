@@ -59,6 +59,7 @@ internal sealed class PortListenerPlan
 internal sealed partial class TranslationPass
 {
     private readonly List<L4RouteOutcome> _l4Routes = [];
+    private readonly HashSet<(ListenerOutcome Listener, string RouteKey)> _l4AttachedCounts = [];
 
     private const string BackendNotFound = "BackendNotFound";
 
@@ -183,6 +184,13 @@ internal sealed partial class TranslationPass
             parent.Accepted = true;
             parent.Reason = "Accepted";
             parent.Message = "Route accepted";
+            foreach (var (listener, _) in parent.Attached)
+            {
+                if (_l4AttachedCounts.Add((listener, outcome.Key)))
+                {
+                    listener.AttachedRoutes++;
+                }
+            }
         }
         else
         {
@@ -576,17 +584,21 @@ internal sealed partial class TranslationPass
             switch (plan.Kind)
             {
                 case "tls":
-                    config.Listeners.Add(new ListenerConfig
+                    if (plan.SniRoutes.Count > 0 || plan.SniDefaultClusterId is not null)
                     {
-                        Host = "0.0.0.0",
-                        Port = plan.MappedPort,
-                        Type = "transparent",
-                        Passthrough = true,
-                        DecryptSsl = false,
-                        TerminateTls = plan.TerminateTls,
-                        SniRoutes = plan.SniRoutes.Count > 0 ? plan.SniRoutes.ToList() : new List<SniRouteConfig>(),
-                        SniDefaultClusterId = plan.SniDefaultClusterId,
-                    });
+                        config.Listeners.Add(new ListenerConfig
+                        {
+                            Host = "0.0.0.0",
+                            Port = plan.MappedPort,
+                            Type = "transparent",
+                            Passthrough = true,
+                            DecryptSsl = false,
+                            TerminateTls = plan.TerminateTls,
+                            SniRoutes = plan.SniRoutes.Count > 0 ? plan.SniRoutes.ToList() : new List<SniRouteConfig>(),
+                            SniDefaultClusterId = plan.SniDefaultClusterId,
+                        });
+                    }
+
                     break;
                 case "tcp":
                     if (plan.SniDefaultClusterId is not null)
