@@ -191,19 +191,37 @@ public class PlusCommandCoverageTests
     {
         if (OperatingSystem.IsLinux())
         {
-            Assert.IsFalse(SystemdServiceManager.IsRoot() && false, "probe IsRoot without requiring root");
-            _ = SystemdServiceManager.IsRoot();
+            Assert.IsInstanceOfType<bool>(SystemdServiceManager.IsRoot());
         }
 
         if (OperatingSystem.IsWindows())
         {
-            Assert.IsInstanceOfType(WindowsServiceManager.IsElevated(), typeof(bool));
+            Assert.IsInstanceOfType<bool>(WindowsServiceManager.IsElevated());
         }
 
         Assert.AreEqual("/Library/Logs/Titanium", ServiceUnitFactory.ResolveLaunchdLogDirectory(user: false));
         StringAssert.Contains(
             ServiceUnitFactory.ResolveLaunchdLogDirectory(user: true, userHome: "/Users/ada"),
             "/Users/ada/Library/Logs/Titanium");
+        StringAssert.Contains(
+            ServiceUnitFactory.ResolveLaunchdLogDirectory(user: true),
+            "/Library/Logs/Titanium");
+
+        var quotedBin = ServiceUnitFactory.BuildWindowsBinPath(
+            @"C:\Program Files\titanium\titanium.exe",
+            @"C:\Program Files\titanium\twp.yaml",
+            "Titanium Proxy");
+        StringAssert.Contains(quotedBin, "\"C:\\Program Files\\titanium\\titanium.exe\"");
+        StringAssert.Contains(quotedBin, "--service --name \"Titanium Proxy\"");
+
+        var userUnit = ServiceUnitFactory.BuildSystemdUnit(
+            "/usr/bin/titanium",
+            "/home/ada/.config/twp.yaml",
+            "/home/ada",
+            user: true);
+        StringAssert.Contains(userUnit, "WantedBy=default.target");
+        Assert.IsFalse(userUnit.Contains("WantedBy=multi-user.target", StringComparison.Ordinal));
+
         var unit = ServiceUnitFactory.BuildSystemdUnit(
             ["/usr/bin/titanium"],
             "/etc/twp.yaml",
@@ -211,14 +229,25 @@ public class PlusCommandCoverageTests
             user: false,
             new Dictionary<string, string> { ["DOTNET_NOLOGO"] = "1" });
         StringAssert.Contains(unit, "Environment=DOTNET_NOLOGO=1");
+
         var plist = ServiceUnitFactory.BuildLaunchdPlist(
             "com.example.titanium",
-            "/usr/local/bin/titanium",
+            ["/usr/local/bin/titanium"],
             "/etc/twp.yaml",
             "/var/lib/titanium",
             "/tmp/out.log",
-            "/tmp/err.log");
+            "/tmp/err.log",
+            new Dictionary<string, string> { ["DOTNET_NOLOGO"] = "1" });
         StringAssert.Contains(plist, "com.example.titanium");
+        StringAssert.Contains(plist, "EnvironmentVariables");
+        StringAssert.Contains(plist, "DOTNET_NOLOGO");
+
+        StringAssert.Contains(
+            ServiceUnitFactory.ResolveSystemdUnitPath("titanium", user: true),
+            "/.config/systemd/user/titanium.service");
+        Assert.AreEqual(
+            "/etc/systemd/system/titanium.service",
+            ServiceUnitFactory.ResolveSystemdUnitPath("titanium", user: false));
     }
 
     private static int GetFreePort()

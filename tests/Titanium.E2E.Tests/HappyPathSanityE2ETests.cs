@@ -165,8 +165,9 @@ public class HappyPathSanityE2ETests
     public async Task HappyPath_CliPlus_MitmProxy_ControlPlane_AndDebugLog()
     {
         using var httpOrigin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "happy-plus-secret";
         var logPath = Path.Combine(_tempDir, "plus-happy.log");
         var cfg = ConfigFixtures.WriteExplicitMitm(_tempDir, listen, logPath, plus: true, controlPort: control, secret: secret);

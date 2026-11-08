@@ -272,8 +272,9 @@ public class CliServiceLifecycleE2ETests
         }
 
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-svc-plus";
         var cfg = ConfigFixtures.WritePlus(_tempDir, listen, origin.Port, control, secret);
         using var harness = new CliProcessHarness(CliProcessHarness.SpawnMode.Apphost);
