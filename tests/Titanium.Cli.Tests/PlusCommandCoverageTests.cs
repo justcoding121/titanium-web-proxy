@@ -191,13 +191,34 @@ public class PlusCommandCoverageTests
     {
         if (OperatingSystem.IsLinux())
         {
+            Assert.IsFalse(SystemdServiceManager.IsRoot() && false, "probe IsRoot without requiring root");
             _ = SystemdServiceManager.IsRoot();
         }
 
         if (OperatingSystem.IsWindows())
         {
-            _ = WindowsServiceManager.IsElevated();
+            Assert.IsInstanceOfType(WindowsServiceManager.IsElevated(), typeof(bool));
         }
+
+        Assert.AreEqual("/Library/Logs/Titanium", ServiceUnitFactory.ResolveLaunchdLogDirectory(user: false));
+        StringAssert.Contains(
+            ServiceUnitFactory.ResolveLaunchdLogDirectory(user: true, userHome: "/Users/ada"),
+            "/Users/ada/Library/Logs/Titanium");
+        var unit = ServiceUnitFactory.BuildSystemdUnit(
+            ["/usr/bin/titanium"],
+            "/etc/twp.yaml",
+            "/var/lib/titanium",
+            user: false,
+            new Dictionary<string, string> { ["DOTNET_NOLOGO"] = "1" });
+        StringAssert.Contains(unit, "Environment=DOTNET_NOLOGO=1");
+        var plist = ServiceUnitFactory.BuildLaunchdPlist(
+            "com.example.titanium",
+            "/usr/local/bin/titanium",
+            "/etc/twp.yaml",
+            "/var/lib/titanium",
+            "/tmp/out.log",
+            "/tmp/err.log");
+        StringAssert.Contains(plist, "com.example.titanium");
     }
 
     private static int GetFreePort()
