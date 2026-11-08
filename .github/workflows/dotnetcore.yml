@@ -228,7 +228,10 @@ jobs:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/geoip
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        # CLI process E2E (TestCategory=E2E) runs on the cli-e2e OS matrix — avoid doubling Windows.
+        # Attribute CLI process E2E coverage to the build merge (cli-e2e matrix stays the OS gate).
+        # Natives were already bundled beside titanium.dll for scripting coverage above.
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E&FullyQualifiedName~Cli" --collect:"Code Coverage" --results-directory coverage/cli-e2e
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

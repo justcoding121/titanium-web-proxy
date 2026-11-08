@@ -391,6 +391,102 @@ public class RunCommandExecuteCoreBehaviorTests
         Assert.IsTrue(proxy.Logging.Enabled);
     }
 
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task MetricsAndAccessLog_StartFromConfig_AndStopCleanly()
+    {
+        var previousCwd = Directory.GetCurrentDirectory();
+        var dir = Path.Combine(Path.GetTempPath(), "twp-run-metrics-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var proxyPort = GetFreePort();
+        var metricsPort = GetFreePort();
+        var accessLog = Path.Combine(dir, "access.ndjson");
+        var path = Path.Combine(dir, "twp.yaml");
+        await File.WriteAllTextAsync(path, $"""
+            schemaVersion: "7.1"
+            listeners:
+              - host: "127.0.0.1"
+                port: {proxyPort}
+                decryptSsl: false
+            server:
+              drainTimeoutSeconds: 0
+              metrics:
+                enabled: true
+                host: "127.0.0.1"
+                port: {metricsPort}
+              accessLog:
+                path: "{accessLog.Replace('\\', '/')}"
+                sampleRate: 1.0
+            """);
+
+        var stdout = new StringWriter();
+        var previousOut = Console.Out;
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            Console.SetOut(stdout);
+            var run = RunCommand.ExecuteCoreAsync(path, verbose: false, serviceMode: false, cts.Token);
+            await WaitForPredicateAsync(
+                () => stdout.ToString().Contains("Metrics:", StringComparison.Ordinal)
+                      && stdout.ToString().Contains("Access log:", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(20),
+                () => stdout.ToString());
+            Assert.IsTrue(await CanConnectAsync(proxyPort));
+            Assert.AreEqual(200, await GetStatusAsync(metricsPort, "/metrics"));
+
+            await cts.CancelAsync();
+            Assert.AreEqual(0, await run.WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                await cts.CancelAsync();
+            }
+
+            Console.SetOut(previousOut);
+            Directory.SetCurrentDirectory(previousCwd);
+            TryDelete(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task MissingScriptPlugin_ReturnsOne()
+    {
+        var previousCwd = Directory.GetCurrentDirectory();
+        var dir = Path.Combine(Path.GetTempPath(), "twp-run-script-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "twp.yaml");
+        await File.WriteAllTextAsync(path, $"""
+            schemaVersion: "7.1"
+            listeners:
+              - host: "127.0.0.1"
+                port: {GetFreePort()}
+                decryptSsl: false
+            plugins:
+              - name: ghost
+                kind: lua
+                file: "{Path.Combine(dir, "missing.lua").Replace('\\', '/')}"
+            scriptPipeline: ["ghost"]
+            """);
+        try
+        {
+            var code = await RunCommand.ExecuteCoreAsync(path, verbose: false, serviceMode: false, CancellationToken.None);
+            Assert.AreEqual(1, code);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(previousCwd);
+            TryDelete(dir);
+        }
+    }
+
+    [TestMethod]
+    public async Task ExecuteAsync_Help_ReturnsZero()
+    {
+        Assert.AreEqual(0, await RunCommand.ExecuteAsync(["run", "--help"]));
+    }
+
     private static string ValidListenerYaml(int port) => $"""
         schemaVersion: "7.1"
         listeners:
