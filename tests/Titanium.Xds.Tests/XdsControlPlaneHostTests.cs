@@ -106,6 +106,7 @@ public class XdsControlPlaneHostTests
             cfg => applied = cfg);
 
         Assert.IsNull(host.LastGoodConfig);
+        Assert.AreEqual(AdsConnectionState.Connecting, host.ConnectionState);
 
         var validate = typeof(XdsControlPlaneHost).GetMethod(
             "ValidateAsync",
