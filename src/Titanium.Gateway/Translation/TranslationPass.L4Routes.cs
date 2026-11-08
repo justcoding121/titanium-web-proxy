@@ -581,54 +581,43 @@ internal sealed partial class TranslationPass
     {
         foreach (var plan in _portPlans.OrderBy(p => p.MappedPort))
         {
-            switch (plan.Kind)
+            var listener = CreateL4Listener(plan);
+            if (listener is not null)
             {
-                case "tls":
-                    if (plan.SniRoutes.Count > 0 || plan.SniDefaultClusterId is not null)
-                    {
-                        config.Listeners.Add(new ListenerConfig
-                        {
-                            Host = "0.0.0.0",
-                            Port = plan.MappedPort,
-                            Type = "transparent",
-                            Passthrough = true,
-                            DecryptSsl = false,
-                            TerminateTls = plan.TerminateTls,
-                            SniRoutes = plan.SniRoutes.Count > 0 ? plan.SniRoutes.ToList() : new List<SniRouteConfig>(),
-                            SniDefaultClusterId = plan.SniDefaultClusterId,
-                        });
-                    }
-
-                    break;
-                case "tcp":
-                    if (plan.SniDefaultClusterId is not null)
-                    {
-                        config.Listeners.Add(new ListenerConfig
-                        {
-                            Host = "0.0.0.0",
-                            Port = plan.MappedPort,
-                            Type = "transparent",
-                            Passthrough = true,
-                            DecryptSsl = false,
-                            SniDefaultClusterId = plan.SniDefaultClusterId,
-                        });
-                    }
-
-                    break;
-                case "udp":
-                    if (plan.UdpClusterId is not null)
-                    {
-                        config.Listeners.Add(new ListenerConfig
-                        {
-                            Host = "0.0.0.0",
-                            Port = plan.MappedPort,
-                            Type = "udp",
-                            ClusterId = plan.UdpClusterId,
-                        });
-                    }
-
-                    break;
+                config.Listeners.Add(listener);
             }
         }
     }
+
+    private static ListenerConfig? CreateL4Listener(PortListenerPlan plan) => plan.Kind switch
+    {
+        "tls" when plan.SniRoutes.Count > 0 || plan.SniDefaultClusterId is not null => new ListenerConfig
+        {
+            Host = "0.0.0.0",
+            Port = plan.MappedPort,
+            Type = "transparent",
+            Passthrough = true,
+            DecryptSsl = false,
+            TerminateTls = plan.TerminateTls,
+            SniRoutes = plan.SniRoutes.Count > 0 ? plan.SniRoutes.ToList() : new List<SniRouteConfig>(),
+            SniDefaultClusterId = plan.SniDefaultClusterId,
+        },
+        "tcp" when plan.SniDefaultClusterId is not null => new ListenerConfig
+        {
+            Host = "0.0.0.0",
+            Port = plan.MappedPort,
+            Type = "transparent",
+            Passthrough = true,
+            DecryptSsl = false,
+            SniDefaultClusterId = plan.SniDefaultClusterId,
+        },
+        "udp" when plan.UdpClusterId is not null => new ListenerConfig
+        {
+            Host = "0.0.0.0",
+            Port = plan.MappedPort,
+            Type = "udp",
+            ClusterId = plan.UdpClusterId,
+        },
+        _ => null,
+    };
 }

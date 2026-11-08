@@ -121,6 +121,72 @@ public class ManagerStoreAndApiTests
     }
 
     [TestMethod]
+    public async Task Api_FleetDetailRevisionsAndRollouts_RoundTrip()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fleetDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "detail" })));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        var missing = await admin.GetAsync("/v1/fleets/999999");
+        Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+
+        var detail = await admin.GetAsync($"/v1/fleets/{fleetId}");
+        Assert.AreEqual(HttpStatusCode.OK, detail.StatusCode);
+        using var detailDoc = await ManagerTestHost.ReadJsonAsync(detail);
+        Assert.AreEqual("detail", detailDoc.RootElement.GetProperty("name").GetString());
+
+        using var revDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", ManagerTestHost.Yaml(ValidYaml)));
+        var revId = revDoc.RootElement.GetProperty("id").GetInt64();
+
+        var revisions = await admin.GetAsync($"/v1/fleets/{fleetId}/revisions");
+        Assert.AreEqual(HttpStatusCode.OK, revisions.StatusCode);
+        using var revisionsDoc = await ManagerTestHost.ReadJsonAsync(revisions);
+        Assert.AreEqual(1, revisionsDoc.RootElement.GetArrayLength());
+
+        var oneRev = await admin.GetAsync($"/v1/fleets/{fleetId}/revisions/{revId}");
+        Assert.AreEqual(HttpStatusCode.OK, oneRev.StatusCode);
+
+        var publish = await admin.PostAsync($"/v1/fleets/{fleetId}/revisions/{revId}/publish", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.OK, publish.StatusCode);
+        using var pubDoc = await ManagerTestHost.ReadJsonAsync(publish);
+        var rolloutId = pubDoc.RootElement.GetProperty("id").GetInt64();
+
+        var rollouts = await admin.GetAsync($"/v1/fleets/{fleetId}/rollouts");
+        Assert.AreEqual(HttpStatusCode.OK, rollouts.StatusCode);
+        using var rolloutsDoc = await ManagerTestHost.ReadJsonAsync(rollouts);
+        Assert.IsTrue(rolloutsDoc.RootElement.GetArrayLength() >= 1);
+
+        var oneRollout = await admin.GetAsync($"/v1/fleets/{fleetId}/rollouts/{rolloutId}");
+        Assert.AreEqual(HttpStatusCode.OK, oneRollout.StatusCode);
+
+        var badMethod = await admin.DeleteAsync($"/v1/fleets/{fleetId}");
+        Assert.AreEqual(HttpStatusCode.MethodNotAllowed, badMethod.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Api_AgentWrongFleetScope_IsForbidden()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fleetA = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "a" })));
+        using var fleetB = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "b" })));
+        var aId = fleetA.RootElement.GetProperty("id").GetInt64();
+        var bId = fleetB.RootElement.GetProperty("id").GetInt64();
+
+        using var tokenDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/agent-tokens", ManagerTestHost.Json(new { fleetId = aId, name = "scoped" })));
+        using var agent = host.CreateAgentClient(tokenDoc.RootElement.GetProperty("token").GetString()!);
+
+        var cfg = await agent.GetAsync($"/v1/agent/config?fleet={bId}&have=&wait=0");
+        Assert.AreEqual(HttpStatusCode.Forbidden, cfg.StatusCode);
+    }
+
+    [TestMethod]
     public async Task Api_WrongBearerToken_IsRejectedAndDoesNotCreateAFleet()
     {
         await using var host = await ManagerTestHost.StartAsync();

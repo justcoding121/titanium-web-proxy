@@ -1,4 +1,4 @@
-# Fail when an assembly's line coverage in a VS coverage XML drops more than the allowance
+﻿# Fail when an assembly's line coverage in a VS coverage XML drops more than the allowance
 # below tests/coverage-floors.json, unless that file is part of the diff.
 param(
     [string]$CoverageXml = 'coverage/coverage.xml',
@@ -20,19 +20,32 @@ $failed = $false
 # Longest name first so Titanium.Web.Proxy does not match Titanium.Web.Proxy.Scripting.
 $assemblies = @($floorsDoc.assemblies.PSObject.Properties) | Sort-Object { $_.Name.Length } -Descending
 
+# Product AssemblyName overrides (csproj) — coverage XML uses the DLL file name.
+$aliases = @{
+    'Titanium.Cli' = @('titanium.dll')
+    'Titanium.Gateway' = @('titanium-gateway.dll')
+    'Titanium.Manager' = @('titanium-manager.dll')
+    'Titanium.Inspector' = @('TitaniumInspector.dll')
+}
+
 $modules = @($doc.SelectNodes("//module"))
 $claimed = New-Object 'System.Collections.Generic.HashSet[string]'
 
 foreach ($prop in $assemblies) {
     $name = $prop.Name
     $floor = [double]$prop.Value
-    $dll = "$name.dll"
+    $candidates = @("$name.dll")
+    if ($aliases.ContainsKey($name)) { $candidates += $aliases[$name] }
     $matched = @()
     foreach ($module in $modules) {
         $moduleName = [string]$module.name
         if ([string]::IsNullOrWhiteSpace($moduleName)) { continue }
         if ($claimed.Contains($moduleName)) { continue }
-        if ($moduleName -eq $dll -or $moduleName -like "$name.dll") {
+        $hit = $false
+        foreach ($dll in $candidates) {
+            if ($moduleName -eq $dll -or $moduleName -like $dll) { $hit = $true; break }
+        }
+        if ($hit) {
             $matched += $module
             [void]$claimed.Add($moduleName)
         }

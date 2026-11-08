@@ -32,7 +32,7 @@ public class XdsControlPlaneHostTests
     [TestMethod]
     public void MissingServer_ThrowsBeforeConnect()
     {
-        Assert.ThrowsException<InvalidOperationException>(() =>
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
             new XdsControlPlaneHost(
                 new XdsConfig { Server = null },
                 new TwpConfig(),
@@ -84,6 +84,64 @@ public class XdsControlPlaneHostTests
         Assert.AreEqual("c1", built.Config.Routes[0].ClusterId);
         Assert.AreEqual(18080, built.Config.Listeners.Single().Port);
         Assert.IsTrue(built.Config.Certificates!.Items.Count > 0);
+    }
+
+    [TestMethod]
+    public async Task HostValidateAndApply_AckPartialThenApplyFull_AndKeepLastGoodOnBuildFailure()
+    {
+        TwpConfig? applied = null;
+        await using var host = new XdsControlPlaneHost(
+            new XdsConfig
+            {
+                Server = "ads.example:18000",
+                Node = new XdsNodeConfig
+                {
+                    Id = "node-1",
+                    Cluster = "edge",
+                    Locality = new XdsLocalityConfig { Zone = "us-west1-a" },
+                },
+            },
+            new TwpConfig(),
+            _stateDir,
+            cfg => applied = cfg);
+
+        Assert.IsNull(host.LastGoodConfig);
+
+        var validate = typeof(XdsControlPlaneHost).GetMethod(
+            "ValidateAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var apply = typeof(XdsControlPlaneHost).GetMethod(
+            "ApplyAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+        // EDS-only: ACK without full TwpConfig validation so CLA can arrive next.
+        var partial = new AdsResourceStore();
+        partial.Replace(
+            Titanium.Xds.XdsTypeUrls.Cluster,
+            [Any.Pack(new Cluster { Name = "c1", Type = ClusterDiscoveryType.Eds })]);
+        var partialDecision = await ((Task<AdsAckDecision>)validate.Invoke(host, [partial])!);
+        Assert.IsTrue(partialDecision.Ack);
+        Assert.IsTrue(string.IsNullOrEmpty(partialDecision.ErrorDetail));
+
+        var full = StoreFrom(GoodSnapshotResources());
+        var fullDecision = await ((Task<AdsAckDecision>)validate.Invoke(host, [full])!);
+        Assert.IsTrue(fullDecision.Ack, fullDecision.ErrorDetail);
+
+        await ((Task)apply.Invoke(host, [full])!);
+        Assert.IsNotNull(applied);
+        Assert.AreSame(applied, host.LastGoodConfig);
+        Assert.AreEqual("c1", host.LastGoodConfig!.Clusters.Single().Id);
+
+        var bad = StoreFrom(GoodSnapshotResources());
+        bad.Replace(
+            Titanium.Xds.XdsTypeUrls.Cluster,
+            [Any.Pack(new Cluster { Name = "c2", Type = ClusterDiscoveryType.LogicalDns })]);
+        var nack = await ((Task<AdsAckDecision>)validate.Invoke(host, [bad])!);
+        Assert.IsFalse(nack.Ack);
+        StringAssert.Contains(nack.ErrorDetail, "type");
+
+        await ((Task)apply.Invoke(host, [bad])!);
+        Assert.AreEqual("c1", host.LastGoodConfig!.Clusters.Single().Id);
     }
 
     [TestMethod]

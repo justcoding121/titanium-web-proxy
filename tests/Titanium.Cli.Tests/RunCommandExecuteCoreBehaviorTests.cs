@@ -4,6 +4,8 @@ using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
 using Titanium.Web.Proxy;
+using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.Configuration.Models;
 
 namespace Titanium.Cli.Tests;
@@ -266,6 +268,118 @@ public class RunCommandExecuteCoreBehaviorTests
         // When YAML already opted into a file sink, the helper returns without mutating the proxy.
         Assert.IsFalse(proxy.Logging.EnableFile);
         Assert.AreNotEqual(existing, proxy.Logging.FilePath ?? string.Empty);
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task Watch_ValidRewrite_ReloadsAndKeepsServing()
+    {
+        var previousCwd = Directory.GetCurrentDirectory();
+        var dir = Path.Combine(Path.GetTempPath(), "twp-run-watch-ok-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var port = GetFreePort();
+        var path = Path.Combine(dir, "twp.yaml");
+        await File.WriteAllTextAsync(path, ValidListenerYaml(port));
+
+        var stdout = new StringWriter();
+        var previousOut = Console.Out;
+        using var cts = new CancellationTokenSource();
+        try
+        {
+            Console.SetOut(stdout);
+            var run = RunCommand.ExecuteCoreAsync(path, verbose: false, serviceMode: false, cts.Token, watch: true);
+            await WaitForPredicateAsync(
+                () => stdout.ToString().Contains("config-watch-enabled", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(20),
+                () => stdout.ToString());
+            Assert.IsTrue(await CanConnectAsync(port));
+
+            var nextPort = GetFreePort();
+            await File.WriteAllTextAsync(path, ValidListenerYaml(nextPort));
+            await WaitForPredicateAsync(
+                () => stdout.ToString().Contains("Config reloaded.", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(30),
+                () => stdout.ToString());
+            Assert.IsTrue(await CanConnectAsync(nextPort), "the reloaded listener must serve the new port");
+
+            await cts.CancelAsync();
+            Assert.AreEqual(0, await run.WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                await cts.CancelAsync();
+            }
+
+            Console.SetOut(previousOut);
+            Directory.SetCurrentDirectory(previousCwd);
+            TryDelete(dir);
+        }
+    }
+
+    [TestMethod]
+    public void ResolveLocalZone_PrefersOverrideThenServerThenNull()
+    {
+        var previous = Environment.GetEnvironmentVariable("TITANIUM_ZONE");
+        try
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_ZONE", null);
+            Assert.AreEqual("override", RunCommand.ResolveLocalZone(new ServerConfig { LocalZone = "server" }, "override"));
+            Assert.AreEqual("server", RunCommand.ResolveLocalZone(new ServerConfig { LocalZone = "server" }, null));
+            Assert.IsNull(RunCommand.ResolveLocalZone(null, null));
+            Assert.IsNull(RunCommand.ResolveLocalZone(new ServerConfig(), "  "));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_ZONE", previous);
+        }
+    }
+
+    [TestMethod]
+    public void ShouldEnableHttp3_AndSessionPath_FollowConfigGates()
+    {
+        Assert.IsTrue(RunCommand.ShouldEnableHttp3(new TwpConfig()), "no listener opts out of HTTP/3");
+        Assert.IsFalse(RunCommand.ShouldEnableHttp3(new TwpConfig
+        {
+            Listeners = [new ListenerConfig { Port = 443, EnableHttp3 = false }],
+        }));
+        Assert.IsFalse(RunCommand.ConfigNeedsSessionPath(new TwpConfig()));
+        Assert.IsTrue(RunCommand.ConfigNeedsRequestTimingCapture(new TwpConfig
+        {
+            Clusters =
+            [
+                new ClusterConfig
+                {
+                    Id = "c",
+                    Algorithm = LoadBalanceAlgorithm.LeastTime,
+                    Destinations = [new DestinationConfig { Id = "d1", Address = "127.0.0.1", Port = 80 }],
+                },
+            ],
+        }));
+    }
+
+    [TestMethod]
+    public void ReplaceRoutes_SwapsTheListInPlace()
+    {
+        var routes = new List<RouteConfig>
+        {
+            new() { Id = "old", ClusterId = "c", Match = new RouteMatch { Path = "/" } },
+        };
+        RunCommand.ReplaceRoutes(
+            routes,
+            [new RouteConfig { Id = "new", ClusterId = "c", Match = new RouteMatch { Path = "/" } }]);
+        Assert.AreEqual(1, routes.Count);
+        Assert.AreEqual("new", routes[0].Id);
+    }
+
+    [TestMethod]
+    public void ApplyLogging_VerboseForcesInformationFloor()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        RunCommand.ApplyLogging(proxy, new LoggingConfig { MinimumLevel = "Error" }, verbose: true);
+        Assert.AreEqual(Microsoft.Extensions.Logging.LogLevel.Debug, proxy.Logging.MinimumLevel);
+        Assert.IsTrue(proxy.Logging.Enabled);
     }
 
     private static string ValidListenerYaml(int port) => $"""

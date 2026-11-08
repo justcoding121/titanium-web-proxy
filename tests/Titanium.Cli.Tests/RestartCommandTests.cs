@@ -94,6 +94,8 @@ public class RestartCommandTests
         }
     }
 
+    private static readonly string[] RestartLaunchArgs = ["restart", "-c", "a.yaml", "--watch"];
+
     [TestMethod]
     public void BuildStartInfo_LaunchesThroughShWithRunArgsAndLogRedirect()
     {
@@ -101,7 +103,7 @@ public class RestartCommandTests
         Assert.IsNotNull(method);
         var startInfo = (ProcessStartInfo)method.Invoke(
             null,
-            [new[] { "restart", "-c", "a.yaml", "--watch" }, "out.log"])!;
+            [RestartLaunchArgs, "out.log"])!;
 
         Assert.AreEqual("/bin/sh", startInfo.FileName);
         Assert.IsFalse(startInfo.UseShellExecute);
