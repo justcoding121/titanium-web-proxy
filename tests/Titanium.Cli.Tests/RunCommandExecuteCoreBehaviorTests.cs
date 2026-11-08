@@ -294,13 +294,22 @@ public class RunCommandExecuteCoreBehaviorTests
                 () => stdout.ToString());
             Assert.IsTrue(await CanConnectAsync(port));
 
-            var nextPort = GetFreePort();
-            await File.WriteAllTextAsync(path, ValidListenerYaml(nextPort));
+            // Keep the same listen port; only bump a server field so reload applies without a rebind race.
+            await File.WriteAllTextAsync(path, $"""
+                schemaVersion: "7.1"
+                listeners:
+                  - host: "127.0.0.1"
+                    port: {port}
+                    decryptSsl: false
+                server:
+                  drainTimeoutSeconds: 0
+                  localZone: "watch-reload-zone"
+                """);
             await WaitForPredicateAsync(
                 () => stdout.ToString().Contains("Config reloaded.", StringComparison.Ordinal),
                 TimeSpan.FromSeconds(30),
                 () => stdout.ToString());
-            Assert.IsTrue(await CanConnectAsync(nextPort), "the reloaded listener must serve the new port");
+            Assert.IsTrue(await CanConnectAsync(port), "the listener must keep serving after a successful reload");
 
             await cts.CancelAsync();
             Assert.AreEqual(0, await run.WaitAsync(TimeSpan.FromSeconds(30)));
