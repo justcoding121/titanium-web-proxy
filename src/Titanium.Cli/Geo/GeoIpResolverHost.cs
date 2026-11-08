@@ -10,7 +10,7 @@ internal sealed class GeoIpResolverHost : IDisposable
     private IGeoIpResolver? _current;
     private string? _path;
     private long _writeTicksUtc;
-    private readonly List<Timer> _pendingDisposals = [];
+    private readonly List<(Timer Timer, IDisposable Resolver)> _pendingDisposals = [];
 
     public IGeoIpResolver? Resolver => Volatile.Read(ref _current);
 
@@ -20,9 +20,14 @@ internal sealed class GeoIpResolverHost : IDisposable
         databasePath = string.IsNullOrWhiteSpace(databasePath) ? null : databasePath.Trim();
         if (databasePath is null)
         {
-            Swap(null);
+            var previous = Swap(null);
             _path = null;
             _writeTicksUtc = 0;
+            if (previous is IDisposable disposable)
+            {
+                ScheduleDispose(disposable);
+            }
+
             return;
         }
 
@@ -146,7 +151,7 @@ internal sealed class GeoIpResolverHost : IDisposable
 
                 lock (pair.Host._pendingDisposals)
                 {
-                    // timer is one-shot; list holds roots until host disposal.
+                    pair.Host._pendingDisposals.RemoveAll(p => ReferenceEquals(p.Resolver, pair.Resolver));
                 }
             },
             (previous, this),
@@ -154,7 +159,7 @@ internal sealed class GeoIpResolverHost : IDisposable
             Timeout.InfiniteTimeSpan);
         lock (_pendingDisposals)
         {
-            _pendingDisposals.Add(timer);
+            _pendingDisposals.Add((timer, previous));
         }
     }
 
@@ -168,9 +173,17 @@ internal sealed class GeoIpResolverHost : IDisposable
 
         lock (_pendingDisposals)
         {
-            foreach (var timer in _pendingDisposals)
+            foreach (var (timer, resolver) in _pendingDisposals)
             {
                 timer.Dispose();
+                try
+                {
+                    resolver.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // already gone
+                }
             }
 
             _pendingDisposals.Clear();
