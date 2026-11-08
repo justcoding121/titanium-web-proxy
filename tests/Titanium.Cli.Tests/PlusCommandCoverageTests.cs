@@ -1,6 +1,10 @@
+using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Config;
+using Titanium.Cli.Parsers;
 using Titanium.Cli.Service;
+using Titanium.Cli.Updates;
+using Titanium.Web.Proxy.Configuration.Models;
 
 namespace Titanium.Cli.Tests;
 
@@ -41,5 +45,51 @@ public class PlusCommandCoverageTests
         Assert.IsTrue(ServiceDefaults.IsDotnetHostPath("dotnet.exe"));
         Assert.IsFalse(ServiceDefaults.IsDotnetMuxer("titanium"));
         Assert.AreEqual("com.justcoding121.edge", ServiceDefaults.ResolveMacOsLabel("edge"));
+        _ = ServiceDefaults.ResolveRelaunchTarget();
+        _ = ServiceDefaults.ResolveExePath();
+    }
+
+    [TestMethod]
+    public async Task HashPassword_ReadsRedirectedStdin_AndRejectsEmpty()
+    {
+        var previousIn = Console.In;
+        try
+        {
+            Console.SetIn(new StringReader("\n"));
+            Assert.AreEqual(1, await PlusCommand.ExecuteAsync(["plus", "hash-password", "--user", "stdin-user"]));
+            Console.SetIn(new StringReader("from-stdin\n"));
+            Assert.AreEqual(0, await PlusCommand.ExecuteAsync(["plus", "hash-password", "--user", "stdin-user"]));
+        }
+        finally
+        {
+            Console.SetIn(previousIn);
+        }
+    }
+
+    [TestMethod]
+    public void RunCommand_ParseZoneAndWriteWarnings_AndAcmeSessionGate()
+    {
+        var parseZone = typeof(RunCommand).GetMethod("ParseZone", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(parseZone);
+        Assert.AreEqual("z1", parseZone.Invoke(null, [new[] { "run", "--zone", "z1" }]));
+        Assert.AreEqual("z2", parseZone.Invoke(null, [new[] { "run", "--zone=z2" }]));
+        Assert.IsNull(parseZone.Invoke(null, [new[] { "run", "-c", "x.yaml" }]));
+
+        var writeWarnings = typeof(RunCommand).GetMethod("WriteConfigWarnings", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.IsNotNull(writeWarnings);
+        writeWarnings.Invoke(null, [
+            new LoadedConfig
+            {
+                Config = new TwpConfig(),
+                Path = "x.yaml",
+                Dialect = "twp-native",
+                UnknownKeys = ["listeners[0].typo"],
+            },
+        ]);
+
+        Assert.AreEqual(1, UpdateCommand.RemovePlus(Path.Combine(Path.GetTempPath(), "twp-missing-plus-" + Guid.NewGuid().ToString("N"))));
+        Assert.AreEqual(1, UpdateCommand.ApplyPlusBundleZip(
+            "missing.zip",
+            Path.Combine(Path.GetTempPath(), "twp-missing-plus-" + Guid.NewGuid().ToString("N"))));
     }
 }
