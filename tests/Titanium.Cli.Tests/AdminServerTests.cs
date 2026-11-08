@@ -13,7 +13,7 @@ public class AdminServerTests
 {
     private const string Token = "s3cret-admin-token";
 
-    private static readonly AdminVersionInfo Version = new("8.0.0", "abc1234", ".NET 10.0.0", "community", "deadbeef");
+    private static readonly AdminVersionInfo Version = new("8.0.1", "abc1234", ".NET 10.0.0", "community", "deadbeef");
 
     [TestMethod]
     public async Task Healthz_IsAlwaysOk_EvenWhenNotReadyAndTokenIsSet()
@@ -123,7 +123,7 @@ public class AdminServerTests
         Assert.AreEqual(200, response.Status);
         StringAssert.Contains(response.Head, "Content-Type: application/json");
         using var doc = JsonDocument.Parse(response.Body);
-        Assert.AreEqual("8.0.0", doc.RootElement.GetProperty("version").GetString());
+        Assert.AreEqual("8.0.1", doc.RootElement.GetProperty("version").GetString());
         Assert.AreEqual("abc1234", doc.RootElement.GetProperty("commit").GetString());
         Assert.AreEqual(".NET 10.0.0", doc.RootElement.GetProperty("runtime").GetString());
         Assert.AreEqual("community", doc.RootElement.GetProperty("edition").GetString());

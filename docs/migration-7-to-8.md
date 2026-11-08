@@ -45,7 +45,7 @@ On Kubernetes the default GHCR image is the MIT CLI and has no shell, so `titani
 
 - Charts live under `deploy/helm/{titanium,titanium-gateway,titanium-manager}`.
 - Install from the git tree, from Helm `.tgz` assets on the GitHub Release, or from OCI (`oci://ghcr.io/justcoding121/charts`).
-- Chart `appVersion` tracks the product version; chart semver is **1.0.0** for the 8.0 GA packaging contract.
+- Chart `appVersion` tracks the product patch (**8.0.1**); chart semver is **1.0.1** for this release (the 8.0 packaging contract stays on the **1.x** line).
 - Default CLI image includes scripting natives; it still omits `libmsquic` (no HTTP/3 in the default image) and omits the Plus bundle.
 
 ## Managed fleet vs Gateway / Ingress

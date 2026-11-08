@@ -10,7 +10,7 @@ titanium-manager --listen http://127.0.0.1:7700/ --db ./manager.db --admin-token
 
 Bootstrap the admin token with `--admin-token` or `TITANIUM_MANAGER_ADMIN_TOKEN`. Agents enroll with `plus.options` `manager.url` and `manager.tokenFile` (see [Plus](https://titaniumproxy.com/docs/plus#managed-fleet-agent)).
 
-The Helm chart is `deploy/helm/titanium-manager` (OCI `oci://ghcr.io/justcoding121/charts/titanium-manager`, and `titanium-manager-1.0.0.tgz` on the GitHub Release). One replica, SQLite on a PVC. `GET /v1/healthz` needs no token. `GET /v1/fleets` needs the bearer token from Secret `<release>-titanium-manager-admin`, key `admin-token`. `image.tag` defaults to the chart `appVersion` (`8.0.0`).
+The Helm chart is `deploy/helm/titanium-manager` (OCI `oci://ghcr.io/justcoding121/charts/titanium-manager`, and `titanium-manager-1.0.1.tgz` on the GitHub Release). One replica, SQLite on a PVC. `GET /v1/healthz` needs no token. `GET /v1/fleets` needs the bearer token from Secret `<release>-titanium-manager-admin`, key `admin-token`. `image.tag` defaults to the chart `appVersion` (`8.0.1`).
 
 ## What it covers
 

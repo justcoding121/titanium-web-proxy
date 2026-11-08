@@ -140,7 +140,7 @@ public class CliCommandE2ETests
         using var harness = new CliProcessHarness();
         var (code, stdout, _) = await harness.RunOnceAsync(["version"]);
         Assert.AreEqual(0, code);
-        StringAssert.Contains(stdout, "8.0.0");
+        StringAssert.Contains(stdout, "8.0.1");
     }
 
     [TestMethod]
@@ -517,7 +517,7 @@ public class CliCommandE2ETests
         var combined = stdout + stderr;
         // 0 = up to date, 2 = update available, 1 = feed unreachable (transient CI / network).
         Assert.IsTrue(code is 0 or 1 or 2, $"Unexpected exit {code}. Output: {combined}");
-        StringAssert.Contains(combined, "8.0.0");
+        StringAssert.Contains(combined, "8.0.1");
         if (code == 1)
         {
             Assert.IsTrue(

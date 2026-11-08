@@ -6,7 +6,7 @@
 helm install titanium-gateway ./deploy/helm/titanium-gateway --namespace gateway-system --create-namespace
 ```
 
-The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that are already installed. If `/healthz` is `200` and `/readyz` stays `503` (`caches not synced`), the cluster's ReferenceGrant CRD is still `v1beta1` only: apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side`. Image tags are `controller.image.tag` and `dataPlane.image.tag` (there is no `image.tag`). An empty tag is the chart `appVersion` (`8.0.0`). A `ClusterIP` Service still supplies `Gateway.status.addresses` from its cluster IP, so `Programmed` does not wait for a load balancer.
+The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that are already installed. If `/healthz` is `200` and `/readyz` stays `503` (`caches not synced`), the cluster's ReferenceGrant CRD is still `v1beta1` only: apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side`. Image tags are `controller.image.tag` and `dataPlane.image.tag` (there is no `image.tag`). An empty tag is the chart `appVersion` (`8.0.1`). A `ClusterIP` Service still supplies `Gateway.status.addresses` from its cluster IP, so `Programmed` does not wait for a load balancer.
 
 ## How it works
 
