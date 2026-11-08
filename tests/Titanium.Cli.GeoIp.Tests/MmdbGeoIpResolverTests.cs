@@ -47,6 +47,50 @@ public class MmdbGeoIpResolverTests
         Assert.AreEqual("GB", code);
     }
 
+    [TestMethod]
+    public void RegisteredCountry_WithoutCountry_ReturnsThatIsoCode()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = "de" },
+        };
+        Assert.AreEqual("DE", MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
+    public void Country_TakesPrecedenceOverRegisteredCountry()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = "fr" },
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = "de" },
+        };
+        Assert.AreEqual("FR", MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
+    public void IsoCode_ThatIsNotTwoLetters_IsAMiss()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = "DEU" },
+        };
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
+    public async Task TryGetCountry_AfterDispose_ReturnsFalseAndDoesNotThrow()
+    {
+        var path = await EnsureTestDatabaseAsync();
+        var resolver = new MmdbGeoIpResolver(path);
+        Assert.IsTrue(resolver.TryGetCountry(IPAddress.Parse("2.125.160.216"), out var before));
+        Assert.AreEqual("GB", before);
+        resolver.Dispose();
+        Assert.IsFalse(resolver.TryGetCountry(IPAddress.Parse("2.125.160.216"), out var after));
+        Assert.AreEqual(string.Empty, after);
+        resolver.Dispose();
+    }
+
     private static async Task<string> EnsureTestDatabaseAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-geolite2-country-test.mmdb");
