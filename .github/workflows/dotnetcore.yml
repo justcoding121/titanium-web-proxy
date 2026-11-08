@@ -268,18 +268,29 @@ jobs:
         .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml
         if (-not (Test-Path -LiteralPath coverage/coverage.xml)) { Write-Error "coverage merge produced no coverage.xml"; exit 1 }
         if ((Get-Item -LiteralPath coverage/coverage.xml).Length -lt 100) { Write-Error "coverage.xml is empty"; exit 1 }
-        powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-CoverageFloors.ps1 -CoverageXml coverage/coverage.xml
         if ('${{ github.base_ref }}' -ne '') { git fetch origin '${{ github.base_ref }}' --depth=1 }
         dotnet tool install --global dotnet-reportgenerator-globaltool
         reportgenerator "-reports:coverage/coverage.xml" "-targetdir:coverage/report" "-reporttypes:MarkdownSummaryGithub"
         if (Test-Path coverage/report/SummaryGithub.md) { Get-Content coverage/report/SummaryGithub.md | Out-File -Append $env:GITHUB_STEP_SUMMARY }
         powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-DiffCoverage.ps1 -CoverageXml coverage/coverage.xml -BaseRef "${{ github.base_ref }}"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: Complete SonarCloud analysis
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       continue-on-error: true
       shell: pwsh
       run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+
+    - name: Assert coverage floors
+      shell: pwsh
+      env:
+        TWP_SONAR_PULL_REQUEST: ${{ github.event.pull_request.number }}
+        TWP_SONAR_BRANCH: ${{ github.ref_name }}
+      run: |
+        # Prefer Sonar component coverage (same bar as the merge gate). Give the upload a moment to publish.
+        if ($env:SONAR_TOKEN) { Start-Sleep -Seconds 90 }
+        powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-CoverageFloors.ps1 -CoverageXml coverage/coverage.xml -PullRequest "$env:TWP_SONAR_PULL_REQUEST" -Branch "$env:TWP_SONAR_BRANCH"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     # DocFX output races other develop pushes (incl. concurrent "Update documentation").
     # Sync to origin/develop, regenerate, commit docs-only, retry push â€” never fail the
