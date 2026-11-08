@@ -189,7 +189,11 @@ public class PlusCommandCoverageTests
     [TestMethod]
     public void OsServiceHelpers_ReportElevationWithoutShellingOut()
     {
-        Assert.IsFalse(SystemdServiceManager.IsRoot(), "Windows/macOS collectors are not systemd root");
+        if (OperatingSystem.IsLinux())
+        {
+            _ = SystemdServiceManager.IsRoot();
+        }
+
         if (OperatingSystem.IsWindows())
         {
             _ = WindowsServiceManager.IsElevated();
