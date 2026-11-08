@@ -18,6 +18,15 @@ on:
         - develop
         - beta
         - stable
+  workflow_dispatch:
+    inputs:
+      nuget_channel:
+        description: 'Pack and push MIT NuGet only (trusted publishing is bound to this workflow file).'
+        required: true
+        type: choice
+        options:
+          - beta
+          - stable
 
 permissions:
   contents: read
@@ -26,6 +35,8 @@ jobs:
   # Docs-only pull requests still have to report merge-gate. A paths-ignore on
   # pull_request left the required checks waiting forever.
   changes:
+    # NuGet-only dispatches skip the test graph; publish-nuget runs alone.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.paths.outputs.code }}
@@ -581,11 +592,103 @@ jobs:
       run: |
         pwsh tools/RpsLoadProbe/run-spot-matrix.ps1
 
-  # NuGet publish lives in release.yml (publish-nuget), after the GitHub Release.
-  # Product zips stay on release.yml. After a beta/stable merge, create/move the
-  # version tag and dispatch release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
-  # release.yml also packs/pushes Chocolatey (titanium-cli / titanium-inspector) after the
-  # GitHub Release exists — skipped while vars.SKIP_CATALOG_PUBLISH=true.
+  # NuGet trusted publishing policies are bound to this workflow file name. Keep
+  # MIT pack/push here (not release.yml). Product zips stay on release.yml.
+  # After a beta/stable merge, cut-product-tag creates/moves the version tag and
+  # dispatches release.yml (GITHUB_TOKEN tag pushes do not re-trigger workflows).
+  # release.yml also packs/pushes Chocolatey after the GitHub Release exists —
+  # skipped while vars.SKIP_CATALOG_PUBLISH=true.
+  publish-nuget:
+    needs: [merge-gate, rps-publish-gate, rps-peer-gate]
+    # always(): workflow_dispatch skips the test graph; push still requires green gates.
+    if: |
+      always() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'push' &&
+          (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable') &&
+          needs.merge-gate.result == 'success' &&
+          needs.rps-publish-gate.result == 'success' &&
+          needs.rps-peer-gate.result == 'success'
+        )
+      )
+    runs-on: windows-latest
+    environment: nuget-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+
+    - name: NuGet audit before pack
+      run: dotnet restore src/Titanium.Web.Proxy.sln -p:NuGetAudit=true -p:NuGetAuditLevel=high
+
+    - name: Pack Beta
+      if: |
+        (github.event_name == 'push' && github.ref == 'refs/heads/beta') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.nuget_channel == 'beta')
+      run: |
+        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release --version-suffix "beta"
+        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release --version-suffix "beta"
+        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release --version-suffix "beta"
+
+    - name: Pack Stable
+      if: |
+        (github.event_name == 'push' && github.ref == 'refs/heads/stable') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.nuget_channel == 'stable')
+      run: |
+        dotnet pack src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj --configuration Release
+        dotnet pack src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj --configuration Release
+        dotnet pack src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj --configuration Release
+
+    - name: Generate CycloneDX SBOM for MIT packages
+      shell: pwsh
+      run: |
+        dotnet tool install --global CycloneDX --version 6.2.0
+        New-Item -ItemType Directory -Force -Path sbom | Out-Null
+        foreach ($proj in @(
+          'src/Titanium.Web.Proxy.Abstractions/Titanium.Web.Proxy.Abstractions.csproj',
+          'src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj',
+          'src/Titanium.Web.Proxy/Titanium.Web.Proxy.csproj'
+        )) {
+          $name = [IO.Path]::GetFileNameWithoutExtension($proj)
+          dotnet CycloneDX $proj -o "sbom" -F Json -fn "$name.cdx.json" -t --disable-package-restore
+        }
+
+    - name: Upload MIT package SBOM
+      uses: actions/upload-artifact@v7
+      with:
+        name: mit-nuget-sbom
+        path: sbom/*.cdx.json
+        if-no-files-found: warn
+
+    - name: Log in to NuGet
+      uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Publish Package
+      # MIT packages only -- never push PolyForm products (Plus, Inspector, Xds, GeoIp)
+      run: |
+        Get-ChildItem -Recurse -Filter *.nupkg |
+          Where-Object { $_.Name -notlike '*Plus*' -and $_.Name -notlike '*Inspector*' -and $_.Name -notlike '*Xds*' -and $_.Name -notlike '*GeoIp*' -and $_.Name -notlike '*.symbols.nupkg' } |
+          ForEach-Object {
+            dotnet nuget push $_.FullName `
+              --source https://api.nuget.org/v3/index.json `
+              --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" `
+              --skip-duplicate
+          }
+
   cut-product-tag:
     if: github.event_name == 'push' && (github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/stable')
     needs: [merge-gate, rps-publish-gate, rps-peer-gate]
