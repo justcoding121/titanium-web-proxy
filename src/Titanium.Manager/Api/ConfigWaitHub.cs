@@ -20,6 +20,10 @@ internal sealed class ConfigWaitHub
         }
     }
 
+    /// <summary>Active waiters for a fleet (tests assert cancel/disconnect cleanup).</summary>
+    internal int CountWaiters(long fleetId) =>
+        _waiters.TryGetValue(fleetId, out var set) ? set.Count : 0;
+
     public async Task WaitAsync(long fleetId, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -36,7 +40,7 @@ internal sealed class ConfigWaitHub
             }
             catch (OperationCanceledException)
             {
-                // timeout or shutdown — caller re-checks published hash
+                // timeout, client abort, or shutdown — caller re-checks published hash
             }
         }
         finally

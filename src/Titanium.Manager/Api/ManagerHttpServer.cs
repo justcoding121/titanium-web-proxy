@@ -45,6 +45,9 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     /// <summary>Browser sessions for the HTML UI (tests assert login/CSRF).</summary>
     internal ManagerSessionStore Sessions => _ui.Sessions;
 
+    /// <summary>Long-poll waiters (tests assert cancel cleans them up).</summary>
+    internal ConfigWaitHub WaitHub => _waitHub;
+
     public void Start()
     {
         _listener.Start();

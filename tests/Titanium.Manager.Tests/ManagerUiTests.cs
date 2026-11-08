@@ -139,6 +139,11 @@ public partial class ManagerUiTests
         using var fleetDoc = await ReadJsonAsync(await PostJsonAsync(client, "/ui/fleets", new { name = "validate" }, csrf));
         var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
 
+        var fleetsPage = await client.GetAsync("/");
+        Assert.AreEqual(HttpStatusCode.OK, fleetsPage.StatusCode);
+        var fleetsHtml = await fleetsPage.Content.ReadAsStringAsync();
+        StringAssert.Contains(fleetsHtml, "validate");
+
         var editor = await client.GetAsync($"/fleets/{fleetId}/editor");
         Assert.AreEqual(HttpStatusCode.OK, editor.StatusCode);
         var html = await editor.Content.ReadAsStringAsync();
