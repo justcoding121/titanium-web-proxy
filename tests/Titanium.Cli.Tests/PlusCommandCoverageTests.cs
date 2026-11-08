@@ -124,8 +124,13 @@ public class PlusCommandCoverageTests
             Assert.IsNull(ServicePayload.DiscoverAppDirectory([]));
             StringAssert.Contains(ServicePayload.MacOsDaemonPayloadDirectory("svc"), "svc");
 
+            var nested = Path.Combine(source, "nested");
+            Directory.CreateDirectory(nested);
+            File.WriteAllText(Path.Combine(nested, "leaf.txt"), "z");
+            ServicePayload.CopyDirectory(source, source); // no-op when source == dest
             ServicePayload.CopyDirectory(source, dest);
             Assert.IsTrue(File.Exists(Path.Combine(dest, "sidecar.txt")));
+            Assert.IsTrue(File.Exists(Path.Combine(dest, "nested", "leaf.txt")));
             var remapped = ServicePayload.RemapPrefix([exe, Path.Combine(source, "sidecar.txt")], source, dest);
             Assert.AreEqual(Path.Combine(dest, "titanium.exe"), remapped[0]);
             Assert.AreEqual(Path.Combine(dest, "sidecar.txt"), remapped[1]);
@@ -178,6 +183,16 @@ public class PlusCommandCoverageTests
             {
                 // ignore
             }
+        }
+    }
+
+    [TestMethod]
+    public void OsServiceHelpers_ReportElevationWithoutShellingOut()
+    {
+        Assert.IsFalse(SystemdServiceManager.IsRoot(), "Windows/macOS collectors are not systemd root");
+        if (OperatingSystem.IsWindows())
+        {
+            _ = WindowsServiceManager.IsElevated();
         }
     }
 
