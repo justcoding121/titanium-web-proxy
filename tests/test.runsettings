@@ -12,4 +12,16 @@
     <!-- Ceiling for tests that do not set [Timeout]. A test attribute still wins. -->
     <TestTimeout>300000</TestTimeout>
   </MSTest>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0">
+        <Configuration>
+          <CodeCoverage>
+            <!-- Attribute titanium process E2E (and other child hosts) to product assemblies. -->
+            <CollectFromChildProcesses>True</CollectFromChildProcesses>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
 </RunSettings>
