@@ -67,6 +67,13 @@ public sealed class XdsControlPlaneHost : IAsyncDisposable
             return Task.FromResult(new AdsAckDecision { Ack = false, ErrorDetail = detail });
         }
 
+        // ADS delivers one type per response. An Eds cluster has no destinations until CLA arrives, so full
+        // TwpConfig validation must wait until every subscribed type has been seen at least once.
+        if (!HasSeenAllResourceTypes(store))
+        {
+            return Task.FromResult(new AdsAckDecision { Ack = true });
+        }
+
         var errors = TwpConfigValidator.Validate(built.Config!);
         if (errors.Count > 0)
         {
@@ -75,6 +82,9 @@ public sealed class XdsControlPlaneHost : IAsyncDisposable
 
         return Task.FromResult(new AdsAckDecision { Ack = true });
     }
+
+    private static bool HasSeenAllResourceTypes(AdsResourceStore store) =>
+        XdsTypeUrls.ApplyOrder.All(typeUrl => store.TryGetAll(typeUrl, out _));
 
     private Task ApplyAsync(AdsResourceStore store)
     {

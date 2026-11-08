@@ -37,7 +37,13 @@ public static class RouteTranslator
                     });
                 }
 
-                var match = BuildMatch(route.Match, vhost);
+                var matchResult = BuildMatch(routeConfiguration.Name, order - 1, route.Match, vhost);
+                if (!matchResult.IsSuccess)
+                {
+                    return TranslationResult<IReadOnlyList<RouteConfig>>.Fail(matchResult.Error!);
+                }
+
+                var match = matchResult.Value!;
                 RouteConfig config;
                 switch (route.ActionCase)
                 {
@@ -83,7 +89,11 @@ public static class RouteTranslator
         return TranslationResult<IReadOnlyList<RouteConfig>>.Ok(routes);
     }
 
-    private static Titanium.Web.Proxy.Abstractions.Routing.RouteMatch BuildMatch(XdsRouteMatch routeMatch, VirtualHost vhost)
+    private static TranslationResult<Titanium.Web.Proxy.Abstractions.Routing.RouteMatch> BuildMatch(
+        string resourceName,
+        int routeIndex,
+        XdsRouteMatch routeMatch,
+        VirtualHost vhost)
     {
         string? path;
         PathMatchKind pathKind;
@@ -98,14 +108,20 @@ public static class RouteTranslator
                 pathKind = PathMatchKind.Exact;
                 break;
             default:
-                throw new InvalidOperationException("unsupported path match");
+                return TranslationResult<Titanium.Web.Proxy.Abstractions.Routing.RouteMatch>.Fail(new TranslationError
+                {
+                    ResourceName = resourceName,
+                    FieldPath = $"virtual_hosts[].routes[{routeIndex}].match",
+                    Message = "unsupported path match",
+                });
         }
 
-        return new Titanium.Web.Proxy.Abstractions.Routing.RouteMatch
-        {
-            Path = path,
-            PathKind = pathKind,
-            Host = vhost.Domains is { Count: > 0 } ? vhost.Domains[0] : null,
-        };
+        return TranslationResult<Titanium.Web.Proxy.Abstractions.Routing.RouteMatch>.Ok(
+            new Titanium.Web.Proxy.Abstractions.Routing.RouteMatch
+            {
+                Path = path,
+                PathKind = pathKind,
+                Host = vhost.Domains is { Count: > 0 } ? vhost.Domains[0] : null,
+            });
     }
 }
