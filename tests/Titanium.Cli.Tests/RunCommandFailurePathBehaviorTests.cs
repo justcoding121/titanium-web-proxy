@@ -248,7 +248,7 @@ public class RunCommandFailurePathBehaviorTests
         CollectionAssert.AreEqual(new[] { "h2", "http/1.1" }, tuned.TerminateTlsAlpn!.ToArray());
         Assert.AreEqual(ClientCertificateMode.Require, tuned.ClientCertificateMode);
         Assert.IsTrue(tuned.AcceptProxyProtocol);
-        CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, tuned.TrustedProxyProtocolSources.ToArray());
+        CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, tuned.TrustedProxyProtocolSources!.ToArray());
 
         var defaults = (TransparentProxyEndPoint)Invoke("AddListener", proxy, new ListenerConfig
         {
