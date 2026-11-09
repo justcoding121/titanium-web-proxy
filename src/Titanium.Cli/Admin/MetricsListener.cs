@@ -231,6 +231,9 @@ internal sealed class MetricsListener : IDisposable
 
         public readonly override bool Equals(object? obj) => obj is SeriesKey other && Equals(other);
 
+        // Nine labels exceed HashCode.Combine's 8-param limit so each must be added individually.
+        // NoInlining keeps line-level coverage visible in Release builds.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         public readonly override int GetHashCode()
         {
             var hash = new HashCode();
