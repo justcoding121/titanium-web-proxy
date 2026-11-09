@@ -115,6 +115,55 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
     }
 
     /// <summary>
+    ///     Bug class: first frame after preface is PING (not SETTINGS); GOAWAY is lost
+    ///     if the 8-byte payload is not drained.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Preface_FirstPingFrame_WithPayload_GoAwayProtocolError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+        var uri = new Uri(origin.Url);
+
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync("127.0.0.1", proxy.ProxyEndPoints[0].Port);
+        var ns = tcp.GetStream();
+        var connectReq = Encoding.ASCII.GetBytes(
+            $"CONNECT {uri.Host}:{uri.Port} HTTP/1.1\r\nHost: {uri.Host}:{uri.Port}\r\n\r\n");
+        await ns.WriteAsync(connectReq);
+        var buf = new byte[1];
+        var sb = new StringBuilder();
+        while (!sb.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+        {
+            var n = await ns.ReadAsync(buf.AsMemory(0, 1));
+            if (n == 0) break;
+            sb.Append((char)buf[0]);
+        }
+
+        await using var sslStream = new SslStream(ns, false,
+            (_, cert, _, errors) => TestCertificateAuthority.Validate(cert, errors));
+        await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+        {
+            TargetHost = uri.Host,
+            ApplicationProtocols = [SslApplicationProtocol.Http2],
+        });
+
+        await sslStream.WriteAsync(Http2Helper.ConnectionPreface.AsMemory());
+        var conn = new Http2RawFrame.Connection(sslStream);
+        await conn.WriteFrameAsync(
+            Http2FrameType.Ping, 0, (Http2FrameFlag)0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+        using var raw = Http2RawClient.Adopt(tcp, conn);
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
     ///     Bug class: SETTINGS on a non-zero stream leaves payload unread and the client never sees GOAWAY.
     /// </summary>
     [TestMethod]

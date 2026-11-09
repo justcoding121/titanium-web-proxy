@@ -99,6 +99,41 @@ public class Http3RequestStreamExtendedConnectGapCoverageTests
     }
 
     /// <summary>
+    ///     Bug class: CONNECT with an unsupported <c>:protocol</c> still opens an origin hop.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3_ExtendedConnect_UnsupportedProtocol_Returns501WithoutOrigin()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin")));
+
+        var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port,
+        };
+        using var proxy = CreateH3Proxy(ep, p => p.EnableRfc8441 = true);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, ep.Port), "localhost");
+            var response = await client.SendAsync(
+                "CONNECT",
+                $"localhost:{origin.Port}",
+                "/ec-bad",
+                extraRequestHeaders: [(":protocol", "connect-ip")]);
+            Assert.AreEqual(501, response.StatusCode, response.TextBody);
+            Assert.AreEqual(0, origin.AcceptedConnectionCount);
+        }
+        finally
+        {
+            proxy.Stop();
+        }
+    }
+
+    /// <summary>
     ///     Bug class: extended CONNECT with empty <c>:path</c> is forwarded to the origin.
     /// </summary>
     [TestMethod]
