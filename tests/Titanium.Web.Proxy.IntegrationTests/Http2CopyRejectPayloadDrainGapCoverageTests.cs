@@ -511,6 +511,32 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
         Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
     }
 
+    /// <summary>
+    ///     Bug class: PUSH_PROMISE on stream 0 sends GOAWAY but the promise block desyncs the reader.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task PushPromise_OnStreamZero_WithPayload_DrainsGoAway()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        var payload = new byte[6];
+        BinaryPrimitives.WriteInt32BigEndian(payload.AsSpan(0, 4), 2);
+        payload[4] = 0x82;
+        payload[5] = 0x86;
+        await raw.Connection.WriteFrameAsync(Http2FrameType.PushPromise, 0, Http2FrameFlag.EndHeaders, payload);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
     private static async Task<Http2RawClient> ConnectExplicitPostPrefaceAsync(ProxyServer proxy, Uri uri)
     {
         var tcp = new TcpClient();

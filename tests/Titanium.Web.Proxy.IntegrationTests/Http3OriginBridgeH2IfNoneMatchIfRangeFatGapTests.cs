@@ -5,8 +5,10 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Quic;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
@@ -174,6 +176,54 @@ public class Http3OriginBridgeH2IfNoneMatchIfRangeFatGapTests
                 extraRequestHeaders: [("if-unmodified-since", "Mon, 09 Nov 2026 00:00:00 GMT")]);
             Assert.AreEqual(412, response.StatusCode, response.TextBody);
             Assert.AreEqual("Mon, 09 Nov 2026 00:00:00 GMT", seen);
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3ToH2_ContentMd5_OnPost_ReachesOrigin()
+    {
+        RequireQuic();
+
+        string? seen = null;
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            while (true)
+            {
+                var (streamId, headers, body) = await conn.ReadRequestAsync();
+                if (headers.FirstOrDefault(h => h.Name == ":method").Value is not "POST")
+                    continue;
+                seen = headers.FirstOrDefault(h => h.Name == "content-md5").Value;
+                var payload = Encoding.UTF8.GetBytes($"n={body.Length}");
+                var resp = conn.EncodeHeaders(
+                    [(":status", "200"), ("content-length", payload.Length.ToString())], []);
+                await conn.WriteHeaderBlockAsync(streamId, resp, endStream: false);
+                await conn.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream, payload);
+            }
+        });
+
+        var (proxy, quicEp, uri) = await StartH2BridgeAsync(origin);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, quicEp.Port), "localhost");
+            var body = Encoding.UTF8.GetBytes("h3-md5");
+            var response = await client.SendAsync(
+                "POST",
+                $"{uri.Host}:{uri.Port}",
+                "/md5",
+                body,
+                extraRequestHeaders: [("content-md5", "QrkBlrSHxUBpCXpo/pirbw==")]);
+            Assert.AreEqual(200, response.StatusCode, response.TextBody);
+            Assert.AreEqual("QrkBlrSHxUBpCXpo/pirbw==", seen);
+            Assert.AreEqual("n=7", response.TextBody);
         }
         finally
         {
