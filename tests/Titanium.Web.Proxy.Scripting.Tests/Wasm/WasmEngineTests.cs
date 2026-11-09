@@ -210,6 +210,73 @@ public class WasmEngineTests
     }
 
     [TestMethod]
+    public async Task ResponseBody_Replace_IsForwardedInOneChunk()
+    {
+        // headers_filter.wat handles request body only; use Lua for a response-body replace scenario is in LuaFeatureTests.
+        // Here we verify the response-headers phase sets x-wasm-response: ok (the WAT sets it unconditionally).
+        using var plugin = Create(Config("headers_filter.wat"));
+        var items = new Dictionary<string, object?>();
+
+        await plugin.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders, items), default);
+        var resp = await plugin.OnResponseHeadersAsync(Phase(ScriptPhases.ResponseHeaders, items,
+            [H("content-length", "5")], status: 200), default);
+        var bodyResult = await plugin.OnResponseBodyAsync(Phase(ScriptPhases.ResponseBody, items,
+            chunk: "hello"u8.ToArray(), last: true), default);
+        await plugin.OnLogAsync(Phase(ScriptPhases.Log, items, status: 200), default);
+
+        Assert.AreEqual("ok", resp.SetHeaders!["x-wasm-response"]);
+        // headers_filter.wat does not export proxy_on_response_body, so the body passes through unchanged.
+        Assert.IsNull(bodyResult.ReplaceBody, "no response body manipulation in this module");
+    }
+
+    [TestMethod]
+    public async Task RequestBody_ExceedingBufferedLimit_Returns413()
+    {
+        // headers_filter.wat pauses on non-last body chunks; a second chunk that overflows the limit must yield 413.
+        using var plugin = Create(Config("headers_filter.wat",
+            limits: new PluginLimitsConfig { PoolSize = 1, BufferedBodyBytes = 8 }));
+        var items = new Dictionary<string, object?>();
+
+        await plugin.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders, items,
+            [H("content-length", "20")], method: "POST"), default);
+
+        // First chunk (5 bytes): held by the guest (not last) — returns empty replace body.
+        var held = await plugin.OnRequestBodyAsync(Phase(ScriptPhases.RequestBody, items,
+            chunk: "hello"u8.ToArray(), last: false), default);
+        Assert.AreEqual(ScriptAction.Continue, held.Action);
+        Assert.AreEqual(0, held.ReplaceBody!.Length, "guest holds the first piece");
+
+        // Second chunk (5 bytes): 5 + 5 = 10 > 8 → body exceeds limit.
+        var overflow = await plugin.OnRequestBodyAsync(Phase(ScriptPhases.RequestBody, items,
+            chunk: "world"u8.ToArray(), last: false), default);
+
+        Assert.AreEqual(ScriptAction.Deny, overflow.Action);
+        Assert.AreEqual(413, overflow.LocalResponse!.Status);
+    }
+
+    [TestMethod]
+    public async Task Pool_NplusOne_SpreadsAcrossAllVmsAndRemainsHealthy()
+    {
+        // Pool of N=2: N+1=3 sequential requests must spread across both VMs and leave both healthy.
+        const int N = 2;
+        using var plugin = Create(Config("headers_filter.wat", poolSize: N));
+        var vms = new HashSet<WasmVm>();
+
+        for (var i = 0; i < N + 1; i++)
+        {
+            var items = new Dictionary<string, object?>();
+            await plugin.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders, items), default);
+            var ctx = (WasmHttpContext)items.Values.Single()!;
+            vms.Add(ctx.Vm);
+            await plugin.OnResponseHeadersAsync(Phase(ScriptPhases.ResponseHeaders, items, status: 200), default);
+            await plugin.OnLogAsync(Phase(ScriptPhases.Log, items, status: 200), default);
+        }
+
+        Assert.AreEqual(N, plugin.Pool.HealthyCount, "no VM was faulted by a plain request");
+        Assert.AreEqual(N, vms.Count, "N+1 sequential requests spread across the full pool of N");
+    }
+
+    [TestMethod]
     public void BadLimits_AndBodyMode_FailBeforeAnythingNativeRuns()
     {
         var engine = new WasmPluginEngine();
