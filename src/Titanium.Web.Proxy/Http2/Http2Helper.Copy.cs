@@ -671,6 +671,33 @@ namespace Titanium.Web.Proxy.Http2
                             return;
                         }
 
+                        // The forwarded wire frame never carries the PADDED flag (EnqueueWireFrame and the
+                        // deferred queue emit flag-less DATA), so strip the pad-length octet and the padding here.
+                        // Forwarding the padded payload under a flag-less header would prepend the pad length
+                        // to the body and append padding to it. Receive credit above already covered the full
+                        // padded length; the send window is charged only for what is actually forwarded.
+                        var forwardLength = length;
+                        if (dataPadded)
+                        {
+                            // RFC 9113 §6.1: a padded frame needs the pad-length octet and padding no longer
+                            // than the rest of the payload; anything else is a connection error.
+                            if (length == 0 || payloadRented[0] >= length)
+                            {
+                                if (length > 0)
+                                    ArrayPool<byte>.Shared.Return(payloadRented);
+                                ReportException(logger, new ProxyHttpException(
+                                    "HTTP/2 protocol error: DATA frame padding exceeds the frame payload.", null, null));
+                                await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                    connectionState.LastClientStreamId,
+                                    length == 0 ? Http2ErrorCode.FrameSizeError : Http2ErrorCode.ProtocolError, input));
+                                return;
+                            }
+
+                            forwardLength = length - 1 - payloadRented[0];
+                            if (forwardLength > 0)
+                                Buffer.BlockCopy(payloadRented, 1, payloadRented, 0, forwardLength);
+                        }
+
                         // Request half already closed (e.g. absorbed origin RST after early response):
                         // consume bytes for flow-control hygiene but do not forward toward a dead origin.
                         if (isClient && compressedDataState.RequestClosed)
@@ -758,8 +785,8 @@ namespace Titanium.Web.Proxy.Http2
                                     rented, wireLen);
                         }
 
-                        // Padded frames are not split (pad length + padding layout); defer whole frame.
-                        var reserveBytes = length;
+                        // Padding was stripped above, so the forwarded frame is plain DATA and may be split freely.
+                        var reserveBytes = forwardLength;
 
                         // Never await ReserveAsync on either DATA direction: parking the shared frame
                         // reader HOL-blocks WINDOW_UPDATE (early-response / duplex H2↔H2: client
@@ -772,17 +799,17 @@ namespace Titanium.Web.Proxy.Http2
                         // the body under a slow client (arch slow-consumer 256 KiB short-read at 65535).
                         if (sendDeferred.PendingCount(wireStreamId) > 0)
                         {
-                            if (length == 0 && !dataEndStream)
+                            if (forwardLength == 0 && !dataEndStream)
                             {
                                 // nothing to forward
                             }
                             else
                             {
-                                var toEnqueue = length > 0
+                                var toEnqueue = forwardLength > 0
                                     ? payloadRented
                                     : ArrayPool<byte>.Shared.Rent(1);
-                                var ownedPayload = length > 0;
-                                if (!sendDeferred.TryEnqueue(wireStreamId, toEnqueue, 0, length, dataEndStream))
+                                var ownedPayload = forwardLength > 0;
+                                if (!sendDeferred.TryEnqueue(wireStreamId, toEnqueue, 0, forwardLength, dataEndStream))
                                 {
                                     ArrayPool<byte>.Shared.Return(toEnqueue);
                                     if (ownedPayload)
@@ -807,19 +834,11 @@ namespace Titanium.Web.Proxy.Http2
                         }
 
                         var reserved = sendFlow.TryReservePartial(wireStreamId, reserveBytes);
-                        if (dataPadded && reserved > 0 && reserved < reserveBytes)
-                        {
-                            // Undo partial reserve — cannot emit a valid short padded frame.
-                            sendFlow.OnWindowUpdate(wireStreamId, reserved);
-                            sendFlow.OnWindowUpdate(0, reserved);
-                            reserved = 0;
-                        }
-
                         if (reserved == reserveBytes)
                         {
-                            EnqueueWireFrame(length == 0
+                            EnqueueWireFrame(forwardLength == 0
                                 ? ReadOnlySpan<byte>.Empty
-                                : payloadRented.AsSpan(0, length), dataEndStream);
+                                : payloadRented.AsSpan(0, forwardLength), dataEndStream);
                             if (length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
                             MarkCompressedClosedIfFullySent();
@@ -827,7 +846,7 @@ namespace Titanium.Web.Proxy.Http2
                         else if (reserved > 0)
                         {
                             EnqueueWireFrame(payloadRented.AsSpan(0, reserved), endStream: false);
-                            var rem = length - reserved;
+                            var rem = forwardLength - reserved;
                             if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, reserved, rem, dataEndStream))
                             {
                                 ArrayPool<byte>.Shared.Return(payloadRented);
@@ -839,17 +858,21 @@ namespace Titanium.Web.Proxy.Http2
                                 connectionState.RemoveStream(dataStreamId);
                             }
                         }
-                        else if (length == 0 && dataEndStream)
+                        else if (forwardLength == 0 && dataEndStream)
                         {
-                            // Empty END_STREAM DATA — still needs a frame on the wire (no window cost).
+                            // Empty (or all-padding) END_STREAM DATA — still needs a frame on the wire (no window cost).
                             EnqueueWireFrame(ReadOnlySpan<byte>.Empty, endStream: true);
+                            if (length > 0)
+                                ArrayPool<byte>.Shared.Return(payloadRented);
                             MarkCompressedClosedIfFullySent();
                         }
-                        else if (length == 0)
+                        else if (forwardLength == 0)
                         {
-                            // Empty non-END_STREAM DATA — nothing to forward.
+                            // Empty (or all-padding) non-END_STREAM DATA — nothing to forward.
+                            if (length > 0)
+                                ArrayPool<byte>.Shared.Return(payloadRented);
                         }
-                        else if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, length, dataEndStream))
+                        else if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, forwardLength, dataEndStream))
                         {
                             ArrayPool<byte>.Shared.Return(payloadRented);
                             ReportException(logger, new ProxyHttpException(
