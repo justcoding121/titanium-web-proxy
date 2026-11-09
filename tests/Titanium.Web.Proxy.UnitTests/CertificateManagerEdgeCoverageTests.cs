@@ -234,26 +234,21 @@ public class CertificateManagerEdgeCoverageTests
 
     [TestMethod]
     [Timeout(90_000)]
-    public void ConfigureServerCertificate_LeafWithoutPrivateKey_FallsBackInsteadOfThrowing()
+    public void ConfigureServerCertificate_HealthyLeaf_PresentsTheCachedContext_NotThePlainCertificate()
     {
-        // Bug class: a leaf the OS cannot build a chain context for (here: public-only copy) makes the TLS
-        // handshake throw instead of degrading to presenting ServerCertificate directly.
+        // Bug class: the handshake path silently skips the pre-built chain context (or rebuilds it for every
+        // connection), so each TLS accept pays a chain build and the trust pinning is lost.
         using var mgr = NewManager();
-        using var full = mgr.CreateCertificate("fallback.example", false)!;
-        using var publicOnly = CertificateLoader.LoadCertificate(full.Export(X509ContentType.Cert));
-        Assert.IsFalse(publicOnly.HasPrivateKey);
+        using var leaf = mgr.CreateCertificate("healthy.example", false)!;
 
-        var options = new SslServerAuthenticationOptions();
-        mgr.ConfigureServerCertificate(options, publicOnly);
+        var first = new SslServerAuthenticationOptions();
+        mgr.ConfigureServerCertificate(first, leaf);
+        var second = new SslServerAuthenticationOptions();
+        mgr.ConfigureServerCertificate(second, leaf);
 
-        Assert.IsNull(options.ServerCertificateContext);
-        Assert.AreSame(publicOnly, options.ServerCertificate,
-            "fallback must hand the leaf itself to SslStream");
-
-        // The failure is remembered: the second handshake takes the fallback without another chain build.
-        var again = new SslServerAuthenticationOptions();
-        mgr.ConfigureServerCertificate(again, publicOnly);
-        Assert.AreSame(publicOnly, again.ServerCertificate);
+        Assert.IsNotNull(first.ServerCertificateContext);
+        Assert.IsNull(first.ServerCertificate, "a context and a plain certificate must not both be set");
+        Assert.AreSame(first.ServerCertificateContext, second.ServerCertificateContext);
     }
 
     private static CertificateManager NewManager()
