@@ -250,4 +250,302 @@ public class GatewayTranslatorL4Tests
         Assert.AreEqual("False", refs.Status);
         Assert.AreEqual("BackendNotFound", refs.Reason);
     }
+
+    [TestMethod]
+    public void GrpcRoute_ServiceOnly_MapsToSegmentPrefixForService()
+    {
+        var b = Basic();
+        b.GrpcRoutes.Add(GrpcRoute(
+            "r",
+            "default",
+            null,
+            GrpcRule("web", 8080, new GrpcRouteMatch
+            {
+                Method = new GrpcMethodMatch { Service = "pkg.Echo" },
+            })));
+        var result = b.Render();
+        AssertValid(result);
+
+        var route = result.Config.UserRoutes().Single();
+        // "/pkg.Echo/" is trimmed to "/pkg.Echo" by the PathPrefix handler.
+        Assert.AreEqual("/pkg.Echo", route.Match.Path);
+        Assert.AreEqual(PathMatchKind.SegmentPrefix, route.Match.PathKind);
+    }
+
+    [TestMethod]
+    public void GrpcRoute_MethodOnly_MapsToRegex()
+    {
+        var b = Basic();
+        b.GrpcRoutes.Add(GrpcRoute(
+            "r",
+            "default",
+            null,
+            GrpcRule("web", 8080, new GrpcRouteMatch
+            {
+                Method = new GrpcMethodMatch { Method = "Say" },
+            })));
+        var result = b.Render();
+        AssertValid(result);
+
+        var route = result.Config.UserRoutes().Single();
+        Assert.IsNotNull(route.Match.Path);
+        Assert.AreEqual(PathMatchKind.Regex, route.Match.PathKind);
+        StringAssert.Contains(route.Match.Path, "Say");
+    }
+
+    [TestMethod]
+    public void GrpcRoute_NoMethodMatch_MapsToRootPathPrefix()
+    {
+        var b = Basic();
+        b.GrpcRoutes.Add(GrpcRoute(
+            "r",
+            "default",
+            null,
+            GrpcRule("web", 8080)));
+        var result = b.Render();
+        AssertValid(result);
+
+        var route = result.Config.UserRoutes().Single();
+        Assert.IsNull(route.Match.Path);
+        Assert.AreEqual(PathMatchKind.Prefix, route.Match.PathKind);
+    }
+
+    [TestMethod]
+    public void GrpcRoute_RegularExpressionType_MapsToRegex()
+    {
+        var b = Basic();
+        b.GrpcRoutes.Add(GrpcRoute(
+            "r",
+            "default",
+            null,
+            GrpcRule("web", 8080, new GrpcRouteMatch
+            {
+                Method = new GrpcMethodMatch { Type = "RegularExpression", Service = "pkg\\..*", Method = "Say.*" },
+            })));
+        var result = b.Render();
+        AssertValid(result);
+
+        var route = result.Config.UserRoutes().Single();
+        Assert.IsNotNull(route.Match.Path);
+        Assert.AreEqual(PathMatchKind.Regex, route.Match.PathKind);
+    }
+
+    [TestMethod]
+    public void AllZeroWeightBackends_GivesA500DirectResponse()
+    {
+        var b = Basic();
+        var route = Route("r", "default", null, new HttpRouteRule
+        {
+            BackendRefs =
+            [
+                new HttpBackendRef { Name = "web", Port = 8080, Weight = 0 },
+            ],
+        });
+        b.Routes.Add(route);
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+        Assert.AreEqual(0, result.Config.Clusters.Count);
+    }
+
+    [TestMethod]
+    public void UnsupportedPathType_IsDirectResponse500()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch { Path = new HttpPathMatch { Type = "Glob", Value = "/api/**" } };
+        var result = b.Render();
+        b.Routes.Add(Route("r", "default", null, Rule("web", 8080, match)));
+        var r = b.Render();
+
+        Assert.AreEqual(500, r.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    public void UnsupportedQueryParamMatchType_IsDirectResponse500()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            QueryParams = [new HttpQueryParamMatch { Name = "version", Value = "v1", Type = "Wildcard" }],
+        };
+        b.Routes.Add(Route("r", "default", null, Rule("web", 8080, match)));
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    public void URLRewrite_UnknownPathType_IsUnsupported()
+    {
+        var b = Basic();
+        var rule = Rule("web", 8080, PathPrefix("/old"));
+        rule.Filters =
+        [
+            new HttpRouteFilter
+            {
+                Type = "URLRewrite",
+                UrlRewrite = new HttpUrlRewrite
+                {
+                    Path = new HttpPathModifier { Type = "GrowLength" },
+                },
+            },
+        ];
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    public void URLRewrite_ReplaceFullPath_NeedsAValue()
+    {
+        var b = Basic();
+        var rule = Rule("web", 8080, PathPrefix("/old"));
+        rule.Filters =
+        [
+            new HttpRouteFilter
+            {
+                Type = "URLRewrite",
+                UrlRewrite = new HttpUrlRewrite
+                {
+                    Path = new HttpPathModifier { Type = "ReplaceFullPath", ReplaceFullPath = string.Empty },
+                },
+            },
+        ];
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    public void Redirect_NonDefaultPort_IsKeptOnUrl()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect
+                    {
+                        Scheme = "https",
+                        Hostname = "secure.example.com",
+                        Port = 8443,
+                        StatusCode = 302,
+                    },
+                },
+            ],
+        };
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        var route = result.Config.UserRoutes().Single();
+        Assert.AreEqual(8443, route.Redirect!.Port);
+        Assert.AreEqual("https", route.Redirect.Scheme);
+    }
+
+    [TestMethod]
+    public void Redirect_UnsupportedStatusCode_IsDirectResponse500()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect
+                    {
+                        Hostname = "x.example.com",
+                        StatusCode = 303,
+                    },
+                },
+            ],
+        };
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    public void Redirect_UnsupportedScheme_IsDirectResponse500()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect
+                    {
+                        Hostname = "x.example.com",
+                        Scheme = "ftp",
+                    },
+                },
+            ],
+        };
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    public void MirrorWithZeroPercent_IsSkipped()
+    {
+        var b = Basic();
+        b.AddService("default", "shadow", 8080, "10.7.0.1");
+        var rule = Rule("web");
+        rule.Filters =
+        [
+            new HttpRouteFilter
+            {
+                Type = "RequestMirror",
+                RequestMirror = new HttpRequestMirror
+                {
+                    BackendRef = new BackendObjectReference { Name = "shadow", Port = 8080 },
+                    Percent = 0,
+                },
+            },
+        ];
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        Assert.IsNull(result.Config.UserRoutes().Single().Mirror);
+        // No ref error because zero-percent mirror is simply skipped.
+        Assert.AreEqual("True", result.StatusPatches
+            .Single(p => p.Kind == StatusKind.HttpRoute).Parents!.Single()
+            .Conditions.Single(c => c.Type == "ResolvedRefs").Status);
+    }
+
+    [TestMethod]
+    public void DuplicateFilterType_IsUnsupported()
+    {
+        var b = Basic();
+        var rule = Rule("web", 8080);
+        rule.Filters =
+        [
+            new HttpRouteFilter
+            {
+                Type = "URLRewrite",
+                UrlRewrite = new HttpUrlRewrite { Hostname = "a.example.com" },
+            },
+            new HttpRouteFilter
+            {
+                Type = "URLRewrite",
+                UrlRewrite = new HttpUrlRewrite { Hostname = "b.example.com" },
+            },
+        ];
+        b.Routes.Add(Route("r", "default", null, rule));
+        var result = b.Render();
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
 }

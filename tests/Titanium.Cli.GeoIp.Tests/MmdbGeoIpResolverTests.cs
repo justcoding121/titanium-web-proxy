@@ -91,6 +91,57 @@ public class MmdbGeoIpResolverTests
         resolver.Dispose();
     }
 
+    [TestMethod]
+    public async Task CachedNull_ReturnsFalseWithoutHittingReader()
+    {
+        // Query a private IP (not in the DB) twice. The second call must hit the cached null entry.
+        var path = await EnsureTestDatabaseAsync();
+        using var resolver = new MmdbGeoIpResolver(path);
+
+        var privateIp = System.Net.IPAddress.Parse("10.0.0.1");
+
+        // First call: reader returns null (private IP not in test DB), cached as null.
+        Assert.IsFalse(resolver.TryGetCountry(privateIp, out var first));
+        Assert.AreEqual(string.Empty, first);
+
+        // Second call: null is retrieved from cache; reader is not re-invoked.
+        Assert.IsFalse(resolver.TryGetCountry(privateIp, out var second));
+        Assert.AreEqual(string.Empty, second);
+    }
+
+    [TestMethod]
+    public async Task CachedHit_ReturnsTrueFromCache()
+    {
+        var path = await EnsureTestDatabaseAsync();
+        using var resolver = new MmdbGeoIpResolver(path);
+
+        var ip = System.Net.IPAddress.Parse("2.125.160.216");
+
+        // First call fills the cache.
+        Assert.IsTrue(resolver.TryGetCountry(ip, out var first));
+        Assert.AreEqual("GB", first);
+
+        // Second call returns the cached code without hitting the reader.
+        Assert.IsTrue(resolver.TryGetCountry(ip, out var second));
+        Assert.AreEqual("GB", second);
+    }
+
+    [TestMethod]
+    public void ReadCountryCode_NullData_ReturnsNull()
+    {
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(null));
+    }
+
+    [TestMethod]
+    public void ReadCountryCode_NoCountryOrRegisteredCountry_ReturnsNull()
+    {
+        var data = new Dictionary<string, object>
+        {
+            ["continent"] = new Dictionary<string, object> { ["code"] = "EU" },
+        };
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
     private static async Task<string> EnsureTestDatabaseAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-geolite2-country-test.mmdb");

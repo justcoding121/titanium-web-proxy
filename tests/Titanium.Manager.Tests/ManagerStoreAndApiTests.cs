@@ -718,5 +718,192 @@ public class ManagerStoreAndApiTests
         Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
     }
 
+    [TestMethod]
+    public void Store_CreateFleet_WithLabels_PersistsLabels()
+    {
+        using var store = new ManagerStore(TempDb());
+        var fleet = store.CreateFleet("labeled", """{"env":"prod"}""");
+        Assert.AreEqual("""{"env":"prod"}""", fleet.LabelsJson);
+        var fetched = store.GetFleet(fleet.Id);
+        Assert.AreEqual("""{"env":"prod"}""", fetched!.LabelsJson);
+    }
+
+    [TestMethod]
+    public void Store_CreateFleet_DuplicateName_Throws()
+    {
+        using var store = new ManagerStore(TempDb());
+        store.CreateFleet("unique");
+        Assert.ThrowsExactly<Microsoft.Data.Sqlite.SqliteException>(() => store.CreateFleet("unique"));
+    }
+
+    [TestMethod]
+    public void Store_ResumeRunningRollout_Throws()
+    {
+        using var store = new ManagerStore(TempDb());
+        var fleet = store.CreateFleet("resume-err");
+        var rev = store.CreateRevision(fleet.Id, ValidYaml, "tester");
+        var rollout = store.Publish(fleet.Id, rev.Id, [new PublishWaveSpec(new Dictionary<string, string>(), 1, 30)]);
+        Assert.AreEqual("running", rollout.State);
+        var ex = Assert.ThrowsExactly<InvalidOperationException>(() => store.ResumeRollout(fleet.Id, rollout.Id));
+        StringAssert.Contains(ex.Message, "not paused");
+    }
+
+    [TestMethod]
+    public void Store_GetRevision_WrongFleet_ReturnsNull()
+    {
+        using var store = new ManagerStore(TempDb());
+        var fleetA = store.CreateFleet("a");
+        var fleetB = store.CreateFleet("b");
+        var rev = store.CreateRevision(fleetA.Id, ValidYaml, "tester");
+        Assert.IsNull(store.GetRevision(fleetB.Id, rev.Id));
+        Assert.IsNotNull(store.GetRevision(fleetA.Id, rev.Id));
+    }
+
+    [TestMethod]
+    public void Store_LabelsMatch_EmptySelector_MatchesAll()
+    {
+        Assert.IsTrue(ManagerStore.LabelsMatch("{}", new Dictionary<string, string>()));
+        Assert.IsTrue(ManagerStore.LabelsMatch("""{"env":"prod"}""", new Dictionary<string, string>()));
+    }
+
+    [TestMethod]
+    public void Store_LabelsMatch_MissingKey_DoesNotMatch()
+    {
+        var selector = new Dictionary<string, string> { ["env"] = "prod" };
+        Assert.IsTrue(ManagerStore.LabelsMatch("""{"env":"prod"}""", selector));
+        Assert.IsFalse(ManagerStore.LabelsMatch("""{"env":"dev"}""", selector));
+        Assert.IsFalse(ManagerStore.LabelsMatch("{}", selector));
+    }
+
+    [TestMethod]
+    public async Task Api_FleetWithLabels_RoundTrips()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        var resp = await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new
+        {
+            name = "labeled-fleet",
+            labels = new { env = "staging" },
+        }));
+        Assert.AreEqual(HttpStatusCode.Created, resp.StatusCode);
+        using var doc = await ManagerTestHost.ReadJsonAsync(resp);
+        var fleetId = doc.RootElement.GetProperty("id").GetInt64();
+
+        var detail = await admin.GetAsync($"/v1/fleets/{fleetId}");
+        using var detailDoc = await ManagerTestHost.ReadJsonAsync(detail);
+        StringAssert.Contains(detailDoc.RootElement.GetProperty("labelsJson").GetString() ?? string.Empty, "staging");
+    }
+
+    [TestMethod]
+    public async Task Api_ConcurrentPublishViaHttp_Returns409()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fleetDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "conflict-http" })));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        using var r1Doc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", ManagerTestHost.Yaml(ValidYaml)));
+        var r1Id = r1Doc.RootElement.GetProperty("id").GetInt64();
+
+        using var r2Doc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{fleetId}/revisions", ManagerTestHost.Yaml(ValidYamlV2)));
+        var r2Id = r2Doc.RootElement.GetProperty("id").GetInt64();
+
+        // Publish first as a staged rollout so it stays running.
+        var waves = ManagerTestHost.Json(new
+        {
+            waves = new object[]
+            {
+                new { matchLabels = new { wave = "1" }, maxUnavailable = 0, bakeSeconds = 60 },
+            },
+        });
+        var first = await admin.PostAsync($"/v1/fleets/{fleetId}/revisions/{r1Id}/publish", waves);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+
+        // Second publish while first is running must return 409.
+        var second = await admin.PostAsync($"/v1/fleets/{fleetId}/revisions/{r2Id}/publish", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Api_ResumeRunningRollout_Returns409()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        var (fleetId, _, _, _, rolloutId) = await StartTwoWaveAsync(host, admin, bakeSeconds: 60);
+
+        // The rollout is running; resuming a running rollout should give 409.
+        var resume = await admin.PostAsync(
+            $"/v1/fleets/{fleetId}/rollouts/{rolloutId}/resume", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.Conflict, resume.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Api_RolloutNotFound_Returns404()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fleetDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "no-rollout" })));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        var missing = await admin.GetAsync($"/v1/fleets/{fleetId}/rollouts/999999");
+        Assert.AreEqual(HttpStatusCode.NotFound, missing.StatusCode);
+
+        var pause = await admin.PostAsync($"/v1/fleets/{fleetId}/rollouts/999999/pause", new StringContent(""));
+        Assert.AreEqual(HttpStatusCode.NotFound, pause.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Api_RevisionNotFound_Returns404_AndWrongFleetIs404()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+        using var fa = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "fa" })));
+        using var fb = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync("/v1/fleets", ManagerTestHost.Json(new { name = "fb" })));
+        var faId = fa.RootElement.GetProperty("id").GetInt64();
+        var fbId = fb.RootElement.GetProperty("id").GetInt64();
+
+        using var revDoc = await ManagerTestHost.ReadJsonAsync(
+            await admin.PostAsync($"/v1/fleets/{faId}/revisions", ManagerTestHost.Yaml(ValidYaml)));
+        var revId = revDoc.RootElement.GetProperty("id").GetInt64();
+
+        // Correct fleet — found.
+        var correct = await admin.GetAsync($"/v1/fleets/{faId}/revisions/{revId}");
+        Assert.AreEqual(HttpStatusCode.OK, correct.StatusCode);
+
+        // Wrong fleet — not found.
+        var wrong = await admin.GetAsync($"/v1/fleets/{fbId}/revisions/{revId}");
+        Assert.AreEqual(HttpStatusCode.NotFound, wrong.StatusCode);
+
+        // Non-existent revision — not found.
+        var noRev = await admin.GetAsync($"/v1/fleets/{faId}/revisions/999999");
+        Assert.AreEqual(HttpStatusCode.NotFound, noRev.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Api_InvalidFleetId_Returns400()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+
+        var resp = await admin.GetAsync("/v1/fleets/not-a-number/revisions");
+        Assert.AreEqual(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Api_FleetNotFound_Returns404()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var admin = host.CreateAdminClient();
+
+        var resp = await admin.GetAsync("/v1/fleets/999999/rollouts");
+        Assert.AreEqual(HttpStatusCode.NotFound, resp.StatusCode);
+    }
+
     private static string TempDb() => Path.Combine(Path.GetTempPath(), $"twp-mgr-store-{Guid.NewGuid():N}.db");
 }
