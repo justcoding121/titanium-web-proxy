@@ -177,6 +177,18 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void ReadCountryCode_MissingIsoCodeKey_FallsThroughToRegisteredCountry()
+    {
+        // Bug class: a country map without iso_code blocks registered_country.
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["name"] = "Nowhere" },
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = "nl" },
+        };
+        Assert.AreEqual("NL", MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
     public async Task Database_HeldOpenByWriter_StillResolves()
     {
         var path = await CopyOfficialDatabaseAsync();
