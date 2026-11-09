@@ -74,6 +74,25 @@ public class WasmHeaderMapAndLimitsBehaviorTests
     }
 
     [TestMethod]
+    public void HeaderMap_Remove_DropsEveryRepeatedValue()
+    {
+        // Bug class: Diff/Remove only clears the first value of a repeated header.
+        var map = new WasmHeaderMap(
+        [
+            new("x-a", "1"),
+            new("x-a", "2"),
+            new("x-b", "keep"),
+        ]);
+        map.Remove("x-a");
+        Assert.IsNull(map.Get("x-a"));
+        Assert.AreEqual("keep", map.Get("x-b"));
+        var (set, remove) = map.Diff();
+        Assert.IsNotNull(remove);
+        CollectionAssert.Contains(remove!, "x-a");
+        Assert.IsTrue(set is null || !set.ContainsKey("x-a"));
+    }
+
+    [TestMethod]
     public void WasmLimits_TryParse_AppliesDefaultsAndRejectsOutOfRange()
     {
         Assert.IsTrue(WasmLimits.TryParse(new PluginConfig(), out var defaults, out var okError));

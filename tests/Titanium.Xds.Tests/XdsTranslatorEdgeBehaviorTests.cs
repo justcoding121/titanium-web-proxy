@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Envoy.Config.Cluster.V3;
 using Envoy.Config.Route.V3;
 using Envoy.Extensions.TransportSockets.Tls.V3;
 using Google.Protobuf.WellKnownTypes;
@@ -69,6 +70,21 @@ public class XdsTranslatorEdgeBehaviorTests
         Assert.IsFalse(result.IsSuccess);
         StringAssert.Contains(result.Error!.Message, "unsupported route action");
         StringAssert.Contains(result.Error.FieldPath, "action");
+    }
+
+    [TestMethod]
+    public void ClusterTranslator_ZeroConnectTimeout_StillBuildsHttpClient()
+    {
+        // Bug class: ConnectTimeout of 0 drops HttpClient and origins hang forever.
+        var result = ClusterTranslator.Translate(new Cluster
+        {
+            Name = "c-zero",
+            Type = ClusterDiscoveryType.Eds,
+            ConnectTimeout = Duration.FromTimeSpan(TimeSpan.Zero),
+        });
+        Assert.IsTrue(result.IsSuccess, result.Error?.Message);
+        Assert.IsNotNull(result.Value!.HttpClient);
+        Assert.AreEqual(TimeSpan.Zero, result.Value.HttpClient!.ConnectTimeout);
     }
 
     [TestMethod]

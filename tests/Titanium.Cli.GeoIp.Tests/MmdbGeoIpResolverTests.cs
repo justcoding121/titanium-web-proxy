@@ -31,6 +31,24 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public async Task TryGetCountry_AfterDispose_ReturnsFalse()
+    {
+        var path = await CopyOfficialDatabaseAsync();
+        try
+        {
+            var resolver = new MmdbGeoIpResolver(path);
+            Assert.IsTrue(resolver.TryGetCountry(IPAddress.Parse("2.125.160.216"), out _));
+            resolver.Dispose();
+            Assert.IsFalse(resolver.TryGetCountry(IPAddress.Parse("2.125.160.216"), out var code));
+            Assert.AreEqual(string.Empty, code);
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
     public async Task Resolver_ReadsOfficialTestDatabase()
     {
         var path = await EnsureTestDatabaseAsync();
