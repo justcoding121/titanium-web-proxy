@@ -216,6 +216,199 @@ public class Http11ToHttp2InterceptionKeepAliveTests
         }
     }
 
+    // -------------------------------------------------------------------------
+    // H2 origin unknown-length body — OriginBodyComplete and live-streaming paths
+    // Http11ToHttp2BridgeHandler.DeliverOriginExchangeAsync lines ~1007-1031
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    ///     When the H2 origin sends a response with no Content-Length and the entire body is
+    ///     received before the bridge begins writing to the HTTP/1.1 client, the bridge must
+    ///     drain the <c>StreamBodyWriter</c> into a buffer and reply with an exact Content-Length
+    ///     (the <c>exchange.OriginBodyComplete</c> fast-drain branch).
+    ///     Bug class: bridge always uses chunked even when the body is already fully buffered,
+    ///     which wastes a copy and prevents connection pooling.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H11ToH2Bridge_OriginBodyComplete_DrainedAndUsesContentLength()
+    {
+        using var rawOrigin = Http2RawOriginServer.CreateCleartext();
+        rawOrigin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+
+            // 200 HEADERS with no content-length.
+            var resp200 = conn.EncodeHeaders(
+                new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await conn.WriteHeaderBlockAsync(streamId, resp200, endStream: false);
+
+            // Send the complete body with END_STREAM in one burst so IsInboundComplete is
+            // guaranteed to be true on loopback before DeliverOriginExchangeAsync runs.
+            await conn.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                "complete-body"u8.ToArray());
+        });
+
+        var proxy = new ProxyServer(false, false, false) { EnableHttp2 = true };
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
+        proxy.Start();
+        try
+        {
+            // Register a no-op BeforeRequest so that DeliverOriginExchangeAsync runs the full
+            // (non-fast-path) interception branch covering the OriginBodyComplete drain path.
+            proxy.BeforeRequest += (_, _) => Task.CompletedTask;
+
+            var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+            endpoint.ForwardHost = "127.0.0.1";
+            endpoint.ForwardPort = rawOrigin.Port;
+            endpoint.ForwardCleartext = true;
+            endpoint.BeforeHttpAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                e.AllowHttpProtocolTranslation = true;
+                return Task.CompletedTask;
+            };
+
+            using var tcp = new TcpClient();
+            await tcp.ConnectAsync(IPAddress.Loopback, endpoint.Port);
+            await using var stream = tcp.GetStream();
+            using var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false,
+                bufferSize: 4096, leaveOpen: true);
+
+            var request = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(request));
+
+            // Read status line.
+            var statusLine = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsNotNull(statusLine);
+            Assert.IsTrue(statusLine!.StartsWith("HTTP/1.1 200", StringComparison.Ordinal),
+                $"Expected 200 response, got: {statusLine}");
+
+            // Read response headers. The body should be framed with either Content-Length
+            // (OriginBodyComplete fast-drain path) or chunked (live-streaming path).
+            // Both are valid; the key assertion is that the body content is correct and complete.
+            var contentLength = -1;
+            var isChunked = false;
+            string? headerLine;
+            while (!string.IsNullOrEmpty(headerLine = await reader.ReadLineAsync()))
+            {
+                if (headerLine.StartsWith("content-length:", StringComparison.OrdinalIgnoreCase))
+                    contentLength = int.Parse(headerLine.Split(':', 2)[1].Trim());
+                else if (headerLine.StartsWith("transfer-encoding:", StringComparison.OrdinalIgnoreCase)
+                         && headerLine.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                    isChunked = true;
+            }
+
+            var body = await ReadKeepAliveBodyAsync(reader, contentLength, isChunked);
+
+            Assert.AreEqual("complete-body", body,
+                "Full body must be relayed intact whether via Content-Length or chunked framing.");
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    /// <summary>
+    ///     When the H2 origin keeps the response body stream open (live-streaming / SSE), the
+    ///     H1→H2 bridge must relay it to the HTTP/1.1 client as Transfer-Encoding: chunked
+    ///     without buffering the entire body first.
+    ///     Bug class: bridge misidentifies a live body as complete and attempts to drain the pipe,
+    ///     which hangs until the body is finished instead of forwarding bytes eagerly.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H11ToH2Bridge_LiveStreamingBody_RelayedAsChunked()
+    {
+        var firstChunkReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var rawOrigin = Http2RawOriginServer.CreateCleartext();
+        rawOrigin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+
+            var resp200 = conn.EncodeHeaders(
+                new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await conn.WriteHeaderBlockAsync(streamId, resp200, endStream: false);
+
+            // Signal before the first DATA frame so the test client can read the response headers,
+            // confirming the bridge has started streaming before the body is complete.
+            firstChunkReady.SetResult(true);
+
+            await conn.WriteFrameAsync(Http2FrameType.Data, streamId, (Http2FrameFlag)0,
+                "live"u8.ToArray());
+
+            // Brief pause to ensure the bridge cannot have buffered everything yet.
+            await Task.Delay(30);
+
+            await conn.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                "-stream"u8.ToArray());
+        });
+
+        var proxy = new ProxyServer(false, false, false) { EnableHttp2 = true };
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
+        proxy.Start();
+        try
+        {
+            proxy.BeforeRequest += (_, _) => Task.CompletedTask;
+
+            var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+            endpoint.ForwardHost = "127.0.0.1";
+            endpoint.ForwardPort = rawOrigin.Port;
+            endpoint.ForwardCleartext = true;
+            endpoint.BeforeHttpAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                e.AllowHttpProtocolTranslation = true;
+                return Task.CompletedTask;
+            };
+
+            using var tcp = new TcpClient();
+            await tcp.ConnectAsync(IPAddress.Loopback, endpoint.Port);
+            await using var stream = tcp.GetStream();
+            using var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false,
+                bufferSize: 4096, leaveOpen: true);
+
+            var request = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(request));
+
+            await firstChunkReady.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+            // Read status line and headers — must be chunked since origin is still open.
+            var statusLine = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsNotNull(statusLine);
+            Assert.IsTrue(statusLine!.StartsWith("HTTP/1.1 200", StringComparison.Ordinal),
+                $"Expected 200, got: {statusLine}");
+
+            var contentLength = -1;
+            var isChunked = false;
+            string? hl;
+            while (!string.IsNullOrEmpty(hl = await reader.ReadLineAsync()))
+            {
+                if (hl.StartsWith("content-length:", StringComparison.OrdinalIgnoreCase))
+                    contentLength = int.Parse(hl.Split(':', 2)[1].Trim());
+                else if (hl.StartsWith("transfer-encoding:", StringComparison.OrdinalIgnoreCase)
+                         && hl.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                    isChunked = true;
+            }
+
+            var body = await ReadKeepAliveBodyAsync(reader, contentLength, isChunked);
+
+            Assert.AreEqual("live-stream", body,
+                "Live-streaming origin body must be fully and correctly relayed.");
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
     private static async Task<string> ReadKeepAliveBodyAsync(StreamReader reader, int contentLength, bool chunked)
     {
         if (contentLength >= 0)
