@@ -2,6 +2,7 @@ using System.Net.Sockets;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using StackExchange.Redis;
 using Titanium.Plus.State;
+using Titanium.TestKit;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Abstractions.Routing;
 
@@ -166,5 +167,25 @@ public class RedisFleetRateStoreBehaviorTests
         Assert.IsFalse(result.StoreAvailable);
         Assert.AreEqual(0, result.Granted);
         mux.Dispose();
+    }
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task TryStart_AgainstFakeRespThatNeverHandshakes_ReturnsNullWithoutThrowing()
+    {
+        // Bug class: a listener that accepts TCP but never speaks Redis must not throw during Plus activation.
+        // Full EVAL success against an in-process RESP fake is left to the redis-fleet job (category Redis);
+        // StackExchange.Redis handshake fidelity exceeded the Group 2 time box for FakeRespServer.
+        await using var redis = new FakeRespServer { CloseAfterNextCommand = true };
+        var before = RedisFleetRateStore.LiveStores;
+        var context = new PlusActivationContext { ProxyServer = new object() };
+        var store = RedisFleetRateStore.TryStart(context, new Dictionary<string, string>
+        {
+            ["state.redis"] = redis.Endpoint,
+            ["state.fleetRate"] = "true",
+        });
+        Assert.IsNull(store);
+        Assert.AreEqual(before, RedisFleetRateStore.LiveStores);
+        Assert.IsNull(context.FleetRateStore);
     }
 }
