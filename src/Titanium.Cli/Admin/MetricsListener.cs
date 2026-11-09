@@ -155,6 +155,7 @@ internal sealed class MetricsListener : IDisposable
         "direction" => 5,
         "reason" => 6,
         "outcome" => 7,
+        "result" => 8,
         _ => -1,
     };
 
@@ -185,6 +186,7 @@ internal sealed class MetricsListener : IDisposable
         public string? Direction;
         public string? Reason;
         public string? Outcome;
+        public string? Result;
 
         public void Set(int slot, string value)
         {
@@ -198,6 +200,7 @@ internal sealed class MetricsListener : IDisposable
                 case 5: Direction = value; break;
                 case 6: Reason = value; break;
                 case 7: Outcome = value; break;
+                case 8: Result = value; break;
             }
         }
 
@@ -211,6 +214,7 @@ internal sealed class MetricsListener : IDisposable
             5 => Direction,
             6 => Reason,
             7 => Outcome,
+            8 => Result,
             _ => null,
         };
 
@@ -222,12 +226,25 @@ internal sealed class MetricsListener : IDisposable
             string.Equals(Error, other.Error, StringComparison.Ordinal) &&
             string.Equals(Direction, other.Direction, StringComparison.Ordinal) &&
             string.Equals(Reason, other.Reason, StringComparison.Ordinal) &&
-            string.Equals(Outcome, other.Outcome, StringComparison.Ordinal);
+            string.Equals(Outcome, other.Outcome, StringComparison.Ordinal) &&
+            string.Equals(Result, other.Result, StringComparison.Ordinal);
 
         public readonly override bool Equals(object? obj) => obj is SeriesKey other && Equals(other);
 
-        public readonly override int GetHashCode() =>
-            HashCode.Combine(Route, Cluster, StatusClass, Protocol, Error, Direction, Reason, Outcome);
+        public readonly override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(Route);
+            hash.Add(Cluster);
+            hash.Add(StatusClass);
+            hash.Add(Protocol);
+            hash.Add(Error);
+            hash.Add(Direction);
+            hash.Add(Reason);
+            hash.Add(Outcome);
+            hash.Add(Result);
+            return hash.ToHashCode();
+        }
 
         public readonly SeriesKey AllOverflow()
         {
