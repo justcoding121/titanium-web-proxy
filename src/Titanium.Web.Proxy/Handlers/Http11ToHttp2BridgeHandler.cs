@@ -575,8 +575,25 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
 
-        var originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
-            cancellationToken);
+        Http2OriginConnection originConnection;
+        try
+        {
+            originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException
+                                   || !cancellationToken.IsCancellationRequested)
+        {
+            // CreateAsync SETTINGS / preface protocol errors used to escape past the exchange catch
+            // (RentAsync sits above it) and reset the HTTP/1.1 client with no status line.
+            if (!args.HttpClient.Response.Locked)
+            {
+                OriginFailureResponses.Apply(args, ex);
+                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            }
+
+            return;
+        }
 
         // Bind shared h2 origin identity without SetConnection: this bridge owns frame I/O via
         // Http2OriginConnection, and HasConnection must stay false so H1 syphon paths never run.
