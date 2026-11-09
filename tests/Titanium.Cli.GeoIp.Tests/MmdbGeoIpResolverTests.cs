@@ -50,6 +50,20 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void ReadCountryCode_NonDictionaryCountry_FallsThroughOrReturnsNull()
+    {
+        // Bug class: a scalar country value throws instead of falling through.
+        var fallthrough = new Dictionary<string, object>
+        {
+            ["country"] = "Finland",
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = "fi" },
+        };
+        Assert.AreEqual("FI", MmdbGeoIpResolver.ReadCountryCodeForTests(fallthrough));
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(new Dictionary<string, object> { ["country"] = 42 }));
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(null));
+    }
+
+    [TestMethod]
     public async Task TryGetCountry_AfterDispose_ReturnsFalse()
     {
         var path = await CopyOfficialDatabaseAsync();
