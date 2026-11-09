@@ -35,6 +35,18 @@ public class ManagerPureHelpersBehaviorTests
     }
 
     [TestMethod]
+    public void YamlDiff_InsertedLine_DoesNotMarkFollowingSharedLinesRemoved()
+    {
+        // Bug class: insert in the middle rewrites the rest as remove+add.
+        var diff = YamlDiff.Unified("a\nb\nc\n", "a\nX\nb\nc\n");
+        StringAssert.Contains(diff, "+X\n");
+        Assert.IsFalse(diff.Contains("-b\n", StringComparison.Ordinal));
+        Assert.IsFalse(diff.Contains("-c\n", StringComparison.Ordinal));
+        StringAssert.Contains(diff, " b\n");
+        StringAssert.Contains(diff, " c\n");
+    }
+
+    [TestMethod]
     public void TokenHasher_HashesMatchesAndMintsUrlSafeTokens()
     {
         var hash = TokenHasher.Hash("secret-token");

@@ -80,6 +80,27 @@ public class WasmPropertiesCatalogTests
     }
 
     [TestMethod]
+    public void ForHttp_ReadsGrpcStatusClusterRouteAndConnectionFlags()
+    {
+        var phase = WasmTestSupport.Phase(ScriptPhases.ResponseTrailers, new Dictionary<string, object?>(), status: 200);
+        var context = new WasmHttpContext(null!, 1, 1, null!) { Last = phase };
+        context.BeginHeaders(ScriptPhases.ResponseTrailers, new WasmHeaderMap(
+        [
+            new KeyValuePair<string, string>("grpc-status", "14"),
+        ]));
+
+        Assert.AreEqual(14L, System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(WasmProperties.ForHttp(context, "response.grpc_status")!));
+        Assert.IsNotNull(WasmProperties.ForHttp(context, "response.trailers"));
+        Assert.AreEqual("c1", Utf8(WasmProperties.ForHttp(context, "cluster_name")));
+        Assert.AreEqual("c1", Utf8(WasmProperties.ForHttp(context, "xds.cluster_name")));
+        Assert.AreEqual("r1", Utf8(WasmProperties.ForHttp(context, "route_name")));
+        Assert.AreEqual("r1", Utf8(WasmProperties.ForHttp(context, "xds.route_name")));
+        CollectionAssert.AreEqual(new byte[] { 0 }, WasmProperties.ForHttp(context, "connection.mtls"));
+        Assert.AreEqual(string.Empty, Utf8(WasmProperties.ForHttp(context, "connection.tls_version")));
+        Assert.IsNotNull(WasmProperties.ForHttp(context, "request.duration"));
+    }
+
+    [TestMethod]
     public void ForHttp_ReturnsNullForUnknownPaths()
     {
         var context = new WasmHttpContext(null!, 1, 1, null!)

@@ -24,6 +24,13 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void Constructor_NonIoOpenFailure_Propagates()
+    {
+        // Bug class: ArgumentException from an empty path is swallowed into the stream fallback.
+        Assert.ThrowsExactly<ArgumentException>(() => _ = new MmdbGeoIpResolver(""));
+    }
+
+    [TestMethod]
     public async Task Resolver_ReadsOfficialTestDatabase()
     {
         var path = await EnsureTestDatabaseAsync();
