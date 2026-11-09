@@ -142,6 +142,40 @@ public class MmdbGeoIpResolverTests
         Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
     }
 
+    [TestMethod]
+    public void ReadCountryCode_NonDictionaryCountryValue_IsAMiss()
+    {
+        // Bug class: MMDB country node that is a string/int instead of a map is treated as a hit.
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = "US",
+            ["registered_country"] = 42,
+        };
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
+    public void ReadCountryCode_EmptyIsoCode_IsAMiss()
+    {
+        // Bug class: empty iso_code is accepted and returned as a country.
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = "" },
+        };
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
+    public void ReadCountryCode_NonStringIsoCode_IsAMiss()
+    {
+        // Bug class: numeric iso_code is ToString()'d into a fake country code.
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = 44 },
+        };
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
     private static async Task<string> EnsureTestDatabaseAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-geolite2-country-test.mmdb");

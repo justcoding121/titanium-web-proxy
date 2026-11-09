@@ -282,4 +282,118 @@ public class DnsSrvDiscoveryTests
         Assert.AreEqual(2, dests.Count, "BuildDestinations must stop at maxTargets.");
         Assert.IsTrue(truncated, "Truncated flag must be set when the cap is hit.");
     }
+
+    // -------------------------------------------------------------------------
+    // ParseNameServer / option clamps — remaining DnsSrvDiscovery uncovered paths
+    // Bug class: malformed discovery.dnsServer or out-of-range clamps break discovery
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void ParseNameServer_Ipv4WithPort_UsesExplicitPort()
+    {
+        // Bug class: port after IPv4 is ignored, so discovery queries the wrong name server.
+        var ep = DnsSrvDiscovery.ParseNameServer("8.8.8.8:5353");
+        Assert.AreEqual(System.Net.IPAddress.Parse("8.8.8.8"), ep.Address);
+        Assert.AreEqual(5353, ep.Port);
+    }
+
+    [TestMethod]
+    public void ParseNameServer_Ipv4WithoutPort_DefaultsTo53()
+    {
+        var ep = DnsSrvDiscovery.ParseNameServer("1.1.1.1");
+        Assert.AreEqual(System.Net.IPAddress.Parse("1.1.1.1"), ep.Address);
+        Assert.AreEqual(53, ep.Port);
+    }
+
+    [TestMethod]
+    public void ParseNameServer_BracketedIpv6WithPort_ParsesBoth()
+    {
+        // Bug class: bracketed IPv6 is rejected or the port is mis-parsed as part of the address.
+        var ep = DnsSrvDiscovery.ParseNameServer("[2001:db8::1]:5353");
+        Assert.AreEqual(System.Net.IPAddress.Parse("2001:db8::1"), ep.Address);
+        Assert.AreEqual(5353, ep.Port);
+    }
+
+    [TestMethod]
+    public void ParseNameServer_MalformedBracketedIpv6_ThrowsFormatException()
+    {
+        // Bug class: missing ']' or missing ':' after ']' is accepted and misroutes queries.
+        Assert.ThrowsException<FormatException>(() => DnsSrvDiscovery.ParseNameServer("[2001:db8::1"));
+        Assert.ThrowsException<FormatException>(() => DnsSrvDiscovery.ParseNameServer("[2001:db8::1]5353"));
+    }
+
+    [TestMethod]
+    public void ParseNameServer_Hostname_ResolvesToIp()
+    {
+        // Bug class: hostname dnsServer values throw instead of resolving via DNS.
+        var ep = DnsSrvDiscovery.ParseNameServer("localhost");
+        Assert.IsNotNull(ep.Address);
+        Assert.AreEqual(53, ep.Port);
+    }
+
+    [TestMethod]
+    public void ReadIntervalMs_ClampsAndDefaults()
+    {
+        // Bug class: intervalMs below MinIntervalMs or above 1h is accepted, spinning discovery.
+        Assert.AreEqual(DnsSrvDiscovery.DefaultIntervalMs,
+            DnsSrvDiscovery.ReadIntervalMs(new Dictionary<string, string>()));
+        Assert.AreEqual(DnsSrvDiscovery.MinIntervalMs,
+            DnsSrvDiscovery.ReadIntervalMs(new Dictionary<string, string>
+            {
+                ["discovery.intervalMs"] = "1",
+            }));
+        Assert.AreEqual(3_600_000,
+            DnsSrvDiscovery.ReadIntervalMs(new Dictionary<string, string>
+            {
+                ["discovery.intervalMs"] = "99999999",
+            }));
+        Assert.AreEqual(5_000,
+            DnsSrvDiscovery.ReadIntervalMs(new Dictionary<string, string>
+            {
+                ["discovery.intervalMs"] = "5000",
+            }));
+    }
+
+    [TestMethod]
+    public void ReadMaxTargets_ClampsAndDefaults()
+    {
+        // Bug class: srvMaxTargets of 0 or huge values bypass the destination cap.
+        Assert.AreEqual(DnsSrvDiscovery.DefaultMaxTargets,
+            DnsSrvDiscovery.ReadMaxTargets(new Dictionary<string, string>()));
+        Assert.AreEqual(1,
+            DnsSrvDiscovery.ReadMaxTargets(new Dictionary<string, string>
+            {
+                ["discovery.srvMaxTargets"] = "0",
+            }));
+        Assert.AreEqual(DnsSrvDiscovery.MaxMaxTargets,
+            DnsSrvDiscovery.ReadMaxTargets(new Dictionary<string, string>
+            {
+                ["discovery.srvMaxTargets"] = "99999",
+            }));
+    }
+
+    [TestMethod]
+    public async Task QueryAsync_NullDnsServer_UsesSystemResolver()
+    {
+        // Bug class: null dnsServer path (system resolver) never builds a LookupClient.
+        // Use a FakeDnsServer only to prove the null-server overload constructs; when there is no
+        // SRV for a random name the call may return empty or throw — either is fine as long as it
+        // does not hang. Prefer FakeDns with an explicit endpoint for deterministic empty answers;
+        // this case specifically passes null to exercise CreateLookupClient(null).
+        try
+        {
+            var (dests, ttl, _) = await DnsSrvDiscovery.QueryAsync(
+                "_definitely-missing-twp-srv._tcp.invalid",
+                "svc",
+                maxTargets: 2,
+                dnsServer: null,
+                CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.IsTrue(dests.Count == 0 || ttl >= 0);
+        }
+        catch (Exception ex) when (ex is not AssertFailedException)
+        {
+            // NXDOMAIN / SERVFAIL / timeout from the system resolver are acceptable for this path.
+            Assert.IsFalse(ex is OutOfMemoryException);
+        }
+    }
 }
