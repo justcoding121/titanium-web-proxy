@@ -163,6 +163,91 @@ public class XdsControlPlaneHostTests
         Assert.AreEqual("c1", good.Config!.Clusters.Single().Id);
     }
 
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task Start_AppliesTheControlPlaneSnapshot_AndReportsSynced()
+    {
+        var state = new FakeAdsState();
+        foreach (var (typeUrl, items) in GoodSnapshotResources())
+        {
+            state.Initial[typeUrl] = items;
+        }
+
+        await using var server = new FakeAdsServer(state);
+        await server.StartAsync();
+        var applied = new TaskCompletionSource<TwpConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var host = new XdsControlPlaneHost(
+            new XdsConfig { Server = server.Address },
+            new TwpConfig(),
+            _stateDir,
+            cfg => applied.TrySetResult(cfg));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        host.Start(cts.Token);
+
+        var config = await applied.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.AreEqual("c1", config.Clusters.Single().Id);
+        Assert.AreEqual(18080, config.Listeners.Single().Port);
+        Assert.IsTrue(SpinWait.SpinUntil(() => host.ConnectionState == AdsConnectionState.Synced, TimeSpan.FromSeconds(5)));
+        Assert.AreSame(config, host.LastGoodConfig);
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task Start_NacksASnapshotThatFailsConfigValidation_AndNeverApplies()
+    {
+        // Bug class: a route to a cluster the control plane never sent is applied and breaks the dataplane.
+        var resources = GoodSnapshotResources();
+        resources[Titanium.Xds.XdsTypeUrls.RouteConfiguration] =
+        [
+            Any.Pack(new RouteConfiguration
+            {
+                Name = "routes",
+                VirtualHosts =
+                {
+                    new VirtualHost
+                    {
+                        Name = "www",
+                        Domains = { "*" },
+                        Routes =
+                        {
+                            new XdsRoute
+                            {
+                                Match = new XdsRouteMatch { Prefix = "/" },
+                                RouteAction = new RouteAction { Cluster = "no-such-cluster" },
+                            },
+                        },
+                    },
+                },
+            }),
+        ];
+        var state = new FakeAdsState();
+        foreach (var (typeUrl, items) in resources)
+        {
+            state.Initial[typeUrl] = items;
+        }
+
+        await using var server = new FakeAdsServer(state);
+        await server.StartAsync();
+        var appliedCount = 0;
+        await using var host = new XdsControlPlaneHost(
+            new XdsConfig { Server = server.Address },
+            new TwpConfig(),
+            _stateDir,
+            _ => Interlocked.Increment(ref appliedCount));
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        host.Start(cts.Token);
+
+        Assert.IsTrue(
+            SpinWait.SpinUntil(() => !state.Nacks.IsEmpty, TimeSpan.FromSeconds(30)),
+            "the control plane must receive a NACK for the invalid snapshot");
+        await Task.Delay(1200);
+        Assert.AreEqual(0, Volatile.Read(ref appliedCount));
+        Assert.IsNull(host.LastGoodConfig);
+        Assert.AreNotEqual(AdsConnectionState.Synced, host.ConnectionState);
+    }
+
     private static AdsResourceStore StoreFrom(Dictionary<string, Any[]> resources)
     {
         var store = new AdsResourceStore();
