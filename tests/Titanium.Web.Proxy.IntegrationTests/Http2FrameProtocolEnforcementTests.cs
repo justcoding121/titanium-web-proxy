@@ -1168,4 +1168,155 @@ public class Http2FrameProtocolEnforcementTests
             Assert.AreEqual($"resp:/seq/{i}", results[i].Body, $"Stream {1 + i * 2} body mismatch");
         }
     }
+
+    // =========================================================================
+    // SETTINGS ACK with non-zero payload — Http2Helper.Copy.cs §6.5
+    // =========================================================================
+
+    /// <summary>
+    ///     RFC 7540 §6.5: a SETTINGS frame with ACK flag and a payload length > 0 is a
+    ///     FRAME_SIZE_ERROR at the connection level.
+    ///     Bug class: proxy ignores the ACK payload and silently continues in an inconsistent state.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Client_SettingsAck_WithNonZeroPayload_Triggers_GoAway_FrameSizeError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(NoOpOriginHandler());
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        // SETTINGS frame with ACK (0x01) and a 6-byte payload — invalid per RFC 7540 §6.5.
+        var settingsAckWithPayload = new byte[9 + 6];
+        settingsAckWithPayload[0] = 0; settingsAckWithPayload[1] = 0; settingsAckWithPayload[2] = 6; // length=6
+        settingsAckWithPayload[3] = (byte)Http2FrameType.Settings;
+        settingsAckWithPayload[4] = (byte)Http2FrameFlag.Ack; // ACK flag
+        // stream ID = 0 (bytes 5-8 stay zero)
+
+        var s = raw.Connection.GetStream();
+        await s.WriteAsync(settingsAckWithPayload.AsMemory());
+
+        var frame = await ReadSignificantFrameAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, frame.Type,
+            "SETTINGS ACK with non-zero payload must produce GOAWAY.");
+        var errorCode = BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(4, 4));
+        Assert.AreEqual((int)Http2ErrorCode.FrameSizeError, errorCode,
+            "GOAWAY error code must be FRAME_SIZE_ERROR for SETTINGS ACK with payload.");
+    }
+
+    // =========================================================================
+    // GOAWAY as the first client frame — Http2Helper.Copy.cs §510
+    // =========================================================================
+
+    /// <summary>
+    ///     RFC 7540 §6.8: an endpoint may send GOAWAY at any time, including before SETTINGS.
+    ///     A browser that decides it no longer needs a speculatively-opened connection sends GOAWAY
+    ///     before any request. The proxy must not respond with PROTOCOL_ERROR.
+    ///     Bug class: proxy rejects GOAWAY as first frame with PROTOCOL_ERROR instead of tolerating it.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Client_GoAway_AsFirstFrame_IsNotRejected()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(NoOpOriginHandler());
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        // Send GOAWAY with NO_ERROR and last-stream-id = 0 as the very first frame (before SETTINGS).
+        // Length=8 (last-stream-id + error code), type=0x07 (GOAWAY), flags=0, stream=0.
+        var goAwayFrame = new byte[9 + 8];
+        goAwayFrame[0] = 0; goAwayFrame[1] = 0; goAwayFrame[2] = 8; // length=8
+        goAwayFrame[3] = (byte)Http2FrameType.GoAway;
+        // flags=0, stream ID=0 (bytes 4-8 zero), payload all zero = last-stream-id=0, NO_ERROR
+
+        var s = raw.Connection.GetStream();
+        await s.WriteAsync(goAwayFrame.AsMemory());
+
+        // After client GOAWAY the proxy must NOT send a PROTOCOL_ERROR GOAWAY back.
+        try
+        {
+            var frame = await ReadSignificantFrameAsync(raw, TimeSpan.FromSeconds(5));
+            if (frame.Type == Http2FrameType.GoAway && frame.Payload.Length >= 8)
+            {
+                var errorCode = BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(4, 4));
+                Assert.AreNotEqual((int)Http2ErrorCode.ProtocolError, errorCode,
+                    "Proxy must not send PROTOCOL_ERROR GOAWAY for a client GOAWAY as first frame.");
+            }
+        }
+        catch (Exception)
+        {
+            // Connection closed cleanly — acceptable response to client GOAWAY.
+        }
+    }
+
+    // =========================================================================
+    // PRIORITY on a closed stream — Http2Helper.Copy.cs default/PRIORITY path
+    // =========================================================================
+
+    /// <summary>
+    ///     RFC 7540 §5.1: PRIORITY frames on closed streams MUST be tolerated without a connection error.
+    ///     Bug class: proxy sends PROTOCOL_ERROR GOAWAY on PRIORITY for a completed stream.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Client_Priority_OnClosedStream_IsToleratedWithoutConnectionError()
+    {
+        using var suite = new TestSuite(sharedServer);
+        var server = suite.GetServer();
+        server.HandleRequest(ctx => ctx.Response.WriteAsync("ok"));
+
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var endpoint = (ExplicitProxyEndPoint)proxy.ProxyEndPoints[0];
+        endpoint.BeforeTunnelConnectRequest += (_, e) =>
+        {
+            e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http11;
+            e.AllowHttpProtocolTranslation = true;
+            return Task.CompletedTask;
+        };
+
+        using var raw = await Http2RawClient.ConnectAsync(endpoint.Port, "localhost", server.HttpsListeningPort);
+
+        // Complete stream 1.
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/")],
+            Array.Empty<(string, string)>());
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+        var (_, _, _) = await raw.Connection.ReadHeaderBlockAsync();
+
+        // Now send a PRIORITY frame on the already-closed stream 1.
+        // PRIORITY frame: length=5, type=0x02, flags=0, stream=1.
+        var priorityFrame = new byte[9 + 5];
+        priorityFrame[0] = 0; priorityFrame[1] = 0; priorityFrame[2] = 5; // length=5
+        priorityFrame[3] = (byte)Http2FrameType.Priority;
+        priorityFrame[4] = 0; // no flags
+        priorityFrame[8] = 1; // stream ID 1
+        // payload: 5 zero bytes
+
+        var s = raw.Connection.GetStream();
+        await s.WriteAsync(priorityFrame.AsMemory());
+
+        // The next request on a new stream must still succeed.
+        var block2 = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/")],
+            Array.Empty<(string, string)>());
+        await raw.Connection.WriteHeaderBlockAsync(3, block2, endStream: true);
+
+        var (_, responseHeaders, _) = await raw.Connection.ReadHeaderBlockAsync();
+        var status = responseHeaders.SingleOrDefault(h => h.Name == ":status").Value;
+        Assert.AreEqual("200", status,
+            "PRIORITY on closed stream must be tolerated; stream 3 must succeed.");
+    }
 }
