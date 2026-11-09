@@ -218,7 +218,11 @@ public class InspectorServiceTrustAndProgressiveBehaviorTests
 
     private sealed class ManualTime : TimeProvider
     {
-        private long _timestamp;
+        // Starts at zero; Advance() increments the clock in tests that need elapsed time.
+        private long _timestamp = 0L;
+
+        public void Advance(TimeSpan by) =>
+            _timestamp += (long)(by.TotalSeconds * TimestampFrequency);
 
         public override long GetTimestamp() => _timestamp;
 

@@ -68,7 +68,7 @@ public class TcpTlsTerminateTests
                 Destinations = [Destination("o1", "127.0.0.1", origin.Port, useHttps: true)],
             });
 
-        await Assert.ThrowsAsync<IOException>(() => RoundTripAsync(rejecting.Port, "a.example.com", "x"));
+        await AssertClosedByProxyAsync(rejecting.Port, "a.example.com", "x");
         Assert.AreEqual(1, origin.Connections);
 
         await using var accepting = await TerminateRig.StartAsync(
@@ -116,7 +116,7 @@ public class TcpTlsTerminateTests
             endPoint => endPoint.PassthroughRoutes = [new PassthroughSniRoute("only.example.com", "c")],
             Cluster("c", Destination("o1", "127.0.0.1", a.Port)));
         using var metrics = new PassthroughMetrics();
-        await Assert.ThrowsAsync<IOException>(() => RoundTripAsync(closed.Port, "missing.example.com", "x"));
+        await AssertClosedByProxyAsync(closed.Port, "missing.example.com", "x");
         await metrics.WaitForAsync("none", "no_route");
     }
 
@@ -162,7 +162,7 @@ public class TcpTlsTerminateTests
             },
             Cluster("c", Destination("o1", "127.0.0.1", origin.Port)));
 
-        await Assert.ThrowsAsync<IOException>(() => RoundTripAsync(rig.Port, "a.example.com", "x"));
+        await AssertClosedByProxyAsync(rig.Port, "a.example.com", "x");
 
         // Re-bind a certificate on a new listener and confirm the process is still healthy.
         await using var healthy = await TerminateRig.StartAsync(
@@ -217,7 +217,10 @@ public class TcpTlsTerminateTests
         await metrics.WaitForAsync("tls-terminate", "handshake_overload");
 
         hold.Dispose();
-        await Task.Delay(100);
+        // Wait for the proxy to detect the TCP close and release the handshake gate.
+        // The proxy's handler catches the IOException from AuthenticateAsServerAsync and records
+        // a "tls-terminate"/"error" metric in its finally block before releasing the gate.
+        await metrics.WaitForAsync("tls-terminate", "error");
         Assert.AreEqual("echo:free", await RoundTripAsync(rig.Port, "a.example.com", "free"));
     }
 
@@ -332,7 +335,7 @@ public class TcpTlsTerminateTests
         await using var down = await TerminateRig.StartAsync(
             endPoint => endPoint.PassthroughDefaultClusterId = "down",
             Cluster("down", Destination("d1", "127.0.0.1", FreeLoopbackPort())));
-        await Assert.ThrowsAsync<IOException>(() => RoundTripAsync(down.Port, "a.example.com", "x"));
+        await AssertClosedByProxyAsync(down.Port, "a.example.com", "x");
         await metrics.WaitForAsync("default", "connect_failed");
     }
 
@@ -345,7 +348,7 @@ public class TcpTlsTerminateTests
         await using var rig = await TerminateRig.StartAsync(
             endPoint => endPoint.PassthroughDefaultClusterId = "missing");
 
-        await Assert.ThrowsAsync<IOException>(() => RoundTripAsync(rig.Port, "a.example.com", "x"));
+        await AssertClosedByProxyAsync(rig.Port, "a.example.com", "x");
         await metrics.WaitForAsync("default", "no_destination");
     }
 
@@ -601,6 +604,30 @@ public class TcpTlsTerminateTests
             }
 
             text.Append(Encoding.ASCII.GetString(buffer, 0, n));
+        }
+    }
+
+    // The proxy closes the connection when it cannot serve the request (no route, connect failed,
+    // cert validation error, missing certificate, etc.).
+    // On .NET 10 the SslStream may return 0 bytes (graceful TCP FIN) rather than throwing when
+    // the server-side socket is closed without sending a TLS close_notify alert.  During an
+    // incomplete handshake the TLS stack may raise IOException or AuthenticationException.
+    // Accept all three outcomes: IOException, AuthenticationException, or an empty reply.
+    private static async Task AssertClosedByProxyAsync(int port, string serverName, string message)
+    {
+        try
+        {
+            var reply = await RoundTripAsync(port, serverName, message);
+            Assert.AreEqual(string.Empty, reply,
+                "Proxy should have closed the connection without returning data.");
+        }
+        catch (IOException)
+        {
+            // Acceptable: abrupt socket close or truncated TLS record.
+        }
+        catch (AuthenticationException)
+        {
+            // Acceptable: server closed during the TLS handshake (e.g. missing certificate).
         }
     }
 
