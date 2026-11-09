@@ -1,0 +1,60 @@
+name: mutation
+
+# Non-blocking mutation report for assertion quality. Not part of merge-gate.
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stryker-configuration:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: |
+            10.0.x
+      - name: Restore Configuration projects
+        shell: pwsh
+        run: |
+          dotnet restore src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj
+          dotnet restore tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj
+      - name: Install Stryker
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          dotnet tool install --tool-path .stryker/tools dotnet-stryker
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Stryker install failed; mutation report skipped."
+            exit 0
+          }
+      - name: Mutate Configuration
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $stryker = Join-Path $PWD '.stryker/tools/dotnet-stryker.exe'
+          if (-not (Test-Path -LiteralPath $stryker)) {
+            Write-Host "Stryker binary missing; mutation report skipped."
+            exit 0
+          }
+          New-Item -ItemType Directory -Force -Path artifacts/mutation | Out-Null
+          & $stryker `
+            --project-file src/Titanium.Web.Proxy.Configuration/Titanium.Web.Proxy.Configuration.csproj `
+            --test-project tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj `
+            --reporter html `
+            --reporter json `
+            --output artifacts/mutation
+          exit 0
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-configuration
+          path: artifacts/mutation/**
+          if-no-files-found: ignore
