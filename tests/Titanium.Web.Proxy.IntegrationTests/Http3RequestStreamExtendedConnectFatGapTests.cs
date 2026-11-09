@@ -164,6 +164,82 @@ public class Http3RequestStreamExtendedConnectFatGapTests
             proxy.Stop();
         }
     }
+
+    /// <summary>
+    ///     Bug class: extended CONNECT with empty <c>:path</c> is forwarded to the origin.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3_ExtendedConnect_EmptyPath_AbortsWithoutOrigin()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin")));
+
+        var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port,
+        };
+        using var proxy = CreateH3Proxy(ep, p => p.EnableRfc8441 = true);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, ep.Port), "localhost");
+            var status = await client.TrySendFieldSectionAsync(
+            [
+                (":method", "CONNECT"),
+                (":protocol", "connect-udp"),
+                (":scheme", "https"),
+                (":authority", $"localhost:{origin.Port}"),
+                (":path", "")
+            ]);
+            Assert.IsNull(status, "Empty :path on extended CONNECT must reset the stream.");
+            Assert.AreEqual(0, origin.AcceptedConnectionCount);
+        }
+        finally
+        {
+            proxy.Stop();
+        }
+    }
+
+    /// <summary>
+    ///     Bug class: extended CONNECT with empty <c>:authority</c> is forwarded to the origin.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3_ExtendedConnect_EmptyAuthority_AbortsWithoutOrigin()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin")));
+
+        var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port,
+        };
+        using var proxy = CreateH3Proxy(ep, p => p.EnableRfc8441 = true);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, ep.Port), "localhost");
+            var status = await client.TrySendFieldSectionAsync(
+            [
+                (":method", "CONNECT"),
+                (":protocol", "connect-udp"),
+                (":scheme", "https"),
+                (":authority", ""),
+                (":path", "/ec-empty-authority")
+            ]);
+            Assert.IsNull(status, "Empty :authority on extended CONNECT must reset the stream.");
+            Assert.AreEqual(0, origin.AcceptedConnectionCount);
+        }
+        finally
+        {
+            proxy.Stop();
+        }
+    }
 }
 #pragma warning restore TWP001
 #pragma warning restore CA1416

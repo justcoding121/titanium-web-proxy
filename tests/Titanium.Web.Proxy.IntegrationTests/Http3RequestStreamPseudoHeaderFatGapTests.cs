@@ -128,6 +128,115 @@ public class Http3RequestStreamPseudoHeaderFatGapTests
     }
 
     /// <summary>
+    ///     Bug class: duplicate <c>:scheme</c> is resolved last-wins and forwarded to the origin.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3_DuplicateScheme_AbortsWithoutOrigin()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin")));
+
+        var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port,
+        };
+        using var proxy = CreateH3Proxy(ep);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, ep.Port), "localhost");
+            var status = await client.TrySendFieldSectionAsync(
+            [
+                (":method", "GET"), (":scheme", "https"), (":scheme", "http"),
+                (":authority", $"localhost:{origin.Port}"),
+                (":path", "/dup-scheme")
+            ]);
+            Assert.IsNull(status, "Duplicate :scheme must reset the stream.");
+            Assert.AreEqual(0, origin.AcceptedConnectionCount);
+        }
+        finally
+        {
+            proxy.Stop();
+        }
+    }
+
+    /// <summary>
+    ///     Bug class: duplicate <c>:path</c> is resolved last-wins and forwarded to the origin.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3_DuplicatePath_AbortsWithoutOrigin()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin")));
+
+        var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port,
+        };
+        using var proxy = CreateH3Proxy(ep);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, ep.Port), "localhost");
+            var status = await client.TrySendFieldSectionAsync(
+            [
+                (":method", "GET"),
+                (":scheme", "https"),
+                (":authority", $"localhost:{origin.Port}"),
+                (":path", "/first"), (":path", "/second")
+            ]);
+            Assert.IsNull(status, "Duplicate :path must reset the stream.");
+            Assert.AreEqual(0, origin.AcceptedConnectionCount);
+        }
+        finally
+        {
+            proxy.Stop();
+        }
+    }
+
+    /// <summary>
+    ///     Bug class: non-CONNECT request without <c>:path</c> still reaches the origin.
+    /// </summary>
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task H3_MissingPath_AbortsWithoutOrigin()
+    {
+        RequireQuic();
+        await using var origin = new QuicHttp3OriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleRequest(_ => Task.FromResult(new QuicHttp3Response(200, "origin")));
+
+        var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
+        {
+            ForwardHost = "localhost",
+            ForwardPort = origin.Port,
+        };
+        using var proxy = CreateH3Proxy(ep);
+        try
+        {
+            await using var client = await QuicHttp3Client.ConnectAsync(
+                new IPEndPoint(IPAddress.Loopback, ep.Port), "localhost");
+            var status = await client.TrySendFieldSectionAsync(
+            [
+                (":method", "GET"),
+                (":scheme", "https"),
+                (":authority", $"localhost:{origin.Port}")
+            ]);
+            Assert.IsNull(status, "Missing :path must reset the stream.");
+            Assert.AreEqual(0, origin.AcceptedConnectionCount);
+        }
+        finally
+        {
+            proxy.Stop();
+        }
+    }
+
+    /// <summary>
     ///     Bug class: missing mandatory <c>:authority</c> still reaches the origin.
     /// </summary>
     [TestMethod]

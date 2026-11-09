@@ -281,4 +281,79 @@ public class Http2CopyCompressedRelayRelayDefectFatGapTests
             _ => null
         };
     }
+
+    /// <summary>
+    ///     Bug class: stray CONTINUATION without an open header block is accepted on compressed relay.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task CompressedRelay_StrayContinuation_GoAwayProtocolError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = false;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await ConnectCompressedRelayAsync(proxy, uri);
+
+        var chunk = new byte[] { 0x80, 0x82 };
+        await raw.Connection.WriteFrameAsync(
+            Http2FrameType.Continuation, 1, Http2FrameFlag.EndHeaders, chunk);
+
+        var (_, code) = await ReadGoAwayOrRstAsync(raw, 1, TimeSpan.FromSeconds(10));
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
+    ///     Bug class: DATA on a closed stream id is relayed instead of RST_STREAM(STREAM_CLOSED).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task CompressedRelay_DataOnClosedStream_RstStreamClosed()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            while (true)
+            {
+                var (streamId, _, _) = await conn.ReadRequestAsync();
+                var resp = conn.EncodeHeaders([(":status", "204")], []);
+                await conn.WriteHeaderBlockAsync(streamId, resp, endStream: true);
+            }
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = false;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await ConnectCompressedRelayAsync(proxy, uri);
+
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"),
+             (":authority", $"{uri.Host}:{uri.Port}"), (":path", "/closed-data")],
+            []);
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+
+        var drainUntil = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        while (DateTime.UtcNow < drainUntil)
+        {
+            var frame = await raw.Connection.ReadFrameAsync()
+                .WaitAsync(drainUntil - DateTime.UtcNow);
+            if (frame.Type == Http2FrameType.Headers)
+                break;
+        }
+
+        await raw.Connection.WriteFrameAsync(
+            Http2FrameType.Data, 1, Http2FrameFlag.EndStream, Pattern(4, 7));
+
+        var (type, code) = await ReadGoAwayOrRstAsync(raw, 1, TimeSpan.FromSeconds(8));
+        Assert.AreEqual(Http2FrameType.RstStream, type);
+        Assert.AreEqual((int)Http2ErrorCode.StreamClosed, code);
+    }
 }
