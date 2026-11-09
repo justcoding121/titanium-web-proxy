@@ -161,6 +161,28 @@ public class LuaCodecTests
     }
 
     [TestMethod]
+    public void Reader_NestedTablesPastDepthLimit_ThrowsFormatException()
+    {
+        // Bug class: deep nested tables hang or throw a non-FormatException.
+        var w = new LuaWriter();
+        var marks = new int[40];
+        for (var i = 0; i < marks.Length; i++)
+        {
+            marks[i] = w.BeginTable();
+            w.String("n");
+        }
+
+        w.Int(1);
+        for (var i = marks.Length - 1; i >= 0; i--)
+        {
+            w.EndTable(marks[i], 1);
+        }
+
+        var ex = Assert.ThrowsExactly<FormatException>(() => _ = new LuaReader(w.ToArray()).Read());
+        StringAssert.Contains(ex.Message, "nested too deeply");
+    }
+
+    [TestMethod]
     public void RoundTrip_Value_CovarsAllBranchesOfValueMethod()
     {
         var w = new LuaWriter();

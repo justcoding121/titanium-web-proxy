@@ -82,6 +82,48 @@ public class XdsTranslatorEdgeBehaviorTests
     }
 
     [TestMethod]
+    public void TranslationError_ToString_IncludesNameFieldAndMessage()
+    {
+        var error = new TranslationError
+        {
+            ResourceName = "listener/a",
+            FieldPath = "address.socket_address",
+            Message = "listener address is required",
+        };
+        Assert.AreEqual("listener/a: address.socket_address: listener address is required", error.ToString());
+    }
+
+    [TestMethod]
+    public void RouteTranslator_EmptyDomains_LeavesHostNull()
+    {
+        var configuration = new RouteConfiguration
+        {
+            Name = "r-empty-domains",
+            VirtualHosts =
+            {
+                new VirtualHost
+                {
+                    Name = "vh",
+                    Routes =
+                    {
+                        new XdsRoute
+                        {
+                            Match = new RouteMatch { Prefix = "/api" },
+                            RouteAction = new RouteAction { Cluster = "c1" },
+                        },
+                    },
+                },
+            },
+        };
+
+        var result = RouteTranslator.Translate(configuration);
+        Assert.IsTrue(result.IsSuccess, result.Error?.Message);
+        Assert.AreEqual(1, result.Value!.Count);
+        Assert.IsNull(result.Value[0].Match.Host);
+        Assert.AreEqual("/api", result.Value[0].Match.Path);
+    }
+
+    [TestMethod]
     public void ClusterTranslator_ZeroConnectTimeout_StillBuildsHttpClient()
     {
         // Bug class: ConnectTimeout of 0 drops HttpClient and origins hang forever.

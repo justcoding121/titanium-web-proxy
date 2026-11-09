@@ -31,6 +31,13 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void Constructor_MissingFile_Throws()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "twp-missing-" + Guid.NewGuid().ToString("N") + ".mmdb");
+        Assert.ThrowsExactly<FileNotFoundException>(() => _ = new MmdbGeoIpResolver(path));
+    }
+
+    [TestMethod]
     public async Task TryGetCountry_AfterDispose_ReturnsFalse()
     {
         var path = await CopyOfficialDatabaseAsync();
