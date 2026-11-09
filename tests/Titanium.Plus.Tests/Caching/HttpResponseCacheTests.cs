@@ -127,6 +127,36 @@ public class MemoryHttpResponseCacheTests
         Assert.ThrowsExactly<ArgumentException>(() => cache.TryGet("", out _));
     }
 
+    [TestMethod]
+    public void Set_RejectsBodyLargerThanMaxEntryBytes_AndEvictsUnderTinyBudget()
+    {
+        // Bug class: oversized bodies still land in the store, or a tiny budget never evicts.
+        var cache = new MemoryHttpResponseCache(maxBytes: 8_192, maxEntryBytes: 64);
+        cache.Set("big", new CachedHttpResponse
+        {
+            StatusCode = 200,
+            Body = new byte[65],
+            Headers = [],
+            ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5),
+        }, TimeSpan.FromMinutes(5));
+        Assert.IsFalse(cache.TryGet("big", out _));
+        Assert.AreEqual(0, cache.Count);
+
+        for (var i = 0; i < 40; i++)
+        {
+            cache.Set("k" + i, new CachedHttpResponse
+            {
+                StatusCode = 200,
+                Body = new byte[32],
+                Headers = [],
+                ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(5),
+            }, TimeSpan.FromMinutes(5));
+        }
+
+        Assert.IsTrue(cache.Evictions > 0, "a tight byte budget must evict older entries");
+        Assert.IsTrue(cache.Count < 40);
+    }
+
     private static CachedHttpResponse Make(int status) => new()
     {
         StatusCode = status,
