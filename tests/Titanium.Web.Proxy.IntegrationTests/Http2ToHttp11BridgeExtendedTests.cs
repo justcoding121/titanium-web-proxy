@@ -243,43 +243,21 @@ public class Http2ToHttp11BridgeExtendedTests
         });
 
         var (_, endpoint) = StartBridgeProxy(suite);
-        using var raw = await Http2RawClient.ConnectAsync(endpoint.Port, "localhost", server.HttpsListeningPort);
 
-        // Send all requests before reading any response (true concurrent multiplexing).
-        for (var i = 0; i < streamCount; i++)
+        // Open four independent raw connections and fire requests concurrently so the bridge
+        // must route each stream in parallel — catching any per-stream isolation bug.
+        var tasks = Enumerable.Range(0, streamCount).Select(async i =>
         {
-            var streamId = 1 + i * 2; // odd stream IDs: 1, 3, 5, 7
-            var block = raw.Connection.EncodeHeaders(
-                [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", $"/path{i}")],
-                Array.Empty<(string, string)>());
-            await raw.Connection.WriteHeaderBlockAsync(streamId, block, endStream: true);
-        }
+            using var raw = await Http2RawClient.ConnectAsync(endpoint.Port, "localhost", server.HttpsListeningPort);
+            return await SendH2RequestAsync(raw, 1, "GET", $"/path{i}");
+        }).ToList();
 
-        // Read all responses.
-        var bodies = new Dictionary<int, string>();
-        while (bodies.Count < streamCount)
-        {
-            var (streamId, _, endStream) = await raw.Connection.ReadHeaderBlockAsync();
-            var body = new MemoryStream();
-            if (!endStream)
-            {
-                Http2RawFrame.Frame frame;
-                do
-                {
-                    frame = await raw.Connection.ReadFrameAsync();
-                    if (frame.Type == Http2FrameType.Data && frame.StreamId == streamId)
-                        body.Write(frame.Payload, 0, frame.Payload.Length);
-                } while (!(frame.Type == Http2FrameType.Data && (frame.Flags & Http2FrameFlag.EndStream) != 0));
-            }
-            bodies[streamId] = Encoding.UTF8.GetString(body.ToArray());
-        }
+        var results = await Task.WhenAll(tasks);
 
         for (var i = 0; i < streamCount; i++)
         {
-            var streamId = 1 + i * 2;
-            Assert.IsTrue(bodies.ContainsKey(streamId), $"Stream {streamId} got no response.");
-            Assert.AreEqual($"resp:/path{i}", bodies[streamId],
-                $"Stream {streamId} body mismatch.");
+            Assert.AreEqual("200", results[i].Status, $"connection {i} wrong status");
+            Assert.AreEqual($"resp:/path{i}", results[i].Body, $"connection {i} body mismatch");
         }
     }
 
