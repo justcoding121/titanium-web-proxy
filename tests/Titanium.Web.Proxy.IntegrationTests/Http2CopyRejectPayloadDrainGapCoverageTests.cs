@@ -8,6 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
@@ -291,6 +292,81 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
     }
 
     /// <summary>
+    ///     Bug class: first frame after preface is HEADERS; GOAWAY is lost if the HPACK block is not drained.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Preface_FirstHeadersFrame_WithPayload_GoAwayProtocolError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+        var uri = new Uri(origin.Url);
+
+        using var raw = await ConnectExplicitPostPrefaceAsync(proxy, uri);
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"), (":path", "/"), (":authority", "x")],
+            []);
+        await raw.Connection.WriteFrameAsync(Http2FrameType.Headers, 1, Http2FrameFlag.EndHeaders, block);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
+    ///     Bug class: first frame after preface is RST_STREAM; GOAWAY is lost if the error code
+    ///     payload is not drained.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Preface_FirstRstStreamFrame_WithPayload_GoAwayProtocolError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+        var uri = new Uri(origin.Url);
+
+        using var raw = await ConnectExplicitPostPrefaceAsync(proxy, uri);
+        var rst = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(rst, (int)Http2ErrorCode.Cancel);
+        await raw.Connection.WriteFrameAsync(Http2FrameType.RstStream, 3, 0, rst);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
+    ///     Bug class: HEADERS on stream 0 sends GOAWAY but the compressed block desyncs the reader.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Headers_OnStreamZero_WithPayload_DrainsGoAway()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        var block = raw.Connection.EncodeHeaders([(":status", "200")], []);
+        await raw.Connection.WriteFrameAsync(Http2FrameType.Headers, 0, Http2FrameFlag.EndHeaders, block);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
     ///     Bug class: PRIORITY on stream 0 sends GOAWAY but the priority payload desyncs the reader.
     /// </summary>
     [TestMethod]
@@ -311,5 +387,35 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
         var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
         Assert.AreEqual(Http2FrameType.GoAway, type);
         Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    private static async Task<Http2RawClient> ConnectExplicitPostPrefaceAsync(ProxyServer proxy, Uri uri)
+    {
+        var tcp = new TcpClient();
+        await tcp.ConnectAsync("127.0.0.1", proxy.ProxyEndPoints[0].Port);
+        var ns = tcp.GetStream();
+        var connectReq = Encoding.ASCII.GetBytes(
+            $"CONNECT {uri.Host}:{uri.Port} HTTP/1.1\r\nHost: {uri.Host}:{uri.Port}\r\n\r\n");
+        await ns.WriteAsync(connectReq);
+        var buf = new byte[1];
+        var sb = new StringBuilder();
+        while (!sb.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+        {
+            var n = await ns.ReadAsync(buf.AsMemory(0, 1));
+            if (n == 0) break;
+            sb.Append((char)buf[0]);
+        }
+
+        var sslStream = new SslStream(ns, false,
+            (_, cert, _, errors) => TestCertificateAuthority.Validate(cert, errors));
+        await sslStream.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+        {
+            TargetHost = uri.Host,
+            ApplicationProtocols = [SslApplicationProtocol.Http2],
+        });
+
+        await sslStream.WriteAsync(Http2Helper.ConnectionPreface.AsMemory());
+        var conn = new Http2RawFrame.Connection(sslStream);
+        return Http2RawClient.Adopt(tcp, conn);
     }
 }
