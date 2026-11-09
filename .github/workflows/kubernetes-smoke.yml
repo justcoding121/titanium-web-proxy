@@ -34,7 +34,7 @@ jobs:
       REL: twp
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build the image
         uses: docker/build-push-action@v7
@@ -151,7 +151,7 @@ jobs:
       REL: titanium-gateway
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build proxy and gateway images
         uses: docker/build-push-action@v7
@@ -305,7 +305,7 @@ jobs:
       REL: twp-mgr
     steps:
       - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build the manager image
         uses: docker/build-push-action@v7
