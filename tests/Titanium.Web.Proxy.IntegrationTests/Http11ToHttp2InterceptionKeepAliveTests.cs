@@ -123,6 +123,99 @@ public class Http11ToHttp2InterceptionKeepAliveTests
         }
     }
 
+    // -------------------------------------------------------------------------
+    // 103 Early Hints relay — Http11ToHttp2BridgeHandler relayInterim callback
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    ///     When the H2 origin sends a 103 Early Hints interim response, the H1→H2 bridge must relay it
+    ///     to the HTTP/1.1 client before the final response, not discard it.
+    ///     The relay path (<c>relayInterim</c> callback, ~line 670 of <c>Http11ToHttp2BridgeHandler.cs</c>)
+    ///     is only active when <see cref="ProxyServer.NeedsHttpInterception" /> returns true — i.e. when at
+    ///     least one <c>BeforeRequest</c> or <c>BeforeResponse</c> handler is registered.
+    ///     Bug class: the bridge uses the lite-headers path (no interim channel) and silently drops 1xx
+    ///     interim responses when interception is off, but must relay them when interception is on.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H11ToH2Bridge_103_EarlyHints_IsRelayedToH1Client()
+    {
+        // Stand up a raw h2c (cleartext) origin that sends 103 then 200.
+        using var rawOrigin = Http2RawOriginServer.CreateCleartext();
+        rawOrigin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+
+            // 103 Early Hints — the bridge's relayInterim callback must forward this to the H1 client.
+            var hints = conn.EncodeHeaders(
+                new[] { (":status", "103") },
+                new[] { ("link", "</style.css>; rel=preload; as=style") });
+            await conn.WriteHeaderBlockAsync(streamId, hints, endStream: false);
+
+            // Small pause so the proxy can relay the 103 before the 200 arrives.
+            await Task.Delay(50);
+
+            // Final 200 response.
+            var resp200 = conn.EncodeHeaders(
+                new[] { (":status", "200") },
+                new[] { ("content-length", "5") });
+            await conn.WriteHeaderBlockAsync(streamId, resp200, endStream: false);
+            await conn.WriteFrameAsync(Http2FrameType.Data, streamId, Http2FrameFlag.EndStream,
+                "hello"u8.ToArray());
+        });
+
+        var proxy = new ProxyServer(false, false, false) { EnableHttp2 = true };
+        proxy.AddEndPoint(new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false));
+        proxy.Start();
+        try
+        {
+            // BeforeRequest registration makes NeedsHttpInterception() return true, which activates
+            // the relayInterim callback path in RunHttp11ToHttp2ExchangeAsync.
+            proxy.BeforeRequest += (_, _) => Task.CompletedTask;
+
+            var endpoint = proxy.ProxyEndPoints.OfType<TransparentProxyEndPoint>().First();
+            endpoint.ForwardHost = "127.0.0.1";
+            endpoint.ForwardPort = rawOrigin.Port;
+            endpoint.ForwardCleartext = true;
+            endpoint.BeforeHttpAuthenticate += (_, e) =>
+            {
+                e.UpstreamHttpProtocol = UpstreamHttpProtocol.Http2;
+                e.AllowHttpProtocolTranslation = true;
+                return Task.CompletedTask;
+            };
+
+            using var tcp = new TcpClient();
+            await tcp.ConnectAsync(IPAddress.Loopback, endpoint.Port);
+            await using var stream = tcp.GetStream();
+            using var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false,
+                bufferSize: 4096, leaveOpen: true);
+
+            var request = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(request));
+
+            // Read the first status line — must be 103 if the bridge relays Early Hints.
+            var firstStatus = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsNotNull(firstStatus, "Expected a response status line.");
+            Assert.IsTrue(firstStatus!.StartsWith("HTTP/1.1 103", StringComparison.Ordinal),
+                $"Bridge must relay 103 Early Hints before the final 200, but got: {firstStatus}");
+
+            // Drain the 103 headers.
+            while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) { }
+
+            // Now the final 200 response must follow.
+            var finalStatus = await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.IsNotNull(finalStatus, "Expected the 200 final status line after 103.");
+            Assert.IsTrue(finalStatus!.StartsWith("HTTP/1.1 200", StringComparison.Ordinal),
+                $"Expected 200 after the 103 Early Hints, got: {finalStatus}");
+        }
+        finally
+        {
+            proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
     private static async Task<string> ReadKeepAliveBodyAsync(StreamReader reader, int contentLength, bool chunked)
     {
         if (contentLength >= 0)

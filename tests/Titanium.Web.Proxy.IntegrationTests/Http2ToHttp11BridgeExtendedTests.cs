@@ -369,4 +369,77 @@ public class Http2ToHttp11BridgeExtendedTests
         Assert.AreEqual("bridge-header", headerValue,
             "A header injected via BeforeRequest must reach the HTTP/1.1 origin.");
     }
+
+    // ---------------------------------------------------------------- HEAD request — no body path
+
+    /// <summary>
+    ///     Bug class: a HEAD response has no body regardless of Content-Length; the bridge
+    ///     (<c>Http2ToHttp11BridgeHandler</c>) must not try to read body bytes from the H1.1 origin
+    ///     or emit DATA frames. The HEADERS frame sent to the H2 client must carry END_STREAM.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Bridge_HEAD_Request_NoBodyFromOrigin_CompletesCleanly()
+    {
+        using var suite = new TestSuite(sharedServer);
+        var server = suite.GetServer();
+        server.HandleRequest(context =>
+        {
+            // ASP.NET Core strips the body for HEAD automatically; the bridge must honour that.
+            context.Response.ContentLength = 42;
+            return Task.CompletedTask;
+        });
+
+        var (proxy, endpoint) = StartBridgeProxy(suite);
+        using var raw = await Http2RawClient.ConnectAsync(endpoint.Port, "localhost", server.HttpsListeningPort);
+
+        // Send HEAD request on stream 1.
+        var headers = raw.Connection.EncodeHeaders(
+            [(":method", "HEAD"), (":scheme", "https"), (":authority", "localhost"), (":path", "/")],
+            Array.Empty<(string, string)>());
+        await raw.Connection.WriteHeaderBlockAsync(1, headers, endStream: true);
+
+        // The response HEADERS frame must have END_STREAM set — no DATA frames allowed for HEAD.
+        var (respHeaders, endStream, errorCode) =
+            await raw.Connection.ReadHeadersOrRstAsync(1).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.IsNotNull(respHeaders, $"HEAD response must arrive (error: {errorCode}).");
+        Assert.AreEqual(Http2ErrorCode.NoError, errorCode);
+        Assert.IsTrue(endStream,
+            "HEAD response HEADERS frame must carry END_STREAM — no body should follow.");
+        var status = respHeaders!.Single(h => h.Name == ":status").Value;
+        Assert.AreEqual("200", status);
+    }
+
+    // ---------------------------------------------------------------- chunked origin response — LimitedStream path
+
+    /// <summary>
+    ///     Bug class: when the HTTP/1.1 origin sends <c>Transfer-Encoding: chunked</c> (no Content-Length),
+    ///     the bridge must read the body via <c>LimitedStream</c> and relay it as H2 DATA frames rather
+    ///     than treating it as a zero-length response.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Bridge_ChunkedOriginResponse_RelayedAsH2DataFrames()
+    {
+        using var suite = new TestSuite(sharedServer);
+        var server = suite.GetServer();
+        server.HandleRequest(async context =>
+        {
+            // Writing without setting Content-Length forces ASP.NET Core / Kestrel to use
+            // Transfer-Encoding: chunked on the HTTP/1.1 origin connection.
+            await context.Response.WriteAsync("part-one");
+            await context.Response.Body.FlushAsync();
+            await context.Response.WriteAsync("-part-two");
+        });
+
+        var (proxy, endpoint) = StartBridgeProxy(suite);
+        using var raw = await Http2RawClient.ConnectAsync(endpoint.Port, "localhost", server.HttpsListeningPort);
+
+        var (status, body) = await SendH2RequestAsync(raw, 1, "GET", "/chunked");
+
+        Assert.AreEqual("200", status);
+        Assert.AreEqual("part-one-part-two", body,
+            "Chunked origin body must be fully relayed as H2 DATA frames.");
+    }
 }

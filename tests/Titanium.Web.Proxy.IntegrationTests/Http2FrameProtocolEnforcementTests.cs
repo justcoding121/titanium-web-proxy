@@ -1319,4 +1319,214 @@ public class Http2FrameProtocolEnforcementTests
         Assert.AreEqual("200", status,
             "PRIORITY on closed stream must be tolerated; stream 3 must succeed.");
     }
+
+    // =========================================================================
+    // Origin response HEADERS/trailer semantic validation
+    // Http2Helper.Copy.Headers.cs lines ~1505–1570
+    // =========================================================================
+
+    /// <summary>
+    ///     RFC 7540 §8.1.2.4: every response HEADERS block MUST include a :status pseudo-header field.
+    ///     With HTTP interception on, the proxy must not forward a semantically-invalid 2xx to the client.
+    ///     Bug class: proxy relays garbage response when origin omits :status.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Origin_ResponseHeaders_MissingStatus_IsRejectedAndClientSeesError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+            // HEADERS block with no :status pseudo-header — RFC 7540 §8.1.2.4 violation.
+            var badHeaders = conn.EncodeHeaders(
+                Array.Empty<(string, string)>(),
+                new[] { ("x-test", "no-status-here") });
+            await conn.WriteHeaderBlockAsync(streamId, badHeaders, endStream: true);
+            await Task.Delay(800); // stay alive so the proxy can react before dispose
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"), (":authority", $"{uri.Host}:{uri.Port}"), (":path", "/")],
+            Array.Empty<(string, string)>());
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+
+        // The client must NOT receive a clean 2xx response; it must see RST_STREAM, GOAWAY, 5xx, or
+        // a connection close — any of which indicates the proxy enforced RFC 7540 §8.1.2.4.
+        var gotTwoxx = false;
+        var sawTerminal = false;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!sawTerminal && !gotTwoxx && DateTime.UtcNow < deadline)
+        {
+            Http2RawFrame.Frame frame;
+            try { frame = await raw.Connection.ReadFrameAsync().WaitAsync(TimeSpan.FromSeconds(4)); }
+            catch { sawTerminal = true; break; }
+
+            switch (frame.Type)
+            {
+                case Http2FrameType.RstStream when frame.StreamId == 1:
+                case Http2FrameType.GoAway:
+                    sawTerminal = true;
+                    break;
+                case Http2FrameType.Headers when frame.StreamId == 1:
+                {
+                    var headers = raw.Connection.DecodeHeaders(frame.Payload);
+                    var s = headers.FirstOrDefault(h => h.Name == ":status").Value;
+                    if (s?.StartsWith("2") == true)
+                        gotTwoxx = true;
+                    else if (s != null)
+                        sawTerminal = true; // 5xx etc - valid error response
+                    break;
+                }
+            }
+        }
+
+        Assert.IsFalse(gotTwoxx,
+            "Proxy must NOT relay a 2xx for origin HEADERS missing :status.");
+        Assert.IsTrue(sawTerminal,
+            "Proxy must signal an error (RST_STREAM/GOAWAY/5xx/close) for missing :status.");
+    }
+
+    /// <summary>
+    ///     RFC 7540 §8.1.2.1: trailer HEADERS MUST NOT contain pseudo-header fields.
+    ///     With HTTP interception on, a trailer block that includes :status must trigger RST_STREAM.
+    ///     Bug class: proxy relays a pseudo-header in a response trailer, confusing HPACK state on the
+    ///     client-facing leg.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Origin_ResponseTrailer_ContainsPseudoHeader_TriggersStreamError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+            // Valid 200 response.
+            var resp = conn.EncodeHeaders(new[] { (":status", "200") }, Array.Empty<(string, string)>());
+            await conn.WriteHeaderBlockAsync(streamId, resp, endStream: false);
+            await conn.WriteFrameAsync(Http2FrameType.Data, streamId, (Http2FrameFlag)0, "hi"u8.ToArray());
+            // Trailer HEADERS that contain a :status pseudo-header — RFC 7540 §8.1.2.1 violation.
+            var badTrailer = conn.EncodeHeaders(
+                new[] { (":status", "200") },
+                Array.Empty<(string, string)>());
+            await conn.WriteHeaderBlockAsync(streamId, badTrailer, endStream: true);
+            await Task.Delay(800);
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"), (":authority", $"{uri.Host}:{uri.Port}"), (":path", "/")],
+            Array.Empty<(string, string)>());
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+
+        // After the valid 200 + partial DATA, the stream must NOT end cleanly (END_STREAM DATA).
+        // The proxy must signal an error (RST_STREAM, GOAWAY, or connection close).
+        var gotCleanEnd = false;
+        var gotError = false;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!gotCleanEnd && !gotError && DateTime.UtcNow < deadline)
+        {
+            Http2RawFrame.Frame frame;
+            try { frame = await raw.Connection.ReadFrameAsync().WaitAsync(TimeSpan.FromSeconds(4)); }
+            catch { gotError = true; break; }
+
+            switch (frame.Type)
+            {
+                case Http2FrameType.RstStream when frame.StreamId == 1:
+                case Http2FrameType.GoAway:
+                    gotError = true;
+                    break;
+                case Http2FrameType.Data when frame.StreamId == 1
+                                              && (frame.Flags & Http2FrameFlag.EndStream) != 0:
+                    gotCleanEnd = true;
+                    break;
+            }
+        }
+
+        Assert.IsTrue(gotError,
+            "Proxy must reject response trailer containing :status and signal stream error.");
+        Assert.IsFalse(gotCleanEnd,
+            "Proxy must NOT relay a clean END_STREAM after a trailer with pseudo-headers.");
+    }
+
+    /// <summary>
+    ///     RFC 9110 §6.5.1: certain header fields are forbidden in trailers (e.g. Content-Length).
+    ///     With HTTP interception on, a trailer block containing a forbidden field must trigger RST_STREAM.
+    ///     Bug class: proxy relays forbidden trailer fields, which can desync Content-Length on keep-alive
+    ///     HTTP/1.1 legs that the trailer is translated onto.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Origin_ResponseTrailer_ContainsForbiddenField_TriggersStreamError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+            var resp = conn.EncodeHeaders(new[] { (":status", "200") }, Array.Empty<(string, string)>());
+            await conn.WriteHeaderBlockAsync(streamId, resp, endStream: false);
+            await conn.WriteFrameAsync(Http2FrameType.Data, streamId, (Http2FrameFlag)0, "body"u8.ToArray());
+            // content-length in a trailer is forbidden per RFC 9110 §6.5.1.
+            var badTrailer = conn.EncodeHeaders(
+                Array.Empty<(string, string)>(),
+                new[] { ("content-length", "4") });
+            await conn.WriteHeaderBlockAsync(streamId, badTrailer, endStream: true);
+            await Task.Delay(800);
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"), (":authority", $"{uri.Host}:{uri.Port}"), (":path", "/")],
+            Array.Empty<(string, string)>());
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+
+        var gotCleanEnd = false;
+        var gotError = false;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (!gotCleanEnd && !gotError && DateTime.UtcNow < deadline)
+        {
+            Http2RawFrame.Frame frame;
+            try { frame = await raw.Connection.ReadFrameAsync().WaitAsync(TimeSpan.FromSeconds(4)); }
+            catch { gotError = true; break; }
+
+            switch (frame.Type)
+            {
+                case Http2FrameType.RstStream when frame.StreamId == 1:
+                case Http2FrameType.GoAway:
+                    gotError = true;
+                    break;
+                case Http2FrameType.Data when frame.StreamId == 1
+                                              && (frame.Flags & Http2FrameFlag.EndStream) != 0:
+                    gotCleanEnd = true;
+                    break;
+            }
+        }
+
+        Assert.IsTrue(gotError,
+            "Proxy must reject response trailer with content-length (forbidden field) and signal stream error.");
+        Assert.IsFalse(gotCleanEnd,
+            "Proxy must NOT relay END_STREAM after a trailer with a forbidden field.");
+    }
 }
