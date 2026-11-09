@@ -537,6 +537,77 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
         Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
     }
 
+    /// <summary>
+    ///     Bug class: first frame after preface is oversize DATA; GOAWAY is lost if the
+    ///     declared payload is not drained (preface violation path).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Preface_FirstOversizeData_WithFullPayload_DrainsGoAwayProtocolError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+        var uri = new Uri(origin.Url);
+
+        using var raw = await ConnectExplicitPostPrefaceAsync(proxy, uri);
+        const int oversize = 16385;
+        var junk = new byte[oversize];
+        Array.Fill(junk, (byte)'z');
+
+        var hdr = new byte[9];
+        hdr[0] = (byte)((oversize >> 16) & 0xff);
+        hdr[1] = (byte)((oversize >> 8) & 0xff);
+        hdr[2] = (byte)(oversize & 0xff);
+        hdr[3] = (byte)Http2FrameType.Data;
+        hdr[4] = 0;
+        hdr[8] = 1;
+        await raw.Connection.GetStream().WriteAsync(hdr);
+        await raw.Connection.GetStream().WriteAsync(junk);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
+    ///     Bug class: after SETTINGS, declared frame length above the cap must drain the
+    ///     unread payload before GOAWAY so the client observes FRAME_SIZE_ERROR.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task PostSettings_OversizeData_WithFullPayload_DrainsGoAwayFrameSizeError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        const int oversize = 16385;
+        var junk = new byte[oversize];
+        Array.Fill(junk, (byte)'z');
+
+        var hdr = new byte[9];
+        hdr[0] = (byte)((oversize >> 16) & 0xff);
+        hdr[1] = (byte)((oversize >> 8) & 0xff);
+        hdr[2] = (byte)(oversize & 0xff);
+        hdr[3] = (byte)Http2FrameType.Data;
+        hdr[4] = 0;
+        hdr[8] = 1;
+        await raw.Connection.GetStream().WriteAsync(hdr);
+        await raw.Connection.GetStream().WriteAsync(junk);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.FrameSizeError, code);
+    }
+
     private static async Task<Http2RawClient> ConnectExplicitPostPrefaceAsync(ProxyServer proxy, Uri uri)
     {
         var tcp = new TcpClient();
