@@ -743,9 +743,12 @@ public partial class ProxyServer
             if (args.HttpClient.CloseServerConnection)
                 Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
         }
-        catch (Exception ex) when (!(ex is ProxyHttpException))
+        catch (Exception ex)
         {
-            if (!cancellationToken.IsCancellationRequested)
+            // ProxyHttpException (e.g. origin header-list overflow from Http2OriginConnection) is already
+            // reported at the fail site — still map it to a client-facing 502/504 instead of resetting
+            // the HTTP/1.1 connection. Other failures are wrapped once here.
+            if (ex is not ProxyHttpException && !cancellationToken.IsCancellationRequested)
             {
                 ProxyDiagnostics.ReportException(logger, "HTTP/1.1-to-HTTP/2 bridge origin exchange failed",
                     new ProxyHttpException("HTTP/1.1-to-HTTP/2 bridge origin exchange failed", ex, args));
