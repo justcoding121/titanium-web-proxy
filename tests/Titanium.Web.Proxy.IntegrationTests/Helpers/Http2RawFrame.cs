@@ -225,6 +225,22 @@ internal static class Http2RawFrame
         }
 
         /// <summary>
+        ///     SETTINGS with optional RFC 8441 SETTINGS_ENABLE_CONNECT_PROTOCOL (id 8).
+        /// </summary>
+        public Task SendInitialSettingsAsync(bool enableConnectProtocol)
+        {
+            if (!enableConnectProtocol)
+                return SendInitialSettingsAsync();
+
+            var payload = new byte[6];
+            var id = (int)Http2SettingsId.EnableConnectProtocol;
+            payload[0] = (byte)((id >> 8) & 0xff);
+            payload[1] = (byte)(id & 0xff);
+            payload[5] = 1;
+            return WriteFrameAsync(Http2FrameType.Settings, 0, 0, payload);
+        }
+
+        /// <summary>
         ///     Reads frames until the request HEADERS block (assumed to fit in one frame - true for the
         ///     small test requests these tests send) and any DATA frames are fully consumed through
         ///     END_STREAM. SETTINGS/WINDOW_UPDATE/PING frames encountered along the way are ignored.
