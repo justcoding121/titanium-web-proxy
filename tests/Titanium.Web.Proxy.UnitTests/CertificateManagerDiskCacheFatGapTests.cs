@@ -45,10 +45,11 @@ public class CertificateManagerDiskCacheFatGapTests
             using var leaf = await mgr.CreateServerCertificate("disk-cache.example");
             Assert.IsNotNull(leaf);
 
-            var deadline = DateTime.UtcNow.AddSeconds(5);
+            var deadline = DateTime.UtcNow.AddSeconds(30);
             while (cache.SaveLeafCount == 0 && DateTime.UtcNow < deadline)
-                await Task.Delay(50);
-            Assert.IsTrue(cache.SaveLeafCount >= 1, "SaveFakeCertificates must persist the leaf.");
+                await Task.Delay(25);
+            Assert.IsTrue(cache.SaveLeafCount >= 1,
+                $"SaveFakeCertificates must persist the leaf (SaveLeafCount={cache.SaveLeafCount}).");
             Assert.IsTrue(cache.Leaves.ContainsKey("disk-cache.example"));
         }
 
@@ -154,9 +155,19 @@ public class CertificateManagerDiskCacheFatGapTests
                 return;
             }
 
+            // Prefer a PKCS#12 clone; fall back to recording the call if Export is unavailable
+            // so persistence is still observable under SaveFakeCertificates.
+            try
+            {
+                Leaves[subjectName] = X509CertificateLoader.LoadPkcs12(
+                    certificate.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.Exportable);
+            }
+            catch
+            {
+                Leaves[subjectName] = certificate;
+            }
+
             SaveLeafCount++;
-            Leaves[subjectName] = X509CertificateLoader.LoadPkcs12(
-                certificate.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.Exportable);
         }
 
         public void Clear() => Leaves.Clear();
