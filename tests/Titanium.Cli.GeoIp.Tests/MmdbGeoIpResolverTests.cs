@@ -176,6 +176,77 @@ public class MmdbGeoIpResolverTests
         Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(data));
     }
 
+    [TestMethod]
+    public async Task Database_HeldOpenByWriter_StillResolves()
+    {
+        var path = await CopyOfficialDatabaseAsync();
+        try
+        {
+            using var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            using var resolver = new MmdbGeoIpResolver(path);
+            Assert.IsTrue(resolver.TryGetCountry(IPAddress.Parse("2.125.160.216"), out var code));
+            Assert.AreEqual("GB", code);
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task Lookups_RacingDispose_NeverThrow()
+    {
+        var path = await CopyOfficialDatabaseAsync();
+        try
+        {
+            var failures = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+            for (var round = 0; round < 300; round++)
+            {
+                var resolver = new MmdbGeoIpResolver(path);
+                using var start = new ManualResetEventSlim(false);
+                var workers = Enumerable.Range(0, 4).Select(w => Task.Run(() =>
+                {
+                    start.Wait();
+                    try
+                    {
+                        for (var i = 0; i < 200; i++)
+                        {
+                            _ = resolver.TryGetCountry(IPAddress.Parse($"10.{w}.{i / 256}.{i % 256}"), out _);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add(ex);
+                    }
+                })).ToArray();
+                start.Set();
+                Thread.SpinWait(50 * round);
+                resolver.Dispose();
+                Task.WaitAll(workers);
+            }
+
+            Assert.AreEqual(0, failures.Count, string.Join("; ", failures.Select(e => e.GetType().Name)));
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
+    private static async Task<string> CopyOfficialDatabaseAsync()
+    {
+        var source = await EnsureTestDatabaseAsync();
+        var path = Path.Combine(Path.GetTempPath(), "twp-mmdb-" + Guid.NewGuid().ToString("N") + ".mmdb");
+        File.Copy(source, path);
+        return path;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch (IOException) { }
+    }
+
     private static async Task<string> EnsureTestDatabaseAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-geolite2-country-test.mmdb");

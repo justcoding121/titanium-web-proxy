@@ -12,18 +12,21 @@ public sealed class MmdbGeoIpResolver : IGeoIpResolver, IDisposable
 
     private readonly Reader _reader;
     private readonly ConcurrentDictionary<IPAddress, string?> _cache = new();
+    private readonly ReaderWriterLockSlim _readerGate = new();
     private int _disposed;
 
     public MmdbGeoIpResolver(string path)
     {
-        // Memory-mapped open fails on some valid test databases. A normal read still works.
+        // Memory-mapped open fails when another process holds the file open for writing (for example
+        // a database updater) or on some valid test databases. A shared-read stream load still works.
         try
         {
             _reader = new Reader(path, FileAccessMode.MemoryMapped);
         }
         catch (Exception ex) when (ex is InvalidDatabaseException or IOException or UnauthorizedAccessException)
         {
-            _reader = new Reader(path);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            _reader = new Reader(stream);
         }
     }
 
@@ -46,15 +49,22 @@ public sealed class MmdbGeoIpResolver : IGeoIpResolver, IDisposable
             return true;
         }
 
-        string? resolved = null;
+        // Dispose takes the write lock, so the memory-mapped view is never unmapped under a lookup.
+        string? resolved;
+        _readerGate.EnterReadLock();
         try
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                return false;
+            }
+
             var data = _reader.Find<Dictionary<string, object>>(address);
             resolved = ReadCountryCode(data);
         }
-        catch (ObjectDisposedException)
+        finally
         {
-            return false;
+            _readerGate.ExitReadLock();
         }
 
         Remember(address, resolved);
@@ -119,7 +129,15 @@ public sealed class MmdbGeoIpResolver : IGeoIpResolver, IDisposable
             return;
         }
 
-        _cache.Clear();
-        _reader.Dispose();
+        _readerGate.EnterWriteLock();
+        try
+        {
+            _cache.Clear();
+            _reader.Dispose();
+        }
+        finally
+        {
+            _readerGate.ExitWriteLock();
+        }
     }
 }
