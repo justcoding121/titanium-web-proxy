@@ -33,9 +33,9 @@ public sealed class ResourceParsersAndPortMapBehaviorTests
         Assert.AreEqual(2, service!.Ports.Count);
         Assert.AreEqual("http", service.Ports[0].TargetPortName);
         Assert.AreEqual(8443, service.Ports[1].TargetPort);
-        Assert.AreEqual(2, service.Addresses.Count);
-        Assert.IsFalse(service.Addresses[0].IsHostname);
-        Assert.IsTrue(service.Addresses[1].IsHostname);
+        Assert.AreEqual(2, service.LoadBalancerAddresses.Count);
+        Assert.IsFalse(service.LoadBalancerAddresses[0].IsHostname);
+        Assert.IsTrue(service.LoadBalancerAddresses[1].IsHostname);
         Assert.AreEqual("b", service.Annotations["a"]);
 
         var crt = Convert.ToBase64String(Encoding.UTF8.GetBytes("cert"));
