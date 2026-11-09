@@ -418,6 +418,54 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
     }
 
     /// <summary>
+    ///     Bug class: first frame after preface is PRIORITY; GOAWAY is lost if the 5-byte
+    ///     priority payload is not drained.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Preface_FirstPriorityFrame_WithPayload_GoAwayProtocolError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+        var uri = new Uri(origin.Url);
+
+        using var raw = await ConnectExplicitPostPrefaceAsync(proxy, uri);
+        await raw.Connection.WriteFrameAsync(Http2FrameType.Priority, 3, 0, new byte[] { 0, 0, 0, 0, 16 });
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
+    ///     Bug class: RST_STREAM on stream 0 sends GOAWAY but the error-code payload desyncs the reader.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task RstStream_OnStreamZero_WithPayload_DrainsGoAway()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        var rst = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(rst, (int)Http2ErrorCode.Cancel);
+        await raw.Connection.WriteFrameAsync(Http2FrameType.RstStream, 0, 0, rst);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
+    /// <summary>
     ///     Bug class: PRIORITY on stream 0 sends GOAWAY but the priority payload desyncs the reader.
     /// </summary>
     [TestMethod]
