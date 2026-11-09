@@ -1030,9 +1030,9 @@ public partial class ProxyServer
             response.IsChunked = true;
         else if (response.StreamBodyWriter == null)
         {
-            response.ContentLength = body.Length;
+            response.ContentLength = body?.Length ?? 0;
             // Match fast path: stamp Body so WriteResponseAsync can coalesce and set IsBodySent.
-            if (!response.BodyAvailable)
+            if (!response.BodyAvailable && body != null)
             {
                 response.Body = body;
                 response.BodyIsWireEncoded = true;
@@ -1079,7 +1079,7 @@ public partial class ProxyServer
         }
         else if (!response.IsBodySent && (response.HasBody || response.HasTrailingHeaders))
         {
-            await clientStream.WriteBodyAsync(body, response.IsChunked,
+            await clientStream.WriteBodyAsync(body ?? Array.Empty<byte>(), response.IsChunked,
                 response.HasTrailingHeaders ? response.TrailingHeaders : null, cancellationToken);
         }
 
