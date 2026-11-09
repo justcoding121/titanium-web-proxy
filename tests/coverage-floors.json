@@ -4,6 +4,7 @@
   "assemblies": {
     "Titanium.Web.Proxy": 80,
     "Titanium.Web.Proxy.Configuration": 90,
+    "Titanium.Web.Proxy.Abstractions": 90,
     "Titanium.Cli": 80,
     "Titanium.Plus": 80,
     "Titanium.Gateway": 80,
