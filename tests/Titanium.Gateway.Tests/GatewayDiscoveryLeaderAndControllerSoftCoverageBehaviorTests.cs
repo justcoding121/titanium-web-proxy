@@ -157,6 +157,7 @@ public class GatewayDiscoveryLeaderAndControllerSoftCoverageBehaviorTests
     [TestMethod]
     public void TlsTerminateListener_WithSecret_ProgramsTerminate()
     {
+        // TLS Terminate + TCPRoute programs TerminateTls on the mapped data-plane port (443→8443).
         var b = Basic();
         b.Secrets.Add(new SecretInfo("default", "term-cert", "kubernetes.io/tls", true, true));
         b.Gateways[0].Spec.Listeners =
@@ -166,7 +167,6 @@ public class GatewayDiscoveryLeaderAndControllerSoftCoverageBehaviorTests
                 Name = "tls-term",
                 Port = 443,
                 Protocol = "TLS",
-                Hostname = "term.example",
                 Tls = new ListenerTls
                 {
                     Mode = "Terminate",
@@ -174,12 +174,14 @@ public class GatewayDiscoveryLeaderAndControllerSoftCoverageBehaviorTests
                 },
             },
         ];
-        b.TlsRoutes.Add(TlsRoute("r", "default", ["term.example"], Backend("web")));
+        b.TcpRoutes.Add(TcpRoute("r", "default", Backend("web")));
         var result = b.Render();
         Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count, string.Join("; ", TwpConfigValidator.Validate(result.Config)));
 
-        var listener = result.StatusPatches.Single(p => p.Kind == StatusKind.Gateway).Listeners!.Single();
-        Assert.AreEqual("True", listener.Conditions.Single(c => c.Type == "Accepted").Status);
-        Assert.IsTrue(result.Config.Listeners.Any(l => l.TerminateTls || l.Port == 443));
+        var gatewayListener = result.StatusPatches.Single(p => p.Kind == StatusKind.Gateway).Listeners!.Single();
+        Assert.AreEqual("True", gatewayListener.Conditions.Single(c => c.Type == "Accepted").Status);
+        var programmed = result.Config.Listeners.Single(l => l.Port == 8443);
+        Assert.IsTrue(programmed.TerminateTls);
+        Assert.IsTrue(result.TlsFiles.Any(f => f.SecretName == "term-cert"));
     }
 }
