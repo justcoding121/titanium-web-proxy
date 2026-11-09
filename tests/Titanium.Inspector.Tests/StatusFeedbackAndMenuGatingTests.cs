@@ -271,6 +271,9 @@ public class StatusFeedbackAndMenuGatingTests
         try
         {
             var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
             var registry = new SessionRegistry();
             var notifier = new RecordingStatusNotifier();
             var interception = new InterceptionService(new RecordingSystemProxyController())
@@ -287,7 +290,7 @@ public class StatusFeedbackAndMenuGatingTests
 
             vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
-            await WaitUntil(() => interception.IsRunning);
+            await WaitUntil(() => interception.IsRunning && vm.StatusText == "Ready", timeoutMs: 15000);
             notifier.Calls.Clear();
 
             vm.SetTransientStatus(
