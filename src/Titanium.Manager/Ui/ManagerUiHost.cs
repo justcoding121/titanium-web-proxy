@@ -584,7 +584,11 @@ internal sealed class ManagerUiHost
         context.Response.ContentType = "application/json; charset=utf-8";
         ApplySecurityHeaders(context);
         context.Response.ContentLength64 = bytes.Length;
-        await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+        if (!IsHead(context))
+        {
+            await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+        }
+
         context.Response.Close();
     }
 
@@ -605,9 +609,17 @@ internal sealed class ManagerUiHost
         }
 
         context.Response.ContentLength64 = bytes.Length;
-        await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+        // HttpListener throws ProtocolViolationException if a HEAD response writes a body.
+        if (!IsHead(context))
+        {
+            await context.Response.OutputStream.WriteAsync(bytes).ConfigureAwait(false);
+        }
+
         context.Response.Close();
     }
+
+    private static bool IsHead(HttpListenerContext context) =>
+        context.Request.HttpMethod.Equals("HEAD", StringComparison.OrdinalIgnoreCase);
 
     private static void ApplySecurityHeaders(HttpListenerContext context)
     {
