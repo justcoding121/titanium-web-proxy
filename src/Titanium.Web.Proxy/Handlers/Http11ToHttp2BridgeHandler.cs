@@ -579,6 +579,10 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
 
+        // Match RequestHandler / H2 dispatch / H3 forward: lock before origin I/O so
+        // BeforeResponse SetResponseBody* is allowed (and request mutation is refused).
+        request.Locked = true;
+
         Http2OriginConnection originConnection;
         try
         {
@@ -954,6 +958,20 @@ public partial class ProxyServer
         // Response object, and the origin concurrency gate / lease would never be released.
         var originStreamBody = response.StreamBodyWriter;
 
+        // Http2OriginConnection keeps buffered bytes on exchange.Body and intentionally skips
+        // response.Body. Stamp them here so BeforeResponse GetResponseBody / SetResponseBody
+        // match the HTTP/1.1 pipeline (otherwise BodyString NRE and rewrites are invisible).
+        // IsBodyRead must be set: GetResponseBody otherwise calls ReadResponseBodyAsync against
+        // a bridge response that has no HttpStream to drain.
+        if (originStreamBody == null && !response.BodyAvailable && exchange.Body != null)
+        {
+            response.ContentLength = exchange.Body.Length;
+            response.Body = exchange.Body;
+            response.BodyIsWireEncoded = true;
+            response.IsBodyRead = true;
+            response.IsBodyReceived = true;
+        }
+
         if (!response.Locked) await OnBeforeResponse(args, mayCompress: true);
 
         response = args.HttpClient.Response;
@@ -1001,7 +1019,8 @@ public partial class ProxyServer
         else
             response.Headers.NormalizeMessageFraming();
 
-        var body = exchange.Body;
+        // Prefer a BeforeResponse-updated body over the original origin buffer.
+        var body = response.BodyAvailable ? response.Body : exchange.Body;
 
         // RFC 7540 §8.1.2: h2 field framing carries no HTTP/1.1-style trailers concept of its own, but the
         // decoded trailers must still reach the client somehow - HTTP/1.1 can only convey them as chunked
@@ -1013,8 +1032,11 @@ public partial class ProxyServer
         {
             response.ContentLength = body.Length;
             // Match fast path: stamp Body so WriteResponseAsync can coalesce and set IsBodySent.
-            response.Body = body;
-            response.BodyIsWireEncoded = true;
+            if (!response.BodyAvailable)
+            {
+                response.Body = body;
+                response.BodyIsWireEncoded = true;
+            }
         }
         else if (response.ContentLength < 0 && !response.IsChunked)
         {
