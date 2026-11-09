@@ -67,7 +67,8 @@ public class GatewayTranslatorL4GrpcBackendTlsCoverageBehaviorTests
         Assert.AreEqual("default/web:8080", listener.SniDefaultClusterId);
         Assert.IsFalse(listener.DecryptSsl);
         Assert.IsNotNull(result.Config.Certificates?.Items);
-        Assert.IsTrue(result.Config.Certificates!.Items.Any(i => i.Path.Contains("default.cert.pfx", StringComparison.Ordinal)));
+        Assert.IsTrue(result.Config.Certificates!.Items.Any(i =>
+            i.Path?.Contains("default.cert.pfx", StringComparison.Ordinal) == true));
         Assert.AreEqual(1, result.TlsFiles.Count(f => f.SecretName == "cert"));
     }
 
