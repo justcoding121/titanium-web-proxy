@@ -181,4 +181,136 @@ public class ControlHttpServerEdgeBehaviorTests
         var response = await SendRawAsync(server.Port, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: no\r\n\r\n");
         StringAssert.StartsWith(response, "HTTP/1.1 400");
     }
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task ChunkedPost_WithChunkExtension_IsDecoded()
+    {
+        string? seen = null;
+        Task<ControlHttpResponse> Handler(ControlHttpRequest req, CancellationToken _)
+        {
+            seen = req.BodyText();
+            return Task.FromResult(ControlHttpResponse.Text(200, "text/plain", "ok"));
+        }
+
+        using var server = new ControlHttpServer(IPAddress.Loopback, 0, null, Handler);
+        server.Start();
+
+        var raw =
+            "POST /ext HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n" +
+            "4;ext=1\r\ndata\r\n" +
+            "0\r\n\r\n";
+        var response = await SendRawAsync(server.Port, raw);
+        StringAssert.StartsWith(response, "HTTP/1.1 200");
+        Assert.AreEqual("data", seen);
+    }
+
+    [TestMethod]
+    [Timeout(10_000)]
+    public async Task ChunkedPost_BadSize_Returns400()
+    {
+        using var server = new ControlHttpServer(
+            IPAddress.Loopback,
+            0,
+            null,
+            static (_, _) => Task.FromResult(ControlHttpResponse.Text(200, "text/plain", "ok")));
+        server.Start();
+
+        var response = await SendRawAsync(
+            server.Port,
+            "POST /bad HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\nzz\r\n\r\n");
+        StringAssert.StartsWith(response, "HTTP/1.1 400");
+    }
+
+    [TestMethod]
+    [Timeout(10_000)]
+    public async Task TruncatedBody_Returns400()
+    {
+        // Bug class: short bodies are treated as complete and reach the handler.
+        using var server = new ControlHttpServer(
+            IPAddress.Loopback,
+            0,
+            null,
+            static (_, _) => Task.FromResult(ControlHttpResponse.Text(200, "text/plain", "ok")));
+        server.Start();
+
+        var response = await SendRawAsync(
+            server.Port,
+            "POST /short HTTP/1.1\r\nHost: x\r\nContent-Length: 8\r\n\r\nabc");
+        StringAssert.StartsWith(response, "HTTP/1.1 400");
+    }
+
+    [TestMethod]
+    [Timeout(10_000)]
+    public async Task HeaderWithoutColon_Returns400()
+    {
+        using var server = new ControlHttpServer(
+            IPAddress.Loopback,
+            0,
+            null,
+            static (_, _) => Task.FromResult(ControlHttpResponse.Text(200, "text/plain", "ok")));
+        server.Start();
+
+        var response = await SendRawAsync(
+            server.Port,
+            "GET / HTTP/1.1\r\nHost: x\r\nBadHeader\r\n\r\n");
+        StringAssert.StartsWith(response, "HTTP/1.1 400");
+    }
+
+    [TestMethod]
+    [Timeout(10_000)]
+    public async Task DuplicateHeaders_KeepFirstValue()
+    {
+        string? host = null;
+        Task<ControlHttpResponse> Handler(ControlHttpRequest req, CancellationToken _)
+        {
+            host = req.Header("Host");
+            return Task.FromResult(ControlHttpResponse.Text(200, "text/plain", "ok"));
+        }
+
+        using var server = new ControlHttpServer(IPAddress.Loopback, 0, null, Handler);
+        server.Start();
+
+        var response = await SendRawAsync(
+            server.Port,
+            "GET / HTTP/1.1\r\nHost: first\r\nHost: second\r\n\r\n");
+        StringAssert.StartsWith(response, "HTTP/1.1 200");
+        Assert.AreEqual("first", host);
+    }
+
+    [TestMethod]
+    [Timeout(10_000)]
+    public async Task Response_DoesNotDuplicateSecurityHeaders_AndStripsCRLFFromCustomHeaders()
+    {
+        Task<ControlHttpResponse> Handler(ControlHttpRequest _, CancellationToken __) =>
+            Task.FromResult(ControlHttpResponse.Text(
+                204,
+                "text/plain",
+                "",
+                new KeyValuePair<string, string>("Cache-Control", "private"),
+                new KeyValuePair<string, string>("X-Content-Type-Options", "nosniff"),
+                new KeyValuePair<string, string>("X-Trace", "a\r\nInjected: yes")));
+
+        using var server = new ControlHttpServer(IPAddress.Loopback, 0, null, Handler);
+        server.Start();
+
+        var response = await SendRawAsync(server.Port, "GET /h HTTP/1.1\r\nHost: x\r\n\r\n");
+        StringAssert.StartsWith(response, "HTTP/1.1 204");
+        Assert.AreEqual(1, CountOccurrences(response, "Cache-Control:"));
+        Assert.AreEqual(1, CountOccurrences(response, "X-Content-Type-Options:"));
+        StringAssert.Contains(response, "Cache-Control: private");
+        Assert.IsFalse(response.Contains("\r\nInjected:", StringComparison.Ordinal));
+        StringAssert.Contains(response, "X-Trace: a  Injected: yes");
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        for (var i = 0; (i = haystack.IndexOf(needle, i, StringComparison.Ordinal)) >= 0; i += needle.Length)
+        {
+            count++;
+        }
+
+        return count;
+    }
 }
