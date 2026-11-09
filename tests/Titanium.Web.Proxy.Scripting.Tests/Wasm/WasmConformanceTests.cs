@@ -26,6 +26,7 @@ public class WasmConformanceTests
         ("callouts.wat", ProxyWasmAbi.V021, null),
         ("state.wat", ProxyWasmAbi.V021, null),
         ("tcp_filter.wat", ProxyWasmAbi.V021, null),
+        ("host_calls.wat", ProxyWasmAbi.V021, null),
         ("wasi_exit0.wat", ProxyWasmAbi.V020, null),
         ("missing_import.wat", null, "missing import env.proxy_teleport"),
         ("unknown_abi.wat", null, "proxy_abi_version_9_9_9"),
