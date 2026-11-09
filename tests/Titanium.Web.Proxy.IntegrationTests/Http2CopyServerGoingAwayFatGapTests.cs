@@ -114,7 +114,9 @@ public class Http2CopyServerGoingAwayFatGapTests
         using var suite = new TestSuite(sharedServer);
         var proxy = suite.GetProxy();
         proxy.EnableHttp2 = true;
-        proxy.EnableHttpInterception = true;
+        // Compressed-relay (interception off) is the path that records ServerGoingAway
+        // from origin GOAWAY and refuses later client streams locally.
+        proxy.EnableHttpInterception = false;
 
         var uri = new Uri(origin.Url);
         using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
@@ -126,22 +128,18 @@ public class Http2CopyServerGoingAwayFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, first, endStream: true);
         Assert.AreEqual("204", await ReadStatusAsync(raw, TimeSpan.FromSeconds(12)));
 
-        // Drain the relayed origin GOAWAY (and any other control frames) before opening stream 3.
+        // Drain until the relayed origin GOAWAY arrives. One WaitAsync to the overall
+        // deadline — short timeout slices cancel SslStream.ReadAsync and poison the next read.
         var sawGoAway = false;
-        var drainDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var drainDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
         while (DateTime.UtcNow < drainDeadline && !sawGoAway)
         {
-            try
-            {
-                var frame = await raw.Connection.ReadFrameAsync()
-                    .WaitAsync(drainDeadline - DateTime.UtcNow);
-                if (frame.Type == Http2FrameType.GoAway)
-                    sawGoAway = true;
-            }
-            catch (TimeoutException)
-            {
+            var remaining = drainDeadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
                 break;
-            }
+            var frame = await raw.Connection.ReadFrameAsync().WaitAsync(remaining);
+            if (frame.Type == Http2FrameType.GoAway)
+                sawGoAway = true;
         }
 
         Assert.IsTrue(sawGoAway, "Origin GOAWAY must be relayed to the client connection.");
@@ -152,13 +150,35 @@ public class Http2CopyServerGoingAwayFatGapTests
             []);
         await raw.Connection.WriteHeaderBlockAsync(3, second, endStream: true);
 
-        var (type, code, streamId) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(12));
+        var (type, code, streamId) = await ReadRstForStreamAsync(raw, 3, TimeSpan.FromSeconds(12));
         Assert.AreEqual(Http2FrameType.RstStream, type,
             "A stream above the origin GOAWAY last-stream-id must be RST locally.");
         Assert.AreEqual(3, streamId);
         Assert.AreEqual((int)Http2ErrorCode.RefusedStream, code);
         Assert.AreEqual(0, Volatile.Read(ref originSawSecond),
             "Refused streams must not reach the origin after GOAWAY.");
+    }
+
+    private static async Task<(Http2FrameType Type, int Error, int StreamId)> ReadRstForStreamAsync(
+        Http2RawClient raw, int expectedStreamId, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                break;
+            var frame = await raw.Connection.ReadFrameAsync().WaitAsync(remaining);
+            if (frame.Type == Http2FrameType.RstStream && frame.StreamId == expectedStreamId)
+            {
+                return (frame.Type,
+                    BinaryPrimitives.ReadInt32BigEndian(frame.Payload.AsSpan(0, 4)),
+                    frame.StreamId);
+            }
+        }
+
+        Assert.Fail($"Timed out waiting for RST_STREAM on stream {expectedStreamId}.");
+        return default;
     }
 
     /// <summary>

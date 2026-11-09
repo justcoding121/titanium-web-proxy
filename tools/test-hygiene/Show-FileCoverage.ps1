@@ -20,9 +20,18 @@ $sourcesById = @{}
 foreach ($source in @($doc.SelectNodes('//source_file'))) {
     $id = [string]$source.id
     $path = ([string]$source.path) -replace '\\', '/'
-    if ($id -and $path) {
-        $sourcesById[$id] = $path
+    if (-not $id -or -not $path) { continue }
+    # Merged coverage can repeat source_file ids for test and product files. Prefer src/ product paths.
+    $isProduct = $path -match '(^|/)src/'
+    if ($sourcesById.ContainsKey($id)) {
+        $existing = $sourcesById[$id]
+        $existingProduct = $existing -match '(^|/)src/'
+        if ($existingProduct -and -not $isProduct) { continue }
+        if (-not $existingProduct -and $isProduct) { $sourcesById[$id] = $path; continue }
+        if ($existingProduct -eq $isProduct -and $path.Length -gt $existing.Length) { $sourcesById[$id] = $path }
+        continue
     }
+    $sourcesById[$id] = $path
 }
 
 $rangesBySourceId = @{}
