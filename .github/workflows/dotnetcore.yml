@@ -272,6 +272,14 @@ jobs:
         dotnet tool install --global dotnet-reportgenerator-globaltool
         reportgenerator "-reports:coverage/coverage.xml" "-targetdir:coverage/report" "-reporttypes:MarkdownSummaryGithub"
         if (Test-Path coverage/report/SummaryGithub.md) { Get-Content coverage/report/SummaryGithub.md | Out-File -Append $env:GITHUB_STEP_SUMMARY }
+        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "`n## Top uncovered product files`n"
+        $topOut = & powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Show-FileCoverage.ps1 -CoverageXml coverage/coverage.xml -Top 10
+        if ($topOut) {
+          foreach ($line in @($topOut)) {
+            if ($line -match '^\s') { continue }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ("- ``{0}``" -f $line)
+          }
+        }
         powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-DiffCoverage.ps1 -CoverageXml coverage/coverage.xml -BaseRef "${{ github.base_ref }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
