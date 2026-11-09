@@ -36,9 +36,26 @@ using var stop = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
 {
     e.Cancel = true;
-    stop.Cancel();
+    try
+    {
+        stop.Cancel();
+    }
+    catch (ObjectDisposedException)
+    {
+        // Main already returned and disposed the gate.
+    }
 };
-AppDomain.CurrentDomain.ProcessExit += (_, _) => stop.Cancel();
+AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+{
+    try
+    {
+        stop.Cancel();
+    }
+    catch (ObjectDisposedException)
+    {
+        // Main already returned and disposed the gate.
+    }
+};
 
 try
 {
