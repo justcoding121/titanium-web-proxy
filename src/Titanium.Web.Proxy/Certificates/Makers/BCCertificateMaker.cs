@@ -269,7 +269,8 @@ internal class BcCertificateMaker : ICertificateMaker
     private X509Certificate2 MakeCertificateInternal(string subject,
         X509Certificate2? signingCert = null)
     {
-        return MakeCertificateInternal(subject, $"CN={subject}",
+        var host = CertificateHostName.Normalize(subject);
+        return MakeCertificateInternal(host, $"CN={host}",
             DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
             signingCert);
     }
