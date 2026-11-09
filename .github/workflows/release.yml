@@ -1071,7 +1071,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
@@ -1138,7 +1138,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
@@ -1205,7 +1205,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           # v7.0.27 -> 7.0.27, 7.0, 7 ; a beta channel release (7.0.27-beta) is only tagged with its full version.
