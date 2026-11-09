@@ -125,4 +125,43 @@ public class Http2CopyUnknownFrameAndSettingsIdFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
         Assert.AreEqual("204", await ReadStatusAsync(raw, TimeSpan.FromSeconds(12)));
     }
+
+    /// <summary>
+    ///     Bug class: an unknown frame with a large payload is not drained and desyncs the reader.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task UnknownFrameType_LargePayload_ThenGet_Succeeds()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.SendInitialSettingsAsync();
+            while (true)
+            {
+                var (streamId, _, _) = await conn.ReadRequestAsync();
+                var resp = conn.EncodeHeaders([(":status", "204")], []);
+                await conn.WriteHeaderBlockAsync(streamId, resp, endStream: true);
+            }
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.EnableHttpInterception = true;
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        var junk = new byte[8192];
+        junk[0] = 0xab;
+        await raw.Connection.WriteFrameAsync((Http2FrameType)0x0f, 0, 0, junk);
+
+        var block = raw.Connection.EncodeHeaders(
+            [(":method", "GET"), (":scheme", "https"),
+             (":authority", $"{uri.Host}:{uri.Port}"), (":path", "/after-unknown-large")],
+            []);
+        await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
+        Assert.AreEqual("204", await ReadStatusAsync(raw, TimeSpan.FromSeconds(12)));
+    }
 }

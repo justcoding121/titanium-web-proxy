@@ -574,6 +574,40 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
     }
 
     /// <summary>
+    ///     Bug class: after SETTINGS, oversize HEADERS must drain the HPACK block before GOAWAY.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task PostSettings_OversizeHeaders_WithFullPayload_DrainsGoAwayFrameSizeError()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        const int oversize = 16385;
+        var junk = new byte[oversize];
+        Array.Fill(junk, (byte)0x82);
+
+        var hdr = new byte[9];
+        hdr[0] = (byte)((oversize >> 16) & 0xff);
+        hdr[1] = (byte)((oversize >> 8) & 0xff);
+        hdr[2] = (byte)(oversize & 0xff);
+        hdr[3] = (byte)Http2FrameType.Headers;
+        hdr[4] = (byte)Http2FrameFlag.EndHeaders;
+        hdr[8] = 1;
+        await raw.Connection.GetStream().WriteAsync(hdr);
+        await raw.Connection.GetStream().WriteAsync(junk);
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.FrameSizeError, code);
+    }
+
+    /// <summary>
     ///     Bug class: after SETTINGS, declared frame length above the cap must drain the
     ///     unread payload before GOAWAY so the client observes FRAME_SIZE_ERROR.
     /// </summary>
