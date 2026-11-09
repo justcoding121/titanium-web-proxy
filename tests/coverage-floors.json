@@ -9,9 +9,9 @@
     "Titanium.Plus": 90,
     "Titanium.Gateway": 80,
     "Titanium.Manager": 80,
-    "Titanium.Xds": 80,
+    "Titanium.Xds": 90,
     "Titanium.Inspector": 80,
-    "Titanium.Web.Proxy.Scripting": 80,
-    "Titanium.Cli.GeoIp": 80
+    "Titanium.Web.Proxy.Scripting": 86,
+    "Titanium.Cli.GeoIp": 90
   }
 }
