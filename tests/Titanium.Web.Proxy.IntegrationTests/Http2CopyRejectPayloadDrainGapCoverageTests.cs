@@ -488,6 +488,29 @@ public class Http2CopyRejectPayloadDrainGapCoverageTests
         Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
     }
 
+    /// <summary>
+    ///     Bug class: CONTINUATION on stream 0 sends GOAWAY but the HPACK block desyncs the reader.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Continuation_OnStreamZero_WithPayload_DrainsGoAway()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        await IdleOriginAsync(origin);
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+
+        await raw.Connection.WriteFrameAsync(
+            Http2FrameType.Continuation, 0, Http2FrameFlag.EndHeaders, new byte[] { 0x82 });
+
+        var (type, code) = await ReadRstOrGoAwayAsync(raw, TimeSpan.FromSeconds(10));
+        Assert.AreEqual(Http2FrameType.GoAway, type);
+        Assert.AreEqual((int)Http2ErrorCode.ProtocolError, code);
+    }
+
     private static async Task<Http2RawClient> ConnectExplicitPostPrefaceAsync(ProxyServer proxy, Uri uri)
     {
         var tcp = new TcpClient();
