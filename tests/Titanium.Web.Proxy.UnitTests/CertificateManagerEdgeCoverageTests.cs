@@ -8,6 +8,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Network.Certificate;
 
@@ -58,6 +59,7 @@ public class CertificateManagerEdgeCoverageTests
         // After the round-trip the cache was cleared, so a new offline context is built.
         var ctx2 = mgr.CreateSslCertificateContext(leaf);
         Assert.IsNotNull(ctx2);
+        Assert.AreNotSame(ctx1, ctx2, "A real OcspStapling change must drop the cached context for the leaf.");
     }
 
     [TestMethod]
@@ -77,9 +79,8 @@ public class CertificateManagerEdgeCoverageTests
         // Setting the same value (false→false) must not clear the cache.
         mgr.OcspStapling = false;
         var ctx2 = mgr.CreateSslCertificateContext(leaf);
-        // Both calls must return the same cached object (reference equality: same leaf).
-        Assert.IsTrue(ReferenceEquals(ctx1.TargetCertificate, ctx2.TargetCertificate),
-            "No-op OcspStapling toggle must not evict the cached context.");
+        // Both calls must return the very same cached context object.
+        Assert.AreSame(ctx1, ctx2, "No-op OcspStapling toggle must not evict the cached context.");
     }
 
     // -----------------------------------------------------------------------
@@ -198,45 +199,78 @@ public class CertificateManagerEdgeCoverageTests
 
     [TestMethod]
     [Timeout(90_000)]
-    public void DisableWildCardCertificates_True_EmitsExactHostCert()
+    public void DisableWildCardCertificates_True_NamesTheLeafAfterTheExactHost()
     {
-        // Bug class: DisableWildCardCertificates=true still generates wildcard SANs,
-        // so per-host pinning and strict name checks fail.
-        using var mgr = new CertificateManager(
-            IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
-        {
-            CertificateEngine = CertificateEngine.BouncyCastle,
-            DisableWildCardCertificates = true,
-        };
-        mgr.CreateRootCertificate(false);
-        using var cert = mgr.CreateCertificate("sub.example.com", false)!;
-        Assert.IsNotNull(cert);
-        // When wildcards are disabled the SAN must not contain a star.
-        var san = cert.Extensions.OfType<X509SubjectAlternativeNameExtension>().SingleOrDefault()
-                  ?? new X509SubjectAlternativeNameExtension(cert.Extensions["2.5.29.17"]!.RawData, false);
-        var dnsNames = san.EnumerateDnsNames().ToArray();
+        // Bug class: the manager flag is not honoured by the name the handlers ask a leaf for, so a client that
+        // pins or strictly checks the host receives a "*.parent.tld" certificate it did not expect.
+        using var mgr = NewManager();
+        mgr.DisableWildCardCertificates = true;
+
+        var requested = HttpHelper.GetWildCardDomainName("sub.example.com", mgr.DisableWildCardCertificates);
+        Assert.AreEqual("sub.example.com", requested);
+
+        using var cert = mgr.CreateCertificate(requested, false)!;
+        var dnsNames = DnsNames(cert);
+        CollectionAssert.Contains(dnsNames, "sub.example.com");
         Assert.IsFalse(dnsNames.Any(d => d.StartsWith("*.", StringComparison.Ordinal)),
-            $"DisableWildCardCertificates=true must not produce wildcard SAN; got: {string.Join(", ", dnsNames)}");
-        Assert.IsTrue(dnsNames.Any(d => d.Contains("sub.example.com", StringComparison.OrdinalIgnoreCase)
-                                        || d.Contains("example.com", StringComparison.OrdinalIgnoreCase)),
-            $"SAN must contain the host or its parent; got: {string.Join(", ", dnsNames)}");
+            $"No wildcard SAN expected; got: {string.Join(", ", dnsNames)}");
     }
 
     [TestMethod]
     [Timeout(90_000)]
-    public void DisableWildCardCertificates_False_MayEmitWildcard()
+    public void DisableWildCardCertificates_False_IssuesAWildcardLeafForSubdomains()
     {
-        // Bug class: DisableWildCardCertificates=false always emits per-host certs, which is fine,
-        // but we check that the default (false) does not break certificate creation.
-        using var mgr = new CertificateManager(
+        // Bug class: the default (wildcards on) regresses to per-host leaves, defeating leaf reuse across
+        // sibling subdomains, or a wildcard name produces a leaf that does not actually cover the parent's children.
+        using var mgr = NewManager();
+        Assert.IsFalse(mgr.DisableWildCardCertificates, "default must stay wildcard-enabled");
+
+        var requested = HttpHelper.GetWildCardDomainName("api.example.com", mgr.DisableWildCardCertificates);
+        Assert.AreEqual("*.example.com", requested);
+
+        using var cert = mgr.CreateCertificate(requested, false)!;
+        CollectionAssert.Contains(DnsNames(cert), "*.example.com");
+    }
+
+    [TestMethod]
+    [Timeout(90_000)]
+    public void ConfigureServerCertificate_LeafWithoutPrivateKey_FallsBackInsteadOfThrowing()
+    {
+        // Bug class: a leaf the OS cannot build a chain context for (here: public-only copy) makes the TLS
+        // handshake throw instead of degrading to presenting ServerCertificate directly.
+        using var mgr = NewManager();
+        using var full = mgr.CreateCertificate("fallback.example", false)!;
+        using var publicOnly = CertificateLoader.LoadCertificate(full.Export(X509ContentType.Cert));
+        Assert.IsFalse(publicOnly.HasPrivateKey);
+
+        var options = new SslServerAuthenticationOptions();
+        mgr.ConfigureServerCertificate(options, publicOnly);
+
+        Assert.IsNull(options.ServerCertificateContext);
+        Assert.AreSame(publicOnly, options.ServerCertificate,
+            "fallback must hand the leaf itself to SslStream");
+
+        // The failure is remembered: the second handshake takes the fallback without another chain build.
+        var again = new SslServerAuthenticationOptions();
+        mgr.ConfigureServerCertificate(again, publicOnly);
+        Assert.AreSame(publicOnly, again.ServerCertificate);
+    }
+
+    private static CertificateManager NewManager()
+    {
+        var mgr = new CertificateManager(
             IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
-            DisableWildCardCertificates = false,
         };
         mgr.CreateRootCertificate(false);
-        using var cert = mgr.CreateCertificate("sub.wildcard.com", false)!;
-        Assert.IsNotNull(cert, "Creating a certificate with wildcards enabled must succeed.");
+        return mgr;
+    }
+
+    private static string[] DnsNames(X509Certificate2 cert)
+    {
+        var san = new X509SubjectAlternativeNameExtension(cert.Extensions["2.5.29.17"]!.RawData, false);
+        return san.EnumerateDnsNames().ToArray();
     }
 
     // -----------------------------------------------------------------------
