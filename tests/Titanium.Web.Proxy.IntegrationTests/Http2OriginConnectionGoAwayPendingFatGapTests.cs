@@ -111,11 +111,15 @@ public class Http2OriginConnectionGoAwayPendingFatGapTests
         origin.HandleConnection(async conn =>
         {
             await conn.SendInitialSettingsAsync();
+            var (streamId, _, _) = await conn.ReadRequestAsync();
+            var resp = conn.EncodeHeaders([(":status", "204")], []);
+            await conn.WriteHeaderBlockAsync(streamId, resp, endStream: true);
+
+            // Probe liveness only after the bridge has a live origin reader on this connection.
             var ping = new byte[8];
             BinaryPrimitives.WriteUInt64BigEndian(ping, 0x1122334455667788UL);
             await conn.WriteFrameAsync(Http2FrameType.Ping, 0, 0, ping);
 
-            // Expect ACK from the proxy's origin connection reader.
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
             while (DateTime.UtcNow < deadline)
             {
@@ -127,14 +131,6 @@ public class Http2OriginConnectionGoAwayPendingFatGapTests
                     break;
                 }
             }
-
-            try
-            {
-                var (streamId, _, _) = await conn.ReadRequestAsync();
-                var resp = conn.EncodeHeaders([(":status", "204")], []);
-                await conn.WriteHeaderBlockAsync(streamId, resp, endStream: true);
-            }
-            catch { /* optional */ }
         });
 
         using var suite = new TestSuite(sharedServer);

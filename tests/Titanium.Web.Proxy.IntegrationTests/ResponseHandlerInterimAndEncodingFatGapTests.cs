@@ -114,6 +114,9 @@ public class ResponseHandlerInterimAndEncodingFatGapTests
         using var client = suite.GetClient(proxy);
         using var response = await client.GetAsync(server.ListeningHttpsUrl + "/created");
         Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
+
+        for (var i = 0; i < 50 && afterStatus is null; i++)
+            await Task.Delay(50);
         Assert.AreEqual(201, afterStatus);
     }
 
