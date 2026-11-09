@@ -88,6 +88,23 @@ public class MemoryHttpResponseCacheTests
     }
 
     [TestMethod]
+    public void PurgeExactPrefix_IsOrdinal_AndDoesNotUsePathHeuristics()
+    {
+        // Bug class: case-insensitive Purge and ordinal PurgeExactPrefix diverge for control-plane keys.
+        var cache = new MemoryHttpResponseCache();
+        cache.Set("GET:API/v1", Make(200), TimeSpan.FromMinutes(1));
+        cache.Set("GET:api/v2", Make(200), TimeSpan.FromMinutes(1));
+        cache.Set("prefix:keep", Make(200), TimeSpan.FromMinutes(1));
+
+        Assert.AreEqual(1, cache.PurgeExactPrefix("GET:api"));
+        Assert.IsTrue(cache.TryGet("GET:API/v1", out _));
+        Assert.IsFalse(cache.TryGet("GET:api/v2", out _));
+        Assert.AreEqual(0, cache.PurgeExactPrefix("missing:"));
+        Assert.AreEqual(1, cache.PurgeExactPrefix("prefix:"));
+        Assert.AreEqual(1, cache.Count);
+    }
+
+    [TestMethod]
     public void Set_UsesDefaultTtl_WhenExpiresUnset()
     {
         var cache = new MemoryHttpResponseCache();
