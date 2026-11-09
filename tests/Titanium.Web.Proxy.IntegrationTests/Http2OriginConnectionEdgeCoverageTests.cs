@@ -139,6 +139,117 @@ public class Http2OriginConnectionEdgeCoverageTests
             "Invalid origin SETTINGS_MAX_FRAME_SIZE must fail the bridged request as 502.");
     }
 
+    /// <summary>
+    ///     Bug class: origin's first frame is not SETTINGS; CreateAsync hangs or resets H1 with no 502.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1ToH2_OriginFirstFrameNotSettings_Returns502()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.WriteFrameAsync(Http2FrameType.Ping, 0, (Http2FrameFlag)0, new byte[8]);
+            try { while (true) await conn.ReadFrameAsync(); }
+            catch { /* torn down */ }
+        });
+
+        var (proxy, suite) = CreateH1ToH2BridgeProxy();
+        using var ownedSuite = suite;
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get, origin.Url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Bug class: SETTINGS on a non-zero stream id is accepted (RFC 9113 §6.5).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1ToH2_OriginSettingsOnNonZeroStream_Returns502()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.WriteFrameAsync(Http2FrameType.Settings, 1, (Http2FrameFlag)0,
+                SettingsEntry(Http2SettingsId.MaxConcurrentStreams, 100));
+            try { while (true) await conn.ReadFrameAsync(); }
+            catch { /* torn down */ }
+        });
+
+        var (proxy, suite) = CreateH1ToH2BridgeProxy();
+        using var ownedSuite = suite;
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get, origin.Url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Bug class: SETTINGS payload length not a multiple of 6 is ignored.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1ToH2_OriginSettingsPayloadNotMultipleOf6_Returns502()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.WriteFrameAsync(Http2FrameType.Settings, 0, (Http2FrameFlag)0, new byte[4]);
+            try { while (true) await conn.ReadFrameAsync(); }
+            catch { /* torn down */ }
+        });
+
+        var (proxy, suite) = CreateH1ToH2BridgeProxy();
+        using var ownedSuite = suite;
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get, origin.Url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Bug class: SETTINGS_INITIAL_WINDOW_SIZE above 2^31-1 is accepted, overflowing send windows.
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1ToH2_OriginInvalidInitialWindowSizeSetting_Returns502()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            // 0xFFFFFFFF casts to int -1 and trips TryApplyInitialWindowSize.
+            await conn.WriteFrameAsync(Http2FrameType.Settings, 0, (Http2FrameFlag)0,
+                SettingsEntry(Http2SettingsId.InitialWindowSize, 0xFFFFFFFFu));
+            try { while (true) await conn.ReadFrameAsync(); }
+            catch { /* torn down */ }
+        });
+
+        var (proxy, suite) = CreateH1ToH2BridgeProxy();
+        using var ownedSuite = suite;
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get, origin.Url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // Http2OriginConnection — ENABLE_CONNECT_PROTOCOL downgrade 1→0
     // -------------------------------------------------------------------------
