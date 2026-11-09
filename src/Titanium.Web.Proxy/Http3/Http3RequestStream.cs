@@ -1618,28 +1618,41 @@ internal static partial class Http3RequestStream
         string? method = null, scheme = null, authority = null, path = null, protocol = null;
         var regular = new List<(string, string)>(fields.Count);
 
+        var sawRegularField = false;
         foreach (var (name, value) in fields)
         {
+            // RFC 9114 §4.3: every pseudo-header precedes the regular fields, and none repeats. A repeated
+            // :path/:authority/:method would otherwise be resolved last-wins here while another hop on the
+            // path may pick the first, which is a request-smuggling / cache-poisoning primitive.
+            if (name.StartsWith(':') && sawRegularField)
+                throw new Http3StreamException(Http3ErrorCode.MessageError,
+                    $"Pseudo-header {name} appears after a regular field.");
+
             switch (name)
             {
-                case ":method": method = value; break;
-                case ":scheme": scheme = value; break;
-                case ":authority": authority = value; break;
-                case ":path": path = value; break;
-                case ":protocol":
-                    if (protocol != null)
-                        throw new Http3StreamException(Http3ErrorCode.MessageError,
-                            "Duplicate :protocol pseudo-header.");
-                    protocol = value;
-                    break;
+                case ":method": method = SetOnce(method, value, name); break;
+                case ":scheme": scheme = SetOnce(scheme, value, name); break;
+                case ":authority": authority = SetOnce(authority, value, name); break;
+                case ":path": path = SetOnce(path, value, name); break;
+                case ":protocol": protocol = SetOnce(protocol, value, name); break;
                 default:
-                    if (!name.StartsWith(':')) regular.Add((name, value));
+                    if (!name.StartsWith(':'))
+                    {
+                        sawRegularField = true;
+                        regular.Add((name, value));
+                    }
+
                     break;
             }
         }
 
         return (method, scheme, authority, path, protocol, regular);
     }
+
+    private static string SetOnce(string? current, string value, string name) =>
+        current is null
+            ? value
+            : throw new Http3StreamException(Http3ErrorCode.MessageError, $"Duplicate {name} pseudo-header.");
 
     internal static Task SendSimpleStatusForTunnelAsync(
         QuicStream stream, int statusCode, QpackContext? qpackContext, CancellationToken ct) =>
