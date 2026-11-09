@@ -190,8 +190,8 @@ public class InspectorServiceEdgeBehaviorTests
             logger.Log(LogLevel.Error, 0, "n" + i, null, static (state, _) => state);
         }
 
-        await WaitFor(ring, 100);
-        var afterFill = ring.Snapshot();
+        // Wait until the async writer has drained all 120 enqueues (count alone hits 100 early).
+        var afterFill = await WaitForNewest(ring, "n119");
         Assert.AreEqual(100, afterFill.Count);
         ring.SetCapacity(100); // no-op
         ring.SetCapacity(101);
@@ -256,6 +256,25 @@ public class InspectorServiceEdgeBehaviorTests
         }
 
         Assert.Fail($"expected {count} log lines, got {ring.Snapshot().Count}");
+        return Array.Empty<RunLogEntry>();
+    }
+
+    private static async Task<IReadOnlyList<RunLogEntry>> WaitForNewest(RunLogRing ring, string newest)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            var snap = ring.Snapshot();
+            if (snap.Count > 0 && snap[^1].Message == newest)
+            {
+                return snap;
+            }
+
+            await Task.Delay(20);
+        }
+
+        var last = ring.Snapshot();
+        Assert.Fail($"expected newest '{newest}', got '{(last.Count == 0 ? "<empty>" : last[^1].Message)}'");
         return Array.Empty<RunLogEntry>();
     }
 }
