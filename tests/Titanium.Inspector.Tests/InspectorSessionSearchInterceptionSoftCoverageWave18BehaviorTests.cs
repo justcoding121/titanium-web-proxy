@@ -107,7 +107,7 @@ public class InspectorSessionSearchInterceptionSoftCoverageWave18BehaviorTests
                 settings,
                 new InterceptionService(new RecordingSystemProxyController()) { UseInMemoryTrustState = true });
             await InvokeAsync(vm, "ExportHarAsync");
-            StringAssert.Contains(vm.StatusText, "export", StringComparison.OrdinalIgnoreCase);
+            StringAssert.Contains(vm.StatusText, "No sessions to export", StringComparison.Ordinal);
         }
         finally
         {
