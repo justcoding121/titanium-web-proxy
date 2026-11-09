@@ -62,7 +62,7 @@ public class UdpH3H1TerminateFatGapTests
         listener.Start();
         var localPort = listener.LocalEndPoint!.Port;
 
-        using var client = new UdpClient();
+        using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var payload = Encoding.ASCII.GetBytes("udp-ping");
         await client.SendAsync(payload, payload.Length, new IPEndPoint(IPAddress.Loopback, localPort));
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -104,7 +104,7 @@ public class UdpH3H1TerminateFatGapTests
 
         async Task<string> RoundTripAsync(string msg)
         {
-            using var client = new UdpClient();
+            using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
             var bytes = Encoding.ASCII.GetBytes(msg);
             await client.SendAsync(bytes, bytes.Length, new IPEndPoint(IPAddress.Loopback, localPort));
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

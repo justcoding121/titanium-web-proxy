@@ -177,7 +177,7 @@ public class Http3UdpRelaySessionFatGapTests
         listener.Start();
         var local = listener.LocalEndPoint!.Port;
 
-        using var client = new UdpClient();
+        using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var ep = new IPEndPoint(IPAddress.Loopback, local);
         for (var i = 0; i < 8; i++)
         {
@@ -194,9 +194,9 @@ public class Http3UdpRelaySessionFatGapTests
         client.Client.ReceiveTimeout = 50;
         try
         {
-            EndPoint any = new IPEndPoint(IPAddress.Any, 0);
+            EndPoint peer = new IPEndPoint(IPAddress.Loopback, 0);
             while (true)
-                _ = client.Client.ReceiveFrom(new byte[512], ref any);
+                _ = client.Client.ReceiveFrom(new byte[512], ref peer);
         }
         catch (SocketException)
         {
@@ -205,7 +205,7 @@ public class Http3UdpRelaySessionFatGapTests
 
         // After the 1s window, a fresh datagram from a new client must still relay.
         await Task.Delay(1100);
-        using var lateClient = new UdpClient();
+        using var lateClient = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var late = Encoding.ASCII.GetBytes("late");
         await lateClient.SendAsync(late, late.Length, new IPEndPoint(IPAddress.Loopback, local));
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));

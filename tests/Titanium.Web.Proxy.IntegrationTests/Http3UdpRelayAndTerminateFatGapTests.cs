@@ -161,7 +161,7 @@ public class Http3UdpRelayAndTerminateFatGapTests
         listener.Start();
         var local = listener.LocalEndPoint!.Port;
 
-        using var client = new UdpClient();
+        using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var huge = new byte[200];
         Array.Fill(huge, (byte)0xab);
         await client.SendAsync(huge, huge.Length, new IPEndPoint(IPAddress.Loopback, local));
@@ -205,7 +205,7 @@ public class Http3UdpRelayAndTerminateFatGapTests
         listener.Start();
         var local = listener.LocalEndPoint!.Port;
 
-        using var client = new UdpClient();
+        using var client = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         var payload = Encoding.ASCII.GetBytes("live");
         await client.SendAsync(payload, payload.Length, new IPEndPoint(IPAddress.Loopback, local));
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));

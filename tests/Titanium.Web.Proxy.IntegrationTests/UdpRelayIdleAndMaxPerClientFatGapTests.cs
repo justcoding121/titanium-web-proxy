@@ -71,8 +71,8 @@ public class UdpRelayIdleAndMaxPerClientFatGapTests
         c2.Client.ReceiveTimeout = 400;
         try
         {
-            EndPoint any = new IPEndPoint(IPAddress.Any, 0);
-            _ = c2.Client.ReceiveFrom(new byte[64], ref any);
+            EndPoint peer = new IPEndPoint(IPAddress.Loopback, 0);
+            _ = c2.Client.ReceiveFrom(new byte[64], ref peer);
             Assert.Fail("Second session under MaxSessionsPerClient=1 must not receive a reply.");
         }
         catch (SocketException)
@@ -151,8 +151,8 @@ public class UdpRelayIdleAndMaxPerClientFatGapTests
         client.Client.ReceiveTimeout = 500;
         try
         {
-            EndPoint any = new IPEndPoint(IPAddress.Any, 0);
-            _ = client.Client.ReceiveFrom(new byte[64], ref any);
+            EndPoint peer = new IPEndPoint(IPAddress.Loopback, 0);
+            _ = client.Client.ReceiveFrom(new byte[64], ref peer);
             // UDP connect to a closed port may still "succeed" on loopback; no echo is the contract.
             Assert.Fail("Unreachable upstream must not echo a client datagram.");
         }

@@ -112,8 +112,8 @@ public class UdpRelayDrainAndDoubleStartFatGapTests
         second.Client.ReceiveTimeout = 400;
         try
         {
-            EndPoint any = new IPEndPoint(IPAddress.Any, 0);
-            _ = second.Client.ReceiveFrom(new byte[64], ref any);
+            EndPoint peer = new IPEndPoint(IPAddress.Loopback, 0);
+            _ = second.Client.ReceiveFrom(new byte[64], ref peer);
             Assert.Fail("BeginDrain must drop datagrams that would open a new session.");
         }
         catch (SocketException)
