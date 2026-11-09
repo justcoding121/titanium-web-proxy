@@ -326,6 +326,103 @@ public class RequestHandlerAndBridgeHelperTests
         CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("x"), args.BodyBytes);
     }
 
+    [TestMethod]
+    public async Task OnBeforeResponse_IsFastPath_SkipsHandlers()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var called = false;
+        proxy.BeforeResponse += (_, _) =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        };
+
+        using var session = MakeSession(proxy);
+        session.IsFastPath = true;
+
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeResponse", PrivateInstance,
+            [typeof(SessionEventArgs)])!
+            .Invoke(proxy, [session])!;
+
+        Assert.IsFalse(called, "Fast-path sessions must skip BeforeResponse.");
+    }
+
+    [TestMethod]
+    public async Task OnBeforeResponse_WithTranscoder_RewritesThenRunsBeforeResponse()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var transcoder = new RecordingTranscoder();
+        proxy.ReverseProxy = new ReverseProxyOptions { GrpcJsonTranscoder = transcoder };
+
+        var beforeResponse = false;
+        proxy.BeforeResponse += (_, _) =>
+        {
+            beforeResponse = true;
+            return Task.CompletedTask;
+        };
+
+        using var session = MakeSession(proxy);
+        session.HttpClient.Response.StatusCode = 200;
+        session.HttpClient.Response.HttpVersion = HttpHeader.Version11;
+
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeResponse", PrivateInstance,
+            [typeof(SessionEventArgs)])!
+            .Invoke(proxy, [session])!;
+
+        Assert.AreEqual(1, transcoder.ResponseCalls);
+        Assert.IsTrue(beforeResponse, "Transcoder path must still invoke BeforeResponse.");
+    }
+
+    [TestMethod]
+    public async Task OnBeforeResponse_MayCompressFalse_StillInvokesHandler()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var called = false;
+        proxy.BeforeResponse += (_, _) =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        };
+
+        using var session = MakeSession(proxy);
+        session.HttpClient.Response.StatusCode = 200;
+        session.HttpClient.Response.HttpVersion = HttpHeader.Version11;
+
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeResponse", PrivateInstance,
+            [typeof(SessionEventArgs), typeof(bool)])!
+            .Invoke(proxy, [session, false])!;
+
+        Assert.IsTrue(called);
+    }
+
+    [TestMethod]
+    public async Task DowngradeChunkedFramingForHttp10Origin_UnreadBody_BuffersAndClearsChunked()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var session = MakeSession(proxy);
+        session.HttpClient.Request.HttpVersion = HttpHeader.Version10;
+        session.HttpClient.Request.IsChunked = true;
+        session.HttpClient.Request.IsBodyRead = false;
+
+        var method = typeof(ProxyServer).GetMethod("DowngradeChunkedFramingForHttp10OriginIfNeeded",
+            PrivateStatic)!;
+        await (Task)method.Invoke(null, [session, CancellationToken.None])!;
+
+        Assert.IsFalse(session.HttpClient.Request.IsChunked,
+            "HTTP/1.0 origin downgrade must buffer (possibly empty) and clear chunked framing.");
+        Assert.AreEqual(0, session.HttpClient.Request.ContentLength);
+    }
+
+    [TestMethod]
+    public void ProxyServer_MaxBufferedBodyBytes_RoundTrips()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.MaxBufferedBodyBytes = 12345;
+        Assert.AreEqual(12345, proxy.MaxBufferedBodyBytes);
+        proxy.MaxDecodedHeaderListBytes = 8192;
+        Assert.AreEqual(8192, proxy.MaxDecodedHeaderListBytes);
+    }
+
     private sealed class RecordingMiddleware : IProxyMiddleware
     {
         public int Calls { get; private set; }
@@ -343,6 +440,7 @@ public class RequestHandlerAndBridgeHelperTests
     private sealed class RecordingTranscoder : IGrpcJsonTranscoder
     {
         public int Calls { get; private set; }
+        public int ResponseCalls { get; private set; }
 
         public ValueTask<bool> TryRewriteRequestAsync(object session, CancellationToken cancellationToken = default)
         {
@@ -350,7 +448,10 @@ public class RequestHandlerAndBridgeHelperTests
             return ValueTask.FromResult(false);
         }
 
-        public ValueTask<bool> TryRewriteResponseAsync(object session, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(false);
+        public ValueTask<bool> TryRewriteResponseAsync(object session, CancellationToken cancellationToken = default)
+        {
+            ResponseCalls++;
+            return ValueTask.FromResult(false);
+        }
     }
 }
