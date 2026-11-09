@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Middleware;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -19,6 +21,9 @@ public class RequestHandlerAndBridgeHelperTests
 {
     private static readonly BindingFlags PrivateStatic =
         BindingFlags.Static | BindingFlags.NonPublic;
+
+    private static readonly BindingFlags PrivateInstance =
+        BindingFlags.Instance | BindingFlags.NonPublic;
 
     private static SessionEventArgs MakeSession(ProxyServer proxy, ProxyEndPoint? endPoint = null)
     {
@@ -215,5 +220,70 @@ public class RequestHandlerAndBridgeHelperTests
         Assert.AreEqual("1", list[0].Value);
         Assert.AreEqual("content-type", list[1].Name);
         Assert.AreEqual("x-bar", list[2].Name);
+    }
+
+    [TestMethod]
+    public async Task OnBeforeRequest_IsFastPath_SkipsHandlers()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var called = false;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            called = true;
+            return Task.CompletedTask;
+        };
+
+        using var session = MakeSession(proxy);
+        session.IsFastPath = true;
+
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeRequest", PrivateInstance)!
+            .Invoke(proxy, [session])!;
+
+        Assert.IsFalse(called, "Fast-path sessions must skip BeforeRequest.");
+    }
+
+    [TestMethod]
+    public async Task OnBeforeRequest_WithMiddleware_RunsChainThenBeforeRequest()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var middleware = new RecordingMiddleware();
+        proxy.ReverseProxy = new ReverseProxyOptions { Middleware = [middleware] };
+
+        var beforeRequest = false;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            beforeRequest = true;
+            return Task.CompletedTask;
+        };
+
+        using var session = MakeSession(proxy);
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeRequest", PrivateInstance)!
+            .Invoke(proxy, [session])!;
+
+        Assert.AreEqual(1, middleware.Calls);
+        Assert.IsTrue(beforeRequest, "Middleware terminus must still invoke BeforeRequest.");
+    }
+
+    [TestMethod]
+    public async Task OnBeforeRequest_WithoutHandlers_IsNoOp()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var session = MakeSession(proxy);
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeRequest", PrivateInstance)!
+            .Invoke(proxy, [session])!;
+    }
+
+    private sealed class RecordingMiddleware : IProxyMiddleware
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask InvokeAsync(
+            ProxyMiddlewareContext context,
+            ProxyMiddlewareDelegate next,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            return next(context, cancellationToken);
+        }
     }
 }
