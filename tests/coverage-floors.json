@@ -5,13 +5,13 @@
     "Titanium.Web.Proxy": 80,
     "Titanium.Web.Proxy.Configuration": 90,
     "Titanium.Web.Proxy.Abstractions": 90,
-    "Titanium.Cli": 84,
+    "Titanium.Cli": 85,
     "Titanium.Plus": 90,
-    "Titanium.Gateway": 80,
-    "Titanium.Manager": 80,
+    "Titanium.Gateway": 84,
+    "Titanium.Manager": 84,
     "Titanium.Xds": 90,
     "Titanium.Inspector": 80,
-    "Titanium.Web.Proxy.Scripting": 86,
+    "Titanium.Web.Proxy.Scripting": 87,
     "Titanium.Cli.GeoIp": 90
   }
 }
