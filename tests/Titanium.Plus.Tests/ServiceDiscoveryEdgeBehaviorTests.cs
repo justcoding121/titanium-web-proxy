@@ -121,6 +121,123 @@ public class ServiceDiscoveryEdgeBehaviorTests
     }
 
     [TestMethod]
+    [DataRow("dns-srv")]
+    [DataRow("dns_srv")]
+    public void TryStart_DnsSrvAliases_WithoutSrvName_LogTheSameRequirement(string mode)
+    {
+        // Bug class: only "dnssrv" is recognized; hyphen/underscore aliases never start the loop.
+        var logger = new RecordingLogger();
+        var context = new PlusActivationContext
+        {
+            ProxyServer = new object(),
+            Logger = logger,
+            ClusterManager = new ClusterManager(),
+        };
+        using var discovery = ServiceDiscovery.TryStart(context, new Dictionary<string, string>
+        {
+            ["discovery.mode"] = mode,
+        });
+        Assert.IsNotNull(discovery);
+        StringAssert.Contains(logger.Text, "discovery.srvName");
+    }
+
+    [TestMethod]
+    public void ParseKubernetesDestinations_EndpointSlice_UsesRootPorts()
+    {
+        // Bug class: EndpointSlice-shaped docs (endpoints[] + root ports) yield zero destinations.
+        var list = ServiceDiscovery.ParseKubernetesDestinations("""
+            {"endpoints":[{"addresses":["10.1.2.3",""]},{"addresses":["10.1.2.4"]}],"ports":[{"port":9443}]}
+            """);
+        Assert.AreEqual(2, list.Count);
+        Assert.AreEqual("10.1.2.3", list[0].Address);
+        Assert.AreEqual(9443, list[0].Port);
+        Assert.AreEqual("k8s-0", list[0].Id);
+        Assert.AreEqual("10.1.2.4", list[1].Address);
+        Assert.AreEqual(9443, list[1].Port);
+
+        Assert.AreEqual(0, ServiceDiscovery.ParseKubernetesDestinations("""{"endpoints":[]}""").Count);
+        Assert.AreEqual(0, ServiceDiscovery.ParseKubernetesDestinations("""{"other":true}""").Count);
+    }
+
+    [TestMethod]
+    public void TryStart_Kubernetes_InClusterIpv6Host_IsBracketedInLog()
+    {
+        var previousHost = Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_HOST");
+        var previousPort = Environment.GetEnvironmentVariable("KUBERNETES_SERVICE_PORT");
+        var saDir = Directory.CreateTempSubdirectory("twp-k8s-sa-").FullName;
+        try
+        {
+            Environment.SetEnvironmentVariable("KUBERNETES_SERVICE_HOST", "2001:db8::64");
+            Environment.SetEnvironmentVariable("KUBERNETES_SERVICE_PORT", "6443");
+            File.WriteAllText(Path.Combine(saDir, "namespace"), "team-a");
+
+            var logger = new RecordingLogger();
+            var context = new PlusActivationContext
+            {
+                ProxyServer = new object(),
+                Logger = logger,
+                ClusterManager = new ClusterManager(),
+            };
+            using var discovery = ServiceDiscovery.TryStart(context, new Dictionary<string, string>
+            {
+                ["discovery.mode"] = "k8s",
+                ["discovery.k8sService"] = "web",
+                ["discovery.k8sServiceAccountDir"] = saDir,
+            });
+            Assert.IsNotNull(discovery);
+            StringAssert.Contains(logger.Text, "https://[2001:db8::64]:6443/");
+            StringAssert.Contains(logger.Text, "/namespaces/team-a/endpointslices");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("KUBERNETES_SERVICE_HOST", previousHost);
+            Environment.SetEnvironmentVariable("KUBERNETES_SERVICE_PORT", previousPort);
+            try { Directory.Delete(saDir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    [Timeout(20_000)]
+    public async Task FileMode_SameLengthContentSwap_WithRestoredMtime_Reapplies()
+    {
+        // Bug class: same-length JSON swap (dA→dB) with a shared mtime bucket never re-applies.
+        var path = Path.Combine(Path.GetTempPath(), "twp-discovery-hash-" + Guid.NewGuid().ToString("N") + ".json");
+        const string first = """{"clusters":[{"id":"from-file","destinations":[{"id":"a","address":"10.0.0.1","port":8080}]}]}""";
+        const string second = """{"clusters":[{"id":"from-file","destinations":[{"id":"b","address":"10.0.0.2","port":8080}]}]}""";
+        Assert.AreEqual(first.Length, second.Length);
+        await File.WriteAllTextAsync(path, first);
+
+        try
+        {
+            var manager = new ClusterManager();
+            var context = new PlusActivationContext
+            {
+                ProxyServer = new object(),
+                ClusterManager = manager,
+            };
+            using var discovery = ServiceDiscovery.TryStart(context, new Dictionary<string, string>
+            {
+                ["discovery.mode"] = "file",
+                ["discovery.file"] = path,
+            });
+            Assert.IsNotNull(discovery);
+            await WaitUntilAsync(() => manager.Snapshot.Clusters.ContainsKey("from-file") &&
+                                       manager.Snapshot.Clusters["from-file"].Destinations[0].Id == "a");
+
+            var stamp = File.GetLastWriteTimeUtc(path);
+            await File.WriteAllTextAsync(path, second);
+            File.SetLastWriteTimeUtc(path, stamp);
+
+            await WaitUntilAsync(() => manager.Snapshot.Clusters.ContainsKey("from-file") &&
+                                       manager.Snapshot.Clusters["from-file"].Destinations[0].Id == "b");
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void TryStart_ConsulWithoutUrl_OrNonHttpUrl_LogsAndReturnsInstance()
     {
         var logger = new RecordingLogger();

@@ -227,6 +227,22 @@ public class OidcGuardTests
     }
 
     [TestMethod]
+    public void Callbacks_RejectNewClients_WhenRateTableIsFullOfLiveWindows()
+    {
+        // Bug class: after MaxEntries live windows, a new client bypasses the rate table.
+        var clock = new OidcClock();
+        var guards = new OidcGuards(clock);
+        for (var i = 0; i < 10_000; i++)
+        {
+            Assert.IsTrue(guards.TryAdmitCallback("flood-" + i, 5));
+        }
+
+        Assert.IsFalse(guards.TryAdmitCallback("overflow-client", 5));
+        clock.Advance(TimeSpan.FromSeconds(61));
+        Assert.IsTrue(guards.TryAdmitCallback("overflow-client", 5), "stale windows must be purged");
+    }
+
+    [TestMethod]
     public async Task Refresher_RunsOneCallForConcurrentCallers_AndReusesASuccessBriefly()
     {
         var clock = new OidcClock();

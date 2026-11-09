@@ -53,13 +53,31 @@ public class WafBodyPolicyMultipartBehaviorTests
     {
         Assert.IsFalse(WafPatternLinter.HasNestedUnboundedRepeat(@"[+(]+"));
         Assert.IsFalse(WafPatternLinter.HasNestedUnboundedRepeat(@"\(a+\)+"));
+        Assert.IsFalse(WafPatternLinter.HasNestedUnboundedRepeat(@"[(a+)]+"));
+        Assert.IsTrue(WafPatternLinter.HasNestedUnboundedRepeat(@"(?:a+)+"));
         Assert.IsTrue(WafPatternLinter.HasNestedUnboundedRepeat("(a+)+"));
         Assert.IsTrue(WafPatternLinter.HasNestedUnboundedRepeat("(x*y)*"));
         Assert.IsTrue(WafPatternLinter.HasNestedUnboundedRepeat("(a+){1,}"));
         Assert.IsFalse(WafPatternLinter.HasNestedUnboundedRepeat("(a+){1,3}"));
+        Assert.IsFalse(WafPatternLinter.HasNestedUnboundedRepeat("(a+){"));
 
         var regex = WafPatternLinter.Compile(@"\bunion\b", ignoreCase: true);
         Assert.IsTrue(WafPatternLinter.IsNonBacktracking(regex));
         WafPatternLinter.WarmUp(regex);
+    }
+
+    [TestMethod]
+    public void IsTextPart_SkipsFalseNameEquals_AndUnclosedQuotes()
+    {
+        // Bug class: "name=" inside another token is treated as the disposition name.
+        Assert.IsTrue(WafBodyPolicy.IsTextPart(
+            "Content-Disposition: form-data; xname=noise; name=\"real\"\r\n".AsSpan(),
+            out var real));
+        Assert.AreEqual("real", real.ToString());
+
+        Assert.IsTrue(WafBodyPolicy.IsTextPart(
+            "Content-Disposition: form-data; name=\"unclosed\r\n".AsSpan(),
+            out var unclosed));
+        Assert.IsTrue(unclosed.IsEmpty);
     }
 }

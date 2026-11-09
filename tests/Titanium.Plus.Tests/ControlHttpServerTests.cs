@@ -224,6 +224,16 @@ public class ControlHttpServerTests
         Assert.AreEqual(IPAddress.IPv6Loopback, ControlHttpServer.ResolveBindAddress("::1"));
     }
 
+    [TestMethod]
+    public void ResolveBindAddress_Hostname_PrefersIPv4WhenPresent()
+    {
+        // Bug class: non-literal hosts throw instead of resolving, or IPv6 wins when IPv4 is available.
+        var address = ControlHttpServer.ResolveBindAddress(Dns.GetHostName());
+        Assert.IsNotNull(address);
+        Assert.AreNotEqual(IPAddress.None, address);
+        Assert.AreNotEqual(IPAddress.IPv6None, address);
+    }
+
     // ---------------------------------------------------------------- graceful stop
 
     [TestMethod]
