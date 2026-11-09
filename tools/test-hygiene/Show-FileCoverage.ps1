@@ -1,4 +1,4 @@
-# Print line coverage for one or more product source files from a VS coverage XML.
+﻿# Print line coverage for one or more product source files from a VS coverage XML.
 # Used locally while writing behavior tests: uncovered spans tell you which branches to hit next.
 param(
     [string]$CoverageXml = 'coverage/coverage.xml',
@@ -38,10 +38,11 @@ foreach ($range in @($doc.SelectNodes('//range'))) {
 function Merge-Spans([System.Collections.Generic.List[int]]$lines) {
     $spans = New-Object System.Collections.Generic.List[string]
     if ($lines.Count -eq 0) { return ,$spans.ToArray() }
-    $sorted = $lines | Sort-Object -Unique
+    # Force an object[] so a single Unique result is not an unwrapped [int] under StrictMode.
+    $sorted = @($lines | Sort-Object -Unique)
     $start = [int]$sorted[0]
     $prev = $start
-    for ($i = 1; $i -lt $sorted.Count; $i++) {
+    for ($i = 1; $i -lt $sorted.Length; $i++) {
         $n = [int]$sorted[$i]
         if ($n -eq $prev + 1) {
             $prev = $n
@@ -108,9 +109,16 @@ foreach ($entry in $sourcesById.GetEnumerator()) {
         continue
     }
 
-    if (-not $rangesBySourceId.ContainsKey($entry.Key)) { continue }
-    $fileRanges = @($rangesBySourceId[$entry.Key])
-    if ($fileRanges.Count -eq 0) { continue }
+    $sid = [string]$entry.Key
+    if (-not $rangesBySourceId.ContainsKey($sid)) { continue }
+    $rangeList = $rangesBySourceId[$sid]
+    if ($null -eq $rangeList -or $rangeList.Count -eq 0) { continue }
+    # Materialize as object[] without @() — StrictMode can throw "Argument types do not match"
+    # when wrapping a generic List[object] that still holds XmlElement instances.
+    $fileRanges = New-Object object[] $rangeList.Count
+    for ($ri = 0; $ri -lt $rangeList.Count; $ri++) {
+        $fileRanges[$ri] = $rangeList[$ri]
+    }
     $stats.Add((Get-FileStats $path $fileRanges))
 }
 
