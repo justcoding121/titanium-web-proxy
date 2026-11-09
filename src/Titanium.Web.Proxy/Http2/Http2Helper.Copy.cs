@@ -1086,6 +1086,18 @@ namespace Titanium.Web.Proxy.Http2
                             }
                         }
 
+                        // RFC 9113 §6.2: PRIORITY consumes 5 octets before the header block; a short
+                        // payload is a connection FRAME_SIZE_ERROR (do not IndexOutOfRange / Overflow).
+                        if (priority && offset + 5 + padLength > length)
+                        {
+                            ReportException(logger, new ProxyHttpException(
+                                "HTTP/2 protocol error: HEADERS PRIORITY flag set but payload is too short.",
+                                null, null));
+                            await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                                connectionState.LastClientStreamId, Http2ErrorCode.FrameSizeError, input));
+                            return;
+                        }
+
                         if (priority)
                             offset += 5;
 
@@ -1164,6 +1176,18 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     rr = isClient ? (RequestResponseBase)args.HttpClient.Request : args.HttpClient.Response;
+                    // RFC 9113 §6.2: PRIORITY consumes 5 octets before the header block; a short
+                    // payload is a connection FRAME_SIZE_ERROR (do not OverflowException on new byte[n]).
+                    if (priority && offset + 5 + padLength > length)
+                    {
+                        ReportException(logger, new ProxyHttpException(
+                            "HTTP/2 protocol error: HEADERS PRIORITY flag set but payload is too short.",
+                            null, args));
+                        await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
+                            connectionState.LastClientStreamId, Http2ErrorCode.FrameSizeError, input));
+                        return;
+                    }
+
                     if (priority)
                     {
                         var priorityData = ((long)buffer[offset++] << 32) + ((long)buffer[offset++] << 24) +
