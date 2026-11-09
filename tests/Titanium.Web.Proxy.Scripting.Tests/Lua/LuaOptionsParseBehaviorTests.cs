@@ -59,6 +59,22 @@ public class LuaOptionsParseBehaviorTests
             }, out _, out var dicts));
             Assert.IsFalse(string.IsNullOrWhiteSpace(dicts));
 
+            Assert.IsFalse(LuaOptions.TryParse(new PluginConfig
+            {
+                Name = "x",
+                File = path,
+                Limits = new PluginLimitsConfig { MemoryMb = 0 },
+            }, out _, out var mem));
+            StringAssert.Contains(mem!, "limits.memoryMb");
+
+            Assert.IsFalse(LuaOptions.TryParse(new PluginConfig
+            {
+                Name = "x",
+                File = path,
+                Limits = new PluginLimitsConfig { PoolSize = 0 },
+            }, out _, out var pool));
+            StringAssert.Contains(pool!, "limits.poolSize");
+
             Assert.IsTrue(LuaOptions.TryParse(new PluginConfig { Name = "ok", File = path }, out var options, out var okError));
             Assert.IsNull(okError);
             Assert.AreEqual("ok", options!.Name);

@@ -38,6 +38,18 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void ReadCountryCode_ShortIsoCode_FallsThroughToRegisteredCountry()
+    {
+        // Bug class: iso_code of wrong length is treated as a hit and blocks registered_country.
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = "x" },
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = "fi" },
+        };
+        Assert.AreEqual("FI", MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
     public async Task TryGetCountry_AfterDispose_ReturnsFalse()
     {
         var path = await CopyOfficialDatabaseAsync();

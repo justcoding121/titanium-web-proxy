@@ -161,6 +161,17 @@ public class LuaCodecTests
     }
 
     [TestMethod]
+    public void Writer_Raw_EmptyEncodesNil_AndNonEmptyRoundTrips()
+    {
+        var empty = Encode(w => w.Raw(ReadOnlySpan<byte>.Empty));
+        Assert.IsNull(Decode(empty));
+
+        var inner = Encode(w => w.String("hi"));
+        var wrapped = Encode(w => w.Raw(inner));
+        CollectionAssert.AreEqual("hi"u8.ToArray(), (byte[]?)Decode(wrapped));
+    }
+
+    [TestMethod]
     public void Reader_NestedTablesPastDepthLimit_ThrowsFormatException()
     {
         // Bug class: deep nested tables hang or throw a non-FormatException.

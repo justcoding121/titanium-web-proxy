@@ -94,6 +94,54 @@ public class XdsTranslatorEdgeBehaviorTests
     }
 
     [TestMethod]
+    public void RouteTranslator_MissingPathSpecifier_NacksUnsupportedPath()
+    {
+        var configuration = new RouteConfiguration
+        {
+            Name = "r-nopath",
+            VirtualHosts =
+            {
+                new VirtualHost
+                {
+                    Name = "vh",
+                    Domains = { "*" },
+                    Routes =
+                    {
+                        new XdsRoute
+                        {
+                            Match = new RouteMatch(),
+                            RouteAction = new RouteAction { Cluster = "c1" },
+                        },
+                    },
+                },
+            },
+        };
+
+        var result = RouteTranslator.Translate(configuration);
+        Assert.IsFalse(result.IsSuccess);
+        StringAssert.Contains(result.Error!.Message, "unsupported path match");
+        StringAssert.Contains(result.Error.FieldPath, "match");
+    }
+
+    [TestMethod]
+    public void EndpointTranslator_EmptyEndpoints_ReturnsZeroDestinations()
+    {
+        var result = EndpointTranslator.Translate(new Envoy.Config.Endpoint.V3.ClusterLoadAssignment
+        {
+            ClusterName = "c1",
+        });
+        Assert.IsTrue(result.IsSuccess, result.Error?.Message);
+        Assert.AreEqual(0, result.Value!.Count);
+
+        var blank = EndpointTranslator.Translate(new Envoy.Config.Endpoint.V3.ClusterLoadAssignment
+        {
+            ClusterName = "  ",
+        });
+        Assert.IsFalse(blank.IsSuccess);
+        Assert.AreEqual("cluster_name", blank.Error!.FieldPath);
+    }
+
+    [TestMethod]
     public void RouteTranslator_EmptyDomains_LeavesHostNull()
     {
         var configuration = new RouteConfiguration
