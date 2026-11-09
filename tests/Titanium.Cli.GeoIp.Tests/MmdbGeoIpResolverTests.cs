@@ -214,6 +214,18 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void ReadCountryCode_NullIsoCodeValue_FallsThroughToRegisteredCountry()
+    {
+        // Bug class: iso_code present but null is treated as a hit and blocks registered_country.
+        var data = new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = null! },
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = "se" },
+        };
+        Assert.AreEqual("SE", MmdbGeoIpResolver.ReadCountryCodeForTests(data));
+    }
+
+    [TestMethod]
     public async Task Database_HeldOpenByWriter_StillResolves()
     {
         var path = await CopyOfficialDatabaseAsync();

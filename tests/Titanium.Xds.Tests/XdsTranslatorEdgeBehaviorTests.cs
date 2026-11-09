@@ -73,6 +73,15 @@ public class XdsTranslatorEdgeBehaviorTests
     }
 
     [TestMethod]
+    public void ListenerTranslator_MissingSocketAddress_Nacks()
+    {
+        var result = ListenerTranslator.Translate(new Envoy.Config.Listener.V3.Listener { Name = "no-addr" });
+        Assert.IsFalse(result.IsSuccess);
+        Assert.AreEqual("address.socket_address", result.Error!.FieldPath);
+        StringAssert.Contains(result.Error.Message, "listener address is required");
+    }
+
+    [TestMethod]
     public void ClusterTranslator_ZeroConnectTimeout_StillBuildsHttpClient()
     {
         // Bug class: ConnectTimeout of 0 drops HttpClient and origins hang forever.
