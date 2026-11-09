@@ -1,9 +1,9 @@
 {
-  "note": "Line-coverage percent per assembly after Sonar-aligned exclusions in tests/coverage-exclusions.txt. A pull request fails when a measured assembly drops more than 0.1 below its floor unless this file changes in the same pull request.",
+  "note": "Line-coverage percent per assembly after Sonar-aligned exclusions in tests/coverage-exclusions.txt. Targets are 90 (Tier 1) and 85 (Cli, Inspector); floors are raised only after Sonar confirms each assembly and never above the confirmed value. A pull request fails when a measured assembly drops more than 0.1 below its floor unless this file changes in the same pull request.",
   "dropAllowance": 0.1,
   "assemblies": {
     "Titanium.Web.Proxy": 80,
-    "Titanium.Web.Proxy.Configuration": 80,
+    "Titanium.Web.Proxy.Configuration": 90,
     "Titanium.Cli": 80,
     "Titanium.Plus": 80,
     "Titanium.Gateway": 80,
