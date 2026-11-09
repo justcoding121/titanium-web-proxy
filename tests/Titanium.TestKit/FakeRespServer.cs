@@ -157,13 +157,43 @@ public sealed class FakeRespServer : IAsyncDisposable
                 return Encoding.UTF8.GetBytes("*2\r\n$6\r\nserver\r\n$5\r\nredis\r\n");
             case "CLIENT":
             case "SELECT":
-            case "CONFIG":
-            case "INFO":
-            case "COMMAND":
-            case "READONLY":
-            case "CLUSTER":
             case "AUTH":
+            case "READONLY":
+            case "COMMAND":
                 return Simple("OK");
+            case "CONFIG":
+                // CONFIG GET * → empty array; CONFIG SET → OK
+                if (argv.Count > 1 && argv[1].Equals("GET", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Encoding.UTF8.GetBytes("*0\r\n");
+                }
+
+                return Simple("OK");
+            case "INFO":
+                // SE.Redis probes redis_version / redis_mode / role during handshake.
+                return Bulk(
+                    "redis_version:7.2.0\r\n" +
+                    "redis_mode:standalone\r\n" +
+                    "role:master\r\n" +
+                    "connected_clients:1\r\n" +
+                    "run_id:0123456789abcdef0123456789abcdef01234567\r\n");
+            case "CLUSTER":
+                return Error("ERR This instance has cluster support disabled");
+            case "SENTINEL":
+                return Error("ERR unknown command 'SENTINEL'");
+            case "SUBSCRIBE":
+            case "PSUBSCRIBE":
+            case "UNSUBSCRIBE":
+            case "PUNSUBSCRIBE":
+            {
+                // Pub/sub confirmation: [kind, channel, count]
+                var channel = argv.Count > 1 ? argv[1] : string.Empty;
+                return Encoding.UTF8.GetBytes(
+                    $"*3\r\n${name.Length}\r\n{name}\r\n${channel.Length}\r\n{channel}\r\n:1\r\n");
+            }
+            case "GET":
+            case "HGET":
+                return Encoding.UTF8.GetBytes("$-1\r\n");
             case "SCRIPT":
                 if (argv.Count > 1 && argv[1].Equals("LOAD", StringComparison.OrdinalIgnoreCase))
                 {
@@ -193,6 +223,8 @@ public sealed class FakeRespServer : IAsyncDisposable
                 return Simple("OK");
         }
     }
+
+    private static byte[] Error(string message) => Encoding.UTF8.GetBytes($"-{message}\r\n");
 
     private static byte[] Simple(string s) => Encoding.UTF8.GetBytes($"+{s}\r\n");
     private static byte[] Integer(long n) => Encoding.UTF8.GetBytes($":{n}\r\n");
