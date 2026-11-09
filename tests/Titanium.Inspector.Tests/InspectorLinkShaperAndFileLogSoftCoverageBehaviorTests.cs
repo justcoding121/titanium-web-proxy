@@ -129,11 +129,9 @@ public class InspectorLinkShaperAndFileLogSoftCoverageBehaviorTests
 
     private sealed class ManualTimeProvider : TimeProvider
     {
-        private long _timestamp;
-
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
 
-        public override long GetTimestamp() => _timestamp;
+        public override long GetTimestamp() => 0;
     }
 
 }
