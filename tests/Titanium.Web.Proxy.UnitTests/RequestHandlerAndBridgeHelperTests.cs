@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Middleware;
+using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
@@ -273,6 +274,58 @@ public class RequestHandlerAndBridgeHelperTests
             .Invoke(proxy, [session])!;
     }
 
+    [TestMethod]
+    public async Task OnBeforeRequest_WithTranscoder_RewritesThenRunsBeforeRequest()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var transcoder = new RecordingTranscoder();
+        proxy.ReverseProxy = new ReverseProxyOptions { GrpcJsonTranscoder = transcoder };
+
+        var beforeRequest = false;
+        proxy.BeforeRequest += (_, _) =>
+        {
+            beforeRequest = true;
+            return Task.CompletedTask;
+        };
+
+        using var session = MakeSession(proxy);
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeRequest", PrivateInstance)!
+            .Invoke(proxy, [session])!;
+
+        Assert.AreEqual(1, transcoder.Calls);
+        Assert.IsTrue(beforeRequest, "Transcoder path must still invoke BeforeRequest.");
+    }
+
+    [TestMethod]
+    public async Task OnBeforeRequest_WithTranscoderAndMiddleware_RunsBoth()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var transcoder = new RecordingTranscoder();
+        var middleware = new RecordingMiddleware();
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            GrpcJsonTranscoder = transcoder,
+            Middleware = [middleware],
+        };
+
+        using var session = MakeSession(proxy);
+        await (Task)typeof(ProxyServer).GetMethod("OnBeforeRequest", PrivateInstance)!
+            .Invoke(proxy, [session])!;
+
+        Assert.AreEqual(1, transcoder.Calls);
+        Assert.AreEqual(1, middleware.Calls);
+    }
+
+    [TestMethod]
+    public async Task OnBeforeRequestBodyWrite_WithoutHandler_IsNoOp()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        using var session = MakeSession(proxy);
+        var args = new BeforeBodyWriteEventArgs(session, Encoding.ASCII.GetBytes("x"), false, true);
+        await proxy.OnBeforeRequestBodyWrite(args);
+        CollectionAssert.AreEqual(Encoding.ASCII.GetBytes("x"), args.BodyBytes);
+    }
+
     private sealed class RecordingMiddleware : IProxyMiddleware
     {
         public int Calls { get; private set; }
@@ -285,5 +338,19 @@ public class RequestHandlerAndBridgeHelperTests
             Calls++;
             return next(context, cancellationToken);
         }
+    }
+
+    private sealed class RecordingTranscoder : IGrpcJsonTranscoder
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<bool> TryRewriteRequestAsync(object session, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return ValueTask.FromResult(false);
+        }
+
+        public ValueTask<bool> TryRewriteResponseAsync(object session, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
     }
 }
