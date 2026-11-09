@@ -1450,12 +1450,18 @@ internal static partial class Http3RequestStream
         // Match H1 WriteResponseAsync / H2 EmitBuffered: recompress when Body is plain and
         // Content-Encoding is set (SetResponseBody after GetResponseBody). Wire-eager buffers
         // set BodyIsWireEncoded and must not be recompressed.
+        // 204/304/HEAD may set IsBodyRead with no BodyInternal — never call Body (throws
+        // BodyNotFoundException) when BodyAvailable is false.
         byte[]? body;
-        if (response.BodyAvailable || response.IsBodyRead)
+        if (response.BodyAvailable)
         {
             body = !response.BodyIsWireEncoded && response.ContentEncoding != null
                 ? response.CompressBodyAndUpdateContentLength()
                 : response.Body;
+        }
+        else if (response.IsBodyRead)
+        {
+            body = Array.Empty<byte>();
         }
         else
         {
