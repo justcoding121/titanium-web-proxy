@@ -64,6 +64,30 @@ public class MmdbGeoIpResolverTests
     }
 
     [TestMethod]
+    public void ReadCountryCode_MissingIsoKey_AndNonStringIso_AreMisses()
+    {
+        Assert.IsNull(MmdbGeoIpResolver.ReadCountryCodeForTests(new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["names"] = "Finland" },
+            ["registered_country"] = new Dictionary<string, object> { ["iso_code"] = 12 },
+        }));
+        Assert.AreEqual("NO", MmdbGeoIpResolver.ReadCountryCodeForTests(new Dictionary<string, object>
+        {
+            ["country"] = new Dictionary<string, object> { ["iso_code"] = "no" },
+        }));
+    }
+
+    [TestMethod]
+    public async Task Resolver_ReadsIpv6FromOfficialTestDatabase()
+    {
+        var path = await EnsureTestDatabaseAsync();
+        using var resolver = new MmdbGeoIpResolver(path);
+        // GeoLite2-Country-Test.mmdb includes 2001:218::/32 (JP).
+        Assert.IsTrue(resolver.TryGetCountry(IPAddress.Parse("2001:218::1"), out var code));
+        Assert.AreEqual("JP", code);
+    }
+
+    [TestMethod]
     public async Task TryGetCountry_AfterDispose_ReturnsFalse()
     {
         var path = await CopyOfficialDatabaseAsync();
