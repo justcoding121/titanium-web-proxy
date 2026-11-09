@@ -914,7 +914,9 @@ public sealed class CertificateManager : IDisposable
                     var createdCertificate = MakeCertificate(certificateName, false);
                     certificate = createdCertificate;
 
-                    //Don't need to wait for save to complete
+                    // Don't need to wait for save to complete. Do not tie this fire-and-forget
+                    // save to clearCertificatesTokenSource: StopClearIdleCertificates/Dispose
+                    // would cancel the token and drop persistence before the leaf hits disk.
                     _ = Task.Run(() =>
                     {
                         try
@@ -949,7 +951,7 @@ public sealed class CertificateManager : IDisposable
                         {
                             OnException(new Exception("Failed to save fake certificate.", e));
                         }
-                    }, clearCertificatesTokenSource.Token);
+                    });
                 }
             }
             else
