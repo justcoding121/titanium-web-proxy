@@ -165,7 +165,7 @@ public class StatusFeedbackAndMenuGatingTests
 
             vm.BindPort = 0;
             vm.StartCaptureCommand.Execute(null);
-            await WaitUntil(() => interception.IsRunning);
+            await WaitUntil(() => interception.IsRunning && vm.StatusText == "Ready", timeoutMs: 15000);
 
             Assert.AreEqual("Ready", vm.StatusText);
             Assert.AreEqual(StatusSeverity.Neutral, vm.StatusSeverity);
