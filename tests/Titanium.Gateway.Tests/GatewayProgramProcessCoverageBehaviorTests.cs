@@ -26,7 +26,7 @@ public class GatewayProgramProcessCoverageBehaviorTests
     [Timeout(60_000)]
     public async Task Process_MissingKubeConfig_ExitsOneWithoutBindingHealth()
     {
-        // Bug class: a missing kubeconfig must fail before HealthServer binds http://+:port/ (firewall).
+        // Bug class: a missing kubeconfig must fail before HealthServer binds a wildcard health prefix (firewall).
         var env = new Dictionary<string, string?>
         {
             ["KUBECONFIG"] = Path.Combine(Path.GetTempPath(), "twp-gw-missing-" + Guid.NewGuid().ToString("N")),

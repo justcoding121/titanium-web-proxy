@@ -118,7 +118,7 @@ public class GatewayRedirectMirrorAndRewriteCoverageBehaviorTests
         var port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
         probe.Stop();
 
-        // Covers the production overload that builds http://+:{port}/ via ProbePrefix.
+        // Covers the production overload that builds the wildcard ProbePrefix for a port.
         using var server = new HealthServer(port, () => true, NullLogger.Instance);
         Assert.IsNotNull(server);
     }
