@@ -155,12 +155,12 @@ public class Http2DispatchBridgeCoverageTests
 
     [TestMethod]
     [Timeout(30_000)]
-    public async Task DispatchBridge_CookieHeader_IsForwardedToOrigin()
+    public async Task DispatchBridge_MultipleCookieHeaders_Coalesced_LowercaseOnWire()
     {
-        // Bug class: Cookie is dropped on the H2→H2 dispatch path so the origin never sees session
-        // state. Multi-field Cookie coalescing (RFC 7540 §8.1.2.5) is exercised in HeaderCollection
-        // unit coverage; this integration test pins that a Cookie value survives the bridge.
-        var capturedCookie = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Bug class: HTTP/2 encodes multiple Cookie fields; after coalescing, the dispatch bridge
+        // used to AddHeader("Cookie", …) while HeaderNamesAreHttp2Normalized was already true, so
+        // the origin saw an uppercase field name (RFC 7540 §8.1.2) or no recognizable cookie.
+        var captured = new TaskCompletionSource<(string Name, string Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var originServer = new Helpers.Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
         originServer.HandleConnection(async connection =>
         {
@@ -168,11 +168,9 @@ public class Http2DispatchBridgeCoverageTests
             while (true)
             {
                 var (streamId, requestHeaders, _) = await connection.ReadRequestAsync();
-                var cookieValues = requestHeaders
-                    .Where(h => string.Equals(h.Name, "cookie", StringComparison.OrdinalIgnoreCase))
-                    .Select(h => h.Value)
-                    .ToArray();
-                capturedCookie.TrySetResult(string.Join("; ", cookieValues));
+                var cookie = requestHeaders.FirstOrDefault(h =>
+                    string.Equals(h.Name, "cookie", StringComparison.OrdinalIgnoreCase));
+                captured.TrySetResult((cookie.Name ?? string.Empty, cookie.Value ?? string.Empty));
                 var payload = System.Text.Encoding.UTF8.GetBytes("ok");
                 var respHeaders = connection.EncodeHeaders(
                     [(":status", "200"), ("content-length", payload.Length.ToString())],
@@ -188,16 +186,16 @@ public class Http2DispatchBridgeCoverageTests
             using var rawClient = await Helpers.Http2RawClient.ConnectDirectAsync(ep.Port, "localhost");
             var reqHeaders = rawClient.Connection.EncodeHeaders(
                 [(":method", "GET"), (":scheme", "https"), (":path", "/"), (":authority", "localhost")],
-                [("cookie", "a=1; b=2")]);
+                [("cookie", "a=1"), ("cookie", "b=2")]);
             await rawClient.Connection.WriteHeaderBlockAsync(1, reqHeaders, endStream: true);
 
             var (_, respHeaders, _) = await rawClient.Connection.ReadHeaderBlockAsync();
-            var status = respHeaders.FirstOrDefault(h => h.Name == ":status").Value;
-            Assert.AreEqual("200", status);
+            Assert.AreEqual("200", respHeaders.FirstOrDefault(h => h.Name == ":status").Value);
 
-            var seen = await capturedCookie.Task.WaitAsync(TimeSpan.FromSeconds(10));
-            Assert.IsTrue(seen.Contains("a=1"), $"Cookie '{seen}' missing a=1");
-            Assert.IsTrue(seen.Contains("b=2"), $"Cookie '{seen}' missing b=2");
+            var seen = await captured.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.AreEqual("cookie", seen.Name, "H2 field name must be lowercase on the wire");
+            Assert.IsTrue(seen.Value.Contains("a=1"), $"Cookie '{seen.Value}' missing a=1");
+            Assert.IsTrue(seen.Value.Contains("b=2"), $"Cookie '{seen.Value}' missing b=2");
         }
         finally { proxy.Stop(); proxy.Dispose(); }
     }
