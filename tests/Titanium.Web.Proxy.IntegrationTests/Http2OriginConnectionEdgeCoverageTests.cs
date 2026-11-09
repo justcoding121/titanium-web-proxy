@@ -250,6 +250,64 @@ public class Http2OriginConnectionEdgeCoverageTests
         Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
     }
 
+    /// <summary>
+    ///     Bug class: SETTINGS_ENABLE_CONNECT_PROTOCOL values other than 0/1 are accepted
+    ///     (RFC 8441 §3 requires 0 or 1).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1ToH2_OriginEnableConnectProtocolInvalidValue_Returns502()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            await conn.WriteFrameAsync(Http2FrameType.Settings, 0, (Http2FrameFlag)0,
+                SettingsEntry(Http2SettingsId.EnableConnectProtocol, 2));
+            try { while (true) await conn.ReadFrameAsync(); }
+            catch { /* torn down */ }
+        });
+
+        var (proxy, suite) = CreateH1ToH2BridgeProxy();
+        using var ownedSuite = suite;
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get, origin.Url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Bug class: a SETTINGS ACK with a non-empty payload is tolerated (RFC 9113 §6.5.3).
+    /// </summary>
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task H1ToH2_OriginSettingsAckWithPayload_Returns502()
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            // First frame is SETTINGS+ACK with a body — illegal.
+            await conn.WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack,
+                SettingsEntry(Http2SettingsId.MaxConcurrentStreams, 100));
+            try { while (true) await conn.ReadFrameAsync(); }
+            catch { /* torn down */ }
+        });
+
+        var (proxy, suite) = CreateH1ToH2BridgeProxy();
+        using var ownedSuite = suite;
+        using var client = TestHelper.GetHttpClient(proxy.ProxyEndPoints[0].Port);
+        using var request = new HttpRequestMessage(HttpMethod.Get, origin.Url)
+        {
+            Version = HttpVersion.Version11,
+            VersionPolicy = HttpVersionPolicy.RequestVersionExact
+        };
+        var response = await client.SendAsync(request);
+        Assert.AreEqual(HttpStatusCode.BadGateway, response.StatusCode);
+    }
+
     // -------------------------------------------------------------------------
     // Http2OriginConnection — ENABLE_CONNECT_PROTOCOL downgrade 1→0
     // -------------------------------------------------------------------------
