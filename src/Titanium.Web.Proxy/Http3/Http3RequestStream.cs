@@ -290,6 +290,16 @@ internal static partial class Http3RequestStream
                     return;
                 }
 
+                if (!sessionArgs.IsFastPath && !string.IsNullOrEmpty(server.ViaHeaderPseudonym)
+                    && ProxyServer.HasLoopedVia(request.Headers, server.ViaHeaderPseudonym))
+                {
+                    sessionArgs.Http3BufferedBodyReader = null;
+                    sessionArgs.Http3RequestBodyPump = null;
+                    await SendSimpleStatusResponseAsync(stream, 508, qpackContext, cancellationToken);
+                    streamState.RequestClosed = true;
+                    return;
+                }
+
                 // 6. Fire BeforeRequest (stamp timing milestone just before).
                 request.Headers.ArmMitmRelayBaseline();
                 var capturedRequestMethod = request.Method;

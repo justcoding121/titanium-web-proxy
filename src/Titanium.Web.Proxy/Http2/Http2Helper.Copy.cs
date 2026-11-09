@@ -521,6 +521,8 @@ namespace Titanium.Web.Proxy.Http2
                             null, null));
                         await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                             Http2ErrorCode.ProtocolError, input));
+                        if (length > 0)
+                            await intake.DiscardAsync(length, cancellationToken);
                         return;
                     }
                 }
@@ -553,6 +555,8 @@ namespace Titanium.Web.Proxy.Http2
                         $"HTTP/2 protocol error: frame of type {type} received with stream id 0.", null, null));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9], connectionState.LastClientStreamId,
                         Http2ErrorCode.ProtocolError, input));
+                    if (length > 0)
+                        await intake.DiscardAsync(length, cancellationToken);
                     return;
                 }
 
@@ -565,6 +569,8 @@ namespace Titanium.Web.Proxy.Http2
                         null, null));
                     await lockedOwnLegWrite(() => SendGoAwayAsync(new Http2FrameHeader(), new byte[9],
                         connectionState.LastClientStreamId, Http2ErrorCode.ProtocolError, input));
+                    if (length > 0)
+                        await intake.DiscardAsync(length, cancellationToken);
                     return;
                 }
 
