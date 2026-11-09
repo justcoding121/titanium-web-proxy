@@ -61,4 +61,32 @@ public class ManagerUiYamlDraftEdgeTests
         Assert.ThrowsExactly<ArgumentException>(() =>
             ManagerUiYamlDraft.RemoveCluster(ManagerUiYamlDraft.EmptyDraft, " "));
     }
+
+    [TestMethod]
+    public void Summarize_ReadsSnakeCaseClusterId_AndRemoveRouteDropsIt()
+    {
+        var yaml = """
+            listeners:
+              - port: 8000
+                type: explicit
+            routes:
+              - id: api
+                match:
+                  path: /v1
+                cluster_id: backend
+            clusters:
+              - id: backend
+                destinations:
+                  - address: 10.0.0.1
+                    port: 80
+            """;
+        var summary = ManagerUiYamlDraft.Summarize(yaml);
+        Assert.AreEqual(1, summary.Routes.Count);
+        Assert.AreEqual("backend", summary.Routes[0].ClusterId);
+        Assert.AreEqual(1, summary.Clusters[0].DestinationCount);
+
+        var removed = ManagerUiYamlDraft.RemoveRoute(yaml, "api");
+        Assert.AreEqual(0, ManagerUiYamlDraft.Summarize(removed).Routes.Count);
+        Assert.AreEqual(1, ManagerUiYamlDraft.Summarize(removed).Clusters.Count);
+    }
 }
