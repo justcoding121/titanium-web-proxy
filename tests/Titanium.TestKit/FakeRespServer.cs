@@ -46,7 +46,6 @@ public sealed class FakeRespServer : IAsyncDisposable
     }
 
     private readonly List<string> _commands = [];
-
     public FakeRespServer(IPAddress? address = null)
     {
         _listener = new TcpListener(address ?? IPAddress.Loopback, 0);
