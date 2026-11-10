@@ -917,6 +917,7 @@ public sealed class CertificateManager : IDisposable
                     // Don't need to wait for save to complete. Do not tie this fire-and-forget
                     // save to clearCertificatesTokenSource: StopClearIdleCertificates/Dispose
                     // would cancel the token and drop persistence before the leaf hits disk.
+                    // CancellationToken.None is intentional (not the clear-idle CTS).
                     _ = Task.Run(() =>
                     {
                         try
@@ -951,7 +952,7 @@ public sealed class CertificateManager : IDisposable
                         {
                             OnException(new Exception("Failed to save fake certificate.", e));
                         }
-                    });
+                    }, CancellationToken.None);
                 }
             }
             else
