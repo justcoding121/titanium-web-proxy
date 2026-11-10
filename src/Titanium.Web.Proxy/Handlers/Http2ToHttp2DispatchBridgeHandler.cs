@@ -262,7 +262,12 @@ public partial class ProxyServer
             {
                 var combinedCookie = string.Join("; ", cookieLines.Select(h => h.Value));
                 sessionArgs.HttpClient.Request.Headers.RemoveHeader("Cookie");
-                sessionArgs.HttpClient.Request.Headers.AddHeader("Cookie", combinedCookie);
+                // RFC 7540 §8.1.2: H2 header field names must be lowercase on the wire.
+                // PrepareRequestForOrigin already set HeaderNamesAreHttp2Normalized=true, so
+                // EncodeHeaderBlock trusts the flag and skips per-header lowercasing. Adding
+                // "Cookie" (mixed-case) after that point would reach the origin with an uppercase
+                // name and violate the RFC. Use the canonical lowercase form to close this gap.
+                sessionArgs.HttpClient.Request.Headers.AddHeader("cookie", combinedCookie);
             }
 
             if (requestBodyChannel is not null

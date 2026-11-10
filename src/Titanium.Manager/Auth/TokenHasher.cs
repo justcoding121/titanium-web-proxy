@@ -11,12 +11,27 @@ internal static class TokenHasher
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     }
 
-    public static bool Matches(string token, string hash) =>
-        !string.IsNullOrEmpty(token) &&
-        !string.IsNullOrEmpty(hash) &&
-        CryptographicOperations.FixedTimeEquals(
-            SHA256.HashData(Encoding.UTF8.GetBytes(token)),
-            Convert.FromHexString(hash));
+    public static bool Matches(string token, string hash)
+    {
+        if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(hash))
+        {
+            return false;
+        }
+
+        byte[] expected;
+        try
+        {
+            expected = Convert.FromHexString(hash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        var actual = SHA256.HashData(Encoding.UTF8.GetBytes(token));
+        return expected.Length == actual.Length &&
+               CryptographicOperations.FixedTimeEquals(actual, expected);
+    }
 
     public static string NewToken() =>
         Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))

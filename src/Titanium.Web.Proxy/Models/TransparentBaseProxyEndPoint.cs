@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Security;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Titanium.Web.Proxy.EventArguments;
@@ -44,6 +45,32 @@ public abstract class TransparentBaseProxyEndPoint : ProxyEndPoint
 
     /// <summary>Max concurrent inbound TLS handshakes for <see cref="TerminateTls"/> listeners.</summary>
     public int MaxConcurrentTlsHandshakes { get; set; } = 256;
+
+    private SemaphoreSlim? tlsHandshakeGate;
+
+    /// <summary>
+    ///     Per-endpoint handshake gate so a restarted listener on the same port cannot inherit a
+    ///     stale limit from a previous endpoint instance.
+    /// </summary>
+    internal SemaphoreSlim GetOrCreateTlsHandshakeGate()
+    {
+        var existing = Volatile.Read(ref tlsHandshakeGate);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var limit = MaxConcurrentTlsHandshakes > 0 ? MaxConcurrentTlsHandshakes : 256;
+        var created = new SemaphoreSlim(limit, limit);
+        var winner = Interlocked.CompareExchange(ref tlsHandshakeGate, created, null);
+        if (winner is not null)
+        {
+            created.Dispose();
+            return winner;
+        }
+
+        return created;
+    }
 
     /// <summary>Inbound TLS handshake timeout for <see cref="TerminateTls"/> listeners.</summary>
     public TimeSpan TlsHandshakeTimeout { get; set; } = TimeSpan.FromSeconds(10);

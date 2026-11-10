@@ -292,7 +292,7 @@ public abstract class RequestResponseBase
     ///     Use the encoding specified to decode the byte[] data to string
     /// </summary>
     [Browsable(false)]
-    public string BodyString => bodyString ??= Encoding.GetString(Body);
+    public string BodyString => bodyString ??= Encoding.GetString(Body ?? Array.Empty<byte>());
 
     /// <summary>
     ///     Was the body read by user?

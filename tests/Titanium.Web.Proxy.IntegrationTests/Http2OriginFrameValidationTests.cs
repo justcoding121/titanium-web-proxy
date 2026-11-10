@@ -295,4 +295,236 @@ public class Http2OriginFrameValidationTests
         Assert.IsFalse(succeeded,
             "The proxy must treat GOAWAY on a non-zero stream as a connection-level error.");
     }
+
+    // -------------------------------------------------------------------------
+    // Bug class — RFC 7540 §6.7: origin PING; proxy must reply with ACK
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task Origin_Ping_WithoutAck_ProxySendsAckBack()
+    {
+        // Bug class: proxy ignores PING from origin instead of replying with ACK.
+        // RFC 7540 §6.7: a PING without ACK must be answered with PING+ACK echoing the payload.
+        var pingPayload = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        byte[]? receivedPingAck = null;
+        var pingAckTcs = new TaskCompletionSource<bool>();
+
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            await Task.Delay(100);
+            await connection.WriteFrameAsync(Http2FrameType.Ping, 0, 0, pingPayload);
+
+            var stream = connection.GetStream();
+            using var readCts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var buf = new byte[17]; // 9-byte header + 8-byte payload
+            try
+            {
+                while (!readCts.IsCancellationRequested)
+                {
+                    var read = 0;
+                    while (read < buf.Length && !readCts.IsCancellationRequested)
+                    {
+                        var got = await stream.ReadAsync(buf.AsMemory(read, buf.Length - read), readCts.Token);
+                        if (got == 0) { pingAckTcs.TrySetCanceled(); return; }
+                        read += got;
+                    }
+
+                    if (buf[3] == 0x06 && (buf[4] & 0x01) != 0) // PING + ACK
+                    {
+                        receivedPingAck = buf[9..17];
+                        pingAckTcs.TrySetResult(true);
+                        return;
+                    }
+
+                    // Not PING ACK: consume remaining payload and continue.
+                    var frameLen = (buf[0] << 16) | (buf[1] << 8) | buf[2];
+                    if (frameLen > 0)
+                    {
+                        var extra = new byte[frameLen];
+                        var extraRead = 0;
+                        while (extraRead < frameLen && !readCts.IsCancellationRequested)
+                        {
+                            var got = await stream.ReadAsync(extra.AsMemory(extraRead), readCts.Token);
+                            if (got == 0) break;
+                            extraRead += got;
+                        }
+                    }
+                    buf = new byte[17];
+                }
+            }
+            catch (OperationCanceledException) { }
+            pingAckTcs.TrySetCanceled();
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        _ = TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+
+        var done = await Task.WhenAny(pingAckTcs.Task, Task.Delay(10_000));
+        Assert.AreEqual(pingAckTcs.Task, done, "Proxy must send PING ACK to origin within 10 s.");
+        if (receivedPingAck != null)
+            CollectionAssert.AreEqual(pingPayload, receivedPingAck,
+                "PING ACK must echo the 8-byte PING payload.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug class — origin SETTINGS ACK with non-zero payload is FRAME_SIZE_ERROR
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task Origin_SettingsAck_WithNonZeroPayload_Tears_Down_Connection()
+    {
+        // Bug class: proxy silently ignores SETTINGS ACK with non-empty payload.
+        // RFC 7540 §6.5: a SETTINGS ACK frame MUST NOT contain a payload.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            await Task.Delay(100);
+            var header = new byte[9];
+            header[0] = 0x00; header[1] = 0x00; header[2] = 0x06; // length=6
+            header[3] = 0x04; // SETTINGS
+            header[4] = 0x01; // ACK flag
+            var payload = new byte[6];
+            var stream = connection.GetStream();
+            await stream.WriteAsync(header);
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel();
+
+        Assert.IsFalse(succeeded,
+            "The proxy must reject a SETTINGS ACK with non-empty payload as a connection error.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug class — origin GOAWAY with payload < 8 bytes is tolerated gracefully
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task Origin_GoAway_WithShortPayload_DoesNotCrashProxy()
+    {
+        // Bug class: proxy crashes on a GOAWAY with fewer than 8 bytes payload.
+        // RFC 7540 §6.8: if the payload is shorter than 8 bytes, just advance.
+        var serverSentGoAwayTcs = new TaskCompletionSource<bool>();
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            await Task.Delay(100);
+            var header = new byte[9];
+            header[0] = 0x00; header[1] = 0x00; header[2] = 0x04; // length=4 (<8)
+            header[3] = 0x07; // GOAWAY
+            var payload = new byte[4];
+            var stream = connection.GetStream();
+            await stream.WriteAsync(header);
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+            serverSentGoAwayTcs.TrySetResult(true);
+            await Task.Delay(2000);
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        _ = TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        await serverSentGoAwayTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(true, "Proxy must not crash on a short GOAWAY payload.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug class — origin WINDOW_UPDATE with length != 4 is PROTOCOL_ERROR
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task Origin_WindowUpdate_WithWrongLength_Tears_Down_Connection()
+    {
+        // Bug class: proxy ignores WINDOW_UPDATE with wrong length, desyncing flow control.
+        // RFC 7540 §6.9: WINDOW_UPDATE with length != 4 is FRAME_SIZE_ERROR.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            await Task.Delay(100);
+            var header = new byte[9];
+            header[0] = 0x00; header[1] = 0x00; header[2] = 0x02; // length=2 (must be 4)
+            header[3] = 0x08; // WINDOW_UPDATE
+            var payload = new byte[2];
+            var stream = connection.GetStream();
+            await stream.WriteAsync(header);
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+            try { await Task.Delay(Timeout.Infinite, cts.Token); } catch { }
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+        cts.Cancel();
+
+        Assert.IsFalse(succeeded,
+            "The proxy must reject a WINDOW_UPDATE with wrong length as a connection-level error.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Bug class — unknown/reserved frame type from origin is silently ignored
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    [Timeout(15_000)]
+    public async Task Origin_UnknownFrameType_IsIgnoredAndConnectionContinues()
+    {
+        // Bug class: proxy throws on unknown frame type instead of skipping it.
+        // RFC 7540 §5.5: unknown/unsupported frame types MUST be ignored.
+        using var rawServer = new Http2RawOriginServer(CreateOriginCertificate());
+        rawServer.HandleConnection(async connection =>
+        {
+            await connection.SendInitialSettingsAsync();
+            var (streamId, _, _) = await connection.ReadRequestAsync();
+
+            // Send an unknown frame (0xFE) before answering the request.
+            var header = new byte[9];
+            header[0] = 0x00; header[1] = 0x00; header[2] = 0x04;
+            header[3] = 0xFE; // unknown frame type
+            var payload = new byte[4];
+            var stream = connection.GetStream();
+            await stream.WriteAsync(header);
+            await stream.WriteAsync(payload);
+            await stream.FlushAsync();
+
+            // Answer the request normally.
+            var responseHeaders = connection.EncodeHeaders(
+                new[] { (":status", "200") }, Array.Empty<(string, string)>());
+            await connection.WriteHeaderBlockAsync(streamId, responseHeaders, true);
+        });
+
+        using var testSuite = new TestSuite(sharedServer);
+        var proxy = testSuite.GetProxy();
+        proxy.EnableHttp2 = true;
+
+        var succeeded = await TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
+
+        Assert.IsTrue(succeeded,
+            "Proxy must ignore unknown frame type from origin and deliver the response.");
+    }
 }

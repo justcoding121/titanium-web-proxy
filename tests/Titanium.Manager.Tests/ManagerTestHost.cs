@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Titanium.Manager.Api;
 using Titanium.Manager.Store;
+using Titanium.Manager.Ui;
 
 namespace Titanium.Manager.Tests;
 
@@ -26,6 +27,7 @@ internal sealed class ManagerTestHost : IAsyncDisposable
     public string AdminToken => _adminToken;
     public ManagerStore Store => _store;
     public ConfigWaitHub WaitHub => _server.WaitHub;
+    public ManagerSessionStore Sessions => _server.Sessions;
 
     public static async Task<ManagerTestHost> StartAsync()
     {

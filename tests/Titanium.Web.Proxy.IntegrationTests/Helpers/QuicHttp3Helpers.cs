@@ -559,6 +559,42 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Sends an arbitrary QPACK request field section (caller controls pseudo-header order and duplicates).
+    ///     Returns the response <c>:status</c> when present, or <c>null</c> when the stream is reset early.
+    /// </summary>
+    public async Task<int?> TrySendFieldSectionAsync(
+        IReadOnlyList<(string Name, string Value)> fields,
+        CancellationToken cancellationToken = default)
+    {
+        await using var stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional, cancellationToken);
+
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, QpackEncoder.Encode(fields), cancellationToken);
+        stream.CompleteWrites();
+
+        try
+        {
+            var headersFrame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 64 * 1024, cancellationToken);
+            if (headersFrame is null || headersFrame.Type != Http3FrameType.Headers)
+                return null;
+
+            var decoded = QpackDecoder.Decode(headersFrame.Payload.Span);
+            headersFrame.ReturnPayload();
+            foreach (var (name, value) in decoded)
+            {
+                if (name == ":status" && int.TryParse(value, out var code))
+                    return code;
+            }
+
+            return null;
+        }
+        catch (QuicException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     ///     Opens an RFC 9220 extended CONNECT stream and returns a handle for tunnel DATA relay.
     /// </summary>
     public async Task<H3Tunnel> OpenExtendedConnectAsync(

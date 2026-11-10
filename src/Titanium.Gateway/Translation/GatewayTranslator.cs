@@ -151,8 +151,9 @@ internal sealed partial class TranslationPass
         }
 
         // Listener certificates and Ingress tls entries share one list, and a Secret both name is one file.
+        // HTTPS decrypt and TLS terminate both need serving certificates in the data-plane mount.
         var bindings = new List<(TlsFile File, string Host)>();
-        foreach (var listener in programmable.Where(l => l.IsHttps))
+        foreach (var listener in programmable.Where(l => l.IsHttps || l.IsTlsTerminate))
         {
             foreach (var file in listener.Certificates)
             {

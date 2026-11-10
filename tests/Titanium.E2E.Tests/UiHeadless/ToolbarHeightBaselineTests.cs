@@ -1,3 +1,4 @@
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
@@ -48,8 +49,19 @@ public class ToolbarHeightBaselineTests
             Assert.AreEqual(ScrollBarVisibility.Auto, ScrollViewer.GetVerticalScrollBarVisibility(search));
 
             fx.Window.Width = 360;
-            Dispatcher.UIThread.RunJobs();
-            Assert.IsTrue(filters.Bounds.Y > search.Bounds.Y, "Filters border should wrap under the search box.");
+            // Narrow layout can take more than one RunJobs pass on slow CI agents.
+            var wrapped = false;
+            for (var i = 0; i < 40 && !wrapped; i++)
+            {
+                Dispatcher.UIThread.RunJobs();
+                wrapped = filters.Bounds.Y > search.Bounds.Y;
+                if (!wrapped)
+                {
+                    Thread.Sleep(25);
+                }
+            }
+
+            Assert.IsTrue(wrapped, "Filters border should wrap under the search box.");
             Assert.AreEqual(filters.Bounds.Height, search.Bounds.Height, 1.0);
             var gap = filters.Bounds.Y - search.Bounds.Bottom;
             Assert.IsTrue(gap >= 7, $"Wrap gap was {gap}.");

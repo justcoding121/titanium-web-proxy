@@ -174,6 +174,18 @@ public class Rfc9111VectorTests
     }
 
     [TestMethod]
+    public void NormalizeVaryValue_CollapsesWhitespace_AndLowercasesTokenHeaders()
+    {
+        // Bug class: Accept-Language casing or multi-space values split the secondary key.
+        Assert.AreEqual("", HttpCachePolicy.NormalizeVaryValue("accept-language", null));
+        Assert.AreEqual("", HttpCachePolicy.NormalizeVaryValue("accept-language", []));
+        Assert.AreEqual("en-us,fr", HttpCachePolicy.NormalizeVaryValue("accept-language", ["  EN-US  ", "\tFr\t"]));
+        Assert.AreEqual("a b", HttpCachePolicy.NormalizeVaryValue("accept-language", ["a \t  b"]));
+        Assert.AreEqual("Custom-Value", HttpCachePolicy.NormalizeVaryValue("x-custom", ["Custom-Value"]));
+        Assert.AreEqual("a,b", HttpCachePolicy.NormalizeVaryValue("accept", ["A", "B"]));
+    }
+
+    [TestMethod]
     public void BuildSecondaryKey_OversizedKeyPart_Bypasses()
     {
         Assert.IsNull(HttpCachePolicy.BuildSecondaryKey("x-" + new string('a', 500), null, null),

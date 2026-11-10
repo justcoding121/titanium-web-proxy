@@ -19,6 +19,18 @@ internal sealed class FakeAdsState
 
     public ConcurrentDictionary<string, Any[]> Initial { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Error details the client sent in NACK requests.</summary>
+    public ConcurrentQueue<string> Nacks { get; } = new();
+
+    /// <summary>When set, every ADS stream completes right after it opens (a control plane that hangs up at once).</summary>
+    public bool CloseStreamsImmediately { get; set; }
+
+    private int _streamCount;
+
+    public int StreamCount => Volatile.Read(ref _streamCount);
+
+    public void CountStream() => Interlocked.Increment(ref _streamCount);
+
     public void EnqueueFollowUp(string typeUrl, string version, string nonce, params Any[] resources)
     {
         var response = new DiscoveryResponse
@@ -125,10 +137,17 @@ internal sealed class FakeAdsService : AggregatedDiscoveryService.AggregatedDisc
         IServerStreamWriter<DiscoveryResponse> responseStream,
         ServerCallContext context)
     {
+        _state.CountStream();
+        if (_state.CloseStreamsImmediately)
+        {
+            return;
+        }
+
         await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
         {
             if (!string.IsNullOrEmpty(request.ErrorDetail))
             {
+                _state.Nacks.Enqueue(request.ErrorDetail);
                 continue;
             }
 

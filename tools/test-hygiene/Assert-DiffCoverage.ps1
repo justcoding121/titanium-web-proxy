@@ -1,9 +1,9 @@
-# Fail a pull request when changed lines in a measured file are under 80% covered.
+# Fail a pull request when changed lines in a measured file are under 90% covered.
 # A qa-waiver label skips the gate. A push that is not a pull request exits 0.
 param(
     [string]$CoverageXml = 'coverage/coverage.xml',
     [string]$BaseRef = '',
-    [double]$Minimum = 80
+    [double]$Minimum = 90
 )
 
 Set-StrictMode -Version 2.0

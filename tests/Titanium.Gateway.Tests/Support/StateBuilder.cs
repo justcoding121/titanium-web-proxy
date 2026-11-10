@@ -27,6 +27,10 @@ internal sealed class StateBuilder
 
     public List<GrpcRoute> GrpcRoutes { get; } = [];
 
+    public List<BackendTlsPolicy> BackendTlsPolicies { get; } = [];
+
+    public List<ConfigMapInfo> ConfigMaps { get; } = [];
+
     public List<ReferenceGrant> Grants { get; } = [];
 
     public List<NamespaceInfo> Namespaces { get; } = [];
@@ -45,6 +49,11 @@ internal sealed class StateBuilder
     {
         DataPlaneServiceNamespace = "titanium-system",
         DataPlaneServiceName = "titanium-data",
+    };
+
+    public static GatewayTranslatorOptions BackendTlsOptions { get; } = Options with
+    {
+        BackendTlsPolicyEnabled = true,
     };
 
     /// <summary>A class, one HTTP Gateway on port 80, and a Service with two ready endpoints.</summary>
@@ -217,6 +226,8 @@ internal sealed class StateBuilder
         TcpRoutes = TcpRoutes,
         UdpRoutes = UdpRoutes,
         GrpcRoutes = GrpcRoutes,
+        BackendTlsPolicies = BackendTlsPolicies,
+        ConfigMaps = ConfigMaps,
         ReferenceGrants = Grants,
         Namespaces = Namespaces,
         Services = Services,
@@ -224,6 +235,45 @@ internal sealed class StateBuilder
         Secrets = Secrets,
         IngressClasses = IngressClasses,
         Ingresses = Ingresses,
+    };
+
+    public static BackendTlsPolicy BackendTls(
+        string name,
+        string ns,
+        string targetService,
+        string? hostname,
+        string? wellKnownCa = null,
+        string[]? caConfigMaps = null,
+        string[]? subjectAltNames = null,
+        DateTimeOffset? created = null) => new()
+    {
+        Metadata = new ObjectMeta
+        {
+            Name = name,
+            Namespace = ns,
+            Generation = 1,
+            CreationTimestamp = created ?? T0,
+        },
+        Spec = new BackendTlsPolicySpec
+        {
+            TargetRefs =
+            [
+                new BackendTlsTargetRef
+                {
+                    Kind = GatewayApiNames.ServiceKind,
+                    Name = targetService,
+                },
+            ],
+            Validation = new BackendTlsValidation
+            {
+                Hostname = hostname,
+                WellKnownCACertificates = wellKnownCa,
+                CaCertificateRefs = caConfigMaps?
+                    .Select(n => new CaCertificateRef { Kind = GatewayApiNames.ConfigMapKind, Name = n })
+                    .ToList(),
+                SubjectAltNames = subjectAltNames?.ToList(),
+            },
+        },
     };
 
     public RenderResult Render(GatewayTranslatorOptions? options = null) => new GatewayTranslator(options ?? Options).Render(Build());

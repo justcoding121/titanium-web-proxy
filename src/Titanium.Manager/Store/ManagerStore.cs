@@ -630,20 +630,24 @@ internal sealed class ManagerStore : IDisposable
                 }
 
                 // Known agent with no desired yet: during a staged rollout keep previous;
-                // otherwise fall through to fleet published.
-                var active = GetActiveRolloutUnlocked(fleetId);
-                if (active is not null &&
-                    active.PreviousRevisionId is long prevId &&
-                    (string.Equals(active.State, StateRunning, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(active.State, StatePaused, StringComparison.OrdinalIgnoreCase)))
+                // otherwise fall through to fleet published. Unknown node ids must not inherit
+                // the staged "keep previous" path — they should see the fleet published target.
+                if (agent is not null)
                 {
-                    var prev = GetRevisionUnlocked(prevId);
-                    if (prev is not null)
+                    var active = GetActiveRolloutUnlocked(fleetId);
+                    if (active is not null &&
+                        active.PreviousRevisionId is long prevId &&
+                        (string.Equals(active.State, StateRunning, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(active.State, StatePaused, StringComparison.OrdinalIgnoreCase)))
                     {
-                        return new PublishedConfig(prev.Id, prev.ContentHash, prev.YamlText);
-                    }
+                        var prev = GetRevisionUnlocked(prevId);
+                        if (prev is not null)
+                        {
+                            return new PublishedConfig(prev.Id, prev.ContentHash, prev.YamlText);
+                        }
 
-                    return null;
+                        return null;
+                    }
                 }
             }
 

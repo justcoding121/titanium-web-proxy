@@ -23,6 +23,7 @@ public sealed class ManagerAgent : IDisposable
     public const string LastKnownGoodHashFileName = "last-known-good.hash";
 
     private static readonly TimeSpan DefaultApplyDebounce = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan PollFailureBackoff = TimeSpan.FromSeconds(2);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -239,7 +240,7 @@ public sealed class ManagerAgent : IDisposable
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+            await Task.Delay(PollFailureBackoff, ct).ConfigureAwait(false);
             return true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -410,6 +411,8 @@ public sealed class ManagerAgent : IDisposable
         if (response.StatusCode == HttpStatusCode.Unauthorized)
         {
             PlusLog.Warn(_context, "Plus ManagerAgent: unauthorized (check manager.tokenFile).");
+            // A 401 answers instantly. Without a pause the loop re-asks at full speed and floods the manager.
+            await Task.Delay(PollFailureBackoff, ct).ConfigureAwait(false);
             return null;
         }
 
