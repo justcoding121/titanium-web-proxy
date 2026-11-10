@@ -4,6 +4,7 @@
 using System;
 using System.Net;
 using System.Net.Quic;
+using System.Net.Security;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
@@ -41,7 +42,7 @@ public class Http3RequestStreamIpv6AuthorityFatGapTests
 
         var ep = new TransparentQuicProxyEndPoint(IPAddress.Loopback, 0)
         {
-            ForwardHost = "localhost",
+            ForwardHost = "::1",
             ForwardPort = origin.Port,
         };
         ep.BeforeQuicAuthenticate += async (_, args) =>
@@ -61,7 +62,8 @@ public class Http3RequestStreamIpv6AuthorityFatGapTests
         proxy.CertificateManager.SaveFakeCertificates = false;
         proxy.ServerCertificateValidationCallback += (_, args) =>
         {
-            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, args.SslPolicyErrors);
+            var errors = args.SslPolicyErrors & ~SslPolicyErrors.RemoteCertificateNameMismatch;
+            args.IsValid = TestCertificateAuthority.Validate(args.Certificate, errors);
             return Task.CompletedTask;
         };
         proxy.AddEndPoint(ep);

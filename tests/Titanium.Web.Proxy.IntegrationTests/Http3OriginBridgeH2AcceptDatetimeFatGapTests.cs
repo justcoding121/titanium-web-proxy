@@ -233,7 +233,7 @@ public class Http3OriginBridgeH2AcceptDatetimeFatGapTests
                 ]);
             Assert.AreEqual(204, response.StatusCode, response.TextBody);
             Assert.IsFalse(names.Exists(n => string.Equals(n, "connection", StringComparison.OrdinalIgnoreCase)));
-            Assert.IsFalse(names.Exists(n => string.Equals(n, "te", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(names.Exists(n => string.Equals(n, "te", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(names.Exists(n => string.Equals(n, "accept-datetime", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(names.Exists(n => string.Equals(n, "x-bridge-probe", StringComparison.OrdinalIgnoreCase)));
         }

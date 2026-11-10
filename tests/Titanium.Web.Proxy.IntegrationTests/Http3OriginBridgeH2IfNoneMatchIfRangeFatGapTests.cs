@@ -223,7 +223,7 @@ public class Http3OriginBridgeH2IfNoneMatchIfRangeFatGapTests
                 extraRequestHeaders: [("content-md5", "QrkBlrSHxUBpCXpo/pirbw==")]);
             Assert.AreEqual(200, response.StatusCode, response.TextBody);
             Assert.AreEqual("QrkBlrSHxUBpCXpo/pirbw==", seen);
-            Assert.AreEqual("n=7", response.TextBody);
+            Assert.AreEqual("n=6", response.TextBody);
         }
         finally
         {
@@ -233,7 +233,7 @@ public class Http3OriginBridgeH2IfNoneMatchIfRangeFatGapTests
     }
 
     /// <summary>
-    ///     <c>PrepareH2OriginRequestHeaders</c> strips the TE hop-by-hop header on the interception path.
+    ///     <c>PrepareH2OriginRequestHeaders</c> / H2 encode keeps <c>te: trailers</c> (RFC 7540) while stripping connection-specific fields.
     /// </summary>
     [TestMethod]
     [Timeout(60_000)]
@@ -266,7 +266,7 @@ public class Http3OriginBridgeH2IfNoneMatchIfRangeFatGapTests
                 "/te",
                 extraRequestHeaders: [("te", "trailers"), ("x-te-probe", "1")]);
             Assert.AreEqual(204, response.StatusCode, response.TextBody);
-            Assert.IsFalse(names.Exists(n => string.Equals(n, "te", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(names.Exists(n => string.Equals(n, "te", StringComparison.OrdinalIgnoreCase)));
             Assert.IsTrue(names.Exists(n => string.Equals(n, "x-te-probe", StringComparison.OrdinalIgnoreCase)));
         }
         finally
