@@ -361,7 +361,8 @@ internal static partial class Http3RequestStream
                     sessionArgs.Extras.Retry ??= armedRetry;
                 }
 
-                var needsGatewayStatusRetry = sessionArgs.Extras?.Retry is { Attempts: > 0 };
+                var needsGatewayStatusRetry = sessionArgs.Extras?.Retry is { Attempts: > 0 }
+                                                || sessionArgs.MatchedRoute?.Retry is { Attempts: > 0 };
                 var mitmUnchangedH3H1 = !routeAnswered && !needsGatewayStatusRetry && !isWsTunnel
                                         && TryMitmUnchangedH3ToH1Lite(
                                             sessionArgs, authArgs, request, requestHeaderRelayBaseline,
@@ -901,7 +902,8 @@ internal static partial class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
-        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 }
+            || sessionArgs.MatchedRoute?.Retry is { Attempts: > 0 })
             return false;
         if (sessionArgs.IsFastPath)
             return false;
@@ -927,7 +929,8 @@ internal static partial class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
-        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 }
+            || sessionArgs.MatchedRoute?.Retry is { Attempts: > 0 })
             return false;
         if (sessionArgs.IsFastPath)
             return false;
@@ -955,7 +958,8 @@ internal static partial class Http3RequestStream
         ByteString capturedRequestAuthority,
         string method)
     {
-        if (sessionArgs.Extras?.Retry is { Attempts: > 0 })
+        if (sessionArgs.Extras?.Retry is { Attempts: > 0 }
+            || sessionArgs.MatchedRoute?.Retry is { Attempts: > 0 })
             return false;
         if (sessionArgs.IsFastPath)
             return false;
