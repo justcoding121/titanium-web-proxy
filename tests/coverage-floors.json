@@ -10,7 +10,7 @@
     "Titanium.Gateway": 90,
     "Titanium.Manager": 90,
     "Titanium.Xds": 90,
-    "Titanium.Inspector": 80,
+    "Titanium.Inspector": 85,
     "Titanium.Web.Proxy.Scripting": 90,
     "Titanium.Cli.GeoIp": 90
   }
