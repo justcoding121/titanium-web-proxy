@@ -171,14 +171,22 @@ public class MetricsListenerAggregationBehaviorTests
     public void EveryLabelSlot_RoundTripsThroughTheSeriesKey()
     {
         var key = default(MetricsListener.SeriesKey);
-        var names = new[] { "route", "cluster", "status_class", "protocol", "error", "direction", "reason", "outcome" };
-        for (var slot = 0; slot < names.Length; slot++)
+        Assert.AreEqual(MetricsListener.LabelNames.Length, 9);
+        CollectionAssert.AreEqual(MetricsListener.LabelNames, new[]
         {
-            Assert.AreEqual(slot, MetricsListener.SlotOf(names[slot]));
+            "route", "cluster", "status_class", "protocol", "error", "direction", "reason", "outcome", "result",
+        });
+
+        for (var slot = 0; slot < MetricsListener.LabelNames.Length; slot++)
+        {
+            Assert.AreEqual(slot, MetricsListener.SlotOf(MetricsListener.LabelNames[slot]));
             key.Set(slot, "v" + slot);
         }
 
-        for (var slot = 0; slot < names.Length; slot++)
+        Assert.AreEqual("v0", key.Route);
+        Assert.AreEqual("v8", key.Result);
+
+        for (var slot = 0; slot < MetricsListener.LabelNames.Length; slot++)
         {
             Assert.AreEqual("v" + slot, key.Get(slot));
         }
@@ -190,10 +198,20 @@ public class MetricsListenerAggregationBehaviorTests
         var other = key;
         Assert.IsTrue(key.Equals(other));
         Assert.IsTrue(key.Equals((object)other));
-        Assert.AreEqual(key.GetHashCode(), other.GetHashCode());
-        other.Set(6, "different");
+        var fullHash = key.GetHashCode();
+        Assert.AreEqual(fullHash, other.GetHashCode());
+
+        other.Set(0, "route-changed");
+        Assert.AreEqual("route-changed", other.Route);
         Assert.IsFalse(key.Equals(other));
+        Assert.AreNotEqual(fullHash, other.GetHashCode());
         Assert.IsFalse(key.Equals("not a key"));
+
+        other = key;
+        other.Set(8, "result-changed");
+        Assert.AreEqual("result-changed", other.Result);
+        Assert.IsFalse(key.Equals(other));
+        Assert.AreNotEqual(fullHash, other.GetHashCode());
     }
 
     // Bug class: route and cluster names are unbounded, so a client that sprays unique paths through a wildcard route
