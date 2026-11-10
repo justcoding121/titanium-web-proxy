@@ -338,7 +338,26 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private void InvalidateSslCertificateContext(X509Certificate2 leaf)
     {
-        var thumbprint = leaf.Thumbprint;
+        string? thumbprint;
+        try
+        {
+            thumbprint = leaf.Thumbprint;
+        }
+        catch (CryptographicException)
+        {
+            // Native handle already gone — drop every cached context so a later handshake
+            // cannot reuse one keyed by the disposed leaf.
+            sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
+            return;
+        }
+
         if (thumbprint != null)
         {
             sslCertificateContexts.TryRemove(thumbprint, out _);
@@ -1140,26 +1159,34 @@ public sealed class CertificateManager : IDisposable
 
         var certificate = await createCertificateTask;
 
-        if (createdTask)
+        if (certificate != null && !IsCertificateHandleAlive(certificate))
         {
-            // cleanup pending task
+            InvalidateSslCertificateContext(certificate);
+            cachedCertificates.TryRemove(certificateName, out _);
+            try { certificate.Dispose(); }
+            catch
+            {
+                // Already disposed by a concurrent ClearRoot/Dispose.
+            }
+
+            certificate = null;
+        }
+
+        // Creator always removes; waiters also drop a completed null/dead entry so retry can mint
+        // instead of re-awaiting the same failed task forever.
+        if (createdTask || certificate == null)
+        {
             await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
             try
             {
-                pendingCertificateCreationTasks.Remove(certificateName);
+                if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var pending)
+                    && ReferenceEquals(pending, createCertificateTask))
+                    pendingCertificateCreationTasks.Remove(certificateName);
             }
             finally
             {
                 pendingCertificateCreationTaskLock.Release();
             }
-        }
-
-        if (certificate != null && !IsCertificateHandleAlive(certificate))
-        {
-            InvalidateSslCertificateContext(certificate);
-            cachedCertificates.TryRemove(certificateName, out _);
-            certificate.Dispose();
-            certificate = null;
         }
 
         if (certificate == null && remainingRetries > 0 && !disposed
