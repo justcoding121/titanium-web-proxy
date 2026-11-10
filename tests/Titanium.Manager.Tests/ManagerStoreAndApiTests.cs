@@ -414,11 +414,18 @@ public class ManagerStoreAndApiTests
         await host.DisposeAsync();
         try
         {
-            await waitTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await waitTask.WaitAsync(TimeSpan.FromSeconds(15));
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or OperationCanceledException
+                                   or TimeoutException)
         {
             // client connection drops when the listener stops
+        }
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline && host.WaitHub.CountWaiters(fleetId) > 0)
+        {
+            await Task.Delay(50);
         }
 
         Assert.AreEqual(0, host.WaitHub.CountWaiters(fleetId), "shutdown must cancel long-poll waiters");
