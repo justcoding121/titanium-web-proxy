@@ -533,10 +533,13 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
 
         var decoded = QpackDecoder.Decode(headersFrame.Payload.Span);
         var status = 0;
+        var extraHeaders = new List<(string Name, string Value)>();
         foreach (var (name, value) in decoded)
         {
             if (name == ":status" && int.TryParse(value, out var code))
                 status = code;
+            else if (name != ":status")
+                extraHeaders.Add((name, value));
         }
 
         var responseBody = new List<byte>();
@@ -555,7 +558,7 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
         }
 
         return new QuicHttp3Response(status, Encoding.UTF8.GetString(responseBody.ToArray()),
-            responseBody.ToArray(), dataFrameCount: responseDataFrames);
+            responseBody.ToArray(), extraHeaders: extraHeaders, dataFrameCount: responseDataFrames);
     }
 
     /// <summary>
