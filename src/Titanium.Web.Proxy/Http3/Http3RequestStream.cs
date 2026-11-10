@@ -353,16 +353,29 @@ internal static partial class Http3RequestStream
                         HttpStatusCode.NotImplemented);
                 }
 
-                var mitmUnchangedH3H1 = !routeAnswered && !isWsTunnel && TryMitmUnchangedH3ToH1Lite(
-                    sessionArgs, authArgs, request, requestHeaderRelayBaseline,
-                    capturedRequestMethod, capturedRequestPath, capturedRequestAuthority, method);
-                var mitmUnchangedH3H3 = !routeAnswered && !mitmUnchangedH3H1 && !isWsTunnel
+                // Unchanged-lite TCP/QUIC/H2 forwards do not run ReverseProxySessionDispatch
+                // status-retry loops. When the route armed gateway retries, stay on ForwardAsync.
+                if (sessionArgs.MatchedRoute?.Retry is { Attempts: > 0 } armedRetry)
+                {
+                    sessionArgs.Extras ??= new RoutingFeatureState();
+                    sessionArgs.Extras.Retry ??= armedRetry;
+                }
+
+                var needsGatewayStatusRetry = sessionArgs.Extras?.Retry is { Attempts: > 0 };
+                var mitmUnchangedH3H1 = !routeAnswered && !needsGatewayStatusRetry && !isWsTunnel
+                                        && TryMitmUnchangedH3ToH1Lite(
+                                            sessionArgs, authArgs, request, requestHeaderRelayBaseline,
+                                            capturedRequestMethod, capturedRequestPath, capturedRequestAuthority,
+                                            method);
+                var mitmUnchangedH3H3 = !routeAnswered && !mitmUnchangedH3H1 && !needsGatewayStatusRetry
+                                        && !isWsTunnel
                                         && TryMitmUnchangedH3ToH3Lite(
                                             sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                                             capturedRequestMethod, capturedRequestPath, capturedRequestAuthority,
                                             method);
                 var mitmUnchangedH3H2 = !routeAnswered && !mitmUnchangedH3H1 && !mitmUnchangedH3H3
-                                        && !isWsTunnel && TryMitmUnchangedH3ToH2Lite(
+                                        && !needsGatewayStatusRetry && !isWsTunnel
+                                        && TryMitmUnchangedH3ToH2Lite(
                                             sessionArgs, authArgs, request, requestHeaderRelayBaseline,
                                             capturedRequestMethod, capturedRequestPath, capturedRequestAuthority,
                                             method);
