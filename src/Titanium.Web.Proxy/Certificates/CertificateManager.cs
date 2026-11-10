@@ -589,7 +589,20 @@ public sealed class CertificateManager : IDisposable
     ///     chain even if this collection is empty; any certificates in this collection are appended
     ///     after it.
     /// </summary>
-    public X509Certificate2Collection? IntermediateCertificates { get; set; }
+    private X509Certificate2Collection? intermediateCertificates;
+
+    public X509Certificate2Collection? IntermediateCertificates
+    {
+        get => intermediateCertificates;
+        set
+        {
+            intermediateCertificates = value;
+            // Chain extras participate in SslStreamCertificateContext.Create; a change must
+            // drop cached contexts so the next handshake rebuilds with the new extras.
+            sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
+        }
+    }
 
     /// <summary>
     ///     When true, persist generated leaf certificates via <see cref="CertificateStorage" /> so
