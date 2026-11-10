@@ -97,7 +97,12 @@ public partial class TrustUxStressTests
             var before = dialogs.RotateRootCaCalls;
             vm.RotateCaCommand.Execute(null);
             vm.RotateCaCommand.Execute(null);
-            await WaitUntil(() => !vm.IsStatusBusy && dialogs.RotateRootCaCalls > before, 30000);
+            // Double-click rotate can leave a brief second busy pulse after the first
+            // completion; wait until calls advanced and busy stays clear across a settle.
+            await WaitUntil(() => dialogs.RotateRootCaCalls > before, 30000);
+            await WaitUntil(() => !vm.IsStatusBusy, 30000);
+            await Task.Delay(50);
+            await WaitUntil(() => !vm.IsStatusBusy, 10000, () => $"status=[{vm.StatusText}]");
 
             Assert.IsFalse(vm.IsStatusBusy, vm.StatusText);
             AssertNoUnexpectedSlowUx(uxBefore);
