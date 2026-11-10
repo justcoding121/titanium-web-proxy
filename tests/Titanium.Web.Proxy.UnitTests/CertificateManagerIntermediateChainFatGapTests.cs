@@ -36,7 +36,7 @@ public class CertificateManagerIntermediateChainFatGapTests
         mgr.CreateRootCertificate(persistToFile: false);
         using var signingLeaf = await mgr.CreateServerCertificate("intermediate-signer-wave27.example");
         Assert.IsNotNull(signingLeaf);
-        using var intermediateOnly = new X509Certificate2(signingLeaf!.Export(X509ContentType.Cert));
+        using var intermediateOnly = X509CertificateLoader.LoadCertificate(signingLeaf!.RawData);
 
         mgr.IntermediateCertificates = new X509Certificate2Collection { intermediateOnly };
         using var leaf = await mgr.CreateServerCertificate("leaf-chain-wave27.example");
@@ -59,11 +59,13 @@ public class CertificateManagerIntermediateChainFatGapTests
         using var mgr = NewMgr();
         mgr.CreateRootCertificate(persistToFile: false);
         using var extraLeaf = await mgr.CreateServerCertificate("extra-intermediate-wave27.example");
-        using var extra = new X509Certificate2(extraLeaf!.Export(X509ContentType.Cert));
+        Assert.IsNotNull(extraLeaf);
+        using var extra = X509CertificateLoader.LoadCertificate(extraLeaf!.RawData);
         var extraThumb = extra.Thumbprint;
 
         mgr.IntermediateCertificates = new X509Certificate2Collection { extra };
         using var leaf = await mgr.CreateServerCertificate("leaf-clear-wave27.example");
+        Assert.IsNotNull(leaf);
         var withExtra = mgr.CreateSslCertificateContext(leaf!);
         var withExtraHasExtra = withExtra.IntermediateCertificates
             .OfType<X509Certificate2>()
@@ -71,7 +73,7 @@ public class CertificateManagerIntermediateChainFatGapTests
 
         mgr.IntermediateCertificates = null;
         Assert.IsNull(mgr.IntermediateCertificates);
-        var cleared = mgr.CreateSslCertificateContext(leaf);
+        var cleared = mgr.CreateSslCertificateContext(leaf!);
         var clearedHasExtra = cleared.IntermediateCertificates
             .OfType<X509Certificate2>()
             .Any(c => string.Equals(c.Thumbprint, extraThumb, StringComparison.OrdinalIgnoreCase));
