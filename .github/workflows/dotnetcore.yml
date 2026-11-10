@@ -77,7 +77,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
-    timeout-minutes: 90
+    # Behavior-coverage FatGap volume needs headroom beyond the prior 90m wall clock.
+    timeout-minutes: 180
     permissions:
       # write: Publish Documentation pushes DocFX output to develop.
       # GITHUB_TOKEN with contents:read cannot push (403 github-actions[bot]).
