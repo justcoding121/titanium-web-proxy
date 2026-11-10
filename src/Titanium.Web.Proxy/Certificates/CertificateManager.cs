@@ -2260,8 +2260,21 @@ public sealed class CertificateManager : IDisposable
     {
         if (disposed) return;
 
+        // Flip first so in-flight Task.Run mints observe disposed and exit; Cancel unblocks
+        // certificateCreationThrottle.Wait(token) / WaitAsync(token) before the CTS is disposed.
+        disposed = true;
+
         if (disposing)
         {
+            try
+            {
+                clearCertificatesTokenSource.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already torn down.
+            }
+
             clearCertificatesTokenSource.Dispose();
             pendingCertificateCreationTaskLock.Dispose();
             certificateCreationThrottle.Dispose();
@@ -2292,7 +2305,5 @@ public sealed class CertificateManager : IDisposable
             // Drop SslStreamCertificateContext.Create side effects after the cached contexts are gone.
             ScrubTestHostUserStores();
         }
-
-        disposed = true;
     }
 }
