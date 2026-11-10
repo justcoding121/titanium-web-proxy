@@ -284,6 +284,13 @@ internal sealed class QuicHttp3OriginServer : IAsyncDisposable
                             response.Body.AsMemory(offset, len), cts.Token);
                     }
                 }
+
+                if (response.TrailerHeaders is { Count: > 0 })
+                {
+                    await Http3Frame.WriteAsync(stream, Http3FrameType.Headers,
+                        QpackEncoder.Encode(response.TrailerHeaders), cts.Token);
+                }
+
                 stream.CompleteWrites();
             }
             catch (OperationCanceledException) { }
@@ -544,6 +551,7 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
 
         var responseBody = new List<byte>();
         var responseDataFrames = 0;
+        var trailingHeaders = new List<(string Name, string Value)>();
         while (true)
         {
             var frame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 0, cancellationToken);
@@ -554,11 +562,52 @@ internal sealed class QuicHttp3Client : IAsyncDisposable
                 responseBody.AddRange(frame.Payload.ToArray());
             }
             else if (frame.Type == Http3FrameType.Headers)
+            {
+                foreach (var (name, value) in QpackDecoder.Decode(frame.Payload.Span))
+                {
+                    if (!name.StartsWith(':'))
+                        trailingHeaders.Add((name, value));
+                }
+
+                frame.ReturnPayload();
                 break;
+            }
         }
 
         return new QuicHttp3Response(status, Encoding.UTF8.GetString(responseBody.ToArray()),
-            responseBody.ToArray(), extraHeaders: extraHeaders, dataFrameCount: responseDataFrames);
+            responseBody.ToArray(), extraHeaders: extraHeaders, trailerHeaders: trailingHeaders,
+            dataFrameCount: responseDataFrames);
+    }
+
+    /// <summary>Sends a raw QPACK field section on a new request stream (negative decode tests).</summary>
+    public async Task<int?> SendRawRequestHeadersAsync(
+        byte[] qpackPayload, CancellationToken cancellationToken = default)
+    {
+        await using var stream = await connection.OpenOutboundStreamAsync(
+            QuicStreamType.Bidirectional, cancellationToken);
+        await Http3Frame.WriteAsync(stream, Http3FrameType.Headers, qpackPayload, cancellationToken);
+        stream.CompleteWrites();
+
+        try
+        {
+            var headersFrame = await Http3Frame.ReadAsync(stream, maxPayloadBytes: 64 * 1024, cancellationToken);
+            if (headersFrame is null || headersFrame.Type != Http3FrameType.Headers)
+                return null;
+
+            var decoded = QpackDecoder.Decode(headersFrame.Payload.Span);
+            headersFrame.ReturnPayload();
+            foreach (var (name, value) in decoded)
+            {
+                if (name == ":status" && int.TryParse(value, out var code))
+                    return code;
+            }
+
+            return null;
+        }
+        catch (QuicException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -741,7 +790,8 @@ internal sealed class QuicHttp3Response
 
     public QuicHttp3Response(int statusCode, string textBody, byte[] body,
         IReadOnlyList<(string Name, string Value)>? extraHeaders = null, string? contentType = null,
-        int? dataFrameSize = null, int dataFrameCount = 0)
+        int? dataFrameSize = null, int dataFrameCount = 0,
+        IReadOnlyList<(string Name, string Value)>? trailerHeaders = null)
     {
         StatusCode = statusCode;
         TextBody = textBody;
@@ -750,12 +800,14 @@ internal sealed class QuicHttp3Response
         ContentType = contentType;
         DataFrameSize = dataFrameSize;
         DataFrameCount = dataFrameCount;
+        TrailerHeaders = trailerHeaders;
     }
 
     public int StatusCode { get; }
     public string TextBody { get; }
     public byte[] Body { get; }
     public IReadOnlyList<(string Name, string Value)>? ExtraHeaders { get; }
+    public IReadOnlyList<(string Name, string Value)>? TrailerHeaders { get; }
     public string? ContentType { get; }
 
     /// <summary>When set, the origin writes <see cref="Body"/> as multiple DATA frames of this size.</summary>
