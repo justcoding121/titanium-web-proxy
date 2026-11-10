@@ -19,9 +19,12 @@ public class ProxyServerTryDisableSystemProxyFatGapTests
     public void TryDisableSystemProxy_BeforeStart_ReturnsResultWithoutThrow()
     {
         using var proxy = new ProxyServer(false, false, false);
-        _ = proxy.TryDisableSystemProxy(ProxyProtocolType.Http);
-        _ = proxy.TryDisableAllSystemProxies();
-        _ = proxy.TryRestoreOriginalProxySettings();
+        var r1 = proxy.TryDisableSystemProxy(ProxyProtocolType.Http);
+        var r2 = proxy.TryDisableAllSystemProxies();
+        var r3 = proxy.TryRestoreOriginalProxySettings();
+        Assert.IsNotNull(r1.Message);
+        Assert.IsNotNull(r2.Message);
+        Assert.IsNotNull(r3.Message);
     }
 
     /// <summary>

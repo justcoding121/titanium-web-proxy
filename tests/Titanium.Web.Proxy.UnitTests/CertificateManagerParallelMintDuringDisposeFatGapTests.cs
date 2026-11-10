@@ -46,6 +46,8 @@ public class CertificateManagerParallelMintDuringDisposeFatGapTests
             leaves = [];
         }
 
+        Assert.IsNotNull(leaves);
+        Assert.IsTrue(leaves.Length <= 8);
         foreach (var leaf in leaves)
             leaf?.Dispose();
     }

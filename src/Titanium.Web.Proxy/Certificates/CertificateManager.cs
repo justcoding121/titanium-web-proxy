@@ -2217,7 +2217,8 @@ public sealed class CertificateManager : IDisposable
     public void ClearRootCertificate()
     {
         Interlocked.Increment(ref certificateCacheGeneration);
-        pendingCertificateCreationTaskLock.Wait();
+        // ClearRoot must finish emptying the pending map even if Dispose cancelled the mint CTS.
+        pendingCertificateCreationTaskLock.Wait(CancellationToken.None);
         try
         {
             pendingCertificateCreationTasks.Clear();

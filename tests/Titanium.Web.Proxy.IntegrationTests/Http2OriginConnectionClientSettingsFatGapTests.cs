@@ -66,7 +66,9 @@ public class Http2OriginConnectionClientSettingsFatGapTests
         };
 
         using var client = suite.GetClient(proxy);
-        _ = await client.GetAsync(origin.Url);
+        using var response = await client.GetAsync(origin.Url);
         await settingsAcked.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.IsTrue(settingsAcked.Task.IsCompletedSuccessfully);
+        Assert.AreEqual(System.Net.HttpStatusCode.NoContent, response.StatusCode);
     }
 }
