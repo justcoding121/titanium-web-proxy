@@ -195,6 +195,12 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private readonly Dictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks = new();
 
+    /// <summary>
+    ///     Bumped on every <see cref="ClearRootCertificate" /> so in-flight leaf mints that raced a cache flush
+    ///     do not publish into <see cref="cachedCertificates" /> or return disposed native handles.
+    /// </summary>
+    private long certificateCacheGeneration;
+
     private readonly object rootCertCreationLock = new();
 
     private ICertificateMaker? certEngineValue;
@@ -982,6 +988,19 @@ public sealed class CertificateManager : IDisposable
         return certificate;
     }
 
+    private static bool IsCertificateHandleAlive(X509Certificate2 certificate)
+    {
+        try
+        {
+            _ = certificate.Thumbprint;
+            return certificate.HasPrivateKey;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     ///     Tries to get a still-valid certificate from the in-memory cache.
     ///     Expired cached certificates are evicted and disposed so that a fresh one is generated.
@@ -991,6 +1010,21 @@ public sealed class CertificateManager : IDisposable
         certificate = null;
 
         if (!cachedCertificates.TryGetValue(certificateName, out var cached)) return false;
+
+        if (!IsCertificateHandleAlive(cached.Certificate))
+        {
+            if (cachedCertificates.TryRemove(certificateName, out var removed))
+            {
+                InvalidateSslCertificateContext(removed.Certificate);
+                try { removed.Certificate.Dispose(); }
+                catch
+                {
+                    // Best-effort; continue with a fresh mint.
+                }
+            }
+
+            return false;
+        }
 
         // do not serve an expired (or not-yet-valid) certificate from the cache
         var now = DateTime.Now;
@@ -1015,8 +1049,14 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     /// <param name="certificateName"></param>
     /// <returns></returns>
-    public async Task<X509Certificate2?> CreateServerCertificate(string certificateName) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    public Task<X509Certificate2?> CreateServerCertificate(string certificateName) =>
+        CreateServerCertificateCore(certificateName, remainingRetries: 6);
+
+    private async Task<X509Certificate2?> CreateServerCertificateCore(string certificateName, int remainingRetries) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
+        if (!disposed && RootCertificate == null)
+            EnsureRootCertificate();
+
         // check in cache first
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
             return cachedCertificate;
@@ -1060,13 +1100,22 @@ public sealed class CertificateManager : IDisposable
                     certificateCreationThrottle.Wait(clearCertificatesTokenSource.Token);
                     try
                     {
+                        if (disposed) return null;
+
+                        var generationAtStart = Volatile.Read(ref certificateCacheGeneration);
                         var result = CreateCertificate(certificateName, false);
-                        if (result != null)
+                        if (result == null) return null;
+
+                        if (Volatile.Read(ref certificateCacheGeneration) != generationAtStart
+                            || !IsCertificateHandleAlive(result))
                         {
-                            cachedCertificates.TryAdd(certificateName,
-                                new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
-                            EnforceCertificateCacheBound();
+                            result.Dispose();
+                            return null;
                         }
+
+                        if (cachedCertificates.TryAdd(certificateName,
+                                new CachedCertificate(result) { LastAccess = DateTime.UtcNow }))
+                            EnforceCertificateCacheBound();
 
                         return result;
                     }
@@ -1103,6 +1152,22 @@ public sealed class CertificateManager : IDisposable
             {
                 pendingCertificateCreationTaskLock.Release();
             }
+        }
+
+        if (certificate != null && !IsCertificateHandleAlive(certificate))
+        {
+            InvalidateSslCertificateContext(certificate);
+            cachedCertificates.TryRemove(certificateName, out _);
+            certificate.Dispose();
+            certificate = null;
+        }
+
+        if (certificate == null && remainingRetries > 0 && !disposed
+                                    && !clearCertificatesTokenSource.Token.IsCancellationRequested)
+        {
+            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+                return cachedCertificate;
+            return await CreateServerCertificateCore(certificateName, remainingRetries - 1).ConfigureAwait(false);
         }
 
         return certificate;
@@ -2151,6 +2216,17 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     public void ClearRootCertificate()
     {
+        Interlocked.Increment(ref certificateCacheGeneration);
+        pendingCertificateCreationTaskLock.Wait();
+        try
+        {
+            pendingCertificateCreationTasks.Clear();
+        }
+        finally
+        {
+            pendingCertificateCreationTaskLock.Release();
+        }
+
         certificateCache.Clear();
 
         // Dispose every cached leaf cert before clearing so native CAPI/OpenSSL handles
