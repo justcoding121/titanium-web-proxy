@@ -302,6 +302,15 @@ jobs:
         }
         & helm version
         if ($LASTEXITCODE -ne 0) { throw "helm version exited $LASTEXITCODE" }
+    - name: Build PromptGuard
+      shell: pwsh
+      run: |
+        # PromptGuardTests spawn this Windows UI tool. Build it here so a restore or
+        # targeting-pack miss fails the job with a readable log instead of four silent exits.
+        dotnet restore tools/PromptGuard/PromptGuard.csproj
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet build tools/PromptGuard/PromptGuard.csproj -c Release --no-restore --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Test
       shell: pwsh
       run: |

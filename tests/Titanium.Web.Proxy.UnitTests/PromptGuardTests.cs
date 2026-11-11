@@ -37,8 +37,8 @@ public class PromptGuardTests
 
         var root = FindRepoRoot();
         var project = Path.Combine(root, "tools", "PromptGuard", "PromptGuard.csproj");
-        var build = Run("dotnet", $"build \"{project}\" -c Release --nologo", root, ephemeral: false, timeoutMs: 180000);
-        Assert.AreEqual(0, build, "PromptGuard failed to build");
+        var (build, buildLog) = RunCaptured("dotnet", $"build \"{project}\" -c Release --nologo", root, timeoutMs: 180000);
+        Assert.AreEqual(0, build, "PromptGuard failed to build: " + buildLog);
 
         var result = Path.Combine(Path.GetTempPath(), "twp-prompt-" + Guid.NewGuid().ToString("N") + ".txt");
         var log = Path.Combine(Path.GetTempPath(), "twp-prompt-" + Guid.NewGuid().ToString("N") + ".jsonl");
@@ -120,22 +120,26 @@ public class PromptGuardTests
         return info;
     }
 
-    private static int Run(string file, string args, string root, bool ephemeral, int timeoutMs)
+    private static (int ExitCode, string Output) RunCaptured(string file, string args, string root, int timeoutMs)
     {
-        _ = ephemeral;
         using var process = Process.Start(new ProcessStartInfo(file, args)
         {
             WorkingDirectory = root,
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         })!;
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(timeoutMs))
         {
             process.Kill(entireProcessTree: true);
-            return -1;
+            return (-1, "(timeout)");
         }
 
-        return process.ExitCode;
+        var output = stdoutTask.GetAwaiter().GetResult() + stderrTask.GetAwaiter().GetResult();
+        return (process.ExitCode, output);
     }
 
     private static void TryDelete(string path)
