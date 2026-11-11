@@ -150,8 +150,12 @@ foreach ($path in @($changed.Keys | Sort-Object)) {
             if ($lineNo -ge $startLine -and $lineNo -le $endLine) {
                 $known = $true
                 $flag = [string]$range.covered
-                if ($flag -eq 'yes' -or $flag -eq 'true' -or $flag -eq 'partial') { $hit = $true }
-                break
+                # Merged coverage can list the same line more than once (one range per
+                # instrumented assembly). Prefer any hit over the first miss.
+                if ($flag -eq 'yes' -or $flag -eq 'true' -or $flag -eq 'partial') {
+                    $hit = $true
+                    break
+                }
             }
         }
         if ($known) {
