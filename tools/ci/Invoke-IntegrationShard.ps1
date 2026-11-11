@@ -31,56 +31,35 @@ function Get-StableBucket([string]$value, [int]$count) {
     return [int]$bucket
 }
 
-function Get-ClassKey([string]$displayName) {
-    $base = $displayName.Trim()
-    $paren = $base.IndexOf(' (')
-    if ($paren -ge 0) { $base = $base.Substring(0, $paren) }
-
-    $prefix = 'Titanium.Web.Proxy.IntegrationTests.'
-    if ($base.StartsWith($prefix, [StringComparison]::Ordinal)) {
-        $rest = $base.Substring($prefix.Length)
-        $splitAt = $rest.IndexOfAny([char[]]@('.', '+'))
-        if ($splitAt -gt 0) { return $rest.Substring(0, $splitAt) }
-        return $rest
-    }
-
-    return $base
-}
-
-Write-Host "Listing integration tests for shard $ShardIndex of $ShardCount"
-$listed = & dotnet test $Project --configuration Release --no-build --no-restore --settings $Settings --list-tests 2>&1 |
-    ForEach-Object { "$_" }
-if ($LASTEXITCODE -ne 0) {
-    $listed | Write-Host
-    throw "dotnet test --list-tests exited $LASTEXITCODE"
-}
-
-$names = New-Object System.Collections.Generic.List[string]
-foreach ($line in $listed) {
-    $trim = $line.Trim()
-    if ($trim.StartsWith('Titanium.Web.Proxy.IntegrationTests.', [StringComparison]::Ordinal)) {
-        $names.Add($trim)
-    }
-}
-
-if ($names.Count -eq 0) {
-    $listed | Select-Object -Last 40 | Write-Host
-    throw 'list-tests produced no integration test names'
-}
-
-$classes = New-Object System.Collections.Generic.List[string]
+# dotnet test --list-tests prints the MSTest display name (the method), not the class.
+# [TestClass] in source is the class-stable key, and it does not require starting the test host.
+$sourceRoot = 'tests/Titanium.Web.Proxy.IntegrationTests'
+$classPattern = [regex]'\[TestClass[^\]]*\](?:\s|//[^\r\n]*[\r\n]+|/\*[\s\S]*?\*/|\[[^\]]*\])*(?:public|internal)\s+(?:sealed\s+|partial\s+|abstract\s+)*class\s+(?<name>\w+)'
+$discovered = New-Object System.Collections.Generic.List[string]
 $seen = @{}
-foreach ($name in $names) {
-    $key = Get-ClassKey $name
-    if (-not $seen.ContainsKey($key)) {
-        $seen[$key] = $true
-        if ((Get-StableBucket $key $ShardCount) -eq $ShardIndex) {
-            $classes.Add($key)
+Get-ChildItem -Path $sourceRoot -Filter *.cs -Recurse -File | ForEach-Object {
+    $text = [IO.File]::ReadAllText($_.FullName)
+    foreach ($match in $classPattern.Matches($text)) {
+        $name = $match.Groups['name'].Value
+        if (-not $seen.ContainsKey($name)) {
+            $seen[$name] = $true
+            $discovered.Add($name)
         }
     }
 }
 
-Write-Host ("Shard {0}: {1} classes, {2} tests listed in the assembly" -f $ShardIndex, $classes.Count, $names.Count)
+if ($discovered.Count -eq 0) {
+    throw "No [TestClass] types found under $sourceRoot"
+}
+
+$classes = New-Object System.Collections.Generic.List[string]
+foreach ($name in $discovered) {
+    if ((Get-StableBucket $name $ShardCount) -eq $ShardIndex) {
+        $classes.Add($name)
+    }
+}
+
+Write-Host ("Shard {0}: {1} of {2} test classes" -f $ShardIndex, $classes.Count, $discovered.Count)
 if ($classes.Count -eq 0) {
     Write-Host "Shard $ShardIndex has no classes."
     exit 0
