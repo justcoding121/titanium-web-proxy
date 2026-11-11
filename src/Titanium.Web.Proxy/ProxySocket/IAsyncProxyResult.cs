@@ -1,4 +1,4 @@
-﻿/*
+/*
     Copyright © 2002, The KPD-Team
     All rights reserved.
     http://www.mentalis.org/
@@ -42,7 +42,7 @@ internal class AsyncProxyResult : IAsyncResult
     // private variables
 
     /// <summary>Holds the value of the WaitHandle property.</summary>
-    private readonly object syncRoot = new();
+    private readonly System.Threading.Lock syncRoot = new();
     private ManualResetEvent? waitHandle;
     private volatile bool isCompleted;
 

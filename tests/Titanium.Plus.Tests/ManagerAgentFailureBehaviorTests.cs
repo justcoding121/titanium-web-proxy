@@ -426,7 +426,7 @@ public class ManagerAgentFailureBehaviorTests
 
         public int Attempts => Volatile.Read(ref _attempts);
 
-        public IReadOnlyList<(string Yaml, string Hash)> Applied => _applied.ToArray();
+        public (string Yaml, string Hash)[] Applied => _applied.ToArray();
 
         public Task<ConfigApplyResult> ApplyAsync(string yaml, string configHash, CancellationToken cancellationToken = default)
         {

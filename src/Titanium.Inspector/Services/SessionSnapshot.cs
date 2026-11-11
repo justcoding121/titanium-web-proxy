@@ -403,7 +403,7 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    private readonly object _dirtyGate = new();
+    private readonly System.Threading.Lock _dirtyGate = new();
     private HashSet<string?>? _dirtyNames;
     private int _dirtyQueued;
 

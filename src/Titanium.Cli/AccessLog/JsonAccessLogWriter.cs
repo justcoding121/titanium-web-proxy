@@ -29,7 +29,7 @@ public sealed class JsonAccessLogWriter : IDisposable
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
     private readonly StreamWriter _writer;
     private readonly double _sampleRate;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
 
     public JsonAccessLogWriter(string path, double sampleRate = 1.0)
     {

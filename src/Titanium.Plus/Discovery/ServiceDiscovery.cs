@@ -1544,7 +1544,7 @@ internal sealed class ServiceAccountCredentials
     private readonly string _tokenPath;
     private readonly string _caPath;
     private readonly TimeSpan _ttl;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private string? _token;
     private DateTime _tokenLoadedUtc = DateTime.MinValue;
     private X509Certificate2Collection? _roots;

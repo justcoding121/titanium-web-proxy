@@ -38,7 +38,7 @@ internal sealed class ContentWatcher : IDisposable
     private readonly TimeProvider _time;
     private readonly TimeSpan _debounce;
     private readonly bool _useEvents;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly SemaphoreSlim _checkLock = new(1, 1);
     private readonly Dictionary<string, FileSystemWatcher> _watchers = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _stop = new();

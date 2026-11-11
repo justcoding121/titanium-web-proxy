@@ -554,7 +554,7 @@ internal sealed class DatagramBudget
 {
     private readonly int maxDatagrams;
     private readonly int maxBytes;
-    private readonly object gate = new();
+    private readonly System.Threading.Lock gate = new();
     private readonly Func<long> clock;
     private long windowStart;
     private int datagrams;

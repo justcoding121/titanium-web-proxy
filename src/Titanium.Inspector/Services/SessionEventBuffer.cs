@@ -12,7 +12,7 @@ internal sealed class SessionEventBuffer
     public const int Cap = 20;
 
     private readonly List<(DateTime At, string Key, bool Failure)> _notes = new();
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
 
     public void Add(string key, bool failure)
     {

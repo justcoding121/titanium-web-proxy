@@ -15,7 +15,7 @@ namespace Titanium.Cli.Config;
 /// </summary>
 internal static class PlusLoader
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static Assembly? _plusAssembly;
     private static string? _loadDirectory;
     private static HashSet<string>? _bundleNames;

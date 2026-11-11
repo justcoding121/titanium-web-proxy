@@ -14,7 +14,7 @@ namespace Titanium.Cli.Admin;
 internal sealed class MetricsExposition : IDisposable
 {
     private readonly MetricsListener _listener;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private Action<StringBuilder>[] _appenders = [];
 
     public MetricsExposition(string meterName = MetricsListener.DefaultMeterName)

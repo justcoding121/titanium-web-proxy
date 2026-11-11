@@ -53,7 +53,7 @@ internal sealed class MetricsListener : IDisposable
     private readonly string _meterName;
     private readonly LabelCap _routes = new(MaxDistinctRoutesAndClusters);
     private readonly LabelCap _clusters = new(MaxDistinctRoutesAndClusters);
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private MeterListener? _listener;
     private InstrumentState[] _instruments = [];
     private bool _disposed;

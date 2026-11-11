@@ -7,7 +7,7 @@ namespace Titanium.Cli.Geo;
 /// <summary>Loads <c>Titanium.Cli.GeoIp.dll</c> on first use so MaxMind.Db stays off the default CLI path.</summary>
 internal static class GeoIpAssemblyLoader
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static Assembly? _geoIpAssembly;
 
     public static IGeoIpResolver CreateMmdbResolver(string path)

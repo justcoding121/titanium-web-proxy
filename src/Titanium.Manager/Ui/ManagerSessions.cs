@@ -37,7 +37,7 @@ internal sealed class ManagerSessionStore
     public const int DefaultMaxSessions = 64;
     public static readonly TimeSpan DefaultIdleTimeout = TimeSpan.FromMinutes(30);
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly Dictionary<string, ManagerSession> _sessions = new(StringComparer.Ordinal);
     private readonly TimeProvider _time;
     private readonly int _maxSessions;

@@ -22,7 +22,7 @@ public interface IProxyConfigProvider
 /// <summary>In-memory provider for tests and hosts that push snapshots themselves.</summary>
 public sealed class InMemoryProxyConfigProvider : IProxyConfigProvider
 {
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly List<Action<ProxyConfigSnapshot>> _subscribers = [];
     private ProxyConfigSnapshot _current = new();
 

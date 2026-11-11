@@ -54,7 +54,7 @@ public class ExplicitBeforeTunnelConnectResponseFatGapTests
         using var response = await client.GetAsync(server.ListeningHttpsUrl + "/t");
         await signaled.Task.WaitAsync(TimeSpan.FromSeconds(15));
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.AreEqual(true, isHttps);
+        Assert.IsTrue(isHttps);
     }
 
     /// <summary>

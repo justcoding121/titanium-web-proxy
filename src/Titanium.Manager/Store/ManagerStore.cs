@@ -15,7 +15,7 @@ internal sealed class ManagerStore : IDisposable
     private const string StatePaused = "paused";
 
     private readonly SqliteConnection _db;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
 
     public ManagerStore(string databasePath)
     {

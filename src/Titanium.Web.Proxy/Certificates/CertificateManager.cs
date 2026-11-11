@@ -201,7 +201,7 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private long certificateCacheGeneration;
 
-    private readonly object rootCertCreationLock = new();
+    private readonly System.Threading.Lock rootCertCreationLock = new();
 
     private ICertificateMaker? certEngineValue;
 

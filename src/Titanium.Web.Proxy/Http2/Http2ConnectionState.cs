@@ -145,7 +145,7 @@ internal sealed class Http2ConnectionState
     /// </summary>
     private int unmatchedClientSettingsAcks;
 
-    private readonly object settingsAckGate = new();
+    private readonly System.Threading.Lock settingsAckGate = new();
 
     /// <summary>
     ///     Records one non-ACK SETTINGS frame that has been written toward the client.

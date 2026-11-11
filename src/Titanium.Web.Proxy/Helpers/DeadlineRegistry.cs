@@ -45,7 +45,7 @@ namespace Titanium.Web.Proxy.Helpers;
 /// </summary>
 internal sealed class DeadlineRegistry
 {
-    private readonly object gate = new();
+    private readonly System.Threading.Lock gate = new();
     private ProxyTimeoutKind? firedKind;
     private long firedTimestamp;
     private TimeSpan? firedConfigured;

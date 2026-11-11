@@ -17,7 +17,7 @@ internal static class WasmGuestMetrics
     /// <summary>Most metrics one process holds, so a guest cannot grow the table without bound.</summary>
     public const int MaxMetrics = 10_000;
 
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static readonly Dictionary<(string Scope, int Type, string Name), int> Ids = [];
     private static readonly List<Metric> ById = [];
 

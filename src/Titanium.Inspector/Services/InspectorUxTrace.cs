@@ -11,7 +11,7 @@ namespace Titanium.Inspector.Services;
 /// </summary>
 internal static class InspectorUxTrace
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static readonly string Path = ResolvePath();
     private const long RotateBytes = 4 * 1024 * 1024;
     private static long _seq;
