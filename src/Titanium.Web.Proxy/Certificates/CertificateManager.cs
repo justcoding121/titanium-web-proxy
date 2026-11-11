@@ -1007,12 +1007,17 @@ public sealed class CertificateManager : IDisposable
         return certificate;
     }
 
+    /// <summary>
+    ///     True while the native handle is usable. <see cref="X509Certificate.Thumbprint" /> throws
+    ///     <see cref="CryptographicException" /> once the certificate was disposed (about 25 ns, so it is safe on
+    ///     every cache hit; <c>HasPrivateKey</c> costs ~190 ns and detects nothing more).
+    /// </summary>
     private static bool IsCertificateHandleAlive(X509Certificate2 certificate)
     {
         try
         {
             _ = certificate.Thumbprint;
-            return certificate.HasPrivateKey;
+            return true;
         }
         catch (CryptographicException)
         {
@@ -1069,12 +1074,14 @@ public sealed class CertificateManager : IDisposable
     /// <param name="certificateName"></param>
     /// <returns></returns>
     public Task<X509Certificate2?> CreateServerCertificate(string certificateName) =>
-        CreateServerCertificateCore(certificateName, remainingRetries: 6);
+        CreateServerCertificateCore(certificateName, remainingRetries: 3);
 
     private async Task<X509Certificate2?> CreateServerCertificateCore(string certificateName, int remainingRetries) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
-        if (!disposed && RootCertificate == null)
-            EnsureRootCertificate();
+        // Do not call EnsureRootCertificate here: it also installs OS trust (and may elevate). MakeCertificate
+        // already creates a missing root without trusting it, which is all a mint needs.
+        var generationAtEntry = Volatile.Read(ref certificateCacheGeneration);
+        var deadHandleObserved = false;
 
         // check in cache first
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
@@ -1170,27 +1177,39 @@ public sealed class CertificateManager : IDisposable
             }
 
             certificate = null;
+            deadHandleObserved = true;
         }
 
         // Creator always removes; waiters also drop a completed null/dead entry so retry can mint
         // instead of re-awaiting the same failed task forever.
         if (createdTask || certificate == null)
         {
-            await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
             try
             {
-                if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var pending)
-                    && ReferenceEquals(pending, createCertificateTask))
-                    pendingCertificateCreationTasks.Remove(certificateName);
+                await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
+                try
+                {
+                    if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var pending)
+                        && ReferenceEquals(pending, createCertificateTask))
+                        pendingCertificateCreationTasks.Remove(certificateName);
+                }
+                finally
+                {
+                    pendingCertificateCreationTaskLock.Release();
+                }
             }
-            finally
+            catch (Exception ex) when (!createdTask && ex is OperationCanceledException or ObjectDisposedException)
             {
-                pendingCertificateCreationTaskLock.Release();
+                // A waiter that only joined a null result must not newly throw while the manager shuts down.
             }
         }
 
+        // Retry only when this call lost a race (ClearRoot bumped the generation, or the handle died).
+        // A mint that fails for any other reason (no root, engine error) is not repeated: that would
+        // multiply expensive key generation per handshake while the failure persists.
         if (certificate == null && remainingRetries > 0 && !disposed
-                                    && !clearCertificatesTokenSource.Token.IsCancellationRequested)
+            && (deadHandleObserved || Volatile.Read(ref certificateCacheGeneration) != generationAtEntry)
+            && !clearCertificatesTokenSource.Token.IsCancellationRequested)
         {
             if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
                 return cachedCertificate;
@@ -2244,15 +2263,26 @@ public sealed class CertificateManager : IDisposable
     public void ClearRootCertificate()
     {
         Interlocked.Increment(ref certificateCacheGeneration);
-        // ClearRoot must finish emptying the pending map even if Dispose cancelled the mint CTS.
-        pendingCertificateCreationTaskLock.Wait(CancellationToken.None);
-        try
+        // Drop in-flight mints signed by the old root so new requests start fresh. After Dispose the lock is
+        // gone and the map is moot.
+        if (!disposed)
         {
-            pendingCertificateCreationTasks.Clear();
-        }
-        finally
-        {
-            pendingCertificateCreationTaskLock.Release();
+            try
+            {
+                pendingCertificateCreationTaskLock.Wait(CancellationToken.None);
+                try
+                {
+                    pendingCertificateCreationTasks.Clear();
+                }
+                finally
+                {
+                    pendingCertificateCreationTaskLock.Release();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Disposed concurrently.
+            }
         }
 
         certificateCache.Clear();
