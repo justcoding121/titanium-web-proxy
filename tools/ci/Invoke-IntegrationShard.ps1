@@ -66,45 +66,66 @@ if ($classes.Count -eq 0) {
 }
 
 $prefix = 'Titanium.Web.Proxy.IntegrationTests.'
-$parts = New-Object System.Collections.Generic.List[string]
+# This class passes in its own process and fails after the rest of shard 0 has run,
+# even one class at a time. Keep it out of that process.
+$ownProcess = @{ 'Http1FramingSafetyTests' = $true }
+$batch = New-Object System.Collections.Generic.List[string]
+$solo = New-Object System.Collections.Generic.List[string]
 foreach ($class in $classes) {
-    $parts.Add("FullyQualifiedName~$prefix$class.")
-    $parts.Add("FullyQualifiedName~$prefix$class+")
+    if ($ownProcess.ContainsKey($class)) { $solo.Add($class) } else { $batch.Add($class) }
 }
 
-# & binds tighter than | in the VSTest filter language, so the class disjunction stays in parentheses.
-$filter = '(' + ($parts -join '|') + ')&TestCategory!=Slow'
+function Write-TestRsp([string]$rspPath, [string]$testFilter, [string]$resultsDir) {
+    $lines = @(
+        '--configuration', 'Release',
+        '--no-build', '--no-restore',
+        '--settings', $Settings,
+        '--filter', $testFilter,
+        '--blame-hang', '--blame-hang-timeout', '5m',
+        '--collect:Code Coverage',
+        '--results-directory', $resultsDir
+    )
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [IO.File]::WriteAllLines((Join-Path (Get-Location) $rspPath), $lines, $utf8)
+}
+
 $results = Join-Path $ResultsRoot "shard-$ShardIndex"
 New-Item -ItemType Directory -Force -Path $results | Out-Null
-
 $rspDir = Join-Path $ResultsRoot 'rsp'
 New-Item -ItemType Directory -Force -Path $rspDir | Out-Null
-$rsp = Join-Path $rspDir "shard-$ShardIndex.rsp"
-$rspLines = @(
-    '--configuration'
-    'Release'
-    '--no-build'
-    '--no-restore'
-    '--settings'
-    $Settings
-    '--filter'
-    $filter
-    '--blame-hang'
-    '--blame-hang-timeout'
-    '5m'
-    '--collect:Code Coverage'
-    '--results-directory'
-    $results
-)
-# UTF-8 without BOM. A BOM becomes part of the first argument.
-$utf8 = New-Object System.Text.UTF8Encoding $false
-[IO.File]::WriteAllLines((Join-Path (Get-Location) $rsp), $rspLines, $utf8)
 
-for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-    Write-Host "Integration shard $ShardIndex attempt $attempt of $MaxAttempts"
-    & dotnet test $Project "@$rsp"
-    if ($LASTEXITCODE -eq 0) { exit 0 }
-    if ($attempt -eq $MaxAttempts) { exit $LASTEXITCODE }
-    Write-Host "Integration shard $ShardIndex failed on attempt $attempt, retrying..."
-    Start-Sleep -Seconds 5
+if ($batch.Count -gt 0) {
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($class in $batch) {
+        $parts.Add("FullyQualifiedName~$prefix$class.")
+        $parts.Add("FullyQualifiedName~$prefix$class+")
+    }
+
+    # & binds tighter than | in the VSTest filter language, so the class disjunction stays in parentheses.
+    $filter = '(' + ($parts -join '|') + ')&TestCategory!=Slow'
+    $rsp = Join-Path $rspDir "shard-$ShardIndex.rsp"
+    Write-TestRsp $rsp $filter $results
+
+    $batchOk = $false
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        Write-Host "Integration shard $ShardIndex attempt $attempt of $MaxAttempts"
+        & dotnet test $Project "@$rsp"
+        if ($LASTEXITCODE -eq 0) { $batchOk = $true; break }
+        if ($attempt -eq $MaxAttempts) { exit $LASTEXITCODE }
+        Write-Host "Integration shard $ShardIndex failed on attempt $attempt, retrying..."
+        Start-Sleep -Seconds 5
+    }
+    if (-not $batchOk) { exit 1 }
 }
+
+foreach ($class in $solo) {
+    $soloFilter = "(FullyQualifiedName~$prefix$class.|FullyQualifiedName~$prefix$class+)&TestCategory!=Slow"
+    $soloRsp = Join-Path $rspDir "shard-$ShardIndex-$class.rsp"
+    $soloResults = Join-Path $results $class
+    Write-Host "Isolated class $class"
+    Write-TestRsp $soloRsp $soloFilter $soloResults
+    & dotnet test $Project "@$soloRsp"
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+exit 0

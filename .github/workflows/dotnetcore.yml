@@ -328,6 +328,7 @@ jobs:
         name: sonar-working
         path: .sonarqube
         if-no-files-found: error
+        include-hidden-files: true
         retention-days: 1
 
   # Integration classes marked DoNotParallelize run one at a time inside a process. Four runners
