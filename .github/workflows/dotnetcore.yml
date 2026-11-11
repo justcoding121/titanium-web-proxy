@@ -196,15 +196,17 @@ jobs:
       shell: pwsh
       run: |
         $settings = 'tests/test.runsettings'
-        # Independent unit assemblies bind loopback listeners on ephemeral ports, use in-memory
-        # test CAs (no cert-store UI), and do not touch OS proxy settings — safe to run in parallel
-        # with throttling so socket/coverage I/O stays bounded on shared runners.
-        # Plus stays out of this batch: its OIDC listener was reset when the assembly ran beside
-        # the other socket suites. xDS reconnect timing also missed its window under that load.
+        # UnitTests touches the current-user certificate store and a shared cert disk cache.
+        # It passed beside the other projects once and failed the next run, so it stays in its own process.
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Fuzz-Nightly" --collect:"Code Coverage" --results-directory coverage/unit
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        # Independent assemblies bind loopback listeners on ephemeral ports and do not touch OS proxy
+        # settings. Plus stays out: its OIDC listener was reset beside the other socket suites.
+        # xDS reconnect timing also missed its window under that load.
         # Inspector/Cli stay sequential after that: file-handle races and AppDomain leftover-assembly
         # guards are sensitive to CPU contention.
         $unitJobs = @(
-          @{ Project = 'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj'; Results = 'coverage/unit'; Filter = 'TestCategory!=Fuzz-Nightly' },
           @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
           @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
           @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
