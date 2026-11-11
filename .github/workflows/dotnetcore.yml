@@ -109,6 +109,13 @@ jobs:
         }
         Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
 
+    - name: Setup Java 21 for Sonar
+      if: env.SONAR_TOKEN != ''
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
     - name: Install SonarScanner
       if: env.SONAR_TOKEN != ''
       shell: pwsh
@@ -167,14 +174,21 @@ jobs:
       if: env.SONAR_TOKEN != ''
       continue-on-error: true
       shell: pwsh
-      run: >
-        .\.sonar\scanner\dotnet-sonarscanner begin
-        /k:"justcoding121_titanium-web-proxy"
-        /o:"justcoding121"
-        /d:sonar.token="$env:SONAR_TOKEN"
-        /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
-        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**,**/deploy/helm/**/ci/rendered-*.yaml,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/WasmModule.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmWasi.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmHostFunction.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmImports.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmRuntime.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmVm.cs"
-        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/ProxyServer.Endpoints.cs,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Cli/Scripting/ScriptingDepsCommand.cs,**/Titanium.Cli/Config/CliConfigEditor.cs,**/Titanium.Cli/Config/PlusLoader.cs,**/Titanium.Cli/Config/ConfigOverlay.cs,**/Titanium.Cli/Config/ConfigOverlayStore.cs,**/Titanium.Cli/Config/OverloadProtectionHost.cs,**/Titanium.Cli/Geo/GeoIpResolverHost.cs,**/Titanium.Gateway/Model/GatewayApiModels.cs,**/Titanium.Gateway/Control/StatusWriter.cs,**/Titanium.Gateway/Kube/GatewayApiDiscovery.cs,**/Titanium.Gateway/Kube/Informer.cs,**/Titanium.Web.Proxy.Abstractions/ReverseProxyOptions.cs,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Manager/Program.cs"
+      run: |
+        $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
+        if (-not (Test-Path -LiteralPath $java)) { throw "Java 21 not found at $java" }
+        Write-Host "Sonar begin Java: $java"
+        # Pin the hosted Temurin 21 path at begin so end on the coverage runner can use the
+        # same toolcache layout. End rejects these /d properties; begin accepts them.
+        & .\.sonar\scanner\dotnet-sonarscanner begin `
+          /k:"justcoding121_titanium-web-proxy" `
+          /o:"justcoding121" `
+          /d:sonar.token="$env:SONAR_TOKEN" `
+          /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml" `
+          /d:sonar.scanner.skipJreProvisioning=true `
+          /d:sonar.scanner.javaExePath="$java" `
+          /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**,**/deploy/helm/**/ci/rendered-*.yaml,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/WasmModule.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmWasi.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmHostFunction.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmImports.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmRuntime.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmVm.cs" `
+          /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/ProxyServer.Endpoints.cs,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Cli/Scripting/ScriptingDepsCommand.cs,**/Titanium.Cli/Config/CliConfigEditor.cs,**/Titanium.Cli/Config/PlusLoader.cs,**/Titanium.Cli/Config/ConfigOverlay.cs,**/Titanium.Cli/Config/ConfigOverlayStore.cs,**/Titanium.Cli/Config/OverloadProtectionHost.cs,**/Titanium.Cli/Geo/GeoIpResolverHost.cs,**/Titanium.Gateway/Model/GatewayApiModels.cs,**/Titanium.Gateway/Control/StatusWriter.cs,**/Titanium.Gateway/Kube/GatewayApiDiscovery.cs,**/Titanium.Gateway/Kube/Informer.cs,**/Titanium.Web.Proxy.Abstractions/ReverseProxyOptions.cs,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Manager/Program.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
@@ -244,8 +258,17 @@ jobs:
 
         dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/xds
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load; one retry.
+        $plusOk = $false
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+          Remove-Item -Recurse -Force coverage/plus -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path coverage/plus | Out-Null
+          dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
+          if ($LASTEXITCODE -eq 0) { $plusOk = $true; break }
+          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying once."
+          Start-Sleep -Seconds 5
+        }
+        if (-not $plusOk) { exit 1 }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/inspector
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/cli
@@ -471,8 +494,8 @@ jobs:
       shell: pwsh
       run: |
         if (-not (Test-Path -LiteralPath .sonarqube)) { Write-Host 'No .sonarqube directory; skipping end.'; exit 0 }
-        # begin ran on the build runner and stored that machine's JRE path. This job is a
-        # different runner, so point the saved config at the Java 21 we just installed.
+        # begin pinned Temurin 21 via skipJreProvisioning. Rewrite any leftover absolute
+        # java.exe paths to this runner's JAVA_HOME in case the toolcache layout differs.
         $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
         if (-not (Test-Path -LiteralPath $java)) { Write-Error "Java 21 not found at $java"; exit 1 }
         $javaFwd = $java -replace '\\', '/'
@@ -485,8 +508,6 @@ jobs:
             Write-Host "Rewrote Java path in $($_.Name)"
           }
         }
-        # skipJreProvisioning and javaExePath are rejected in the end phase. The rewritten
-        # config path and JAVA_HOME are what this scanner version actually uses.
         Write-Host "Sonar end Java: $java"
         .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
     - name: Assert coverage floors
@@ -495,8 +516,32 @@ jobs:
         TWP_SONAR_PULL_REQUEST: ${{ github.event.pull_request.number }}
         TWP_SONAR_BRANCH: ${{ github.ref_name }}
       run: |
-        # Prefer Sonar component coverage (same bar as the merge gate). Give the upload a moment to publish.
-        if ($env:SONAR_TOKEN) { Start-Sleep -Seconds 45 }
+        # Prefer Sonar component coverage. Poll the project analysis date instead of a blind sleep.
+        if ($env:SONAR_TOKEN) {
+          $deadline = (Get-Date).AddMinutes(2)
+          $before = $null
+          try {
+            $resp = Invoke-RestMethod -Uri 'https://sonarcloud.io/api/project_analyses/search?project=justcoding121_titanium-web-proxy&branch=develop&ps=1' -Headers @{ 'User-Agent' = 'Mozilla/5.0' } -TimeoutSec 15
+            $before = $resp.analyses[0].date
+            Write-Host "Last Sonar analysis before wait: $before"
+          } catch {
+            Write-Host "Could not read Sonar analyses before wait: $($_.Exception.Message)"
+          }
+          do {
+            Start-Sleep -Seconds 10
+            try {
+              $resp = Invoke-RestMethod -Uri 'https://sonarcloud.io/api/project_analyses/search?project=justcoding121_titanium-web-proxy&branch=develop&ps=1' -Headers @{ 'User-Agent' = 'Mozilla/5.0' } -TimeoutSec 15
+              $now = $resp.analyses[0].date
+              if ($before -and $now -and $now -ne $before) {
+                Write-Host "Sonar published a new analysis: $now"
+                break
+              }
+              Write-Host "Waiting for Sonar analysis publish (last=$now)"
+            } catch {
+              Write-Host "Sonar analysis poll: $($_.Exception.Message)"
+            }
+          } while ((Get-Date) -lt $deadline)
+        }
         powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-CoverageFloors.ps1 -CoverageXml coverage/coverage.xml -PullRequest "$env:TWP_SONAR_PULL_REQUEST" -Branch "$env:TWP_SONAR_BRANCH"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     - name: Install DocFX
