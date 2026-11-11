@@ -571,7 +571,8 @@ jobs:
     needs: [changes, sonar-build, unit, heavy-suites, integration]
     if: needs.changes.outputs.code == 'true' && needs.sonar-build.result == 'success' && needs.unit.result == 'success' && needs.heavy-suites.result == 'success' && needs.integration.result == 'success'
     runs-on: windows-latest
-    timeout-minutes: 25
+    # DocFX publish and Sonar end usually finish under 10 minutes; keep headroom for artifact download.
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
