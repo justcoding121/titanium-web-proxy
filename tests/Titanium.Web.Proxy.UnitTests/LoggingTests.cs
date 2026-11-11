@@ -21,6 +21,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 ///     <see cref="ProxyLoggerFactory" />, and the built-in console/rolling-file sinks): enable/disable,
 ///     minimum-level filtering, and rolling-file behavior.
 /// </summary>
+[DoNotParallelize] // Static ProxyLog / logger factory sinks are process-wide.
 [TestClass]
 public partial class LoggingTests
 {
