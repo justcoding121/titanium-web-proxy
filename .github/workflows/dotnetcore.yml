@@ -227,11 +227,13 @@ jobs:
         $unitFailures = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
         $unitJobs | ForEach-Object -Parallel {
           $job = $_
+          $failures = $using:unitFailures
+          $settingsPath = $using:settings
           $args = @(
             'test', $job.Project,
             '--configuration', 'Release',
             '--no-build', '--no-restore',
-            '--settings', $using:settings,
+            '--settings', $settingsPath,
             '--collect:Code Coverage',
             '--results-directory', $job.Results
           )
@@ -241,7 +243,7 @@ jobs:
           Write-Host ">>> dotnet $($args -join ' ')"
           & dotnet @args
           if ($LASTEXITCODE -ne 0) {
-            $using:unitFailures.Add("$($job.Project) exited $LASTEXITCODE")
+            [void]$failures.Add("$($job.Project) exited $LASTEXITCODE")
           }
         } -ThrottleLimit 5
 
