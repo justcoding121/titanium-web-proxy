@@ -45,9 +45,9 @@ public class LuaSnapshotAndStreamFailModeBehaviorTests
         Assert.AreEqual("c1", table.Str("cluster_id"));
         Assert.AreEqual("127.0.0.1", table.Str("client_ip"));
         Assert.AreEqual(4444L, table.Int("client_port"));
-        Assert.AreEqual(true, table["is_https"]);
+        Assert.IsTrue((bool)table["is_https"]!);
         Assert.AreEqual("hi", Encoding.UTF8.GetString(table.Bytes("body")!));
-        Assert.AreEqual(true, table["last"]);
+        Assert.IsTrue((bool)table["last"]!);
         Assert.IsNotNull(table.Table("headers"));
 
         var vars = new LuaWriter();

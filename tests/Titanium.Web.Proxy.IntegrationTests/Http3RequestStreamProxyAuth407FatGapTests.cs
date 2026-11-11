@@ -79,7 +79,7 @@ public class Http3RequestStreamProxyAuth407FatGapTests
                 "/protected");
             Assert.AreEqual(407, response.StatusCode, response.TextBody);
             Assert.IsTrue(
-                response.ExtraHeaders?.Any(h => h.Name == "proxy-authenticate") == true,
+                response.ExtraHeaders!.Any(h => h.Name == "proxy-authenticate"),
                 "407 must advertise Proxy-Authenticate.");
         }
         finally

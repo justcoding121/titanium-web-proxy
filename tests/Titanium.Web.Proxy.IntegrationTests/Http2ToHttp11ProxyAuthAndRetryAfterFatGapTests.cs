@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2ToHttp11BridgeHandler</c> suite: Retry-After and Proxy-Authenticate
 ///     on origin H1 responses reach the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2ToHttp11ProxyAuthAndRetryAfterFatGapTests
 {

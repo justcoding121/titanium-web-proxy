@@ -46,7 +46,7 @@ public class ExplicitRequestHandlerIfRangeAndPragmaFatGapTests
         request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 3);
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.PartialContent, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("explicit-etag", StringComparison.Ordinal) == true, seen);
+        Assert.IsTrue(seen!.Contains("explicit-etag", StringComparison.Ordinal), seen);
     }
 
     [TestMethod]

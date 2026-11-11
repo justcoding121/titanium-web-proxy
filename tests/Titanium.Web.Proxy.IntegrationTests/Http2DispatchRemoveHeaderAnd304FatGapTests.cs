@@ -168,7 +168,7 @@ public class Http2DispatchRemoveHeaderAnd304FatGapTests
             using var client = CreateH2Client();
             using var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/ae");
             Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-            Assert.IsTrue(seen?.Contains("gzip", StringComparison.Ordinal) == true, $"got '{seen}'");
+            Assert.IsTrue(seen!.Contains("gzip", StringComparison.Ordinal), $"got '{seen}'");
         }
         finally
         {

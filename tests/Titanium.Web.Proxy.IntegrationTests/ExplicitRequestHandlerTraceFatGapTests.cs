@@ -11,7 +11,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>RequestHandler</c> suite: TRACE is forwarded to the origin and echoed back.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ExplicitRequestHandlerTraceFatGapTests
 {

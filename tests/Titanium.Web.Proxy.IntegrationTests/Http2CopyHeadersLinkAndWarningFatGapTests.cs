@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: Link and Warning on final
 ///     responses reach the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersLinkAndWarningFatGapTests
 {
@@ -77,7 +76,7 @@ public class Http2CopyHeadersLinkAndWarningFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
 
         var link = await ReadHeaderAsync(raw, "link");
-        Assert.IsTrue(link?.Contains("preload", StringComparison.Ordinal) == true, link);
+        Assert.IsTrue(link!.Contains("preload", StringComparison.Ordinal), link);
     }
 
     [TestMethod]
@@ -115,6 +114,6 @@ public class Http2CopyHeadersLinkAndWarningFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
 
         var warning = await ReadHeaderAsync(raw, "warning");
-        Assert.IsTrue(warning?.Contains("copy", StringComparison.Ordinal) == true, warning);
+        Assert.IsTrue(warning!.Contains("copy", StringComparison.Ordinal), warning);
     }
 }

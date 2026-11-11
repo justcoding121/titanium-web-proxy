@@ -521,7 +521,7 @@ public class Http2CopyOriginBridgeCoverageTests
         {
             seenMethod = ctx.Request.Method;
             ctx.Response.StatusCode = 204;
-            ctx.Response.Headers["Allow"] = "GET, POST, OPTIONS";
+            ctx.Response.Headers.Allow = "GET, POST, OPTIONS";
             return Task.CompletedTask;
         });
 

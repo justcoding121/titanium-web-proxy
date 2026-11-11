@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat SOCKS listener suite: <see cref="SocksProxyEndPoint" /> with MITM (<c>decryptSsl: true</c>)
 ///     and HTTP clients using a SOCKS5 <see cref="IWebProxy" />.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Socks5EndpointHttpsMitmFatGapTests
 {

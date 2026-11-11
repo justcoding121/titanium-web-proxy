@@ -37,7 +37,7 @@ public class Http3OriginBridgeH1XFrameOptionsFatGapTests
         var server = testSuite.GetServer();
         server.HandleRequest(ctx =>
         {
-            ctx.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+            ctx.Response.Headers.XFrameOptions = "SAMEORIGIN";
             return ctx.Response.WriteAsync("xfo");
         });
 

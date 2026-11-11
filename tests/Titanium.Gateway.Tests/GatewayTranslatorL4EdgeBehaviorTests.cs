@@ -183,6 +183,6 @@ public class GatewayTranslatorL4EdgeBehaviorTests
         AssertValid(result);
 
         Assert.IsFalse(result.StatusPatches.Any(p => p.Kind == StatusKind.GrpcRoute));
-        Assert.AreEqual(0, result.Config.UserRoutes().Count());
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
     }
 }

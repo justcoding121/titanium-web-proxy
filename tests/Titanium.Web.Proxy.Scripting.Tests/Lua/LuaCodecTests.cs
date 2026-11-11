@@ -46,13 +46,13 @@ public class LuaCodecTests
     [TestMethod]
     public void RoundTrip_BoolTrue()
     {
-        Assert.AreEqual(true, RoundTrip(w => w.Bool(true)));
+        Assert.IsTrue((bool)RoundTrip(w => w.Bool(true))!);
     }
 
     [TestMethod]
     public void RoundTrip_BoolFalse()
     {
-        Assert.AreEqual(false, RoundTrip(w => w.Bool(false)));
+        Assert.IsFalse((bool)RoundTrip(w => w.Bool(false))!);
     }
 
     [TestMethod]
@@ -211,8 +211,8 @@ public class LuaCodecTests
         var table = (LuaTable?)Decode(w.ToArray());
         Assert.IsNotNull(table);
         Assert.IsNull(table["n"]);
-        Assert.AreEqual(true, table["b_true"]);
-        Assert.AreEqual(false, table["b_false"]);
+        Assert.IsTrue((bool)table["b_true"]!);
+        Assert.IsFalse((bool)table["b_false"]!);
         Assert.AreEqual(7L, table["l"]);
         Assert.AreEqual(3L, table["i"]);
         Assert.AreEqual(1.5, table["d"]);

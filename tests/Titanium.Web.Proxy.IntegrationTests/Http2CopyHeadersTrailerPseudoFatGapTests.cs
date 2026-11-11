@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: request trailers with pseudo-headers
 ///     and trailers containing Content-Length (forbidden trailer field).
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersTrailerPseudoFatGapTests
 {

@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: BeforeRequest removes a header,
 ///     Accept-Encoding inject, and origin 304.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2RemoveHeaderAnd304FatGapTests
 {
@@ -107,7 +106,7 @@ public class Http11ToHttp2RemoveHeaderAnd304FatGapTests
         using var client = suite.GetClient(proxy);
         using var response = await client.GetAsync(origin.Url + "ae");
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("gzip", StringComparison.Ordinal) == true, $"got '{seen}'");
+        Assert.IsTrue(seen!.Contains("gzip", StringComparison.Ordinal), $"got '{seen}'");
     }
 
     [TestMethod]

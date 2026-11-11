@@ -10,6 +10,8 @@ namespace Titanium.Web.Proxy.Scripting.Tests;
 [TestClass]
 public class ScriptPhaseHostChainTrailerEditBehaviorTests
 {
+    private static readonly string[] ExpectedRemovedHeaderNames = ["x-drop"];
+
     private sealed class RecordingHost(ScriptPhases phases = ScriptPhases.All) : IScriptPhaseHost
     {
         public List<ScriptPhaseContext> Contexts { get; } = [];
@@ -79,7 +81,7 @@ public class ScriptPhaseHostChainTrailerEditBehaviorTests
         Assert.AreEqual("1S", seen.Headers.Single(h => h.Key == "grpc-timeout").Value);
         Assert.AreEqual("o", seen.Headers.Single(h => h.Key == "x-other").Value);
         Assert.AreEqual("1S", result.SetHeaders!["grpc-timeout"]);
-        CollectionAssert.AreEqual(new[] { "x-drop" }, result.RemoveHeaders!.ToArray());
+        CollectionAssert.AreEqual(ExpectedRemovedHeaderNames, result.RemoveHeaders!.ToArray());
     }
 
     [TestMethod]

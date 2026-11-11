@@ -9,6 +9,8 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class WafSpecParserBehaviorTests
 {
+    private static readonly string[] ExpectedUserAgentHeaders = ["User-Agent"];
+
     [TestMethod]
     public void ParseSeverity_AndCheck_RejectUnknown_AndAcceptKnown()
     {
@@ -34,7 +36,7 @@ public class WafSpecParserBehaviorTests
         Assert.IsTrue(targets.HasFlag(WafTargets.Header));
         Assert.IsTrue(targets.HasFlag(WafTargets.Cookie));
         Assert.IsTrue(targets.HasFlag(WafTargets.Body));
-        CollectionAssert.AreEqual(new[] { "User-Agent" }, headers!.ToArray());
+        CollectionAssert.AreEqual(ExpectedUserAgentHeaders, headers!.ToArray());
 
         var badHeader = Assert.ThrowsExactly<WafRuleException>(() =>
             WafSpecParser.ParseTargets("r1", ["cookie:Name"], null, out _));

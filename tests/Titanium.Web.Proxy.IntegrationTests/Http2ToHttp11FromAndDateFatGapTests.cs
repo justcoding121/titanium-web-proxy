@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http2ToHttp11BridgeHandler</c> suite: Date and From on H1 responses reach the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2ToHttp11FromAndDateFatGapTests
 {

@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: client stream-id reuse after a finished
 ///     stream, and trailer HEADERS arriving before any request HEADERS.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersReuseAndTrailerBeforeFatGapTests
 {

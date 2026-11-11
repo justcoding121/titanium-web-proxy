@@ -12,6 +12,9 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class OidcCookieAndSessionEdgeTests
 {
+    private static readonly string[] ExpectedOidcCookieValues = ["one", "two"];
+    private static readonly string[] ExpectedOpsGroup = ["ops"];
+
     [TestMethod]
     public void Values_ReadsEveryMatchingCookie_AcrossHeaderLines()
     {
@@ -20,7 +23,7 @@ public class OidcCookieAndSessionEdgeTests
         request.Headers.AddHeader("Cookie", "titanium_oidc=two; a=2");
 
         var values = OidcCookies.Values(request, "titanium_oidc");
-        CollectionAssert.AreEqual(new[] { "one", "two" }, values);
+        CollectionAssert.AreEqual(ExpectedOidcCookieValues, values);
         Assert.AreEqual(0, OidcCookies.Values(request, "missing").Count);
         Assert.AreEqual(0, OidcCookies.Values(new Request(), "titanium_oidc").Count);
     }
@@ -103,7 +106,7 @@ public class OidcCookieAndSessionEdgeTests
         Assert.IsNotNull(parsed);
         Assert.AreEqual("u1", parsed.Subject);
         Assert.AreEqual("u1@example.test", parsed.Email);
-        CollectionAssert.AreEqual(new[] { "ops" }, parsed.Groups);
+        CollectionAssert.AreEqual(ExpectedOpsGroup, parsed.Groups);
         Assert.AreEqual("admin", parsed.Claims["role"]);
         Assert.AreEqual(1_700_000_000, parsed.ExpiresAt);
         Assert.AreEqual("rt", parsed.RefreshToken);

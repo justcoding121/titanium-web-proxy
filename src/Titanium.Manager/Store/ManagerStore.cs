@@ -632,22 +632,9 @@ internal sealed class ManagerStore : IDisposable
                 // Known agent with no desired yet: during a staged rollout keep previous;
                 // otherwise fall through to fleet published. Unknown node ids must not inherit
                 // the staged "keep previous" path — they should see the fleet published target.
-                if (agent is not null)
+                if (agent is not null && TryGetStagedPreviousConfig(fleetId, out var staged))
                 {
-                    var active = GetActiveRolloutUnlocked(fleetId);
-                    if (active is not null &&
-                        active.PreviousRevisionId is long prevId &&
-                        (string.Equals(active.State, StateRunning, StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(active.State, StatePaused, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        var prev = GetRevisionUnlocked(prevId);
-                        if (prev is not null)
-                        {
-                            return new PublishedConfig(prev.Id, prev.ContentHash, prev.YamlText);
-                        }
-
-                        return null;
-                    }
+                    return staged;
                 }
             }
 
@@ -1169,6 +1156,27 @@ internal sealed class ManagerStore : IDisposable
         }
 
         return new PublishedConfig(reader.GetInt64(0), reader.GetString(1), reader.GetString(2));
+    }
+
+    private bool TryGetStagedPreviousConfig(long fleetId, out PublishedConfig? config)
+    {
+        config = null;
+        var active = GetActiveRolloutUnlocked(fleetId);
+        if (active is null ||
+            active.PreviousRevisionId is not long prevId ||
+            !(string.Equals(active.State, StateRunning, StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(active.State, StatePaused, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var prev = GetRevisionUnlocked(prevId);
+        if (prev is not null)
+        {
+            config = new PublishedConfig(prev.Id, prev.ContentHash, prev.YamlText);
+        }
+
+        return true;
     }
 
     private RolloutRow? GetActiveRolloutUnlocked(long fleetId)

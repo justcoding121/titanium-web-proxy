@@ -90,7 +90,10 @@ public class InspectorStoreFileLogAndVmGuardSoftCoverageBehaviorTests
             var logger = provider.CreateLogger("drop.tests");
             for (var i = 0; i < 40; i++)
             {
-                logger.LogInformation("flood-{N}", i);
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("flood-{N}", i);
+                }
             }
 
             await Task.Delay(150);

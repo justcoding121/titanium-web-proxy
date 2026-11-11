@@ -124,7 +124,7 @@ public class Http2DispatchIfUnmodifiedFatGapTests
             request.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
             using var response = await client.SendAsync(request);
             Assert.AreEqual(HttpStatusCode.PreconditionFailed, response.StatusCode);
-            Assert.IsTrue(seen?.Contains("Nov 2026", StringComparison.Ordinal) == true, seen);
+            Assert.IsTrue(seen!.Contains("Nov 2026", StringComparison.Ordinal), seen);
         }
         finally
         {

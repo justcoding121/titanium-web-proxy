@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: PUT body, User-Agent inject, and
 ///     GenericResponse 418.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2PutAndUaFatGapTests
 {

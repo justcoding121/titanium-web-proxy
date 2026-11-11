@@ -10,7 +10,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat explicit handler suite: WebDAV LOCK method is forwarded and answered.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ExplicitRequestHandlerLockMethodFatGapTests
 {

@@ -51,7 +51,7 @@ public class TcpConnectionFactoryNestedHttpsFatGapTests
         Assert.AreEqual("nested-1", first);
         Assert.AreEqual("nested-2", second);
         Assert.AreEqual(2, hits);
-        Assert.IsTrue(upstreamProxy.ProxyAuthorizationValues.Count >= 1,
+        Assert.IsFalse(upstreamProxy.ProxyAuthorizationValues.IsEmpty,
             "Nested CONNECT must authenticate at least once.");
     }
 

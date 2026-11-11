@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http2ToHttp11BridgeHandler</c> suite: origin 401 WWW-Authenticate reaches the HTTP/1.1 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2ToHttp11WwwAuthenticateFatGapTests
 {

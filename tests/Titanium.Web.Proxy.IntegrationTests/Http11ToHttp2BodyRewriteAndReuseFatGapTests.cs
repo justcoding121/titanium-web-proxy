@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: BeforeResponse body replace,
 ///     keep-alive GET then POST reuse, and origin 204 then GET on one connection.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2BodyRewriteAndReuseFatGapTests
 {

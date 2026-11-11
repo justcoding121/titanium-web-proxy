@@ -17,7 +17,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: DELETE, PATCH body, UserData across
 ///     AfterResponse, and origin 418 short response.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2DeleteAndPatchFatGapTests
 {

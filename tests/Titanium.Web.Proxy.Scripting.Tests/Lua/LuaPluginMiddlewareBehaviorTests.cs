@@ -166,7 +166,7 @@ public class LuaPluginMiddlewareBehaviorTests
         Assert.AreEqual(1, nexts);
         Assert.AreEqual("T:HELLO", await session.GetRequestBodyAsString());
         Assert.AreEqual("5", session.HttpClient.Request.Headers.GetFirstHeader("x-body-len")!.Value);
-        Assert.IsFalse(context.Items.Any(), "script vars must not leak past the middleware");
+        Assert.AreEqual(0, context.Items.Count, "script vars must not leak past the middleware");
     }
 
     [TestMethod]

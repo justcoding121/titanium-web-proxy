@@ -29,7 +29,7 @@ public class OriginFailureResponsesCapacityFatGapTests
         OriginFailureResponses.Apply(args, ex);
 
         Assert.AreEqual((int)HttpStatusCode.ServiceUnavailable, args.HttpClient.Response.StatusCode);
-        Assert.IsInstanceOfType(args.Exception, typeof(UpstreamCapacityException));
+        Assert.IsInstanceOfType<UpstreamCapacityException>(args.Exception);
         Assert.AreEqual("1", args.HttpClient.Response.Headers.GetHeaderValueOrNull("Retry-After"));
         StringAssert.Contains(args.HttpClient.Response.BodyString ?? string.Empty, "connection limit");
     }

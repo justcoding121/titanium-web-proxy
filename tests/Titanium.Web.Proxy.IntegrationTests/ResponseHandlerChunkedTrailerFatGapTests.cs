@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat ResponseHandler suite: chunked HTTP/1.1 responses carrying trailing headers.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ResponseHandlerChunkedTrailerFatGapTests
 {

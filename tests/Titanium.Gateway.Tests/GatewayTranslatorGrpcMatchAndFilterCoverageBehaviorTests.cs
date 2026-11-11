@@ -112,7 +112,7 @@ public class GatewayTranslatorGrpcMatchAndFilterCoverageBehaviorTests
             t.Parameters is not null &&
             t.Parameters.TryGetValue("name", out var name) &&
             string.Equals(name, "x-grpc", StringComparison.OrdinalIgnoreCase)));
-        Assert.IsTrue(route.Match?.PathKind == PathMatchKind.Regex);
+        Assert.AreEqual(PathMatchKind.Regex, route.Match?.PathKind);
 
         b.GrpcRoutes.Clear();
         b.GrpcRoutes.Add(GrpcRoute(
@@ -144,7 +144,7 @@ public class GatewayTranslatorGrpcMatchAndFilterCoverageBehaviorTests
         var accepted = Cond(Parent(result, StatusKind.GrpcRoute).Conditions, "Accepted");
         Assert.AreEqual("False", accepted.Status);
         Assert.AreEqual("NoMatchingParent", accepted.Reason);
-        Assert.AreEqual(0, result.Config.UserRoutes().Count());
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
     }
 
     [TestMethod]

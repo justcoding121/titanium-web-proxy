@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: SetRequestBodyString, path rewrite,
 ///     and BeforeResponse response header mark.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2SetBodyAndPathFatGapTests
 {

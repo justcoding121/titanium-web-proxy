@@ -19,6 +19,7 @@ namespace Titanium.Xds.Tests;
 [TestClass]
 public class XdsSnapshotGapBehaviorTests
 {
+    private static readonly string[] ExpectedWildcardHosts = ["*"];
     private string _stateDir = string.Empty;
 
     [TestInitialize]
@@ -145,7 +146,7 @@ public class XdsSnapshotGapBehaviorTests
         var result = SecretTranslator.Translate(secret, _stateDir);
 
         Assert.IsTrue(result.IsSuccess, result.Error?.Message);
-        CollectionAssert.AreEqual(new[] { "*" }, result.Value!.Hosts.ToArray());
+        CollectionAssert.AreEqual(ExpectedWildcardHosts, result.Value!.Hosts.ToArray());
     }
 
     [TestMethod]

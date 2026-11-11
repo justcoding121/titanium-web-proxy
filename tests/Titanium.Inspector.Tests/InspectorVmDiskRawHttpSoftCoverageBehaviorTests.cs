@@ -29,6 +29,7 @@ public class InspectorVmDiskRawHttpSoftCoverageBehaviorTests
         interception.EnsureShutdown();
         interception.Stop();
         interception.Dispose();
+        Assert.IsFalse(interception.IsRunning);
     }
 
     [TestMethod]

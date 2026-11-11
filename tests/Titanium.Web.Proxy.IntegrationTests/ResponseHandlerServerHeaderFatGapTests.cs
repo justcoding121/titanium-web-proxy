@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>ResponseHandler</c> suite: origin <c>Server</c> header survives MITM forward.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ResponseHandlerServerHeaderFatGapTests
 {

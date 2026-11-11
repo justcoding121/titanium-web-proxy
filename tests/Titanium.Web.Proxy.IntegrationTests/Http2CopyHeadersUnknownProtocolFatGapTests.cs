@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: unknown extended-CONNECT <c>:protocol</c>
 ///     tokens must 501 (not forward), and origin EnableConnectProtocol=0 refuses websocket.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersUnknownProtocolFatGapTests
 {

@@ -11,7 +11,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: Clear-Site-Data on final responses reaches the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersClearSiteDataFatGapTests
 {

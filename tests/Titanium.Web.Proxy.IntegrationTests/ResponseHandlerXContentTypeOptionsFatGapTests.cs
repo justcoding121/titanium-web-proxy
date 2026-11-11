@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>ResponseHandler</c> suite: X-Content-Type-Options survives MITM forward.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ResponseHandlerXContentTypeOptionsFatGapTests
 {
@@ -36,7 +35,7 @@ public class ResponseHandlerXContentTypeOptionsFatGapTests
         var server = suite.GetServer();
         server.HandleRequest(ctx =>
         {
-            ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Response.Headers.XContentTypeOptions = "nosniff";
             return ctx.Response.WriteAsync("xcto");
         });
 

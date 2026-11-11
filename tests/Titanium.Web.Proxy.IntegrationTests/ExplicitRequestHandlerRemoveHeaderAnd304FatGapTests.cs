@@ -77,7 +77,7 @@ public class ExplicitRequestHandlerRemoveHeaderAnd304FatGapTests
         request.Headers.TryAddWithoutValidation("Accept-Encoding", "gzip");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("gzip", StringComparison.OrdinalIgnoreCase) == true, $"got '{seen}'");
+        Assert.IsTrue(seen!.Contains("gzip", StringComparison.OrdinalIgnoreCase), $"got '{seen}'");
     }
 
     [TestMethod]

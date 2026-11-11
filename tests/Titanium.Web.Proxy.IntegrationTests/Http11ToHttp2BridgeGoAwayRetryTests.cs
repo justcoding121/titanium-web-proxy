@@ -37,8 +37,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///         </item>
 ///     </list>
 /// </summary>
-[TestClass]
 [DoNotParallelize]
+[TestClass]
 public class Http11ToHttp2BridgeGoAwayRetryTests
 {
     private static TestServer sharedServer = null!;

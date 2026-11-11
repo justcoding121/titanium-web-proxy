@@ -14,6 +14,8 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public class GatewayListenerHttpsUdpAndGrpcHostBehaviorTests
 {
+    private static readonly string[] ExpectedMatchHosts = ["app.example.com"];
+
     private static Condition Cond(IReadOnlyList<Condition> list, string type) => list.Single(c => c.Type == type);
 
     private static RouteParentStatus Parent(RenderResult result, StatusKind kind, string route = "r") =>
@@ -52,7 +54,7 @@ public class GatewayListenerHttpsUdpAndGrpcHostBehaviorTests
         var listener = result.StatusPatches.Single(p => p.Kind == StatusKind.Gateway).Listeners!.Single();
         Assert.AreEqual("False", Cond(listener.Conditions, "Accepted").Status);
         Assert.AreEqual("PortUnavailable", Cond(listener.Conditions, "Accepted").Reason);
-        Assert.AreEqual(0, result.Config.UserRoutes().Count());
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
     }
 
     [TestMethod]
@@ -94,7 +96,7 @@ public class GatewayListenerHttpsUdpAndGrpcHostBehaviorTests
         var okResult = ok.Render();
         AssertValid(okResult);
         CollectionAssert.AreEqual(
-            new[] { "app.example.com" },
+            ExpectedMatchHosts,
             okResult.Config.UserRoutes().Single().Match!.Hosts!.ToArray());
 
         var deny = Basic();
@@ -105,7 +107,7 @@ public class GatewayListenerHttpsUdpAndGrpcHostBehaviorTests
         Assert.AreEqual(
             "NotAllowedByListeners",
             Cond(Parent(denyResult, StatusKind.GrpcRoute).Conditions, "Accepted").Reason);
-        Assert.AreEqual(0, denyResult.Config.UserRoutes().Count());
+        Assert.AreEqual(0, denyResult.Config.UserRoutes().Count);
     }
 
     [TestMethod]

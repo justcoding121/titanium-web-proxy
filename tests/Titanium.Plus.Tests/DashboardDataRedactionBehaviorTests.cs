@@ -11,6 +11,11 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class DashboardDataRedactionBehaviorTests
 {
+    private static readonly string[] ExpectedRedactedTransforms =
+    [
+        "RequestHeader", "RequestHeader(name=X-Auth, path=/keep, value=***)",
+    ];
+
     [TestMethod]
     public void Routes_DescribeMatch_ShowsNamesNotValues()
     {
@@ -134,7 +139,7 @@ public class DashboardDataRedactionBehaviorTests
             null);
 
         CollectionAssert.AreEqual(
-            new[] { "RequestHeader", "RequestHeader(name=X-Auth, path=/keep, value=***)" },
+            ExpectedRedactedTransforms,
             page.Routes[0].Transforms.ToArray());
     }
 }

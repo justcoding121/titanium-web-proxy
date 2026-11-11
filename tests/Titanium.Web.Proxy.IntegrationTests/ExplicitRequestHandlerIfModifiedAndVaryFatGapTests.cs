@@ -70,7 +70,7 @@ public class ExplicitRequestHandlerIfModifiedAndVaryFatGapTests
         request.Headers.TryAddWithoutValidation("Authorization", "Bearer explicit-gap");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("Bearer explicit-gap", StringComparison.Ordinal) == true, seen);
+        Assert.IsTrue(seen!.Contains("Bearer explicit-gap", StringComparison.Ordinal), seen);
     }
 
     [TestMethod]

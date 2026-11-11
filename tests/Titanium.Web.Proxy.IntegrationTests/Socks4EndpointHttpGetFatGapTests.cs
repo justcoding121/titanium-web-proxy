@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat SOCKS4 listener suite: cleartext HTTP must still be intercepted (not relayed opaquely).
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Socks4EndpointHttpGetFatGapTests
 {

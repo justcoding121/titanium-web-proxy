@@ -93,8 +93,8 @@ public class LuaJwtBehaviorTests
         CollectionAssert.AreEqual("hi"u8.ToArray(), (byte[]?)table["s"]);
         Assert.AreEqual(7L, table["n"]);
         Assert.AreEqual(1.5, table["f"]);
-        Assert.AreEqual(true, table["t"]);
-        Assert.AreEqual(false, table["f2"]);
+        Assert.IsTrue((bool)table["t"]!);
+        Assert.IsFalse((bool)table["f2"]!);
         Assert.IsNull(table["z"]);
         var array = (LuaTable?)table["a"];
         Assert.IsNotNull(array);

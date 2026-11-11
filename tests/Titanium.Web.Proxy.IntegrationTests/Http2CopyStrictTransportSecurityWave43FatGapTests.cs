@@ -8,7 +8,6 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyStrictTransportSecurityWave43FatGapTests
 {

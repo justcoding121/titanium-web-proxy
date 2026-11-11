@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: response Content-Language reaches the H1 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2ContentLanguageFatGapTests
 {

@@ -177,7 +177,7 @@ public class Http2ToHttp11BridgeExtendedTests
         var cookieHeader = string.Empty;
         server.HandleRequest(ctx =>
         {
-            cookieHeader = ctx.Request.Headers["Cookie"].ToString();
+            cookieHeader = ctx.Request.Headers.Cookie.ToString();
             return ctx.Response.WriteAsync("ok");
         });
 

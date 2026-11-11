@@ -176,7 +176,7 @@ public class WasmHttpAndStreamContextBehaviorTests
 
         var reader = new LuaReader(encoded);
         Assert.IsNull(reader.Read());
-        Assert.AreEqual(true, reader.Read());
+        Assert.IsTrue((bool)reader.Read()!);
         Assert.AreEqual(3L, reader.Read());
         Assert.AreEqual(4L, reader.Read());
         Assert.AreEqual(1.5, reader.Read());

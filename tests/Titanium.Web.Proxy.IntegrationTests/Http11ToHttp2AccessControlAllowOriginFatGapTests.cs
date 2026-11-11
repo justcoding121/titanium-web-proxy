@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: Access-Control-Allow-Origin on the H2 origin reaches the client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2AccessControlAllowOriginFatGapTests
 {

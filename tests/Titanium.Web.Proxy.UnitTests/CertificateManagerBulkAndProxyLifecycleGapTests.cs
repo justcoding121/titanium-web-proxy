@@ -110,8 +110,11 @@ public class CertificateManagerBulkAndProxyLifecycleGapTests
     public void SetThreadPoolMinThread_IsSafeForSmallValues()
     {
         var method = typeof(ProxyServer).GetMethod("SetThreadPoolMinThread", PrivateStatic)!;
+        ThreadPool.GetMinThreads(out var workersBefore, out _);
         method.Invoke(null, [1]);
         method.Invoke(null, [Environment.ProcessorCount]);
+        ThreadPool.GetMinThreads(out var workersAfter, out _);
+        Assert.IsTrue(workersAfter >= workersBefore);
     }
 
     [TestMethod]
@@ -122,6 +125,7 @@ public class CertificateManagerBulkAndProxyLifecycleGapTests
         var method = typeof(ProxyServer).GetMethod("OnException",
             BindingFlags.NonPublic | BindingFlags.Instance)!;
         method.Invoke(proxy, [null, new InvalidOperationException("unit")]);
+        Assert.IsFalse(proxy.ProxyRunning);
     }
 
     [TestMethod]

@@ -11,7 +11,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: COEP on final responses reaches the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersCrossOriginEmbedderPolicyWave42FatGapTests
 {

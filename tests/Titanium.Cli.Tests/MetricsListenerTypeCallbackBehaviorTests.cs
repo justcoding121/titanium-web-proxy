@@ -33,7 +33,7 @@ public class MetricsListenerTypeCallbackBehaviorTests
         StringAssert.Contains(text, "twp_proxy_type_int_total");
         StringAssert.Contains(text, "twp_proxy_type_float_seconds");
         Assert.IsTrue(
-            text.Contains("3", StringComparison.Ordinal),
+            text.Contains('3', StringComparison.Ordinal),
             "int counter value must appear in exposition");
     }
 

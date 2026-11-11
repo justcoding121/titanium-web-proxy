@@ -12,6 +12,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class InspectorServiceEdgeBehaviorTests
 {
+    private static readonly string[] ExpectedRingMessages = ["a", "b", "c", "d", "e"];
+
     // Bug class: Matches ignores MaxChars truncation, treats "errors" differently from "error", or FreeText/HasClass
     // blow up on null/empty so the flyout and the grid disagree on the same token.
     [TestMethod]
@@ -167,13 +169,13 @@ public class InspectorServiceEdgeBehaviorTests
     {
         using var ring = new RunLogRing(200);
         var logger = ring.CreateLogger("cap");
-        foreach (var word in new[] { "a", "b", "c", "d", "e" })
+        foreach (var word in ExpectedRingMessages)
         {
             logger.Log(LogLevel.Error, 0, word, null, static (state, _) => state);
         }
 
         var before = await WaitFor(ring, 5);
-        CollectionAssert.AreEqual(new[] { "a", "b", "c", "d", "e" }, before.Select(e => e.Message).ToArray());
+        CollectionAssert.AreEqual(ExpectedRingMessages, before.Select(e => e.Message).ToArray());
         var version = ring.Version;
 
         ring.SetCapacity(200);
@@ -182,7 +184,7 @@ public class InspectorServiceEdgeBehaviorTests
         ring.SetCapacity(100);
         Assert.IsTrue(ring.Version > version);
         Assert.AreEqual(100, ring.Capacity);
-        CollectionAssert.AreEqual(new[] { "a", "b", "c", "d", "e" }, ring.Snapshot().Select(e => e.Message).ToArray());
+        CollectionAssert.AreEqual(ExpectedRingMessages, ring.Snapshot().Select(e => e.Message).ToArray());
 
         // Fill past the new capacity, then shrink again so the newest lines are kept.
         for (var i = 0; i < 120; i++)

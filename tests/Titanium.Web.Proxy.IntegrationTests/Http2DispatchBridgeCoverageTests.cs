@@ -244,8 +244,8 @@ public class Http2DispatchBridgeCoverageTests
         {
             server.HandleRequest(context =>
             {
-                context.Response.Headers["Connection"] = "keep-alive";
-                context.Response.Headers["Keep-Alive"] = "timeout=60";
+                context.Response.Headers.Connection = "keep-alive";
+                context.Response.Headers.KeepAlive = "timeout=60";
                 return context.Response.WriteAsync("hop-strip-check");
             });
 

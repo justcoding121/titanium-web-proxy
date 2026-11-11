@@ -156,5 +156,6 @@ public class CertificateManagerAndUdpEdgeTests
         using var proxy = new ProxyServer(false, false, false);
         var connect = new Titanium.Web.Proxy.Http.ConnectRequest((ByteString)"noop.example:443");
         proxy.OnBeforeUpStreamConnectRequest(connect).GetAwaiter().GetResult();
+        Assert.AreEqual((ByteString)"noop.example:443", connect.Authority);
     }
 }

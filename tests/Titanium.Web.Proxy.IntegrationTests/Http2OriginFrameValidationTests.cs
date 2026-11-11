@@ -445,7 +445,7 @@ public class Http2OriginFrameValidationTests
 
         _ = TrySendRequestAsync(proxy.ProxyEndPoints[0].Port, new Uri(rawServer.Url));
         await serverSentGoAwayTcs.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.IsTrue(true, "Proxy must not crash on a short GOAWAY payload.");
+        Assert.IsTrue(proxy.ProxyRunning, "Proxy must not crash on a short GOAWAY payload.");
     }
 
     // -------------------------------------------------------------------------

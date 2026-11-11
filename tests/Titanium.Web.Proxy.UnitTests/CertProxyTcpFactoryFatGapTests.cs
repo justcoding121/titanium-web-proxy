@@ -3,6 +3,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -45,8 +46,8 @@ public class CertProxyTcpFactoryFatGapTests
     {
         using var mgr = NewMgr();
         mgr.CreateRootCertificate(false);
-        _ = mgr.IsRootCertificateUserTrusted();
-        _ = mgr.IsRootCertificateMachineTrusted();
+        Assert.IsFalse(mgr.IsRootCertificateUserTrusted());
+        Assert.IsFalse(mgr.IsRootCertificateMachineTrusted());
     }
 
     [TestMethod]
@@ -96,9 +97,13 @@ public class CertProxyTcpFactoryFatGapTests
     public void SetThreadPoolMinThread_MultipleCalls_AreSafe()
     {
         var method = typeof(ProxyServer).GetMethod("SetThreadPoolMinThread", PrivateStatic)!;
+        ThreadPool.GetMinThreads(out _, out var ioBefore);
         method.Invoke(null, [2]);
         method.Invoke(null, [Environment.ProcessorCount * 2]);
         method.Invoke(null, [1]);
+        ThreadPool.GetMinThreads(out var workersAfter, out var ioAfter);
+        Assert.IsTrue(workersAfter >= 1);
+        Assert.IsTrue(ioAfter >= ioBefore);
     }
 
     [TestMethod]

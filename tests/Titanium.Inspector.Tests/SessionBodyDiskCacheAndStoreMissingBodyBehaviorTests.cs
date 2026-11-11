@@ -53,6 +53,7 @@ public class SessionBodyDiskCacheAndStoreMissingBodyBehaviorTests
         {
             Directory.Delete(root, recursive: true);
             cache.ClearAllRuns();
+            Assert.AreEqual(0, cache.GetCacheStats().TotalBytes);
         }
         finally
         {

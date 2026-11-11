@@ -1,4 +1,3 @@
-using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
@@ -24,7 +23,7 @@ public class ToolbarHeightBaselineTests
     {
         await using var fx = new InspectorHeadlessFixture();
         await fx.StartAsync();
-        await fx.DispatchAsync(() =>
+        await fx.DispatchAsync(async () =>
         {
             Assert.AreEqual(1280, fx.Window.Width, 0.1);
             Assert.IsTrue(fx.Robot.TryFind<StackPanel>("ToolbarPanel", out var panel) && panel is not null);
@@ -57,7 +56,7 @@ public class ToolbarHeightBaselineTests
                 wrapped = filters.Bounds.Y > search.Bounds.Y;
                 if (!wrapped)
                 {
-                    Thread.Sleep(25);
+                    await Task.Delay(25);
                 }
             }
 

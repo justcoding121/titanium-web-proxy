@@ -311,6 +311,7 @@ public class Http2HeaderViolationAndOriginTests
 
         // If the proxy hangs after client GOAWAY, the test timeout triggers. Passing means no hang.
         await Task.Delay(500); // give the proxy a moment to react
+        Assert.IsTrue(proxy.ProxyRunning);
     }
 
     // =========================================================================
@@ -743,7 +744,7 @@ public class Http2HeaderViolationAndOriginTests
         server.HandleRequest(ctx =>
         {
             ctx.Response.StatusCode = 405;
-            ctx.Response.Headers["Allow"] = "GET, HEAD";
+            ctx.Response.Headers.Allow = "GET, HEAD";
             return ctx.Response.WriteAsync("not-allowed");
         });
 

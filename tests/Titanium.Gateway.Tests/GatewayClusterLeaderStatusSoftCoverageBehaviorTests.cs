@@ -51,7 +51,7 @@ public class GatewayClusterLeaderStatusSoftCoverageBehaviorTests
         {
             await ClusterFixture.WaitForAsync(() => cache.HasSynced);
             var snap = cache.Snapshot();
-            Assert.IsTrue(snap.ConfigMaps is not null);
+            Assert.IsNotNull(snap.ConfigMaps);
             Assert.IsTrue(cache.IsKindAvailable("tlsroutes"));
             _ = snap.BackendTlsPolicies;
         }

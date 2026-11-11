@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>TransparentClientHandler</c> suite: TLS client to cleartext origin forward and keep-alive reuse.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class TransparentClientHandlerCleartextForwardFatGapTests
 {

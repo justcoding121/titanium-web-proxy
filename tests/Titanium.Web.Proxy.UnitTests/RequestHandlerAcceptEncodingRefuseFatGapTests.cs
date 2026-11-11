@@ -30,7 +30,7 @@ public class RequestHandlerAcceptEncodingRefuseFatGapTests
         var ae = headers.GetHeaderValueOrNull("Accept-Encoding");
         Assert.IsNotNull(ae);
         Assert.IsTrue(ae!.Contains("identity", StringComparison.OrdinalIgnoreCase), ae);
-        Assert.IsFalse(ae.Contains("*", StringComparison.Ordinal), ae);
+        Assert.IsFalse(ae.Contains('*', StringComparison.Ordinal), ae);
     }
 
     [TestMethod]

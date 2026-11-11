@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>TransparentClientHandler</c> suite: DELETE method on cleartext-forward transparent path.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class TransparentClientHandlerDeleteMethodFatGapTests
 {

@@ -116,7 +116,7 @@ public class Http2DispatchAcceptDatetimeFatGapTests
             client.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Datetime", "Mon, 09 Nov 2026 12:00:00 GMT");
             using var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/adt");
             Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-            Assert.IsTrue(seen?.Contains("Nov 2026", StringComparison.Ordinal) == true, seen);
+            Assert.IsTrue(seen!.Contains("Nov 2026", StringComparison.Ordinal), seen);
         }
         finally
         {

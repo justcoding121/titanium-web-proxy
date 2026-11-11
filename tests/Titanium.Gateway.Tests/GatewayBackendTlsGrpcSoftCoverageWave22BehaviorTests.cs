@@ -50,7 +50,7 @@ public class GatewayBackendTlsGrpcSoftCoverageWave22BehaviorTests
         b.GrpcRoutes.Add(route);
         var result = b.Render();
         AssertValid(result);
-        Assert.AreEqual(1, result.Config.UserRoutes().Count());
+        Assert.AreEqual(1, result.Config.UserRoutes().Count);
         Assert.AreEqual("True", result.StatusPatches.Single(p => p.Kind == StatusKind.GrpcRoute).Parents!.Single()
             .Conditions!.Single(c => c.Type == "Accepted").Status);
     }

@@ -14,6 +14,8 @@ namespace Titanium.Cli.Tests;
 public class RunCommandPassthroughSniBehaviorTests
 {
     private static readonly BindingFlags Priv = BindingFlags.NonPublic | BindingFlags.Static;
+    private static readonly string[] ExpectedTerminateTlsAlpn = ["h2", "http/1.1"];
+    private static readonly string[] ExpectedTrustedProxySources = ["127.0.0.1/32"];
 
     // Bug class: a passthrough listener with SNI routes still decrypts / ignores the routes, so L4 routing never fires.
     [TestMethod]
@@ -109,10 +111,10 @@ public class RunCommandPassthroughSniBehaviorTests
         Assert.IsTrue(require.TerminateTls);
         Assert.AreEqual(TimeSpan.FromSeconds(7), require.TlsHandshakeTimeout);
         Assert.AreEqual(12, require.MaxConcurrentTlsHandshakes);
-        CollectionAssert.AreEqual(new[] { "h2", "http/1.1" }, require.TerminateTlsAlpn!.ToArray());
+        CollectionAssert.AreEqual(ExpectedTerminateTlsAlpn, require.TerminateTlsAlpn!.ToArray());
         Assert.AreEqual(ClientCertificateMode.Require, require.ClientCertificateMode);
         Assert.IsTrue(require.AcceptProxyProtocol);
-        CollectionAssert.AreEqual(new[] { "127.0.0.1/32" }, require.TrustedProxyProtocolSources!.ToArray());
+        CollectionAssert.AreEqual(ExpectedTrustedProxySources, require.TrustedProxyProtocolSources!.ToArray());
 
         var allow = (TransparentProxyEndPoint)Invoke(
             "CreateTransparentEndPoint",

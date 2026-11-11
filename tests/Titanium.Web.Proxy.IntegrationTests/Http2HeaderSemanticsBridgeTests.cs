@@ -179,7 +179,7 @@ public class Http2HeaderSemanticsBridgeTests
         var server = suite.GetServer();
         server.HandleRequest(async context =>
         {
-            cookie = context.Request.Headers["Cookie"].ToString();
+            cookie = context.Request.Headers.Cookie.ToString();
             await context.Response.WriteAsync("ok");
         });
 

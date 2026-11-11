@@ -95,7 +95,8 @@ public class Http2FrameProtocolEnforcementTests
         }
 
         Assert.IsNotNull(ack, "Proxy must respond to PING with PING ACK.");
-        Assert.IsTrue((ack.Value.Flags & Http2FrameFlag.Ack) != 0, "PING response must have ACK flag set.");
+        Assert.AreEqual(Http2FrameFlag.Ack, ack.Value.Flags & Http2FrameFlag.Ack,
+            "PING response must have ACK flag set.");
         Assert.AreEqual(0, ack.Value.StreamId, "PING ACK must have stream id 0.");
         CollectionAssert.AreEqual(pingPayload, ack.Value.Payload,
             "PING ACK payload must echo the original PING payload.");
@@ -1069,7 +1070,7 @@ public class Http2FrameProtocolEnforcementTests
         server.HandleRequest(ctx =>
         {
             ctx.Response.StatusCode = 304;
-            ctx.Response.Headers["ETag"] = "\"abc\"";
+            ctx.Response.Headers.ETag = "\"abc\"";
             return Task.CompletedTask;
         });
 
@@ -1380,7 +1381,7 @@ public class Http2FrameProtocolEnforcementTests
                 {
                     var headers = raw.Connection.DecodeHeaders(frame.Payload);
                     var s = headers.FirstOrDefault(h => h.Name == ":status").Value;
-                    if (s?.StartsWith("2") == true)
+                    if (s?.StartsWith('2') == true)
                         gotTwoxx = true;
                     else if (s != null)
                         sawTerminal = true; // 5xx etc - valid error response

@@ -15,6 +15,8 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public sealed class ClusterEndpointsAndOutputWriterApplyBehaviorTests
 {
+    private static readonly string[] ExpectedEndpointAddress = ["10.0.0.1"];
+
     [TestMethod]
     public void ReadyEndpoints_SkipsUnknownAddressTypes_Dedups_AndKeepsZones()
     {
@@ -60,7 +62,7 @@ public sealed class ClusterEndpointsAndOutputWriterApplyBehaviorTests
         };
 
         var endpoints = new ClusterEndpoints(state).ReadyEndpoints(service, service.Ports[0]);
-        CollectionAssert.AreEqual(new[] { "10.0.0.1" }, endpoints.Select(e => e.Address).ToArray());
+        CollectionAssert.AreEqual(ExpectedEndpointAddress, endpoints.Select(e => e.Address).ToArray());
         Assert.AreEqual("us-east-1a", endpoints.Single().Zone);
         var udp = new ClusterEndpoints(state).ReadyEndpoints(service, service.Ports[0], "UDP");
         Assert.AreEqual("10.0.0.9", udp.Single().Address);

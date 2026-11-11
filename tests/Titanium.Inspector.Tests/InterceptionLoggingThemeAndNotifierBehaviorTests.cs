@@ -76,7 +76,10 @@ public class InterceptionLoggingThemeAndNotifierBehaviorTests
         {
             using var provider = new InspectorFileLogProvider(folder, maxBytes: 10_000_000, keep: 2, queueCapacity: 64);
             var logger = provider.CreateLogger("tests.filelog");
-            logger.LogInformation("hello-file-log-{N}", 1);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("hello-file-log-{N}", 1);
+            }
             logger.LogWarning("warn-file-log");
             logger.LogError("error-file-log");
 

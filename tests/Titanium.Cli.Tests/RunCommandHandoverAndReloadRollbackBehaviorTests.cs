@@ -27,6 +27,7 @@ namespace Titanium.Cli.Tests;
 [DoNotParallelize]
 public class RunCommandHandoverAndReloadRollbackBehaviorTests
 {
+    private static readonly string[] ExpectedOldScriptPipeline = ["old-script"];
     private static readonly BindingFlags Priv = BindingFlags.NonPublic | BindingFlags.Static;
 
     private string _dir = null!;
@@ -302,7 +303,7 @@ public class RunCommandHandoverAndReloadRollbackBehaviorTests
             scriptPipeline: pipeline));
 
         Assert.AreSame(original, current, "the plugin set in force before the reload must be back");
-        CollectionAssert.AreEqual(new[] { "old-script" }, pipeline);
+        CollectionAssert.AreEqual(ExpectedOldScriptPipeline, pipeline);
     }
 
     // Bug class: a reload whose scriptPipeline names a plugin that is not in the new plugin set swaps in a pipeline
@@ -337,7 +338,7 @@ public class RunCommandHandoverAndReloadRollbackBehaviorTests
 
         StringAssert.Contains(ex.Message, "ghost");
         Assert.AreSame(original, current);
-        CollectionAssert.AreEqual(new[] { "old-script" }, pipeline);
+        CollectionAssert.AreEqual(ExpectedOldScriptPipeline, pipeline);
         Assert.AreEqual(0, refreshed);
     }
 

@@ -30,6 +30,7 @@ public class InspectorInterceptionVmSoftCoverageBehaviorTests
         interception.ClearDecryptFailureBypass();
         interception.SchedulePruneOrphanedPersonalCertificates(machineStore: false);
         await interception.WaitForFirefoxTrustBackgroundIdleAsync();
+        Assert.IsFalse(interception.IsRunning);
     }
 
     [TestMethod]

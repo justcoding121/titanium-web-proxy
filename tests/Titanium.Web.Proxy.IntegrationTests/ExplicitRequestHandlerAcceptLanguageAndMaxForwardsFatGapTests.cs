@@ -45,7 +45,7 @@ public class ExplicitRequestHandlerAcceptLanguageAndMaxForwardsFatGapTests
         request.Headers.TryAddWithoutValidation("Accept-Language", "fr-CA,fr;q=0.8");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("fr-CA", StringComparison.Ordinal) == true, seen);
+        Assert.IsTrue(seen!.Contains("fr-CA", StringComparison.Ordinal), seen);
     }
 
     [TestMethod]

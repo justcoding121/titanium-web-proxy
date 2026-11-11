@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: Client Hint request fields reach the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersClientHintsFatGapTests
 {

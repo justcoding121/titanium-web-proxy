@@ -273,6 +273,7 @@ public class RequestHandlerAndBridgeHelperTests
         using var session = MakeSession(proxy);
         await (Task)typeof(ProxyServer).GetMethod("OnBeforeRequest", PrivateInstance)!
             .Invoke(proxy, [session])!;
+        Assert.IsFalse(session.HttpClient.Request.HasBody);
     }
 
     [TestMethod]

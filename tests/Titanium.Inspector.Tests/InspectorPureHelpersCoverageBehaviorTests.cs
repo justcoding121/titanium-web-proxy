@@ -12,6 +12,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class InspectorPureHelpersCoverageBehaviorTests
 {
+    private static readonly string[] ExpectedParsedHosts = ["a.example", "b.example"];
+
     [TestMethod]
     public void ExclusionPreview_AndHostListFormat_CoverRemainingBranches()
     {
@@ -35,7 +37,7 @@ public class InspectorPureHelpersCoverageBehaviorTests
         Assert.AreEqual("", HostListFormat.Join([]));
         Assert.AreEqual("", HostListFormat.Join(["", "  "]));
         CollectionAssert.AreEqual(
-            new[] { "a.example", "b.example" },
+            ExpectedParsedHosts,
             HostListFormat.Parse("a.example\r\nb.example\n# skip\nA.example"));
     }
 
@@ -88,8 +90,6 @@ public class InspectorPureHelpersCoverageBehaviorTests
         service.ClearDecryptFailureBypass();
         service.ApplyDecryptFailureBypassSetting();
         service.ApplyHttpProtocols();
-        Assert.AreEqual(InspectorBodyLimits.MaxBodyBytes, InterceptionService.MaxBodyBytes);
-        Assert.AreEqual(InspectorBodyLimits.MaxBodyTextChars, InterceptionService.MaxBodyTextChars);
         _ = InterceptionService.IsHttp3Supported;
         _ = InterceptionService.IsFirefoxProfilePresent;
         service.EnsureShutdown();

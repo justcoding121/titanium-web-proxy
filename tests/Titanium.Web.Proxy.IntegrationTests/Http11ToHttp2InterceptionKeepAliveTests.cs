@@ -18,8 +18,8 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     <c>WriteResponseAsync</c> coalesces tiny Content-Length bodies (sets <c>IsBodySent</c>).
 ///     A second body write desyncs HTTP/1 keep-alive and was the GHA MITM H1→H2 sustain-0 bug.
 /// </summary>
-[TestClass]
 [DoNotParallelize]
+[TestClass]
 public class Http11ToHttp2InterceptionKeepAliveTests
 {
     [TestMethod]

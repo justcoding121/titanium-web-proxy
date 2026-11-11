@@ -11,7 +11,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>ResponseHandler</c> suite: origin Age header survives MITM forward on explicit HTTP.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ResponseHandlerAgeHeaderFatGapTests
 {

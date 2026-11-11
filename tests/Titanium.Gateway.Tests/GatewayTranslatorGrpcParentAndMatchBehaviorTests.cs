@@ -35,7 +35,7 @@ public class GatewayTranslatorGrpcParentAndMatchBehaviorTests
 
         Assert.AreEqual("False", Cond(Parent(result).Conditions, "Accepted").Status);
         Assert.AreEqual("NoMatchingParent", Cond(Parent(result).Conditions, "Accepted").Reason);
-        Assert.AreEqual(0, result.Config.UserRoutes().Count());
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
     }
 
     [TestMethod]

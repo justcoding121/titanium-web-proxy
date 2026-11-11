@@ -213,9 +213,9 @@ public class SessionBodyDiskCacheLifecycleBehaviorTests
     {
         using var cache = NewCache();
         cache.Write(Session(1));
-        Thread.Sleep(30);
+        File.SetLastWriteTimeUtc(cache.PathFor(1), DateTime.UtcNow.AddMinutes(-2));
         cache.Write(Session(2));
-        Thread.Sleep(30);
+        File.SetLastWriteTimeUtc(cache.PathFor(2), DateTime.UtcNow.AddMinutes(-1));
         cache.Write(Session(3));
         var one = new FileInfo(cache.PathFor(3)).Length;
 
@@ -248,8 +248,8 @@ public class SessionBodyDiskCacheLifecycleBehaviorTests
         using var cache = NewCache();
         cache.Write(Session(1));
         var one = new FileInfo(cache.PathFor(1)).Length;
+        File.SetLastWriteTimeUtc(cache.PathFor(1), DateTime.UtcNow.AddMinutes(-1));
         cache.UpdateLimits(one + one / 2, TimeSpan.FromDays(1));
-        Thread.Sleep(30);
 
         var evicted = cache.Write(Session(2));
 

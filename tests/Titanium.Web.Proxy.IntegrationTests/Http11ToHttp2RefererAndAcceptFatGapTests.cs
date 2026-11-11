@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: Referer, Accept-Language,
 ///     and Cache-Control request headers reach the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2RefererAndAcceptFatGapTests
 {
@@ -68,7 +67,7 @@ public class Http11ToHttp2RefererAndAcceptFatGapTests
         request.Headers.Referrer = new Uri("https://example.test/prior");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("example.test", StringComparison.OrdinalIgnoreCase) == true, seen);
+        Assert.IsTrue(seen!.Contains("example.test", StringComparison.OrdinalIgnoreCase), seen);
     }
 
     [TestMethod]
@@ -96,7 +95,7 @@ public class Http11ToHttp2RefererAndAcceptFatGapTests
         request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("en-US", StringComparison.Ordinal) == true, seen);
+        Assert.IsTrue(seen!.Contains("en-US", StringComparison.Ordinal), seen);
     }
 
     [TestMethod]
@@ -124,6 +123,6 @@ public class Http11ToHttp2RefererAndAcceptFatGapTests
         request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("no-cache", StringComparison.OrdinalIgnoreCase) == true, seen);
+        Assert.IsTrue(seen!.Contains("no-cache", StringComparison.OrdinalIgnoreCase), seen);
     }
 }

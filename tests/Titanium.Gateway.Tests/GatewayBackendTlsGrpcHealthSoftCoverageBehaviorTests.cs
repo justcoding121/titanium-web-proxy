@@ -146,7 +146,7 @@ public class GatewayBackendTlsGrpcHealthSoftCoverageBehaviorTests
         var foreignResult = foreign.Render();
         AssertValid(foreignResult);
         Assert.IsFalse(foreignResult.StatusPatches.Any(p => p.Kind == StatusKind.GrpcRoute));
-        Assert.AreEqual(0, foreignResult.Config.UserRoutes().Count());
+        Assert.AreEqual(0, foreignResult.Config.UserRoutes().Count);
     }
 
     [TestMethod]

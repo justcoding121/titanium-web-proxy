@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: Allow and Cache-Control public
 ///     on final responses reach the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersAllowAndPublicFatGapTests
 {
@@ -77,7 +76,7 @@ public class Http2CopyHeadersAllowAndPublicFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
 
         var allow = await ReadFinalHeaderAsync(raw, "allow");
-        Assert.IsTrue(allow?.Contains("OPTIONS", StringComparison.Ordinal) == true, allow);
+        Assert.IsTrue(allow!.Contains("OPTIONS", StringComparison.Ordinal), allow);
     }
 
     [TestMethod]
@@ -115,6 +114,6 @@ public class Http2CopyHeadersAllowAndPublicFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
 
         var cc = await ReadFinalHeaderAsync(raw, "cache-control");
-        Assert.IsTrue(cc?.Contains("public", StringComparison.Ordinal) == true, cc);
+        Assert.IsTrue(cc!.Contains("public", StringComparison.Ordinal), cc);
     }
 }

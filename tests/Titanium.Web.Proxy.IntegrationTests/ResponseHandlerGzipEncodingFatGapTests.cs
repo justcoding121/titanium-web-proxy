@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>ResponseHandler</c> suite: gzip-encoded origin bodies round-trip through explicit MITM.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ResponseHandlerGzipEncodingFatGapTests
 {

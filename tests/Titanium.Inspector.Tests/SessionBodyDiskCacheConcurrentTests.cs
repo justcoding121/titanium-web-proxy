@@ -69,7 +69,7 @@ public class SessionBodyDiskCacheConcurrentTests
             foreach (var har in harFiles)
             {
                 var text = await File.ReadAllTextAsync(har);
-                Assert.IsTrue(text.TrimStart().StartsWith("{", StringComparison.Ordinal),
+                Assert.IsTrue(text.TrimStart().StartsWith('{'),
                     $"HAR file {Path.GetFileName(har)} does not start with '{{' (corrupt or empty)");
             }
         }

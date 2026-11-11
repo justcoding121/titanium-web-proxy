@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>TransparentClientHandler</c> suite: PATCH method on cleartext-forward transparent path.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class TransparentClientHandlerPatchMethodFatGapTests
 {

@@ -135,8 +135,8 @@ public class Http2CopyProtocolSettingsFatGapTests
 
         var (_, respHeaders, _) = await raw.Connection.ReadHeaderBlockAsync();
         var status = respHeaders.Find(h => h.Name == ":status");
-        Assert.IsNotNull(status);
-        Assert.AreEqual("200", status!.Value);
+        Assert.AreNotEqual(default, status, "CONNECT response must include :status.");
+        Assert.AreEqual("200", status.Value);
         Assert.IsTrue(forwarded, "Origin must see websocket extended CONNECT after SETTINGS_ENABLE_CONNECT_PROTOCOL=1.");
     }
 }

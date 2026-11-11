@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: Location on 302 and
 ///     WWW-Authenticate on 401 reach the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersLocationAndWwwAuthenticateFatGapTests
 {

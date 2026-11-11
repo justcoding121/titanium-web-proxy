@@ -57,7 +57,7 @@ public class ResponseHandlerAmbiguousResponseClFatGapTests
                         try { await handler(client.GetStream()); }
                         catch { /* ignored */ }
                     }
-                });
+                }, ct);
             }
         }
 

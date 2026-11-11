@@ -144,7 +144,7 @@ public sealed class FakeRespServer : IAsyncDisposable
         }
     }
 
-    private async Task<byte[]> BuildReplyAsync(string name, IReadOnlyList<string> argv, CancellationToken ct)
+    private async Task<byte[]> BuildReplyAsync(string name, List<string> argv, CancellationToken ct)
     {
         switch (name)
         {

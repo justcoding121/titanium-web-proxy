@@ -11,7 +11,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: X-Frame-Options reaches the H2 MITM client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersXFrameOptionsFatGapTests
 {

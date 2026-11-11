@@ -10,7 +10,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>RequestHandler</c> / <c>ResponseHandler</c> suite: Age on explicit HTTPS GET reaches the client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ExplicitRequestHandlerAgeResponseFatGapTests
 {

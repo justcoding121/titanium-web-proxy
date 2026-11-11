@@ -11,6 +11,9 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class OidcClaimReaderBehaviorTests
 {
+    private static readonly string[] ExpectedOpsViewerRoles = ["ops", "viewer"];
+    private static readonly string[] ExpectedSingleRole = ["single"];
+
     [TestMethod]
     public void Find_ReadsDirectAndDottedPaths()
     {
@@ -30,11 +33,11 @@ public class OidcClaimReaderBehaviorTests
         using var doc = JsonDocument.Parse("""["ops","",42,true,"viewer"]""");
         var into = new List<string>();
         OidcClaimReader.AddAll(doc.RootElement, into);
-        CollectionAssert.AreEqual(new[] { "ops", "viewer" }, into);
+        CollectionAssert.AreEqual(ExpectedOpsViewerRoles, into);
 
         into.Clear();
         OidcClaimReader.AddAll(JsonDocument.Parse("\"single\"").RootElement, into);
-        CollectionAssert.AreEqual(new[] { "single" }, into);
+        CollectionAssert.AreEqual(ExpectedSingleRole, into);
 
         into.Clear();
         OidcClaimReader.AddAll(JsonDocument.Parse("\"\"").RootElement, into);

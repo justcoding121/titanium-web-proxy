@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2ToHttp11BridgeHandler</c> suite: Content-Location and Warning
 ///     on origin H1 responses reach the H2 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2ToHttp11ContentLocationAndWarningFatGapTests
 {
@@ -67,7 +66,7 @@ public class Http2ToHttp11ContentLocationAndWarningFatGapTests
         var server = suite.GetServer();
         server.HandleRequest(ctx =>
         {
-            ctx.Response.Headers["Content-Location"] = "/alt/gap";
+            ctx.Response.Headers.ContentLocation = "/alt/gap";
             return ctx.Response.WriteAsync("ok");
         });
         var (_, ep) = H2ToH1(suite);
@@ -90,7 +89,7 @@ public class Http2ToHttp11ContentLocationAndWarningFatGapTests
         var server = suite.GetServer();
         server.HandleRequest(ctx =>
         {
-            ctx.Response.Headers["Warning"] = "199 gap \"misc\"";
+            ctx.Response.Headers.Warning = "199 gap \"misc\"";
             return ctx.Response.WriteAsync("warn");
         });
         var (_, ep) = H2ToH1(suite);

@@ -117,7 +117,7 @@ public class Http2DispatchAcceptLanguageAndMaxForwardsFatGapTests
             client.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "de-DE,de;q=0.9");
             using var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/al");
             Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-            Assert.IsTrue(seen?.Contains("de-DE", StringComparison.Ordinal) == true, seen);
+            Assert.IsTrue(seen!.Contains("de-DE", StringComparison.Ordinal), seen);
         }
         finally
         {

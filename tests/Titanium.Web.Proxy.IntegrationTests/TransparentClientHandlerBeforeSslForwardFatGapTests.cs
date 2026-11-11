@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>TransparentClientHandler</c> suite: <c>BeforeSslAuthenticate</c> on the ClientHello
 ///     path and HTTPS-to-HTTPS reverse terminate forwarding.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class TransparentClientHandlerBeforeSslForwardFatGapTests
 {

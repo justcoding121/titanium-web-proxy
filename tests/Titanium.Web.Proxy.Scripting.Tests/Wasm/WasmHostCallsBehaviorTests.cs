@@ -12,6 +12,7 @@ public class WasmHostCallsBehaviorTests
     // One character per call in host_calls.wat ('0' + result code): see the sample's header for the call behind each index.
     // 0 Ok, 1 NotFound, 2 BadArgument, 4 ParseFailure.
     private const string ExpectedResults = "000000111001100200004011110111114";
+    private static readonly string[] ExpectedRemovedHeaderNames = ["x-a", "x-keep"];
 
     [TestMethod]
     public async Task HostImports_AnswerWithAbiResultCodes_AndKeepTheVmHealthy()
@@ -26,6 +27,6 @@ public class WasmHostCallsBehaviorTests
 
         // set_header_map_pairs replaced the whole map with one pair, so the original headers are gone.
         Assert.AreEqual("v", result.SetHeaders["x-set"]);
-        CollectionAssert.IsSubsetOf(new[] { "x-a", "x-keep" }, result.RemoveHeaders!.ToArray());
+        CollectionAssert.IsSubsetOf(ExpectedRemovedHeaderNames, result.RemoveHeaders!.ToArray());
     }
 }

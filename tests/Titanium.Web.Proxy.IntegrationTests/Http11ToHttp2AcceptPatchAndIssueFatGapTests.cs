@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: Accept-Patch and Issue reach the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2AcceptPatchAndIssueFatGapTests
 {

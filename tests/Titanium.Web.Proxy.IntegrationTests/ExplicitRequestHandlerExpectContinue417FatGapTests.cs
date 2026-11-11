@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat RequestHandler edges: origin 417 Expectation Failed is relayed for Expect: 100-continue POSTs.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ExplicitRequestHandlerExpectContinue417FatGapTests
 {

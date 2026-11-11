@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: ETag and
 ///     Strict-Transport-Security on H2 origin responses reach the H1 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2EtagAndStrictTransportFatGapTests
 {

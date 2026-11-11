@@ -18,7 +18,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: ambiguous Content-Length framing,
 ///     Via loop → 508, and BeforeResponse status rewrite on the bridge.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2AmbiguousFramingFatGapTests
 {

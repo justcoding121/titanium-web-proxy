@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: If-Match and MIME-Version reach the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2IfMatchAndMimeVersionFatGapTests
 {

@@ -14,7 +14,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: missing :scheme/:path, connection-specific
 ///     forbidden fields, bad HPACK compression error, and decoded-header-list EnhanceYourCalm.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersMissingPseudoAndForbiddenGapTests
 {

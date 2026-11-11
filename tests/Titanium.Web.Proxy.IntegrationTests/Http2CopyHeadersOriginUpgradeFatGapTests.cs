@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: origin response Upgrade / Keep-Alive
 ///     forbidden fields, and request Host alongside :authority.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersOriginUpgradeFatGapTests
 {

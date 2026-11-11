@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> edges: HEAD empty body, OPTIONS, BeforeRequest Ok,
 ///     and BeforeResponse header mutation.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2HeadAndAfterResponseFatGapTests
 {

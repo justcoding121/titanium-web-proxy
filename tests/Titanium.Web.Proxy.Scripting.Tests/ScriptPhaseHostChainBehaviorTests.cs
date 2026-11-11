@@ -7,6 +7,9 @@ namespace Titanium.Web.Proxy.Scripting.Tests;
 [TestClass]
 public class ScriptPhaseHostChainBehaviorTests
 {
+    private static readonly int[] ExpectedResumeCounts = [1, 2, 3];
+    private static readonly string[] ExpectedRemovedHeaderNames = ["x-drop"];
+
     private sealed class RecordingHost(ScriptPhases phases = ScriptPhases.All, ScriptBodyMode mode = ScriptBodyMode.Streaming) : IScriptPhaseHost
     {
         public List<ScriptPhases> Seen { get; } = [];
@@ -174,7 +177,7 @@ public class ScriptPhaseHostChainBehaviorTests
 
         var result = await chain.OnRequestHeadersAsync(Context(ScriptPhases.RequestHeaders), default);
 
-        CollectionAssert.AreEqual(new[] { 1, 2, 3 }, host.ResumeCounts);
+        CollectionAssert.AreEqual(ExpectedResumeCounts, host.ResumeCounts);
         Assert.AreEqual(ScriptAction.Continue, result.Action, "the chain itself never pauses");
         Assert.AreEqual("c9", result.UpstreamClusterId);
     }
@@ -235,7 +238,7 @@ public class ScriptPhaseHostChainBehaviorTests
         Assert.AreEqual("o", seen.Headers.Single(h => h.Key == "x-other").Value);
 
         Assert.AreEqual("1", result.SetHeaders!["x-added"]);
-        CollectionAssert.AreEqual(new[] { "x-drop" }, result.RemoveHeaders!.ToArray());
+        CollectionAssert.AreEqual(ExpectedRemovedHeaderNames, result.RemoveHeaders!.ToArray());
         Assert.AreEqual("c-first", result.UpstreamClusterId);
     }
 

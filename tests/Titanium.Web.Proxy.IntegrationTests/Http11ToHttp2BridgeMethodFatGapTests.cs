@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: PUT/DELETE/PATCH, BeforeResponse rewrite,
 ///     GenericResponse cancel, and origin RST → 5xx.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2BridgeMethodFatGapTests
 {

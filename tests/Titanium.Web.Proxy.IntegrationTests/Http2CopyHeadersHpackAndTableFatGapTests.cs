@@ -13,7 +13,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     mid-connection SETTINGS_HEADER_TABLE_SIZE resize, and even client stream id
 ///     on the interception decode path.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersHpackAndTableFatGapTests
 {

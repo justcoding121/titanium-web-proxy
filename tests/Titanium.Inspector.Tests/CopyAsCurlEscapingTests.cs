@@ -50,7 +50,7 @@ public class CopyAsCurlEscapingTests
         Assert.IsTrue(dataIndex >= 0);
         var dataArg = curl[dataIndex..];
         // The $ characters must all be inside single quotes (none at the very start of a token).
-        Assert.IsFalse(dataArg.TrimStart().StartsWith("$", StringComparison.Ordinal),
+        Assert.IsFalse(dataArg.TrimStart().StartsWith('$'),
             "Dollar sign must never start an unquoted token");
     }
 
@@ -152,8 +152,8 @@ public class CopyAsCurlEscapingTests
     {
         // A single-quoted string with a literal newline is valid POSIX.
         var result = SessionRequestCodegen.ShellSingleQuote("a\nb");
-        Assert.IsTrue(result.StartsWith("'", StringComparison.Ordinal));
-        Assert.IsTrue(result.EndsWith("'", StringComparison.Ordinal));
+        Assert.IsTrue(result.StartsWith('\''));
+        Assert.IsTrue(result.EndsWith('\''));
         StringAssert.Contains(result, "a");
         StringAssert.Contains(result, "b");
         // Newline itself must be present (not escaped away).

@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: Report-To on H2 origin responses reaches the H1 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2ReportToFatGapTests
 {

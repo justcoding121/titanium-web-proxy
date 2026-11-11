@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: origin response Transfer-Encoding /
 ///     Proxy-Connection forbidden fields, and valid request te: trailers.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersOriginTeAndProxyConnFatGapTests
 {

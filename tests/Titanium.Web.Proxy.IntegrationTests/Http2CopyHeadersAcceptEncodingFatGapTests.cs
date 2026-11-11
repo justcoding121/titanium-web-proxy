@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: Accept-Encoding reaches origin,
 ///     BeforeRequest removes a custom header, and origin 304 round-trip.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersAcceptEncodingFatGapTests
 {
@@ -77,7 +76,7 @@ public class Http2CopyHeadersAcceptEncodingFatGapTests
         await raw.Connection.WriteHeaderBlockAsync(1, block, endStream: true);
 
         Assert.AreEqual("204", await ReadStatusAsync(raw, TimeSpan.FromSeconds(12)));
-        Assert.IsTrue(seen?.Contains("gzip", StringComparison.Ordinal) == true, $"got '{seen}'");
+        Assert.IsTrue(seen!.Contains("gzip", StringComparison.Ordinal), $"got '{seen}'");
     }
 
     [TestMethod]

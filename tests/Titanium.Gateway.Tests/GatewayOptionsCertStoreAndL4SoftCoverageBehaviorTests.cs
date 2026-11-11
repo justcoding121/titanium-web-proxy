@@ -19,6 +19,8 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public class GatewayOptionsCertStoreAndL4SoftCoverageBehaviorTests
 {
+    private static readonly string[] ExpectedSecretNamespaces = ["a", "b"];
+
     private static Condition Cond(IReadOnlyList<Condition> list, string type) => list.Single(c => c.Type == type);
 
     private static RouteParentStatus Parent(RenderResult result, StatusKind kind, string route = "r") =>
@@ -55,14 +57,14 @@ public class GatewayOptionsCertStoreAndL4SoftCoverageBehaviorTests
         Assert.IsTrue(options.BackendTlsPolicyEnabled);
         Assert.IsTrue(options.WatchLegacyAnnotation);
         Assert.AreEqual(250, options.MinReconcileMilliseconds);
-        CollectionAssert.AreEqual(new[] { "a", "b" }, options.SecretNamespaces.ToArray());
+        CollectionAssert.AreEqual(ExpectedSecretNamespaces, options.SecretNamespaces.ToArray());
 
         var leader = options.ToLeaderOptions();
         Assert.AreEqual("gw", leader.Namespace);
         Assert.AreEqual("pod-a", leader.Identity);
         var cache = options.ToCacheOptions();
         Assert.IsTrue(cache.BackendTlsPolicyEnabled);
-        CollectionAssert.AreEqual(new[] { "a", "b" }, cache.SecretNamespaces.ToArray());
+        CollectionAssert.AreEqual(ExpectedSecretNamespaces, cache.SecretNamespaces.ToArray());
         Assert.AreEqual("titanium-data", options.ToControllerOptions().Output.DeploymentName);
 
         var needsValue = Assert.ThrowsExactly<ArgumentException>(() =>

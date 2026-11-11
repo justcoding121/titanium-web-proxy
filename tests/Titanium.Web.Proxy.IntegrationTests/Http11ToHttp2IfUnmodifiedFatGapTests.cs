@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: If-Unmodified-Since on PUT
 ///     reaches the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2IfUnmodifiedFatGapTests
 {
@@ -70,6 +69,6 @@ public class Http11ToHttp2IfUnmodifiedFatGapTests
         request.Content = new StringContent("put-body");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.PreconditionFailed, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("Nov 2026", StringComparison.Ordinal) == true, seen);
+        Assert.IsTrue(seen!.Contains("Nov 2026", StringComparison.Ordinal), seen);
     }
 }

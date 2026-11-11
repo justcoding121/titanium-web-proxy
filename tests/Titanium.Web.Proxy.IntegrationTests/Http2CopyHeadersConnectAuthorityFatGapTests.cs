@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: origin response with forbidden
 ///     connection-specific header, and origin response trailers carrying a pseudo-header.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersConnectAuthorityFatGapTests
 {

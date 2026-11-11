@@ -111,7 +111,7 @@ public class H1TerminateLiteIntegrationTests
                         try { await handler(client.GetStream()); }
                         catch { /* ignored */ }
                     }
-                });
+                }, ct);
             }
         }
 

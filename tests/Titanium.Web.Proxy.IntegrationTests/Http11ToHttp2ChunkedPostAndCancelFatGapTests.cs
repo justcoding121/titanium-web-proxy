@@ -17,7 +17,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: chunked POST body, CancelRequest+Ok,
 ///     and Via pseudonym on the translated request.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2ChunkedPostAndCancelFatGapTests
 {

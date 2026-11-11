@@ -21,6 +21,9 @@ namespace Titanium.Cli.Tests;
 public class RunCommandFailurePathBehaviorTests
 {
     private static readonly BindingFlags Priv = BindingFlags.NonPublic | BindingFlags.Static;
+    private static readonly string[] ExpectedTerminateTlsAlpn = ["h2", "http/1.1"];
+    private static readonly string[] ExpectedTrustedProxySources = ["10.0.0.0/8"];
+    private static readonly int[] ExpectedMasquePorts = [443, 8443];
 
     // Bug class: a second `titanium run` on a busy port hangs, throws an unhandled exception, or exits 0 without a
     // message that points the operator at the config key to change.
@@ -245,10 +248,10 @@ public class RunCommandFailurePathBehaviorTests
         Assert.IsTrue(tuned.TerminateTls);
         Assert.AreEqual(TimeSpan.FromSeconds(3), tuned.TlsHandshakeTimeout);
         Assert.AreEqual(17, tuned.MaxConcurrentTlsHandshakes);
-        CollectionAssert.AreEqual(new[] { "h2", "http/1.1" }, tuned.TerminateTlsAlpn!.ToArray());
+        CollectionAssert.AreEqual(ExpectedTerminateTlsAlpn, tuned.TerminateTlsAlpn!.ToArray());
         Assert.AreEqual(ClientCertificateMode.Require, tuned.ClientCertificateMode);
         Assert.IsTrue(tuned.AcceptProxyProtocol);
-        CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, tuned.TrustedProxyProtocolSources!.ToArray());
+        CollectionAssert.AreEqual(ExpectedTrustedProxySources, tuned.TrustedProxyProtocolSources!.ToArray());
 
         var defaults = (TransparentProxyEndPoint)Invoke("AddListener", proxy, new ListenerConfig
         {
@@ -354,7 +357,7 @@ public class RunCommandFailurePathBehaviorTests
         })!;
 
         Assert.IsTrue(masque.Options.AllowHttp11Upgrade);
-        CollectionAssert.AreEqual(new[] { 443, 8443 }, masque.Options.AllowedPorts!.ToArray());
+        CollectionAssert.AreEqual(ExpectedMasquePorts, masque.Options.AllowedPorts!.ToArray());
     }
 
     private static object? Invoke(string name, params object?[] args)

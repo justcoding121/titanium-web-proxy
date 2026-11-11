@@ -111,7 +111,7 @@ public class ExplicitHandlerRequestResponseFatGapTests
         var server = suite.GetServer();
         server.HandleRequest(ctx =>
         {
-            ctx.Response.Headers["Connection"] = "close";
+            ctx.Response.Headers.Connection = "close";
             return ctx.Response.WriteAsync("closed-ok");
         });
 

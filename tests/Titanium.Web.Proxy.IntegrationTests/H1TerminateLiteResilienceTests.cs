@@ -110,7 +110,7 @@ public class H1TerminateLiteResilienceTests
                             // Per-connection failure is the test's business, not the accept loop's.
                         }
                     }
-                });
+                }, ct);
             }
         }
 

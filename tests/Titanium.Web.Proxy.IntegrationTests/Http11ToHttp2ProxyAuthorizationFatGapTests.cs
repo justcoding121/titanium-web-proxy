@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: Proxy-Authorization on the H1 request reaches the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2ProxyAuthorizationFatGapTests
 {

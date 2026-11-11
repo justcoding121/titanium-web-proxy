@@ -158,7 +158,7 @@ public class ExplicitTransparentHandlerFatGapTests
         server.HandleRequest(ctx =>
         {
             Assert.AreEqual(HttpMethods.Options, ctx.Request.Method);
-            ctx.Response.Headers["Allow"] = "GET,POST,OPTIONS";
+            ctx.Response.Headers.Allow = "GET,POST,OPTIONS";
             return ctx.Response.WriteAsync("");
         });
 

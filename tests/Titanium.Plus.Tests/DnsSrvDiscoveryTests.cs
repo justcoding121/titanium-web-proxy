@@ -318,8 +318,8 @@ public class DnsSrvDiscoveryTests
     public void ParseNameServer_MalformedBracketedIpv6_ThrowsFormatException()
     {
         // Bug class: missing ']' or missing ':' after ']' is accepted and misroutes queries.
-        Assert.ThrowsException<FormatException>(() => DnsSrvDiscovery.ParseNameServer("[2001:db8::1"));
-        Assert.ThrowsException<FormatException>(() => DnsSrvDiscovery.ParseNameServer("[2001:db8::1]5353"));
+        Assert.ThrowsExactly<FormatException>(() => DnsSrvDiscovery.ParseNameServer("[2001:db8::1"));
+        Assert.ThrowsExactly<FormatException>(() => DnsSrvDiscovery.ParseNameServer("[2001:db8::1]5353"));
     }
 
     [TestMethod]

@@ -12,6 +12,12 @@ namespace Titanium.Cli.Tests;
 [TestClass]
 public class MetricsListenerAggregationBehaviorTests
 {
+    private static readonly string[] ExpectedWantedInstrument = ["twp.proxy.wanted_total"];
+    private static readonly string[] ExpectedLabelNames =
+    [
+        "route", "cluster", "status_class", "protocol", "error", "direction", "reason", "outcome", "result",
+    ];
+
     private static string UniqueMeter() => "twp.test.meter." + Guid.NewGuid().ToString("N");
 
     private static KeyValuePair<string, object?> Tag(string key, object? value) => new(key, value);
@@ -137,7 +143,7 @@ public class MetricsListenerAggregationBehaviorTests
         foreign.CreateCounter<long>("twp.proxy.foreign_total");
         listener.Start();
 
-        CollectionAssert.AreEqual(new[] { "twp.proxy.wanted_total" }, listener.Instruments.Select(i => i.Name).ToArray());
+        CollectionAssert.AreEqual(ExpectedWantedInstrument, listener.Instruments.Select(i => i.Name).ToArray());
         Assert.IsTrue(MetricsListener.IsSelected("twp.certificates.issued"));
         Assert.IsTrue(MetricsListener.IsSelected("twp.cache.hits"));
         Assert.IsFalse(MetricsListener.IsSelected("twp.telemetry.dropped"));
@@ -171,11 +177,8 @@ public class MetricsListenerAggregationBehaviorTests
     public void EveryLabelSlot_RoundTripsThroughTheSeriesKey()
     {
         var key = default(MetricsListener.SeriesKey);
-        Assert.AreEqual(MetricsListener.LabelNames.Length, 9);
-        CollectionAssert.AreEqual(MetricsListener.LabelNames, new[]
-        {
-            "route", "cluster", "status_class", "protocol", "error", "direction", "reason", "outcome", "result",
-        });
+        Assert.AreEqual(9, MetricsListener.LabelNames.Length);
+        CollectionAssert.AreEqual(MetricsListener.LabelNames, ExpectedLabelNames);
 
         for (var slot = 0; slot < MetricsListener.LabelNames.Length; slot++)
         {

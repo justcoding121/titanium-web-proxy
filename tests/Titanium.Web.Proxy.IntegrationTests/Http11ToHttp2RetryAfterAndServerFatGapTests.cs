@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: Retry-After and Server
 ///     on H2 origin responses reach the H1 client.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2RetryAfterAndServerFatGapTests
 {
@@ -69,7 +68,7 @@ public class Http11ToHttp2RetryAfterAndServerFatGapTests
         using var client = suite.GetClient(proxy);
         using var response = await client.GetAsync(origin.Url + "/retry");
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.IsTrue(response.Headers.RetryAfter is not null, "retry-after");
+        Assert.IsNotNull(response.Headers.RetryAfter, "retry-after");
         Assert.AreEqual("90", response.Headers.RetryAfter.ToString());
     }
 

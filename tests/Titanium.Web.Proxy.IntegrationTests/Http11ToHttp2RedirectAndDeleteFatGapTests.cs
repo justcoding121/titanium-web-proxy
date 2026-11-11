@@ -16,7 +16,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: BeforeRequest Redirect short-circuit,
 ///     DELETE round-trip, and BeforeRequest UserData.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2RedirectAndDeleteFatGapTests
 {
@@ -81,7 +80,7 @@ public class Http11ToHttp2RedirectAndDeleteFatGapTests
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
         using var response = await client.GetAsync(origin.Url + "redir");
         Assert.AreEqual(HttpStatusCode.Found, response.StatusCode);
-        Assert.IsTrue(response.Headers.Location?.ToString().Contains("elsewhere", StringComparison.Ordinal) == true);
+        Assert.IsTrue(response.Headers.Location!.ToString().Contains("elsewhere", StringComparison.Ordinal));
         Assert.IsFalse(contacted);
     }
 

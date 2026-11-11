@@ -8,7 +8,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>RequestHandler</c> suite: MKCOL on explicit HTTP proxy reaches the origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class ExplicitRequestHandlerMkcolWave41FatGapTests
 {

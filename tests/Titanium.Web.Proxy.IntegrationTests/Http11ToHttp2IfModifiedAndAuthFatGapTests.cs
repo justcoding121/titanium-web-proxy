@@ -15,7 +15,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http11ToHttp2BridgeHandler</c> suite: If-Modified-Since, Authorization,
 ///     and Accept-Charset request headers reach the H2 origin.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http11ToHttp2IfModifiedAndAuthFatGapTests
 {
@@ -124,6 +123,6 @@ public class Http11ToHttp2IfModifiedAndAuthFatGapTests
         request.Headers.TryAddWithoutValidation("Accept-Charset", "utf-8");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("utf-8", StringComparison.OrdinalIgnoreCase) == true, seen);
+        Assert.IsTrue(seen!.Contains("utf-8", StringComparison.OrdinalIgnoreCase), seen);
     }
 }

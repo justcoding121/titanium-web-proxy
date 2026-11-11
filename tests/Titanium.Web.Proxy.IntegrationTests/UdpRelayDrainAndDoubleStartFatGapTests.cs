@@ -41,7 +41,7 @@ public class UdpRelayDrainAndDoubleStartFatGapTests
         };
         await using var listener = new UdpRelayListener(options);
         listener.Start();
-        Assert.ThrowsException<InvalidOperationException>(() => listener.Start());
+        Assert.ThrowsExactly<InvalidOperationException>(() => listener.Start());
     }
 
     [TestMethod]

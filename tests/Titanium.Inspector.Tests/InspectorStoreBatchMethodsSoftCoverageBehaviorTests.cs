@@ -13,6 +13,8 @@ namespace Titanium.Inspector.Tests;
 [TestClass]
 public class InspectorStoreBatchMethodsSoftCoverageBehaviorTests
 {
+    private static readonly string[] ExpectedHostListParse = ["*.example.com", "localhost"];
+
     [TestMethod]
     public void SessionStore_DuplicateAddAndAddMany_EnforcesLimitsWithoutSecondAddedEvent()
     {
@@ -78,7 +80,7 @@ public class InspectorStoreBatchMethodsSoftCoverageBehaviorTests
     {
         Assert.AreEqual("", HostListFormat.Join(null));
         var parsed = HostListFormat.Parse("# comment\r\n*.example.com\n\nlocalhost\n*.example.com\r");
-        CollectionAssert.AreEquivalent(new[] { "*.example.com", "localhost" }, parsed);
+        CollectionAssert.AreEquivalent(ExpectedHostListParse, parsed);
     }
 
     [TestMethod]

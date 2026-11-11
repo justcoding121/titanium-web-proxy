@@ -45,7 +45,7 @@ public class ExplicitRequestHandlerCookieAndIfNoneMatchFatGapTests
         request.Headers.TryAddWithoutValidation("Cookie", "gap=1");
         using var response = await client.SendAsync(request);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-        Assert.IsTrue(seen?.Contains("gap=1", StringComparison.Ordinal) == true, seen);
+        Assert.IsTrue(seen!.Contains("gap=1", StringComparison.Ordinal), seen);
     }
 
     [TestMethod]

@@ -171,6 +171,7 @@ public class CertProxyRequestHandlerFatGapTests
         var method = typeof(ProxyServer).GetMethod("OnException", PrivateInstance)!;
         method.Invoke(proxy, [session.ClientStream, new InvalidOperationException("unit")]);
         method.Invoke(proxy, [null, new IOException("io")]);
+        Assert.IsFalse(proxy.ProxyRunning);
     }
 
     [TestMethod]

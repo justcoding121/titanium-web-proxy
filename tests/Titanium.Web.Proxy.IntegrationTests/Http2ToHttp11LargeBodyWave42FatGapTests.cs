@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,7 +11,6 @@ using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
-[DoNotParallelize]
 [TestClass]
 public class Http2ToHttp11LargeBodyWave42FatGapTests
 {

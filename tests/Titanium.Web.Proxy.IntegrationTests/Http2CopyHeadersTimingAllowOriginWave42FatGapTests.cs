@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -8,7 +8,6 @@ using Titanium.Web.Proxy.IntegrationTests.Setup;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersTimingAllowOriginWave42FatGapTests
 {

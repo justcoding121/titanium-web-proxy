@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 /// <summary>
 ///     Fat <c>TransparentClientHandler</c> suite: OPTIONS on cleartext-forward transparent path.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class TransparentClientHandlerOptionsWave41FatGapTests
 {
@@ -47,7 +46,7 @@ public class TransparentClientHandlerOptionsWave41FatGapTests
             if (HttpMethods.IsOptions(ctx.Request.Method))
             {
                 ctx.Response.StatusCode = StatusCodes.Status204NoContent;
-                ctx.Response.Headers["Allow"] = "GET,OPTIONS";
+                ctx.Response.Headers.Allow = "GET,OPTIONS";
             }
 
             return Task.CompletedTask;

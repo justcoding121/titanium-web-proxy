@@ -191,7 +191,7 @@ public class Http2DispatchIfModifiedAndContentTypeFatGapTests
             using var content = new StringContent("{}", Encoding.UTF8, "application/json");
             using var response = await client.PostAsync($"https://127.0.0.1:{ep.Port}/ct", content);
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-            Assert.IsTrue(seen?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true, seen);
+            Assert.IsTrue(seen!.Contains("application/json", StringComparison.OrdinalIgnoreCase), seen);
         }
         finally
         {

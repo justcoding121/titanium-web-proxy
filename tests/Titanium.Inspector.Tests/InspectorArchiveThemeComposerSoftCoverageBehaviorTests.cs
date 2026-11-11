@@ -204,7 +204,10 @@ public class InspectorArchiveThemeComposerSoftCoverageBehaviorTests
             string? first = null;
             for (var i = 0; i < 40; i++)
             {
-                logger.LogInformation("line-{N}-{Pad}", i, new string('x', 40));
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("line-{N}-{Pad}", i, new string('x', 40));
+                }
                 await Task.Delay(20);
                 if (first is null && provider.CurrentFilePath is not null)
                 {

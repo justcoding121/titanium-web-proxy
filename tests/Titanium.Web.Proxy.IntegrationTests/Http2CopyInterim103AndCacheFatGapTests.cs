@@ -17,6 +17,7 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 [TestClass]
 public class Http2CopyInterim103AndCacheFatGapTests
 {
+    private static readonly string[] ExpectedInterimStatuses = ["100", "103", "200"];
     private static TestServer sharedServer = null!;
 
     [ClassInitialize]
@@ -186,6 +187,6 @@ public class Http2CopyInterim103AndCacheFatGapTests
                 statuses.Add(status);
         }
 
-        CollectionAssert.AreEqual(new[] { "100", "103", "200" }, statuses);
+        CollectionAssert.AreEqual(ExpectedInterimStatuses, statuses);
     }
 }

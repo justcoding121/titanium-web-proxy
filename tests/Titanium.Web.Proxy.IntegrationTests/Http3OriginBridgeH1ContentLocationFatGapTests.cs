@@ -41,7 +41,7 @@ public class Http3OriginBridgeH1ContentLocationFatGapTests
         var server = testSuite.GetServer();
         server.HandleRequest(ctx =>
         {
-            ctx.Response.Headers["Content-Location"] = "/alt/h3-cloc";
+            ctx.Response.Headers.ContentLocation = "/alt/h3-cloc";
             return ctx.Response.WriteAsync("cloc-body");
         });
 

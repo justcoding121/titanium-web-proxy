@@ -10,6 +10,11 @@ namespace Titanium.Plus.Tests;
 [TestClass]
 public class DashboardOidcParsingBehaviorTests
 {
+    private static readonly string[] ExpectedOperatorGroups = ["ops", "admin", "lead"];
+    private static readonly string[] ExpectedViewerGroups = ["viewers"];
+    private static readonly string[] ExpectedAllowedEmails = ["a@t.test", "b@t.test"];
+    private static readonly string[] ExpectedAllowedEmailDomains = ["corp.test", "partner.test"];
+
     [TestMethod]
     public void ParseDashboardOidc_EmptyOptions_ReturnsNull()
     {
@@ -88,10 +93,10 @@ public class DashboardOidcParsingBehaviorTests
         Assert.AreEqual("legacy-client", options.ClientId);
         Assert.AreEqual("cs", options.ClientSecret);
         Assert.AreEqual("groups.claim", options.GroupsClaim);
-        CollectionAssert.AreEqual(new[] { "ops", "admin", "lead" }, options.OperatorGroups!.ToArray());
-        CollectionAssert.AreEqual(new[] { "viewers" }, options.ViewerGroups!.ToArray());
-        CollectionAssert.AreEqual(new[] { "a@t.test", "b@t.test" }, options.AllowedEmails!.ToArray());
-        CollectionAssert.AreEqual(new[] { "corp.test", "partner.test" }, options.AllowedEmailDomains!.ToArray());
+        CollectionAssert.AreEqual(ExpectedOperatorGroups, options.OperatorGroups!.ToArray());
+        CollectionAssert.AreEqual(ExpectedViewerGroups, options.ViewerGroups!.ToArray());
+        CollectionAssert.AreEqual(ExpectedAllowedEmails, options.AllowedEmails!.ToArray());
+        CollectionAssert.AreEqual(ExpectedAllowedEmailDomains, options.AllowedEmailDomains!.ToArray());
     }
 
     [TestMethod]

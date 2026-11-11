@@ -71,7 +71,7 @@ public class GatewayBackendTlsGrpcSoftCoverageWave24BehaviorTests
         Assert.IsNotNull(slice);
         Assert.AreEqual("IPv6", slice!.AddressType);
         Assert.AreEqual("web", slice.ServiceName);
-        Assert.AreEqual(false, slice.Endpoints[0].Ready);
+        Assert.IsFalse(slice.Endpoints[0].Ready);
         Assert.AreEqual("2001:db8::1", slice.Endpoints[0].Addresses[0]);
     }
 

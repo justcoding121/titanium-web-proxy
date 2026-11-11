@@ -12,7 +12,6 @@ namespace Titanium.Web.Proxy.IntegrationTests;
 ///     Fat <c>Http2Helper.Copy.Headers</c> suite: <c>:protocol</c> on non-CONNECT,
 ///     duplicate <c>:scheme</c> / uppercase field names, and empty <c>:path</c>.
 /// </summary>
-[DoNotParallelize]
 [TestClass]
 public class Http2CopyHeadersProtocolOnGetFatGapTests
 {

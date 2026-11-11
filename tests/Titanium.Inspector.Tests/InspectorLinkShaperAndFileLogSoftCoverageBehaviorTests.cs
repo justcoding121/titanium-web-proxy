@@ -41,6 +41,7 @@ public class InspectorLinkShaperAndFileLogSoftCoverageBehaviorTests
         var waiting = shaper.WaitAsync(TimeSpan.FromSeconds(30));
         shaper.Dispose();
         await waiting;
+        Assert.IsTrue(waiting.IsCompletedSuccessfully);
         shaper.ReleaseWaiters();
     }
 
