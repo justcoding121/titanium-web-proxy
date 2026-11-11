@@ -81,7 +81,11 @@ public class StatusRetryTests
         Assert.AreEqual("recovered", body);
         Assert.AreEqual(2, hits);
         Assert.AreEqual(1, before);
-        Assert.AreEqual(1, after);
+        // AfterResponse is scheduled when the HTTP/2 stream finalizes, which can be after
+        // the client has already read the body. Wait for that continuation.
+        for (var i = 0; i < 100 && Volatile.Read(ref after) < 1; i++)
+            await Task.Delay(20);
+        Assert.AreEqual(1, Volatile.Read(ref after));
         var manager = started.Server.ReverseProxy!.ClusterManager!;
         Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("c1-d0"));
         Assert.AreEqual(DestinationState.Healthy, manager.GetDestinationState("c1-d1"));

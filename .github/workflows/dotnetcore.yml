@@ -200,15 +200,15 @@ jobs:
         # test CAs (no cert-store UI), and do not touch OS proxy settings — safe to run in parallel
         # with throttling so socket/coverage I/O stays bounded on shared runners.
         # Plus stays out of this batch: its OIDC listener was reset when the assembly ran beside
-        # the other socket suites. Inspector/Cli stay sequential after that: file-handle races and
-        # AppDomain leftover-assembly guards are sensitive to CPU contention.
+        # the other socket suites. xDS reconnect timing also missed its window under that load.
+        # Inspector/Cli stay sequential after that: file-handle races and AppDomain leftover-assembly
+        # guards are sensitive to CPU contention.
         $unitJobs = @(
           @{ Project = 'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj'; Results = 'coverage/unit'; Filter = 'TestCategory!=Fuzz-Nightly' },
           @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
           @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
           @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
           @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj'; Results = 'coverage/gateway' },
-          @{ Project = 'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj'; Results = 'coverage/xds' },
           @{ Project = 'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'; Results = 'coverage/geoip' }
         )
 
@@ -240,6 +240,8 @@ jobs:
           exit 1
         }
 
+        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/xds
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/inspector

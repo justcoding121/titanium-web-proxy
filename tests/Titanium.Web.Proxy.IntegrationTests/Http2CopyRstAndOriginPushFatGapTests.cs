@@ -159,9 +159,11 @@ public class Http2CopyRstAndOriginPushFatGapTests
                 .WaitAsync(deadline - DateTime.UtcNow);
             if (frame.Type is Http2FrameType.Headers or Http2FrameType.Continuation)
             {
+                // Decode every header block so the connection HPACK table stays aligned.
+                // A 200 on stream 1 can still arrive after the RST; only stream 3 is the next request.
                 var status = raw.Connection.DecodeHeaders(frame.Payload)
                     .FirstOrDefault(h => h.Name == ":status").Value;
-                if (status == "200")
+                if (frame.StreamId == 3 && status == "200")
                 {
                     Assert.IsTrue(hits >= 2, "Second stream must reach the origin after CompressionError RST.");
                     return;

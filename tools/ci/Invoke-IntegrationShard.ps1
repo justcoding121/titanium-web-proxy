@@ -5,9 +5,9 @@ param(
     [Parameter(Mandatory = $true)][int]$ShardIndex,
     [Parameter(Mandatory = $true)][int]$ShardCount,
     [string]$Project = 'tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj',
-    [string]$Settings = 'tests/test.runsettings',
+    [string]$Settings = 'tests/integration-shard.runsettings',
     [string]$ResultsRoot = 'coverage/integration',
-    [int]$MaxAttempts = 3
+    [int]$MaxAttempts = 2
 )
 
 Set-StrictMode -Version 2.0
