@@ -11,6 +11,7 @@ namespace Titanium.Inspector.Tests;
 ///     uncommon method rows, and composer body-from-file streaming path.
 /// </summary>
 [TestClass]
+[DoNotParallelize]
 public class MainWindowViewModelBodyInspectSaveAndMethodBehaviorTests
 {
     [TestMethod]

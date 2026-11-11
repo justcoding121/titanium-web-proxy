@@ -211,6 +211,8 @@ jobs:
         # Independent unit assemblies bind loopback listeners on ephemeral ports, use in-memory
         # test CAs (no cert-store UI), and do not touch OS proxy settings — safe to run in parallel
         # with throttling so socket/coverage I/O stays bounded on shared runners.
+        # Inspector/Cli stay sequential after this batch: file-handle races and AppDomain
+        # leftover-assembly guards are sensitive to CPU contention / prior loads in-process.
         $unitJobs = @(
           @{ Project = 'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj'; Results = 'coverage/unit'; Filter = 'TestCategory!=Fuzz-Nightly' },
           @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
@@ -218,8 +220,6 @@ jobs:
           @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
           @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
           @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj'; Results = 'coverage/gateway' },
-          @{ Project = 'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj'; Results = 'coverage/inspector' },
-          @{ Project = 'tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj'; Results = 'coverage/cli' },
           @{ Project = 'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj'; Results = 'coverage/xds' },
           @{ Project = 'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'; Results = 'coverage/geoip' }
         )
@@ -251,6 +251,11 @@ jobs:
           $unitFailures | ForEach-Object { Write-Error $_ }
           exit 1
         }
+
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/inspector
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/cli
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # Attribute CLI process E2E coverage to the build merge (cli-e2e matrix stays the OS gate).
         # Natives were already bundled beside titanium.dll for scripting coverage above.

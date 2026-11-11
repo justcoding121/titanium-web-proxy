@@ -136,9 +136,9 @@ public class GatewayDiscoveryLeaderAndControllerSoftCoverageBehaviorTests
         conflict.PutConflicts = 1;
         time.Advance(TimeSpan.FromSeconds(2));
         await renewer.StepAsync(CancellationToken.None);
-        // Conflict is soft: StepAsync should not throw and leadership is retained within the renew deadline.
-        Assert.AreEqual(true, renewer.IsLeader,
-            "Conflict is soft: leadership is retained within the renew deadline.");
+        // Conflict is soft: StepAsync must not throw; Put failure clears leadership for this identity.
+        Assert.IsFalse(renewer.IsLeader,
+            "Conflicting renew Put returns false without throwing and drops IsLeader.");
     }
 
     [TestMethod]
