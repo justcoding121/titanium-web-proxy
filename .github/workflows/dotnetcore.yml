@@ -109,13 +109,6 @@ jobs:
         }
         Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
 
-    - name: Setup Java 21 for Sonar
-      if: env.SONAR_TOKEN != ''
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: '21'
-
     - name: Install SonarScanner
       if: env.SONAR_TOKEN != ''
       shell: pwsh
@@ -174,21 +167,14 @@ jobs:
       if: env.SONAR_TOKEN != ''
       continue-on-error: true
       shell: pwsh
-      run: |
-        $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
-        if (-not (Test-Path -LiteralPath $java)) { throw "Java 21 not found at $java" }
-        Write-Host "Sonar begin Java: $java"
-        # Pin the hosted Temurin 21 path at begin so end on the coverage runner can use the
-        # same toolcache layout. End rejects these /d properties; begin accepts them.
-        & .\.sonar\scanner\dotnet-sonarscanner begin `
-          /k:"justcoding121_titanium-web-proxy" `
-          /o:"justcoding121" `
-          /d:sonar.token="$env:SONAR_TOKEN" `
-          /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml" `
-          /d:sonar.scanner.skipJreProvisioning=true `
-          /d:sonar.scanner.javaExePath="$java" `
-          /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**,**/deploy/helm/**/ci/rendered-*.yaml,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/WasmModule.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmWasi.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmHostFunction.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmImports.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmRuntime.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmVm.cs" `
-          /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/ProxyServer.Endpoints.cs,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Cli/Scripting/ScriptingDepsCommand.cs,**/Titanium.Cli/Config/CliConfigEditor.cs,**/Titanium.Cli/Config/PlusLoader.cs,**/Titanium.Cli/Config/ConfigOverlay.cs,**/Titanium.Cli/Config/ConfigOverlayStore.cs,**/Titanium.Cli/Config/OverloadProtectionHost.cs,**/Titanium.Cli/Geo/GeoIpResolverHost.cs,**/Titanium.Gateway/Model/GatewayApiModels.cs,**/Titanium.Gateway/Control/StatusWriter.cs,**/Titanium.Gateway/Kube/GatewayApiDiscovery.cs,**/Titanium.Gateway/Kube/Informer.cs,**/Titanium.Web.Proxy.Abstractions/ReverseProxyOptions.cs,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Manager/Program.cs"
+      run: >
+        .\.sonar\scanner\dotnet-sonarscanner begin
+        /k:"justcoding121_titanium-web-proxy"
+        /o:"justcoding121"
+        /d:sonar.token="$env:SONAR_TOKEN"
+        /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
+        /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**,**/deploy/helm/**/ci/rendered-*.yaml,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/WasmModule.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmWasi.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmHostFunction.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmImports.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmRuntime.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmVm.cs"
+        /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/ProxyServer.Endpoints.cs,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Cli/Scripting/ScriptingDepsCommand.cs,**/Titanium.Cli/Config/CliConfigEditor.cs,**/Titanium.Cli/Config/PlusLoader.cs,**/Titanium.Cli/Config/ConfigOverlay.cs,**/Titanium.Cli/Config/ConfigOverlayStore.cs,**/Titanium.Cli/Config/OverloadProtectionHost.cs,**/Titanium.Cli/Geo/GeoIpResolverHost.cs,**/Titanium.Gateway/Model/GatewayApiModels.cs,**/Titanium.Gateway/Control/StatusWriter.cs,**/Titanium.Gateway/Kube/GatewayApiDiscovery.cs,**/Titanium.Gateway/Kube/Informer.cs,**/Titanium.Web.Proxy.Abstractions/ReverseProxyOptions.cs,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Manager/Program.cs"
 
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
@@ -346,12 +332,35 @@ jobs:
         if-no-files-found: error
         retention-days: 1
 
+    - name: Stage Sonar scanner cache
+      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
+      shell: pwsh
+      run: |
+        # begin downloads the scanner engine under the build runner's user profile.
+        # end on the coverage runner needs that same cache or the Java engine pipe closes.
+        $src = Join-Path $env:USERPROFILE '.sonar\cache'
+        if (-not (Test-Path -LiteralPath $src)) { throw "Sonar cache missing at $src" }
+        New-Item -ItemType Directory -Force -Path sonar-cache | Out-Null
+        Copy-Item -LiteralPath $src -Destination 'sonar-cache\cache' -Recurse -Force
+        $size = (Get-ChildItem -LiteralPath sonar-cache -Recurse -File | Measure-Object -Property Length -Sum).Sum
+        Write-Host ("Staged Sonar cache ({0:N1} MB)" -f ($size / 1MB))
+
     - name: Upload Sonar working directory
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       uses: actions/upload-artifact@v7
       with:
         name: sonar-working
         path: .sonarqube
+        if-no-files-found: error
+        include-hidden-files: true
+        retention-days: 1
+
+    - name: Upload Sonar scanner cache
+      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
+      uses: actions/upload-artifact@v7
+      with:
+        name: sonar-cache
+        path: sonar-cache
         if-no-files-found: error
         include-hidden-files: true
         retention-days: 1
@@ -444,6 +453,13 @@ jobs:
       with:
         name: sonar-working
         path: sonar-working
+    - name: Download Sonar scanner cache
+      if: env.SONAR_TOKEN != ''
+      uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: sonar-cache
+        path: sonar-cache
     - name: Merge code coverage
       shell: pwsh
       run: |
@@ -482,33 +498,40 @@ jobs:
         else {
           Write-Host 'Sonar working directory was not downloaded.'
         }
-    - name: Setup Java 21 for Sonar
-      if: env.SONAR_TOKEN != ''
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: '21'
+        $cacheSrc = $null
+        if (Test-Path -LiteralPath 'sonar-cache\cache') { $cacheSrc = 'sonar-cache\cache' }
+        elseif (Test-Path -LiteralPath 'sonar-cache') {
+          $nested = Get-ChildItem -LiteralPath sonar-cache -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($nested) { $cacheSrc = $nested.FullName }
+        }
+        if ($cacheSrc) {
+          $dest = Join-Path $env:USERPROFILE '.sonar\cache'
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+          if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
+          Copy-Item -LiteralPath $cacheSrc -Destination $dest -Recurse -Force
+          $size = (Get-ChildItem -LiteralPath $dest -Recurse -File | Measure-Object -Property Length -Sum).Sum
+          Write-Host ("Restored Sonar cache to {0} ({1:N1} MB)" -f $dest, ($size / 1MB))
+        }
+        else {
+          Write-Host 'Sonar scanner cache was not downloaded.'
+        }
     - name: Complete SonarCloud analysis
       if: env.SONAR_TOKEN != ''
       continue-on-error: true
       shell: pwsh
       run: |
         if (-not (Test-Path -LiteralPath .sonarqube)) { Write-Host 'No .sonarqube directory; skipping end.'; exit 0 }
-        # begin pinned Temurin 21 via skipJreProvisioning. Rewrite any leftover absolute
-        # java.exe paths to this runner's JAVA_HOME in case the toolcache layout differs.
-        $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
-        if (-not (Test-Path -LiteralPath $java)) { Write-Error "Java 21 not found at $java"; exit 1 }
-        $javaFwd = $java -replace '\\', '/'
-        Get-ChildItem -LiteralPath .sonarqube -Recurse -File | Where-Object { $_.Extension -in '.xml', '.properties', '.txt' } | ForEach-Object {
-          $text = [IO.File]::ReadAllText($_.FullName)
-          $updated = [regex]::Replace($text, '(?i)[A-Za-z]:\\[^"<\r\n]*?java\.exe', { $java })
-          $updated = [regex]::Replace($updated, '(?i)[A-Za-z]:/[^"<\r\n]*?java\.exe', { $javaFwd })
-          if ($updated -ne $text) {
-            [IO.File]::WriteAllText($_.FullName, $updated)
-            Write-Host "Rewrote Java path in $($_.Name)"
-          }
+        # begin provisioned its JRE under %USERPROFILE%\.sonar\cache on the build runner.
+        # The sonar-cache artifact restores that tree to the same path on this runner, so
+        # the absolute java.exe recorded in .sonarqube exists again. Do not rewrite it to
+        # Temurin: that host JDK has crashed this scanner with a closed pipe.
+        $cache = Join-Path $env:USERPROFILE '.sonar\cache'
+        Write-Host "Sonar cache present: $(Test-Path -LiteralPath $cache)"
+        if (Test-Path -LiteralPath $cache) {
+          Get-ChildItem -LiteralPath $cache -Recurse -Filter java.exe -ErrorAction SilentlyContinue |
+            Select-Object -First 5 -ExpandProperty FullName |
+            ForEach-Object { Write-Host "Cached java: $_" }
         }
-        Write-Host "Sonar end Java: $java"
         .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
     - name: Assert coverage floors
       shell: pwsh
