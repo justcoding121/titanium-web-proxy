@@ -77,15 +77,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
-    # Behavior-coverage FatGap volume needs headroom beyond the prior 90m wall clock.
-    timeout-minutes: 180
+    # Integration shards run on their own runners. This job is the compile, Sonar build, and the other suites.
+    timeout-minutes: 60
     permissions:
-      # write: Publish Documentation pushes DocFX output to develop.
-      # GITHUB_TOKEN with contents:read cannot push (403 github-actions[bot]).
-      contents: write
-      # SonarCloud / PR decoration when token is present
-      pull-requests: write
-      checks: write
+      contents: read
+      # Sonar begin runs here. Decoration and the DocFX push happen on the coverage job.
+      pull-requests: read
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
@@ -120,15 +117,6 @@ jobs:
     - name: Install coverage tool
       shell: pwsh
       run: dotnet tool install --tool-path .coverage/tools dotnet-coverage
-
-    - name: Install DocFX
-      if: github.ref == 'refs/heads/develop'
-      shell: pwsh
-      run: |
-        # Prefer the .NET tool over Chocolatey: choco's docfx package downloads an old
-        # GitHub release zip that intermittently 500s and blocks Sonar/coverage on develop.
-        dotnet tool install --global docfx
-        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
 
     - name: Detect scripting RID
       id: build-scripting-rid
@@ -211,12 +199,12 @@ jobs:
         # Independent unit assemblies bind loopback listeners on ephemeral ports, use in-memory
         # test CAs (no cert-store UI), and do not touch OS proxy settings — safe to run in parallel
         # with throttling so socket/coverage I/O stays bounded on shared runners.
-        # Inspector/Cli stay sequential after this batch: file-handle races and AppDomain
-        # leftover-assembly guards are sensitive to CPU contention / prior loads in-process.
+        # Plus stays out of this batch: its OIDC listener was reset when the assembly ran beside
+        # the other socket suites. Inspector/Cli stay sequential after that: file-handle races and
+        # AppDomain leftover-assembly guards are sensitive to CPU contention.
         $unitJobs = @(
           @{ Project = 'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj'; Results = 'coverage/unit'; Filter = 'TestCategory!=Fuzz-Nightly' },
           @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
-          @{ Project = 'tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj'; Results = 'coverage/plus' },
           @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
           @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
           @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj'; Results = 'coverage/gateway' },
@@ -245,13 +233,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             [void]$failures.Add("$($job.Project) exited $LASTEXITCODE")
           }
-        } -ThrottleLimit 5
+        } -ThrottleLimit 4
 
         if ($unitFailures.Count -gt 0) {
           $unitFailures | ForEach-Object { Write-Error $_ }
           exit 1
         }
 
+        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/inspector
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/cli
@@ -265,20 +255,6 @@ jobs:
         dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-        # The integration suite spins up real listening sockets and TLS handshakes, which
-        # occasionally hang or get "connection refused" on shared, resource-constrained CI
-        # runners under connection bursts (a pre-existing, environment-dependent flake, not
-        # specific to any particular test). Retry a couple of times before failing the build.
-        $maxAttempts = 3
-        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-          Write-Output "Integration tests attempt $attempt of $maxAttempts"
-          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Slow" --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
-          if ($LASTEXITCODE -eq 0) { break }
-          if ($attempt -eq $maxAttempts) { exit $LASTEXITCODE }
-          Write-Output "Integration tests failed on attempt $attempt, retrying..."
-          Start-Sleep -Seconds 5
-        }
-
     # Error-path hardening (origin 502/504, client-reject breaker, stale-connection replay, log signatures).
     # No retry loop: these tests are deterministic and must never be masked by the flake retry above.
     - name: Regression-2026-10-07 gate
@@ -291,10 +267,163 @@ jobs:
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+    - name: Redact Sonar token before upload
+      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
+      shell: pwsh
+      run: |
+        # .sonarqube stores the token. Replace it in place (same length) so the artifact is not a secret,
+        # and pass the real token again on sonarscanner end in the coverage job.
+        Add-Type -TypeDefinition @'
+        using System.IO;
+        public static class SonarTokenScrub
+        {
+            public static int Scrub(string root, string token)
+            {
+                var needle = System.Text.Encoding.UTF8.GetBytes(token);
+                var dummy = new byte[needle.Length];
+                for (var i = 0; i < dummy.Length; i++) dummy[i] = (byte)'x';
+                var files = 0;
+                foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+                {
+                    var data = File.ReadAllBytes(path);
+                    var changed = false;
+                    for (var i = 0; i <= data.Length - needle.Length; i++)
+                    {
+                        var match = true;
+                        for (var j = 0; j < needle.Length; j++)
+                        {
+                            if (data[i + j] != needle[j]) { match = false; break; }
+                        }
+                        if (!match) continue;
+                        System.Buffer.BlockCopy(dummy, 0, data, i, dummy.Length);
+                        changed = true;
+                        i += needle.Length - 1;
+                    }
+                    if (!changed) continue;
+                    File.WriteAllBytes(path, data);
+                    files++;
+                }
+                return files;
+            }
+        }
+        '@
+        $root = (Resolve-Path -LiteralPath .sonarqube).Path
+        $count = [SonarTokenScrub]::Scrub($root, $env:SONAR_TOKEN)
+        Write-Host "Redacted Sonar token in $count files"
+
+    - name: Upload unit coverage
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-build
+        path: coverage
+        if-no-files-found: error
+        retention-days: 1
+
+    - name: Upload Sonar working directory
+      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
+      uses: actions/upload-artifact@v7
+      with:
+        name: sonar-working
+        path: .sonarqube
+        if-no-files-found: error
+        retention-days: 1
+
+  # Integration classes marked DoNotParallelize run one at a time inside a process. Four runners
+  # each take a class-stable shard, so those serialized classes overlap without sharing static state.
+  integration:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+    - name: Restore and build integration tests
+      run: |
+        dotnet restore tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+        dotnet build tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-restore --warnaserror
+    - name: Integration shard
+      shell: pwsh
+      run: |
+        pwsh -NoProfile -ExecutionPolicy Bypass -File tools/ci/Invoke-IntegrationShard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 4
+    - name: Upload integration coverage
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-integration-${{ matrix.shard }}
+        path: coverage
+        if-no-files-found: error
+        retention-days: 1
+
+  # Merge shard coverage, finish Sonar (same workspace path the begin step recorded), then publish docs.
+  coverage:
+    needs: [changes, build, integration]
+    if: needs.changes.outputs.code == 'true' && needs.build.result == 'success' && needs.integration.result == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: write
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+    - name: Install coverage tool
+      shell: pwsh
+      run: dotnet tool install --tool-path .coverage/tools dotnet-coverage
+    - name: Install SonarScanner
+      if: env.SONAR_TOKEN != ''
+      shell: pwsh
+      run: dotnet tool install --tool-path .sonar/scanner dotnet-sonarscanner
+    - name: Download coverage
+      uses: actions/download-artifact@v8
+      with:
+        pattern: coverage-*
+        path: coverage-parts
+        merge-multiple: false
+    - name: Download Sonar working directory
+      if: env.SONAR_TOKEN != ''
+      uses: actions/download-artifact@v8
+      continue-on-error: true
+      with:
+        name: sonar-working
+        path: sonar-working
     - name: Merge code coverage
       shell: pwsh
       run: |
-        .\.coverage\tools\dotnet-coverage merge "coverage\**\*.coverage" --output coverage/coverage.xml --output-format xml
+        New-Item -ItemType Directory -Force -Path coverage | Out-Null
+        $files = @(Get-ChildItem -Path coverage-parts -Recurse -Filter *.coverage)
+        if ($files.Count -eq 0) { Write-Error 'no .coverage files downloaded'; exit 1 }
+        Write-Host "Merging $($files.Count) coverage files"
+        .\.coverage\tools\dotnet-coverage merge ($files | ForEach-Object { $_.FullName }) --output coverage/coverage.xml --output-format xml
         if (-not (Test-Path -LiteralPath coverage/coverage.xml)) { Write-Error "coverage merge produced no coverage.xml"; exit 1 }
         if ((Get-Item -LiteralPath coverage/coverage.xml).Length -lt 100) { Write-Error "coverage.xml is empty"; exit 1 }
         if ('${{ github.base_ref }}' -ne '') { git fetch origin '${{ github.base_ref }}' --depth=1 }
@@ -311,13 +440,27 @@ jobs:
         }
         powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-DiffCoverage.ps1 -CoverageXml coverage/coverage.xml -BaseRef "${{ github.base_ref }}"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
+    - name: Place Sonar working directory
+      if: env.SONAR_TOKEN != ''
+      shell: pwsh
+      run: |
+        if (Test-Path -LiteralPath sonar-working/.sonarqube) {
+          Move-Item -LiteralPath sonar-working/.sonarqube -Destination .sonarqube
+        }
+        elseif (Test-Path -LiteralPath sonar-working/conf) {
+          New-Item -ItemType Directory -Force -Path .sonarqube | Out-Null
+          Get-ChildItem -LiteralPath sonar-working | ForEach-Object { Move-Item -LiteralPath $_.FullName -Destination .sonarqube }
+        }
+        else {
+          Write-Host 'Sonar working directory was not downloaded.'
+        }
     - name: Complete SonarCloud analysis
-      if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
+      if: env.SONAR_TOKEN != ''
       continue-on-error: true
       shell: pwsh
-      run: .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
-
+      run: |
+        if (-not (Test-Path -LiteralPath .sonarqube)) { Write-Host 'No .sonarqube directory; skipping end.'; exit 0 }
+        .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
     - name: Assert coverage floors
       shell: pwsh
       env:
@@ -325,12 +468,19 @@ jobs:
         TWP_SONAR_BRANCH: ${{ github.ref_name }}
       run: |
         # Prefer Sonar component coverage (same bar as the merge gate). Give the upload a moment to publish.
-        if ($env:SONAR_TOKEN) { Start-Sleep -Seconds 90 }
+        if ($env:SONAR_TOKEN) { Start-Sleep -Seconds 45 }
         powershell -NoProfile -ExecutionPolicy Bypass -File tools/test-hygiene/Assert-CoverageFloors.ps1 -CoverageXml coverage/coverage.xml -PullRequest "$env:TWP_SONAR_PULL_REQUEST" -Branch "$env:TWP_SONAR_BRANCH"
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
+    - name: Install DocFX
+      if: github.ref == 'refs/heads/develop'
+      shell: pwsh
+      run: |
+        # Prefer the .NET tool over Chocolatey: choco's docfx package downloads an old
+        # GitHub release zip that intermittently 500s and blocks Sonar/coverage on develop.
+        dotnet tool install --global docfx
+        Add-Content -Path $env:GITHUB_PATH -Value "$env:USERPROFILE\.dotnet\tools"
     # DocFX output races other develop pushes (incl. concurrent "Update documentation").
-    # Sync to origin/develop, regenerate, commit docs-only, retry push â€” never fail the
+    # Sync to origin/develop, regenerate, commit docs-only, retry push. Never fail the
     # job on stash/rebase conflicts from EndBug/add-and-commit autostash.
     - name: Publish Documentation
       if: github.ref == 'refs/heads/develop'
@@ -503,12 +653,12 @@ jobs:
           **/playwright-report/**
         if-no-files-found: ignore
 
-  # One context for branch protection. Docs-only pull requests skip the four
-  # code jobs; a code change requires each of them to succeed.
+  # One context for branch protection. Docs-only pull requests skip the code jobs;
+  # a code change requires each of them to succeed.
   merge-gate:
     name: merge-gate
     if: always()
-    needs: [changes, build, redis-fleet, ui-portable, cli-e2e]
+    needs: [changes, build, integration, coverage, redis-fleet, ui-portable, cli-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Require the code jobs, or a docs-only skip
@@ -516,23 +666,25 @@ jobs:
           CODE: ${{ needs.changes.outputs.code }}
           CHANGES: ${{ needs.changes.result }}
           BUILD: ${{ needs.build.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+          COVERAGE: ${{ needs.coverage.result }}
           REDIS: ${{ needs.redis-fleet.result }}
           UI: ${{ needs.ui-portable.result }}
           CLI: ${{ needs.cli-e2e.result }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "changes=$CHANGES build=$BUILD redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
-          for result in "$CHANGES" "$BUILD" "$REDIS" "$UI" "$CLI"; do
+          echo "changes=$CHANGES build=$BUILD integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
+          for result in "$CHANGES" "$BUILD" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::a required job finished as $result"
               exit 1
             fi
           done
           if [[ "$CODE" == "true" ]]; then
-            for result in "$BUILD" "$REDIS" "$UI" "$CLI"; do
+            for result in "$BUILD" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
               if [[ "$result" != "success" ]]; then
-                echo "::error::a code change needs success from build, redis-fleet, ui-portable, and cli-e2e (got $result)"
+                echo "::error::a code change needs success from build, integration, coverage, redis-fleet, ui-portable, and cli-e2e (got $result)"
                 exit 1
               fi
             done
