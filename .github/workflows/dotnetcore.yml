@@ -31,6 +31,12 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded pull_request runs. Never cancel develop/beta/stable:
+# publish, tag, and Sonar upload need a full run per commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Docs-only pull requests still have to report merge-gate. A paths-ignore on
   # pull_request left the required checks waiting forever.
@@ -73,95 +79,34 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "code=$code"
 
-  build:
+  # Sonar begin + instrumented compile only. Coverage finishes end after tests upload.
+  sonar-build:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
-    # Integration shards run on their own runners. This job is the compile, Sonar build, and the other suites.
-    timeout-minutes: 60
+    timeout-minutes: 25
     permissions:
       contents: read
-      # Sonar begin runs here. Decoration and the DocFX push happen on the coverage job.
       pull-requests: read
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
-      TITANIUM_SKIP_ROOT_STORE_UI: 1
-      TITANIUM_NO_ELEVATE: 1
-      TITANIUM_REQUIRE_QUIC: "1"
-      QA_WAIVER: ${{ contains(github.event.pull_request.labels.*.name, 'qa-waiver') }}
     steps:
     - uses: actions/checkout@v7
       with:
         fetch-depth: 0
-
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: |
           10.0.x
-
-    - name: Assert in-box MsQuic (Windows)
-      shell: pwsh
-      run: |
-        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
-          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
-        }
-        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
-
+        cache: true
+        cache-dependency-path: '**/*.csproj'
     - name: Install SonarScanner
       if: env.SONAR_TOKEN != ''
       shell: pwsh
       run: dotnet tool install --tool-path .sonar/scanner dotnet-sonarscanner
-
-    - name: Install coverage tool
-      shell: pwsh
-      run: dotnet tool install --tool-path .coverage/tools dotnet-coverage
-
-    - name: Detect scripting RID
-      id: build-scripting-rid
-      shell: pwsh
-      run: |
-        $rid = if ($IsWindows) { 'win-x64' }
-          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
-          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
-        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-        Write-Host "scripting RID=$rid"
-
-    - name: Cache scripting natives for coverage
-      uses: actions/cache@v4
-      with:
-        path: tools/packaging/.cache/scripting-natives
-        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.build-scripting-rid.outputs.rid }}
-
     - name: Restore
-      run: |
-        # Fail restore on high/critical vulnerable packages (NuGet audit via MSBuild).
-        dotnet restore src/Titanium.Web.Proxy.sln --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
-
-    - name: Build
-      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
-
-    - name: Bundle scripting natives for coverage tests
-      shell: pwsh
-      run: |
-        # NativeLibrary loads wasmtime next to Titanium.Web.Proxy.Scripting.dll (test output copy).
-        $rid = '${{ steps.build-scripting-rid.outputs.rid }}'
-        $dirs = @(
-          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.dll src/Titanium.Web.Proxy.Scripting/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
-          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.Tests.dll tests/Titanium.Web.Proxy.Scripting.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
-          (Get-ChildItem -Recurse -Filter titanium.dll src/Titanium.Cli/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
-          (Get-ChildItem -Recurse -Filter Titanium.Cli.Tests.dll tests/Titanium.Cli.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
-        ) | Where-Object { $_ } | Select-Object -Unique
-        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
-        foreach ($out in $dirs) {
-          Write-Host "Bundling scripting natives into $out"
-          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
-          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
-            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
-          }
-        }
-
+      run: dotnet restore src/Titanium.Web.Proxy.sln -p:NuGetAudit=true -p:NuGetAuditLevel=high
     - name: Begin SonarCloud analysis
       id: sonar_begin
       if: env.SONAR_TOKEN != ''
@@ -175,117 +120,13 @@ jobs:
         /d:sonar.cs.vscoveragexml.reportsPaths="coverage/coverage.xml"
         /d:sonar.exclusions="**/docs/**,**/examples/**,**/benchmarks/**,**/tools/**,**/*.axaml,**/website/**,**/.github/**,**/deploy/helm/**/ci/rendered-*.yaml,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Web.Proxy.Scripting/Wasm/WasmModule.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmWasi.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmHostFunction.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmImports.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmRuntime.cs,**/Titanium.Web.Proxy.Scripting/Wasm/WasmVm.cs"
         /d:sonar.coverage.exclusions="**/examples/**,**/benchmarks/**,**/docs/**,**/ProxyServer.Endpoints.cs,**/Titanium.Inspector/Views/**,**/Titanium.Inspector/ViewModels/MainWindowViewModel.Trust.cs,**/Titanium.Inspector/Services/AppContainerLoopback.cs,**/Titanium.Inspector/Services/AvaloniaStatusNotifier.cs,**/Titanium.Inspector/Services/DesktopShell.cs,**/Titanium.Inspector/App.axaml.cs,**/Titanium.Inspector/Program.cs,**/Titanium.Inspector/InspectorAppFactory.cs,**/Titanium.Inspector/Services/UpdateService.cs,**/Titanium.Cli/Program.cs,**/Titanium.Cli/AsyncConsole.cs,**/Titanium.Cli/Http3/Http3DepsCommand.cs,**/Titanium.Cli/Updates/VersionAndUpdateCommands.cs,**/Titanium.Cli/Certificates/CertificateBootstrap.cs,**/Titanium.Cli/Scripting/ScriptingDepsCommand.cs,**/Titanium.Cli/Config/CliConfigEditor.cs,**/Titanium.Cli/Config/PlusLoader.cs,**/Titanium.Cli/Config/ConfigOverlay.cs,**/Titanium.Cli/Config/ConfigOverlayStore.cs,**/Titanium.Cli/Config/OverloadProtectionHost.cs,**/Titanium.Cli/Geo/GeoIpResolverHost.cs,**/Titanium.Gateway/Model/GatewayApiModels.cs,**/Titanium.Gateway/Control/StatusWriter.cs,**/Titanium.Gateway/Kube/GatewayApiDiscovery.cs,**/Titanium.Gateway/Kube/Informer.cs,**/Titanium.Web.Proxy.Abstractions/ReverseProxyOptions.cs,**/Titanium.Plus/Resilience/**,**/Titanium.Plus/PlusLog.cs,**/Titanium.Web.Proxy/Helpers/LinuxSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/MacOsSystemProxyBackend.cs,**/Titanium.Web.Proxy/Helpers/IElevationPrompt.cs,**/Titanium.Web.Proxy/Helpers/IProcessRunner.cs,**/Titanium.Web.Proxy/Certificates/FirefoxCertificateTrust.cs,**/Titanium.Web.Proxy.Scripting/**/Native/**,**/Titanium.Manager/Program.cs"
-
     - name: Build for SonarCloud analysis
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --no-incremental --disable-build-servers
-
-    - name: Warm Helm
-      shell: pwsh
-      run: |
-        $helm = Get-Command helm -ErrorAction SilentlyContinue
-        if (-not $helm) {
-          Write-Host 'helm is not on PATH; chart tests stay inconclusive.'
-          exit 0
-        }
-        # First launch pays the Windows scan. Do that here so the chart tests are not the ones that time out.
-        & helm version
-        if ($LASTEXITCODE -ne 0) { throw "helm version exited $LASTEXITCODE" }
-
-    - name: Test
-      shell: pwsh
-      run: |
-        $settings = 'tests/test.runsettings'
-        # UnitTests touches the current-user certificate store and a shared cert disk cache.
-        # It passed beside the other projects once and failed the next run, so it stays in its own process.
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Fuzz-Nightly" --collect:"Code Coverage" --results-directory coverage/unit
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-        # Independent assemblies bind loopback listeners on ephemeral ports and do not touch OS proxy
-        # settings. Plus stays out: its OIDC listener was reset beside the other socket suites.
-        # xDS reconnect timing also missed its window under that load.
-        # Inspector/Cli stay sequential after that: file-handle races and AppDomain leftover-assembly
-        # guards are sensitive to CPU contention.
-        $unitJobs = @(
-          @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
-          @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
-          @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
-          @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj'; Results = 'coverage/gateway' },
-          @{ Project = 'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'; Results = 'coverage/geoip' }
-        )
-
-        $unitFailures = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
-        $unitJobs | ForEach-Object -Parallel {
-          $job = $_
-          $failures = $using:unitFailures
-          $settingsPath = $using:settings
-          $args = @(
-            'test', $job.Project,
-            '--configuration', 'Release',
-            '--no-build', '--no-restore',
-            '--settings', $settingsPath,
-            '--collect:Code Coverage',
-            '--results-directory', $job.Results
-          )
-          if ($job.Filter) {
-            $args += @('--filter', $job.Filter)
-          }
-          Write-Host ">>> dotnet $($args -join ' ')"
-          & dotnet @args
-          if ($LASTEXITCODE -ne 0) {
-            [void]$failures.Add("$($job.Project) exited $LASTEXITCODE")
-          }
-        } -ThrottleLimit 4
-
-        if ($unitFailures.Count -gt 0) {
-          $unitFailures | ForEach-Object { Write-Error $_ }
-          exit 1
-        }
-
-        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/xds
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load; one retry.
-        $plusOk = $false
-        for ($attempt = 1; $attempt -le 2; $attempt++) {
-          Remove-Item -Recurse -Force coverage/plus -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Force -Path coverage/plus | Out-Null
-          dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
-          if ($LASTEXITCODE -eq 0) { $plusOk = $true; break }
-          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying once."
-          Start-Sleep -Seconds 5
-        }
-        if (-not $plusOk) { exit 1 }
-        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/inspector
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/cli
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-        # Attribute CLI process E2E coverage to the build merge (cli-e2e matrix stays the OS gate).
-        # Natives were already bundled beside titanium.dll for scripting coverage above.
-        # Exclude CliHosted* Playwright leaves — those need Chromium (ui-portable / cli-e2e install it).
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --collect:"Code Coverage" --results-directory coverage/cli-e2e
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    # Error-path hardening (origin 502/504, client-reject breaker, stale-connection replay, log signatures).
-    # No retry loop: these tests are deterministic and must never be masked by the flake retry above.
-    - name: Regression-2026-10-07 gate
-      shell: pwsh
-      run: |
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --blame-hang --blame-hang-timeout 5m
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
     - name: Redact Sonar token before upload
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       shell: pwsh
       run: |
-        # .sonarqube stores the token. Replace it in place (same length) so the artifact is not a secret,
-        # and pass the real token again on sonarscanner end in the coverage job.
         Add-Type -TypeDefinition @'
         using System.IO;
         public static class SonarTokenScrub
@@ -323,28 +164,16 @@ jobs:
         $root = (Resolve-Path -LiteralPath .sonarqube).Path
         $count = [SonarTokenScrub]::Scrub($root, $env:SONAR_TOKEN)
         Write-Host "Redacted Sonar token in $count files"
-
-    - name: Upload unit coverage
-      uses: actions/upload-artifact@v7
-      with:
-        name: coverage-build
-        path: coverage
-        if-no-files-found: error
-        retention-days: 1
-
     - name: Stage Sonar scanner cache
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       shell: pwsh
       run: |
-        # begin downloads the scanner engine under the build runner's user profile.
-        # end on the coverage runner needs that same cache or the Java engine pipe closes.
         $src = Join-Path $env:USERPROFILE '.sonar\cache'
         if (-not (Test-Path -LiteralPath $src)) { throw "Sonar cache missing at $src" }
         New-Item -ItemType Directory -Force -Path sonar-cache | Out-Null
         Copy-Item -LiteralPath $src -Destination 'sonar-cache\cache' -Recurse -Force
         $size = (Get-ChildItem -LiteralPath sonar-cache -Recurse -File | Measure-Object -Property Length -Sum).Sum
         Write-Host ("Staged Sonar cache ({0:N1} MB)" -f ($size / 1MB))
-
     - name: Upload Sonar working directory
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       uses: actions/upload-artifact@v7
@@ -354,7 +183,6 @@ jobs:
         if-no-files-found: error
         include-hidden-files: true
         retention-days: 1
-
     - name: Upload Sonar scanner cache
       if: env.SONAR_TOKEN != '' && steps.sonar_begin.outcome == 'success'
       uses: actions/upload-artifact@v7
@@ -364,6 +192,321 @@ jobs:
         if-no-files-found: error
         include-hidden-files: true
         retention-days: 1
+
+  # Strict compiler warnings gate. Runs beside sonar-build so Sonar analyzer noise cannot weaken it.
+  lint-build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Restore
+      run: dotnet restore src/Titanium.Web.Proxy.sln --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+    - name: Build
+      run: dotnet build src/Titanium.Web.Proxy.sln --configuration Release --no-restore --warnaserror
+
+  # UnitTests alone, then xDS, then the light independent assemblies.
+  unit:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+    - name: Detect scripting RID
+      id: unit-scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+    - name: Cache scripting natives for coverage
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.unit-scripting-rid.outputs.rid }}
+    - name: Restore and build
+      shell: pwsh
+      run: |
+        $projects = @(
+          'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj',
+          'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj',
+          'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj',
+          'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj',
+          'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj',
+          'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj',
+          'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'
+        )
+        foreach ($proj in $projects) {
+          dotnet restore $proj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $proj --configuration Release --no-restore --warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+    - name: Bundle scripting natives for coverage tests
+      shell: pwsh
+      run: |
+        $rid = '${{ steps.unit-scripting-rid.outputs.rid }}'
+        $dirs = @(
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.dll src/Titanium.Web.Proxy.Scripting/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.Tests.dll tests/Titanium.Web.Proxy.Scripting.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+        ) | Where-Object { $_ } | Select-Object -Unique
+        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
+        foreach ($out in $dirs) {
+          Write-Host "Bundling scripting natives into $out"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
+          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
+            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
+          }
+        }
+    - name: Warm Helm
+      shell: pwsh
+      run: |
+        $helm = Get-Command helm -ErrorAction SilentlyContinue
+        if (-not $helm) {
+          Write-Host 'helm is not on PATH; chart tests stay inconclusive.'
+          exit 0
+        }
+        & helm version
+        if ($LASTEXITCODE -ne 0) { throw "helm version exited $LASTEXITCODE" }
+    - name: Test
+      shell: pwsh
+      run: |
+        $settings = 'tests/test.runsettings'
+        # UnitTests touches the current-user certificate store and a shared cert disk cache.
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Fuzz-Nightly" --collect:"Code Coverage" --results-directory coverage/unit
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/xds
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        $unitJobs = @(
+          @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
+          @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
+          @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
+          @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj'; Results = 'coverage/gateway' },
+          @{ Project = 'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'; Results = 'coverage/geoip' }
+        )
+        $unitFailures = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
+        $unitJobs | ForEach-Object -Parallel {
+          $job = $_
+          $failures = $using:unitFailures
+          $settingsPath = $using:settings
+          $args = @(
+            'test', $job.Project,
+            '--configuration', 'Release',
+            '--no-build', '--no-restore',
+            '--settings', $settingsPath,
+            '--collect:Code Coverage',
+            '--results-directory', $job.Results
+          )
+          Write-Host ">>> dotnet $($args -join ' ')"
+          & dotnet @args
+          if ($LASTEXITCODE -ne 0) {
+            [void]$failures.Add("$($job.Project) exited $LASTEXITCODE")
+          }
+        } -ThrottleLimit 4
+        if ($unitFailures.Count -gt 0) {
+          $unitFailures | ForEach-Object { Write-Error $_ }
+          exit 1
+        }
+    - name: Upload unit coverage
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-unit
+        path: coverage
+        if-no-files-found: error
+        retention-days: 1
+
+  # Plus, Inspector, Cli, and Windows E2E subsets stay off the UnitTests machine.
+  heavy-suites:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+    - name: Detect scripting RID
+      id: heavy-scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+    - name: Cache scripting natives for coverage
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.heavy-scripting-rid.outputs.rid }}
+    - name: Restore and build
+      shell: pwsh
+      run: |
+        $projects = @(
+          'tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj',
+          'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj',
+          'tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj',
+          'tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj'
+        )
+        foreach ($proj in $projects) {
+          dotnet restore $proj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $proj --configuration Release --no-restore --warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+    - name: Bundle scripting natives beside CLI
+      shell: pwsh
+      run: |
+        $rid = '${{ steps.heavy-scripting-rid.outputs.rid }}'
+        $dirs = @(
+          (Get-ChildItem -Recurse -Filter titanium.dll src/Titanium.Cli/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Cli.Tests.dll tests/Titanium.Cli.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+        ) | Where-Object { $_ } | Select-Object -Unique
+        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
+        foreach ($out in $dirs) {
+          Write-Host "Bundling scripting natives into $out"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
+          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
+            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
+          }
+        }
+    - name: Test
+      shell: pwsh
+      run: |
+        $settings = 'tests/test.runsettings'
+        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load; one retry.
+        $plusOk = $false
+        for ($attempt = 1; $attempt -le 2; $attempt++) {
+          Remove-Item -Recurse -Force coverage/plus -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path coverage/plus | Out-Null
+          dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
+          if ($LASTEXITCODE -eq 0) { $plusOk = $true; break }
+          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying once."
+          Start-Sleep -Seconds 5
+        }
+        if (-not $plusOk) { exit 1 }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/inspector
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/cli
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # Exclude CliHosted* Playwright leaves — those need Chromium (ui-portable / cli-e2e install it).
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --collect:"Code Coverage" --results-directory coverage/cli-e2e
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Upload heavy-suite coverage
+      uses: actions/upload-artifact@v7
+      with:
+        name: coverage-heavy
+        path: coverage
+        if-no-files-found: error
+        retention-days: 1
+
+  # Deterministic Regression-2026-10-07 gate. No retry.
+  regression:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+    - name: Restore and build
+      shell: pwsh
+      run: |
+        $projects = @(
+          'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj',
+          'tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj',
+          'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj'
+        )
+        foreach ($proj in $projects) {
+          dotnet restore $proj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $proj --configuration Release --no-restore --warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+    - name: Regression-2026-10-07 gate
+      shell: pwsh
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --blame-hang --blame-hang-timeout 5m
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   # Integration classes marked DoNotParallelize run one at a time inside a process. Four runners
   # each take a class-stable shard, so those serialized classes overlap without sharing static state.
@@ -390,6 +533,8 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
     - name: Assert in-box MsQuic (Windows)
       shell: pwsh
       run: |
@@ -414,8 +559,8 @@ jobs:
 
   # Merge shard coverage, finish Sonar (same workspace path the begin step recorded), then publish docs.
   coverage:
-    needs: [changes, build, integration]
-    if: needs.changes.outputs.code == 'true' && needs.build.result == 'success' && needs.integration.result == 'success'
+    needs: [changes, sonar-build, unit, heavy-suites, integration]
+    if: needs.changes.outputs.code == 'true' && needs.sonar-build.result == 'success' && needs.unit.result == 'success' && needs.heavy-suites.result == 'success' && needs.integration.result == 'success'
     runs-on: windows-latest
     timeout-minutes: 25
     permissions:
@@ -433,6 +578,8 @@ jobs:
       with:
         dotnet-version: |
           10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
     - name: Install coverage tool
       shell: pwsh
       run: dotnet tool install --tool-path .coverage/tools dotnet-coverage
@@ -754,14 +901,18 @@ jobs:
   merge-gate:
     name: merge-gate
     if: always()
-    needs: [changes, build, integration, coverage, redis-fleet, ui-portable, cli-e2e]
+    needs: [changes, sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, cli-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Require the code jobs, or a docs-only skip
         env:
           CODE: ${{ needs.changes.outputs.code }}
           CHANGES: ${{ needs.changes.result }}
-          BUILD: ${{ needs.build.result }}
+          SONAR_BUILD: ${{ needs.sonar-build.result }}
+          LINT_BUILD: ${{ needs.lint-build.result }}
+          UNIT: ${{ needs.unit.result }}
+          HEAVY: ${{ needs.heavy-suites.result }}
+          REGRESSION: ${{ needs.regression.result }}
           INTEGRATION: ${{ needs.integration.result }}
           COVERAGE: ${{ needs.coverage.result }}
           REDIS: ${{ needs.redis-fleet.result }}
@@ -770,17 +921,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "changes=$CHANGES build=$BUILD integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
-          for result in "$CHANGES" "$BUILD" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
+          echo "changes=$CHANGES sonar-build=$SONAR_BUILD lint-build=$LINT_BUILD unit=$UNIT heavy-suites=$HEAVY regression=$REGRESSION integration=$INTEGRATION coverage=$COVERAGE redis-fleet=$REDIS ui-portable=$UI cli-e2e=$CLI code=$CODE"
+          for result in "$CHANGES" "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::a required job finished as $result"
               exit 1
             fi
           done
           if [[ "$CODE" == "true" ]]; then
-            for result in "$BUILD" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
+            for result in "$SONAR_BUILD" "$LINT_BUILD" "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION" "$COVERAGE" "$REDIS" "$UI" "$CLI"; do
               if [[ "$result" != "success" ]]; then
-                echo "::error::a code change needs success from build, integration, coverage, redis-fleet, ui-portable, and cli-e2e (got $result)"
+                echo "::error::a code change needs success from sonar-build, lint-build, unit, heavy-suites, regression, integration, coverage, redis-fleet, ui-portable, and cli-e2e (got $result)"
                 exit 1
               fi
             done

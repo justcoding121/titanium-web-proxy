@@ -6,6 +6,7 @@ param(
     [Parameter(Mandatory = $true)][int]$ShardCount,
     [string]$Project = 'tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj',
     [string]$Settings = 'tests/integration-shard.runsettings',
+    [string]$WeightsFile = 'tests/integration-shard-weights.json',
     [string]$ResultsRoot = 'coverage/integration',
     [int]$MaxAttempts = 2
 )
@@ -31,6 +32,50 @@ function Get-StableBucket([string]$value, [int]$count) {
     return [int]$bucket
 }
 
+# Prefer measured/estimated weights so the slowest shard is not the wall clock after
+# the build job is split. Fall back to the stable SHA256 bucket when a class has no weight.
+function Get-ClassWeightMap([string]$path) {
+    $map = @{}
+    if (-not (Test-Path -LiteralPath $path)) { return $map }
+    $json = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    if ($null -eq $json.weights) { return $map }
+    foreach ($prop in $json.weights.PSObject.Properties) {
+        $map[$prop.Name] = [double]$prop.Value
+    }
+    return $map
+}
+
+function Get-WeightedShardAssignment([string[]]$names, [hashtable]$weights, [int]$count) {
+    $loads = New-Object double[] $count
+    $buckets = @{}
+    for ($i = 0; $i -lt $count; $i++) { $buckets[$i] = New-Object System.Collections.Generic.List[string] }
+
+    $ordered = $names | Sort-Object {
+        $w = if ($weights.ContainsKey($_)) { [double]$weights[$_] } else { 0.0 }
+        # Heaviest first. Equal weights keep a stable order via the name.
+        '{0:0000000000}-{1}' -f ([int](1000000000 - [Math]::Min($w, 1000000000))), $_
+    }
+
+    foreach ($name in $ordered) {
+        if ($weights.ContainsKey($name)) {
+            $best = 0
+            $bestLoad = [double]::MaxValue
+            for ($i = 0; $i -lt $count; $i++) {
+                if ($loads[$i] -lt $bestLoad) { $bestLoad = $loads[$i]; $best = $i }
+            }
+            $buckets[$best].Add($name)
+            $loads[$best] += [double]$weights[$name]
+        }
+        else {
+            $bucket = Get-StableBucket $name $count
+            $buckets[$bucket].Add($name)
+            $loads[$bucket] += 1.0
+        }
+    }
+
+    return @{ Buckets = $buckets; Loads = $loads }
+}
+
 # dotnet test --list-tests prints the MSTest display name (the method), not the class.
 # [TestClass] in source is the class-stable key, and it does not require starting the test host.
 $sourceRoot = 'tests/Titanium.Web.Proxy.IntegrationTests'
@@ -52,14 +97,12 @@ if ($discovered.Count -eq 0) {
     throw "No [TestClass] types found under $sourceRoot"
 }
 
-$classes = New-Object System.Collections.Generic.List[string]
-foreach ($name in $discovered) {
-    if ((Get-StableBucket $name $ShardCount) -eq $ShardIndex) {
-        $classes.Add($name)
-    }
-}
+$weightMap = Get-ClassWeightMap $WeightsFile
+$assignment = Get-WeightedShardAssignment $discovered.ToArray() $weightMap $ShardCount
+$classes = $assignment.Buckets[$ShardIndex]
+$load = $assignment.Loads[$ShardIndex]
 
-Write-Host ("Shard {0}: {1} of {2} test classes" -f $ShardIndex, $classes.Count, $discovered.Count)
+Write-Host ("Shard {0}: {1} of {2} test classes (weight {3})" -f $ShardIndex, $classes.Count, $discovered.Count, $load)
 if ($classes.Count -eq 0) {
     Write-Host "Shard $ShardIndex has no classes."
     exit 0
