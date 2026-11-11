@@ -485,7 +485,10 @@ jobs:
             Write-Host "Rewrote Java path in $($_.Name)"
           }
         }
-        .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.scanner.skipJreProvisioning=true /d:sonar.scanner.javaExePath="$java"
+        # skipJreProvisioning and javaExePath are rejected in the end phase. The rewritten
+        # config path and JAVA_HOME are what this scanner version actually uses.
+        Write-Host "Sonar end Java: $java"
+        .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
     - name: Assert coverage floors
       shell: pwsh
       env:
