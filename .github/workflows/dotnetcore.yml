@@ -437,14 +437,14 @@ jobs:
       shell: pwsh
       run: |
         $settings = 'tests/test.runsettings'
-        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load; one retry.
+        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load.
         $plusOk = $false
-        for ($attempt = 1; $attempt -le 2; $attempt++) {
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
           Remove-Item -Recurse -Force coverage/plus -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path coverage/plus | Out-Null
           dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --collect:"Code Coverage" --results-directory coverage/plus
           if ($LASTEXITCODE -eq 0) { $plusOk = $true; break }
-          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying once."
+          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying."
           Start-Sleep -Seconds 5
         }
         if (-not $plusOk) { exit 1 }
