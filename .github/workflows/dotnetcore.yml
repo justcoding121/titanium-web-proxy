@@ -459,13 +459,33 @@ jobs:
         else {
           Write-Host 'Sonar working directory was not downloaded.'
         }
+    - name: Setup Java 21 for Sonar
+      if: env.SONAR_TOKEN != ''
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
     - name: Complete SonarCloud analysis
       if: env.SONAR_TOKEN != ''
       continue-on-error: true
       shell: pwsh
       run: |
         if (-not (Test-Path -LiteralPath .sonarqube)) { Write-Host 'No .sonarqube directory; skipping end.'; exit 0 }
-        .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+        # begin ran on the build runner and stored that machine's JRE path. This job is a
+        # different runner, so point the saved config at the Java 21 we just installed.
+        $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
+        if (-not (Test-Path -LiteralPath $java)) { Write-Error "Java 21 not found at $java"; exit 1 }
+        $javaFwd = $java -replace '\\', '/'
+        Get-ChildItem -LiteralPath .sonarqube -Recurse -File | Where-Object { $_.Extension -in '.xml', '.properties', '.txt' } | ForEach-Object {
+          $text = [IO.File]::ReadAllText($_.FullName)
+          $updated = [regex]::Replace($text, '(?i)[A-Za-z]:\\[^"<\r\n]*?java\.exe', { $java })
+          $updated = [regex]::Replace($updated, '(?i)[A-Za-z]:/[^"<\r\n]*?java\.exe', { $javaFwd })
+          if ($updated -ne $text) {
+            [IO.File]::WriteAllText($_.FullName, $updated)
+            Write-Host "Rewrote Java path in $($_.Name)"
+          }
+        }
+        .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN" /d:sonar.scanner.skipJreProvisioning=true /d:sonar.scanner.javaExePath="$java"
     - name: Assert coverage floors
       shell: pwsh
       env:
