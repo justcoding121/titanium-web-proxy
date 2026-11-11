@@ -207,34 +207,55 @@ jobs:
     - name: Test
       shell: pwsh
       run: |
-        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory!=Fuzz-Nightly" --collect:"Code Coverage" --results-directory coverage/unit
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $settings = 'tests/test.runsettings'
+        # Independent unit assemblies bind loopback listeners on ephemeral ports, use in-memory
+        # test CAs (no cert-store UI), and do not touch OS proxy settings — safe to run in parallel
+        # with throttling so socket/coverage I/O stays bounded on shared runners.
+        $unitJobs = @(
+          @{ Project = 'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj'; Results = 'coverage/unit'; Filter = 'TestCategory!=Fuzz-Nightly' },
+          @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj'; Results = 'coverage/configuration' },
+          @{ Project = 'tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj'; Results = 'coverage/plus' },
+          @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj'; Results = 'coverage/manager' },
+          @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj'; Results = 'coverage/scripting' },
+          @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj'; Results = 'coverage/gateway' },
+          @{ Project = 'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj'; Results = 'coverage/inspector' },
+          @{ Project = 'tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj'; Results = 'coverage/cli' },
+          @{ Project = 'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj'; Results = 'coverage/xds' },
+          @{ Project = 'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'; Results = 'coverage/geoip' }
+        )
 
-        # Additional MIT + NC unit suites (coverage merged below)
-        dotnet test tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/configuration
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/plus
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/manager
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/scripting
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/gateway
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/inspector
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/cli
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/xds
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj --configuration Release --no-build --no-restore --collect:"Code Coverage" --results-directory coverage/geoip
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $unitFailures = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
+        $unitJobs | ForEach-Object -Parallel {
+          $job = $_
+          $args = @(
+            'test', $job.Project,
+            '--configuration', 'Release',
+            '--no-build', '--no-restore',
+            '--settings', $using:settings,
+            '--collect:Code Coverage',
+            '--results-directory', $job.Results
+          )
+          if ($job.Filter) {
+            $args += @('--filter', $job.Filter)
+          }
+          Write-Host ">>> dotnet $($args -join ' ')"
+          & dotnet @args
+          if ($LASTEXITCODE -ne 0) {
+            $using:unitFailures.Add("$($job.Project) exited $LASTEXITCODE")
+          }
+        } -ThrottleLimit 5
+
+        if ($unitFailures.Count -gt 0) {
+          $unitFailures | ForEach-Object { Write-Error $_ }
+          exit 1
+        }
+
         # Attribute CLI process E2E coverage to the build merge (cli-e2e matrix stays the OS gate).
         # Natives were already bundled beside titanium.dll for scripting coverage above.
         # Exclude CliHosted* Playwright leaves — those need Chromium (ui-portable / cli-e2e install it).
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --collect:"Code Coverage" --results-directory coverage/cli-e2e
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --collect:"Code Coverage" --results-directory coverage/cli-e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E-UI" --collect:"Code Coverage" --results-directory coverage/e2e
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
         # The integration suite spins up real listening sockets and TLS handshakes, which
@@ -244,7 +265,7 @@ jobs:
         $maxAttempts = 3
         for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
           Write-Output "Integration tests attempt $attempt of $maxAttempts"
-          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory!=Slow" --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
+          dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Slow" --blame-hang --blame-hang-timeout 5m --collect:"Code Coverage" --results-directory "coverage/integration/attempt-$attempt"
           if ($LASTEXITCODE -eq 0) { break }
           if ($attempt -eq $maxAttempts) { exit $LASTEXITCODE }
           Write-Output "Integration tests failed on attempt $attempt, retrying..."
