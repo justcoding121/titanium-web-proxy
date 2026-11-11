@@ -120,6 +120,19 @@ public class CertificateManagerDeadHandleAndGenerationFatGapTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public void ClearRootCertificate_AfterDispose_DoesNotThrow()
+    {
+        var mgr = NewManager();
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        mgr.Dispose();
+
+        mgr.ClearRootCertificate();
+
+        Assert.IsNull(mgr.RootCertificate);
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public void Dispose_AfterMintCtsAlreadyDisposed_SwallowsObjectDisposedException()
     {
         var mgr = NewManager();
