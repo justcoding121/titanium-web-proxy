@@ -35,14 +35,14 @@ public class ManagerAgentFailureBehaviorTests
         using var agent = Start(DeadUrl(), dir.Path, applier, "managed", logger: logger);
         Assert.IsNotNull(agent);
 
-        await WaitUntilAsync(() => applier.Applied.Count >= 1, TimeSpan.FromSeconds(10));
+        await WaitUntilAsync(() => applier.Applied.Length >= 1, TimeSpan.FromSeconds(10));
         Assert.AreEqual("lkg-hash-1", applier.Applied[0].Hash);
         Assert.AreEqual(ValidYaml, applier.Applied[0].Yaml);
         StringAssert.Contains(logger.Text, "applying last-known-good");
 
         // The poll loop backs off for two seconds before the next failure; the same hash must not be re-applied.
         await Task.Delay(TimeSpan.FromMilliseconds(2600));
-        Assert.AreEqual(1, applier.Applied.Count);
+        Assert.AreEqual(1, applier.Applied.Length);
     }
 
     [TestMethod]
@@ -130,7 +130,7 @@ public class ManagerAgentFailureBehaviorTests
         Assert.AreEqual(0, applier.Attempts);
 
         healthy = true;
-        await WaitUntilAsync(() => applier.Applied.Count >= 1, TimeSpan.FromSeconds(10));
+        await WaitUntilAsync(() => applier.Applied.Length >= 1, TimeSpan.FromSeconds(10));
         Assert.AreEqual("h-recover", applier.Applied[0].Hash);
     }
 
@@ -198,7 +198,7 @@ public class ManagerAgentFailureBehaviorTests
             () => ManagerAgent.TryReadLastKnownGood(dir.Path, out _, out var hash) && hash == "h-ack",
             TimeSpan.FromSeconds(10));
         await WaitUntilAsync(() => logger.Text.Contains("ack returned 503"), TimeSpan.FromSeconds(5));
-        Assert.AreEqual(1, applier.Applied.Count);
+        Assert.AreEqual(1, applier.Applied.Length);
     }
 
     [TestMethod]
@@ -231,7 +231,7 @@ public class ManagerAgentFailureBehaviorTests
         Assert.IsNotNull(agent);
 
         await WaitUntilAsync(() => manager.Count("/v1/agent/config") >= 4, TimeSpan.FromSeconds(10));
-        Assert.AreEqual(1, applier.Applied.Count, "the same hash is applied once");
+        Assert.AreEqual(1, applier.Applied.Length, "the same hash is applied once");
         Assert.AreEqual(1, manager.Count("/v1/agent/ack"), "and acknowledged once");
     }
 
@@ -252,7 +252,7 @@ public class ManagerAgentFailureBehaviorTests
         Assert.IsNotNull(agent);
 
         await WaitUntilAsync(() => harness.Acks.Any(a => a.Accepted), TimeSpan.FromSeconds(10));
-        Assert.AreEqual(1, applier.Applied.Count);
+        Assert.AreEqual(1, applier.Applied.Length);
         StringAssert.Contains(logger.Text, "failed to write last-known-good");
     }
 
