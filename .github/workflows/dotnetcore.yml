@@ -31,10 +31,10 @@ on:
 permissions:
   contents: read
 
-# Cancel superseded pull_request runs. Never cancel develop/beta/stable:
-# publish, tag, and Sonar upload need a full run per commit.
+# Cancel superseded pull_request runs. Push/tag runs use a unique group so a
+# stuck develop job cannot queue every later commit behind it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
