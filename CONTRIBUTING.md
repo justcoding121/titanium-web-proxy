@@ -30,6 +30,12 @@ Not for end users. Per-OS checklists and on-demand probes live under `tools/`:
 - [InspectorDesktopProbe](tools/InspectorDesktopProbe) — system proxy / CA / browser UX
 - [RpsLoadProbe](tools/RpsLoadProbe) — concurrent breaking-point load in requests per second (RPS)
 
+## Fork pull requests and coverage
+
+A pull request from a fork does not receive repository secrets. SonarCloud does not analyze it, and the coverage-floor check uses `coverage.xml` as a warning rather than a failure. Diff coverage still blocks the pull request. Floors are enforced with the Sonar metric on the next push to `develop`.
+
+A maintainer who wants the full quality gate runs `tools/ci/Mirror-ForkPr.ps1 -Pr <number>` (`-WhatIf` previews and changes nothing). The script copies the head onto a same-repo branch and opens a pull request. It refuses PolyForm Noncommercial paths and files that run during a same-repo build unless `-AllowNcPaths` or `-AllowBuildFiles` is passed after the diff has been read. Merge that pull request with a merge commit, not squash or rebase.
+
 ## PR checklist
 
 Use the pull request template. Include tests for behavior changes. Do not weaken performance gates or skip PublicAPI analyzer updates for intentional API surface changes.
