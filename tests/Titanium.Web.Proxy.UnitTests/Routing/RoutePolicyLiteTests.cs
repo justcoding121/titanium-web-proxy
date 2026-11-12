@@ -328,4 +328,125 @@ public class RoutePolicyLiteTests
         };
         Assert.IsTrue(ReverseProxyFastPath.RequiresPerRequestDispatch(guarded, EndPoint));
     }
+
+    [TestMethod]
+    public void Denial_OnACorsRoute_EchoesTheListedOrigin()
+    {
+        var cors = new RoutePolicyConfig
+        {
+            Name = "cors",
+            Kind = "cors",
+            Origins = "https://app.example.com",
+            ExposeHeaders = "X-Trace",
+            AllowCredentials = true,
+        };
+        var key = new RoutePolicyConfig { Name = "key", Kind = "apiKey", HeaderName = "X-Api-Key", HeaderValue = "secret" };
+        var options = Options(["key", "cors"], key, cors);
+
+        Assert.IsTrue(Handle(options, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(401, status);
+        Assert.AreEqual("https://app.example.com", One(headers, "Access-Control-Allow-Origin"));
+        Assert.AreEqual("Origin", One(headers, "Vary"));
+        Assert.AreEqual("true", One(headers, "Access-Control-Allow-Credentials"));
+        Assert.AreEqual("X-Trace", One(headers, "Access-Control-Expose-Headers"));
+
+        Assert.IsTrue(Handle(options, Req(headers: [("Origin", "https://evil.example")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(401, status);
+        Assert.IsNull(One(headers, "Access-Control-Allow-Origin"));
+
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(401, status);
+        Assert.IsNull(One(headers, "Access-Control-Allow-Origin"));
+
+        var bare = Options(["key"], key);
+        Assert.IsTrue(Handle(bare, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out _, out _, out headers));
+        Assert.IsNull(One(headers, "Access-Control-Allow-Origin"));
+    }
+
+    [TestMethod]
+    public void RealPreflight_SkipsApiKeyAndRequireHeader_WithoutDoublingHeaders()
+    {
+        var cors = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://app.example.com", Methods = "GET" };
+        var key = new RoutePolicyConfig { Name = "key", Kind = "apiKey", HeaderName = "X-Api-Key", HeaderValue = "secret" };
+        var options = Options(["key", "cors"], key, cors);
+        var preflight = Req("OPTIONS", headers: [("Origin", "https://app.example.com"), ("Access-Control-Request-Method", "GET")]);
+        Assert.IsTrue(Handle(options, preflight, "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(204, status);
+        Assert.IsNotNull(headers);
+        Assert.AreEqual(1, headers.Count(h => h.Key == "Access-Control-Allow-Origin"));
+        Assert.AreEqual(1, headers.Count(h => h.Key == "Vary"));
+
+        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(401, status);
+        Assert.AreEqual("https://app.example.com", One(headers, "Access-Control-Allow-Origin"));
+
+        var need = new RoutePolicyConfig { Name = "need", Kind = "requireHeader", HeaderName = "X-Tenant", HeaderValue = "t1" };
+        var guarded = Options(["need", "cors"], need, cors);
+        Assert.IsTrue(Handle(guarded, preflight, "10.0.0.1", out status, out _, out _));
+        Assert.AreEqual(204, status);
+    }
+
+    [TestMethod]
+    public void BodyRateAndAddressDenials_CarryCors_AndAPreflightStillHitsTheAddressPolicy()
+    {
+        var star = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "*" };
+        var cap = Options(
+            ["cap", "cors"],
+            new RoutePolicyConfig { Name = "cap", Kind = "maxRequestBodySize", MaxRequestBodyBytes = 1 },
+            star);
+        Assert.IsTrue(Handle(cap, Req("POST", 10, ("Origin", "https://app.example.com")), "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(413, status);
+        Assert.AreEqual("*", One(headers, "Access-Control-Allow-Origin"));
+        Assert.IsNull(One(headers, "Vary"));
+
+        RoutePolicies.Clock = new ManualTimeProvider();
+        var rate = Options(
+            ["rate", "cors"],
+            new RoutePolicyConfig { Name = "rate", Kind = "rateLimit", Limit = 1, WindowSeconds = 60 },
+            star);
+        Assert.IsFalse(Handle(rate, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out _, out _, out _));
+        Assert.IsTrue(Handle(rate, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(429, status);
+        Assert.AreEqual("*", One(headers, "Access-Control-Allow-Origin"));
+        Assert.IsNotNull(One(headers, "Retry-After"));
+
+        var listed = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://app.example.com" };
+        var net = Options(
+            ["net", "cors"],
+            new RoutePolicyConfig { Name = "net", Kind = "ipAllowDeny", Allow = "10.1.0.0/16" },
+            listed);
+        Assert.IsTrue(Handle(net, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(403, status);
+        Assert.AreEqual("https://app.example.com", One(headers, "Access-Control-Allow-Origin"));
+        Assert.IsTrue(Handle(
+            net,
+            Req("OPTIONS", headers: [("Origin", "https://app.example.com"), ("Access-Control-Request-Method", "GET")]),
+            "10.0.0.1",
+            out status,
+            out _,
+            out _));
+        Assert.AreEqual(403, status);
+    }
+
+    private static string? One(List<KeyValuePair<string, string>>? headers, string name)
+    {
+        if (headers is null)
+        {
+            return null;
+        }
+
+        string? value = null;
+        var seen = 0;
+        foreach (var pair in headers)
+        {
+            if (pair.Key == name)
+            {
+                seen++;
+                value = pair.Value;
+            }
+        }
+
+        Assert.IsTrue(seen <= 1, name);
+        return value;
+    }
 }

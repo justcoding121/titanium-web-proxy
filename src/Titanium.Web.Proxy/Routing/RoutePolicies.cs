@@ -278,7 +278,8 @@ internal static class RoutePolicies
             if (stop is { } denied)
             {
                 ReleaseHeld(runtime, heldNames);
-                return denied;
+                // A preflight already carries its own CORS headers. Any other local refusal inherits the route's cors policy.
+                return denied.Status == 204 ? denied : WithLocalCors(options, route, request, denied);
             }
         }
 
@@ -315,8 +316,12 @@ internal static class RoutePolicies
         {
             case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
                 return Stop(413, "payload too large");
+            case "requireHeader" when IsRealPreflight(request) && FindCorsPolicy(options, route) is not null:
+                return null;
             case "requireHeader" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
                 return Stop(401, string.Empty);
+            case "apiKey" when IsRealPreflight(request) && FindCorsPolicy(options, route) is not null:
+                return null;
             case "apiKey" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
                 return Stop(401, string.Empty);
             case "timeout" when policy.TimeoutSeconds is int seconds:
@@ -587,8 +592,200 @@ internal static class RoutePolicies
         return headers;
     }
 
+    /// <summary>
+    /// Headers for a proxy-generated response on a route that lists <c>cors</c>.
+    /// Null when the route has no such policy, the request has no <c>Origin</c>, or the origin is not allowed.
+    /// </summary>
+    internal static List<KeyValuePair<string, string>>? TryGetCorsResponseHeaders(
+        RouteConfig route, Request request, ReverseProxyOptions options)
+    {
+        var policy = FindCorsPolicy(options, route);
+        if (policy is null)
+        {
+            return null;
+        }
+
+        var origin = HeaderValue(request, "Origin");
+        if (string.IsNullOrEmpty(origin))
+        {
+            return null;
+        }
+
+        var allowOrigin = AllowedOrigin(policy.Origins, origin);
+        if (allowOrigin is null)
+        {
+            return null;
+        }
+
+        var headers = new List<KeyValuePair<string, string>>(4)
+        {
+            new("Access-Control-Allow-Origin", allowOrigin),
+        };
+        if (policy.AllowCredentials == true && !string.Equals(allowOrigin, "*", StringComparison.Ordinal))
+        {
+            headers.Add(new("Access-Control-Allow-Credentials", "true"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(policy.ExposeHeaders))
+        {
+            headers.Add(new("Access-Control-Expose-Headers", policy.ExposeHeaders.Trim()));
+        }
+
+        // A wildcard answer does not vary. A list does, so caches do not reuse one origin's reply for another.
+        var configured = policy.Origins?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured) && !string.Equals(configured, "*", StringComparison.Ordinal))
+        {
+            headers.Add(new("Vary", "Origin"));
+        }
+
+        return headers;
+    }
+
+    /// <summary>Writes <see cref="TryGetCorsResponseHeaders"/> onto a response, merging an existing <c>Vary</c>.</summary>
+    internal static void ApplyLocalCors(Response response, RouteConfig route, Request request, ReverseProxyOptions options)
+    {
+        var extra = TryGetCorsResponseHeaders(route, request, options);
+        if (extra is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < extra.Count; i++)
+        {
+            AddMerged(response.Headers, extra[i]);
+        }
+    }
+
+    private static PolicyDecision WithLocalCors(
+        ReverseProxyOptions options, RouteConfig route, Request request, PolicyDecision denied)
+    {
+        var extra = TryGetCorsResponseHeaders(route, request, options);
+        if (extra is null)
+        {
+            return denied;
+        }
+
+        if (denied.Headers is not { Count: > 0 })
+        {
+            return denied with { Headers = extra };
+        }
+
+        var merged = new List<KeyValuePair<string, string>>(denied.Headers);
+        for (var i = 0; i < extra.Count; i++)
+        {
+            merged = MergeHeader(merged, extra[i]);
+        }
+
+        return denied with { Headers = merged };
+    }
+
+    private static List<KeyValuePair<string, string>> MergeHeader(
+        List<KeyValuePair<string, string>> headers, KeyValuePair<string, string> extra)
+    {
+        if (!string.Equals(extra.Key, "Vary", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.Add(extra);
+            return headers;
+        }
+
+        for (var i = 0; i < headers.Count; i++)
+        {
+            if (!string.Equals(headers[i].Key, "Vary", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!ContainsToken(headers[i].Value, extra.Value))
+            {
+                headers[i] = new KeyValuePair<string, string>(headers[i].Key, headers[i].Value + ", " + extra.Value);
+            }
+
+            return headers;
+        }
+
+        headers.Add(extra);
+        return headers;
+    }
+
+    private static void AddMerged(HeaderCollection headers, KeyValuePair<string, string> extra)
+    {
+        if (!string.Equals(extra.Key, "Vary", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.AddHeader(extra.Key, extra.Value);
+            return;
+        }
+
+        var existing = headers.GetHeaders("Vary");
+        if (existing is not { Count: > 0 })
+        {
+            headers.AddHeader("Vary", extra.Value);
+            return;
+        }
+
+        if (ContainsToken(existing[0].Value, extra.Value))
+        {
+            return;
+        }
+
+        var merged = existing[0].Value + ", " + extra.Value;
+        headers.RemoveHeader("Vary");
+        headers.AddHeader("Vary", merged);
+    }
+
+    private static bool ContainsToken(string list, string token)
+    {
+        var start = 0;
+        while (start < list.Length)
+        {
+            var comma = list.IndexOf(',', start);
+            if (comma < 0)
+            {
+                comma = list.Length;
+            }
+
+            if (string.Equals(list[start..comma].Trim(), token, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            start = comma + 1;
+        }
+
+        return false;
+    }
+
+    private static bool IsRealPreflight(Request request)
+    {
+        if (!string.Equals(request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrEmpty(HeaderValue(request, "Origin"))
+            && !string.IsNullOrEmpty(HeaderValue(request, "Access-Control-Request-Method"));
+    }
+
+    private static RoutePolicyConfig? FindCorsPolicy(ReverseProxyOptions options, RouteConfig route)
+    {
+        if (route.Policies is not { Count: > 0 } names || options.Policies is not { Count: > 0 } policies)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < names.Count; i++)
+        {
+            var policy = FindNamedPolicy(policies, names[i]);
+            if (policy is not null && string.Equals(policy.Kind, "cors", StringComparison.Ordinal))
+            {
+                return policy;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary><c>*</c> or a missing list allows every origin. A list echoes only an exact match, and an unlisted origin gets nothing.</summary>
-    private static string? AllowedOrigin(string? configured, string origin)
+    internal static string? AllowedOrigin(string? configured, string origin)
     {
         if (string.IsNullOrWhiteSpace(configured) || configured.Trim() == "*")
         {

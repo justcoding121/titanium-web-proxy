@@ -18,6 +18,7 @@ using Titanium.Web.Proxy.Http.Responses;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network.Tcp;
+using Titanium.Web.Proxy.Routing;
 using SslExtensions = Titanium.Web.Proxy.Extensions.SslExtensions;
 
 namespace Titanium.Web.Proxy;
@@ -341,6 +342,8 @@ public partial class ProxyServer
                     HttpVersion = request.HttpVersion
                 };
                 badGateway.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+                if (ReverseProxy is { Routes: { Count: > 0 } routes } rp)
+                    RoutePolicies.ApplyLocalCors(badGateway, routes[0], request, rp);
                 ApplyResponseHeaderContributor(badGateway);
                 await clientStream.WriteResponseAsync(badGateway, cancellationToken);
                 return false;
@@ -617,6 +620,8 @@ public partial class ProxyServer
                     HttpVersion = request.HttpVersion
                 };
                 badGateway.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+                if (ReverseProxy is { Routes: { Count: > 0 } routes } rp)
+                    RoutePolicies.ApplyLocalCors(badGateway, routes[0], request, rp);
                 await clientStream.WriteResponseAsync(badGateway, cancellationToken);
                 return false;
             }
