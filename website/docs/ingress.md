@@ -112,7 +112,7 @@ An Ingress with `titanium.io/canary: "true"` is the canary of the Ingress that s
 These follow from the data plane. They are listed so nothing surprises you.
 
 - **`ssl-redirect: "true"` is rejected.** Routes are matched by host, path, header, query, and method, not by scheme, so a redirect rule would also catch HTTPS requests. Terminate and redirect at the load balancer in front, or use an `HTTPRoute` with `RequestRedirect`.
-- **CORS adds only the allow-origin header to the actual response.** `cors-allow-origin` replies to `OPTIONS` itself and adds `Access-Control-Allow-Origin` to the real response. A request whose `Origin` is not listed gets no allow header. Other `Access-Control-*` headers, such as `Allow-Credentials` and `Expose-Headers`, are not added.
+- **CORS adds only the allow-origin header to the actual response.** `cors-allow-origin` replies to `OPTIONS` itself and adds `Access-Control-Allow-Origin` to the real response. A request whose `Origin` is not listed gets no allow header. Other `Access-Control-*` headers, such as `Allow-Credentials` and `Expose-Headers`, are not added. Responses the proxy itself generates (policy denials, rate-limit, bad gateway) carry no CORS header, so a browser reports a CORS error for them.
 - **`H2C` and `GRPC` follow the client.** The data plane speaks HTTP/2 to the backend when the client does, so there is no separate setting for it.
 - **`proxy-body-size` reads `Content-Length`.** A chunked request with no length is not checked.
 - **Annotations of other controllers are ignored**, not translated. Only `titanium.io/` is read.
