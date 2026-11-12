@@ -367,6 +367,7 @@ public class ParityGapTests
         var session = MakeSession(proxy);
         session.HttpClient.Request.Method = "OPTIONS";
         session.HttpClient.Request.Headers.AddHeader("Origin", "https://app.test");
+        session.HttpClient.Request.Headers.AddHeader("Access-Control-Request-Method", "GET");
         Assert.AreEqual(204, ApplyStatus(proxy, session));
         Assert.AreEqual("https://app.test", session.HttpClient.Response.Headers.GetHeaders("Access-Control-Allow-Origin")![0].Value);
     }

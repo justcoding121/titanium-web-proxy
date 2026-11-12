@@ -884,6 +884,52 @@ public class IngressTranslatorTests
         Assert.AreEqual(500, Annotated((A("cors-allow-origin"), value)).Route.DirectResponse?.Status);
 
     [TestMethod]
+    public void Annotations_CorsCompanions_ThreadIntoThePolicyAndTheTransform()
+    {
+        var (result, route) = Annotated(
+            (A("cors-allow-origin"), "https://app.example.com"),
+            (A("cors-allow-methods"), "GET, PUT"),
+            (A("cors-allow-headers"), "X-Trace, X-Tenant"),
+            (A("cors-allow-credentials"), "true"),
+            (A("cors-expose-headers"), "X-Request-Id"),
+            (A("cors-max-age"), "600"));
+
+        var policy = result.Config.Policies.Single();
+        Assert.AreEqual("https://app.example.com", policy.Origins);
+        Assert.AreEqual("GET,PUT", policy.Methods);
+        Assert.AreEqual("X-Trace,X-Tenant", policy.HeaderName);
+        Assert.AreEqual(true, policy.AllowCredentials);
+        Assert.AreEqual("X-Request-Id", policy.ExposeHeaders);
+        Assert.AreEqual(600, policy.MaxAgeSeconds);
+
+        var cors = route.Transforms!.Single(t => t.Kind == TransformKinds.ResponseCors);
+        Assert.AreEqual("https://app.example.com", cors.Parameters!["origins"]);
+        Assert.AreEqual("true", cors.Parameters["allowCredentials"]);
+        Assert.AreEqual("X-Request-Id", cors.Parameters["exposeHeaders"]);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    [DataRow("cors-allow-methods", "GET")]
+    [DataRow("cors-allow-headers", "*")]
+    [DataRow("cors-allow-credentials", "true")]
+    [DataRow("cors-expose-headers", "X-Request-Id")]
+    [DataRow("cors-max-age", "60")]
+    public void Annotations_CorsCompanions_WithoutOrigin_Answer500(string name, string value) =>
+        Assert.AreEqual(500, Annotated((A(name), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_CorsCredentialsWithWildcard_Answers500() =>
+        Assert.AreEqual(500, Annotated((A("cors-allow-origin"), "*"), (A("cors-allow-credentials"), "true")).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    [DataRow("-1")]
+    [DataRow("86401")]
+    [DataRow("soon")]
+    public void Annotations_CorsMaxAge_OutOfRange_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("cors-allow-origin"), "*"), (A("cors-max-age"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
     public void Annotations_AuthUrl_BecomesAnExtAuthPolicy_ThatFailsClosed()
     {
         var (result, route) = Annotated((A("auth-url"), "https://auth.example.com/check"));

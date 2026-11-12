@@ -165,6 +165,21 @@ public sealed class RoutePolicyConfig
     public string? Origins { get; init; }
     public string? Methods { get; init; }
 
+    /// <summary>
+    /// <c>cors</c>: add <c>Access-Control-Allow-Credentials: true</c>.
+    /// Rejected when <c>origins</c> is missing or contains <c>*</c>.
+    /// </summary>
+    public bool? AllowCredentials { get; init; }
+
+    /// <summary>
+    /// <c>cors</c>: <c>Access-Control-Expose-Headers</c> for the actual response.
+    /// The <c>ResponseCors</c> transform carries the same list.
+    /// </summary>
+    public string? ExposeHeaders { get; init; }
+
+    /// <summary><c>cors</c>: <c>Access-Control-Max-Age</c> in seconds, 0-86400.</summary>
+    public int? MaxAgeSeconds { get; init; }
+
     /// <summary><c>extAuth</c>: absolute http or https URL of the authorization service. Fixed in config.</summary>
     public string? Url { get; init; }
 

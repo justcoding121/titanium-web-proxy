@@ -93,21 +93,100 @@ public class RoutePolicyLiteTests
     public void Cors_AnswersAPreflightAndLeavesOtherMethodsAlone()
     {
         var options = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://a.test, https://b.test", Methods = "GET", HeaderName = "X-Custom" });
-        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://b.test")]), "10.0.0.1", out var status, out _, out var headers));
+        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://b.test"), ("Access-Control-Request-Method", "GET")]), "10.0.0.1", out var status, out _, out var headers));
         Assert.AreEqual(204, status);
         Assert.AreEqual("https://b.test", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
         Assert.AreEqual("GET", headers!.Single(h => h.Key == "Access-Control-Allow-Methods").Value);
         Assert.AreEqual("X-Custom", headers!.Single(h => h.Key == "Access-Control-Allow-Headers").Value);
 
-        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://evil.test")]), "10.0.0.1", out _, out _, out headers));
-        Assert.AreEqual("https://a.test", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
+        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://evil.test"), ("Access-Control-Request-Method", "PUT")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(204, status);
+        Assert.IsFalse(headers!.Any(h => h.Key.StartsWith("Access-Control-Allow-", StringComparison.Ordinal)));
 
         Assert.IsFalse(Handle(options, Req("GET"), "10.0.0.1", out _, out _, out _));
 
         var open = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors" });
-        Assert.IsTrue(Handle(open, Req("OPTIONS"), "10.0.0.1", out _, out _, out headers));
+        Assert.IsTrue(Handle(open, Req("OPTIONS", headers: [("Origin", "https://any.test"), ("Access-Control-Request-Method", "GET")]), "10.0.0.1", out _, out _, out headers));
         Assert.AreEqual("*", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
         Assert.AreEqual("GET, POST, OPTIONS", headers!.Single(h => h.Key == "Access-Control-Allow-Methods").Value);
+    }
+
+    [TestMethod]
+    public void Cors_CredentialsReflectTheRequestedHeaders_AndSendMaxAge()
+    {
+        var options = Options(["cors"], new RoutePolicyConfig
+        {
+            Name = "cors",
+            Kind = "cors",
+            Origins = "https://a.test",
+            AllowCredentials = true,
+            MaxAgeSeconds = 600,
+        });
+        Assert.IsTrue(Handle(
+            options,
+            Req("OPTIONS", headers:
+            [
+                ("Origin", "https://a.test"),
+                ("Access-Control-Request-Method", "GET"),
+                ("Access-Control-Request-Headers", "X-Trace"),
+            ]),
+            "10.0.0.1",
+            out _,
+            out _,
+            out var headers));
+        var sent = headers ?? throw new InvalidOperationException("preflight headers");
+        Assert.AreEqual("true", sent.Single(h => h.Key == "Access-Control-Allow-Credentials").Value);
+        Assert.AreEqual("X-Trace", sent.Single(h => h.Key == "Access-Control-Allow-Headers").Value);
+        Assert.AreEqual("600", sent.Single(h => h.Key == "Access-Control-Max-Age").Value);
+    }
+
+    [TestMethod]
+    public void Cors_AnswersOnlyARealPreflight_AndDoesNotEchoAnUnlistedOrigin()
+    {
+        var options = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://a.test, https://b.test" });
+
+        Assert.IsFalse(Handle(options, Req("OPTIONS"), "10.0.0.1", out _, out _, out _), "a plain OPTIONS is not a preflight");
+        Assert.IsFalse(
+            Handle(options, Req("OPTIONS", headers: [("Origin", "https://a.test")]), "10.0.0.1", out _, out _, out _),
+            "Origin alone is not a preflight");
+        Assert.IsFalse(
+            Handle(options, Req("OPTIONS", headers: [("Access-Control-Request-Method", "GET")]), "10.0.0.1", out _, out _, out _),
+            "a request method without Origin is not a preflight");
+
+        Assert.IsTrue(Handle(
+            options,
+            Req("OPTIONS", headers: [("Origin", "https://b.test"), ("Access-Control-Request-Method", "GET")]),
+            "10.0.0.1",
+            out var status,
+            out _,
+            out var headers));
+        Assert.AreEqual(204, status);
+        Assert.IsNotNull(headers);
+        Assert.AreEqual("https://b.test", headers.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
+        StringAssert.Contains(headers.Single(h => h.Key == "Vary").Value, "Access-Control-Request-Method");
+        StringAssert.Contains(headers.Single(h => h.Key == "Vary").Value, "Access-Control-Request-Headers");
+
+        Assert.IsTrue(Handle(
+            options,
+            Req("OPTIONS", headers: [("Origin", "https://evil.test"), ("Access-Control-Request-Method", "PUT")]),
+            "10.0.0.1",
+            out status,
+            out _,
+            out headers));
+        Assert.AreEqual(204, status);
+        Assert.IsNotNull(headers);
+        Assert.IsFalse(headers.Any(h => h.Key.StartsWith("Access-Control-Allow-", StringComparison.Ordinal)));
+        StringAssert.Contains(headers.Single(h => h.Key == "Vary").Value, "Origin");
+
+        var open = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors" });
+        Assert.IsTrue(Handle(
+            open,
+            Req("OPTIONS", headers: [("Origin", "https://any.test"), ("Access-Control-Request-Method", "DELETE")]),
+            "10.0.0.1",
+            out _,
+            out _,
+            out headers));
+        Assert.AreEqual("*", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
     }
 
     [TestMethod]

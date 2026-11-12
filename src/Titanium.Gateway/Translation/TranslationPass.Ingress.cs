@@ -493,10 +493,21 @@ internal sealed partial class TranslationPass
         var settings = entry.Owner.Settings;
         var transforms = new List<TransformConfig>();
 
-        // The cors policy answers the preflight; this adds the allow header to the real response.
+        // The cors policy answers the preflight; this adds the same decision to the real response.
         if (settings.CorsOrigins is { } corsOrigins)
         {
-            transforms.Add(Transform(TransformKinds.ResponseCors, ("origins", corsOrigins)));
+            var parameters = new List<(string Key, string Value)> { ("origins", corsOrigins) };
+            if (settings.CorsAllowCredentials == true)
+            {
+                parameters.Add(("allowCredentials", "true"));
+            }
+
+            if (settings.CorsExposeHeaders is { } exposeHeaders)
+            {
+                parameters.Add(("exposeHeaders", exposeHeaders));
+            }
+
+            transforms.Add(Transform(TransformKinds.ResponseCors, parameters.ToArray()));
         }
 
         var target = settings.RewriteTarget;
@@ -544,7 +555,17 @@ internal sealed partial class TranslationPass
 
         if (settings.CorsOrigins is { } origins)
         {
-            Add(new RoutePolicyConfig { Name = prefix + "cors", Kind = "cors", Origins = origins });
+            Add(new RoutePolicyConfig
+            {
+                Name = prefix + "cors",
+                Kind = "cors",
+                Origins = origins,
+                Methods = settings.CorsMethods,
+                HeaderName = settings.CorsAllowHeaders,
+                AllowCredentials = settings.CorsAllowCredentials,
+                ExposeHeaders = settings.CorsExposeHeaders,
+                MaxAgeSeconds = settings.CorsMaxAge,
+            });
         }
 
         if (settings.LimitRps is { } rps)
