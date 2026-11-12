@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -8,8 +9,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Abstractions;
+using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Routing;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
@@ -612,5 +618,104 @@ public class H1TerminateLiteIntegrationTests
             Assert.AreEqual("/new", r.Headers.Location?.ToString());
         }
         finally { proxy.Stop(); proxy.Dispose(); }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ConstrainedSingleRoute_GetAgreesWithPost_AndAMatchingGetReachesTheOrigin()
+    {
+        // A path constraint leaves terminate-lite. An unmatched request is still forwarded to ForwardHost
+        // on the session path, so GET /other and POST /other agree, and GET /api/x still reaches the origin.
+        // A prefix / route stays on terminate-lite and forwards too.
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAndBodyAsync(s);
+            await s.WriteAsync(OkWithBody("origin", keepAlive: false));
+        });
+
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/api", PathKind = PathMatchKind.Prefix });
+            using var client = MakeClient();
+            var getOther = await client.GetAsync($"https://127.0.0.1:{ep.Port}/other");
+            var postOther = await client.PostAsync($"https://127.0.0.1:{ep.Port}/other", new StringContent("x"));
+            Assert.AreEqual((int)postOther.StatusCode, (int)getOther.StatusCode);
+            var matched = await client.GetAsync($"https://127.0.0.1:{ep.Port}/api/x");
+            Assert.AreEqual("origin", await matched.Content.ReadAsStringAsync());
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
+
+        var (control, controlEp) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(control, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix });
+            using var client = MakeClient();
+            var forwarded = await client.GetAsync($"https://127.0.0.1:{controlEp.Port}/other");
+            Assert.AreEqual(HttpStatusCode.OK, forwarded.StatusCode);
+            Assert.AreEqual("origin", await forwarded.Content.ReadAsStringAsync());
+        }
+        finally { control.Stop(); control.Dispose(); }
+    }
+
+    /// <summary>Reads the header block and a Content-Length body so a POST is not cut off mid-request.</summary>
+    private static async Task DrainRequestAndBodyAsync(Stream stream)
+    {
+        var header = new List<byte>(128);
+        var one = new byte[1];
+        while (true)
+        {
+            if (await stream.ReadAsync(one) == 0)
+            {
+                return;
+            }
+
+            header.Add(one[0]);
+            if (header.Count >= 4 && header[^4] == '\r' && header[^3] == '\n' && header[^2] == '\r' && header[^1] == '\n')
+            {
+                break;
+            }
+        }
+
+        var text = Encoding.ASCII.GetString(header.ToArray());
+        var length = 0;
+        foreach (var line in text.Split("\r\n"))
+        {
+            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase) &&
+                int.TryParse(line.AsSpan(line.IndexOf(':') + 1).Trim(), out var parsed))
+            {
+                length = parsed;
+            }
+        }
+
+        while (length > 0)
+        {
+            if (await stream.ReadAsync(one) == 0)
+            {
+                return;
+            }
+
+            length--;
+        }
+    }
+
+    private static async Task AttachRouteAsync(ProxyServer proxy, int originPort, RouteMatch match)
+    {
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = originPort }],
+            },
+        ]);
+        proxy.ReverseProxy = new ReverseProxyOptions
+        {
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match }],
+            ClusterManager = manager,
+            RouteMatcher = new RouteMatcher(),
+            LoadBalancer = new LoadBalancer(),
+        };
     }
 }
