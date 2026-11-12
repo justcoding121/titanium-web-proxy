@@ -654,6 +654,7 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Limit.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.HttpToHttps.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey = null, string? hashInput = null) -> void
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestTrailerSet = "RequestTrailerSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseCors = "ResponseCors" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseTrailerSet = "ResponseTrailerSet" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxAllowedBodyBytes = 1048576 -> int
 static Titanium.Web.Proxy.Abstractions.Network.ClientCertificateAuthorityFiles.Load(string! path) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!

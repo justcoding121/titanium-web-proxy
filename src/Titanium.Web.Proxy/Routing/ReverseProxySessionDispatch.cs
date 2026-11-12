@@ -1085,10 +1085,10 @@ internal static class ReverseProxySessionDispatch
         }
 
         var ctx = new TransformRequestContext { Path = path };
-        if (HasKind(transforms, TransformKinds.RequestHeaderAppend))
+        if (HasKind(transforms, TransformKinds.RequestHeaderAppend) || HasKind(transforms, TransformKinds.ResponseCors))
         {
-            // Append extends what the client sent (Gateway API Add semantics). Only wired when a transform
-            // needs it, so the common path pays no closure.
+            // Append extends what the client sent (Gateway API Add semantics), and ResponseCors reads Origin.
+            // Only wired when a transform needs it, so the common path pays no closure.
             var clientHeaders = request.Headers;
             ctx.ExistingRequestHeader = name => JoinHeaderValues(clientHeaders.GetHeaders(name));
         }

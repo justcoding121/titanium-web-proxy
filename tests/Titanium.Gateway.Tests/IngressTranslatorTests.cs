@@ -845,6 +845,36 @@ public class IngressTranslatorTests
     }
 
     [TestMethod]
+    [DataRow("*")]
+    [DataRow("https://a.example.com, http://b.example.com:8080")]
+    public void Annotations_CorsAllowOrigin_AlsoAddsTheAllowHeaderToTheRealResponse(string value)
+    {
+        var (result, route) = Annotated((A("cors-allow-origin"), value));
+
+        var cors = route.Transforms!.Single(t => t.Kind == TransformKinds.ResponseCors);
+        Assert.AreEqual(string.Join(",", value.Split(',', StringSplitOptions.TrimEntries)), cors.Parameters!["origins"]);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    public void Annotations_CorsAllowOrigin_KeepsTheRewriteTransformsToo()
+    {
+        var (_, route) = Annotated((A("cors-allow-origin"), "*"), (A("rewrite-target"), "/v2"));
+
+        var kinds = route.Transforms!.Select(t => t.Kind).ToArray();
+        CollectionAssert.Contains(kinds, TransformKinds.ResponseCors);
+        Assert.IsTrue(kinds.Length > 1, "the rewrite transforms are still present");
+    }
+
+    [TestMethod]
+    public void Annotations_WithoutCors_AddNoResponseCorsTransform()
+    {
+        var (_, route) = Annotated((A("limit-rps"), "5"));
+
+        Assert.IsNull(route.Transforms);
+    }
+
+    [TestMethod]
     [DataRow("app.example.com")]
     [DataRow("https://app.example.com/")]
     [DataRow("https://app.example.com/path")]

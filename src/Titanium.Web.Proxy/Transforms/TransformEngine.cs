@@ -139,17 +139,10 @@ public sealed class TransformEngine : ITransformEngine
 
                     break;
                 case TransformKinds.ResponseHeaderAppend when Param(t, "name") is { } responseName && Param(t, ValueParameter) is { } responseValue:
-                    if (context.ResponseHeadersToSet.TryGetValue(responseName, out var stagedResponse) && stagedResponse.Length > 0)
-                    {
-                        // Joins an earlier Set/Append of the same name; the staged entry keeps its own mode.
-                        context.ResponseHeadersToSet[responseName] = stagedResponse + ", " + responseValue;
-                    }
-                    else
-                    {
-                        context.ResponseHeadersToSet[responseName] = responseValue;
-                        (context.ResponseHeadersToAppend ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(responseName);
-                    }
-
+                    StageResponseAppend(context, responseName, responseValue);
+                    break;
+                case TransformKinds.ResponseCors when Param(t, "origins") is { } corsOrigins:
+                    StageResponseCors(context, corsOrigins);
                     break;
                 case TransformKinds.ResponseHeadersAllowed when Param(t, "headers") is { } responseAllowed:
                     context.ResponseHeadersToRemove.Add("*" + responseAllowed);
@@ -165,6 +158,53 @@ public sealed class TransformEngine : ITransformEngine
                 default:
                     ApplyFactory(t, context);
                     break;
+            }
+        }
+    }
+
+    private static void StageResponseAppend(TransformRequestContext context, string name, string value)
+    {
+        if (context.ResponseHeadersToSet.TryGetValue(name, out var staged) && staged.Length > 0)
+        {
+            // Joins an earlier Set/Append of the same name; the staged entry keeps its own mode.
+            context.ResponseHeadersToSet[name] = staged + ", " + value;
+        }
+        else
+        {
+            context.ResponseHeadersToSet[name] = value;
+            (context.ResponseHeadersToAppend ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(name);
+        }
+    }
+
+    /// <summary>
+    ///     <c>*</c> always allows every origin. For a list, only a request <c>Origin</c> that is listed (exact,
+    ///     case-sensitive) is echoed back; otherwise no allow header is added and the browser blocks the read.
+    ///     A list also stages <c>Vary: Origin</c>, because the answer depends on the request.
+    /// </summary>
+    private static void StageResponseCors(TransformRequestContext context, string origins)
+    {
+        var allowed = origins.Trim();
+        if (allowed == "*")
+        {
+            context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = "*";
+            context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
+            return;
+        }
+
+        StageResponseAppend(context, "Vary", "Origin");
+        var origin = context.ExistingRequestHeader?.Invoke("Origin");
+        if (string.IsNullOrEmpty(origin))
+        {
+            return;
+        }
+
+        foreach (var candidate in allowed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (string.Equals(candidate, origin, StringComparison.Ordinal))
+            {
+                context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = origin;
+                context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
+                return;
             }
         }
     }
