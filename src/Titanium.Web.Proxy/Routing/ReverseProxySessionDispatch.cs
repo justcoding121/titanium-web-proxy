@@ -432,7 +432,11 @@ internal static class ReverseProxySessionDispatch
     internal static string BuildRedirect(Request request, RedirectConfig redirect)
     {
         var target = OriginForm(request.RequestUriString8.GetString());
-        var path = string.IsNullOrEmpty(redirect.Path) ? target : redirect.Path;
+        var path = string.IsNullOrEmpty(redirect.Path)
+            ? redirect.ReplacePrefixFrom is not null
+                ? ReplacePathPrefix(target, redirect.ReplacePrefixFrom, redirect.ReplacePrefixTo ?? string.Empty)
+                : target
+            : redirect.Path;
         var query = PreservedQuery(target, redirect.PreserveQuery);
         if (!string.IsNullOrEmpty(redirect.Host))
         {
@@ -447,6 +451,33 @@ internal static class ReverseProxySessionDispatch
         }
 
         return path + query;
+    }
+
+    /// <summary>Swaps a leading segment prefix of the path (query dropped; the caller re-adds it). No match keeps the path.</summary>
+    private static string ReplacePathPrefix(string target, string from, string to)
+    {
+        var q = target.IndexOf('?');
+        var path = q >= 0 ? target[..q] : target;
+        string rest;
+        if (from.Length == 0)
+        {
+            rest = path;
+        }
+        else if (path.Equals(from, StringComparison.Ordinal))
+        {
+            rest = string.Empty;
+        }
+        else if (path.Length > from.Length && path.StartsWith(from, StringComparison.Ordinal) && path[from.Length] == '/')
+        {
+            rest = path[from.Length..];
+        }
+        else
+        {
+            return path;
+        }
+
+        var result = to + rest;
+        return result.Length == 0 ? "/" : result;
     }
 
     private static string PreservedQuery(string target, bool preserve)
