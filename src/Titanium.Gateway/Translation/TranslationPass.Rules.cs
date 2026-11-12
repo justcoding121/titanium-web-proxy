@@ -121,6 +121,12 @@ internal sealed class RedirectSpec
     public int? Port { get; init; }
 
     public string? FullPath { get; init; }
+
+    /// <summary>
+    /// <c>ReplacePrefixMatch</c> replacement (trailing slash trimmed; empty is the root), or null. The prefix being
+    /// replaced is the match's own, so it is resolved per match when the route is emitted.
+    /// </summary>
+    public string? PrefixReplacement { get; init; }
 }
 
 internal sealed class RulePlan
@@ -298,9 +304,9 @@ internal sealed partial class TranslationPass
     private static void PlanRedirect(HttpRequestRedirect redirect, RulePlan plan, List<string> unsupported)
     {
         var status = redirect.StatusCode ?? 302;
-        if (status is not (301 or 302))
+        if (status is not (301 or 302 or 303 or 307 or 308))
         {
-            unsupported.Add($"RequestRedirect statusCode {status} (use 301 or 302)");
+            unsupported.Add($"RequestRedirect statusCode {status} (use 301, 302, 303, 307 or 308)");
             return;
         }
 
@@ -311,15 +317,20 @@ internal sealed partial class TranslationPass
         }
 
         string? fullPath = null;
+        string? prefixReplacement = null;
         if (redirect.Path is { } path)
         {
             if (path.Type == "ReplaceFullPath" && path.ReplaceFullPath is { } full)
             {
                 fullPath = full;
             }
+            else if (path.Type == "ReplacePrefixMatch")
+            {
+                prefixReplacement = (path.ReplacePrefixMatch ?? "/").TrimEnd('/');
+            }
             else
             {
-                unsupported.Add("RequestRedirect path.type ReplacePrefixMatch (only ReplaceFullPath is supported)");
+                unsupported.Add($"RequestRedirect path.type '{path.Type}'");
                 return;
             }
         }
@@ -340,6 +351,7 @@ internal sealed partial class TranslationPass
             Hostname = redirect.Hostname,
             Port = port,
             FullPath = fullPath,
+            PrefixReplacement = prefixReplacement,
         };
     }
 
