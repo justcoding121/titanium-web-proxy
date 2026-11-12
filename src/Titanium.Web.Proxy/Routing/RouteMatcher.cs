@@ -121,17 +121,62 @@ public sealed class RouteMatcher : IRouteMatcher
     private static int Presence(string? value) => string.IsNullOrEmpty(value) ? 0 : 1;
 
     private static int ConstraintCount(RouteMatch match) =>
-        (match.Headers?.Count ?? 0) + (match.Query?.Count ?? 0) + (match.QueryParameters?.Count ?? 0);
+        (match.Headers?.Count ?? 0) + (match.HeaderMatches?.Count ?? 0) + (match.Query?.Count ?? 0) + (match.QueryParameters?.Count ?? 0);
 
     private static bool Matches(RouteMatch match, RouteMatchContext context) =>
         HostMatches(match, context.Host) &&
         MethodMatches(match, context.Method) &&
         PathConstraintMatches(match, context) &&
         DictionaryMatches(match.Headers, context.Headers, ignoreCase: true) &&
+        (match.HeaderMatches is null || HeaderMatchesMatch(match.HeaderMatches, context.Headers)) &&
         DictionaryMatches(match.Query, context.Query, ignoreCase: false) &&
         (match.QueryParameters is null || QueryParametersMatch(match.QueryParameters, context.Query));
 
     private static readonly ConditionalWeakTable<QueryParameterMatch, Regex> CompiledQueryExpressions = new();
+    private static readonly ConditionalWeakTable<HeaderValueMatch, Regex> CompiledHeaderExpressions = new();
+
+    private static bool HeaderMatchesMatch(
+        IReadOnlyList<HeaderValueMatch> expected,
+        IReadOnlyDictionary<string, string>? actual)
+    {
+        for (var i = 0; i < expected.Count; i++)
+        {
+            var entry = expected[i];
+            if (actual is null || !actual.TryGetValue(entry.Name, out var found))
+            {
+                return false;
+            }
+
+            if (entry.Kind == HeaderMatchKind.Regex
+                    ? !HeaderRegexMatches(entry, found)
+                    : !string.Equals(found, entry.Value, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool HeaderRegexMatches(HeaderValueMatch entry, string value)
+    {
+        try
+        {
+            // The whole value must match, so an unanchored pattern cannot match a fragment.
+            var regex = CompiledHeaderExpressions.GetValue(
+                entry,
+                static item => new Regex(
+                    "^(?:" + item.Value + ")$",
+                    RegexOptions.NonBacktracking | RegexOptions.CultureInvariant,
+                    RegexTimeout));
+            return regex.IsMatch(value);
+        }
+        catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException or NotSupportedException)
+        {
+            // A pattern that cannot compile never matches. Validation reports it before it gets here.
+            return false;
+        }
+    }
 
     private static bool QueryParametersMatch(
         IReadOnlyList<QueryParameterMatch> expected,

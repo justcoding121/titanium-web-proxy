@@ -109,7 +109,7 @@ A `certificateRef` in another namespace needs a `ReferenceGrant`.
 | `HTTPRoute` | `parentRefs` (with `sectionName` and `port`), `hostnames`, and `rules` with the matches, filters, and backends below. Status per parent: `Accepted`, `ResolvedRefs`. |
 | `ReferenceGrant` | Cross-namespace `backendRefs`, `RequestMirror` backends, and `certificateRefs`. The controller watches **v1**. |
 
-**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
+**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`, `RegularExpression`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
 
 **Backends:** `backendRefs` to `Service` with `weight`. Destinations are the **ready** endpoints of the Service's `EndpointSlice`s, so a pod that is not ready receives no traffic. A weight of `0` takes no traffic.
 
@@ -126,7 +126,6 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 | `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy` | Not watched. The standard CRDs for `GRPCRoute` are installed, but no controller acts on them. |
 | TLS `Passthrough`, protocols other than `HTTP` and `HTTPS` | Listener `Accepted` `False`, reason `UnsupportedProtocol`. |
 | `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
-| Header matches of type `RegularExpression` | The rule answers `500` (`UnsupportedValue`). |
 | `RequestRedirect` with `ReplacePrefixMatch`, or a status other than 301 and 302 | The rule answers `500`. |
 | `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
 | More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
