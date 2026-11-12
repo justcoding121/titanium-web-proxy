@@ -311,6 +311,8 @@ public class LuaEngineTests
         using var stop = new CancellationTokenSource();
         var seen = new System.Collections.Concurrent.ConcurrentBag<string>();
         var errors = 0;
+        // Null until the live plugin is the reloaded instance; only that instance's answers are collected.
+        LuaPlugin? live = null;
 
         var load = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
         {
@@ -320,7 +322,12 @@ public class LuaEngineTests
                 try
                 {
                     var r = await plugin.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
-                    seen.Add(r.SetHeaders?["x-version"] ?? "deny");
+                    // Ignore in-flight answers from the retired plugin that finish after the swap.
+                    if (ReferenceEquals(plugin, Volatile.Read(ref live)) &&
+                        r.SetHeaders?.TryGetValue("x-version", out var version) == true)
+                    {
+                        seen.Add(version);
+                    }
                 }
                 catch (ObjectDisposedException)
                 {
@@ -333,16 +340,33 @@ public class LuaEngineTests
             }
         })).ToArray();
 
-        await Task.Delay(100);
+        await Task.Delay(50);
         // A broken candidate never replaces the running plugin.
         Assert.IsNotNull(CreateError(Config("function on_request_headers(ctx")));
         var next = Create(Version(2), poolSize: 2);
         var old = Interlocked.Exchange(ref current, next);
-        await Task.Delay(100);
+
+        var swapped = Stopwatch.GetTimestamp() + (long)(2 * Stopwatch.Frequency);
+        while (Stopwatch.GetTimestamp() < swapped)
+        {
+            var probe = await next.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
+            if (probe.SetHeaders?.TryGetValue("x-version", out var version) == true && version == "2")
+            {
+                break;
+            }
+
+            await Task.Delay(10);
+        }
+
         old.Dispose();
-        await Task.Delay(100);
-        seen.Clear();
-        await Task.Delay(100);
+        Volatile.Write(ref live, next);
+
+        var deadline = Stopwatch.GetTimestamp() + (long)(2 * Stopwatch.Frequency);
+        while (seen.IsEmpty && Stopwatch.GetTimestamp() < deadline)
+        {
+            await Task.Delay(10);
+        }
+
         stop.Cancel();
         await Task.WhenAll(load);
         next.Dispose();
