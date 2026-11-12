@@ -183,13 +183,38 @@ internal static class Http3DepsCommand
         _ = dpkg;
         try { File.Delete(tmp); } catch { /* ignore */ }
 
-        var update = await RunAsync("sudo", ["apt-get", "update"]);
+        // apt-get update has hung for minutes on transient resolver failures. Bound each try
+        // so a dead mirror returns instead of holding the process open.
+        var update = await RunAptAsync(["apt-get", "update"], attempts: 3, perTry: TimeSpan.FromSeconds(40));
         if (update != 0)
         {
             return update;
         }
 
-        return await RunAsync("sudo", ["apt-get", InstallSubcommand, "-y", LibMsQuicPackage, "libnuma1"]);
+        return await RunAptAsync(
+            ["apt-get", InstallSubcommand, "-y", LibMsQuicPackage, "libnuma1"],
+            attempts: 2,
+            perTry: TimeSpan.FromSeconds(90));
+    }
+
+    private static async Task<int> RunAptAsync(string[] aptArgs, int attempts, TimeSpan perTry)
+    {
+        var code = 1;
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            if (attempt > 1)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+
+            code = await RunAsync("sudo", aptArgs, perTry);
+            if (code == 0)
+            {
+                return 0;
+            }
+        }
+
+        return code;
     }
 
     private static async Task<int> RunPackageInstallAsync(string fileName, string[] args, string hint)
@@ -236,7 +261,7 @@ internal static class Http3DepsCommand
                  }.FirstOrDefault(File.Exists) ?? "brew";
     }
 
-    private static async Task<int> RunAsync(string fileName, IReadOnlyList<string> args)
+    private static async Task<int> RunAsync(string fileName, IReadOnlyList<string> args, TimeSpan? timeout = null)
     {
         AsyncConsole.WriteLine($"> {fileName} {string.Join(' ', args)}");
         var psi = new ProcessStartInfo
@@ -262,7 +287,32 @@ internal static class Http3DepsCommand
 
             var stdout = p.StandardOutput.ReadToEndAsync();
             var stderr = p.StandardError.ReadToEndAsync();
-            await p.WaitForExitAsync();
+            if (timeout is { } limit)
+            {
+                using var cts = new CancellationTokenSource(limit);
+                try
+                {
+                    await p.WaitForExitAsync(cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    try
+                    {
+                        p.Kill(entireProcessTree: true);
+                    }
+                    catch (Exception)
+                    {
+                        // The process already exited.
+                    }
+
+                    AsyncConsole.WriteError($"{fileName} exceeded {limit.TotalSeconds:0}s.");
+                    return 124;
+                }
+            }
+            else
+            {
+                await p.WaitForExitAsync();
+            }
             var outText = await stdout;
             var errText = await stderr;
             if (!string.IsNullOrWhiteSpace(outText))

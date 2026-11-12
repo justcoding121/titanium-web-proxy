@@ -18,6 +18,7 @@ namespace Titanium.Web.Proxy.UnitTests;
 /// <summary>
 ///     Characterization for issue #889: DefaultCertificateDiskCache PKCS#12 save/load on Windows.
 /// </summary>
+[DoNotParallelize] // Shared %LocalAppData%\Titanium.Web.Proxy\crts disk root.
 [TestClass]
 public class DefaultCertificateDiskCacheTests
 {

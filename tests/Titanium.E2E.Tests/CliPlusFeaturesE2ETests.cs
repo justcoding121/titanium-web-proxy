@@ -47,8 +47,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_Waf_MethodHeaderBodyAndRulesFile()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-waf2";
         var rules = Path.Combine(_tempDir, "waf-rules.json");
         await File.WriteAllTextAsync(rules, """{"denyPaths":["^/from-file"]}""");
@@ -112,8 +113,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_CidrDeny_BlocksNonAllowedClient()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-cidr";
         // Allow only a non-loopback documentation range — loopback traffic should be denied.
         var cfg = ConfigFixtures.WritePlusOptions(
@@ -149,8 +151,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_BasicAuth_AndCustomApiKeyHeader()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-basic";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -227,8 +230,9 @@ public class CliPlusFeaturesE2ETests
         var jwksUrl = $"http://127.0.0.1:{jwksStub.Port}/jwks";
 
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-jwt";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -301,8 +305,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_RateLimit_Returns429()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-rl";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -340,8 +345,9 @@ public class CliPlusFeaturesE2ETests
     {
         using var originA = new EchoOrigin();
         using var originB = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-watch";
         var discFile = Path.Combine(_tempDir, "clusters-watch.json");
         await File.WriteAllTextAsync(discFile, $$"""
@@ -384,8 +390,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_DiscoveryDns_AppliesLocalhost()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-dns";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -428,8 +435,9 @@ public class CliPlusFeaturesE2ETests
         using var consul = new JsonHttpStub(consulJson);
         using var k8s = new JsonHttpStub(k8sJson);
 
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-disc-http";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -459,8 +467,9 @@ public class CliPlusFeaturesE2ETests
         }
 
         // Separate k8s process leaf
-        var listen2 = CliProcessHarness.GetFreePort();
-        var control2 = CliProcessHarness.GetFreePort();
+        var ports2 = CliProcessHarness.GetFreePorts(2);
+        var listen2 = ports2[0];
+        var control2 = ports2[1];
         var cfg2 = ConfigFixtures.WritePlusOptions(
             _tempDir,
             listen2,
@@ -494,8 +503,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_ActiveHealth_MarksUnhealthy()
     {
         using var fail = new AlwaysFailOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-health";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -534,8 +544,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_CircuitCooldown_ConfigActivates()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-cool";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -576,8 +587,9 @@ public class CliPlusFeaturesE2ETests
     public async Task Plus_GrpcTranscode_UnaryHappyPath()
     {
         await using var origin = await StartFakeGrpcOriginAsync();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-grpc-ok";
         var pb = Path.Combine(AppContext.BaseDirectory, "Fixtures", "GrpcTranscode", "greeter.pb");
         Assert.IsTrue(File.Exists(pb), "greeter.pb fixture missing from test output");

@@ -12,7 +12,7 @@ public sealed class AuthThrottle
     public const int DefaultMaxRemotes = 10_000;
     public static readonly TimeSpan DefaultWindow = TimeSpan.FromMinutes(1);
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly Dictionary<string, Entry> _remotes = new(StringComparer.Ordinal);
     private readonly TimeProvider _time;
     private readonly int _maxRemotes;

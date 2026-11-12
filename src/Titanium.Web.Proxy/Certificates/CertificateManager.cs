@@ -195,7 +195,13 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private readonly Dictionary<string, Task<X509Certificate2?>> pendingCertificateCreationTasks = new();
 
-    private readonly object rootCertCreationLock = new();
+    /// <summary>
+    ///     Bumped on every <see cref="ClearRootCertificate" /> so in-flight leaf mints that raced a cache flush
+    ///     do not publish into <see cref="cachedCertificates" /> or return disposed native handles.
+    /// </summary>
+    private long certificateCacheGeneration;
+
+    private readonly System.Threading.Lock rootCertCreationLock = new();
 
     private ICertificateMaker? certEngineValue;
 
@@ -332,7 +338,26 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private void InvalidateSslCertificateContext(X509Certificate2 leaf)
     {
-        var thumbprint = leaf.Thumbprint;
+        string? thumbprint;
+        try
+        {
+            thumbprint = leaf.Thumbprint;
+        }
+        catch (CryptographicException)
+        {
+            // Native handle already gone — drop every cached context so a later handshake
+            // cannot reuse one keyed by the disposed leaf.
+            sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
+            return;
+        }
+        catch (ObjectDisposedException)
+        {
+            sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
+            return;
+        }
+
         if (thumbprint != null)
         {
             sslCertificateContexts.TryRemove(thumbprint, out _);
@@ -589,7 +614,20 @@ public sealed class CertificateManager : IDisposable
     ///     chain even if this collection is empty; any certificates in this collection are appended
     ///     after it.
     /// </summary>
-    public X509Certificate2Collection? IntermediateCertificates { get; set; }
+    private X509Certificate2Collection? intermediateCertificates;
+
+    public X509Certificate2Collection? IntermediateCertificates
+    {
+        get => intermediateCertificates;
+        set
+        {
+            intermediateCertificates = value;
+            // Chain extras participate in SslStreamCertificateContext.Create; a change must
+            // drop cached contexts so the next handshake rebuilds with the new extras.
+            sslCertificateContexts.Clear();
+            sslCertificateContextFailures.Clear();
+        }
+    }
 
     /// <summary>
     ///     When true, persist generated leaf certificates via <see cref="CertificateStorage" /> so
@@ -914,7 +952,10 @@ public sealed class CertificateManager : IDisposable
                     var createdCertificate = MakeCertificate(certificateName, false);
                     certificate = createdCertificate;
 
-                    //Don't need to wait for save to complete
+                    // Don't need to wait for save to complete. Do not tie this fire-and-forget
+                    // save to clearCertificatesTokenSource: StopClearIdleCertificates/Dispose
+                    // would cancel the token and drop persistence before the leaf hits disk.
+                    // CancellationToken.None is intentional (not the clear-idle CTS).
                     _ = Task.Run(() =>
                     {
                         try
@@ -949,7 +990,7 @@ public sealed class CertificateManager : IDisposable
                         {
                             OnException(new Exception("Failed to save fake certificate.", e));
                         }
-                    }, clearCertificatesTokenSource.Token);
+                    }, CancellationToken.None);
                 }
             }
             else
@@ -967,6 +1008,24 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     True while the native handle is usable. <see cref="X509Certificate.Thumbprint" /> throws
+    ///     <see cref="CryptographicException" /> once the certificate was disposed (about 25 ns, so it is safe on
+    ///     every cache hit; <c>HasPrivateKey</c> costs ~190 ns and detects nothing more).
+    /// </summary>
+    private static bool IsCertificateHandleAlive(X509Certificate2 certificate)
+    {
+        try
+        {
+            _ = certificate.Thumbprint;
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     Tries to get a still-valid certificate from the in-memory cache.
     ///     Expired cached certificates are evicted and disposed so that a fresh one is generated.
     /// </summary>
@@ -975,6 +1034,21 @@ public sealed class CertificateManager : IDisposable
         certificate = null;
 
         if (!cachedCertificates.TryGetValue(certificateName, out var cached)) return false;
+
+        if (!IsCertificateHandleAlive(cached.Certificate))
+        {
+            if (cachedCertificates.TryRemove(certificateName, out var removed))
+            {
+                InvalidateSslCertificateContext(removed.Certificate);
+                try { removed.Certificate.Dispose(); }
+                catch
+                {
+                    // Best-effort; continue with a fresh mint.
+                }
+            }
+
+            return false;
+        }
 
         // do not serve an expired (or not-yet-valid) certificate from the cache
         var now = DateTime.Now;
@@ -999,8 +1073,16 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     /// <param name="certificateName"></param>
     /// <returns></returns>
-    public async Task<X509Certificate2?> CreateServerCertificate(string certificateName) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
+    public Task<X509Certificate2?> CreateServerCertificate(string certificateName) =>
+        CreateServerCertificateCore(certificateName, remainingRetries: 3);
+
+    private async Task<X509Certificate2?> CreateServerCertificateCore(string certificateName, int remainingRetries) // NOSONAR S3776 -- This protocol/state-machine path shares mutable parsing or transport state; splitting it further would create disproportionate regression risk.
     {
+        // Do not call EnsureRootCertificate here: it also installs OS trust (and may elevate). MakeCertificate
+        // already creates a missing root without trusting it, which is all a mint needs.
+        var generationAtEntry = Volatile.Read(ref certificateCacheGeneration);
+        var deadHandleObserved = false;
+
         // check in cache first
         if (TryGetValidCachedCertificate(certificateName, out var cachedCertificate))
             return cachedCertificate;
@@ -1044,13 +1126,22 @@ public sealed class CertificateManager : IDisposable
                     certificateCreationThrottle.Wait(clearCertificatesTokenSource.Token);
                     try
                     {
+                        if (disposed) return null;
+
+                        var generationAtStart = Volatile.Read(ref certificateCacheGeneration);
                         var result = CreateCertificate(certificateName, false);
-                        if (result != null)
+                        if (result == null) return null;
+
+                        if (Volatile.Read(ref certificateCacheGeneration) != generationAtStart
+                            || !IsCertificateHandleAlive(result))
                         {
-                            cachedCertificates.TryAdd(certificateName,
-                                new CachedCertificate(result) { LastAccess = DateTime.UtcNow });
-                            EnforceCertificateCacheBound();
+                            result.Dispose();
+                            return null;
                         }
+
+                        if (cachedCertificates.TryAdd(certificateName,
+                                new CachedCertificate(result) { LastAccess = DateTime.UtcNow }))
+                            EnforceCertificateCacheBound();
 
                         return result;
                     }
@@ -1075,18 +1166,54 @@ public sealed class CertificateManager : IDisposable
 
         var certificate = await createCertificateTask;
 
-        if (createdTask)
+        if (certificate != null && !IsCertificateHandleAlive(certificate))
         {
-            // cleanup pending task
-            await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
+            InvalidateSslCertificateContext(certificate);
+            cachedCertificates.TryRemove(certificateName, out _);
+            try { certificate.Dispose(); }
+            catch
+            {
+                // Already disposed by a concurrent ClearRoot/Dispose.
+            }
+
+            certificate = null;
+            deadHandleObserved = true;
+        }
+
+        // Creator always removes; waiters also drop a completed null/dead entry so retry can mint
+        // instead of re-awaiting the same failed task forever.
+        if (createdTask || certificate == null)
+        {
             try
             {
-                pendingCertificateCreationTasks.Remove(certificateName);
+                await pendingCertificateCreationTaskLock.WaitAsync(clearCertificatesTokenSource.Token);
+                try
+                {
+                    if (pendingCertificateCreationTasks.TryGetValue(certificateName, out var pending)
+                        && ReferenceEquals(pending, createCertificateTask))
+                        pendingCertificateCreationTasks.Remove(certificateName);
+                }
+                finally
+                {
+                    pendingCertificateCreationTaskLock.Release();
+                }
             }
-            finally
+            catch (Exception ex) when (!createdTask && ex is OperationCanceledException or ObjectDisposedException)
             {
-                pendingCertificateCreationTaskLock.Release();
+                // A waiter that only joined a null result must not newly throw while the manager shuts down.
             }
+        }
+
+        // Retry only when this call lost a race (ClearRoot bumped the generation, or the handle died).
+        // A mint that fails for any other reason (no root, engine error) is not repeated: that would
+        // multiply expensive key generation per handshake while the failure persists.
+        if (certificate == null && remainingRetries > 0 && !disposed
+            && (deadHandleObserved || Volatile.Read(ref certificateCacheGeneration) != generationAtEntry)
+            && !clearCertificatesTokenSource.Token.IsCancellationRequested)
+        {
+            if (TryGetValidCachedCertificate(certificateName, out cachedCertificate))
+                return cachedCertificate;
+            return await CreateServerCertificateCore(certificateName, remainingRetries - 1).ConfigureAwait(false);
         }
 
         return certificate;
@@ -2135,6 +2262,29 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     public void ClearRootCertificate()
     {
+        Interlocked.Increment(ref certificateCacheGeneration);
+        // Drop in-flight mints signed by the old root so new requests start fresh. After Dispose the lock is
+        // gone and the map is moot.
+        if (!disposed)
+        {
+            try
+            {
+                pendingCertificateCreationTaskLock.Wait(CancellationToken.None);
+                try
+                {
+                    pendingCertificateCreationTasks.Clear();
+                }
+                finally
+                {
+                    pendingCertificateCreationTaskLock.Release();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Disposed concurrently.
+            }
+        }
+
         certificateCache.Clear();
 
         // Dispose every cached leaf cert before clearing so native CAPI/OpenSSL handles
@@ -2168,8 +2318,21 @@ public sealed class CertificateManager : IDisposable
     {
         if (disposed) return;
 
+        // Flip first so in-flight Task.Run mints observe disposed and exit; Cancel unblocks
+        // certificateCreationThrottle.Wait(token) / WaitAsync(token) before the CTS is disposed.
+        disposed = true;
+
         if (disposing)
         {
+            try
+            {
+                clearCertificatesTokenSource.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already torn down.
+            }
+
             clearCertificatesTokenSource.Dispose();
             pendingCertificateCreationTaskLock.Dispose();
             certificateCreationThrottle.Dispose();
@@ -2200,7 +2363,5 @@ public sealed class CertificateManager : IDisposable
             // Drop SslStreamCertificateContext.Create side effects after the cached contexts are gone.
             ScrubTestHostUserStores();
         }
-
-        disposed = true;
     }
 }

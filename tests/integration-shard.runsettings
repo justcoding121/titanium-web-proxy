@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <!-- One shard process. Class-level workers stay at 1 so a shard does not
+         overlap suites that the full assembly only survived by interleaving. -->
+    <TestSessionTimeout>2700000</TestSessionTimeout>
+    <EnvironmentVariables>
+      <TITANIUM_SKIP_ROOT_STORE_UI>1</TITANIUM_SKIP_ROOT_STORE_UI>
+      <TITANIUM_NO_ELEVATE>1</TITANIUM_NO_ELEVATE>
+    </EnvironmentVariables>
+  </RunConfiguration>
+  <MSTest>
+    <Parallelize>
+      <Workers>1</Workers>
+      <Scope>ClassLevel</Scope>
+    </Parallelize>
+    <TestTimeout>300000</TestTimeout>
+  </MSTest>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0">
+        <Configuration>
+          <CodeCoverage>
+            <CollectFromChildProcesses>True</CollectFromChildProcesses>
+          </CodeCoverage>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

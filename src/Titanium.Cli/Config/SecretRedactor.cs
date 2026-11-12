@@ -12,7 +12,7 @@ internal static class SecretRedactor
 
     public const int MinLength = 4;
 
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static string[] _secrets = [];
 
     public static void Register(string? secret)

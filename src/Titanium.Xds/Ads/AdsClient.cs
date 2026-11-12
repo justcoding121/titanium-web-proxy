@@ -26,6 +26,9 @@ public sealed class AdsClientOptions
 
     public TimeSpan SettleWindow { get; init; } = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>Pause before reconnecting after the control plane ends the stream without an error.</summary>
+    public TimeSpan ReconnectDelay { get; init; } = TimeSpan.FromSeconds(1);
+
     public int MaxResourcesPerType { get; init; } = 10_000;
 
     public int MaxMessageBytes { get; init; } = 16 * 1024 * 1024;
@@ -101,6 +104,10 @@ public sealed class AdsClient : IAsyncDisposable
                 _client = new AggregatedDiscoveryService.AggregatedDiscoveryServiceClient(_channel);
                 await StreamOnceAsync(cancellationToken).ConfigureAwait(false);
                 attempt = 0;
+
+                // The control plane closed the stream cleanly. Pause before reconnecting so a server that hangs up
+                // at once is not hammered in a tight loop.
+                await Task.Delay(_options.ReconnectDelay, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

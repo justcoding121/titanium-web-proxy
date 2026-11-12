@@ -47,7 +47,7 @@ internal static partial class Http3OriginBridge
         request.Headers.RemoveHeader(KnownHeaders.ProxyConnection);
         request.Headers.RemoveHeader(KnownHeaders.TransferEncoding);
         request.Headers.RemoveHeader(KnownHeaders.Upgrade);
-        request.Headers.RemoveHeader("TE");
+        // TE is omitted at H2 encode unless the value is exactly "trailers" (ShouldOmitHttp2Header).
         request.Headers.RemoveHeader(KnownHeaders.Host);
 
         // Fast path when names are already lowercase (QPACK); otherwise rename in place.

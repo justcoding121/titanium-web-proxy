@@ -76,7 +76,7 @@ public sealed class DashboardMetrics : IDisposable
 
     private static readonly double[] Bounds = [.. BucketBounds];
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly TimeProvider _time;
     private readonly MeterListener _listener;
     private readonly long[] _slotSecond = new long[WindowSeconds];

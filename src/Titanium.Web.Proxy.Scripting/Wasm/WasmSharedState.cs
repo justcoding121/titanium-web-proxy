@@ -7,12 +7,12 @@ namespace Titanium.Web.Proxy.Scripting.Wasm;
 /// </summary>
 internal sealed class WasmSharedState
 {
-    private static readonly object Registry = new();
+    private static readonly System.Threading.Lock Registry = new();
     private static readonly Dictionary<string, WasmSharedState> Scopes = new(StringComparer.Ordinal);
     private static readonly Dictionary<int, WasmSharedQueue> QueuesByToken = [];
     private static int _nextToken;
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly Dictionary<string, (byte[] Value, uint Cas)> _data = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WasmSharedQueue> _queues = new(StringComparer.Ordinal);
     private readonly long _dataLimit;
@@ -178,7 +178,7 @@ internal sealed class WasmSharedState
 /// </summary>
 internal sealed class WasmSharedQueue(int token, WasmSharedState scope)
 {
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly Queue<byte[]> _items = new();
     private readonly List<(WeakReference<WasmVm> Vm, int RootId)> _readers = [];
     private long _bytes;

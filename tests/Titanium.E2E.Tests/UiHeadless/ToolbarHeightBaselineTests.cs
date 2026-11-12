@@ -23,7 +23,7 @@ public class ToolbarHeightBaselineTests
     {
         await using var fx = new InspectorHeadlessFixture();
         await fx.StartAsync();
-        await fx.DispatchAsync(() =>
+        await fx.DispatchAsync(async () =>
         {
             Assert.AreEqual(1280, fx.Window.Width, 0.1);
             Assert.IsTrue(fx.Robot.TryFind<StackPanel>("ToolbarPanel", out var panel) && panel is not null);
@@ -48,8 +48,19 @@ public class ToolbarHeightBaselineTests
             Assert.AreEqual(ScrollBarVisibility.Auto, ScrollViewer.GetVerticalScrollBarVisibility(search));
 
             fx.Window.Width = 360;
-            Dispatcher.UIThread.RunJobs();
-            Assert.IsTrue(filters.Bounds.Y > search.Bounds.Y, "Filters border should wrap under the search box.");
+            // Narrow layout can take more than one RunJobs pass on slow CI agents.
+            var wrapped = false;
+            for (var i = 0; i < 40 && !wrapped; i++)
+            {
+                Dispatcher.UIThread.RunJobs();
+                wrapped = filters.Bounds.Y > search.Bounds.Y;
+                if (!wrapped)
+                {
+                    await Task.Delay(25);
+                }
+            }
+
+            Assert.IsTrue(wrapped, "Filters border should wrap under the search box.");
             Assert.AreEqual(filters.Bounds.Height, search.Bounds.Height, 1.0);
             var gap = filters.Bounds.Y - search.Bounds.Bottom;
             Assert.IsTrue(gap >= 7, $"Wrap gap was {gap}.");

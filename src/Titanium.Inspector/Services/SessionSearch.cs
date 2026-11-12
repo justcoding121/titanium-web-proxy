@@ -644,7 +644,7 @@ public static class SessionSearch
         };
     }
 
-    private static readonly object IdsCacheGate = new();
+    private static readonly System.Threading.Lock IdsCacheGate = new();
     private static string? IdsCacheValue;
     private static HashSet<long>? IdsCacheSet;
 

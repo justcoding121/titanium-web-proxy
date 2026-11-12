@@ -111,8 +111,10 @@ internal class WinCertificateMaker : ICertificateMaker
             return task.Result;
         }
 
+        var host = CertificateHostName.Normalize(sSubjectCn);
+
         // Subject
-        var fullSubject = $"CN={sSubjectCn}";
+        var fullSubject = $"CN={host}";
 
         // Sig Algo
         const string hashAlgo = "SHA256";
@@ -122,7 +124,7 @@ internal class WinCertificateMaker : ICertificateMaker
 
         var now = DateTime.UtcNow;
         var graceTime = now.AddDays(-certificateGraceDays);
-        var certificate = MakeCertificate(sSubjectCn, fullSubject, keyLength, hashAlgo, graceTime,
+        var certificate = MakeCertificate(host, fullSubject, keyLength, hashAlgo, graceTime,
             now.AddDays(certificateValidDays), signingCertificate);
         return certificate;
     }

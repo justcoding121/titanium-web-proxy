@@ -197,6 +197,7 @@ public class InspectorCommandCoverageTests
             await ExecuteAsync(vm.ToggleInterceptCommand);
             if (interception.IsRunning)
                 await ExecuteAsync(vm.StopCaptureCommand);
+            await WaitForCaptureStopStatusAsync(vm);
 
             typeof(MainWindowViewModel).GetMethod("ApplyExclusionSettingsFromSettings",
                 BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(vm, null);
@@ -409,6 +410,24 @@ public class InspectorCommandCoverageTests
     {
         command.Execute(null);
         await Task.Delay(120);
+    }
+
+    /// <summary>Waits for an in-flight <see cref="MainWindowViewModel.StopCaptureCommand"/> async void to settle.</summary>
+    private static async Task WaitForCaptureStopStatusAsync(MainWindowViewModel vm)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (vm.StatusText.Contains("Stopped", StringComparison.OrdinalIgnoreCase))
+            {
+                await Task.Delay(50);
+                return;
+            }
+
+            await Task.Delay(25);
+        }
+
+        Assert.Fail("capture stop status not observed: " + vm.StatusText);
     }
 
     [TestMethod]

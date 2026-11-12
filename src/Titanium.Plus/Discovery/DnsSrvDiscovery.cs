@@ -109,13 +109,19 @@ internal static class DnsSrvDiscovery
 
     private static LookupClient CreateLookupClient(string? dnsServer)
     {
+        // ThrowDnsErrors=true converts NXDOMAIN, SERVFAIL, and other non-zero RCODEs into
+        // DnsResponseException so that the discovery backoff in RunDnsSrvAsync triggers, instead
+        // of the error being silently treated as an empty answer that resets the backoff counter.
         if (string.IsNullOrWhiteSpace(dnsServer))
         {
-            return new LookupClient();
+            return new LookupClient(new LookupClientOptions { ThrowDnsErrors = true });
         }
 
         var endpoint = ParseNameServer(dnsServer.Trim());
-        return new LookupClient(new LookupClientOptions(new NameServer(endpoint.Address, endpoint.Port)));
+        return new LookupClient(new LookupClientOptions(new NameServer(endpoint.Address, endpoint.Port))
+        {
+            ThrowDnsErrors = true,
+        });
     }
 
     internal static IPEndPoint ParseNameServer(string value)

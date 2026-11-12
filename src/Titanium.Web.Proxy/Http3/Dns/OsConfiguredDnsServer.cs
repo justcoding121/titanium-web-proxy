@@ -12,7 +12,7 @@ namespace Titanium.Web.Proxy.Http3.Dns;
 /// </summary>
 internal static class OsConfiguredDnsServer
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static IPEndPoint? cached;
     private static bool cachedResolved;
     private static bool networkChangeHooked;

@@ -135,8 +135,12 @@ public partial class ProxyServer
                                 return;
                             }
                         }
-                        catch (HeaderLimitsExceededException)
+                        catch (Exception ex) when (ex is HeaderLimitsExceededException
+                            || (ex is ProxyHttpException &&
+                                ex.Message.Contains("header/request line exceeded", StringComparison.Ordinal)))
                         {
+                            // Header count/aggregate throw HeaderLimitsExceededException; a single line over
+                            // MaxHeaderLineBytes throws ProxyHttpException from HttpStream — both are 431.
                             closeConnection = true;
                             args.HttpClient.Response = new GenericResponse(HttpStatusCode.RequestHeaderFieldsTooLarge)
                             {
@@ -575,8 +579,29 @@ public partial class ProxyServer
         var request = args.HttpClient.Request;
         var clientStream = args.ClientStream;
 
-        var originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
-            cancellationToken);
+        // Match RequestHandler / H2 dispatch / H3 forward: lock before origin I/O so
+        // BeforeResponse SetResponseBody* is allowed (and request mutation is refused).
+        request.Locked = true;
+
+        Http2OriginConnection originConnection;
+        try
+        {
+            originConnection = await Http2OriginConnectionPool.RentAsync(poolKey, openFactory,
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException
+                                   || !cancellationToken.IsCancellationRequested)
+        {
+            // CreateAsync SETTINGS / preface protocol errors used to escape past the exchange catch
+            // (RentAsync sits above it) and reset the HTTP/1.1 client with no status line.
+            if (!args.HttpClient.Response.Locked)
+            {
+                OriginFailureResponses.Apply(args, ex);
+                await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
+            }
+
+            return;
+        }
 
         // Bind shared h2 origin identity without SetConnection: this bridge owns frame I/O via
         // Http2OriginConnection, and HasConnection must stay false so H1 syphon paths never run.
@@ -743,9 +768,12 @@ public partial class ProxyServer
             if (args.HttpClient.CloseServerConnection)
                 Http2OriginConnectionPool.Invalidate(poolKey, originConnection);
         }
-        catch (Exception ex) when (!(ex is ProxyHttpException))
+        catch (Exception ex)
         {
-            if (!cancellationToken.IsCancellationRequested)
+            // ProxyHttpException (e.g. origin header-list overflow from Http2OriginConnection) is already
+            // reported at the fail site — still map it to a client-facing 502/504 instead of resetting
+            // the HTTP/1.1 connection. Other failures are wrapped once here.
+            if (ex is not ProxyHttpException && !cancellationToken.IsCancellationRequested)
             {
                 ProxyDiagnostics.ReportException(logger, "HTTP/1.1-to-HTTP/2 bridge origin exchange failed",
                     new ProxyHttpException("HTTP/1.1-to-HTTP/2 bridge origin exchange failed", ex, args));
@@ -930,6 +958,20 @@ public partial class ProxyServer
         // Response object, and the origin concurrency gate / lease would never be released.
         var originStreamBody = response.StreamBodyWriter;
 
+        // Http2OriginConnection keeps buffered bytes on exchange.Body and intentionally skips
+        // response.Body. Stamp them here so BeforeResponse GetResponseBody / SetResponseBody
+        // match the HTTP/1.1 pipeline (otherwise BodyString NRE and rewrites are invisible).
+        // IsBodyRead must be set: GetResponseBody otherwise calls ReadResponseBodyAsync against
+        // a bridge response that has no HttpStream to drain.
+        if (originStreamBody == null && !response.BodyAvailable && exchange.Body != null)
+        {
+            response.ContentLength = exchange.Body.Length;
+            response.Body = exchange.Body;
+            response.BodyIsWireEncoded = true;
+            response.IsBodyRead = true;
+            response.IsBodyReceived = true;
+        }
+
         if (!response.Locked) await OnBeforeResponse(args, mayCompress: true);
 
         response = args.HttpClient.Response;
@@ -977,7 +1019,8 @@ public partial class ProxyServer
         else
             response.Headers.NormalizeMessageFraming();
 
-        var body = exchange.Body;
+        // Prefer a BeforeResponse-updated body over the original origin buffer.
+        var body = response.BodyAvailable ? response.Body : exchange.Body;
 
         // RFC 7540 §8.1.2: h2 field framing carries no HTTP/1.1-style trailers concept of its own, but the
         // decoded trailers must still reach the client somehow - HTTP/1.1 can only convey them as chunked
@@ -987,10 +1030,13 @@ public partial class ProxyServer
             response.IsChunked = true;
         else if (response.StreamBodyWriter == null)
         {
-            response.ContentLength = body.Length;
+            response.ContentLength = body?.Length ?? 0;
             // Match fast path: stamp Body so WriteResponseAsync can coalesce and set IsBodySent.
-            response.Body = body;
-            response.BodyIsWireEncoded = true;
+            if (!response.BodyAvailable && body != null)
+            {
+                response.Body = body;
+                response.BodyIsWireEncoded = true;
+            }
         }
         else if (response.ContentLength < 0 && !response.IsChunked)
         {
@@ -1033,7 +1079,7 @@ public partial class ProxyServer
         }
         else if (!response.IsBodySent && (response.HasBody || response.HasTrailingHeaders))
         {
-            await clientStream.WriteBodyAsync(body, response.IsChunked,
+            await clientStream.WriteBodyAsync(body ?? Array.Empty<byte>(), response.IsChunked,
                 response.HasTrailingHeaders ? response.TrailingHeaders : null, cancellationToken);
         }
 

@@ -36,7 +36,7 @@ internal sealed class Http2DeferredOutboundData
     private const int CoalesceTarget = 16 * 1024;
 
     private readonly int maxDeferredBytes;
-    private readonly object gate = new();
+    private readonly System.Threading.Lock gate = new();
 
     internal Http2DeferredOutboundData(int maxDeferredBytesPerStream = HardMaxDeferredBytesPerStream)
     {

@@ -8,7 +8,7 @@ namespace Titanium.Inspector.ViewModels;
 /// <summary>Breakpoint rules: Continue/Abort/Edit; max 1 active; 120s timeout.</summary>
 public sealed class BreakpointViewModel : System.ComponentModel.INotifyPropertyChanged
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private BreakpointHit? _active;
     private bool _enabled;
     private string _urlFilter = "*";

@@ -101,6 +101,24 @@ public class WasmCalloutTests
         Assert.AreEqual("0", set["x-grpc-status"]);
     }
 
+    [TestMethod]
+    public async Task HttpCall_ResponseExceedingBufferLimit_IsAnsweredWithNoHeaders()
+    {
+        // A limit of 1 byte means the "world" (5 bytes) response body exceeds the cap.
+        // The host swallows the oversized response and delivers a no-headers callback to the guest,
+        // which then continues the request — same observable result as a connection refused.
+        using var plugin = Create(Config("callouts.wat", calloutHosts: [_origin.HttpTarget],
+            limits: new PluginLimitsConfig { PoolSize = 1, BufferedBodyBytes = 1 }));
+
+        var result = await RunAsync(plugin, H("x-http-call", _origin.HttpTarget));
+
+        Assert.AreEqual(ScriptAction.Continue, result.Action);
+        // The guest sees no :status header when the response was dropped.
+        Assert.IsFalse(result.SetHeaders?.ContainsKey("x-call-status") ?? false,
+            "an oversized callout response is treated like a failed callout");
+        Assert.AreEqual(0, plugin.Pool.Callouts.InFlight);
+    }
+
     /// <summary>Runs request headers, then resumes as Core would until the guest answers.</summary>
     private static async Task<ScriptPhaseResult> RunAsync(WasmPlugin plugin, KeyValuePair<string, string> header)
     {

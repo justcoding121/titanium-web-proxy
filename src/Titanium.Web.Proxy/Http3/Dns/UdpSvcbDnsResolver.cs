@@ -89,7 +89,7 @@ internal sealed class UdpSvcbDnsResolver : IHttpsSvcbResolver
 
     private readonly TimeSpan _negativeCacheTtl;
     private readonly TimeSpan _transientCacheTtl;
-    private readonly object _backoffGate = new();
+    private readonly System.Threading.Lock _backoffGate = new();
     private int _consecutiveTransientFailures;
     private DateTime _resolverBackoffUntilUtc = DateTime.MinValue;
     private int _halfOpenProbeInFlight;

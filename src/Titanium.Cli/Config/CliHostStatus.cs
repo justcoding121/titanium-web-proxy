@@ -15,7 +15,7 @@ internal sealed class CliHostStatus : IPlusHostStatus
     private const int MaxCertificatesPerFile = 50;
     private static readonly TimeSpan InventoryTtl = TimeSpan.FromSeconds(10);
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly TimeProvider _time;
     private readonly Func<string, string?> _readEnv;
     private TwpConfig _config;

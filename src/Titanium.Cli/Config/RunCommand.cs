@@ -532,7 +532,8 @@ internal static class RunCommand
 
             await AsyncConsole.FlushAsync().ConfigureAwait(false);
             Console.WriteLine("awaiting-shutdown-or-reload");
-            await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+            // Do not pass stoppingToken: a raced cancel must not fail the run with TaskCanceledException.
+            await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             ConfigReloadGate.WritePidFile(configPath, Environment.ProcessId);
             try
             {
@@ -1332,7 +1333,9 @@ internal static class RunCommand
                         }, stoppingToken);
                     });
                     Console.WriteLine("sighup-handler-registered");
-                    await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+                    // Diagnostic flush must not use stoppingToken: cancel can already be requested
+                    // (Register fired RequestStop) and FlushAsync would throw TaskCanceledException.
+                    await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
                 }
             }
             else if (onReload is not null)
@@ -1358,7 +1361,7 @@ internal static class RunCommand
                     millisecondsTimeOutInterval: -1,
                     executeOnlyOnce: false);
                 Console.WriteLine("windows-reload-handler-registered");
-                await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+                await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
             if (watch && onReload is not null)
@@ -1376,7 +1379,7 @@ internal static class RunCommand
                     onReload,
                     onError: ex => AsyncConsole.WriteError("Config reload failed: " + ex.Message));
                 Console.WriteLine("config-watch-enabled");
-                await Console.Out.FlushAsync(stoppingToken).ConfigureAwait(false);
+                await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
 
                 // The watcher takes its baseline when it starts. A change between the load and now would never
                 // differ from that baseline, so the running config would stay stale until the next change.

@@ -141,8 +141,13 @@ internal sealed partial class TranslationPass
                 TranslateGrpcRule(route, httpShim, rules[ruleIndex], ruleIndex, clusters, drafts);
             }
 
-            route.RefsReason = httpShim.RefsReason;
-            route.RefsMessage = httpShim.RefsMessage;
+            // PlanGrpcBackends records ref issues on the GRPC outcome; the HTTP shim may add more
+            // (for example from filters). Never replace an existing reason with a null shim value.
+            if (httpShim.RefsReason is not null)
+            {
+                route.AddRefIssue(httpShim.RefsReason, httpShim.RefsMessage ?? string.Empty);
+            }
+
             route.Unsupported.AddRange(httpShim.Unsupported);
         }
     }

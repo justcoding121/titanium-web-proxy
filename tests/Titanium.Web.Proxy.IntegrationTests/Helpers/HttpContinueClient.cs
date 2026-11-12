@@ -40,13 +40,13 @@ internal class HttpContinueClient
 
         while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
         {
-            var readTask = client.GetStream().ReadAsync(buffer.AsMemory(0, 1024)).AsTask();
-            if (!readTask.Wait(waitTimeoutMs))
+            var read = await ReadAsync(client, buffer, waitTimeoutMs);
+            if (read < 0)
             {
                 return null;
             }
 
-            responseMsg += _msgEncoding.GetString(buffer, 0, readTask.Result);
+            responseMsg += _msgEncoding.GetString(buffer, 0, read);
         }
 
         if (response.StatusCode == 100)
@@ -57,18 +57,35 @@ internal class HttpContinueClient
 
             while ((response = HttpMessageParsing.ParseResponse(responseMsg)) == null)
             {
-                var readTask = client.GetStream().ReadAsync(buffer.AsMemory(0, 1024)).AsTask();
-                if (!readTask.Wait(waitTimeoutMs))
+                var read = await ReadAsync(client, buffer, waitTimeoutMs);
+                if (read < 0)
                 {
                     return null;
                 }
 
-                responseMsg += _msgEncoding.GetString(buffer, 0, readTask.Result);
+                responseMsg += _msgEncoding.GetString(buffer, 0, read);
             }
 
             return response;
         }
 
         return response;
+    }
+
+    /// <summary>
+    ///     Reads one socket chunk without blocking a thread-pool thread. <c>Task.Wait</c> on the
+    ///     read deadlocks when the pool is saturated, which is how this client returned null in a
+    ///     busy integration shard even though the proxy had sent the bytes.
+    /// </summary>
+    private static async Task<int> ReadAsync(TcpClient client, byte[] buffer, int waitTimeoutMs)
+    {
+        var readTask = client.GetStream().ReadAsync(buffer.AsMemory(0, buffer.Length)).AsTask();
+        var finished = await Task.WhenAny(readTask, Task.Delay(waitTimeoutMs));
+        if (finished != readTask)
+        {
+            return -1;
+        }
+
+        return await readTask;
     }
 }

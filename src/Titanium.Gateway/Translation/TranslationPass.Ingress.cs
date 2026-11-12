@@ -706,7 +706,7 @@ internal sealed partial class TranslationPass
 
         return new IngressBackendResult(id, null, null, false);
 
-        IngressBackendResult Failed(string reason, string message) => new(null, reason, message, false);
+        static IngressBackendResult Failed(string reason, string message) => new(null, reason, message, false);
     }
 
     private bool ResolveUpstreamTls(IngressOutcome owner, string secretName, out UpstreamTlsPlan? plan, out string problem)

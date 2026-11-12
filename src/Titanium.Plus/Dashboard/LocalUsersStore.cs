@@ -19,7 +19,7 @@ internal sealed class LocalUsersStore : IDisposable
     private const int MinIterations = 10_000;
     private const int MaxIterations = Pbkdf2PasswordHash.MaxIterations;
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly string _path;
     private Dictionary<string, LocalUserRecord> _users = new(StringComparer.Ordinal);
     private DateTime _loadedWriteTime = DateTime.MinValue;

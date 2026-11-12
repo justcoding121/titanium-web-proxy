@@ -14,7 +14,7 @@ public sealed class HealthEventLog : IDisposable
 
     private const int MaxFieldLength = 256;
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly DestinationHealthEvent[] _ring = new DestinationHealthEvent[Capacity];
     private readonly IDestinationHealthEvents? _source;
     private int _head;

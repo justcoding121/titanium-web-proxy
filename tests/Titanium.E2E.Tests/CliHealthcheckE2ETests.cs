@@ -35,8 +35,9 @@ public class CliHealthcheckE2ETests
     public async Task Healthcheck_Url_AgainstRunningAdmin_Exits0()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var admin = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var admin = ports[1];
         var cfg = WriteWithAdmin(_tempDir, listen, origin.Port, admin);
         using var harness = new CliProcessHarness();
         await harness.StartRunAsync(cfg);
@@ -60,8 +61,9 @@ public class CliHealthcheckE2ETests
     public async Task Healthcheck_Config_AgainstRunningAdmin_Exits0()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var admin = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var admin = ports[1];
         var cfg = WriteWithAdmin(_tempDir, listen, origin.Port, admin);
         using var harness = new CliProcessHarness();
         await harness.StartRunAsync(cfg);

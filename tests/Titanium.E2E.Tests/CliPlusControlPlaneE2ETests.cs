@@ -40,8 +40,9 @@ public class CliPlusControlPlaneE2ETests
     public async Task PlusDisabled_WithDllPresent_NoControlPlane()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         var cfg = ConfigFixtures.WritePlusDisabled(_tempDir, listen, origin.Port, control, "secret");
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
@@ -75,8 +76,9 @@ public class CliPlusControlPlaneE2ETests
     public async Task Plus_ChangemeSecret_WithoutDevEnv_FailsStart()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         var cfg = ConfigFixtures.WritePlusChangemeSecret(_tempDir, listen, origin.Port, control);
         using var harness = new CliProcessHarness();
         harness.EnsurePlusDllBesideCli(copy: true);
@@ -104,8 +106,9 @@ public class CliPlusControlPlaneE2ETests
     public async Task ControlPlane_MethodPathMatrix()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         var dashboard = CliProcessHarness.GetFreePort();
         const string secret = "e2e-cp-matrix";
         var cfg = ConfigFixtures.WritePlus(_tempDir, listen, origin.Port, control, secret, dashboard);
@@ -238,8 +241,9 @@ public class CliPlusControlPlaneE2ETests
         // Plus creates a MemoryHttpResponseCache during Apply even when cache.enable is off,
         // so purge returns 200 (removed=0) rather than 503.
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-no-cache";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -275,8 +279,9 @@ public class CliPlusControlPlaneE2ETests
     public async Task Plus_CacheHit_ThenPrefixPurge()
     {
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-cache";
         var cfg = ConfigFixtures.WritePlusOptions(
             _tempDir,
@@ -339,8 +344,9 @@ public class CliPlusControlPlaneE2ETests
         }
 
         using var origin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "e2e-plus-hup";
         var cfg = ConfigFixtures.WritePlusRoutes(_tempDir, listen, origin.Port, control, secret);
         using var harness = new CliProcessHarness();

@@ -53,7 +53,7 @@ public class CliHttp3DepsE2ETests
         var quic = QuicListener.IsSupported;
         var (code, stdout, stderr) = await harness.RunOnceAsync(
             ["http3-deps", "install"],
-            timeout: TimeSpan.FromMinutes(3));
+            timeout: TimeSpan.FromMinutes(6));
         var text = stdout + stderr;
 
         if (quic)

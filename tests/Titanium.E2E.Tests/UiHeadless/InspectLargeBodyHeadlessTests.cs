@@ -14,10 +14,11 @@ namespace Titanium.E2E.Tests.UiHeadless;
 [TestClass]
 public class InspectLargeBodyHeadlessTests
 {
-    // Local fix is well under a second. A shared Windows runner measured 14 s of wall time for the
-    // same layout while other jobs were building. The unfixed path laid out hundreds of thousands of
-    // replacement characters and stalled far longer; the length and character asserts catch that.
-    private const int MaxTabSwitchMs = 20_000;
+    // Local fix is well under a second. Shared Windows runners under load have measured 14–37 s of
+    // wall time for the same layout while other jobs were building. The unfixed path laid out
+    // hundreds of thousands of replacement characters and stalled far longer; the length and
+    // character asserts catch that regression. Keep a 4× headroom over the observed 20 s budget.
+    private const int MaxTabSwitchMs = 80_000;
 
     [TestMethod]
     [TestCategory("E2E-UI-Headless")]

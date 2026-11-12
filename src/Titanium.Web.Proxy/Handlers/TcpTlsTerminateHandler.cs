@@ -23,8 +23,6 @@ namespace Titanium.Web.Proxy;
 
 public partial class ProxyServer
 {
-    private static readonly Dictionary<int, SemaphoreSlim> TlsTerminateHandshakeGates = new();
-
     private async Task HandleTlsTerminateClientAsync(
         Socket client,
         TransparentBaseProxyEndPoint endPoint,
@@ -126,16 +124,7 @@ public partial class ProxyServer
 
     private static bool TryEnterTlsHandshake(TransparentBaseProxyEndPoint endPoint, out SemaphoreSlim gate)
     {
-        var limit = endPoint.MaxConcurrentTlsHandshakes > 0 ? endPoint.MaxConcurrentTlsHandshakes : 256;
-        lock (TlsTerminateHandshakeGates)
-        {
-            if (!TlsTerminateHandshakeGates.TryGetValue(endPoint.Port, out gate!))
-            {
-                gate = new SemaphoreSlim(limit, limit);
-                TlsTerminateHandshakeGates[endPoint.Port] = gate;
-            }
-        }
-
+        gate = endPoint.GetOrCreateTlsHandshakeGate();
         return gate.Wait(0);
     }
 
@@ -374,16 +363,43 @@ public partial class ProxyServer
                 linked.CancelAfter(options.IdleTimeout);
             }
 
+            using var graceCts = options.HalfCloseGrace > TimeSpan.Zero
+                ? CancellationTokenSource.CreateLinkedTokenSource(linked.Token)
+                : null;
+            var pumpToken = graceCts?.Token ?? linked.Token;
+
             var clientToUpstream = PumpStreamAsync(
-                client, upstream, clientBuffer, options.Filters, fromClient: true, linked.Token);
+                client, upstream, clientBuffer, options.Filters, fromClient: true, pumpToken);
             var upstreamToClient = PumpStreamAsync(
-                upstream, client, upstreamBuffer, options.Filters, fromClient: false, linked.Token);
-            await Task.WhenAll(clientToUpstream, upstreamToClient).ConfigureAwait(false);
-            return new PassthroughRelayResult(await clientToUpstream, await upstreamToClient, PassthroughOutcome.Completed);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return new PassthroughRelayResult(0, 0, PassthroughOutcome.IdleTimeout);
+                upstream, client, upstreamBuffer, options.Filters, fromClient: false, pumpToken);
+
+            var first = await Task.WhenAny(clientToUpstream, upstreamToClient).ConfigureAwait(false);
+            if (first.IsCompletedSuccessfully && graceCts is not null)
+            {
+                // Bound how long the remaining direction may drain after one side EOFs.
+                graceCts.CancelAfter(options.HalfCloseGrace);
+            }
+
+            try
+            {
+                await Task.WhenAll(clientToUpstream, upstreamToClient).ConfigureAwait(false);
+                return new PassthroughRelayResult(
+                    await clientToUpstream.ConfigureAwait(false),
+                    await upstreamToClient.ConfigureAwait(false),
+                    PassthroughOutcome.Completed);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                if (graceCts is not null && graceCts.IsCancellationRequested && !linked.Token.IsCancellationRequested)
+                {
+                    return new PassthroughRelayResult(
+                        clientToUpstream.IsCompletedSuccessfully ? clientToUpstream.Result : 0,
+                        upstreamToClient.IsCompletedSuccessfully ? upstreamToClient.Result : 0,
+                        PassthroughOutcome.GraceExpired);
+                }
+
+                return new PassthroughRelayResult(0, 0, PassthroughOutcome.IdleTimeout);
+            }
         }
         finally
         {
@@ -407,6 +423,8 @@ public partial class ProxyServer
                 .ConfigureAwait(false);
             if (read == 0)
             {
+                // Half-close the opposite write so an origin waiting for EOF can answer.
+                await TryHalfCloseWriteAsync(sink).ConfigureAwait(false);
                 break;
             }
 
@@ -430,5 +448,26 @@ public partial class ProxyServer
         }
 
         return total;
+    }
+
+    private static async Task TryHalfCloseWriteAsync(Stream sink)
+    {
+        try
+        {
+            if (sink is SslStream ssl)
+            {
+                await ssl.ShutdownAsync().ConfigureAwait(false);
+                return;
+            }
+
+            if (sink is NetworkStream network)
+            {
+                network.Socket.Shutdown(SocketShutdown.Send);
+            }
+        }
+        catch (Exception)
+        {
+            // Peer already closed or the stream was disposed by the other pump.
+        }
     }
 }

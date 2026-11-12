@@ -1,9 +1,9 @@
-# Fail a pull request when changed lines in a measured file are under 80% covered.
+# Fail a pull request when changed lines in a measured file are under 90% covered.
 # A qa-waiver label skips the gate. A push that is not a pull request exits 0.
 param(
     [string]$CoverageXml = 'coverage/coverage.xml',
     [string]$BaseRef = '',
-    [double]$Minimum = 80
+    [double]$Minimum = 90
 )
 
 Set-StrictMode -Version 2.0
@@ -34,22 +34,37 @@ if ($LASTEXITCODE -ne 0) {
 
 $changed = @{}
 $file = ''
+$nextLine = 0
+$inHunk = $false
 foreach ($line in $diff) {
     if ($line.StartsWith('+++ b/')) {
         $file = ($line.Substring(6) -replace '\\', '/')
+        $inHunk = $false
         continue
     }
     if ($line.StartsWith('@@')) {
-        # Score the first line of each added hunk (stable vs the previous gate).
-        $match = [regex]::Match($line, '\+(\d+)')
+        # Score every added line in the hunk so method signatures alone cannot sink the gate.
+        $match = [regex]::Match($line, '\+(\d+)(?:,(\d+))?')
         if ($match.Success -and $file) {
-            $start = [int]$match.Groups[1].Value
-            if (-not $changed.ContainsKey($file)) {
-                $changed[$file] = New-Object System.Collections.Generic.List[int]
-            }
-            $changed[$file].Add($start)
+            $nextLine = [int]$match.Groups[1].Value
+            $inHunk = $true
         }
+        continue
     }
+    if (-not $inHunk -or -not $file) { continue }
+    if ($line.StartsWith('+') -and -not $line.StartsWith('+++')) {
+        if (-not $changed.ContainsKey($file)) {
+            $changed[$file] = New-Object System.Collections.Generic.List[int]
+        }
+        $changed[$file].Add($nextLine)
+        $nextLine++
+        continue
+    }
+    if ($line.StartsWith('-') -and -not $line.StartsWith('---')) {
+        continue
+    }
+    # context line
+    $nextLine++
 }
 
 if ($changed.Count -eq 0) {
@@ -82,10 +97,15 @@ foreach ($range in @($doc.SelectNodes('//range'))) {
 function Find-SourceIds([string]$repoPath) {
     $ids = New-Object System.Collections.Generic.List[string]
     $normalized = $repoPath.TrimStart('./')
+    $fileName = [System.IO.Path]::GetFileName($normalized)
     foreach ($entry in $sourcesById.GetEnumerator()) {
         $coveragePath = $entry.Value
         if ($coveragePath.EndsWith($normalized, [StringComparison]::OrdinalIgnoreCase) -or
-            $coveragePath.EndsWith('/' + $normalized, [StringComparison]::OrdinalIgnoreCase)) {
+            $coveragePath.EndsWith('/' + $normalized, [StringComparison]::OrdinalIgnoreCase) -or
+            ($fileName -and (
+                $coveragePath.EndsWith('/' + $fileName, [StringComparison]::OrdinalIgnoreCase) -or
+                $coveragePath.EndsWith('\' + $fileName, [StringComparison]::OrdinalIgnoreCase) -or
+                $coveragePath.Equals($fileName, [StringComparison]::OrdinalIgnoreCase)))) {
             $ids.Add($entry.Key)
         }
     }
@@ -130,8 +150,12 @@ foreach ($path in @($changed.Keys | Sort-Object)) {
             if ($lineNo -ge $startLine -and $lineNo -le $endLine) {
                 $known = $true
                 $flag = [string]$range.covered
-                if ($flag -eq 'yes' -or $flag -eq 'true' -or $flag -eq 'partial') { $hit = $true }
-                break
+                # Merged coverage can list the same line more than once (one range per
+                # instrumented assembly). Prefer any hit over the first miss.
+                if ($flag -eq 'yes' -or $flag -eq 'true' -or $flag -eq 'partial') {
+                    $hit = $true
+                    break
+                }
             }
         }
         if ($known) {
