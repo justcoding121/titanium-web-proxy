@@ -203,7 +203,7 @@ internal sealed partial class TranslationPass
 
             if (header.Type == "RegularExpression")
             {
-                if (!CompilesAsRegex("^(?:" + header.Value + ")$"))
+                if (!CompilesAsWholeValueRegex(header.Value))
                 {
                     problems.Add($"header match '{header.Name}' regular expression is not supported by the data plane");
                     continue;
@@ -314,6 +314,9 @@ internal sealed partial class TranslationPass
             return false;
         }
     }
+
+    private static bool CompilesAsWholeValueRegex(string pattern) =>
+        CompilesAsRegex(pattern) && CompilesAsRegex("^(?:" + pattern + ")$");
 
     private static bool AddRewrite(List<TransformConfig> transforms, HttpUrlRewrite rewrite, MatchSpec spec, out string problem)
     {

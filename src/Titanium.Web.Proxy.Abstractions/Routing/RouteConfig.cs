@@ -38,7 +38,10 @@ public enum HeaderMatchKind
     /// <summary>Ordinal, case-sensitive equality.</summary>
     Exact = 0,
 
-    /// <summary>The whole value must match the regular expression (non-backtracking engine).</summary>
+    /// <summary>
+    ///     The whole value must match the regular expression (non-backtracking engine). The pattern must compile on
+    ///     its own, so unbalanced parentheses are rejected.
+    /// </summary>
     Regex = 1,
 }
 

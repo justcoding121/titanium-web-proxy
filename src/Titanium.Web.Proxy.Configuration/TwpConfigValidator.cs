@@ -1541,7 +1541,7 @@ public static class TwpConfigValidator
                 continue;
             }
 
-            if (entry.Kind == HeaderMatchKind.Regex && !CompilesAsRegex("^(?:" + entry.Value + ")$"))
+            if (entry.Kind == HeaderMatchKind.Regex && !CompilesAsWholeValueRegex(entry.Value))
             {
                 errors.Add($"Route '{route.Id}' headerMatches '{entry.Name}' has a regex that does not compile.");
             }
@@ -2445,6 +2445,12 @@ public static class TwpConfigValidator
             return false;
         }
     }
+
+    /// <summary>Same two-step check the matcher uses: the pattern must compile alone and as ^(?:pattern)$.</summary>
+    private static bool CompilesAsWholeValueRegex(string? pattern) =>
+        pattern is not null &&
+        (pattern.Length == 0 || CompilesAsRegex(pattern)) &&
+        CompilesAsRegex("^(?:" + pattern + ")$");
 
     private static void ValidateTemplate(RouteConfig route, List<string> errors)
     {

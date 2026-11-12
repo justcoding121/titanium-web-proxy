@@ -128,12 +128,15 @@ public sealed class RouteMatcher : IRouteMatcher
         MethodMatches(match, context.Method) &&
         PathConstraintMatches(match, context) &&
         DictionaryMatches(match.Headers, context.Headers, ignoreCase: true) &&
-        (match.HeaderMatches is null || HeaderMatchesMatch(match.HeaderMatches, context.Headers)) &&
         DictionaryMatches(match.Query, context.Query, ignoreCase: false) &&
-        (match.QueryParameters is null || QueryParametersMatch(match.QueryParameters, context.Query));
+        (match.QueryParameters is null || QueryParametersMatch(match.QueryParameters, context.Query)) &&
+        (match.HeaderMatches is null || HeaderMatchesMatch(match.HeaderMatches, context.Headers));
 
     private static readonly ConditionalWeakTable<QueryParameterMatch, Regex> CompiledQueryExpressions = new();
-    private static readonly ConditionalWeakTable<HeaderValueMatch, Regex> CompiledHeaderExpressions = new();
+
+    private sealed record CompiledHeaderExpression(Regex? Regex);
+
+    private static readonly ConditionalWeakTable<HeaderValueMatch, CompiledHeaderExpression> CompiledHeaderExpressions = new();
 
     private static bool HeaderMatchesMatch(
         IReadOnlyList<HeaderValueMatch> expected,
@@ -160,21 +163,42 @@ public sealed class RouteMatcher : IRouteMatcher
 
     private static bool HeaderRegexMatches(HeaderValueMatch entry, string value)
     {
+        var compiled = CompiledHeaderExpressions.GetValue(
+            entry,
+            static item => new CompiledHeaderExpression(CompileWholeValue(item.Value)));
+        if (compiled.Regex is null)
+        {
+            // A pattern that cannot be matched as a whole value never matches. Validation reports it before it gets here.
+            return false;
+        }
+
         try
         {
-            // The whole value must match, so an unanchored pattern cannot match a fragment.
-            var regex = CompiledHeaderExpressions.GetValue(
-                entry,
-                static item => new Regex(
-                    "^(?:" + item.Value + ")$",
-                    RegexOptions.NonBacktracking | RegexOptions.CultureInvariant,
-                    RegexTimeout));
-            return regex.IsMatch(value);
+            return compiled.Regex.IsMatch(value);
         }
-        catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException or NotSupportedException)
+        catch (RegexMatchTimeoutException)
         {
-            // A pattern that cannot compile never matches. Validation reports it before it gets here.
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Compiles <c>^(?:pattern)$</c>. Null when the pattern cannot stand on its own (a stray <c>)</c> would close the
+    /// added group and make the match a prefix or suffix test) or when the non-backtracking engine rejects it.
+    /// </summary>
+    private static Regex? CompileWholeValue(string pattern)
+    {
+        try
+        {
+            _ = new Regex(pattern, RegexOptions.NonBacktracking | RegexOptions.CultureInvariant, RegexTimeout);
+            return new Regex(
+                "^(?:" + pattern + ")$",
+                RegexOptions.NonBacktracking | RegexOptions.CultureInvariant,
+                RegexTimeout);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return null;
         }
     }
 
