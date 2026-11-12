@@ -132,7 +132,9 @@ public sealed class RouteMatcher : IRouteMatcher
         (match.QueryParameters is null || QueryParametersMatch(match.QueryParameters, context.Query)) &&
         (match.HeaderMatches is null || HeaderMatchesMatch(match.HeaderMatches, context.Headers));
 
-    private static readonly ConditionalWeakTable<QueryParameterMatch, Regex> CompiledQueryExpressions = new();
+    private sealed record CompiledQueryExpression(Regex? Regex);
+
+    private static readonly ConditionalWeakTable<QueryParameterMatch, CompiledQueryExpression> CompiledQueryExpressions = new();
 
     private sealed record CompiledHeaderExpression(Regex? Regex);
 
@@ -227,20 +229,21 @@ public sealed class RouteMatcher : IRouteMatcher
 
     private static bool QueryRegexMatches(QueryParameterMatch entry, string value)
     {
+        var compiled = CompiledQueryExpressions.GetValue(
+            entry,
+            static item => new CompiledQueryExpression(CompileWholeValue(item.Value)));
+        if (compiled.Regex is null)
+        {
+            // A pattern that cannot be matched as a whole value never matches. Validation reports it before it gets here.
+            return false;
+        }
+
         try
         {
-            // The whole value must match, so an unanchored pattern cannot match a fragment.
-            var regex = CompiledQueryExpressions.GetValue(
-                entry,
-                static item => new Regex(
-                    "^(?:" + item.Value + ")$",
-                    RegexOptions.NonBacktracking | RegexOptions.CultureInvariant,
-                    RegexTimeout));
-            return regex.IsMatch(value);
+            return compiled.Regex.IsMatch(value);
         }
-        catch (Exception ex) when (ex is RegexMatchTimeoutException or ArgumentException or NotSupportedException)
+        catch (RegexMatchTimeoutException)
         {
-            // A pattern that cannot compile never matches. Validation reports it before it gets here.
             return false;
         }
     }
