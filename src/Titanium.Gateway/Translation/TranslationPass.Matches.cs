@@ -21,6 +21,9 @@ internal sealed partial class TranslationPass
 
         public Dictionary<string, string>? Headers { get; set; }
 
+        /// <summary>Header matches of type <c>RegularExpression</c>.</summary>
+        public List<HeaderValueMatch>? HeaderRegexes { get; set; }
+
         public List<QueryParameterMatch>? Query { get; set; }
     }
 
@@ -103,7 +106,7 @@ internal sealed partial class TranslationPass
             },
             PathLength = spec.PathKind == PathMatchKind.Regex ? 0 : pathLength,
             HasMethod = spec.Method is not null,
-            HeaderCount = spec.Headers?.Count ?? 0,
+            HeaderCount = (spec.Headers?.Count ?? 0) + (spec.HeaderRegexes?.Count ?? 0),
             QueryCount = spec.Query?.Count ?? 0,
             Created = routeMeta.CreationTimestamp ?? DateTimeOffset.MaxValue,
             NamespaceName = route.Key,
@@ -121,6 +124,7 @@ internal sealed partial class TranslationPass
                     PathKind = spec.PathKind,
                     Method = spec.Method,
                     Headers = spec.Headers,
+                    HeaderMatches = spec.HeaderRegexes,
                     QueryParameters = spec.Query,
                     PathCaseSensitive = true,
                 },
@@ -184,14 +188,34 @@ internal sealed partial class TranslationPass
 
         foreach (var header in match.Headers ?? [])
         {
-            if (header.Type is not (null or "Exact"))
+            if (header.Type is not (null or "Exact" or "RegularExpression"))
             {
-                problems.Add($"header match '{header.Name}' type '{header.Type}' is not supported (Exact only)");
+                problems.Add($"header match '{header.Name}' type '{header.Type}' is not supported (Exact and RegularExpression only)");
+                continue;
+            }
+
+            // The first match for a header name wins, whatever its type.
+            if ((spec.Headers?.ContainsKey(header.Name) ?? false)
+                || (spec.HeaderRegexes?.Any(h => string.Equals(h.Name, header.Name, StringComparison.OrdinalIgnoreCase)) ?? false))
+            {
+                continue;
+            }
+
+            if (header.Type == "RegularExpression")
+            {
+                if (!CompilesAsWholeValueRegex(header.Value))
+                {
+                    problems.Add($"header match '{header.Name}' regular expression is not supported by the data plane");
+                    continue;
+                }
+
+                spec.HeaderRegexes ??= [];
+                spec.HeaderRegexes.Add(new HeaderValueMatch { Name = header.Name, Value = header.Value, Kind = HeaderMatchKind.Regex });
                 continue;
             }
 
             spec.Headers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            spec.Headers.TryAdd(header.Name, header.Value);
+            spec.Headers.Add(header.Name, header.Value);
         }
 
         foreach (var query in match.QueryParams ?? [])
@@ -290,6 +314,9 @@ internal sealed partial class TranslationPass
             return false;
         }
     }
+
+    private static bool CompilesAsWholeValueRegex(string pattern) =>
+        CompilesAsRegex(pattern) && CompilesAsRegex("^(?:" + pattern + ")$");
 
     private static bool AddRewrite(List<TransformConfig> transforms, HttpUrlRewrite rewrite, MatchSpec spec, out string problem)
     {

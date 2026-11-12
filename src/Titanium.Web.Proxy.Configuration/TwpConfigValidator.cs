@@ -1511,6 +1511,7 @@ public static class TwpConfigValidator
         }
 
         ValidateQueryParameters(route, errors);
+        ValidateHeaderMatches(route, errors);
 
         if (route.Match.PathKind == PathMatchKind.Template)
         {
@@ -1522,6 +1523,28 @@ public static class TwpConfigValidator
             !CompilesAsRegex(route.Match.Path))
         {
             errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
+        }
+    }
+
+    private static void ValidateHeaderMatches(RouteConfig route, List<string> errors)
+    {
+        if (route.Match.HeaderMatches is not { } entries)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            if (entry is null || string.IsNullOrEmpty(entry.Name))
+            {
+                errors.Add($"Route '{route.Id}' has a headerMatches entry without a name.");
+                continue;
+            }
+
+            if (entry.Kind == HeaderMatchKind.Regex && !CompilesAsWholeValueRegex(entry.Value))
+            {
+                errors.Add($"Route '{route.Id}' headerMatches '{entry.Name}' has a regex that does not compile.");
+            }
         }
     }
 
@@ -2422,6 +2445,12 @@ public static class TwpConfigValidator
             return false;
         }
     }
+
+    /// <summary>Same two-step check the matcher uses: the pattern must compile alone and as ^(?:pattern)$.</summary>
+    private static bool CompilesAsWholeValueRegex(string? pattern) =>
+        pattern is not null &&
+        (pattern.Length == 0 || CompilesAsRegex(pattern)) &&
+        CompilesAsRegex("^(?:" + pattern + ")$");
 
     private static void ValidateTemplate(RouteConfig route, List<string> errors)
     {

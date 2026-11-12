@@ -21,18 +21,19 @@ The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that ar
 ## Supported
 
 - **Gateway:** `HTTP` and `HTTPS` (Terminate) listeners, `hostname`, `allowedRoutes`, `certificateRefs` (a cross-namespace Secret needs a `ReferenceGrant`), `attachedRoutes`, addresses from the data-plane Service.
-- **HTTPRoute:** path `Exact`, `PathPrefix`, `RegularExpression`; header `Exact`; query parameter `Exact` and `RegularExpression`; `method`; Gateway API precedence.
+- **HTTPRoute:** path `Exact`, `PathPrefix`, `RegularExpression`; header `Exact` and `RegularExpression`; query parameter `Exact` and `RegularExpression`; `method`; Gateway API precedence.
 - **Backends:** `Service` backends with `weight`, from **ready** `EndpointSlice` endpoints only.
 - **Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier`, `URLRewrite`, `RequestRedirect`, `RequestMirror`; `timeouts.request` and `timeouts.backendRequest`.
 
 ## Not supported, and differences
 
 - `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy`, TLS `Passthrough`, and `Gateway.spec.addresses` are not handled.
-- A rule that uses an unsupported value (header regular expression, `ReplacePrefixMatch` redirect, a redirect status other than 301 and 302, a second mirror) answers `500`, and the reason is in the route status.
+- A rule that uses an unsupported value (a regular expression the data plane cannot match, `ReplacePrefixMatch` redirect, a redirect status other than 301 and 302, a second mirror) answers `500`, and the reason is in the route status.
 - Routes are global across listeners: the data plane does not scope a route to a listener port. Gateways of one class share one data plane, and their listeners on one port merge. A request no route matches answers `404`.
 - A header modifier `add` appends to a value that is already there, joined with `, ` (`Set-Cookie` keeps one line per cookie).
 - A rule that mixes usable and unusable backends answers `503` for the unusable share, where the specification says `500`.
-- Header values match case-insensitively. `ResponseHeaderModifier` add acts as set.
+- `Exact` header values match case-insensitively. A header `RegularExpression` matches the whole value and is case-sensitive, and only the first value of a repeated header is tested. A header regular expression that uses lookahead or has an unbalanced parenthesis answers `500`. `ResponseHeaderModifier` add acts as set.
+- Upgrade the data plane with the controller (both default to the chart `appVersion`). An older data plane ignores `headerMatches`, so the route would match without that header constraint.
 - Gateway ports `80` and `443` are bound as `8080` and `8443` because the data plane is non-root (`dataPlane.ports`).
 
 ## Conformance

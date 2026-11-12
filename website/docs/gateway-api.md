@@ -109,7 +109,7 @@ A `certificateRef` in another namespace needs a `ReferenceGrant`.
 | `HTTPRoute` | `parentRefs` (with `sectionName` and `port`), `hostnames`, and `rules` with the matches, filters, and backends below. Status per parent: `Accepted`, `ResolvedRefs`. |
 | `ReferenceGrant` | Cross-namespace `backendRefs`, `RequestMirror` backends, and `certificateRefs`. The controller watches **v1**. |
 
-**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
+**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`, `RegularExpression`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
 
 **Backends:** `backendRefs` to `Service` with `weight`. Destinations are the **ready** endpoints of the Service's `EndpointSlice`s, so a pod that is not ready receives no traffic. A weight of `0` takes no traffic.
 
@@ -126,7 +126,7 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 | `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy` | Not watched. The standard CRDs for `GRPCRoute` are installed, but no controller acts on them. |
 | TLS `Passthrough`, protocols other than `HTTP` and `HTTPS` | Listener `Accepted` `False`, reason `UnsupportedProtocol`. |
 | `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
-| Header matches of type `RegularExpression` | The rule answers `500` (`UnsupportedValue`). |
+| Header `RegularExpression` that uses lookahead, a backreference, or an unbalanced parenthesis | The rule answers `500` (`UnsupportedValue`). |
 | `RequestRedirect` with `ReplacePrefixMatch`, or a status other than 301 and 302 | The rule answers `500`. |
 | `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
 | More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
@@ -140,7 +140,8 @@ These follow from how the data plane works. They are deliberate and listed so no
 - **`add` in a header modifier joins values with `, `.** A request or response header that already carries a value gets the new one appended (`foo` and `bar` become `foo, bar`), which is the same list as the specification's `foo,bar`. Repeated lines of one header collapse into one. `Set-Cookie` is the exception: each added cookie keeps its own line.
 - **Routes are global across listeners.** The data plane matches routes by host, path, header, query, and method, not by listener port. Two Gateway listeners that would serve different routes on different ports serve the same routes.
 - **A mix of valid and invalid backends answers `503` for the invalid share**, where the specification says `500`. When no backend of a rule is usable, the rule answers `500`.
-- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive.
+- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive. `RegularExpression` header values are case-sensitive and match the whole value, and only the first value of a repeated header is tested.
+- **Upgrade the data plane with the controller.** An older data plane ignores `headerMatches` and routes without that constraint.
 - **A listener with a mix of supported and unsupported `allowedRoutes.kinds`** serves the supported ones (`supportedKinds` lists `HTTPRoute`) and reports `ResolvedRefs` `False`, reason `InvalidRouteKinds`.
 - **Privileged ports are mapped.** The data plane runs as non-root, so Gateway port `80` is bound as `8080` and `443` as `8443` (`dataPlane.ports`). The Service maps them back.
 

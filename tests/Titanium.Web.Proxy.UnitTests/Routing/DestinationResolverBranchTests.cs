@@ -92,6 +92,25 @@ public class DestinationResolverBranchTests
     }
 
     [TestMethod]
+    public async Task HeaderMatches_Regex_NeedsAWholeValueMatch()
+    {
+        var options = await OptionsAsync(
+            Cluster(),
+            new RouteMatch
+            {
+                Path = "/",
+                HeaderMatches =
+                [
+                    new HeaderValueMatch { Name = "X-Build", Value = "v[0-9]+", Kind = HeaderMatchKind.Regex },
+                ],
+            });
+        Assert.IsNotNull(Pick(options, Req("/p", ("X-Build", "v9"))));
+        Assert.IsNull(Pick(options, Req("/p", ("X-Build", "v9x"))));
+        Assert.IsNull(Pick(options, Req("/p", ("X-Build", "V9"))));
+        Assert.IsNull(Pick(options, Req("/p")));
+    }
+
+    [TestMethod]
     public async Task QueryMatch_DecodesTheValue()
     {
         var options = await OptionsAsync(Cluster(), new RouteMatch { Path = "/", Query = new Dictionary<string, string> { ["v"] = "2 x" } });

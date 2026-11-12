@@ -258,15 +258,96 @@ public class GatewayTranslatorRouteTests
     }
 
     [TestMethod]
-    public void HeaderRegex_IsUnsupportedAndAnswers500()
+    public void HeaderRegex_ReachesTheMatcherAsAWholeValueMatch()
     {
         var b = Basic();
-        var match = new HttpRouteMatch { Headers = [new HttpHeaderMatch { Name = "x", Value = ".*", Type = "RegularExpression" }] };
+        var match = new HttpRouteMatch
+        {
+            Path = new HttpPathMatch { Value = "/h" },
+            Headers =
+            [
+                new HttpHeaderMatch { Name = "X-Env", Value = "lab" },
+                new HttpHeaderMatch { Name = "X-Build", Value = "v[0-9]+", Type = "RegularExpression" },
+            ],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+        var route = result.Config.UserRoutes().Single();
+
+        Assert.IsNull(route.DirectResponse);
+        Assert.AreEqual("lab", route.Match.Headers!["x-env"]);
+        Assert.AreEqual(HeaderMatchKind.Regex, route.Match.HeaderMatches!.Single().Kind);
+        // The proxy hands the matcher a case-insensitive header map.
+        static Dictionary<string, string> H(params (string, string)[] items) =>
+            items.ToDictionary(i => i.Item1, i => i.Item2, StringComparer.OrdinalIgnoreCase);
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/h", headers: H(("x-env", "lab"), ("x-build", "v12"))));
+        Assert.IsNull(Winner(result, "/h", headers: H(("x-env", "lab"), ("x-build", "v12x"))));
+        Assert.IsNull(Winner(result, "/h", headers: H(("x-env", "lab"))));
+    }
+
+    [TestMethod]
+    public void HeaderRegex_FirstMatchForAHeaderNameWins()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            Headers =
+            [
+                new HttpHeaderMatch { Name = "x", Value = "a" },
+                new HttpHeaderMatch { Name = "X", Value = ".*", Type = "RegularExpression" },
+            ],
+        };
+        var route = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match))).Config.UserRoutes().Single();
+
+        Assert.AreEqual("a", route.Match.Headers!["x"]);
+        Assert.IsNull(route.Match.HeaderMatches);
+    }
+
+    [TestMethod]
+    public void UncompilableHeaderRegex_IsUnsupportedAndAnswers500()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch { Headers = [new HttpHeaderMatch { Name = "x", Value = "(", Type = "RegularExpression" }] };
         var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
 
         Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
         Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
         Assert.IsTrue(result.Notes.Any(n => n.Contains("header match", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void HeaderRegex_AGroupedAlternation_RoutesOnlyTheWholeValue()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            Path = new HttpPathMatch { Value = "/h" },
+            Headers = [new HttpHeaderMatch { Name = "X-Build", Value = "(a)|(b)", Type = "RegularExpression" }],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+        static Dictionary<string, string> H(string value) =>
+            new(StringComparer.OrdinalIgnoreCase) { ["x-build"] = value };
+
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/h", headers: H("a")));
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/h", headers: H("b")));
+        Assert.IsNull(Winner(result, "/h", headers: H("aEXTRA")));
+        Assert.IsNull(Winner(result, "/h", headers: H("EXTRAb")));
+    }
+
+    [DataTestMethod]
+    [DataRow("a)|(b")]
+    [DataRow("(")]
+    [DataRow("(?=x)")]
+    public void HeaderRegex_APatternTheDataPlaneCannotMatch_Answers500(string pattern)
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            Headers = [new HttpHeaderMatch { Name = "x", Value = pattern, Type = "RegularExpression" }],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+        Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
     }
 
     [TestMethod]
