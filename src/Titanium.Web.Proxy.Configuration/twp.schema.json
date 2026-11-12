@@ -1384,10 +1384,12 @@
                 "type": "boolean"
               },
               "replacePrefixFrom": {
-                "type": "string"
+                "type": "string",
+                "description": "Empty (the root), or a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters. replacePrefixTo requires replacePrefixFrom, and neither may be set with path."
               },
               "replacePrefixTo": {
-                "type": "string"
+                "type": "string",
+                "description": "Empty (the root), or a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters. replacePrefixTo requires replacePrefixFrom, and neither may be set with path."
               },
               "scheme": {
                 "type": "string"

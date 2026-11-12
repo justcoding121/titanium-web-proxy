@@ -202,6 +202,11 @@ public static class TwpConfigSchema
             case "RoutePolicyConfig.Key":
                 schema["pattern"] = "^(client|forwardedClient|route|header:[!#$%&'*+.^_`|~0-9A-Za-z-]+|cookie:[!#$%&'*+.^_`|~0-9A-Za-z-]+)$";
                 break;
+            case "RedirectConfig.ReplacePrefixFrom":
+            case "RedirectConfig.ReplacePrefixTo":
+                schema["description"] =
+                    "Empty (the root), or a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters. replacePrefixTo requires replacePrefixFrom, and neither may be set with path.";
+                break;
             case "RoutePolicyConfig.MaxAgeSeconds":
                 schema[MinimumKey] = 0;
                 schema[MaximumKey] = 86_400;
