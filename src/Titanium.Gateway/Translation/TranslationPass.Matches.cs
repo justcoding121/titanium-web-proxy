@@ -49,6 +49,14 @@ internal sealed partial class TranslationPass
         }
 
         var redirect = direct500 ? null : plan.Redirect;
+        if (redirect is { PrefixReplacement: not null } && spec.Prefix is null)
+        {
+            // Like URLRewrite, ReplacePrefixMatch only has a prefix to replace when the match is a PathPrefix.
+            route.Unsupported.Add($"rule {ruleIndex} match {matchIndex}: RequestRedirect ReplacePrefixMatch needs a PathPrefix match");
+            redirect = null;
+            direct500 = true;
+        }
+
         if (redirect is { Hostname: null })
         {
             // The data plane builds an absolute Location only when it is given a host, so a redirect that keeps the
@@ -135,6 +143,8 @@ internal sealed partial class TranslationPass
                         Host = redirect.Hostname ?? redirectHost,
                         Port = redirect.Port,
                         Path = redirect.FullPath,
+                        ReplacePrefixFrom = redirect.PrefixReplacement is null ? null : spec.Prefix,
+                        ReplacePrefixTo = redirect.PrefixReplacement,
                         PreserveQuery = true,
                     },
                 DirectResponse = direct500 && redirect is null ? new DirectResponseConfig { Status = 500 } : null,

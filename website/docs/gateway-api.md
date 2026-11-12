@@ -113,7 +113,7 @@ A `certificateRef` in another namespace needs a `ReferenceGrant`.
 
 **Backends:** `backendRefs` to `Service` with `weight`. Destinations are the **ready** endpoints of the Service's `EndpointSlice`s, so a pod that is not ready receives no traffic. A weight of `0` takes no traffic.
 
-**Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier` (set, add, remove), `URLRewrite` (`hostname`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestRedirect` (301 and 302, `scheme`, `hostname`, `port`, `ReplaceFullPath`), `RequestMirror` (`percent` or `fraction`).
+**Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier` (set, add, remove), `URLRewrite` (`hostname`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestRedirect` (301, 302, 303, 307 and 308, `scheme`, `hostname`, `port`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestMirror` (`percent` or `fraction`).
 
 **Timeouts:** `timeouts.request` and `timeouts.backendRequest`.
 
@@ -127,7 +127,7 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 | TLS `Passthrough`, protocols other than `HTTP` and `HTTPS` | Listener `Accepted` `False`, reason `UnsupportedProtocol`. |
 | `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
 | Header matches of type `RegularExpression` | The rule answers `500` (`UnsupportedValue`). |
-| `RequestRedirect` with `ReplacePrefixMatch`, or a status other than 301 and 302 | The rule answers `500`. |
+| `RequestRedirect` with `ReplacePrefixMatch` on a match that is not a `PathPrefix` | The rule answers `500` (a prefix is needed to replace). |
 | `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
 | More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
 | A listener on a port not in `dataPlane.ports` | Listener not programmed, reason `PortUnavailable`. |

@@ -1354,6 +1354,12 @@
               "preserveQuery": {
                 "type": "boolean"
               },
+              "replacePrefixFrom": {
+                "type": "string"
+              },
+              "replacePrefixTo": {
+                "type": "string"
+              },
               "scheme": {
                 "type": "string"
               },

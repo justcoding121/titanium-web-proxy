@@ -379,27 +379,68 @@ public class GatewayTranslatorBackendTests
         Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
     }
 
+    private static HttpRouteRule PrefixRedirectRule(HttpRouteMatch match, string? replacement, int? status = null) => new()
+    {
+        Matches = [match],
+        Filters =
+        [
+            new HttpRouteFilter
+            {
+                Type = "RequestRedirect",
+                RequestRedirect = new HttpRequestRedirect
+                {
+                    Hostname = "x.example.com",
+                    StatusCode = status,
+                    Path = new HttpPathModifier { Type = "ReplacePrefixMatch", ReplacePrefixMatch = replacement },
+                },
+            },
+        ],
+    };
+
     [TestMethod]
-    public void Redirect_ReplacePrefixMatch_IsUnsupported()
+    public void Redirect_ReplacePrefixMatch_CarriesTheMatchedPrefixAndItsReplacement()
+    {
+        var route = Render(Basic(), Route("r", "default", null, PrefixRedirectRule(PathPrefix("/old/"), "/new/")))
+            .Config.UserRoutes().Single();
+
+        Assert.IsNull(route.DirectResponse);
+        Assert.AreEqual("/old", route.Redirect!.ReplacePrefixFrom, "trailing slash trimmed");
+        Assert.AreEqual("/new", route.Redirect.ReplacePrefixTo);
+        Assert.IsNull(route.Redirect.Path);
+    }
+
+    [TestMethod]
+    public void Redirect_ReplacePrefixMatch_WithNoReplacementMeansTheRoot()
+    {
+        var route = Render(Basic(), Route("r", "default", null, PrefixRedirectRule(PathPrefix("/old"), null)))
+            .Config.UserRoutes().Single();
+
+        Assert.AreEqual("/old", route.Redirect!.ReplacePrefixFrom);
+        Assert.AreEqual(string.Empty, route.Redirect.ReplacePrefixTo);
+    }
+
+    [TestMethod]
+    public void Redirect_ReplacePrefixMatch_OnAnExactMatch_Answers500()
     {
         var b = Basic();
-        var rule = new HttpRouteRule
-        {
-            Filters =
-            [
-                new HttpRouteFilter
-                {
-                    Type = "RequestRedirect",
-                    RequestRedirect = new HttpRequestRedirect
-                    {
-                        Hostname = "x.example.com",
-                        Path = new HttpPathModifier { Type = "ReplacePrefixMatch", ReplacePrefixMatch = "/a" },
-                    },
-                },
-            ],
-        };
+        var result = Render(b, Route("r", "default", null, PrefixRedirectRule(PathExact("/old"), "/new")));
 
-        Assert.AreEqual(500, Render(b, Route("r", "default", null, rule)).Config.UserRoutes().Single().DirectResponse?.Status);
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [TestMethod]
+    [DataRow(301)]
+    [DataRow(302)]
+    [DataRow(303)]
+    [DataRow(307)]
+    [DataRow(308)]
+    public void Redirect_AcceptsEveryGatewayApiStatusCode(int status)
+    {
+        var rule = PrefixRedirectRule(PathPrefix("/"), "/", status);
+        var route = Render(Basic(), Route("r", "default", null, rule)).Config.UserRoutes().Single();
+
+        Assert.AreEqual(status, route.Redirect!.Status);
+        Assert.IsNull(route.DirectResponse);
     }
 
     [TestMethod]
