@@ -1297,7 +1297,28 @@ internal static class ReverseProxySessionDispatch
             return ForwarderError.PolicyDenied;
         }
 
-        var ex = session.Exception;
+        if (session.Exception is not null)
+        {
+            return ClassifyException(session.Exception);
+        }
+
+        var status = session.HttpClient.Response.StatusCode;
+        if (status == 503 && session.MatchedRoute is not null && session.UpstreamDestinationId is null)
+        {
+            return ForwarderError.NoAvailableDestination;
+        }
+
+        return status switch
+        {
+            504 => ForwarderError.RequestTimedOut,
+            502 => ForwarderError.RequestBodyDestination,
+            _ => ForwarderError.None,
+        };
+    }
+
+    /// <summary>The exception half of <see cref="Classify"/>. A null exception is <see cref="ForwarderError.None"/>.</summary>
+    internal static ForwarderError ClassifyException(Exception? ex)
+    {
         if (IsCapacityFailure(ex))
         {
             return ForwarderError.NoAvailableDestination;
@@ -1318,23 +1339,7 @@ internal static class ReverseProxySessionDispatch
             return ForwarderError.RequestBodyDestination;
         }
 
-        if (ex is not null)
-        {
-            return ForwarderError.Other;
-        }
-
-        var status = session.HttpClient.Response.StatusCode;
-        if (status == 503 && session.MatchedRoute is not null && session.UpstreamDestinationId is null)
-        {
-            return ForwarderError.NoAvailableDestination;
-        }
-
-        return status switch
-        {
-            504 => ForwarderError.RequestTimedOut,
-            502 => ForwarderError.RequestBodyDestination,
-            _ => ForwarderError.None,
-        };
+        return ex is null ? ForwarderError.None : ForwarderError.Other;
     }
 
     private static string TakeRequestId(SessionEventArgsBase session, string headerName)

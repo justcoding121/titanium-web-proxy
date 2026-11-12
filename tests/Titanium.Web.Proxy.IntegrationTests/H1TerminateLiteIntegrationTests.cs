@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -11,7 +12,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions;
 using Titanium.Web.Proxy.Abstractions.Clusters;
+using Titanium.Web.Proxy.Abstractions.Diagnostics;
 using Titanium.Web.Proxy.Abstractions.Routing;
+using Titanium.Web.Proxy.Diagnostics;
 using Titanium.Web.Proxy.Clusters;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
 using Titanium.Web.Proxy.Models;
@@ -656,6 +659,263 @@ public class H1TerminateLiteIntegrationTests
             Assert.AreEqual("origin", await forwarded.Content.ReadAsStringAsync());
         }
         finally { control.Stop(); control.Dispose(); }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task LiteRequest_IsCountedOnce_AndTheActiveGaugeReturns()
+    {
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAsync(s);
+            await s.WriteAsync(OkWithBody("ok", keepAlive: false));
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix });
+            using var listener = new MeterListener();
+            long requests = 0;
+            long duration = 0;
+            long active = 0;
+            string? protocol = null;
+            listener.InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ProxyMetrics.MeterName &&
+                    instrument.Name is "twp.proxy.requests" or "twp.proxy.request.duration" or "twp.proxy.requests.active")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+            {
+                if (instrument.Name == "twp.proxy.requests")
+                {
+                    requests += measurement;
+                    foreach (var tag in tags)
+                    {
+                        if (tag.Key == "protocol")
+                            protocol = tag.Value?.ToString();
+                    }
+                }
+                else if (instrument.Name == "twp.proxy.requests.active")
+                {
+                    active += measurement;
+                }
+            });
+            listener.SetMeasurementEventCallback<double>((_, measurement, _, _) =>
+            {
+                if (measurement > 0)
+                    duration++;
+            });
+            listener.Start();
+            var enabledBy = Environment.TickCount64 + 1_000;
+            while (!ProxyMetrics.RequestMetricsEnabled && Environment.TickCount64 < enabledBy)
+                Thread.Sleep(1);
+            Assert.IsTrue(ProxyMetrics.RequestMetricsEnabled, "the listener did not attach before the request");
+            using var client = MakeClient();
+            var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            // The response bytes are on the wire before the counter is updated, so wait for that update.
+            var countedBy = Environment.TickCount64 + 2_000;
+            while (requests == 0 && Environment.TickCount64 < countedBy)
+                Thread.Sleep(1);
+            Assert.AreEqual(1, requests);
+            Assert.AreEqual("h1", protocol);
+            Assert.AreEqual(1, duration);
+            Assert.AreEqual(0, active);
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task LiteRequest_WithoutAListener_StillReturns200()
+    {
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAsync(s);
+            await s.WriteAsync(OkWithBody("ok", keepAlive: false));
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix });
+            using var client = MakeClient();
+            var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task Interim100_IsCountedOnceAfterFallback()
+    {
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAsync(s);
+            await s.WriteAsync(Encoding.ASCII.GetBytes(
+                "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"));
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix });
+            using var listener = new MeterListener();
+            long requests = 0;
+            listener.InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ProxyMetrics.MeterName && instrument.Name == "twp.proxy.requests")
+                    meterListener.EnableMeasurementEvents(instrument);
+            };
+            listener.SetMeasurementEventCallback<long>((_, measurement, _, _) => requests += measurement);
+            listener.Start();
+            using var client = MakeClient();
+            var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/");
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+            // Lite must not record the fallback. The session path records after the body is written.
+            var countedBy = Environment.TickCount64 + 2_000;
+            while (requests == 0 && Environment.TickCount64 < countedBy)
+                Thread.Sleep(1);
+            Assert.AreEqual(1, requests);
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task OriginCloses_CountsOneFailedLiteRequest()
+    {
+        await using var origin = Http11Origin.Start(s =>
+        {
+            s.Close();
+            return Task.CompletedTask;
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix });
+            using var listener = new MeterListener();
+            long requests = 0;
+            string? error = null;
+            listener.InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ProxyMetrics.MeterName && instrument.Name == "twp.proxy.requests.failed")
+                    meterListener.EnableMeasurementEvents(instrument);
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+            {
+                if (instrument.Name != "twp.proxy.requests.failed")
+                    return;
+
+                requests += measurement;
+                foreach (var tag in tags)
+                {
+                    if (tag.Key == "error")
+                        error = tag.Value?.ToString();
+                }
+            });
+            listener.Start();
+            // One raw request. HttpClient retries a reset and would count each attempt.
+            using var tcp = new TcpClient();
+            await tcp.ConnectAsync(IPAddress.Loopback, ep.Port);
+            await using var ssl = new System.Net.Security.SslStream(tcp.GetStream(), false, (_, _, _, _) => true);
+            await ssl.AuthenticateAsClientAsync("127.0.0.1");
+            var payload = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+            await ssl.WriteAsync(payload);
+            var sink = new byte[64];
+            try
+            {
+                while (await ssl.ReadAsync(sink) > 0)
+                {
+                }
+            }
+            catch (IOException)
+            {
+                // The origin closed before a status line, so the client connection ends with the failure.
+            }
+
+            // A replayable GET whose origin closes before a status line is RetryableServerConnectionException
+            // with no inner exception. The existing classifier labels that Other, not a socket error.
+            Assert.AreEqual(1, requests);
+            Assert.AreEqual(ForwarderError.Other.ToString(), error);
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ApiKeyDenial_OnLite_CountsPolicyDenied()
+    {
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAsync(s);
+            await s.WriteAsync(OkWithBody("no", keepAlive: false));
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            var manager = new ClusterManager();
+            await manager.ApplyAsync(
+            [
+                new ClusterConfig
+                {
+                    Id = "c",
+                    Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = origin.Port }],
+                },
+            ]);
+            proxy.ReverseProxy = new ReverseProxyOptions
+            {
+                Routes =
+                [
+                    new RouteConfig
+                    {
+                        Id = "r",
+                        ClusterId = "c",
+                        Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                        Policies = ["key"],
+                    },
+                ],
+                Policies =
+                [
+                    new RoutePolicyConfig
+                    {
+                        Name = "key",
+                        Kind = "apiKey",
+                        HeaderName = "X-Api-Key",
+                        HeaderValue = "secret",
+                    },
+                ],
+                ClusterManager = manager,
+                RouteMatcher = new RouteMatcher(),
+                LoadBalancer = new LoadBalancer(),
+            };
+            using var listener = new MeterListener();
+            long requests = 0;
+            string? error = null;
+            listener.InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ProxyMetrics.MeterName && instrument.Name == "twp.proxy.requests.failed")
+                    meterListener.EnableMeasurementEvents(instrument);
+            };
+            listener.SetMeasurementEventCallback<long>((_, measurement, tags, _) =>
+            {
+                requests += measurement;
+                foreach (var tag in tags)
+                {
+                    if (tag.Key == "error")
+                        error = tag.Value?.ToString();
+                }
+            });
+            listener.Start();
+            using var client = MakeClient();
+            var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/");
+            Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.AreEqual(1, requests);
+            Assert.AreEqual(ForwarderError.PolicyDenied.ToString(), error);
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
     }
 
     /// <summary>Reads the header block and a Content-Length body so a POST is not cut off mid-request.</summary>
