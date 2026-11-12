@@ -370,6 +370,17 @@ public sealed class RedirectConfig
     public string? Host { get; init; }
     public int? Port { get; init; }
     public string? Path { get; init; }
+
+    /// <summary>
+    /// With <see cref="ReplacePrefixTo"/>: the leading path segment prefix to replace (no trailing slash; empty means
+    /// the root). Ignored when <see cref="Path"/> is set. A request path that does not start with the prefix on a
+    /// segment boundary keeps its path.
+    /// </summary>
+    public string? ReplacePrefixFrom { get; init; }
+
+    /// <summary>With <see cref="ReplacePrefixFrom"/>: what replaces the prefix (no trailing slash; empty means the root).</summary>
+    public string? ReplacePrefixTo { get; init; }
+
     public bool PreserveQuery { get; init; } = true;
 
     /// <summary>When the request is cleartext, the redirect scheme is https.</summary>

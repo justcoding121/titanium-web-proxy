@@ -28,7 +28,7 @@ The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that ar
 ## Not supported, and differences
 
 - `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy`, TLS `Passthrough`, and `Gateway.spec.addresses` are not handled.
-- A rule that uses an unsupported value (a regular expression the data plane cannot match, `ReplacePrefixMatch` redirect, a redirect status other than 301 and 302, a second mirror) answers `500`, and the reason is in the route status.
+- A rule that uses an unsupported value (a regular expression the data plane cannot match, a `RequestRedirect` status other than 301, 302, 303, 307, or 308, a `ReplacePrefixMatch` redirect on a match that is not a path prefix, a second mirror) answers `500`, and the reason is in the route status.
 - Routes are global across listeners: the data plane does not scope a route to a listener port. Gateways of one class share one data plane, and their listeners on one port merge. A request no route matches answers `404`.
 - A header modifier `add` appends to a value that is already there, joined with `, ` (`Set-Cookie` keeps one line per cookie).
 - A rule that mixes usable and unusable backends answers `503` for the unusable share, where the specification says `500`.
