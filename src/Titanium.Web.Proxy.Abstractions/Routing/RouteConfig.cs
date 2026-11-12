@@ -203,6 +203,12 @@ public sealed class RoutePolicyConfig
     public bool? AllowCredentials { get; init; }
 
     /// <summary>
+    /// <c>cors</c>: when true, a preflight that sends <c>Access-Control-Request-Private-Network: true</c>
+    /// for an allowed origin also sends <c>Access-Control-Allow-Private-Network: true</c>.
+    /// </summary>
+    public bool? AllowPrivateNetwork { get; init; }
+
+    /// <summary>
     /// <c>cors</c>: <c>Access-Control-Expose-Headers</c> for the actual response.
     /// The <c>ResponseCors</c> transform carries the same list.
     /// </summary>

@@ -97,9 +97,9 @@ public static partial class IngressAnnotations
         new("limit-rps", "requests per second per client, 1-1000000",
             "`rateLimit` policy (fixed window of 1 second)",
             "Counted per client address and per Ingress. Excess requests get `429` with `Retry-After`."),
-        new("cors-allow-origin", "`*` or comma-separated origins such as `https://app.example.com`",
+        new("cors-allow-origin", "`*`, an origin, or a wildcard such as `https://*.example.com`. `regex:` is not accepted here",
             "`cors` policy and a `ResponseCors` transform",
-            "Answers a real preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) with `204` and the `Access-Control-Allow-*` headers. A plain `OPTIONS` is forwarded. The actual response gets `Access-Control-Allow-Origin` (`*`, or the request `Origin` when it is listed, plus `Vary: Origin`). An unlisted origin gets no allow header."),
+            "Answers a real preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) with `204` and the `Access-Control-Allow-*` headers. A plain `OPTIONS` is forwarded. The actual response gets `Access-Control-Allow-Origin` (`*`, or the request `Origin` when it matches, plus `Vary: Origin`). A wildcard matches one host label and echoes that origin. An unlisted origin gets no allow header. `regex:` is configuration only, not this annotation."),
         new("cors-allow-methods", "comma-separated method names such as `GET, POST`",
             "`cors` policy `methods`",
             "Sent as `Access-Control-Allow-Methods`. Needs `cors-allow-origin`. Default when omitted: `GET, POST, OPTIONS`."),
@@ -368,13 +368,13 @@ public static partial class IngressAnnotations
                 break;
             case "cors-allow-origin":
                 var origins = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (origins is ["*"] || (origins.Length > 0 && origins.All(IsOrigin)))
+                if (origins is ["*"] || (origins.Length > 0 && origins.All(IsOrigin) && !origins.Any(part => part.StartsWith("regex:", StringComparison.Ordinal))))
                 {
                     settings.CorsOrigins = string.Join(",", origins);
                 }
                 else
                 {
-                    Bad("\"*\" or comma-separated origins such as https://app.example.com");
+                    Bad("\"*\", comma-separated origins, or a wildcard such as https://*.example.com. regex: is not accepted");
                 }
 
                 break;
@@ -754,12 +754,49 @@ public static partial class IngressAnnotations
         return true;
     }
 
-    private static bool IsOrigin(string value) =>
-        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-        uri.Scheme is "http" or "https" &&
-        string.IsNullOrEmpty(uri.UserInfo) &&
-        (uri.AbsolutePath is "" or "/") && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
-        !value.EndsWith('/');
+    private static bool IsOrigin(string value)
+    {
+        if (value.Contains('*'))
+        {
+            return IsWildcardOrigin(value);
+        }
+
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            uri.Scheme is "http" or "https" &&
+            string.IsNullOrEmpty(uri.UserInfo) &&
+            (uri.AbsolutePath is "" or "/") && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
+            !value.EndsWith('/');
+    }
+
+    private static bool IsWildcardOrigin(string value)
+    {
+        var schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd <= 0 || value[..schemeEnd] is not ("http" or "https"))
+        {
+            return false;
+        }
+
+        var rest = value[(schemeEnd + 3)..];
+        if (!rest.StartsWith("*.", StringComparison.Ordinal) || rest.Contains('/') || rest.Contains('?') || rest.Contains('#') || rest.AsSpan(2).Contains('*'))
+        {
+            return false;
+        }
+
+        var host = rest[2..];
+        var colon = host.LastIndexOf(':');
+        if (colon >= 0)
+        {
+            if (!int.TryParse(host[(colon + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
+            {
+                return false;
+            }
+
+            host = host[..colon];
+        }
+
+        var dot = host.IndexOf('.');
+        return dot > 0 && dot < host.Length - 1 && !host.EndsWith('.');
+    }
 }
 
 /// <summary>The annotations of one Ingress, parsed.</summary>

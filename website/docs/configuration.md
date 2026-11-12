@@ -506,6 +506,8 @@ On the actual response, a `ResponseCors` transform with the same `origins` write
 
 A reply the proxy generates itself on a route that lists `cors` (a policy denial, redirect, direct response, or bad gateway) carries the same allow-origin, credentials, expose-headers, and `Vary: Origin` when the list is not `*`. A real preflight is not refused by an `apiKey` or `requireHeader` policy listed earlier. `ipAllowDeny`, `rateLimit`, and `geo` still apply to that preflight. `extAuth` and `oidc` are session-path policies and are unchanged.
 
+An origin list may also contain `https://*.example.com` (one host label, optional port) or `regex:` followed by a whole-value pattern. A match echoes the request `Origin`; it is never rewritten to `*`. `allowCredentials: true` is rejected with `*` and is allowed with a wildcard or `regex:` entry, which will echo whichever origin matched. An `Origin` longer than 256 characters, containing a control character, or equal to `null` does not match a wildcard or `regex:` entry (`null` matches only an exact `null` entry). `allowPrivateNetwork: true` adds `Access-Control-Allow-Private-Network: true` on a preflight that asked for it and whose origin is allowed. Ingress annotations accept the wildcard form and do not accept `regex:`.
+
 A plain `OPTIONS` that used to be answered locally now reaches the origin, and an unlisted origin no longer receives another origin's allow header.
 
 ### Login (route policy `oidc`, Plus)

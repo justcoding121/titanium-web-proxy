@@ -954,6 +954,9 @@
           "allowCredentials": {
             "type": "boolean"
           },
+          "allowPrivateNetwork": {
+            "type": "boolean"
+          },
           "allowedEmailDomains": {
             "type": "array",
             "items": {
