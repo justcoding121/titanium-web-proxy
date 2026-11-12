@@ -20,7 +20,7 @@ internal sealed class LinkShaper : IDisposable
 
     private readonly TimeProvider _time;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly CancellationTokenSource _epoch = new();
     private long _uploadReadyAt;
     private long _downloadReadyAt;

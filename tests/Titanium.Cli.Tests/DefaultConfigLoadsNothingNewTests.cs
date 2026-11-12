@@ -67,6 +67,9 @@ public class DefaultConfigLoadsNothingNewTests
         {
             var beforeThreads = SnapshotThreadCount();
             var beforeTasks = SnapshotIncompleteTaskCount();
+            // Prior Cli tests in this process may already have loaded optional leftovers; only
+            // flag assemblies that appear for the first time while this default config runs.
+            var beforeForbidden = SnapshotForbiddenFragments();
 
             var run = RunCommand.ExecuteCoreAsync(path, verbose: false, serviceMode: true, stop.Token);
 
@@ -78,7 +81,7 @@ public class DefaultConfigLoadsNothingNewTests
             }
 
             Assert.IsTrue(served, "the default reverse configuration never answered a request");
-            AssertForbiddenAssembliesNotLoaded("after serving a request on a default reverse configuration");
+            AssertNoNewForbiddenAssemblies(beforeForbidden, "after serving a request on a default reverse configuration");
 
             // Warm-up: allow settle, then the leftover features must not have added a standing thread or timer.
             await Task.Delay(500);
@@ -91,7 +94,7 @@ public class DefaultConfigLoadsNothingNewTests
 
             await stop.CancelAsync();
             Assert.AreEqual(0, await run.WaitAsync(TimeSpan.FromSeconds(30)));
-            AssertForbiddenAssembliesNotLoaded("after the proxy stopped");
+            AssertNoNewForbiddenAssemblies(beforeForbidden, "after the proxy stopped");
         }
         finally
         {
@@ -101,7 +104,22 @@ public class DefaultConfigLoadsNothingNewTests
         }
     }
 
-    private static void AssertForbiddenAssembliesNotLoaded(string when)
+    private static HashSet<string> SnapshotForbiddenFragments()
+    {
+        var loaded = AppDomain.CurrentDomain.GetAssemblies()
+            .Select(a => a.GetName().Name ?? a.FullName ?? string.Empty)
+            .ToList();
+        var hits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var fragment in ForbiddenAssemblyNameFragments)
+        {
+            if (loaded.Any(n => n.Contains(fragment, StringComparison.OrdinalIgnoreCase)))
+                hits.Add(fragment);
+        }
+
+        return hits;
+    }
+
+    private static void AssertNoNewForbiddenAssemblies(HashSet<string> beforeForbidden, string when)
     {
         var loaded = AppDomain.CurrentDomain.GetAssemblies()
             .Select(a => a.GetName().Name ?? a.FullName ?? string.Empty)
@@ -113,7 +131,9 @@ public class DefaultConfigLoadsNothingNewTests
         foreach (var fragment in ForbiddenAssemblyNameFragments)
         {
             var hit = loaded.FirstOrDefault(n => n.Contains(fragment, StringComparison.OrdinalIgnoreCase));
-            Assert.IsNull(hit, $"{when}: leftover assembly '{hit}' is loaded (matched '{fragment}')");
+            if (hit is null || beforeForbidden.Contains(fragment))
+                continue;
+            Assert.Fail($"{when}: leftover assembly '{hit}' was newly loaded (matched '{fragment}')");
         }
     }
 

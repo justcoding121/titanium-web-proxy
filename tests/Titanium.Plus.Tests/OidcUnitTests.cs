@@ -227,6 +227,22 @@ public class OidcGuardTests
     }
 
     [TestMethod]
+    public void Callbacks_RejectNewClients_WhenRateTableIsFullOfLiveWindows()
+    {
+        // Bug class: after MaxEntries live windows, a new client bypasses the rate table.
+        var clock = new OidcClock();
+        var guards = new OidcGuards(clock);
+        for (var i = 0; i < 10_000; i++)
+        {
+            Assert.IsTrue(guards.TryAdmitCallback("flood-" + i, 5));
+        }
+
+        Assert.IsFalse(guards.TryAdmitCallback("overflow-client", 5));
+        clock.Advance(TimeSpan.FromSeconds(61));
+        Assert.IsTrue(guards.TryAdmitCallback("overflow-client", 5), "stale windows must be purged");
+    }
+
+    [TestMethod]
     public async Task Refresher_RunsOneCallForConcurrentCallers_AndReusesASuccessBriefly()
     {
         var clock = new OidcClock();
@@ -507,5 +523,65 @@ public class OidcIdTokenValidationTests
         {
             await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(() => provider.ValidateIdTokenAsync(garbage, null, default), garbage.Length.ToString());
         }
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task ExpiredToken_IsRefused()
+    {
+        var (h, provider) = await StartAsync();
+        await using var _ = h;
+
+        h.Idp.IdTokenLifetime = TimeSpan.FromMinutes(-5);
+        var expired = h.Idp.IdToken(null);
+
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(
+            () => provider.ValidateIdTokenAsync(expired, null, default));
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task TokenWithNbfInFuture_IsRefused()
+    {
+        var (h, provider) = await StartAsync();
+        await using var _ = h;
+
+        // Advance the fake clock by 2 h so the IdP sets nbf = T+2h.
+        h.Clock.Advance(TimeSpan.FromHours(2));
+        var futureToken = h.Idp.IdToken(null);
+
+        // Wind the clock back: from the validator's perspective nbf is 2 hours in the future.
+        h.Clock.Advance(TimeSpan.FromHours(-2));
+
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(
+            () => provider.ValidateIdTokenAsync(futureToken, null, default));
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task WrongIssuer_IsRefused()
+    {
+        var (h, provider) = await StartAsync();
+        await using var _ = h;
+
+        h.Idp.IssuerOverride = "https://evil.example.test";
+        var badIss = h.Idp.IdToken(null);
+
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(
+            () => provider.ValidateIdTokenAsync(badIss, null, default));
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task WrongAudience_IsRefused()
+    {
+        var (h, provider) = await StartAsync();
+        await using var _ = h;
+
+        h.Idp.AudienceOverride = "another-client";
+        var badAud = h.Idp.IdToken(null);
+
+        await Assert.ThrowsExactlyAsync<OidcTokenInvalidException>(
+            () => provider.ValidateIdTokenAsync(badAud, null, default));
     }
 }

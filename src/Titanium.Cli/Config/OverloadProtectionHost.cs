@@ -20,7 +20,7 @@ internal sealed class OverloadProtectionHost : IAsyncDisposable
 
     private readonly ProxyServer _proxy;
     private readonly Action<string> _warn;
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private volatile Settings? _settings;
     private CancellationTokenSource? _cts;
     private Task? _loop;

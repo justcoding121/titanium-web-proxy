@@ -9,7 +9,7 @@ namespace Titanium.Inspector.ViewModels;
 /// <summary>Map Remote rules — rewrite request URL before origin (after AutoResponder).</summary>
 public sealed class MapRemoteViewModel : INotifyPropertyChanged
 {
-    private readonly object _rulesGate = new();
+    private readonly System.Threading.Lock _rulesGate = new();
     private bool _enabled;
     private MapRemoteRule? _selectedRule;
 

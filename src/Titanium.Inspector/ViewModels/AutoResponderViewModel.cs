@@ -10,7 +10,7 @@ namespace Titanium.Inspector.ViewModels;
 /// <summary>AutoResponder rules — evaluated before breakpoints. Optional Map Local file body.</summary>
 public sealed class AutoResponderViewModel : INotifyPropertyChanged
 {
-    private readonly object _rulesGate = new();
+    private readonly System.Threading.Lock _rulesGate = new();
     private bool _enabled;
     private AutoResponderRule? _selectedRule;
 

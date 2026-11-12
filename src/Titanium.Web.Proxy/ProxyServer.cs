@@ -1105,7 +1105,7 @@ public partial class ProxyServer : IDisposable
     private int maxConcurrentHttp11HttpsOriginCreates = Math.Clamp(Environment.ProcessorCount, 4, 32);
 
     private SemaphoreSlim? http2ToHttp11HttpsOriginCreateGate;
-    private readonly object http2ToHttp11HttpsOriginCreateGateLock = new();
+    private readonly System.Threading.Lock http2ToHttp11HttpsOriginCreateGateLock = new();
 
     /// <summary>
     ///     Instance create SoftCap for H2→H1 HTTPS origin opens. Sized from

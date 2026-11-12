@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using Envoy.Config.Cluster.V3;
 using Envoy.Config.Core.V3;
 using Envoy.Config.Endpoint.V3;
+using Envoy.Config.Listener.V3;
 using Envoy.Extensions.TransportSockets.Tls.V3;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -170,5 +171,56 @@ public class XdsSnapshotBuilderTests
         var result = XdsSnapshotBuilder.Build(new AdsResourceStore(), _stateDir, bootstrap);
 
         Assert.AreSame(bootstrap.Certificates, result.Config!.Certificates);
+    }
+
+    [TestMethod]
+    public void EmptyListenerList_YieldsNoListeners()
+    {
+        // A snapshot that pushes a Cluster+CLA+Route but no Listener must produce a config with
+        // no listeners — the builder must not carry over any default.
+        var store = new AdsResourceStore();
+        store.Replace(XdsTypeUrls.Cluster,
+        [
+            Any.Pack(new Cluster { Name = "c1", Type = ClusterDiscoveryType.Eds }),
+        ]);
+        store.Replace(AssignmentUrl, [Any.Pack(Assignment("c1"))]);
+        // Deliberately not adding any Listener.
+
+        var result = XdsSnapshotBuilder.Build(store, _stateDir, new TwpConfig());
+
+        Assert.IsTrue(result.IsSuccess, result.Error?.ToString());
+        Assert.AreEqual(0, result.Config!.Listeners.Count);
+    }
+
+    [TestMethod]
+    public void BadListenerInSnapshot_NacksWithListenerName()
+    {
+        var store = new AdsResourceStore();
+        // A listener with no address should be rejected.
+        store.Replace(XdsTypeUrls.Listener,
+        [
+            Any.Pack(new Listener { Name = "bad-listener" }),
+        ]);
+
+        var result = XdsSnapshotBuilder.Build(store, _stateDir, new TwpConfig());
+
+        Assert.IsFalse(result.IsSuccess);
+        StringAssert.Contains(result.Error!.ResourceName, "bad-listener");
+    }
+
+    [TestMethod]
+    public void BadRouteInSnapshot_NacksWithRouteName()
+    {
+        // A RouteConfiguration without a name should be rejected.
+        var store = new AdsResourceStore();
+        store.Replace(XdsTypeUrls.RouteConfiguration,
+        [
+            Any.Pack(new global::Envoy.Config.Route.V3.RouteConfiguration()),
+        ]);
+
+        var result = XdsSnapshotBuilder.Build(store, _stateDir, new TwpConfig());
+
+        Assert.IsFalse(result.IsSuccess);
+        StringAssert.Contains(result.Error!.FieldPath, "name");
     }
 }

@@ -195,7 +195,7 @@ internal static class VersionCommand
 
     private static void PrintLocalVersions(bool includePlus)
     {
-        void Print(string name, Assembly? asm)
+        static void Print(string name, Assembly? asm)
         {
             var ver = asm?.GetName().Version;
             AsyncConsole.WriteLine($"{name}: {(ver is null ? "(not loaded)" : ReleaseVersion.FormatDisplay(ver))}");

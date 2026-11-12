@@ -364,9 +364,14 @@ namespace Titanium.Web.Proxy.Http2
                     // request trailers - never valid before any main request headers were seen.
                     if (headerRr.HttpVersion < HttpHeader.Version20)
                     {
+                        // Bug class: logging alone left the client stream open with no RST/GOAWAY,
+                        // so a trailer-before-request hang forever waiting for a response.
                         ReportException(logger, new ProxyHttpException(
                             "HTTP/2 protocol error: trailer HEADERS received before request headers.", null,
                             sessionArgs));
+                        removeAndFinalizeStream(hbStreamId);
+                        await LockedWriteAsync(ownLegWriteLock, cancellationToken, () => SendRstStreamAsync(
+                            new Http2FrameHeader(), new byte[9], hbStreamId, Http2ErrorCode.ProtocolError, input));
                         return false;
                     }
 

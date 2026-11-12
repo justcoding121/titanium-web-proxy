@@ -89,7 +89,8 @@ public class HappyPathSanityE2ETests
         // CONNECT is captured as host:port before the decrypted request URL arrives.
         deadline = DateTime.UtcNow.AddSeconds(8);
         var sessions = SessionListPoll.Copy(vm.Sessions);
-        while (!sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase))
+        while (!sessions.Any(s =>
+                   s?.Url?.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase) == true)
                && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
@@ -98,8 +99,8 @@ public class HappyPathSanityE2ETests
 
         Assert.IsTrue(sessions.Length > 0, $"Expected UI sessions; status={vm.StatusText}");
         Assert.IsTrue(
-            sessions.Any(s => s.Url.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase)),
-            string.Join(", ", sessions.Select(s => s.Url)));
+            sessions.Any(s => s?.Url?.Contains("happy-inspector", StringComparison.OrdinalIgnoreCase) == true),
+            string.Join(", ", sessions.Select(s => s?.Url ?? "<null>")));
         Assert.IsTrue(vm.SessionCountText.Contains("Sessions:", StringComparison.OrdinalIgnoreCase), vm.SessionCountText);
 
         vm.EnsureShutdown();
@@ -165,8 +166,9 @@ public class HappyPathSanityE2ETests
     public async Task HappyPath_CliPlus_MitmProxy_ControlPlane_AndDebugLog()
     {
         using var httpOrigin = new EchoOrigin();
-        var listen = CliProcessHarness.GetFreePort();
-        var control = CliProcessHarness.GetFreePort();
+        var ports = CliProcessHarness.GetFreePorts(2);
+        var listen = ports[0];
+        var control = ports[1];
         const string secret = "happy-plus-secret";
         var logPath = Path.Combine(_tempDir, "plus-happy.log");
         var cfg = ConfigFixtures.WriteExplicitMitm(_tempDir, listen, logPath, plus: true, controlPort: control, secret: secret);

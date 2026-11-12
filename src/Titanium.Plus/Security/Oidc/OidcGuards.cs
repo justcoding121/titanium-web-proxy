@@ -14,7 +14,7 @@ internal sealed class OidcGuards(TimeProvider time)
     private const int MaxEntries = 10_000;
     private static readonly TimeSpan RateWindow = TimeSpan.FromMinutes(1);
 
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly Dictionary<string, DateTimeOffset> _usedStates = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (DateTimeOffset Start, int Count)> _rates = new(StringComparer.Ordinal);
 

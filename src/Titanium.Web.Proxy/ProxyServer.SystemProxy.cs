@@ -162,7 +162,7 @@ public partial class ProxyServer : IDisposable
         }
     }
 
-    private readonly object systemProxyOverrideBaselineLock = new();
+    private readonly System.Threading.Lock systemProxyOverrideBaselineLock = new();
     private bool systemProxyOverrideBaselineCaptured;
     private string? systemProxyOverrideBaseline;
 

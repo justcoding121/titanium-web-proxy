@@ -55,7 +55,7 @@ public sealed class InterceptionService : IDisposable
     ///     prune. Rapid Clear+Install / Install / Untrust must not interleave ClearRootTrust,
     ///     EnableEnterpriseRoots, and My-store prune (prefs locks + Crypt32 contention).
     /// </summary>
-    private readonly object _firefoxTrustBgGate = new();
+    private readonly System.Threading.Lock _firefoxTrustBgGate = new();
     private readonly Queue<FirefoxTrustBgQueued> _firefoxTrustBgQueue = new();
     private bool _firefoxTrustBgRunning;
     private TaskCompletionSource _firefoxTrustBgIdle = CreateCompletedFirefoxTrustIdle();
@@ -632,7 +632,7 @@ public sealed class InterceptionService : IDisposable
         Http3Enabled = false;
     }
 
-    private readonly object _systemProxyGate = new();
+    private readonly System.Threading.Lock _systemProxyGate = new();
 
     /// <summary>
     /// Enable or disable system proxy. Returns false if the proxy is not running or the underlying call failed.

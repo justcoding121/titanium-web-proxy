@@ -22,8 +22,8 @@ public sealed class SessionBodyDiskCache : IDisposable
     private string _runDirectory;
     private int _runGeneration;
     private long _maxBytes;
-    private readonly object _gate = new();
-    private readonly object _writeGate = new();
+    private readonly System.Threading.Lock _gate = new();
+    private readonly System.Threading.Lock _writeGate = new();
     private readonly object _cleanupGate = new();
     private readonly Queue<string> _cleanupPaths = new();
     private Task _cleanupTask = Task.CompletedTask;
@@ -32,7 +32,7 @@ public sealed class SessionBodyDiskCache : IDisposable
         StringComparer.OrdinalIgnoreCase);
     private long _trackedBytes;
     private bool _disposed;
-    private static readonly object RunPathReserveGate = new();
+    private static readonly System.Threading.Lock RunPathReserveGate = new();
     private static readonly HashSet<string> ReservedRunPaths = new(StringComparer.OrdinalIgnoreCase);
 
     public SessionBodyDiskCache(string rootDirectory, long maxBytes, TimeSpan maxAge)

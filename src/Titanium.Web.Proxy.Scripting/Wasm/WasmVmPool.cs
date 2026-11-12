@@ -9,7 +9,7 @@ namespace Titanium.Web.Proxy.Scripting.Wasm;
 /// </summary>
 internal sealed class WasmVmPool : IDisposable
 {
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private readonly WasmVm?[] _slots;
     private readonly List<WasmPlugin> _plugins = [];
     private readonly bool[] _rebuilding;
@@ -500,7 +500,7 @@ public sealed class WasmPoolClosedException() : Exception("the shared WASM VM po
 /// </summary>
 internal static class WasmVmPools
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static readonly Dictionary<string, WasmVmPool> Pools = new(StringComparer.Ordinal);
 
     public static string Key(string vmId, string moduleHash, WasmRuntime runtime, WasmLimits limits) =>

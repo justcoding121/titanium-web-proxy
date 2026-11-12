@@ -1,11 +1,8 @@
+using System.Collections.Concurrent;
 using System.Net;
 using Envoy.Config.Cluster.V3;
-using Envoy.Config.Core.V3;
-using Envoy.Config.Endpoint.V3;
 using Envoy.Service.Discovery.V3;
-using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
-using Grpc.AspNetCore;
 using Grpc.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -14,13 +11,70 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Titanium.Xds.Tests;
 
+/// <summary>Queued ADS responses keyed by type URL. Empty queues still get an empty v1 so multi-type clients can settle.</summary>
+internal sealed class FakeAdsState
+{
+    private readonly ConcurrentDictionary<string, ConcurrentQueue<DiscoveryResponse>> _followUps =
+        new(StringComparer.Ordinal);
+
+    public ConcurrentDictionary<string, Any[]> Initial { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Error details the client sent in NACK requests.</summary>
+    public ConcurrentQueue<string> Nacks { get; } = new();
+
+    /// <summary>When set, every ADS stream completes right after it opens (a control plane that hangs up at once).</summary>
+    public bool CloseStreamsImmediately { get; set; }
+
+    private int _streamCount;
+
+    public int StreamCount => Volatile.Read(ref _streamCount);
+
+    public void CountStream() => Interlocked.Increment(ref _streamCount);
+
+    public void EnqueueFollowUp(string typeUrl, string version, string nonce, params Any[] resources)
+    {
+        var response = new DiscoveryResponse
+        {
+            TypeUrl = typeUrl,
+            VersionInfo = version,
+            Nonce = nonce,
+        };
+        response.Resources.AddRange(resources);
+        _followUps.GetOrAdd(typeUrl, _ => new ConcurrentQueue<DiscoveryResponse>()).Enqueue(response);
+    }
+
+    public DiscoveryResponse InitialResponse(string typeUrl)
+    {
+        var response = new DiscoveryResponse
+        {
+            TypeUrl = typeUrl,
+            VersionInfo = "v1",
+            Nonce = "n1:" + typeUrl,
+        };
+        if (Initial.TryGetValue(typeUrl, out var resources))
+        {
+            response.Resources.AddRange(resources);
+        }
+
+        return response;
+    }
+
+    public bool TryDequeueFollowUp(string typeUrl, out DiscoveryResponse response)
+    {
+        response = null!;
+        return _followUps.TryGetValue(typeUrl, out var queue) && queue.TryDequeue(out response!);
+    }
+}
+
 internal sealed class FakeAdsServer : IAsyncDisposable
 {
     private readonly WebApplication _app;
 
-    public FakeAdsServer()
+    public FakeAdsServer(FakeAdsState? state = null)
     {
+        State = state ?? DefaultClusterOnlyState();
         var builder = WebApplication.CreateBuilder();
+        builder.Services.AddSingleton(State);
         builder.Services.AddGrpc();
         builder.WebHost.UseKestrel(options =>
         {
@@ -30,7 +84,19 @@ internal sealed class FakeAdsServer : IAsyncDisposable
         _app.MapGrpcService<FakeAdsService>();
     }
 
+    public FakeAdsState State { get; }
+
     public string Address { get; private set; } = string.Empty;
+
+    /// <summary>Host:port without a scheme, for cleartext ADS normalization tests.</summary>
+    public string BareAddress
+    {
+        get
+        {
+            var uri = new Uri(Address);
+            return $"{uri.Host}:{uri.Port}";
+        }
+    }
 
     public async Task StartAsync()
     {
@@ -43,57 +109,58 @@ internal sealed class FakeAdsServer : IAsyncDisposable
         await _app.StopAsync();
         await _app.DisposeAsync();
     }
+
+    private static FakeAdsState DefaultClusterOnlyState()
+    {
+        var state = new FakeAdsState();
+        state.Initial[Titanium.Xds.XdsTypeUrls.Cluster] =
+        [
+            Any.Pack(new Cluster { Name = "c1", Type = ClusterDiscoveryType.Static }),
+        ];
+        state.EnqueueFollowUp(
+            Titanium.Xds.XdsTypeUrls.Cluster,
+            "v2-bad",
+            "n2",
+            Any.Pack(new Cluster { Name = "c2", Type = ClusterDiscoveryType.LogicalDns }));
+        return state;
+    }
 }
 
 internal sealed class FakeAdsService : AggregatedDiscoveryService.AggregatedDiscoveryServiceBase
 {
+    private readonly FakeAdsState _state;
+
+    public FakeAdsService(FakeAdsState state) => _state = state;
+
     public override async Task StreamAggregatedResources(
         IAsyncStreamReader<DiscoveryRequest> requestStream,
         IServerStreamWriter<DiscoveryResponse> responseStream,
         ServerCallContext context)
     {
+        _state.CountStream();
+        if (_state.CloseStreamsImmediately)
+        {
+            return;
+        }
+
         await foreach (var request in requestStream.ReadAllAsync(context.CancellationToken))
         {
-            if (request.TypeUrl != XdsTypeUrls.Cluster)
-            {
-                continue;
-            }
-
             if (!string.IsNullOrEmpty(request.ErrorDetail))
             {
-                break;
+                _state.Nacks.Enqueue(request.ErrorDetail);
+                continue;
             }
-
-            var cluster = new Cluster { Name = "c1", Type = ClusterDiscoveryType.Static };
 
             if (request.VersionInfo == string.Empty)
             {
-                await responseStream.WriteAsync(new DiscoveryResponse
-                {
-                    TypeUrl = XdsTypeUrls.Cluster,
-                    VersionInfo = "v1",
-                    Nonce = "n1",
-                    Resources = { Any.Pack(cluster) },
-                }).ConfigureAwait(false);
+                await responseStream.WriteAsync(_state.InitialResponse(request.TypeUrl)).ConfigureAwait(false);
                 continue;
             }
 
-            if (request.ResponseNonce == "n1")
+            if (_state.TryDequeueFollowUp(request.TypeUrl, out var followUp))
             {
-                var bad = new Cluster { Name = "c2", Type = ClusterDiscoveryType.LogicalDns };
-                await responseStream.WriteAsync(new DiscoveryResponse
-                {
-                    TypeUrl = XdsTypeUrls.Cluster,
-                    VersionInfo = "v2-bad",
-                    Nonce = "n2",
-                    Resources = { Any.Pack(bad) },
-                }).ConfigureAwait(false);
+                await responseStream.WriteAsync(followUp).ConfigureAwait(false);
             }
         }
     }
-}
-
-internal static class XdsTypeUrls
-{
-    internal const string Cluster = "type.googleapis.com/envoy.config.cluster.v3.Cluster";
 }

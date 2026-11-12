@@ -6,7 +6,7 @@ namespace Titanium.Cli.Xds;
 
 internal static class XdsAssemblyLoader
 {
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static Assembly? _xdsAssembly;
 
     public static object? TryCreateHost(XdsConfig config, TwpConfig bootstrap, string stateDirectory, Action<TwpConfig> onConfigReady)

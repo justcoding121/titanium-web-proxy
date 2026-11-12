@@ -5,10 +5,10 @@ kind: PodDisruptionBudget
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.1
+    helm.sh/chart: titanium-1.0.2
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-    app.kubernetes.io/version: "8.0.1"
+    app.kubernetes.io/version: "8.0.2"
     app.kubernetes.io/managed-by: Helm
 spec:
   maxUnavailable: 1
@@ -23,10 +23,10 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.1
+    helm.sh/chart: titanium-1.0.2
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-    app.kubernetes.io/version: "8.0.1"
+    app.kubernetes.io/version: "8.0.2"
     app.kubernetes.io/managed-by: Helm
 automountServiceAccountToken: false
 ---
@@ -36,10 +36,10 @@ kind: Secret
 metadata:
   name: rel-titanium-admin
   labels:
-    helm.sh/chart: titanium-1.0.1
+    helm.sh/chart: titanium-1.0.2
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-    app.kubernetes.io/version: "8.0.1"
+    app.kubernetes.io/version: "8.0.2"
     app.kubernetes.io/managed-by: Helm
 type: Opaque
 data:
@@ -51,10 +51,10 @@ kind: ConfigMap
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.1
+    helm.sh/chart: titanium-1.0.2
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-    app.kubernetes.io/version: "8.0.1"
+    app.kubernetes.io/version: "8.0.2"
     app.kubernetes.io/managed-by: Helm
 data:
   twp.yaml: |
@@ -81,10 +81,10 @@ kind: Service
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.1
+    helm.sh/chart: titanium-1.0.2
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-    app.kubernetes.io/version: "8.0.1"
+    app.kubernetes.io/version: "8.0.2"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/component: proxy
 spec:
@@ -104,10 +104,10 @@ kind: Deployment
 metadata:
   name: rel-titanium
   labels:
-    helm.sh/chart: titanium-1.0.1
+    helm.sh/chart: titanium-1.0.2
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-    app.kubernetes.io/version: "8.0.1"
+    app.kubernetes.io/version: "8.0.2"
     app.kubernetes.io/managed-by: Helm
 spec:
   replicas: 2
@@ -124,10 +124,10 @@ spec:
     metadata:
       annotations:
       labels:
-        helm.sh/chart: titanium-1.0.1
+        helm.sh/chart: titanium-1.0.2
         app.kubernetes.io/name: titanium
         app.kubernetes.io/instance: rel
-        app.kubernetes.io/version: "8.0.1"
+        app.kubernetes.io/version: "8.0.2"
         app.kubernetes.io/managed-by: Helm
     spec:
       serviceAccountName: rel-titanium
@@ -142,7 +142,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: titanium
-          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.1"
+          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.2"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

@@ -139,6 +139,11 @@ public partial class ManagerUiTests
         using var fleetDoc = await ReadJsonAsync(await PostJsonAsync(client, "/ui/fleets", new { name = "validate" }, csrf));
         var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
 
+        var fleetsPage = await client.GetAsync("/");
+        Assert.AreEqual(HttpStatusCode.OK, fleetsPage.StatusCode);
+        var fleetsHtml = await fleetsPage.Content.ReadAsStringAsync();
+        StringAssert.Contains(fleetsHtml, "validate");
+
         var editor = await client.GetAsync($"/fleets/{fleetId}/editor");
         Assert.AreEqual(HttpStatusCode.OK, editor.StatusCode);
         var html = await editor.Content.ReadAsStringAsync();
@@ -211,6 +216,89 @@ public partial class ManagerUiTests
         Assert.AreEqual(HttpStatusCode.OK, css.StatusCode);
         StringAssert.Contains(await js.Content.ReadAsStringAsync(), "X-Titanium-Csrf");
     }
+
+    [TestMethod]
+    public async Task Ui_Pages_RenderFleetShell_AndRefuseBadDraftOps()
+    {
+        await using var host = await ManagerTestHost.StartAsync();
+        using var client = host.CreateCookieClient();
+        await SignInAsync(client, host.AdminToken);
+        var csrf = await ReadCsrfAsync(client);
+
+        using var fleetDoc = await ReadJsonAsync(await PostJsonAsync(client, "/ui/fleets", new { name = "shell" }, csrf));
+        var fleetId = fleetDoc.RootElement.GetProperty("id").GetInt64();
+
+        using var revDoc = await ReadJsonAsync(
+            await PostJsonAsync(client, $"/v1/fleets/{fleetId}/revisions", new { yaml = ValidYaml }, csrf));
+        var revId = revDoc.RootElement.GetProperty("id").GetInt64();
+        await PostJsonAsync(client, $"/v1/fleets/{fleetId}/revisions/{revId}/publish", new { }, csrf);
+
+        var home = await client.GetAsync("/");
+        Assert.AreEqual(HttpStatusCode.OK, home.StatusCode);
+        StringAssert.Contains(await home.Content.ReadAsStringAsync(), "shell");
+
+        foreach (var path in new[]
+                 {
+                     $"/fleets/{fleetId}",
+                     $"/fleets/{fleetId}/revisions",
+                     $"/fleets/{fleetId}/editor",
+                     $"/fleets/{fleetId}/rollouts",
+                     $"/fleets/{fleetId}/diff?from={revId}&to={revId}",
+                 })
+        {
+            var page = await client.GetAsync(path);
+            Assert.AreEqual(HttpStatusCode.OK, page.StatusCode, path);
+        }
+
+        var missingFleet = await client.GetAsync("/fleets/999999");
+        Assert.AreEqual(HttpStatusCode.NotFound, missingFleet.StatusCode);
+        Assert.AreEqual(HttpStatusCode.BadRequest, (await client.GetAsync("/fleets/not-a-number")).StatusCode);
+        Assert.AreEqual(HttpStatusCode.BadRequest,
+            (await client.GetAsync($"/fleets/{fleetId}/diff")).StatusCode);
+
+        var emptyName = await PostJsonAsync(client, "/ui/fleets", new { name = "  " }, csrf);
+        Assert.AreEqual(HttpStatusCode.BadRequest, emptyName.StatusCode);
+
+        var unknownOp = await PostJsonAsync(client, "/ui/draft/patch", new
+        {
+            yaml = ValidYaml,
+            op = "explode",
+        }, csrf);
+        Assert.AreEqual(HttpStatusCode.BadRequest, unknownOp.StatusCode);
+
+        var removeRoute = await PostJsonAsync(client, "/ui/draft/patch", new
+        {
+            yaml = ManagerUiYamlDraft.UpsertRoute(ValidYaml, "web", "/", "backend"),
+            op = "remove-route",
+            id = "web",
+        }, csrf);
+        Assert.AreEqual(HttpStatusCode.OK, removeRoute.StatusCode);
+
+        var removeCluster = await PostJsonAsync(client, "/ui/draft/patch", new
+        {
+            yaml = ManagerUiYamlDraft.UpsertCluster(ValidYaml, "backend"),
+            op = "remove-cluster",
+            id = "backend",
+        }, csrf);
+        Assert.AreEqual(HttpStatusCode.OK, removeCluster.StatusCode);
+
+        var diffDraft = await PostJsonAsync(client, $"/ui/fleets/{fleetId}/diff-draft", new { yaml = ValidYamlV2 }, csrf);
+        Assert.AreEqual(HttpStatusCode.OK, diffDraft.StatusCode);
+        using var diffDoc = await ReadJsonAsync(diffDraft);
+        StringAssert.Contains(diffDoc.RootElement.GetProperty("unified").GetString()!, "draft");
+
+        var logout = await PostJsonAsync(client, "/logout", new { }, csrf);
+        Assert.AreEqual(HttpStatusCode.OK, logout.StatusCode);
+        Assert.AreEqual(HttpStatusCode.SeeOther, (await client.GetAsync("/")).StatusCode);
+    }
+
+    private const string ValidYamlV2 = """
+        listeners:
+          - port: 8001
+            type: explicit
+        routes: []
+        clusters: []
+        """;
 
     private static async Task SignInAsync(HttpClient client, string token)
     {

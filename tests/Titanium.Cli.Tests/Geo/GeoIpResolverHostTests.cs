@@ -25,6 +25,25 @@ public class GeoIpResolverHostTests
         Assert.IsNull(host.Resolver);
     }
 
+    [TestMethod]
+    public async Task Apply_ClearingTheDatabase_StopsServingLookups_AndHostDisposeReleasesTheResolver()
+    {
+        var path = await EnsureOfficialDatabaseAsync();
+        var host = new GeoIpResolverHost();
+        host.Apply(path, startup: true);
+        var resolver = host.Resolver;
+        Assert.IsNotNull(resolver);
+        Assert.IsTrue(resolver!.TryGetCountry(IPAddress.Parse("2.125.160.216"), out var code));
+        Assert.AreEqual("GB", code);
+
+        host.Apply(null, startup: true);
+        Assert.IsNull(host.Resolver, "clearing geoIpDatabasePath must stop serving the previous resolver");
+
+        host.Dispose();
+        Assert.IsFalse(resolver.TryGetCountry(IPAddress.Parse("2.125.160.216"), out var after));
+        Assert.AreEqual(string.Empty, after);
+    }
+
     private static async Task<string> EnsureOfficialDatabaseAsync()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-geolite2-country-test.mmdb");

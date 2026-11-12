@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Plus.Discovery;
+using Titanium.TestKit;
 using Titanium.Web.Proxy.Abstractions.Plugins;
 using Titanium.Web.Proxy.Clusters;
 
@@ -585,6 +586,123 @@ public class ServiceDiscoveryHardeningTests
         Assert.AreEqual(1, passing.Count);
         Assert.AreEqual("a", passing[0].Id);
     }
+
+    // ---------------------------------------------------------------- DNS SRV behavior
+
+    [TestMethod]
+    public async Task DnsSrv_StaleOnError_KeepsLastKnownDestinations()
+    {
+        // Phase 0: serve one good record so the cluster is populated.
+        // Phase 1: switch to SERVFAIL — the loop must keep the stale destinations.
+        await using var dns = FakeDnsServer.Start();
+        dns.SetRecords(
+        [
+            new FakeDnsServer.SrvEntry("localhost", Port: 9191, Priority: 1, Weight: 1, Ttl: 1),
+        ]);
+
+        var manager = new ClusterManager();
+        var options = DnsSrvOptions(dns);
+        using var discovery = ServiceDiscovery.TryStart(Context(manager, options), options);
+
+        // Wait until the cluster is populated with the initial destinations.
+        await WaitUntilAsync(() => PortsOf(manager, "srv").Contains(9191),
+            "initial SRV destinations must be applied");
+
+        // Inject a fault — every subsequent query will return SERVFAIL.
+        dns.SetFault(FakeDnsServer.FaultMode.ServFail);
+
+        // Let several retry cycles pass.
+        var before = PortsOf(manager, "srv");
+        await Task.Delay(400); // covers multiple 100 ms intervalMs cycles
+
+        CollectionAssert.AreEqual(before.ToArray(), PortsOf(manager, "srv").ToArray(),
+            "A SERVFAIL must not clear or replace the last-known-good destinations.");
+    }
+
+    [TestMethod]
+    public async Task DnsSrv_EmptyAnswer_KeepsLastKnownDestinations()
+    {
+        // An empty NOERROR (zero SRV records) is explicitly never applied so stale
+        // destinations survive a transient DNS blip.
+        await using var dns = FakeDnsServer.Start();
+        dns.SetRecords(
+        [
+            new FakeDnsServer.SrvEntry("localhost", Port: 9192, Priority: 1, Weight: 1, Ttl: 1),
+        ]);
+
+        var manager = new ClusterManager();
+        var options = DnsSrvOptions(dns);
+        using var discovery = ServiceDiscovery.TryStart(Context(manager, options), options);
+
+        await WaitUntilAsync(() => PortsOf(manager, "srv").Contains(9192),
+            "initial SRV destinations must be applied");
+
+        // Remove all records — server now returns NOERROR with ANCOUNT=0.
+        dns.ClearRecords();
+        await Task.Delay(400);
+
+        Assert.IsTrue(PortsOf(manager, "srv").Contains(9192),
+            "An empty SRV answer (NOERROR, 0 records) must never replace the last-known-good destinations.");
+    }
+
+    [TestMethod]
+    public async Task DnsSrv_TtlDrivesRefreshInterval_LongerThanConfiguredInterval()
+    {
+        // When TTL > intervalMs the loop should wait the TTL before re-querying.
+        await using var dns = FakeDnsServer.Start();
+        dns.SetRecords(
+        [
+            new FakeDnsServer.SrvEntry("localhost", Port: 9193, Priority: 1, Weight: 1, Ttl: 2 /* 2 s */),
+        ]);
+
+        // Intercept query count via a fresh FakeDnsServer that counts requests.
+        // We cannot instrument DnsClient directly; instead we observe cluster applications.
+        var manager = new ClusterManager();
+        var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["discovery.mode"]       = "dnssrv",
+            ["discovery.srvName"]    = "_svc._tcp.test",
+            ["discovery.dnsServer"]  = dns.Endpoint,
+            ["discovery.clusterId"]  = "srv",
+            // intervalMs=100 ms is shorter than TTL=2 s; the loop must honour the TTL.
+            ["discovery.intervalMs"] = "100",
+            ["discovery.backoffMinMs"] = "10",
+            ["discovery.backoffMaxMs"] = "50",
+        };
+        using var discovery = ServiceDiscovery.TryStart(Context(manager, options), options);
+
+        await WaitUntilAsync(() => PortsOf(manager, "srv").Contains(9193),
+            "initial SRV destinations must be applied");
+
+        // Record the current cluster-apply count (proxy: check port is stable).
+        // Swap to a different port — the second query should NOT arrive for ~2 s.
+        dns.SetRecords([new FakeDnsServer.SrvEntry("localhost", Port: 9194, Priority: 1, Weight: 1, Ttl: 2)]);
+
+        // Within 600 ms the TTL-driven delay (2 s) has not yet expired, so the new
+        // port must NOT appear in the cluster yet.
+        await Task.Delay(600);
+        Assert.IsFalse(PortsOf(manager, "srv").Contains(9194),
+            "The loop must not re-query before the TTL (2 s) has elapsed when TTL > intervalMs.");
+    }
+
+    // ── DNS SRV helpers ────────────────────────────────────────────────────────
+
+    private static Dictionary<string, string> DnsSrvOptions(FakeDnsServer dns) =>
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["discovery.mode"]         = "dnssrv",
+            ["discovery.srvName"]      = "_svc._tcp.test",
+            ["discovery.dnsServer"]    = dns.Endpoint,
+            ["discovery.clusterId"]    = "srv",
+            ["discovery.intervalMs"]   = "100",
+            ["discovery.backoffMinMs"] = "10",
+            ["discovery.backoffMaxMs"] = "50",
+        };
+
+    private static List<int> PortsOf(ClusterManager manager, string clusterId) =>
+        manager.Snapshot.Clusters.TryGetValue(clusterId, out var cluster)
+            ? cluster.Destinations.Select(d => d.Port).ToList()
+            : [];
 
     // ---------------------------------------------------------------- Backoff
 

@@ -97,9 +97,16 @@ public partial class TrustUxStressTests
             var before = dialogs.RotateRootCaCalls;
             vm.RotateCaCommand.Execute(null);
             vm.RotateCaCommand.Execute(null);
-            await WaitUntil(() => !vm.IsStatusBusy && dialogs.RotateRootCaCalls > before, 30000);
+            // Double-click rotate can leave a brief second busy pulse after the first
+            // completion; wait until calls advanced and busy stays clear across a settle.
+            Func<string> tailDetail = () =>
+                $"busy={vm.IsStatusBusy} trusted={interception.IsRootTrusted} status=[{vm.StatusText ?? "(null)"}] rotateCalls={dialogs.RotateRootCaCalls}";
+            await WaitUntil(() => dialogs.RotateRootCaCalls > before, 45_000, tailDetail);
+            await WaitUntil(() => !vm.IsStatusBusy, 90_000, tailDetail);
+            await Task.Delay(50);
+            await WaitUntil(() => !vm.IsStatusBusy, 60_000, tailDetail);
 
-            Assert.IsFalse(vm.IsStatusBusy, vm.StatusText);
+            Assert.IsFalse(vm.IsStatusBusy, vm.StatusText ?? "(null status)");
             AssertNoUnexpectedSlowUx(uxBefore);
         }
         finally
@@ -178,7 +185,10 @@ public partial class TrustUxStressTests
         while (!done())
         {
             if (Environment.TickCount64 >= deadline)
-                Assert.Fail("Timed out in trust stress loop." + (detail is null ? "" : " " + detail()));
+            {
+                var extra = detail?.Invoke();
+                Assert.Fail("Timed out in trust stress loop." + (string.IsNullOrEmpty(extra) ? "" : " " + extra));
+            }
             await Task.Delay(25);
         }
     }

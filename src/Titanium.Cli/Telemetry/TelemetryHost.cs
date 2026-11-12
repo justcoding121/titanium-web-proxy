@@ -262,7 +262,7 @@ internal static class TelemetryInstruments
     internal const string DroppedName = "twp.telemetry.dropped";
 
     private static readonly Meter Meter = new(MeterName, "1.0.0");
-    private static readonly object Gate = new();
+    private static readonly System.Threading.Lock Gate = new();
     private static readonly List<TelemetryHost> Hosts = [];
     private static long retiredQueueDropped;
     private static long retiredExportFailed;

@@ -227,8 +227,12 @@ public partial class ProxyServer
                             return;
                         }
                     }
-                    catch (HeaderLimitsExceededException)
+                    catch (Exception ex) when (ex is HeaderLimitsExceededException
+                        || (ex is ProxyHttpException &&
+                            ex.Message.Contains("header/request line exceeded", StringComparison.Ordinal)))
                     {
+                        // Single-line MaxHeaderLineBytes breaches throw ProxyHttpException from HttpStream;
+                        // count/aggregate breaches throw HeaderLimitsExceededException. Both are 431.
                         var rejected = new GenericResponse(HttpStatusCode.RequestHeaderFieldsTooLarge)
                         {
                             HttpVersion = HttpHeader.Version11

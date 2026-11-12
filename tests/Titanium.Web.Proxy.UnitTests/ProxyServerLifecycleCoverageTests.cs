@@ -203,4 +203,85 @@ public class ProxyServerLifecycleCoverageTests
         proxy.Stop();
         Assert.ThrowsExactly<InvalidOperationException>(() => proxy.Stop());
     }
+
+    // ---------------------------------------------------------------- ResourceLimits logging paths
+
+    [TestMethod]
+    public void Start_WithCustomDecompressionRatio_DoesNotThrow()
+    {
+        // Exercises ProxyLog.ReservedLimit for maxDecompressionRatio (differs from default 200).
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.ResourceLimits = Titanium.Web.Proxy.Options.ProxyResourceLimits.Create(
+            maxHeaderLineBytes: 64 * 1024,
+            maxHeaderCount: 256,
+            maxHeaderAggregateBytes: 256 * 1024,
+            maxEncodedBodyBytes: null,
+            maxDecodedBodyBytes: null,
+            maxDecompressionRatio: 100,  // differs from default (200) → triggers the ReservedLimit log
+            maxConcurrentClients: null,
+            maxConcurrentStreamsPerConnection: 1000,
+            maxPeerInitiatedIncompleteStreamResets: 100,
+            maxOpenHeaderBlockFrames: 128,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
+            connectionPoolingEnabled: true,
+            maxCachedConnectionsPerHost: 128,
+            maxCertificateCacheEntries: 1024);
+        proxy.Start(changeSystemProxySettings: false);
+        Assert.IsTrue(proxy.ProxyRunning);
+        proxy.Stop();
+    }
+
+    [TestMethod]
+    public void Start_WithMaxEncodedBodyBytes_DoesNotThrow()
+    {
+        // Exercises ProxyLog.ReservedLimit for maxEncodedBodyBytes (non-null triggers the log).
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.ResourceLimits = Titanium.Web.Proxy.Options.ProxyResourceLimits.Create(
+            maxHeaderLineBytes: 64 * 1024,
+            maxHeaderCount: 256,
+            maxHeaderAggregateBytes: 256 * 1024,
+            maxEncodedBodyBytes: 50 * 1024 * 1024L, // non-null → triggers the ReservedLimit log
+            maxDecodedBodyBytes: null,
+            maxDecompressionRatio: 200,
+            maxConcurrentClients: null,
+            maxConcurrentStreamsPerConnection: 1000,
+            maxPeerInitiatedIncompleteStreamResets: 100,
+            maxOpenHeaderBlockFrames: 128,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
+            connectionPoolingEnabled: true,
+            maxCachedConnectionsPerHost: 128,
+            maxCertificateCacheEntries: 1024);
+        proxy.Start(changeSystemProxySettings: false);
+        Assert.IsTrue(proxy.ProxyRunning);
+        proxy.Stop();
+    }
+
+    [TestMethod]
+    public void Start_WithMaxDecodedBodyBytes_DoesNotThrow()
+    {
+        // Exercises ProxyLog.ReservedLimit for maxDecodedBodyBytes (non-null triggers the log).
+        using var proxy = new ProxyServer(false, false, false);
+        proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, 0, false));
+        proxy.ResourceLimits = Titanium.Web.Proxy.Options.ProxyResourceLimits.Create(
+            maxHeaderLineBytes: 64 * 1024,
+            maxHeaderCount: 256,
+            maxHeaderAggregateBytes: 256 * 1024,
+            maxEncodedBodyBytes: null,
+            maxDecodedBodyBytes: 100 * 1024 * 1024L, // non-null → triggers the ReservedLimit log
+            maxDecompressionRatio: 200,
+            maxConcurrentClients: null,
+            maxConcurrentStreamsPerConnection: 1000,
+            maxPeerInitiatedIncompleteStreamResets: 100,
+            maxOpenHeaderBlockFrames: 128,
+            maxOpenHeaderBlockDuration: TimeSpan.FromSeconds(10),
+            connectionPoolingEnabled: true,
+            maxCachedConnectionsPerHost: 128,
+            maxCertificateCacheEntries: 1024);
+        proxy.Start(changeSystemProxySettings: false);
+        Assert.IsTrue(proxy.ProxyRunning);
+        proxy.Stop();
+    }
+
 }

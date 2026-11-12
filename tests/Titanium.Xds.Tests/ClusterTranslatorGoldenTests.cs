@@ -34,4 +34,58 @@ public class ClusterTranslatorGoldenTests
         Assert.IsFalse(result.IsSuccess);
         StringAssert.Contains(result.Error!.FieldPath, "type");
     }
+
+    [TestMethod]
+    public void EmptyName_NacksWithNameFieldPath()
+    {
+        var cluster = new Cluster { Name = string.Empty, Type = ClusterDiscoveryType.Static };
+        var result = ClusterTranslator.Translate(cluster);
+        Assert.IsFalse(result.IsSuccess);
+        Assert.AreEqual("name", result.Error!.FieldPath);
+    }
+
+    [TestMethod]
+    public void RingHash_NacksWithLbPolicyFieldPath()
+    {
+        var cluster = new Cluster { Name = "c1", Type = ClusterDiscoveryType.Static, LbPolicy = LbPolicy.RingHash };
+        var result = ClusterTranslator.Translate(cluster);
+        Assert.IsFalse(result.IsSuccess);
+        StringAssert.Contains(result.Error!.FieldPath, "lb_policy");
+    }
+
+    [TestMethod]
+    public void LeastRequest_MapsToLeastRequestsAlgorithm()
+    {
+        var cluster = new Cluster { Name = "c1", Type = ClusterDiscoveryType.Eds, LbPolicy = LbPolicy.LeastRequest };
+        var result = ClusterTranslator.Translate(cluster);
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.LeastRequests, result.Value!.Algorithm);
+    }
+
+    [TestMethod]
+    public void Random_MapsToRandomAlgorithm()
+    {
+        var cluster = new Cluster { Name = "c1", Type = ClusterDiscoveryType.Eds, LbPolicy = LbPolicy.Random };
+        var result = ClusterTranslator.Translate(cluster);
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual(Titanium.Web.Proxy.Abstractions.Clusters.LoadBalanceAlgorithm.Random, result.Value!.Algorithm);
+    }
+
+    [TestMethod]
+    public void StrictDns_IsAccepted()
+    {
+        var cluster = new Cluster { Name = "c1", Type = ClusterDiscoveryType.StrictDns };
+        var result = ClusterTranslator.Translate(cluster);
+        Assert.IsTrue(result.IsSuccess);
+        Assert.AreEqual("c1", result.Value!.Id);
+    }
+
+    [TestMethod]
+    public void NoConnectTimeout_YieldsNullHttpClient()
+    {
+        var cluster = new Cluster { Name = "c1", Type = ClusterDiscoveryType.Static };
+        var result = ClusterTranslator.Translate(cluster);
+        Assert.IsTrue(result.IsSuccess);
+        Assert.IsNull(result.Value!.HttpClient);
+    }
 }

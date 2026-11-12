@@ -233,14 +233,22 @@ internal sealed class LuaJwt
             return false;
         }
 
-        var buffer = new byte[Base64Url.GetMaxDecodedLength(text.Length)];
-        if (!Base64Url.TryDecodeFromChars(text, buffer, out var written))
+        try
         {
+            var buffer = new byte[Base64Url.GetMaxDecodedLength(text.Length)];
+            if (!Base64Url.TryDecodeFromChars(text, buffer, out var written))
+            {
+                return false;
+            }
+
+            bytes = buffer[..written];
+            return true;
+        }
+        catch (FormatException)
+        {
+            // Some runtimes throw from TryDecodeFromChars on illegal alphabet instead of returning false.
             return false;
         }
-
-        bytes = buffer[..written];
-        return true;
     }
 
     /// <summary>JSON as Lua values: objects and arrays become tables; <c>null</c> becomes nil.</summary>

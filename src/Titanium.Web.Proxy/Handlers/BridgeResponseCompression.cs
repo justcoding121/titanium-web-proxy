@@ -183,13 +183,17 @@ public partial class ProxyServer
         var snap = new Response
         {
             HttpVersion = response.HttpVersion,
-            StatusCode = response.StatusCode,
-            ContentType = response.ContentType,
-            IsChunked = response.OriginalIsChunked,
-            ContentLength = response.OriginalContentLength
+            StatusCode = response.StatusCode
         };
         foreach (var header in response.Headers)
             snap.Headers.AddHeader(header);
+
+        // Stamp the origin's framing over the copied headers (the setters replace in place). Setting the
+        // framing first and copying the headers after it duplicates Content-Length / Transfer-Encoding, and
+        // a duplicated header reads back as "no framing": the length becomes -1, so buffered selection
+        // rejects every bridged response and streaming selection mistakes a chunked body for unknown framing.
+        snap.ContentLength = response.OriginalContentLength;
+        snap.IsChunked = response.OriginalIsChunked;
         return snap;
     }
 
@@ -295,7 +299,9 @@ internal sealed class StreamBodyWriterPumpStream : Stream
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        _pump ??= PumpAsync();
+        // Run the writer off the reader's call stack: a synchronous sink.Write that fills the bounded channel
+        // blocks until the reader drains it, which would deadlock if the writer ran inline inside this call.
+        _pump ??= Task.Run(PumpAsync, CancellationToken.None);
         while (true)
         {
             if (_current != null && _offset < _current.Length)
@@ -306,11 +312,12 @@ internal sealed class StreamBodyWriterPumpStream : Stream
                 return n;
             }
 
+            // End of body is channel completion (never a zero-length chunk). A writer fault completes the channel
+            // with its exception, so WaitToReadAsync rethrows it after the queued chunks drain instead of
+            // presenting a truncated body as a clean EOF.
             if (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false)
                 && _channel.Reader.TryRead(out var next))
             {
-                if (next.Length == 0)
-                    return 0;
                 _current = next;
                 _offset = 0;
                 continue;
@@ -324,12 +331,13 @@ internal sealed class StreamBodyWriterPumpStream : Stream
     {
         try
         {
-            await _writer(new ChannelWriteStream(_channel.Writer), _cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            _channel.Writer.TryWrite([]);
+            await _writer(new ChannelWriteStream(_channel.Writer, _cancellationToken), _cancellationToken)
+                .ConfigureAwait(false);
             _channel.Writer.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            _channel.Writer.TryComplete(ex);
         }
     }
 
@@ -347,8 +355,14 @@ internal sealed class StreamBodyWriterPumpStream : Stream
     {
         private readonly System.Threading.Channels.ChannelWriter<byte[]> _channelWriter;
 
-        internal ChannelWriteStream(System.Threading.Channels.ChannelWriter<byte[]> channelWriter) =>
+        private readonly CancellationToken _cancellationToken;
+
+        internal ChannelWriteStream(System.Threading.Channels.ChannelWriter<byte[]> channelWriter,
+            CancellationToken cancellationToken)
+        {
             _channelWriter = channelWriter;
+            _cancellationToken = cancellationToken;
+        }
 
         public override bool CanRead => false;
         public override bool CanSeek => false;
@@ -364,13 +378,24 @@ internal sealed class StreamBodyWriterPumpStream : Stream
 
         public override void SetLength(long value) => throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) =>
-            _channelWriter.TryWrite(buffer.AsSpan(offset, count).ToArray());
+        // A bounded channel's TryWrite returns false when it is full, which would silently drop the chunk.
+        // Block on the async write instead so a synchronous writer gets back-pressure like an async one.
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (count == 0)
+                return;
+
+            _channelWriter.WriteAsync(buffer.AsSpan(offset, count).ToArray(), _cancellationToken).AsTask()
+                .GetAwaiter().GetResult();
+        }
 
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            var copy = buffer.ToArray();
-            return _channelWriter.WriteAsync(copy, cancellationToken);
+            // An empty chunk carries no data; queueing it would only add a no-op read.
+            if (buffer.IsEmpty)
+                return ValueTask.CompletedTask;
+
+            return _channelWriter.WriteAsync(buffer.ToArray(), cancellationToken);
         }
     }
 }

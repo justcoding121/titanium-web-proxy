@@ -8,7 +8,7 @@ namespace Titanium.Inspector.Services;
 /// </summary>
 internal sealed class LiveWebSocketFrames
 {
-    private readonly object _gate = new();
+    private readonly System.Threading.Lock _gate = new();
     private ImmutableList<WebSocketFrameSnapshot> _frames = ImmutableList<WebSocketFrameSnapshot>.Empty;
 
     public IReadOnlyList<WebSocketFrameSnapshot> Current

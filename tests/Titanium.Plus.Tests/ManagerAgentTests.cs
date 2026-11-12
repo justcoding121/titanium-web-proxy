@@ -358,4 +358,185 @@ public class ManagerAgentTests
 
         public IReadOnlyList<PlusCertificateInfo> GetCertificates() => [];
     }
+
+    // ---------------------------------------------------------------- Additional edge cases
+
+    [TestMethod]
+    public void TryStart_WithMissingTokenFile_ReturnsNull()
+    {
+        var before = ManagerAgent.LiveLoops;
+        var agent = ManagerAgent.TryStart(
+            new PlusActivationContext { ProxyServer = new object() },
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["manager.url"] = "https://127.0.0.1:9/",
+                ["manager.tokenFile"] = Path.Combine(Path.GetTempPath(), "twp-no-such-token-" + Guid.NewGuid() + ".txt"),
+            });
+        Assert.IsNull(agent, "Missing token file must prevent the agent from starting.");
+        Assert.AreEqual(before, ManagerAgent.LiveLoops);
+    }
+
+    [TestMethod]
+    public void TryStart_WithInlineToken_Starts()
+    {
+        var stateDir = NewTempDir();
+        try
+        {
+            var before = ManagerAgent.LiveLoops;
+            using var agent = ManagerAgent.TryStart(
+                new PlusActivationContext { ProxyServer = new object() },
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["manager.url"] = "https://127.0.0.1:9/",
+                    ["manager.token"] = "inline-bearer-token",
+                    ["manager.stateDir"] = stateDir,
+                    ["manager.mode"] = "advisory",
+                });
+            Assert.IsNotNull(agent, "An inline manager.token must be accepted when tokenFile is absent.");
+            Assert.IsTrue(ManagerAgent.LiveLoops > before);
+        }
+        finally
+        {
+            TryDelete(stateDir);
+        }
+    }
+
+    [TestMethod]
+    public void TryStart_WithApplyDebounceSeconds_UsesSecondUnit()
+    {
+        // Exercises the else-if branch for manager.applyDebounceSeconds.
+        var stateDir = NewTempDir();
+        try
+        {
+            var tokenFile = Path.Combine(stateDir, "token");
+            File.WriteAllText(tokenFile, "tok");
+            var before = ManagerAgent.LiveLoops;
+            using var agent = ManagerAgent.TryStart(
+                new PlusActivationContext { ProxyServer = new object() },
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["manager.url"] = "https://127.0.0.1:9/",
+                    ["manager.tokenFile"] = tokenFile,
+                    ["manager.stateDir"] = stateDir,
+                    ["manager.mode"] = "advisory",
+                    ["manager.applyDebounceSeconds"] = "2",
+                });
+            Assert.IsNotNull(agent);
+            Assert.IsTrue(ManagerAgent.LiveLoops > before);
+        }
+        finally
+        {
+            TryDelete(stateDir);
+        }
+    }
+
+    [TestMethod]
+    public void TryStart_WithGatewayControllerAndManaged_ForcesAdvisory()
+    {
+        // manager.mode=managed + a gateway.* key → silent downgrade to advisory.
+        var stateDir = NewTempDir();
+        try
+        {
+            var tokenFile = Path.Combine(stateDir, "token");
+            File.WriteAllText(tokenFile, "tok");
+            var before = ManagerAgent.LiveLoops;
+            using var agent = ManagerAgent.TryStart(
+                new PlusActivationContext { ProxyServer = new object() },
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["manager.url"] = "https://127.0.0.1:9/",
+                    ["manager.tokenFile"] = tokenFile,
+                    ["manager.stateDir"] = stateDir,
+                    ["manager.mode"] = "managed",
+                    ["gateway.enabled"] = "true",
+                });
+            Assert.IsNotNull(agent, "Agent must still start (forced advisory) when gateway.enabled is true.");
+            Assert.IsTrue(ManagerAgent.LiveLoops > before);
+        }
+        finally
+        {
+            TryDelete(stateDir);
+        }
+    }
+
+    [TestMethod]
+    public void TryStart_WithLabelsKvPairs_Starts()
+    {
+        // manager.labels=k=v,k2=v2 triggers the comma-separated parsing branch.
+        var stateDir = NewTempDir();
+        try
+        {
+            var tokenFile = Path.Combine(stateDir, "token");
+            File.WriteAllText(tokenFile, "tok");
+            using var agent = ManagerAgent.TryStart(
+                new PlusActivationContext { ProxyServer = new object() },
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["manager.url"] = "https://127.0.0.1:9/",
+                    ["manager.tokenFile"] = tokenFile,
+                    ["manager.stateDir"] = stateDir,
+                    ["manager.mode"] = "advisory",
+                    ["manager.labels"] = "env=prod,region=eu",
+                });
+            Assert.IsNotNull(agent);
+        }
+        finally
+        {
+            TryDelete(stateDir);
+        }
+    }
+
+    [TestMethod]
+    public void TryStart_WithLabelsJson_Starts()
+    {
+        // manager.labels starting with '{' is passed through as raw JSON.
+        var stateDir = NewTempDir();
+        try
+        {
+            var tokenFile = Path.Combine(stateDir, "token");
+            File.WriteAllText(tokenFile, "tok");
+            using var agent = ManagerAgent.TryStart(
+                new PlusActivationContext { ProxyServer = new object() },
+                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["manager.url"] = "https://127.0.0.1:9/",
+                    ["manager.tokenFile"] = tokenFile,
+                    ["manager.stateDir"] = stateDir,
+                    ["manager.mode"] = "advisory",
+                    ["manager.labels"] = "{\"env\":\"prod\"}",
+                });
+            Assert.IsNotNull(agent);
+        }
+        finally
+        {
+            TryDelete(stateDir);
+        }
+    }
+
+    [TestMethod]
+    public void TryReadLastKnownGood_ReturnsFalse_WhenStateDirectoryIsNull()
+    {
+        var result = ManagerAgent.TryReadLastKnownGood(null, out var yaml, out var hash);
+        Assert.IsFalse(result);
+        Assert.AreEqual(string.Empty, yaml);
+        Assert.AreEqual(string.Empty, hash);
+    }
+
+    [TestMethod]
+    public void TryReadLastKnownGood_ReturnsFalse_WhenOnlyYamlExists()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir, ManagerAgent.LastKnownGoodYamlFileName), "y: 1\n");
+            // Hash file missing.
+            var result = ManagerAgent.TryReadLastKnownGood(dir, out _, out _);
+            Assert.IsFalse(result);
+        }
+        finally
+        {
+            TryDelete(dir);
+        }
+    }
 }

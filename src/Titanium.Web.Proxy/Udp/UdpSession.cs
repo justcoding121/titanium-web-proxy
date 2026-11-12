@@ -106,7 +106,7 @@ internal sealed class UdpRelayStats
 /// <summary>Everything the listener tracks about one client IP: how many sessions it holds and its datagram budget.</summary>
 internal sealed class UdpClientState
 {
-    private readonly object gate = new();
+    private readonly System.Threading.Lock gate = new();
     private double tokens;
     private long lastMs;
 

@@ -10,7 +10,7 @@ namespace Titanium.Inspector.Services;
 public sealed class RunLogRing : ILoggerProvider
 {
     private readonly Channel<RunLogEntry> _channel;
-    private readonly object _ring = new();
+    private readonly System.Threading.Lock _ring = new();
     private readonly CancellationTokenSource _stop = new();
     private RunLogEntry[] _lines;
     private int _count;

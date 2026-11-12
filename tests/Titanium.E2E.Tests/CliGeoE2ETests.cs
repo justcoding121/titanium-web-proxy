@@ -32,8 +32,9 @@ public class CliGeoE2ETests
                 return;
             }
 
-            var listen = CliProcessHarness.GetFreePort();
-            var control = CliProcessHarness.GetFreePort();
+            var ports = CliProcessHarness.GetFreePorts(2);
+            var listen = ports[0];
+            var control = ports[1];
             var cfg = Path.Combine(temp, "geo.yaml");
             var dbYaml = database.Replace("\\", "/");
             await File.WriteAllTextAsync(cfg, $"""

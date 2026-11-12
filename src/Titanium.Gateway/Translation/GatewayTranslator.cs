@@ -93,14 +93,14 @@ internal sealed partial class TranslationPass
     {
         var config = new TwpConfig();
 
-        // One data-plane listener per mapped port. HTTPS listeners decrypt; a port never mixes the two (conflicts
-        // were resolved earlier).
+        // One data-plane listener per mapped HTTP(S) port. HTTPS listeners decrypt; a port never mixes the two
+        // (conflicts were resolved earlier). TLS/TCP/UDP listeners are rendered only by AppendL4Listeners.
         var programmable = _gateways.SelectMany(g => g.Listeners).Where(l => l.Programmable).ToList();
 
         // Ingress shares the data plane: its HTTP port (and its HTTPS port, when a certificate resolved) merge with
         // Gateway listeners on the same port. A protocol clash was resolved when the Ingress ports were reserved.
         var ports = new SortedDictionary<int, bool>();
-        foreach (var group in programmable.GroupBy(l => l.MappedPort))
+        foreach (var group in programmable.Where(l => l.IsHttpFamily).GroupBy(l => l.MappedPort))
         {
             ports[group.Key] = group.Any(l => l.IsHttps);
         }
@@ -151,8 +151,9 @@ internal sealed partial class TranslationPass
         }
 
         // Listener certificates and Ingress tls entries share one list, and a Secret both name is one file.
+        // HTTPS decrypt and TLS terminate both need serving certificates in the data-plane mount.
         var bindings = new List<(TlsFile File, string Host)>();
-        foreach (var listener in programmable.Where(l => l.IsHttps))
+        foreach (var listener in programmable.Where(l => l.IsHttps || l.IsTlsTerminate))
         {
             foreach (var file in listener.Certificates)
             {

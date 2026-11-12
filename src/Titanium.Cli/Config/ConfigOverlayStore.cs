@@ -4,7 +4,7 @@ namespace Titanium.Cli.Config;
 public sealed class ConfigOverlayStore
 {
     private readonly string _path;
-    private readonly object _lock = new();
+    private readonly System.Threading.Lock _lock = new();
 
     public ConfigOverlayStore(string path) => _path = path;
 

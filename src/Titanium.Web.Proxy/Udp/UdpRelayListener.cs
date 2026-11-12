@@ -43,7 +43,7 @@ public sealed class UdpRelayListener : IAsyncDisposable, IDisposable
     private readonly long originTimestamp;
     private readonly ConcurrentDictionary<SocketAddress, UdpSession> sessions = new();
     private readonly Dictionary<IPAddress, UdpClientState> clients = new();
-    private readonly object clientsGate = new();
+    private readonly System.Threading.Lock clientsGate = new();
     private readonly object wheelGate = new();
     private readonly CancellationTokenSource stopping = new();
     private readonly ConcurrentDictionary<string, (IPAddress Address, long ExpiresMs)> resolved = new(StringComparer.OrdinalIgnoreCase);

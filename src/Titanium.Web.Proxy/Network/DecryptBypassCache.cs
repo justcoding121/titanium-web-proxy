@@ -15,7 +15,7 @@ internal sealed class DecryptBypassCache
     private readonly ConcurrentDictionary<string, Entry> cache =
         new(StringComparer.OrdinalIgnoreCase);
 
-    private readonly object writeGate = new();
+    private readonly System.Threading.Lock writeGate = new();
 
     private TimeSpan ttl = TimeSpan.FromMinutes(30);
     private int maxEntries = 256;

@@ -1725,7 +1725,7 @@ public sealed partial class MainWindowViewModel
     /// </summary>
     private int _seenAvaloniaApp;
     private int _hasDeferredUi;
-    private readonly object _deferredUiGate = new();
+    private readonly System.Threading.Lock _deferredUiGate = new();
     private Action? _deferredUi;
 
     private void NoteAvaloniaApp()
