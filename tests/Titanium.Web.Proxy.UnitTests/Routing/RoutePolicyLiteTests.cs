@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.UnitTests.Routing;
 [DoNotParallelize]
 public class RoutePolicyLiteTests
 {
-    private static readonly TransparentProxyEndPoint EndPoint = new(IPAddress.Loopback, 0, false) { ForwardHost = "127.0.0.1", ForwardPort = 80 };
+    private static readonly TransparentProxyEndPoint EndPoint = new(IPAddress.Loopback, 0, false) { ForwardHost = "127.0.0.1", ForwardPort = 80, ForwardCleartext = true };
 
     [TestInitialize]
     public void Reset() => RoutePolicies.ResetForTests();

@@ -68,6 +68,7 @@ public class H1TerminateLiteEligibilityTests
         {
             ForwardHost = "127.0.0.1",
             ForwardPort = 80,
+            ForwardCleartext = true,
         };
         var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
         request.RequestUriString8 = "/".GetByteString();
@@ -173,6 +174,7 @@ public class H1TerminateLiteEligibilityTests
         {
             ForwardHost = "127.0.0.1",
             ForwardPort = 80,
+            ForwardCleartext = true,
         };
         var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
         request.RequestUriString8 = "/".GetByteString();
@@ -227,6 +229,7 @@ public class H1TerminateLiteEligibilityTests
         {
             ForwardHost = "127.0.0.1",
             ForwardPort = 80,
+            ForwardCleartext = true,
         };
         var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
         request.RequestUriString8 = "/".GetByteString();
@@ -262,6 +265,47 @@ public class H1TerminateLiteEligibilityTests
         };
         Assert.IsTrue(global::Titanium.Web.Proxy.Routing.RoutePolicies.RequiresSessionPath(proxy.ReverseProxy));
         Assert.IsTrue(proxy.NeedsHttpInterception(ep), "claim headers and the renewed cookie need the full session path");
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+    }
+
+    [TestMethod]
+    public async Task CanUseH1TerminateLite_ConstrainedRouteLeaves_AndAnUnhealthySnapshotLeavesAfterTheCacheWasWarmed()
+    {
+        using var proxy = new ProxyServer(false, false, false);
+        var ep = new TransparentProxyEndPoint(IPAddress.Loopback, 0, false)
+        {
+            ForwardHost = "127.0.0.1",
+            ForwardPort = 80,
+            ForwardCleartext = true,
+        };
+        var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
+        request.RequestUriString8 = "/".GetByteString();
+        var manager = new ClusterManager();
+        await manager.ApplyAsync(
+        [
+            new ClusterConfig
+            {
+                Id = "c",
+                Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = 80 }],
+            },
+        ]);
+        proxy.ReverseProxy = Options(manager, new RouteConfig
+        {
+            Id = "r",
+            ClusterId = "c",
+            Match = new RouteMatch { Path = "/api", PathKind = PathMatchKind.Prefix },
+        });
+        Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+
+        proxy.ReverseProxy = Options(manager, new RouteConfig
+        {
+            Id = "r",
+            ClusterId = "c",
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+        });
+        Assert.IsTrue(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
+
+        manager.SetDestinationState("d", DestinationState.Unhealthy);
         Assert.IsFalse(proxy.CanUseH1TerminateLite(ep, request, false, false, false, null));
     }
 

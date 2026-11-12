@@ -372,6 +372,43 @@ public class RouteMatchingBranchTests
     }
 
     [TestMethod]
+    public async Task ForwardHostEquivalence_MatchConstraintsDisqualify_CatchAllStays()
+    {
+        var snapshot = await SnapshotAsync(OneDestination(() => Dest()));
+        RouteConfig Constrained(RouteMatch match) => new() { Id = "r", ClusterId = "c", Match = match };
+        var constrained = new RouteMatch[]
+        {
+            new() { Path = "/", Host = "app.example" },
+            new() { Path = "/", Host = "*" },
+            new() { Path = "/", Hosts = ["app.example"] },
+            new() { Path = "/", Method = "GET" },
+            new() { Path = "/", Methods = ["GET"] },
+            new() { Path = "/only", PathKind = PathMatchKind.Exact },
+            new() { Path = "/api", PathKind = PathMatchKind.Prefix },
+            new() { Path = "*", PathKind = PathMatchKind.Prefix },
+            new() { Path = "/", PathKind = PathMatchKind.SegmentPrefix },
+            new() { Path = ".*", PathKind = PathMatchKind.Regex },
+            new() { Path = "/", Headers = new Dictionary<string, string> { ["x-a"] = "1" } },
+            new() { Path = "/", Query = new Dictionary<string, string> { ["q"] = "1" } },
+            new() { Path = "/", QueryParameters = [new QueryParameterMatch { Name = "q", Value = "1" }] },
+            new() { Path = "/", HeaderMatches = [new HeaderValueMatch { Name = "x-a", Value = "1" }] },
+        };
+        foreach (var match in constrained)
+        {
+            Assert.IsFalse(
+                ReverseProxyFastPath.IsForwardHostEquivalent([Constrained(match)], snapshot, "10.0.0.1", 80),
+                match.PathKind + " " + match.Path + " " + match.Host + " " + match.Method);
+        }
+
+        Assert.IsTrue(ReverseProxyFastPath.IsForwardHostEquivalent(
+            [Constrained(new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix })], snapshot, "10.0.0.1", 80));
+        Assert.IsTrue(ReverseProxyFastPath.IsForwardHostEquivalent(
+            [Constrained(new RouteMatch())], snapshot, "10.0.0.1", 80));
+        Assert.IsTrue(RouteMatcher.IsUnconstrained(new RouteMatch { Path = "/", PathCaseSensitive = false }));
+        Assert.IsFalse(RouteMatcher.IsUnconstrained(new RouteMatch { Path = "/", Host = "*" }));
+    }
+
+    [TestMethod]
     public async Task ForwardHostEquivalence_DefaultPortsFollowTheScheme()
     {
         var plain = await SnapshotAsync(OneDestination(() => new DestinationConfig { Id = "d", Address = "h", Port = 0 }));
@@ -433,7 +470,11 @@ public class RouteMatchingBranchTests
     [TestMethod]
     public async Task ForwardHostEquivalence_CachesPerEndpointUntilTheInputsChange()
     {
-        var endPoint = new TransparentProxyEndPoint(System.Net.IPAddress.Loopback, 0, false);
+        var endPoint = new TransparentProxyEndPoint(System.Net.IPAddress.Loopback, 0, false)
+        {
+            // Cleartext origin, matching the destination. The cached check also compares scheme.
+            ForwardCleartext = true,
+        };
         var routes = new[] { PlainRoute() };
         var first = await SnapshotAsync(OneDestination(() => Dest()));
         Assert.IsTrue(ReverseProxyFastPath.IsForwardHostEquivalentCached(endPoint, routes, first, "10.0.0.1", 80));
@@ -441,6 +482,31 @@ public class RouteMatchingBranchTests
         Assert.IsFalse(ReverseProxyFastPath.IsForwardHostEquivalentCached(endPoint, routes, first, "10.0.0.9", 80), "a new host recomputes");
         var second = await SnapshotAsync(OneDestination(() => Dest(port: 81)));
         Assert.IsFalse(ReverseProxyFastPath.IsForwardHostEquivalentCached(endPoint, routes, second, "10.0.0.1", 80), "a new snapshot recomputes");
+    }
+
+    [TestMethod]
+    public async Task ForwardHostEquivalence_CachedSchemeMustMatchTheListener()
+    {
+        // Terminate-lite dials cleartext when the listener forward is cleartext, and TLS otherwise.
+        // A destination UseHttps flag that disagrees leaves the cached fast path. The public helper has
+        // no listener, so it does not apply this rule. Published rows use a cleartext forward and a
+        // cleartext destination, which stays eligible.
+        var routes = new[] { PlainRoute() };
+        var clear = await SnapshotAsync(OneDestination(() => Dest()));
+        var https = await SnapshotAsync(OneDestination(() => new DestinationConfig
+        {
+            Id = "d",
+            Address = "10.0.0.1",
+            Port = 443,
+            UseHttps = true,
+        }));
+        var cleartext = new TransparentProxyEndPoint(System.Net.IPAddress.Loopback, 0, false) { ForwardCleartext = true };
+        var tls = new TransparentProxyEndPoint(System.Net.IPAddress.Loopback, 0, false) { ForwardCleartext = false };
+
+        Assert.IsTrue(ReverseProxyFastPath.IsForwardHostEquivalentCached(cleartext, routes, clear, "10.0.0.1", 80));
+        Assert.IsFalse(ReverseProxyFastPath.IsForwardHostEquivalentCached(cleartext, routes, https, "10.0.0.1", 443));
+        Assert.IsFalse(ReverseProxyFastPath.IsForwardHostEquivalentCached(tls, routes, clear, "10.0.0.1", 80));
+        Assert.IsTrue(ReverseProxyFastPath.IsForwardHostEquivalentCached(tls, routes, https, "10.0.0.1", 443));
     }
 
     [TestMethod]

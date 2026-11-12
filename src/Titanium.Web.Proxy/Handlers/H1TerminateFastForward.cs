@@ -121,8 +121,8 @@ public partial class ProxyServer
         if (reverse?.Routes is { Count: > 0 })
         {
             var snapshot = reverse.ClusterManager?.Snapshot;
-            if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalent(
-                    reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
+            if (!Routing.ReverseProxyFastPath.IsForwardHostEquivalentCached(
+                    endPoint, reverse.Routes, snapshot, transparent.ForwardHost, transparent.ForwardPort ?? 80))
                 return false;
 
             // A connection-limit slot is released when the session ends, which lite does not have.
