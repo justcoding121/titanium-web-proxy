@@ -315,6 +315,42 @@ public class GatewayTranslatorRouteTests
     }
 
     [TestMethod]
+    public void HeaderRegex_AGroupedAlternation_RoutesOnlyTheWholeValue()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            Path = new HttpPathMatch { Value = "/h" },
+            Headers = [new HttpHeaderMatch { Name = "X-Build", Value = "(a)|(b)", Type = "RegularExpression" }],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+        static Dictionary<string, string> H(string value) =>
+            new(StringComparer.OrdinalIgnoreCase) { ["x-build"] = value };
+
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/h", headers: H("a")));
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/h", headers: H("b")));
+        Assert.IsNull(Winner(result, "/h", headers: H("aEXTRA")));
+        Assert.IsNull(Winner(result, "/h", headers: H("EXTRAb")));
+    }
+
+    [DataTestMethod]
+    [DataRow("a)|(b")]
+    [DataRow("(")]
+    [DataRow("(?=x)")]
+    public void HeaderRegex_APatternTheDataPlaneCannotMatch_Answers500(string pattern)
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            Headers = [new HttpHeaderMatch { Name = "x", Value = pattern, Type = "RegularExpression" }],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+        Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
+    }
+
+    [TestMethod]
     public void UncompilableRegex_IsUnsupportedNotAConfigError()
     {
         var b = Basic();

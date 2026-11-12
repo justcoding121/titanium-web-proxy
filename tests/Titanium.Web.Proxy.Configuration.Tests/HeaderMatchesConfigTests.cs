@@ -68,4 +68,23 @@ public class HeaderMatchesConfigTests
 
         Assert.IsNull(config.Routes[0].Match.HeaderMatches);
     }
+
+    [DataTestMethod]
+    [DataRow("a)|(b")]
+    [DataRow("a)(")]
+    public void Validator_RejectsAPatternThatWouldEscapeTheWholeValueGroup(string pattern)
+    {
+        var yaml = Header + "      - name: X-Build\n        value: \"" + pattern + "\"\n        kind: Regex\n";
+        var errors = TwpConfigValidator.Validate(TwpConfigLoader.LoadYaml(yaml));
+
+        Assert.IsTrue(errors.Any(e => e.Contains("headerMatches 'X-Build'", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void Validator_AcceptsAGroupedAlternation()
+    {
+        var yaml = Header + "      - name: X-Build\n        value: \"(a)|(b)\"\n        kind: Regex\n";
+
+        Assert.AreEqual(0, TwpConfigValidator.Validate(TwpConfigLoader.LoadYaml(yaml)).Count);
+    }
 }
