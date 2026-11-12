@@ -647,6 +647,8 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Origins.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Origins.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowCredentials.get -> bool?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowCredentials.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowPrivateNetwork.get -> bool?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowPrivateNetwork.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ExposeHeaders.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ExposeHeaders.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxAgeSeconds.get -> int?

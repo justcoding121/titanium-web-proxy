@@ -555,11 +555,11 @@ internal static class RoutePolicies
         {
             Rejected = true,
             Status = 204,
-            Headers = CorsHeaders(policy, origin, HeaderValue(request, "Access-Control-Request-Headers")),
+            Headers = CorsHeaders(policy, request, origin, HeaderValue(request, "Access-Control-Request-Headers")),
         };
     }
 
-    private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, string origin, string? requestHeaders)
+    private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, Request request, string origin, string? requestHeaders)
     {
         var headers = new List<KeyValuePair<string, string>>
         {
@@ -587,6 +587,15 @@ internal static class RoutePolicies
         if (policy.MaxAgeSeconds is int maxAge)
         {
             headers.Add(new("Access-Control-Max-Age", maxAge.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (policy.AllowPrivateNetwork == true &&
+            string.Equals(HeaderValue(request, "Access-Control-Request-Private-Network"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.Add(new("Access-Control-Allow-Private-Network", "true"));
+            headers[0] = new KeyValuePair<string, string>(
+                headers[0].Key,
+                headers[0].Value + ", Access-Control-Request-Private-Network");
         }
 
         return headers;
@@ -784,24 +793,9 @@ internal static class RoutePolicies
         return null;
     }
 
-    /// <summary><c>*</c> or a missing list allows every origin. A list echoes only an exact match, and an unlisted origin gets nothing.</summary>
-    internal static string? AllowedOrigin(string? configured, string origin)
-    {
-        if (string.IsNullOrWhiteSpace(configured) || configured.Trim() == "*")
-        {
-            return "*";
-        }
-
-        foreach (var candidate in configured.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (string.Equals(candidate, origin, StringComparison.Ordinal))
-            {
-                return origin;
-            }
-        }
-
-        return null;
-    }
+    /// <summary><c>*</c> or a missing list allows every origin. A list echoes a match, and an unlisted origin gets nothing.</summary>
+    internal static string? AllowedOrigin(string? configured, string origin) =>
+        CorsOriginMatcher.Match(configured, origin);
 
     private static string? AllowHeaders(RoutePolicyConfig policy, string? requestHeaders)
     {

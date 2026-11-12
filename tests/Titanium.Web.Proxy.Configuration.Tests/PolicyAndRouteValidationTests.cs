@@ -170,6 +170,41 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void CorsOrigins_AcceptWildcardAndRegex_AndRejectABrokenList()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "wild", Kind = "cors", Origins = "https://*.example.com", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "pattern", Kind = "cors", Origins = "regex:https://app\\.example\\.com" },
+                new RoutePolicyConfig { Name = "both", Kind = "cors", Origins = "https://app.example.com,https://*.example.com" },
+                new RoutePolicyConfig { Name = "starMixed", Kind = "cors", Origins = "*,https://a.test" },
+                new RoutePolicyConfig { Name = "starOnly", Kind = "cors", Origins = "https://*" },
+                new RoutePolicyConfig { Name = "oneLabel", Kind = "cors", Origins = "https://*.com" },
+                new RoutePolicyConfig { Name = "embedded", Kind = "cors", Origins = "https://a*.example.com" },
+                new RoutePolicyConfig { Name = "double", Kind = "cors", Origins = "https://*.*.example.com" },
+                new RoutePolicyConfig { Name = "bare", Kind = "cors", Origins = "*.example.com" },
+                new RoutePolicyConfig { Name = "broken", Kind = "cors", Origins = "regex:(" },
+            ],
+            Routes = [Route("r", "c", "wild")],
+        };
+
+        var errors = Errors(config);
+        Assert.IsFalse(errors.Contains("'wild'", StringComparison.Ordinal), errors);
+        Assert.IsFalse(errors.Contains("'pattern'", StringComparison.Ordinal), errors);
+        Assert.IsFalse(errors.Contains("'both'", StringComparison.Ordinal), errors);
+        StringAssert.Contains(errors, "'starMixed'");
+        StringAssert.Contains(errors, "'starOnly'");
+        StringAssert.Contains(errors, "'oneLabel'");
+        StringAssert.Contains(errors, "'embedded'");
+        StringAssert.Contains(errors, "'double'");
+        StringAssert.Contains(errors, "'bare'");
+        StringAssert.Contains(errors, "'broken'");
+    }
+
+    [TestMethod]
     public void ExtAuthPolicy_RequiresAnAbsoluteHttpUrl_AndSaneLimitsAndHeaders()
     {
         var config = new TwpConfig
