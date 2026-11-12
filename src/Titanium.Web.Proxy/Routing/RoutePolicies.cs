@@ -67,6 +67,9 @@ internal static class RoutePolicies
 
     private const char HeldSeparator = '\u001f';
 
+    /// <summary>Separates a policy name from a per-client or per-route slot. Not the held-list separator.</summary>
+    private const char SlotSeparator = '\u001e';
+
     /// <summary>Gives back every slot named in a held-policy value (one name, or several joined by a separator).</summary>
     public static void Release(ReverseProxyOptions options, string policyNames) => ReleaseHeld(RuntimeFor(options), policyNames);
 
@@ -77,9 +80,14 @@ internal static class RoutePolicies
             return;
         }
 
-        foreach (var policyName in policyNames.Split(HeldSeparator))
+        foreach (var slot in policyNames.Split(HeldSeparator))
         {
-            runtime.Connections.AddOrUpdate(policyName, 0, (_, count) => count > 0 ? count - 1 : 0);
+            var left = runtime.Connections.AddOrUpdate(slot, 0, static (_, count) => count > 0 ? count - 1 : 0);
+            if (left == 0)
+            {
+                // Drops the entry only while it is still zero, so a concurrent acquire is left in place.
+                ((ICollection<KeyValuePair<string, int>>)runtime.Connections).Remove(new KeyValuePair<string, int>(slot, 0));
+            }
         }
     }
 
@@ -331,10 +339,11 @@ internal static class RoutePolicies
                 return CorsPreflight(policy, request);
             case "rateLimit":
                 return CheckRate(runtime, policy, route, request, client, trustedProxies);
-            case "connectionLimit" when !AllowConnection(runtime, policy):
+            case "connectionLimit" when !AllowConnection(runtime, policy, route, request, client, trustedProxies):
                 return Stop(503, string.Empty);
             case "connectionLimit":
-                heldNames = heldNames is null ? policy.Name : heldNames + HeldSeparator + policy.Name;
+                var slot = ConnectionSlotName(policy, route, request, client, trustedProxies);
+                heldNames = heldNames is null ? slot : heldNames + HeldSeparator + slot;
                 decision = decision with { Held = heldNames, HeldRuntime = runtime };
                 return null;
             case "ipAllowDeny" when !AllowAddress(policy, client):
@@ -355,6 +364,9 @@ internal static class RoutePolicies
 
     /// <summary>Rate-limit counters held for <paramref name="options" />.</summary>
     internal static int RateWindowCount(ReverseProxyOptions options) => RuntimeFor(options).Rates.Count;
+
+    /// <summary>Connection-limit counters held for <paramref name="options" />. Zero after every slot is released.</summary>
+    internal static int ConnectionSlotCount(ReverseProxyOptions options) => RuntimeFor(options).Connections.Count;
 
     /// <summary>Null means the request passes. Otherwise a 429 with Retry-After, and RateLimit-* when asked.</summary>
     private static PolicyDecision? CheckRate(
@@ -391,23 +403,69 @@ internal static class RoutePolicies
         };
     }
 
-    private static bool AllowConnection(Runtime runtime, RoutePolicyConfig policy)
+    private static bool AllowConnection(
+        Runtime runtime,
+        RoutePolicyConfig policy,
+        RouteConfig route,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
     {
         var limit = policy.Limit ?? 1;
+        var slot = ConnectionSlotName(policy, route, request, client, trustedProxies);
         var connections = runtime.Connections;
         while (true)
         {
-            var count = connections.GetOrAdd(policy.Name, 0);
+            var count = connections.GetOrAdd(slot, 0);
             if (count >= limit)
             {
                 return false;
             }
 
-            if (connections.TryUpdate(policy.Name, count + 1, count))
+            if (connections.TryUpdate(slot, count + 1, count))
             {
                 return true;
             }
         }
+    }
+
+    /// <summary>
+    ///     Unset <see cref="RoutePolicyConfig.Key"/> is one counter named for the policy.
+    ///     <c>client</c> and <c>forwardedClient</c> append the address; <c>route</c> appends the route id.
+    ///     A value that contains a separator is hashed so release cannot split the wrong slot.
+    /// </summary>
+    internal static string ConnectionSlotName(
+        RoutePolicyConfig policy,
+        RouteConfig route,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
+    {
+        if (string.IsNullOrEmpty(policy.Key))
+        {
+            return policy.Name;
+        }
+
+        string value;
+        if (policy.Key.Equals("route", StringComparison.OrdinalIgnoreCase))
+        {
+            value = route.Id;
+        }
+        else if (policy.Key.Equals("forwardedClient", StringComparison.OrdinalIgnoreCase))
+        {
+            value = RateLimiter.ResolveForwardedClient(request, client, trustedProxies)?.ToString() ?? string.Empty;
+        }
+        else
+        {
+            value = client?.ToString() ?? string.Empty;
+        }
+
+        if (value.Contains(HeldSeparator) || value.Contains(SlotSeparator))
+        {
+            value = RateLimiter.HashValue(value);
+        }
+
+        return policy.Name + SlotSeparator + value;
     }
 
     private static bool AllowAddress(RoutePolicyConfig policy, IPAddress? client)

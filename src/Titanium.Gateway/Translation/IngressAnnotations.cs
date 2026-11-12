@@ -30,6 +30,7 @@ internal enum BackendProtocol
 ///     An annotation under the prefix that is not listed is reported with a
 ///     Warning event (never ignored silently); a listed one with a value that cannot be honored makes every rule of
 ///     the Ingress answer <c>500</c>, with an event that says why.
+///     <c>limit-connections</c> is enforced by a per-client <c>connectionLimit</c> policy.
 /// </summary>
 public static partial class IngressAnnotations
 {
@@ -70,6 +71,9 @@ public static partial class IngressAnnotations
         new("limit-rps", "requests per second per client, 1-1000000",
             "`rateLimit` policy (fixed window of 1 second)",
             "Counted per client address and per Ingress. Excess requests get `429` with `Retry-After`."),
+        new("limit-connections", "concurrent connections per client, 1-1000000",
+            "`connectionLimit` policy (`key: client`)",
+            "Each client address has its own counter. One more connection than the limit gets 503, and the slot is released when the request ends."),
         new("cors-allow-origin", "`*`, an origin, or a wildcard such as `https://*.example.com`. `regex:` is not accepted here",
             "`cors` policy and a `ResponseCors` transform",
             "Answers a real preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) with `204` and the `Access-Control-Allow-*` headers. A plain `OPTIONS` is forwarded. The actual response gets `Access-Control-Allow-Origin` (`*`, or the request `Origin` when it matches, plus `Vary: Origin`). A wildcard matches one host label and echoes that origin. An unlisted origin gets no allow header. `regex:` is configuration only, not this annotation."),
@@ -400,6 +404,17 @@ public static partial class IngressAnnotations
                 else
                 {
                     Bad("a number of requests per second from 1 to 1000000");
+                }
+
+                break;
+            case "limit-connections":
+                if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var connections) && connections is >= 1 and <= 1_000_000)
+                {
+                    settings.LimitConnections = connections;
+                }
+                else
+                {
+                    Bad("a number from 1 to 1000000");
                 }
 
                 break;
@@ -910,6 +925,8 @@ internal sealed class IngressSettings
     public string? WhitelistRanges { get; set; }
 
     public int? LimitRps { get; set; }
+
+    public int? LimitConnections { get; set; }
 
     public string? CorsOrigins { get; set; }
 

@@ -832,6 +832,26 @@ public class IngressTranslatorTests
         Assert.AreEqual(500, Annotated((A("limit-rps"), value)).Route.DirectResponse?.Status);
 
     [TestMethod]
+    public void Annotations_LimitConnections_BecomesAPerClientConnectionLimit()
+    {
+        var (result, route) = Annotated((A("limit-connections"), "40"));
+
+        var policy = result.Config.Policies.Single();
+        Assert.AreEqual("connectionLimit", policy.Kind);
+        Assert.AreEqual(40, policy.Limit);
+        Assert.AreEqual("client", policy.Key);
+        CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    [DataRow("0")]
+    [DataRow("1000001")]
+    [DataRow("many")]
+    public void Annotations_LimitConnections_OutOfRange_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("limit-connections"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
     [DataRow("*")]
     [DataRow("https://app.example.com")]
     [DataRow("https://a.example.com, http://b.example.com:8080")]

@@ -621,6 +621,11 @@ internal sealed partial class TranslationPass
             Add(new RoutePolicyConfig { Name = prefix + "rate", Kind = "rateLimit", Limit = rps, WindowSeconds = 1, Key = "client", Algorithm = "fixedWindow" });
         }
 
+        if (settings.LimitConnections is { } connections)
+        {
+            Add(new RoutePolicyConfig { Name = prefix + "connections", Kind = "connectionLimit", Limit = connections, Key = "client" });
+        }
+
         if (settings.AuthUrl is { } url)
         {
             Add(new RoutePolicyConfig { Name = prefix + "auth", Kind = "extAuth", Url = url, Method = "GET", FailOpen = false });
