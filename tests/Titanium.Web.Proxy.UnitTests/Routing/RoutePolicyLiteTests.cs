@@ -220,6 +220,18 @@ public class RoutePolicyLiteTests
     }
 
     [TestMethod]
+    public void DenylistSourceRange_DeniesTheListedAddress_AndPassesTheRest()
+    {
+        var options = Options(["net"], new RoutePolicyConfig { Name = "net", Kind = "ipAllowDeny", Deny = "10.9.0.0/16,192.0.2.1" });
+
+        Assert.IsTrue(Handle(options, Req(), "10.9.1.1", out var status, out _, out _));
+        Assert.AreEqual(403, status);
+        Assert.IsTrue(Handle(options, Req(), "192.0.2.1", out var exact, out _, out _));
+        Assert.AreEqual(403, exact);
+        Assert.IsFalse(Handle(options, Req(), "10.8.0.1", out _, out _, out _));
+    }
+
+    [TestMethod]
     public void IpAllowDeny_WithoutAClientAddress_FailsClosedWhenAnAllowListExists()
     {
         var allow = Options(["net"], new RoutePolicyConfig { Name = "net", Kind = "ipAllowDeny", Allow = "10.0.0.0/8" });

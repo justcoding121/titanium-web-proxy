@@ -733,6 +733,32 @@ public class GapClosureTests
     }
 
     [TestMethod]
+    public void BuildRedirect_RendersPermanentRedirectAndAppRootLocations()
+    {
+        var request = new Request { Method = "GET", Host = "app.test" };
+        request.RequestUriString8 = (ByteString)"/api?x=1";
+
+        var permanent = ReverseProxySessionDispatch.BuildRedirect(request, new RedirectConfig
+        {
+            Status = 308,
+            Scheme = "https",
+            Host = "example.com",
+            Port = 8443,
+            Path = "/gone",
+            PreserveQuery = false,
+        });
+        Assert.AreEqual("https://example.com:8443/gone", permanent);
+
+        var appRoot = ReverseProxySessionDispatch.BuildRedirect(request, new RedirectConfig
+        {
+            Status = 302,
+            Path = "/app",
+            PreserveQuery = false,
+        });
+        Assert.AreEqual("/app", appRoot);
+    }
+
+    [TestMethod]
     public async Task StatusRetry_DoesNotCarryTheFailedDestinationsPin()
     {
         using var proxy = new ProxyServer(userTrustRootCertificate: false);
