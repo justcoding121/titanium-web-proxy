@@ -95,7 +95,7 @@ Annotations use the prefix `titanium.io/`. The values are strings, as Kubernetes
 | `titanium.io/load-balance` | `round_robin` (default), `random`, `least_conn`, `ewma`, `p2c` | cluster `algorithm` | `least_conn` is `LeastRequests`, `ewma` is `LeastTime`, `p2c` is `PowerOfTwoChoices`. Gives the backend its own cluster. |
 | `titanium.io/whitelist-source-range` | comma-separated addresses or CIDR prefixes | `ipAllowDeny` policy (`allow`) | Any other client address gets `403`. The address is the socket peer, so behind a proxy list the proxy's range. |
 | `titanium.io/limit-rps` | requests per second per client, 1-1000000 | `rateLimit` policy (fixed window of 1 second) | Counted per client address and per Ingress. Excess requests get `429` with `Retry-After`. |
-| `titanium.io/cors-allow-origin` | `*` or comma-separated origins such as `https://app.example.com` | `cors` policy | Answers the `OPTIONS` preflight itself with `204` and the `Access-Control-Allow-*` headers. It does not add headers to the actual response. |
+| `titanium.io/cors-allow-origin` | `*` or comma-separated origins such as `https://app.example.com` | `cors` policy and a `ResponseCors` transform | Answers the `OPTIONS` preflight itself with `204` and the `Access-Control-Allow-*` headers. The actual response gets `Access-Control-Allow-Origin` (`*`, or the request `Origin` when it is listed, plus `Vary: Origin`). |
 | `titanium.io/auth-url` | an absolute `http` or `https` URL without credentials | `extAuth` policy | Each request is checked with a `GET` subrequest first; a `2xx` answer admits it, any other answer is relayed to the client. Fails closed: a timeout or an error answers `503`, never admits. |
 | `titanium.io/canary` | `true` or `false` (default) | weighted route clusters | Marks the Ingress as a canary of the Ingress that serves the same host, path, and path type. The canary Ingress contributes only its backend; every other annotation comes from the primary. |
 | `titanium.io/canary-weight` | percent, 0-100 (default 0) | route `clusters` weights | Share of requests the canary backend receives. Needs `canary: "true"`. |
@@ -112,7 +112,7 @@ An Ingress with `titanium.io/canary: "true"` is the canary of the Ingress that s
 These follow from the data plane. They are listed so nothing surprises you.
 
 - **`ssl-redirect: "true"` is rejected.** Routes are matched by host, path, header, query, and method, not by scheme, so a redirect rule would also catch HTTPS requests. Terminate and redirect at the load balancer in front, or use an `HTTPRoute` with `RequestRedirect`.
-- **CORS answers the preflight only.** `cors-allow-origin` replies to `OPTIONS` itself; it does not add `Access-Control-*` headers to the actual response.
+- **CORS adds only the allow-origin header to the actual response.** `cors-allow-origin` replies to `OPTIONS` itself and adds `Access-Control-Allow-Origin` to the real response. A request whose `Origin` is not listed gets no allow header. Other `Access-Control-*` headers, such as `Allow-Credentials` and `Expose-Headers`, are not added. Responses the proxy itself generates (policy denials, rate-limit, bad gateway) carry no CORS header, so a browser reports a CORS error for them.
 - **`H2C` and `GRPC` follow the client.** The data plane speaks HTTP/2 to the backend when the client does, so there is no separate setting for it.
 - **`proxy-body-size` reads `Content-Length`.** A chunked request with no length is not checked.
 - **Annotations of other controllers are ignored**, not translated. Only `titanium.io/` is read.

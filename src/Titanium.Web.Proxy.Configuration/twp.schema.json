@@ -1241,6 +1241,24 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
+              "headerMatches": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
               "headers": {
                 "type": "object",
                 "additionalProperties": {

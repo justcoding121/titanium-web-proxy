@@ -658,6 +658,7 @@ Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixTo.get -> st
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixTo.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey = null, string? hashInput = null) -> void
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestTrailerSet = "RequestTrailerSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseCors = "ResponseCors" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseTrailerSet = "ResponseTrailerSet" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxAllowedBodyBytes = 1048576 -> int
 static Titanium.Web.Proxy.Abstractions.Network.ClientCertificateAuthorityFiles.Load(string! path) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!
@@ -822,6 +823,19 @@ Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Name.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.QueryParameterMatch() -> void
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind.Exact = 0 -> Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind.Regex = 1 -> Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.HeaderValueMatch() -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Kind.get -> Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Name.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Name.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Value.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Value.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.HeaderMatches.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.HeaderMatches.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch!>?
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ExistingRequestHeader.get -> System.Func<string!, string?>?

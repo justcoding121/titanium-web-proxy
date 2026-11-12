@@ -695,6 +695,11 @@ jobs:
       env:
         TWP_SONAR_PULL_REQUEST: ${{ github.event.pull_request.number }}
         TWP_SONAR_BRANCH: ${{ github.ref_name }}
+        # Fork pull_request runs do not receive SONAR_TOKEN. Floors calibrated to the Sonar
+        # metric then false-fail on coverage.xml. Advisory only in that case; diff coverage
+        # still blocks, and the develop push still enforces the Sonar metric. A null head.repo
+        # (deleted fork) also compares unequal, which is fine because there is still no token.
+        TWP_FLOORS_ADVISORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
       run: |
         # Prefer Sonar component coverage. Poll the project analysis date instead of a blind sleep.
         if ($env:SONAR_TOKEN) {

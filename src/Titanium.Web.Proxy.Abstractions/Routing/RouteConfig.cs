@@ -32,6 +32,31 @@ public sealed class QueryParameterMatch
     public QueryMatchKind Kind { get; init; } = QueryMatchKind.Exact;
 }
 
+/// <summary>How a <see cref="HeaderValueMatch"/> compares the header value.</summary>
+public enum HeaderMatchKind
+{
+    /// <summary>Ordinal, case-sensitive equality.</summary>
+    Exact = 0,
+
+    /// <summary>
+    ///     The whole value must match the regular expression (non-backtracking engine). The pattern must compile on
+    ///     its own, so unbalanced parentheses are rejected.
+    /// </summary>
+    Regex = 1,
+}
+
+/// <summary>One request header constraint that can use a regular expression.</summary>
+public sealed class HeaderValueMatch
+{
+    /// <summary>Header name, compared case-insensitively.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Expected value, or a regular expression when <see cref="Kind"/> is <see cref="HeaderMatchKind.Regex"/>.</summary>
+    public required string Value { get; init; }
+
+    public HeaderMatchKind Kind { get; init; } = HeaderMatchKind.Exact;
+}
+
 /// <summary>Declarative route match criteria (host, path, method, headers, query).</summary>
 public sealed class RouteMatch
 {
@@ -47,6 +72,12 @@ public sealed class RouteMatch
     ///     adds no constraint and no per-request work.
     /// </summary>
     public IReadOnlyList<QueryParameterMatch>? QueryParameters { get; init; }
+
+    /// <summary>
+    ///     Header matches that can use a regular expression. Every entry must match. Null (the default) adds no
+    ///     constraint and no per-request work.
+    /// </summary>
+    public IReadOnlyList<HeaderValueMatch>? HeaderMatches { get; init; }
 
     public IReadOnlyList<string>? Hosts { get; init; }
     public IReadOnlyList<string>? Methods { get; init; }

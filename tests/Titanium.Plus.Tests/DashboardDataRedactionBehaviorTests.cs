@@ -39,6 +39,10 @@ public class DashboardDataRedactionBehaviorTests
                             ["Authorization"] = "Bearer secret-token",
                             ["X-Trace"] = "1",
                         },
+                        HeaderMatches =
+                        [
+                            new HeaderValueMatch { Name = "X-Build", Value = "secret-[0-9]+", Kind = HeaderMatchKind.Regex },
+                        ],
                         Query = new Dictionary<string, string> { ["token"] = "sekrit", ["q"] = "1" },
                         QueryParameters = [new QueryParameterMatch { Name = "sig", Value = ".*" }],
                     },
@@ -51,10 +55,11 @@ public class DashboardDataRedactionBehaviorTests
         StringAssert.Contains(match, "host app.test|api.test");
         StringAssert.Contains(match, "path prefix /v1");
         StringAssert.Contains(match, "method GET|POST");
-        StringAssert.Contains(match, "headers Authorization,X-Trace");
+        StringAssert.Contains(match, "headers Authorization,X-Build,X-Trace");
         StringAssert.Contains(match, "query q,sig,token");
         Assert.IsFalse(match.Contains("Bearer", StringComparison.Ordinal));
         Assert.IsFalse(match.Contains("sekrit", StringComparison.Ordinal));
+        Assert.IsFalse(match.Contains("secret-", StringComparison.Ordinal));
     }
 
     [TestMethod]
