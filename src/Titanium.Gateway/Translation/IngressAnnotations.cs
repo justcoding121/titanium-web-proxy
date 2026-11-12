@@ -41,7 +41,7 @@ public static partial class IngressAnnotations
         ["cors-allow-methods", "cors-allow-headers", "cors-allow-credentials", "cors-expose-headers", "cors-max-age"];
 
     /// <summary>Every annotation, in the order the docs list them.</summary>
-    public static IReadOnlyList<AnnotationSpec> All { get; } =
+    public static IReadOnlyList<AnnotationSpec> All { get; } = InsertAdded(
     [
         new("ssl-redirect", "`false` (default)",
             "none",
@@ -103,7 +103,71 @@ public static partial class IngressAnnotations
         new("upstream-tls-secret", "`name` (same namespace) or `namespace/name` of the Ingress's own namespace",
             "cluster `httpClient` TLS files",
             "A `kubernetes.io/tls` Secret. `ca.crt` becomes the trust anchors for the backend, and `tls.crt` and `tls.key` the client certificate. Needs `backend-protocol: HTTPS`. Gives the backend its own cluster."),
-    ];
+    ]);
+
+    /// <summary>Annotations inserted after <c>proxy-read-timeout</c>. Four lines each: name, values, feature, notes.</summary>
+    private const string AddedCatalog = """
+        proxy-connect-timeout
+        seconds, 1-3600
+        cluster `httpClient.connectTimeout`
+        How long the data plane waits to open the backend connection. Gives the backend its own cluster.
+        proxy-next-upstream
+        `off`, `http_500`, `http_502`, `http_503`, `http_504`, `http_429`, `non_idempotent`, `timeout`
+        cluster `retry`
+        `error` is rejected: a connection failure is not replayed by this policy. `timeout` replays when `proxy-next-upstream-timeout` is set. Omitting the status tokens keeps the default 502, 503, and 504. Gives the backend its own cluster.
+        proxy-next-upstream-tries
+        total tries including the first, 1-1000000
+        cluster `retry.attempts` (tries minus one)
+        `1` turns retry off. `0` is rejected. When omitted, two tries are used once another retry annotation is set. Gives the backend its own cluster.
+        proxy-next-upstream-timeout
+        seconds, 1-3600
+        cluster `retry.perTryTimeoutMilliseconds`
+        Per-try deadline. A timeout is replayed onto another destination. Gives the backend its own cluster.
+        upstream-vhost
+        a DNS name
+        `RequestHeaderSet` of `Host`
+        Sets the Host header sent to the backend, after any rewrite. No scheme, port, or path.
+        denylist-source-range
+        comma-separated addresses or CIDR prefixes
+        `ipAllowDeny` policy (`deny`)
+        A listed address gets 403. Combined with `whitelist-source-range` on one policy.
+        app-root
+        an absolute path starting with `/`
+        redirect route for exact `/`
+        Adds a 302 to that path for each host, ahead of the Ingress's other rules. Skipped, with a warning, when that host already has an exact `/` rule. No query.
+        permanent-redirect
+        an absolute http or https URL
+        redirect route
+        The Ingress's rules redirect and do not use a backend. No query, fragment, or credentials. `permanent-redirect-code` is 301, 302, 307, or 308 (default 301). Rejected together with `canary` set to true.
+        permanent-redirect-code
+        `301`, `302`, `307`, or `308`
+        redirect status
+        Used with `permanent-redirect`. Default 301.
+        """;
+
+    private static IReadOnlyList<AnnotationSpec> InsertAdded(IReadOnlyList<AnnotationSpec> specs)
+    {
+        var list = new List<AnnotationSpec>(specs.Count + 9);
+        foreach (var spec in specs)
+        {
+            list.Add(spec);
+            if (spec.Name == "proxy-read-timeout")
+            {
+                list.AddRange(ReadAdded());
+            }
+        }
+
+        return list;
+    }
+
+    private static IEnumerable<AnnotationSpec> ReadAdded()
+    {
+        var lines = AddedCatalog.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var i = 0; i < lines.Length; i += 4)
+        {
+            yield return new AnnotationSpec(lines[i], lines[i + 1], lines[i + 2], lines[i + 3]);
+        }
+    }
 
     private static readonly Dictionary<string, AnnotationSpec> ByName =
         All.ToDictionary(a => a.Name, StringComparer.Ordinal);
@@ -190,6 +254,21 @@ public static partial class IngressAnnotations
         else if (settings.CorsAllowCredentials == true && CorsOriginIsWildcard(settings.CorsOrigins))
         {
             settings.Problems.Add($"{Prefix}cors-allow-credentials cannot be combined with {Prefix}cors-allow-origin \"*\".");
+        }
+
+        if (settings.RetryOff && (settings.RetryTries is not null || settings.RetryPerTryTimeoutSeconds is not null || settings.RetryRequested))
+        {
+            settings.Problems.Add($"{Prefix}proxy-next-upstream: \"off\" cannot be combined with other retry annotations.");
+        }
+
+        if (settings.PermanentRedirectCode is not null && settings.PermanentRedirectHost is null)
+        {
+            settings.Problems.Add($"{Prefix}permanent-redirect-code needs {Prefix}permanent-redirect.");
+        }
+
+        if (settings.Canary && settings.PermanentRedirectHost is not null)
+        {
+            settings.Problems.Add($"{Prefix}permanent-redirect cannot be combined with {Prefix}canary: \"true\".");
         }
 
         return settings;
@@ -303,10 +382,9 @@ public static partial class IngressAnnotations
 
                 break;
             case "whitelist-source-range":
-                var ranges = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (ranges.Length > 0 && ranges.All(r => CidrPrefix.TryParse(r, out _)))
+                if (TryCidrList(value, out var ranges))
                 {
-                    settings.WhitelistRanges = string.Join(",", ranges);
+                    settings.WhitelistRanges = ranges;
                 }
                 else
                 {
@@ -452,7 +530,211 @@ public static partial class IngressAnnotations
                 }
 
                 break;
+            case "proxy-connect-timeout":
+                if (TryInt(value, 1, 3600, out var connectSeconds))
+                {
+                    settings.ConnectTimeoutSeconds = connectSeconds;
+                }
+                else
+                {
+                    Bad("a number of seconds from 1 to 3600");
+                }
+
+                break;
+            case "proxy-next-upstream":
+                if (!TryNextUpstream(value, settings, out var retryProblem))
+                {
+                    settings.Problems.Add($"{key}: {retryProblem}.");
+                }
+
+                break;
+            case "proxy-next-upstream-tries":
+                if (TryInt(value, 1, 1_000_000, out var tries))
+                {
+                    settings.RetryTries = tries;
+                }
+                else
+                {
+                    Bad("a number of tries from 1 to 1000000");
+                }
+
+                break;
+            case "proxy-next-upstream-timeout":
+                if (TryInt(value, 1, 3600, out var trySeconds))
+                {
+                    settings.RetryPerTryTimeoutSeconds = trySeconds;
+                }
+                else
+                {
+                    Bad("a number of seconds from 1 to 3600");
+                }
+
+                break;
+            case "upstream-vhost":
+                if (IsDnsHost(value))
+                {
+                    settings.UpstreamVhost = value;
+                }
+                else
+                {
+                    Bad("a DNS name with no scheme, port, or path");
+                }
+
+                break;
+            case "denylist-source-range":
+                if (TryCidrList(value, out var denied))
+                {
+                    settings.DenyRanges = denied;
+                }
+                else
+                {
+                    Bad("a comma-separated list of addresses or CIDR prefixes");
+                }
+
+                break;
+            case "app-root":
+                if (value.StartsWith('/') && !value.Contains('?', StringComparison.Ordinal) && !value.Contains('#', StringComparison.Ordinal) && !value.Contains(' ', StringComparison.Ordinal))
+                {
+                    settings.AppRoot = value;
+                }
+                else
+                {
+                    Bad("an absolute path starting with \"/\" and no query");
+                }
+
+                break;
+            case "permanent-redirect":
+                if (TryPermanentRedirect(value, out var scheme, out var redirectHost, out var port, out var path))
+                {
+                    settings.PermanentRedirectScheme = scheme;
+                    settings.PermanentRedirectHost = redirectHost;
+                    settings.PermanentRedirectPort = port;
+                    settings.PermanentRedirectPath = path;
+                }
+                else
+                {
+                    Bad("an absolute http or https URL with no query, fragment, or credentials");
+                }
+
+                break;
+            case "permanent-redirect-code":
+                if (value is "301" or "302" or "307" or "308")
+                {
+                    settings.PermanentRedirectCode = int.Parse(value, CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    Bad("301, 302, 307, or 308");
+                }
+
+                break;
         }
+    }
+
+    private static bool TryInt(string value, int min, int max, out int number) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out number) && number >= min && number <= max;
+
+    private static bool TryCidrList(string value, out string canonical)
+    {
+        var ranges = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (ranges.Length > 0 && ranges.All(range => CidrPrefix.TryParse(range, out _)))
+        {
+            canonical = string.Join(",", ranges);
+            return true;
+        }
+
+        canonical = string.Empty;
+        return false;
+    }
+
+    private static bool TryNextUpstream(string value, IngressSettings settings, out string problem)
+    {
+        problem = string.Empty;
+        var tokens = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (tokens.Length == 0)
+        {
+            problem = "expected at least one token";
+            return false;
+        }
+
+        if (tokens.Any(token => token.Equals("off", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (tokens.Length != 1)
+            {
+                problem = "\"off\" cannot be combined with other tokens";
+                return false;
+            }
+
+            settings.RetryOff = true;
+            return true;
+        }
+
+        var codes = new List<int>();
+        foreach (var token in tokens)
+        {
+            switch (token.ToLowerInvariant())
+            {
+                case "error":
+                    problem = "\"error\" is not honored, because a connection failure is not replayed by the status-retry policy";
+                    return false;
+                case "timeout":
+                    break;
+                case "non_idempotent":
+                    settings.RetryNonIdempotent = true;
+                    break;
+                case "http_500":
+                    codes.Add(500);
+                    break;
+                case "http_502":
+                    codes.Add(502);
+                    break;
+                case "http_503":
+                    codes.Add(503);
+                    break;
+                case "http_504":
+                    codes.Add(504);
+                    break;
+                case "http_429":
+                    codes.Add(429);
+                    break;
+                default:
+                    problem = $"unknown token \"{token}\"";
+                    return false;
+            }
+        }
+
+        settings.RetryRequested = true;
+        if (codes.Count > 0)
+        {
+            settings.RetryStatusCodes = codes.Distinct().ToArray();
+        }
+
+        return true;
+    }
+
+    private static bool IsDnsHost(string value) =>
+        value.Length is > 0 and <= 253 && DnsName().IsMatch(value.ToLowerInvariant());
+
+    private static bool TryPermanentRedirect(string value, out string scheme, out string host, out int? port, out string path)
+    {
+        scheme = string.Empty;
+        host = string.Empty;
+        port = null;
+        path = "/";
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("http" or "https") ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment) ||
+            !string.IsNullOrEmpty(uri.UserInfo))
+        {
+            return false;
+        }
+
+        scheme = uri.Scheme;
+        host = uri.HostNameType == UriHostNameType.IPv6 ? "[" + uri.Host + "]" : uri.Host;
+        port = uri.IsDefaultPort ? null : uri.Port;
+        path = string.IsNullOrEmpty(uri.AbsolutePath) ? "/" : uri.AbsolutePath;
+        return host.Length > 0;
     }
 
     private static bool TryBool(string value, out bool result)
@@ -567,6 +849,55 @@ internal sealed class IngressSettings
 
     public int? ReadTimeoutSeconds { get; set; }
 
+    public int? ConnectTimeoutSeconds { get; set; }
+
+    /// <summary><c>proxy-next-upstream: off</c>.</summary>
+    public bool RetryOff { get; set; }
+
+    /// <summary>A retry token list other than <c>off</c> was accepted.</summary>
+    public bool RetryRequested { get; set; }
+
+    public int? RetryTries { get; set; }
+
+    public int? RetryPerTryTimeoutSeconds { get; set; }
+
+    public bool RetryNonIdempotent { get; set; }
+
+    /// <summary>Null keeps the data-plane default of 502, 503, and 504.</summary>
+    public int[]? RetryStatusCodes { get; set; }
+
+    public string? UpstreamVhost { get; set; }
+
+    public string? DenyRanges { get; set; }
+
+    public string? AppRoot { get; set; }
+
+    public string? PermanentRedirectScheme { get; set; }
+
+    public string? PermanentRedirectHost { get; set; }
+
+    public int? PermanentRedirectPort { get; set; }
+
+    public string? PermanentRedirectPath { get; set; }
+
+    public int? PermanentRedirectCode { get; set; }
+
+    /// <summary>True when this Ingress should emit a cluster <c>retry</c> object.</summary>
+    public bool EmitsRetry
+    {
+        get
+        {
+            if (RetryOff)
+            {
+                return false;
+            }
+
+            var active = RetryRequested || RetryTries is > 1 || RetryPerTryTimeoutSeconds is not null;
+            var tries = RetryTries ?? (active ? 2 : 1);
+            return active && tries > 1;
+        }
+    }
+
     /// <summary>Null for no annotation; 0 for "no limit".</summary>
     public long? BodyLimitBytes { get; set; }
 
@@ -604,6 +935,7 @@ internal sealed class IngressSettings
 
     /// <summary>True when the backend needs a cluster of its own, because a cluster-level setting differs from the default.</summary>
     public bool NeedsOwnCluster =>
-        ReadTimeoutSeconds is not null || Protocol != BackendProtocol.Http || AffinityCookie ||
+        ReadTimeoutSeconds is not null || ConnectTimeoutSeconds is not null || EmitsRetry ||
+        Protocol != BackendProtocol.Http || AffinityCookie ||
         (Algorithm is not null && Algorithm != LoadBalanceAlgorithm.RoundRobin) || UpstreamTlsSecret is not null;
 }

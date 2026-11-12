@@ -108,6 +108,8 @@ internal sealed partial class TranslationPass
             EmitEntry(entry, clusters, drafts);
         }
 
+        EmitAppRoots(primaries, drafts);
+
         if (primaries.Count > 0)
         {
             _ingressListeners[httpPort] = _ingressListeners.TryGetValue(httpPort, out var http) && http;
@@ -421,6 +423,34 @@ internal sealed partial class TranslationPass
             return;
         }
 
+        if (settings.PermanentRedirectHost is not null)
+        {
+            if (entry.Canary is not null)
+            {
+                Warn(owner, "CanaryIgnored", $"{entry.Description}: permanent-redirect does not use a backend, so the canary is not served.");
+            }
+
+            drafts.Add(MakeIngressDraft(
+                entry,
+                entry.Id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new RedirectConfig
+                {
+                    Status = settings.PermanentRedirectCode ?? 301,
+                    Scheme = settings.PermanentRedirectScheme,
+                    Host = settings.PermanentRedirectHost,
+                    Port = settings.PermanentRedirectPort,
+                    Path = settings.PermanentRedirectPath,
+                    PreserveQuery = false,
+                }));
+            return;
+        }
+
         var primary = ResolveIngressBackend(owner, entry.Backend, clusters);
         if (primary.Reason is not null)
         {
@@ -510,6 +540,7 @@ internal sealed partial class TranslationPass
             transforms.Add(Transform(TransformKinds.ResponseCors, parameters.ToArray()));
         }
 
+        AddUpstreamVhost(transforms, settings);
         var target = settings.RewriteTarget;
         if (target is null)
         {
@@ -528,7 +559,18 @@ internal sealed partial class TranslationPass
             AddPrefixRewrite(transforms, entry.Prefix ?? string.Empty, target.TrimEnd('/'));
         }
 
+        // The vhost is appended again so it stays after the rewrite. The earlier add covers a rewrite-less route.
+        transforms.RemoveAll(t => t.Kind == TransformKinds.RequestHeaderSet && t.Parameters is not null && t.Parameters.TryGetValue("name", out var name) && name == "Host");
+        AddUpstreamVhost(transforms, settings);
         return transforms.Count == 0 ? null : transforms;
+    }
+
+    private static void AddUpstreamVhost(List<TransformConfig> transforms, IngressSettings settings)
+    {
+        if (settings.UpstreamVhost is { } host)
+        {
+            transforms.Add(Transform(TransformKinds.RequestHeaderSet, ("name", "Host"), ("value", host)));
+        }
     }
 
     /// <summary>Builds the policies this Ingress's annotations ask for, once, in the order they must run (preflight and allow-list before auth).</summary>
@@ -548,9 +590,15 @@ internal sealed partial class TranslationPass
             _ingressPolicies.Add(policy);
         }
 
-        if (settings.WhitelistRanges is { } allow)
+        if (settings.WhitelistRanges is not null || settings.DenyRanges is not null)
         {
-            Add(new RoutePolicyConfig { Name = prefix + "allow", Kind = "ipAllowDeny", Allow = allow });
+            Add(new RoutePolicyConfig
+            {
+                Name = prefix + "allow",
+                Kind = "ipAllowDeny",
+                Allow = settings.WhitelistRanges,
+                Deny = settings.DenyRanges,
+            });
         }
 
         if (settings.CorsOrigins is { } origins)
@@ -596,11 +644,13 @@ internal sealed partial class TranslationPass
         List<WeightedCluster>? weighted,
         List<TransformConfig>? transforms,
         List<string>? policies,
-        int? directStatus)
+        int? directStatus,
+        RedirectConfig? redirect = null)
     {
         var host = entry.Host;
         var meta = entry.Owner.Ingress.Metadata;
         var hostRank = Hostnames.Rank(host);
+        var terminal = directStatus is not null || redirect is not null;
         return new RouteDraft
         {
             Id = id,
@@ -617,7 +667,7 @@ internal sealed partial class TranslationPass
             Factory = order => new RouteConfig
             {
                 Id = id,
-                ClusterId = directStatus is null && clusterId is not null ? clusterId : NoCluster,
+                ClusterId = terminal || clusterId is null ? NoCluster : clusterId,
                 Order = order,
                 Match = new RouteMatch
                 {
@@ -627,11 +677,75 @@ internal sealed partial class TranslationPass
                     Headers = headers,
                     PathCaseSensitive = true,
                 },
-                Transforms = directStatus is null ? transforms : null,
-                Policies = directStatus is null ? policies : null,
-                Clusters = directStatus is null ? weighted : null,
+                Transforms = terminal ? null : transforms,
+                Policies = terminal ? null : policies,
+                Clusters = terminal ? null : weighted,
                 DirectResponse = directStatus is { } status ? new DirectResponseConfig { Status = status } : null,
+                Redirect = redirect,
             },
+        };
+    }
+
+    private void EmitAppRoots(List<IngressEntry> primaries, List<RouteDraft> drafts)
+    {
+        foreach (var owner in primaries.Select(entry => entry.Owner).Distinct())
+        {
+            if (owner.Settings.AppRoot is not { } root || owner.Settings.Problems.Count > 0)
+            {
+                continue;
+            }
+
+            foreach (var host in primaries.Where(entry => entry.Owner == owner).Select(entry => entry.Host).Distinct())
+            {
+                var occupied = primaries.Any(entry =>
+                    string.Equals(entry.Host, host, StringComparison.Ordinal) &&
+                    entry.PathKind == PathMatchKind.Exact &&
+                    entry.Path == "/");
+                if (occupied)
+                {
+                    Warn(owner, "AppRootSkipped", $"app-root is not added for {host ?? "any host"} because that host already has an exact \"/\" rule.");
+                    continue;
+                }
+
+                drafts.Add(MakeAppRoot(owner, host, root));
+            }
+        }
+    }
+
+    private static RouteDraft MakeAppRoot(IngressOutcome owner, string? host, string path)
+    {
+        var id = $"ingress/{owner.Key}/app-root/{host ?? "*"}";
+        return MakeIngressDraft(
+            new IngressEntry
+            {
+                Owner = owner,
+                Host = host,
+                Path = "/",
+                PathKind = PathMatchKind.Exact,
+                Backend = new IngressBackend(),
+                Id = id,
+                RuleIndex = -1,
+                PathIndex = -1,
+            },
+            id,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new RedirectConfig { Status = 302, Path = path, PreserveQuery = false });
+    }
+
+    private static RetryConfig BuildRetry(IngressSettings settings)
+    {
+        var tries = settings.RetryTries ?? 2;
+        return new RetryConfig
+        {
+            Attempts = tries - 1,
+            StatusCodes = settings.RetryStatusCodes,
+            RetryNonIdempotent = settings.RetryNonIdempotent,
+            PerTryTimeoutMilliseconds = settings.RetryPerTryTimeoutSeconds is { } seconds ? seconds * 1000 : 0,
         };
     }
 
@@ -699,14 +813,18 @@ internal sealed partial class TranslationPass
         if (!clusters.Contains(id))
         {
             ClusterHttpClientConfig? httpClient = null;
-            if (settings.ReadTimeoutSeconds is not null || upstream is not null)
+            if (settings.ReadTimeoutSeconds is not null || settings.ConnectTimeoutSeconds is not null || upstream is not null)
             {
                 TimeSpan? requestTimeout = settings.ReadTimeoutSeconds is { } seconds
                     ? TimeSpan.FromSeconds(seconds)
                     : null;
+                TimeSpan? connectTimeout = settings.ConnectTimeoutSeconds is { } connect
+                    ? TimeSpan.FromSeconds(connect)
+                    : null;
                 httpClient = new ClusterHttpClientConfig
                 {
                     RequestTimeout = requestTimeout,
+                    ConnectTimeout = connectTimeout,
                     ClientCertificatePath = upstream?.CertificatePath,
                     ClientCertificateKeyPath = upstream?.KeyPath,
                     CaBundlePath = upstream?.CaPath,
@@ -721,6 +839,7 @@ internal sealed partial class TranslationPass
                     ? new SessionAffinityConfig { Mode = AffinityMode.Cookie, CookieName = "titanium-affinity" }
                     : null,
                 HttpClient = httpClient,
+                Retry = settings.EmitsRetry ? BuildRetry(settings) : null,
                 Destinations = endpoints
                     .Select(e => new DestinationConfig
                     {
