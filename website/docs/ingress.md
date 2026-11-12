@@ -86,7 +86,7 @@ Annotations use the prefix `titanium.io/`. The values are strings, as Kubernetes
 <!-- annotations:start -->
 | Annotation | Value | Data-plane feature | Notes |
 |------------|-------|--------------------|-------|
-| `titanium.io/ssl-redirect` | `false` (default) | none | `false` is accepted. `true` is rejected: the data plane matches routes by host, path, header, query, and method, not by scheme, so a redirect route would also redirect HTTPS requests in a loop. |
+| `titanium.io/ssl-redirect` | `true` or `false` (default) | `httpsRedirect` policy | `true` redirects a cleartext request to https and leaves an https request alone. A trusted proxy that sends `X-Forwarded-Proto: https` is treated as already secure. `false` does nothing. |
 | `titanium.io/rewrite-target` | a path starting with `/` | `PathRegexReplace` transform | Replaces the matched prefix (`Prefix`, `ImplementationSpecific`) or the whole path (`Exact`). Capture groups (`$1`) are not supported and are rejected. The query string is kept. |
 | `titanium.io/proxy-read-timeout` | seconds, 1-3600 | cluster `httpClient.requestTimeout` | How long the data plane waits for the backend's response headers. Gives the backend its own cluster. |
 | `titanium.io/proxy-connect-timeout` | seconds, 1-3600 | cluster `httpClient.connectTimeout` | How long the data plane waits to open the backend connection. Gives the backend its own cluster. |

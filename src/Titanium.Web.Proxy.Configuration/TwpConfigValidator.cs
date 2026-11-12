@@ -826,7 +826,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", RateLimitPolicyKind, "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", RateLimitPolicyKind, "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf", "httpsRedirect",
     };
 
     private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
@@ -930,6 +930,18 @@ public static class TwpConfigValidator
                 {
                     errors.Add(
                         $"Policy '{name}' (connectionLimit) key '{policy.Key}' must be client, forwardedClient, or route.");
+                }
+
+                break;
+            case "httpsRedirect":
+                if (policy.RedirectStatus is int status && status is not (301 or 302 or 307 or 308))
+                {
+                    errors.Add($"Policy '{name}' (httpsRedirect) status {status} must be 301, 302, 307, or 308.");
+                }
+
+                if (policy.Port is < 1 or > 65535)
+                {
+                    errors.Add($"Policy '{name}' (httpsRedirect) port must be 1-65535.");
                 }
 
                 break;

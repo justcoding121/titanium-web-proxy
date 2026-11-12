@@ -453,6 +453,28 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void HttpsRedirect_AcceptsTheStatusSet_AndRejectsAnythingElse()
+    {
+        var ok = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies = [new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect", Port = 8443, RedirectStatus = 301 }],
+            Routes = [Route("r", "c", "https")],
+        };
+        Assert.AreEqual(0, TwpConfigValidator.Validate(ok).Count, Errors(ok));
+
+        var bad = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies = [new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect", Port = 0, RedirectStatus = 200 }],
+            Routes = [Route("r", "c", "https")],
+        };
+        var errors = Errors(bad);
+        StringAssert.Contains(errors, "port");
+        StringAssert.Contains(errors, "status");
+    }
+
+    [TestMethod]
     public void Regexes_ThatDoNotCompile_AreRejected()
     {
         var config = new TwpConfig

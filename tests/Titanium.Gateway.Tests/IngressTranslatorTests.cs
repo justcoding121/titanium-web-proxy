@@ -629,17 +629,37 @@ public class IngressTranslatorTests
     }
 
     [TestMethod]
-    public void Annotations_SslRedirectFalse_IsAccepted_AndTrueIsRejectedLoudly()
+    public void Annotations_SslRedirect_TrueBecomesAnHttpsRedirect_AndFalseDoesNothing()
     {
         var (accepted, okRoute) = Annotated((A("ssl-redirect"), "false"));
         Assert.AreEqual(0, accepted.Events.Count);
         Assert.IsNull(okRoute.DirectResponse);
+        Assert.AreEqual(0, accepted.Config.Policies.Count);
 
-        var (rejected, route) = Annotated((A("ssl-redirect"), "true"));
-        Assert.AreEqual(500, route.DirectResponse?.Status);
-        var warning = EventFor(rejected, "InvalidAnnotation")!;
-        StringAssert.Contains(warning.Message, "ssl-redirect");
-        StringAssert.Contains(warning.Message, "scheme");
+        var (redirected, route) = Annotated((A("ssl-redirect"), "true"));
+        var policy = redirected.Config.Policies.Single();
+        Assert.AreEqual("httpsRedirect", policy.Kind);
+        Assert.IsNull(policy.Port);
+        Assert.IsNull(policy.RedirectStatus);
+        CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
+        Assert.IsNull(route.DirectResponse);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(redirected.Config).Count);
+    }
+
+    [TestMethod]
+    public void Annotations_SslRedirect_ThatIsNotABoolean_Answers500() =>
+        Assert.AreEqual(500, Annotated((A("ssl-redirect"), "yes")).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_SslRedirect_RunsAfterTheAllowListAndBeforeCors()
+    {
+        var (result, route) = Annotated(
+            (A("ssl-redirect"), "true"),
+            (A("cors-allow-origin"), "*"),
+            (A("whitelist-source-range"), "10.0.0.0/8"));
+
+        var kinds = route.Policies!.Select(n => result.Config.Policies.Single(p => p.Name == n).Kind).ToArray();
+        CollectionAssert.AreEqual(new[] { "ipAllowDeny", "httpsRedirect", "cors" }, kinds);
     }
 
     [TestMethod]

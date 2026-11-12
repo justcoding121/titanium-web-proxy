@@ -710,6 +710,10 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.EmitHeaders.get -> boo
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.EmitHeaders.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Key.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Key.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Port.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Port.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RedirectStatus.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RedirectStatus.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.init -> void
 const Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.DefaultMaxBytes = 1048576 -> int
