@@ -490,13 +490,21 @@ internal sealed partial class TranslationPass
 
     private static List<TransformConfig>? BuildIngressTransforms(IngressEntry entry)
     {
-        var target = entry.Owner.Settings.RewriteTarget;
-        if (target is null)
+        var settings = entry.Owner.Settings;
+        var transforms = new List<TransformConfig>();
+
+        // The cors policy answers the preflight; this adds the allow header to the real response.
+        if (settings.CorsOrigins is { } corsOrigins)
         {
-            return null;
+            transforms.Add(Transform(TransformKinds.ResponseCors, ("origins", corsOrigins)));
         }
 
-        var transforms = new List<TransformConfig>();
+        var target = settings.RewriteTarget;
+        if (target is null)
+        {
+            return transforms.Count == 0 ? null : transforms;
+        }
+
         if (entry.PathKind == PathMatchKind.Exact)
         {
             transforms.Add(Transform(
