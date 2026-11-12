@@ -143,6 +143,33 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void CorsPolicy_RejectsCredentialsWithAnyOrigin_AndAnOutOfRangeMaxAge()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "star", Kind = "cors", Origins = "*", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "missing", Kind = "cors", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "mixed", Kind = "cors", Origins = "https://a.test,*", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "age", Kind = "cors", Origins = "https://a.test", MaxAgeSeconds = 86401 },
+                new RoutePolicyConfig { Name = "neg", Kind = "cors", MaxAgeSeconds = -1 },
+                new RoutePolicyConfig { Name = "ok", Kind = "cors", Origins = "https://a.test", AllowCredentials = true, MaxAgeSeconds = 0 },
+            ],
+            Routes = [Route("r", "c", "ok")],
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "'star' (cors) allowCredentials");
+        StringAssert.Contains(errors, "'missing' (cors) allowCredentials");
+        StringAssert.Contains(errors, "'mixed' (cors) allowCredentials");
+        StringAssert.Contains(errors, "'age' (cors) maxAgeSeconds");
+        StringAssert.Contains(errors, "'neg' (cors) maxAgeSeconds");
+        Assert.IsFalse(errors.Contains("'ok'", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void ExtAuthPolicy_RequiresAnAbsoluteHttpUrl_AndSaneLimitsAndHeaders()
     {
         var config = new TwpConfig

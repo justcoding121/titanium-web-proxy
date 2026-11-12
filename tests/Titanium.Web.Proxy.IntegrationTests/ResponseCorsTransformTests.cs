@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -77,6 +78,85 @@ public class ResponseCorsTransformTests
         }
     }
 
+    [TestMethod]
+    [Timeout(60 * 1000)]
+    public async Task Preflight_IsAnsweredLocally_AndAPlainOptionsReachesTheOrigin()
+    {
+        var (origin, originPort) = BindLoopbackHttpListener();
+        using var cts = new CancellationTokenSource();
+        var hits = 0;
+        var accept = Task.Run(() => ServeAsync(origin, cts.Token, () => Interlocked.Increment(ref hits)), cts.Token);
+
+        using var proxy = new ProxyServer(false, false, false)
+        {
+            EnableHttp2 = false,
+            EnableHttpInterception = true,
+        };
+        var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: false)
+        {
+            GenericCertificateName = "localhost",
+            ForwardHost = "127.0.0.1",
+            ForwardPort = originPort,
+            ForwardCleartext = true,
+        };
+        proxy.AddEndPoint(endPoint);
+        await AttachRouteAsync(
+            proxy,
+            originPort,
+            "https://app.example.com",
+            new RoutePolicyConfig
+            {
+                Name = "cors",
+                Kind = "cors",
+                Origins = "https://app.example.com",
+                AllowCredentials = true,
+                MaxAgeSeconds = 600,
+                ExposeHeaders = "X-Request-Id",
+            },
+            new Dictionary<string, string>
+            {
+                ["allowCredentials"] = "true",
+                ["exposeHeaders"] = "X-Request-Id",
+            });
+        proxy.Start();
+
+        try
+        {
+            using var handler = new HttpClientHandler { UseProxy = false };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+
+            using var preflight = new HttpRequestMessage(HttpMethod.Options, $"http://127.0.0.1:{endPoint.Port}/data");
+            preflight.Headers.TryAddWithoutValidation("Origin", "https://app.example.com");
+            preflight.Headers.TryAddWithoutValidation("Access-Control-Request-Method", "GET");
+            using var preflightResponse = await client.SendAsync(preflight);
+            Assert.AreEqual(HttpStatusCode.NoContent, preflightResponse.StatusCode);
+            Assert.AreEqual("https://app.example.com", string.Join(",", preflightResponse.Headers.GetValues("Access-Control-Allow-Origin")));
+            Assert.AreEqual("true", string.Join(",", preflightResponse.Headers.GetValues("Access-Control-Allow-Credentials")));
+            Assert.AreEqual("600", string.Join(",", preflightResponse.Headers.GetValues("Access-Control-Max-Age")));
+            Assert.AreEqual(0, Volatile.Read(ref hits), "a preflight is answered without calling the origin");
+
+            using var plain = new HttpRequestMessage(HttpMethod.Options, $"http://127.0.0.1:{endPoint.Port}/data");
+            using var plainResponse = await client.SendAsync(plain);
+            Assert.AreEqual(HttpStatusCode.OK, plainResponse.StatusCode);
+            Assert.AreEqual("ok", await plainResponse.Content.ReadAsStringAsync());
+            Assert.AreEqual(1, Volatile.Read(ref hits), "a plain OPTIONS reaches the origin");
+
+            using var actual = await GetAsync(client, endPoint.Port, "https://app.example.com");
+            Assert.AreEqual(HttpStatusCode.OK, actual.StatusCode);
+            Assert.AreEqual("https://app.example.com", string.Join(",", actual.Headers.GetValues("Access-Control-Allow-Origin")));
+            Assert.AreEqual("true", string.Join(",", actual.Headers.GetValues("Access-Control-Allow-Credentials")));
+            Assert.AreEqual("X-Request-Id", string.Join(",", actual.Headers.GetValues("Access-Control-Expose-Headers")));
+            Assert.AreEqual(2, Volatile.Read(ref hits));
+        }
+        finally
+        {
+            cts.Cancel();
+            proxy.Stop();
+            try { origin.Stop(); origin.Close(); } catch { /* ignore */ }
+            try { await accept.WaitAsync(TimeSpan.FromSeconds(2)); } catch { /* ignore */ }
+        }
+    }
+
     private static Task<HttpResponseMessage> GetAsync(HttpClient client, int port, string? requestOrigin)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{port}/data");
@@ -88,7 +168,12 @@ public class ResponseCorsTransformTests
         return client.SendAsync(request);
     }
 
-    private static async Task AttachRouteAsync(ProxyServer proxy, int originPort, string origins)
+    private static async Task AttachRouteAsync(
+        ProxyServer proxy,
+        int originPort,
+        string origins,
+        RoutePolicyConfig? policy = null,
+        Dictionary<string, string>? extraCors = null)
     {
         var manager = new ClusterManager();
         await manager.ApplyAsync(
@@ -108,8 +193,18 @@ public class ResponseCorsTransformTests
                 ],
             },
         ]);
+        var parameters = new Dictionary<string, string> { ["origins"] = origins };
+        if (extraCors is not null)
+        {
+            foreach (var (key, value) in extraCors)
+            {
+                parameters[key] = value;
+            }
+        }
+
         proxy.ReverseProxy = new ReverseProxyOptions
         {
+            Policies = policy is null ? null : [policy],
             Routes =
             [
                 new RouteConfig
@@ -117,12 +212,13 @@ public class ResponseCorsTransformTests
                     Id = "r",
                     ClusterId = "c",
                     Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
+                    Policies = policy is null ? null : [policy.Name],
                     Transforms =
                     [
                         new TransformConfig
                         {
                             Kind = TransformKinds.ResponseCors,
-                            Parameters = new System.Collections.Generic.Dictionary<string, string> { ["origins"] = origins },
+                            Parameters = parameters,
                         },
                     ],
                 },
@@ -160,7 +256,7 @@ public class ResponseCorsTransformTests
     }
 
     /// <summary>Answers 200 with its own <c>Vary</c>, so the test can see the proxy join rather than replace it.</summary>
-    private static async Task ServeAsync(HttpListener listener, CancellationToken ct)
+    private static async Task ServeAsync(HttpListener listener, CancellationToken ct, Action? onRequest = null)
     {
         while (!ct.IsCancellationRequested && listener.IsListening)
         {
@@ -170,6 +266,7 @@ public class ResponseCorsTransformTests
 
             try
             {
+                onRequest?.Invoke();
                 var body = Encoding.UTF8.GetBytes("ok");
                 ctx.Response.StatusCode = 200;
                 ctx.Response.ContentType = "text/plain";

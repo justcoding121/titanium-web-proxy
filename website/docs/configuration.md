@@ -490,6 +490,9 @@ policies:
     origins: https://app.example.com
     methods: POST, OPTIONS
     headerName: content-type, x-grpc-web, x-user-agent, grpc-timeout
+    allowCredentials: true
+    exposeHeaders: grpc-status, grpc-message
+    maxAgeSeconds: 600
 routes:
   - id: api
     clusterId: grpc-backend
@@ -497,7 +500,11 @@ routes:
     policies: [grpc-web-cors]
 ```
 
-The policy answers preflights only. For the real response, expose the status headers with a `ResponseHeaderSet` transform (`Access-Control-Allow-Origin`, and `Access-Control-Expose-Headers: grpc-status, grpc-message`).
+A preflight is `OPTIONS` with both `Origin` and `Access-Control-Request-Method`. Any other `OPTIONS` is forwarded to the origin. A listed origin is echoed with `Vary: Origin`. `origins: "*"` sends `*`. An origin that is not listed gets `204` and `Vary`, and no `Access-Control-Allow-*` header. `allowCredentials: true` adds `Access-Control-Allow-Credentials` and, when `headerName` is omitted, reflects `Access-Control-Request-Headers` instead of sending `*`. `allowCredentials: true` with `origins: "*"` or no origin list is rejected when the config loads. `maxAgeSeconds` must be 0-86400 and is sent as `Access-Control-Max-Age`.
+
+On the actual response, a `ResponseCors` transform with the same `origins` writes `Access-Control-Allow-Origin`. Its `allowCredentials` and `exposeHeaders` parameters write `Access-Control-Allow-Credentials` and `Access-Control-Expose-Headers`. Credentials are not written when the transform's origins are `*`.
+
+A plain `OPTIONS` that used to be answered locally now reaches the origin, and an unlisted origin no longer receives another origin's allow header.
 
 ### Login (route policy `oidc`, Plus)
 

@@ -645,6 +645,12 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Allow.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Deny.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Origins.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Origins.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowCredentials.get -> bool?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowCredentials.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ExposeHeaders.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ExposeHeaders.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxAgeSeconds.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxAgeSeconds.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Methods.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
 Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Headers.init -> void

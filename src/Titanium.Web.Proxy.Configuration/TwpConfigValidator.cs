@@ -955,7 +955,42 @@ public static class TwpConfigValidator
             case "waf":
                 ValidateWaf(policy, errors);
                 break;
+            case "cors":
+                ValidateCors(policy, errors);
+                break;
         }
+    }
+
+    private static void ValidateCors(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.AllowCredentials == true && CorsOriginsAllowAny(policy.Origins))
+        {
+            errors.Add($"Policy '{name}' (cors) allowCredentials cannot be combined with origins \"*\" or a missing origin list.");
+        }
+
+        if (policy.MaxAgeSeconds is < 0 or > 86_400)
+        {
+            errors.Add($"Policy '{name}' (cors) maxAgeSeconds must be 0-86400.");
+        }
+    }
+
+    private static bool CorsOriginsAllowAny(string? origins)
+    {
+        if (string.IsNullOrWhiteSpace(origins))
+        {
+            return true;
+        }
+
+        foreach (var part in origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == "*")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void ValidateWaf(RoutePolicyConfig policy, List<string> errors) // NOSONAR S3776 -- WAF policy validation checks mode, thresholds, and exclusions together.
