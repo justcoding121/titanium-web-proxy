@@ -51,7 +51,7 @@ jobs:
         "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         Write-Host "scripting RID=$rid"
     - name: Cache scripting natives
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: tools/packaging/.cache/scripting-natives
         key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.unit-scripting-rid.outputs.rid }}
@@ -183,7 +183,7 @@ jobs:
         "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         Write-Host "scripting RID=$rid"
     - name: Cache scripting natives
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: tools/packaging/.cache/scripting-natives
         key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.heavy-scripting-rid.outputs.rid }}
