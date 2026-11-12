@@ -973,6 +973,103 @@ public static class TwpConfigValidator
         {
             errors.Add($"Policy '{name}' (cors) maxAgeSeconds must be 0-86400.");
         }
+
+        ValidateCorsOriginList(name, policy.Origins, errors);
+    }
+
+    private static void ValidateCorsOriginList(string name, string? origins, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(origins))
+        {
+            return;
+        }
+
+        var sawStar = false;
+        var sawOther = false;
+        foreach (var part in origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == "*")
+            {
+                sawStar = true;
+                continue;
+            }
+
+            sawOther = true;
+            if (part.StartsWith("regex:", StringComparison.Ordinal))
+            {
+                if (!CompilesAsWholeValueRegex(part["regex:".Length..]))
+                {
+                    errors.Add($"Policy '{name}' (cors) origins regex does not compile as a whole-value pattern.");
+                }
+
+                continue;
+            }
+
+            if (part.Contains('*'))
+            {
+                if (!IsCorsWildcard(part))
+                {
+                    errors.Add($"Policy '{name}' (cors) origins wildcard '{part}' must be http(s)://*.example.com with an optional port.");
+                }
+
+                continue;
+            }
+
+            if (!IsCorsExactOrigin(part))
+            {
+                errors.Add($"Policy '{name}' (cors) origins entry '{part}' is not an http(s) origin.");
+            }
+        }
+
+        if (sawStar && sawOther)
+        {
+            errors.Add($"Policy '{name}' (cors) origins cannot mix \"*\" with other entries.");
+        }
+    }
+
+    private static bool IsCorsExactOrigin(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        {
+            return false;
+        }
+
+        return string.IsNullOrEmpty(uri.UserInfo) &&
+            uri.AbsolutePath is "" or "/" &&
+            string.IsNullOrEmpty(uri.Query) &&
+            string.IsNullOrEmpty(uri.Fragment) &&
+            !value.EndsWith('/') &&
+            !value.Contains('*');
+    }
+
+    private static bool IsCorsWildcard(string value)
+    {
+        var schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd <= 0 || value[..schemeEnd] is not ("http" or "https"))
+        {
+            return false;
+        }
+
+        var rest = value[(schemeEnd + 3)..];
+        if (!rest.StartsWith("*.", StringComparison.Ordinal) || rest.AsSpan(2).Contains('*') || rest.Contains('/') || rest.Contains('?') || rest.Contains('#'))
+        {
+            return false;
+        }
+
+        var host = rest[2..];
+        var colon = host.LastIndexOf(':');
+        if (colon >= 0)
+        {
+            if (!int.TryParse(host[(colon + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
+            {
+                return false;
+            }
+
+            host = host[..colon];
+        }
+
+        var dot = host.IndexOf('.');
+        return dot > 0 && dot < host.Length - 1 && !host.EndsWith('.');
     }
 
     private static bool CorsOriginsAllowAny(string? origins)

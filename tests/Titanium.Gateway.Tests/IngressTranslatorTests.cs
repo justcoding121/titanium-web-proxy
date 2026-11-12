@@ -835,6 +835,8 @@ public class IngressTranslatorTests
     [DataRow("*")]
     [DataRow("https://app.example.com")]
     [DataRow("https://a.example.com, http://b.example.com:8080")]
+    [DataRow("https://*.example.com")]
+    [DataRow("https://*.example.com:8443")]
     public void Annotations_CorsAllowOrigin_BecomesACorsPolicy(string value)
     {
         var (result, _) = Annotated((A("cors-allow-origin"), value));
@@ -880,6 +882,11 @@ public class IngressTranslatorTests
     [DataRow("https://app.example.com/path")]
     [DataRow("*,https://a.example.com")]
     [DataRow("ftp://a.example.com")]
+    [DataRow("https://*")]
+    [DataRow("https://*.com")]
+    [DataRow("https://a*.example.com")]
+    [DataRow("https://*.*.example.com")]
+    [DataRow("regex:https://.*")]
     public void Annotations_CorsAllowOrigin_Invalid_Answers500(string value) =>
         Assert.AreEqual(500, Annotated((A("cors-allow-origin"), value)).Route.DirectResponse?.Status);
 
