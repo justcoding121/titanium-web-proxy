@@ -41,7 +41,7 @@ public static partial class IngressAnnotations
         ["cors-allow-methods", "cors-allow-headers", "cors-allow-credentials", "cors-expose-headers", "cors-max-age"];
 
     /// <summary>Every annotation, in the order the docs list them.</summary>
-    public static IReadOnlyList<AnnotationSpec> All { get; } =
+    public static IReadOnlyList<AnnotationSpec> All { get; } = InsertAdded(
     [
         new("ssl-redirect", "`false` (default)",
             "none",
@@ -52,33 +52,6 @@ public static partial class IngressAnnotations
         new("proxy-read-timeout", "seconds, 1-3600",
             "cluster `httpClient.requestTimeout`",
             "How long the data plane waits for the backend's response headers. Gives the backend its own cluster."),
-        new("proxy-connect-timeout", "seconds, 1-3600",
-            "cluster `httpClient.connectTimeout`",
-            "How long the data plane waits to open the backend connection. Gives the backend its own cluster."),
-        new("proxy-next-upstream", "`off`, `http_500`, `http_502`, `http_503`, `http_504`, `http_429`, `non_idempotent`, `timeout`",
-            "cluster `retry`",
-            "`error` is rejected: a connection failure is not replayed by this policy. `timeout` replays when `proxy-next-upstream-timeout` is set. Omitting the status tokens keeps the default 502, 503, and 504. Gives the backend its own cluster."),
-        new("proxy-next-upstream-tries", "total tries including the first, 1-1000000",
-            "cluster `retry.attempts` (tries minus one)",
-            "`1` turns retry off. `0` is rejected. When omitted, two tries are used once another retry annotation is set. Gives the backend its own cluster."),
-        new("proxy-next-upstream-timeout", "seconds, 1-3600",
-            "cluster `retry.perTryTimeoutMilliseconds`",
-            "Per-try deadline. A timeout is replayed onto another destination. Gives the backend its own cluster."),
-        new("upstream-vhost", "a DNS name",
-            "`RequestHeaderSet` of `Host`",
-            "Sets the Host header sent to the backend, after any rewrite. No scheme, port, or path."),
-        new("denylist-source-range", "comma-separated addresses or CIDR prefixes",
-            "`ipAllowDeny` policy (`deny`)",
-            "A listed address gets 403. Combined with `whitelist-source-range` on one policy."),
-        new("app-root", "an absolute path starting with `/`",
-            "redirect route for exact `/`",
-            "Adds a 302 to that path for each host, ahead of the Ingress's other rules. Skipped, with a warning, when that host already has an exact `/` rule. No query."),
-        new("permanent-redirect", "an absolute http or https URL",
-            "redirect route",
-            "The Ingress's rules redirect and do not use a backend. No query, fragment, or credentials. `permanent-redirect-code` is 301, 302, 307, or 308 (default 301). Rejected together with `canary` set to true."),
-        new("permanent-redirect-code", "`301`, `302`, `307`, or `308`",
-            "redirect status",
-            "Used with `permanent-redirect`. Default 301."),
         new("proxy-body-size", "`8m`, `512k`, `1g`, or bytes; `0` for no limit",
             "`maxRequestBodySize` policy",
             "Checked against `Content-Length`; a request with no length (chunked) is not checked. Answers `413`."),
@@ -130,7 +103,71 @@ public static partial class IngressAnnotations
         new("upstream-tls-secret", "`name` (same namespace) or `namespace/name` of the Ingress's own namespace",
             "cluster `httpClient` TLS files",
             "A `kubernetes.io/tls` Secret. `ca.crt` becomes the trust anchors for the backend, and `tls.crt` and `tls.key` the client certificate. Needs `backend-protocol: HTTPS`. Gives the backend its own cluster."),
-    ];
+    ]);
+
+    /// <summary>Annotations inserted after <c>proxy-read-timeout</c>. Four lines each: name, values, feature, notes.</summary>
+    private const string AddedCatalog = """
+        proxy-connect-timeout
+        seconds, 1-3600
+        cluster `httpClient.connectTimeout`
+        How long the data plane waits to open the backend connection. Gives the backend its own cluster.
+        proxy-next-upstream
+        `off`, `http_500`, `http_502`, `http_503`, `http_504`, `http_429`, `non_idempotent`, `timeout`
+        cluster `retry`
+        `error` is rejected: a connection failure is not replayed by this policy. `timeout` replays when `proxy-next-upstream-timeout` is set. Omitting the status tokens keeps the default 502, 503, and 504. Gives the backend its own cluster.
+        proxy-next-upstream-tries
+        total tries including the first, 1-1000000
+        cluster `retry.attempts` (tries minus one)
+        `1` turns retry off. `0` is rejected. When omitted, two tries are used once another retry annotation is set. Gives the backend its own cluster.
+        proxy-next-upstream-timeout
+        seconds, 1-3600
+        cluster `retry.perTryTimeoutMilliseconds`
+        Per-try deadline. A timeout is replayed onto another destination. Gives the backend its own cluster.
+        upstream-vhost
+        a DNS name
+        `RequestHeaderSet` of `Host`
+        Sets the Host header sent to the backend, after any rewrite. No scheme, port, or path.
+        denylist-source-range
+        comma-separated addresses or CIDR prefixes
+        `ipAllowDeny` policy (`deny`)
+        A listed address gets 403. Combined with `whitelist-source-range` on one policy.
+        app-root
+        an absolute path starting with `/`
+        redirect route for exact `/`
+        Adds a 302 to that path for each host, ahead of the Ingress's other rules. Skipped, with a warning, when that host already has an exact `/` rule. No query.
+        permanent-redirect
+        an absolute http or https URL
+        redirect route
+        The Ingress's rules redirect and do not use a backend. No query, fragment, or credentials. `permanent-redirect-code` is 301, 302, 307, or 308 (default 301). Rejected together with `canary` set to true.
+        permanent-redirect-code
+        `301`, `302`, `307`, or `308`
+        redirect status
+        Used with `permanent-redirect`. Default 301.
+        """;
+
+    private static IReadOnlyList<AnnotationSpec> InsertAdded(IReadOnlyList<AnnotationSpec> specs)
+    {
+        var list = new List<AnnotationSpec>(specs.Count + 9);
+        foreach (var spec in specs)
+        {
+            list.Add(spec);
+            if (spec.Name == "proxy-read-timeout")
+            {
+                list.AddRange(ReadAdded());
+            }
+        }
+
+        return list;
+    }
+
+    private static IEnumerable<AnnotationSpec> ReadAdded()
+    {
+        var lines = AddedCatalog.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var i = 0; i < lines.Length; i += 4)
+        {
+            yield return new AnnotationSpec(lines[i], lines[i + 1], lines[i + 2], lines[i + 3]);
+        }
+    }
 
     private static readonly Dictionary<string, AnnotationSpec> ByName =
         All.ToDictionary(a => a.Name, StringComparer.Ordinal);
