@@ -504,6 +504,8 @@ A preflight is `OPTIONS` with both `Origin` and `Access-Control-Request-Method`.
 
 On the actual response, a `ResponseCors` transform with the same `origins` writes `Access-Control-Allow-Origin`. Its `allowCredentials` and `exposeHeaders` parameters write `Access-Control-Allow-Credentials` and `Access-Control-Expose-Headers`. Credentials are not written when the transform's origins are `*`.
 
+A reply the proxy generates itself on a route that lists `cors` (a policy denial, redirect, direct response, or bad gateway) carries the same allow-origin, credentials, expose-headers, and `Vary: Origin` when the list is not `*`. A real preflight is not refused by an `apiKey` or `requireHeader` policy listed earlier. `ipAllowDeny`, `rateLimit`, and `geo` still apply to that preflight. `extAuth` and `oidc` are session-path policies and are unchanged.
+
 A plain `OPTIONS` that used to be answered locally now reaches the origin, and an unlisted origin no longer receives another origin's allow header.
 
 ### Login (route policy `oidc`, Plus)

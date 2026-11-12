@@ -393,6 +393,7 @@ internal static class ReverseProxySessionDispatch
             var location = BuildRedirect(args.HttpClient.Request, redirect);
             args.GenericResponse(string.Empty, (HttpStatusCode)redirect.Status,
                 [new HttpHeader("Location", location)]);
+            ApplyTerminalCors(args, route);
             return;
         }
 
@@ -417,6 +418,15 @@ internal static class ReverseProxySessionDispatch
         }
 
         args.GenericResponse(direct.Body ?? string.Empty, (HttpStatusCode)direct.Status, headers);
+        ApplyTerminalCors(args, route);
+    }
+
+    private static void ApplyTerminalCors(SessionEventArgs args, RouteConfig route)
+    {
+        if (args.HttpClient.Response is { } response && args.Server.ReverseProxy is { } options)
+        {
+            RoutePolicies.ApplyLocalCors(response, route, args.HttpClient.Request, options);
+        }
     }
 
     internal static string BuildRedirect(Request request, RedirectConfig redirect)
@@ -548,6 +558,11 @@ internal static class ReverseProxySessionDispatch
         }
 
         session.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+        if (session.MatchedRoute is { } route && session.Server.ReverseProxy is { } options)
+        {
+            RoutePolicies.ApplyLocalCors(session.HttpClient.Response, route, request, options);
+        }
+
         await clientStream.WriteResponseAsync(session.HttpClient.Response, cancellationToken).ConfigureAwait(false);
         session.IsClientResponseCommitted = true;
     }
@@ -562,6 +577,11 @@ internal static class ReverseProxySessionDispatch
                 new HttpHeader("grpc-status", "14"),
                 new HttpHeader("grpc-message", "no available destination"),
             ]);
+            if (session.MatchedRoute is { } grpcRoute && session.Server.ReverseProxy is { } grpcOptions && session.HttpClient.Response is { } grpcResponse)
+            {
+                RoutePolicies.ApplyLocalCors(grpcResponse, grpcRoute, session.HttpClient.Request, grpcOptions);
+            }
+
             return;
         }
 
@@ -571,6 +591,10 @@ internal static class ReverseProxySessionDispatch
             new HttpHeader("Retry-After", "1"),
             new HttpHeader(KnownHeaders.ContentType.String, page?.ContentType ?? "text/plain"),
         ]);
+        if (session.MatchedRoute is { } route && session.Server.ReverseProxy is { } options && session.HttpClient.Response is { } response)
+        {
+            RoutePolicies.ApplyLocalCors(response, route, session.HttpClient.Request, options);
+        }
     }
 
     private static void ApplyErrorPage(SessionEventArgsBase session, int status)

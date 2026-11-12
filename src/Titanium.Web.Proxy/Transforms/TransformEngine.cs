@@ -195,18 +195,11 @@ public sealed class TransformEngine : ITransformEngine
         {
             StageResponseAppend(context, "Vary", "Origin");
             var origin = context.ExistingRequestHeader?.Invoke("Origin");
-            if (!string.IsNullOrEmpty(origin))
+            if (!string.IsNullOrEmpty(origin) && Routing.RoutePolicies.AllowedOrigin(allowed, origin) is { } echoedOrigin)
             {
-                foreach (var candidate in allowed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-                {
-                    if (string.Equals(candidate, origin, StringComparison.Ordinal))
-                    {
-                        context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = origin;
-                        context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
-                        echoed = true;
-                        break;
-                    }
-                }
+                context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = echoedOrigin;
+                context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
+                echoed = true;
             }
         }
 

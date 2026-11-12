@@ -959,7 +959,36 @@ public class H1TerminateLiteIntegrationTests
         }
     }
 
-    private static async Task AttachRouteAsync(ProxyServer proxy, int originPort, RouteMatch match)
+    [TestMethod]
+    [Timeout(30_000)]
+    public async Task ApiKeyDenial_OnLite_EchoesTheCorsOrigin()
+    {
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAsync(s);
+            await s.WriteAsync(OkWithBody("no", keepAlive: false));
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            var cors = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://app.example.com" };
+            var key = new RoutePolicyConfig { Name = "key", Kind = "apiKey", HeaderName = "X-Api-Key", HeaderValue = "secret" };
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix }, [key, cors]);
+            using var client = MakeClient();
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://127.0.0.1:{ep.Port}/");
+            request.Headers.TryAddWithoutValidation("Origin", "https://app.example.com");
+            var response = await client.SendAsync(request);
+            Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.IsTrue(response.Headers.TryGetValues("Access-Control-Allow-Origin", out var allow));
+            Assert.AreEqual("https://app.example.com", string.Join(",", allow!));
+            Assert.IsTrue(response.Headers.TryGetValues("Vary", out var vary));
+            StringAssert.Contains(string.Join(",", vary!), "Origin");
+        }
+        finally { proxy.Stop(); proxy.Dispose(); }
+    }
+
+    private static async Task AttachRouteAsync(
+        ProxyServer proxy, int originPort, RouteMatch match, RoutePolicyConfig[]? policies = null)
     {
         var manager = new ClusterManager();
         await manager.ApplyAsync(
@@ -970,9 +999,19 @@ public class H1TerminateLiteIntegrationTests
                 Destinations = [new DestinationConfig { Id = "d", Address = "127.0.0.1", Port = originPort }],
             },
         ]);
+        var names = policies is null ? null : new string[policies.Length];
+        if (policies is not null)
+        {
+            for (var i = 0; i < policies.Length; i++)
+            {
+                names![i] = policies[i].Name;
+            }
+        }
+
         proxy.ReverseProxy = new ReverseProxyOptions
         {
-            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match }],
+            Routes = [new RouteConfig { Id = "r", ClusterId = "c", Match = match, Policies = names }],
+            Policies = policies,
             ClusterManager = manager,
             RouteMatcher = new RouteMatcher(),
             LoadBalancer = new LoadBalancer(),
