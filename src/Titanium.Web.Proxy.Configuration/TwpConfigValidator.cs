@@ -1852,9 +1852,51 @@ public static class TwpConfigValidator
 
     private static void ValidateRouteRedirect(RouteConfig route, List<string> errors)
     {
-        if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
+        if (route.Redirect is not { } redirect)
         {
-            errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
+            return;
+        }
+
+        if (redirect.Status is < 300 or > 399)
+        {
+            errors.Add($"Route '{route.Id}' redirect status {redirect.Status} is not a 3xx code.");
+        }
+
+        if (redirect.ReplacePrefixTo is not null && redirect.ReplacePrefixFrom is null)
+        {
+            errors.Add($"Route '{route.Id}' redirect replacePrefixTo needs replacePrefixFrom.");
+        }
+
+        ValidateRedirectPrefix(route.Id, "replacePrefixFrom", redirect.ReplacePrefixFrom, errors);
+        ValidateRedirectPrefix(route.Id, "replacePrefixTo", redirect.ReplacePrefixTo, errors);
+        if (!string.IsNullOrEmpty(redirect.Path) &&
+            (redirect.ReplacePrefixFrom is not null || redirect.ReplacePrefixTo is not null))
+        {
+            errors.Add($"Route '{route.Id}' redirect path cannot be combined with replacePrefixFrom or replacePrefixTo.");
+        }
+    }
+
+    /// <summary>Empty is the root. Otherwise a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters.</summary>
+    private static void ValidateRedirectPrefix(string routeId, string name, string? value, List<string> errors)
+    {
+        if (value is null || value.Length == 0)
+        {
+            return;
+        }
+
+        var ok = value[0] == '/' && value[^1] != '/';
+        for (var i = 0; ok && i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (ch is '?' or '#' or ' ' or '\t' or '\r' or '\n' || char.IsControl(ch))
+            {
+                ok = false;
+            }
+        }
+
+        if (!ok)
+        {
+            errors.Add($"Route '{routeId}' redirect {name} must be empty or a path that starts with \"/\" and has no trailing slash, query, fragment, whitespace, or control characters.");
         }
     }
 

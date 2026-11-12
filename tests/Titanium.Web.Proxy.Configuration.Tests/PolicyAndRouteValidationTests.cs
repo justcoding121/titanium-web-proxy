@@ -478,6 +478,45 @@ public class PolicyAndRouteValidationTests
         StringAssert.Contains(errors, "redirect status 200 is not a 3xx code");
     }
 
+    [TestMethod]
+    public void RedirectPrefix_RejectsAReplacementWithoutAPrefix_AndBadCharacters()
+    {
+        var errors = Errors(RedirectConfigOf(new RedirectConfig { ReplacePrefixTo = "/new" }));
+        StringAssert.Contains(errors, "replacePrefixTo needs replacePrefixFrom");
+
+        errors = Errors(RedirectConfigOf(new RedirectConfig
+        {
+            ReplacePrefixFrom = "/old",
+            ReplacePrefixTo = "/new",
+            Path = "/fixed",
+        }));
+        StringAssert.Contains(errors, "cannot be combined");
+
+        foreach (var bad in new[] { "/", "/old/", "old", "/old?x=1", "/old#f", "/old x", "/old\r\nSet-Cookie" })
+        {
+            errors = Errors(RedirectConfigOf(new RedirectConfig { ReplacePrefixFrom = bad, ReplacePrefixTo = "/new" }));
+            StringAssert.Contains(errors, "replacePrefixFrom must be empty or a path", bad);
+        }
+
+        errors = Errors(RedirectConfigOf(new RedirectConfig { ReplacePrefixFrom = "/old", ReplacePrefixTo = string.Empty }));
+        Assert.IsFalse(errors.Contains("replacePrefix", StringComparison.Ordinal), errors);
+    }
+
+    private static TwpConfig RedirectConfigOf(RedirectConfig redirect) => new()
+    {
+        Clusters = [Cluster("c")],
+        Routes =
+        [
+            new RouteConfig
+            {
+                Id = "rd",
+                ClusterId = "c",
+                Redirect = redirect,
+                Match = new RouteMatch { Path = "/r", PathKind = PathMatchKind.Prefix },
+            },
+        ],
+    };
+
     private static TwpConfig WithCompression(ResponseCompressionConfig compression, params RouteConfig[] routes) => new()
     {
         Clusters = [Cluster("c")],
