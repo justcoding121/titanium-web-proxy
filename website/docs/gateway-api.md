@@ -126,6 +126,7 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 | `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy` | Not watched. The standard CRDs for `GRPCRoute` are installed, but no controller acts on them. |
 | TLS `Passthrough`, protocols other than `HTTP` and `HTTPS` | Listener `Accepted` `False`, reason `UnsupportedProtocol`. |
 | `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
+| Header `RegularExpression` that uses lookahead, a backreference, or an unbalanced parenthesis | The rule answers `500` (`UnsupportedValue`). |
 | `RequestRedirect` with `ReplacePrefixMatch`, or a status other than 301 and 302 | The rule answers `500`. |
 | `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
 | More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
@@ -139,7 +140,8 @@ These follow from how the data plane works. They are deliberate and listed so no
 - **`add` in a header modifier joins values with `, `.** A request or response header that already carries a value gets the new one appended (`foo` and `bar` become `foo, bar`), which is the same list as the specification's `foo,bar`. Repeated lines of one header collapse into one. `Set-Cookie` is the exception: each added cookie keeps its own line.
 - **Routes are global across listeners.** The data plane matches routes by host, path, header, query, and method, not by listener port. Two Gateway listeners that would serve different routes on different ports serve the same routes.
 - **A mix of valid and invalid backends answers `503` for the invalid share**, where the specification says `500`. When no backend of a rule is usable, the rule answers `500`.
-- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive.
+- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive. `RegularExpression` header values are case-sensitive and match the whole value, and only the first value of a repeated header is tested.
+- **Upgrade the data plane with the controller.** An older data plane ignores `headerMatches` and routes without that constraint.
 - **A listener with a mix of supported and unsupported `allowedRoutes.kinds`** serves the supported ones (`supportedKinds` lists `HTTPRoute`) and reports `ResolvedRefs` `False`, reason `InvalidRouteKinds`.
 - **Privileged ports are mapped.** The data plane runs as non-root, so Gateway port `80` is bound as `8080` and `443` as `8443` (`dataPlane.ports`). The Service maps them back.
 
