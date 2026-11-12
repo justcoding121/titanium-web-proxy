@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
@@ -309,7 +310,6 @@ internal static class RoutePolicies
         ref PolicyDecision decision,
         ref string? heldNames)
     {
-        var method = request.Method;
         var contentLength = request.ContentLength;
         switch (policy.Kind)
         {
@@ -322,13 +322,8 @@ internal static class RoutePolicies
             case "timeout" when policy.TimeoutSeconds is int seconds:
                 decision = decision with { TimeoutSeconds = seconds };
                 return null;
-            case "cors" when string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase):
-                return new PolicyDecision
-                {
-                    Rejected = true,
-                    Status = 204,
-                    Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
-                };
+            case "cors":
+                return CorsPreflight(policy, request);
             case "rateLimit":
                 return CheckRate(runtime, policy, route, request, client, trustedProxies);
             case "connectionLimit" when !AllowConnection(runtime, policy):
@@ -533,25 +528,98 @@ internal static class RoutePolicies
         return false;
     }
 
-    private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, string? origin)
+    /// <summary>
+    /// A preflight is <c>OPTIONS</c> with both <c>Origin</c> and <c>Access-Control-Request-Method</c>.
+    /// Anything else, including a plain <c>OPTIONS</c>, is left for the origin.
+    /// </summary>
+    private static PolicyDecision? CorsPreflight(RoutePolicyConfig policy, Request request)
     {
-        var allowOrigin = policy.Origins ?? "*";
-        if (allowOrigin != "*" && origin is not null && !allowOrigin.Split(',', StringSplitOptions.TrimEntries).Contains(origin, StringComparer.Ordinal))
+        if (!string.Equals(request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
         {
-            allowOrigin = allowOrigin.Split(',', StringSplitOptions.TrimEntries)[0];
-        }
-        else if (allowOrigin != "*" && origin is not null)
-        {
-            allowOrigin = origin;
+            return null;
         }
 
-        return
-        [
-            new("Access-Control-Allow-Origin", allowOrigin),
-            new("Vary", "Origin"),
-            new("Access-Control-Allow-Methods", policy.Methods ?? "GET, POST, OPTIONS"),
-            new("Access-Control-Allow-Headers", policy.HeaderName ?? "*"),
-        ];
+        var origin = HeaderValue(request, "Origin");
+        var requestMethod = HeaderValue(request, "Access-Control-Request-Method");
+        if (string.IsNullOrEmpty(origin) || string.IsNullOrEmpty(requestMethod))
+        {
+            return null;
+        }
+
+        return new PolicyDecision
+        {
+            Rejected = true,
+            Status = 204,
+            Headers = CorsHeaders(policy, origin, HeaderValue(request, "Access-Control-Request-Headers")),
+        };
+    }
+
+    private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, string origin, string? requestHeaders)
+    {
+        var headers = new List<KeyValuePair<string, string>>
+        {
+            new("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"),
+        };
+
+        var allowOrigin = AllowedOrigin(policy.Origins, origin);
+        if (allowOrigin is null)
+        {
+            return headers;
+        }
+
+        headers.Add(new("Access-Control-Allow-Origin", allowOrigin));
+        headers.Add(new("Access-Control-Allow-Methods", string.IsNullOrWhiteSpace(policy.Methods) ? "GET, POST, OPTIONS" : policy.Methods));
+        if (AllowHeaders(policy, requestHeaders) is { } allowHeaders)
+        {
+            headers.Add(new("Access-Control-Allow-Headers", allowHeaders));
+        }
+
+        if (policy.AllowCredentials == true)
+        {
+            headers.Add(new("Access-Control-Allow-Credentials", "true"));
+        }
+
+        if (policy.MaxAgeSeconds is int maxAge)
+        {
+            headers.Add(new("Access-Control-Max-Age", maxAge.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        return headers;
+    }
+
+    /// <summary><c>*</c> or a missing list allows every origin. A list echoes only an exact match, and an unlisted origin gets nothing.</summary>
+    private static string? AllowedOrigin(string? configured, string origin)
+    {
+        if (string.IsNullOrWhiteSpace(configured) || configured.Trim() == "*")
+        {
+            return "*";
+        }
+
+        foreach (var candidate in configured.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (string.Equals(candidate, origin, StringComparison.Ordinal))
+            {
+                return origin;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? AllowHeaders(RoutePolicyConfig policy, string? requestHeaders)
+    {
+        if (!string.IsNullOrWhiteSpace(policy.HeaderName))
+        {
+            return policy.HeaderName;
+        }
+
+        // A credentialed preflight cannot send Allow-Headers: *. Reflect the headers the browser asked for.
+        if (policy.AllowCredentials == true)
+        {
+            return string.IsNullOrWhiteSpace(requestHeaders) ? null : requestHeaders;
+        }
+
+        return "*";
     }
 
     /// <summary>

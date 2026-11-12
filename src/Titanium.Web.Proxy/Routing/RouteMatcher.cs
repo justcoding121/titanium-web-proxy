@@ -123,6 +123,37 @@ public sealed class RouteMatcher : IRouteMatcher
     private static int ConstraintCount(RouteMatch match) =>
         (match.Headers?.Count ?? 0) + (match.HeaderMatches?.Count ?? 0) + (match.Query?.Count ?? 0) + (match.QueryParameters?.Count ?? 0);
 
+    /// <summary>
+    ///     True when <paramref name="match"/> accepts every request the matcher would. Empty path is unconstrained.
+    ///     <see cref="PathMatchKind.Prefix"/> <c>/</c> is the other catch-all. A host of <c>*</c> is treated as
+    ///     constrained on purpose. Anything else is constrained, which is always safe and only slower.
+    /// </summary>
+    internal static bool IsUnconstrained(RouteMatch match)
+    {
+        if (!string.IsNullOrEmpty(match.Host) || match.Hosts is { Count: > 0 })
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(match.Method) || match.Methods is { Count: > 0 })
+        {
+            return false;
+        }
+
+        if (match.Headers is { Count: > 0 } || match.Query is { Count: > 0 } ||
+            match.QueryParameters is { Count: > 0 } || match.HeaderMatches is { Count: > 0 })
+        {
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(match.Path))
+        {
+            return true;
+        }
+
+        return match.PathKind == PathMatchKind.Prefix && match.Path == "/";
+    }
+
     private static bool Matches(RouteMatch match, RouteMatchContext context) =>
         HostMatches(match, context.Host) &&
         MethodMatches(match, context.Method) &&

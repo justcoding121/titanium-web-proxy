@@ -202,6 +202,10 @@ public static class TwpConfigSchema
             case "RoutePolicyConfig.Key":
                 schema["pattern"] = "^(client|forwardedClient|route|header:[!#$%&'*+.^_`|~0-9A-Za-z-]+|cookie:[!#$%&'*+.^_`|~0-9A-Za-z-]+)$";
                 break;
+            case "RoutePolicyConfig.MaxAgeSeconds":
+                schema[MinimumKey] = 0;
+                schema[MaximumKey] = 86_400;
+                break;
             case "RoutePolicyConfig.MaxKeys":
                 schema[MinimumKey] = 1000;
                 schema[MaximumKey] = 10_000_000;

@@ -268,7 +268,15 @@ public sealed class GatewayControllerTests
             { "name": "https", "port": 443, "protocol": "HTTPS", "hostname": "app.test", "tls": { "certificateRefs": [ { "name": "good" } ] }, "allowedRoutes": { "namespaces": { "from": "All" } } }
             """));
         f.Api.Apply("gateways", gateway);
-        await ClusterFixture.WaitForAsync(() => f.Cache.Snapshot().Gateways.Single().Spec.Listeners.Count == 2);
+        // Secrets and Gateways are separate watches. The listener count can move first, and a
+        // reconcile that runs before the TLS Secret is cached rejects the HTTPS listener, so the
+        // rollout signature stays on the original listener set.
+        await ClusterFixture.WaitForAsync(() =>
+        {
+            var snap = f.Cache.Snapshot();
+            return snap.Gateways.Single().Spec.Listeners.Count == 2
+                && snap.Secrets.Any(s => s.Namespace == "default" && s.Name == "good" && s.HasCertificate && s.HasPrivateKey);
+        });
         await f.Reconciler.ReconcileOnceAsync(CancellationToken.None);
         Assert.AreNotEqual(first, ListenersAnnotation(f));
     }

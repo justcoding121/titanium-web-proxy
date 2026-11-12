@@ -951,6 +951,9 @@
           "allow": {
             "type": "string"
           },
+          "allowCredentials": {
+            "type": "boolean"
+          },
           "allowedEmailDomains": {
             "type": "array",
             "items": {
@@ -1030,6 +1033,9 @@
               "type": "string"
             }
           },
+          "exposeHeaders": {
+            "type": "string"
+          },
           "failOpen": {
             "type": "boolean"
           },
@@ -1063,6 +1069,11 @@
           },
           "logoutPath": {
             "type": "string"
+          },
+          "maxAgeSeconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400
           },
           "maxKeys": {
             "type": "integer",

@@ -142,7 +142,7 @@ public sealed class TransformEngine : ITransformEngine
                     StageResponseAppend(context, responseName, responseValue);
                     break;
                 case TransformKinds.ResponseCors when Param(t, "origins") is { } corsOrigins:
-                    StageResponseCors(context, corsOrigins);
+                    StageResponseCors(context, corsOrigins, Param(t, "allowCredentials"), Param(t, "exposeHeaders"));
                     break;
                 case TransformKinds.ResponseHeadersAllowed when Param(t, "headers") is { } responseAllowed:
                     context.ResponseHeadersToRemove.Add("*" + responseAllowed);
@@ -181,32 +181,56 @@ public sealed class TransformEngine : ITransformEngine
     ///     case-sensitive) is echoed back; otherwise no allow header is added and the browser blocks the read.
     ///     A list also stages <c>Vary: Origin</c>, because the answer depends on the request.
     /// </summary>
-    private static void StageResponseCors(TransformRequestContext context, string origins)
+    private static void StageResponseCors(TransformRequestContext context, string origins, string? allowCredentials, string? exposeHeaders)
     {
         var allowed = origins.Trim();
+        var echoed = false;
         if (allowed == "*")
         {
             context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = "*";
             context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
-            return;
+            echoed = true;
         }
-
-        StageResponseAppend(context, "Vary", "Origin");
-        var origin = context.ExistingRequestHeader?.Invoke("Origin");
-        if (string.IsNullOrEmpty(origin))
+        else
         {
-            return;
-        }
-
-        foreach (var candidate in allowed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (string.Equals(candidate, origin, StringComparison.Ordinal))
+            StageResponseAppend(context, "Vary", "Origin");
+            var origin = context.ExistingRequestHeader?.Invoke("Origin");
+            if (!string.IsNullOrEmpty(origin))
             {
-                context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = origin;
-                context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
-                return;
+                foreach (var candidate in allowed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (string.Equals(candidate, origin, StringComparison.Ordinal))
+                    {
+                        context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = origin;
+                        context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
+                        echoed = true;
+                        break;
+                    }
+                }
             }
         }
+
+        if (!echoed)
+        {
+            return;
+        }
+
+        // Browsers refuse credentials together with *. A listed origin is the only safe place for the header.
+        if (allowed != "*" && string.Equals(allowCredentials, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            SetResponseHeader(context, "Access-Control-Allow-Credentials", "true");
+        }
+
+        if (!string.IsNullOrWhiteSpace(exposeHeaders))
+        {
+            SetResponseHeader(context, "Access-Control-Expose-Headers", exposeHeaders.Trim());
+        }
+    }
+
+    private static void SetResponseHeader(TransformRequestContext context, string name, string value)
+    {
+        context.ResponseHeadersToSet[name] = value;
+        context.ResponseHeadersToAppend?.Remove(name);
     }
 
     private void ApplyFactory(TransformConfig transform, TransformRequestContext context)

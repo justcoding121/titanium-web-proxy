@@ -26,8 +26,8 @@ internal enum BackendProtocol
 }
 
 /// <summary>
-///     The <c>titanium.io/</c> annotations an Ingress may carry. Each maps to a feature the data plane already has;
-///     nothing here needs new data-plane code. An annotation under the prefix that is not listed is reported with a
+///     The <c>titanium.io/</c> annotations an Ingress may carry. Each maps to a data-plane feature.
+///     An annotation under the prefix that is not listed is reported with a
 ///     Warning event (never ignored silently); a listed one with a value that cannot be honored makes every rule of
 ///     the Ingress answer <c>500</c>, with an event that says why.
 /// </summary>
@@ -36,6 +36,9 @@ public static partial class IngressAnnotations
     public const string Prefix = "titanium.io/";
 
     private static readonly string[] CanaryDependents = ["canary-weight", "canary-by-header"];
+
+    private static readonly string[] CorsDependents =
+        ["cors-allow-methods", "cors-allow-headers", "cors-allow-credentials", "cors-expose-headers", "cors-max-age"];
 
     /// <summary>Every annotation, in the order the docs list them.</summary>
     public static IReadOnlyList<AnnotationSpec> All { get; } =
@@ -69,7 +72,22 @@ public static partial class IngressAnnotations
             "Counted per client address and per Ingress. Excess requests get `429` with `Retry-After`."),
         new("cors-allow-origin", "`*` or comma-separated origins such as `https://app.example.com`",
             "`cors` policy and a `ResponseCors` transform",
-            "Answers the `OPTIONS` preflight itself with `204` and the `Access-Control-Allow-*` headers. The actual response gets `Access-Control-Allow-Origin` (`*`, or the request `Origin` when it is listed, plus `Vary: Origin`)."),
+            "Answers a real preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) with `204` and the `Access-Control-Allow-*` headers. A plain `OPTIONS` is forwarded. The actual response gets `Access-Control-Allow-Origin` (`*`, or the request `Origin` when it is listed, plus `Vary: Origin`). An unlisted origin gets no allow header."),
+        new("cors-allow-methods", "comma-separated method names such as `GET, POST`",
+            "`cors` policy `methods`",
+            "Sent as `Access-Control-Allow-Methods`. Needs `cors-allow-origin`. Default when omitted: `GET, POST, OPTIONS`."),
+        new("cors-allow-headers", "`*` or comma-separated header names",
+            "`cors` policy `headerName`",
+            "Sent as `Access-Control-Allow-Headers`. With `cors-allow-credentials` and no list, the request's `Access-Control-Request-Headers` is reflected. Needs `cors-allow-origin`."),
+        new("cors-allow-credentials", "`true` or `false`",
+            "`cors` policy `allowCredentials` and the `ResponseCors` transform",
+            "Adds `Access-Control-Allow-Credentials: true` on the preflight and the actual response. Needs `cors-allow-origin`, and `*` is rejected."),
+        new("cors-expose-headers", "comma-separated header names",
+            "`cors` policy `exposeHeaders` and the `ResponseCors` transform",
+            "Adds `Access-Control-Expose-Headers` to the actual response. Needs `cors-allow-origin`."),
+        new("cors-max-age", "seconds, 0-86400",
+            "`cors` policy `maxAgeSeconds`",
+            "Sent as `Access-Control-Max-Age` on the preflight. Needs `cors-allow-origin`."),
         new("auth-url", "an absolute `http` or `https` URL without credentials",
             "`extAuth` policy",
             "Each request is checked with a `GET` subrequest first; a `2xx` answer admits it, any other answer is relayed to the client. Fails closed: a timeout or an error answers `503`, never admits."),
@@ -160,6 +178,18 @@ public static partial class IngressAnnotations
         if (settings.UpstreamTlsSecret is not null && settings.Protocol != BackendProtocol.Https)
         {
             settings.Problems.Add($"{Prefix}upstream-tls-secret needs {Prefix}backend-protocol: \"HTTPS\".");
+        }
+
+        if (settings.CorsOrigins is null)
+        {
+            foreach (var dependent in CorsDependents.Where(d => annotations.ContainsKey(Prefix + d)))
+            {
+                settings.Problems.Add($"{Prefix}{dependent} needs {Prefix}cors-allow-origin.");
+            }
+        }
+        else if (settings.CorsAllowCredentials == true && CorsOriginIsWildcard(settings.CorsOrigins))
+        {
+            settings.Problems.Add($"{Prefix}cors-allow-credentials cannot be combined with {Prefix}cors-allow-origin \"*\".");
         }
 
         return settings;
@@ -307,6 +337,61 @@ public static partial class IngressAnnotations
                 }
 
                 break;
+            case "cors-allow-methods":
+                if (TryTokenList(value, allowStar: false, out var methods))
+                {
+                    settings.CorsMethods = methods;
+                }
+                else
+                {
+                    Bad("comma-separated method names such as GET, POST");
+                }
+
+                break;
+            case "cors-allow-headers":
+                if (TryTokenList(value, allowStar: true, out var allowHeaders))
+                {
+                    settings.CorsAllowHeaders = allowHeaders;
+                }
+                else
+                {
+                    Bad("\"*\" or comma-separated header names");
+                }
+
+                break;
+            case "cors-allow-credentials":
+                if (TryBool(value, out var credentials))
+                {
+                    settings.CorsAllowCredentials = credentials;
+                }
+                else
+                {
+                    Bad("\"true\" or \"false\"");
+                }
+
+                break;
+            case "cors-expose-headers":
+                if (TryTokenList(value, allowStar: false, out var exposeHeaders))
+                {
+                    settings.CorsExposeHeaders = exposeHeaders;
+                }
+                else
+                {
+                    Bad("comma-separated header names");
+                }
+
+                break;
+            case "cors-max-age":
+                if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var maxAge) && maxAge is >= 0 and <= 86_400)
+                {
+                    settings.CorsMaxAge = maxAge;
+                }
+                else
+                {
+                    Bad("a number of seconds from 0 to 86400");
+                }
+
+                break;
             case "auth-url":
                 if (Uri.TryCreate(value, UriKind.Absolute, out var url) &&
                     url.Scheme is "http" or "https" && string.IsNullOrEmpty(url.UserInfo))
@@ -407,6 +492,23 @@ public static partial class IngressAnnotations
         return true;
     }
 
+    private static bool CorsOriginIsWildcard(string origins) =>
+        origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Any(part => part == "*");
+
+    private static bool TryTokenList(string value, bool allowStar, out string canonical)
+    {
+        var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var star = parts.Any(part => part == "*");
+        if (parts.Length == 0 || !parts.All(part => HeaderToken().IsMatch(part)) || (star && !(allowStar && parts.Length == 1)))
+        {
+            canonical = string.Empty;
+            return false;
+        }
+
+        canonical = string.Join(",", parts);
+        return true;
+    }
+
     private static bool IsOrigin(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         uri.Scheme is "http" or "https" &&
@@ -442,6 +544,16 @@ internal sealed class IngressSettings
     public int? LimitRps { get; set; }
 
     public string? CorsOrigins { get; set; }
+
+    public string? CorsMethods { get; set; }
+
+    public string? CorsAllowHeaders { get; set; }
+
+    public bool? CorsAllowCredentials { get; set; }
+
+    public string? CorsExposeHeaders { get; set; }
+
+    public int? CorsMaxAge { get; set; }
 
     public string? AuthUrl { get; set; }
 

@@ -12,7 +12,7 @@ public class TransformResponseCorsTests
 {
     private const string AllowOrigin = "Access-Control-Allow-Origin";
 
-    private static TransformRequestContext Apply(string origins, string? requestOrigin)
+    private static TransformRequestContext Apply(string origins, string? requestOrigin, string? allowCredentials = null, string? exposeHeaders = null)
     {
         var context = new TransformRequestContext
         {
@@ -20,10 +20,21 @@ public class TransformResponseCorsTests
             ExistingRequestHeader = name =>
                 name.Equals("Origin", StringComparison.OrdinalIgnoreCase) ? requestOrigin : null,
         };
+        var parameters = new Dictionary<string, string> { ["origins"] = origins };
+        if (allowCredentials is not null)
+        {
+            parameters["allowCredentials"] = allowCredentials;
+        }
+
+        if (exposeHeaders is not null)
+        {
+            parameters["exposeHeaders"] = exposeHeaders;
+        }
+
         var transform = new TransformConfig
         {
             Kind = TransformKinds.ResponseCors,
-            Parameters = new Dictionary<string, string> { ["origins"] = origins },
+            Parameters = parameters,
         };
         new TransformEngine().ApplyRequestTransforms([transform], context);
         return context;
@@ -92,5 +103,35 @@ public class TransformResponseCorsTests
         var context = Apply("https://a.example.com , https://b.example.com", "https://b.example.com");
 
         Assert.AreEqual("https://b.example.com", context.ResponseHeadersToSet[AllowOrigin]);
+    }
+
+    [TestMethod]
+    public void ListedOrigin_AddsCredentialsAndExposeHeaders()
+    {
+        var context = Apply("https://a.example.com", "https://a.example.com", allowCredentials: "true", exposeHeaders: "X-Request-Id");
+
+        Assert.AreEqual("https://a.example.com", context.ResponseHeadersToSet[AllowOrigin]);
+        Assert.AreEqual("true", context.ResponseHeadersToSet["Access-Control-Allow-Credentials"]);
+        Assert.AreEqual("X-Request-Id", context.ResponseHeadersToSet["Access-Control-Expose-Headers"]);
+    }
+
+    [TestMethod]
+    public void Wildcard_DoesNotAddCredentials()
+    {
+        var context = Apply("*", "https://a.example.com", allowCredentials: "true", exposeHeaders: "X-Request-Id");
+
+        Assert.AreEqual("*", context.ResponseHeadersToSet[AllowOrigin]);
+        Assert.IsFalse(context.ResponseHeadersToSet.ContainsKey("Access-Control-Allow-Credentials"));
+        Assert.AreEqual("X-Request-Id", context.ResponseHeadersToSet["Access-Control-Expose-Headers"]);
+    }
+
+    [TestMethod]
+    public void UnlistedOrigin_AddsNeitherCredentialsNorExposeHeaders()
+    {
+        var context = Apply("https://a.example.com", "https://evil.example.com", allowCredentials: "true", exposeHeaders: "X-Request-Id");
+
+        Assert.IsFalse(context.ResponseHeadersToSet.ContainsKey(AllowOrigin));
+        Assert.IsFalse(context.ResponseHeadersToSet.ContainsKey("Access-Control-Allow-Credentials"));
+        Assert.IsFalse(context.ResponseHeadersToSet.ContainsKey("Access-Control-Expose-Headers"));
     }
 }
