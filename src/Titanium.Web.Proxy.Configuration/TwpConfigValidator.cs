@@ -1563,7 +1563,7 @@ public static class TwpConfigValidator
                 continue;
             }
 
-            if (entry.Kind == QueryMatchKind.Regex && !CompilesAsRegex("^(?:" + entry.Value + ")$"))
+            if (entry.Kind == QueryMatchKind.Regex && !CompilesAsWholeValueRegex(entry.Value))
             {
                 errors.Add($"Route '{route.Id}' queryParameters '{entry.Name}' has a regex that does not compile.");
             }

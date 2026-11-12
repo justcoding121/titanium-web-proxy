@@ -227,7 +227,7 @@ internal sealed partial class TranslationPass
                 continue;
             }
 
-            if (regex && !CompilesAsRegex("^(?:" + query.Value + ")$"))
+            if (regex && !CompilesAsWholeValueRegex(query.Value))
             {
                 problems.Add($"query parameter '{query.Name}' regular expression is not supported by the data plane");
                 continue;
@@ -286,13 +286,13 @@ internal sealed partial class TranslationPass
 
                 break;
             case "RegularExpression":
-                var anchored = "^(?:" + value + ")$";
-                if (!CompilesAsRegex(anchored))
+                if (!CompilesAsWholeValueRegex(value))
                 {
                     problems.Add("path regular expression is not supported by the data plane");
                     return;
                 }
 
+                var anchored = "^(?:" + value + ")$";
                 spec.Path = anchored;
                 spec.PathKind = PathMatchKind.Regex;
                 break;

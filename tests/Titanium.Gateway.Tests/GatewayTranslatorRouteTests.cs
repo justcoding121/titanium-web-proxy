@@ -429,4 +429,50 @@ public class GatewayTranslatorRouteTests
         Assert.AreEqual("default/withquery/r0m0", Winner(result, "/q", query: new() { ["env"] = "lab" }));
         Assert.AreEqual("default/plain/r0m0", Winner(result, "/q", query: new() { ["env"] = "prod" }));
     }
+
+    [TestMethod]
+    public void QueryRegex_AGroupedAlternation_RoutesOnlyTheWholeValue()
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            Path = new HttpPathMatch { Value = "/q" },
+            QueryParams = [new HttpQueryParamMatch { Name = "v", Value = "(a)|(b)", Type = "RegularExpression" }],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/q", query: new() { ["v"] = "a" }));
+        Assert.AreEqual("default/r/r0m0", Winner(result, "/q", query: new() { ["v"] = "b" }));
+        Assert.IsNull(Winner(result, "/q", query: new() { ["v"] = "aEXTRA" }));
+        Assert.IsNull(Winner(result, "/q", query: new() { ["v"] = "EXTRAb" }));
+    }
+
+    [DataTestMethod]
+    [DataRow("a)|(b")]
+    [DataRow("(")]
+    [DataRow("(?=x)")]
+    public void QueryRegex_APatternTheDataPlaneCannotMatch_Answers500(string pattern)
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch
+        {
+            QueryParams = [new HttpQueryParamMatch { Name = "q", Value = pattern, Type = "RegularExpression" }],
+        };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
+
+    [DataTestMethod]
+    [DataRow("a)|(b")]
+    [DataRow("(")]
+    [DataRow("(?=x)")]
+    public void PathRegex_APatternTheDataPlaneCannotMatch_Answers500(string pattern)
+    {
+        var b = Basic();
+        var match = new HttpRouteMatch { Path = new HttpPathMatch { Type = "RegularExpression", Value = pattern } };
+        var result = RenderRoute(b, Route("r", "default", null, Rule("web", 8080, match)));
+
+        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
+    }
 }
