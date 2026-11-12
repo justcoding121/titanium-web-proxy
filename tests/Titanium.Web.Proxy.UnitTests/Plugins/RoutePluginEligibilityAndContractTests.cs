@@ -41,6 +41,7 @@ public class RoutePluginEligibilityAndContractTests
         {
             ForwardHost = "127.0.0.1",
             ForwardPort = 80,
+            ForwardCleartext = true,
         };
         var request = new Request { Method = "GET", HttpVersion = HttpHeader.Version11 };
         request.RequestUriString8 = "/".GetByteString();
