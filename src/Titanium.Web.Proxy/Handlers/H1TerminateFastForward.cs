@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -212,6 +213,9 @@ public partial class ProxyServer
             };
             await WriteTerminateLiteMiddlewareResponseAsync(clientStream, request, denied, cancellationToken)
                 .ConfigureAwait(false);
+            NoteLiteReply(policyStatus, policyStatus == 204
+                ? Abstractions.Diagnostics.ForwarderError.None
+                : Abstractions.Diagnostics.ForwarderError.PolicyDenied, 0);
             return !H1TerminateClientRequestedClose(request);
         }
 
@@ -238,6 +242,10 @@ public partial class ProxyServer
         // ConnectAsyncs every time and was beating TWP at c=32). HTTP/1.0 keep-alive is preserved
         // (see Request.StripHopByHopConnectionForTransparentOrigin).
         var clientRequestedClose = H1TerminateClientRequestedClose(request);
+        // One static bool on the success path. The sample is built only when a listener is attached.
+        var metricsStart = ProxyMetrics.RequestMetricsEnabled ? Stopwatch.GetTimestamp() : 0L;
+        if (metricsStart != 0)
+            ProxyMetrics.AddActiveRequest(1);
         request.StripHopByHopConnectionForTransparentOrigin();
         request.ApplyTransparentForwardCleartextHost(endPoint);
 
@@ -346,6 +354,7 @@ public partial class ProxyServer
                     RoutePolicies.ApplyLocalCors(badGateway, routes[0], request, rp);
                 ApplyResponseHeaderContributor(badGateway);
                 await clientStream.WriteResponseAsync(badGateway, cancellationToken);
+                CompleteLite(ref metricsStart, 502, Abstractions.Diagnostics.ForwarderError.RequestBodyDestination, 0);
                 return false;
             }
 
@@ -373,6 +382,8 @@ public partial class ProxyServer
                             HandledBodyBytes = cacheDecision.Serve.Body,
                             HandledIsCacheHit = true,
                         }, cancellationToken, clientRequestedClose).ConfigureAwait(false);
+                    CompleteLite(ref metricsStart, cacheDecision.Serve!.StatusCode,
+                        LiteStatusError(cacheDecision.Serve.StatusCode), cacheDecision.Serve.Body?.Length ?? 0);
                     return !clientRequestedClose;
                 }
             }
@@ -472,6 +483,8 @@ public partial class ProxyServer
 
             // Client Connection: close (NC) → stop accept-loop KA (origin may stay pooled).
             // A body truncated by the origin must end the client connection too.
+            CompleteLite(ref metricsStart, response.StatusCode, LiteStatusError(response.StatusCode),
+                response.ContentLength);
             return response.KeepAlive && !clientRequestedClose && !truncatedByOrigin;
             }
             finally
@@ -481,18 +494,26 @@ public partial class ProxyServer
                 ReleaseH1TerminateLiteClient(http);
             }
         }
-        catch (RetryableServerConnectionException)
+        catch (H1TerminateLiteFallbackException)
         {
+            // The session path records this request. Counting it here would double count.
             closeConnection = true;
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             closeConnection = true;
+            CompleteLite(ref metricsStart, 502, Routing.ReverseProxySessionDispatch.ClassifyException(ex), 0);
             throw;
         }
         finally
         {
+            if (metricsStart != 0)
+            {
+                ProxyMetrics.AddActiveRequest(-1);
+                metricsStart = 0;
+            }
+
             if (connection != null)
                 await TcpConnectionFactory.Release(connection, closeConnection);
 
@@ -873,6 +894,8 @@ public partial class ProxyServer
         CacheSessionSlot.StateOf(ctx)?.Abandon();
         await WriteTerminateLiteMiddlewareResponseAsync(clientStream, request, ctx, cancellationToken)
             .ConfigureAwait(false);
+        NoteLiteReply(ctx.HandledStatusCode ?? 200, LiteStatusError(ctx.HandledStatusCode ?? 200),
+            ctx.HandledBodyBytes?.LongLength ?? 0);
         return (!H1TerminateClientRequestedClose(request), null);
     }
 
@@ -912,6 +935,55 @@ public partial class ProxyServer
             },
         };
     }
+
+    private void NoteLiteReply(int status, Abstractions.Diagnostics.ForwarderError error, long bytesOut)
+    {
+        if (!ProxyMetrics.RequestMetricsEnabled)
+            return;
+
+        var started = Stopwatch.GetTimestamp();
+        ProxyMetrics.AddActiveRequest(1);
+        var open = started;
+        CompleteLite(ref open, status, error, bytesOut);
+    }
+
+    private void CompleteLite(ref long metricsStart, int status, Abstractions.Diagnostics.ForwarderError error, long bytesOut)
+    {
+        if (metricsStart == 0)
+            return;
+
+        var started = metricsStart;
+        metricsStart = 0;
+        ProxyMetrics.AddActiveRequest(-1);
+        var routes = ReverseProxy?.Routes;
+        var route = routes is { Count: > 0 } ? routes[0] : null;
+        var seconds = (Stopwatch.GetTimestamp() - started) / (double)Stopwatch.Frequency;
+        ProxyMetrics.RecordRequest(new ProxyMetrics.RequestSample
+        {
+            Route = route?.Id ?? "_none",
+            Cluster = route?.ClusterId ?? "_none",
+            Status = status,
+            Protocol = "h1",
+            Error = error.ToString(),
+            DurationSeconds = seconds,
+            BytesIn = 0,
+            BytesOut = bytesOut,
+        });
+        if (ReverseProxy?.LatencyRecorder is { } recorder && route is not null &&
+            ReverseProxy.ClusterManager?.Snapshot is { } snapshot &&
+            snapshot.Clusters.TryGetValue(route.ClusterId, out var cluster) &&
+            cluster.Destinations.Count > 0)
+        {
+            recorder.RecordDestination(cluster.Destinations[0].Id, TimeSpan.FromSeconds(seconds));
+        }
+    }
+
+    private static Abstractions.Diagnostics.ForwarderError LiteStatusError(int status) => status switch
+    {
+        504 => Abstractions.Diagnostics.ForwarderError.RequestTimedOut,
+        502 => Abstractions.Diagnostics.ForwarderError.RequestBodyDestination,
+        _ => Abstractions.Diagnostics.ForwarderError.None,
+    };
 
     private async Task WriteTerminateLiteMiddlewareResponseAsync(
         HttpClientStream clientStream,
