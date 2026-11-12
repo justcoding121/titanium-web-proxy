@@ -8,6 +8,8 @@ param(
     [string]$Settings = 'tests/integration-shard.runsettings',
     [string]$WeightsFile = 'tests/integration-shard-weights.json',
     [string]$ResultsRoot = 'coverage/integration',
+    # Default matches develop push CI. Nightly Slow passes TestCategory=Slow.
+    [string]$CategoryFilter = 'TestCategory!=Slow',
     [int]$MaxAttempts = 2
 )
 
@@ -145,7 +147,7 @@ if ($batch.Count -gt 0) {
     }
 
     # & binds tighter than | in the VSTest filter language, so the class disjunction stays in parentheses.
-    $filter = '(' + ($parts -join '|') + ')&TestCategory!=Slow'
+    $filter = '(' + ($parts -join '|') + ')&' + $CategoryFilter
     $rsp = Join-Path $rspDir "shard-$ShardIndex.rsp"
     Write-TestRsp $rsp $filter $results
 
@@ -162,7 +164,7 @@ if ($batch.Count -gt 0) {
 }
 
 foreach ($class in $solo) {
-    $soloFilter = "(FullyQualifiedName~$prefix$class.|FullyQualifiedName~$prefix$class+)&TestCategory!=Slow"
+    $soloFilter = "(FullyQualifiedName~$prefix$class.|FullyQualifiedName~$prefix$class+)&$CategoryFilter"
     $soloRsp = Join-Path $rspDir "shard-$ShardIndex-$class.rsp"
     $soloResults = Join-Path $results $class
     Write-Host "Isolated class $class"

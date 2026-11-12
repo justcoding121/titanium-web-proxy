@@ -1,0 +1,361 @@
+# Reusable Windows full-suite layout (unit / heavy / regression / integration shards).
+# Used by the release cold fallback. develop push CI stays in dotnetcore.yml.
+name: windows-full-tests
+
+on:
+  workflow_call:
+    inputs:
+      include_playwright_product_ui:
+        description: 'Install Chromium and run Headless/Visual/Plus-Dashboard E2E-UI filters (release product gate).'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+        Write-Host "QuicListener.IsSupported=$([System.Net.Quic.QuicListener]::IsSupported)"
+    - name: Detect scripting RID
+      id: unit-scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+    - name: Cache scripting natives
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.unit-scripting-rid.outputs.rid }}
+    - name: Restore and build
+      shell: pwsh
+      run: |
+        $projects = @(
+          'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj',
+          'tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj',
+          'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj',
+          'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj',
+          'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj',
+          'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj',
+          'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj'
+        )
+        foreach ($proj in $projects) {
+          dotnet restore $proj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $proj --configuration Release --no-restore --warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+    - name: Bundle scripting natives
+      shell: pwsh
+      run: |
+        $rid = '${{ steps.unit-scripting-rid.outputs.rid }}'
+        $dirs = @(
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.dll src/Titanium.Web.Proxy.Scripting/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Web.Proxy.Scripting.Tests.dll tests/Titanium.Web.Proxy.Scripting.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+        ) | Where-Object { $_ } | Select-Object -Unique
+        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
+        foreach ($out in $dirs) {
+          Write-Host "Bundling scripting natives into $out"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
+          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
+            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
+          }
+        }
+    - name: Warm Helm
+      shell: pwsh
+      run: |
+        $helm = Get-Command helm -ErrorAction SilentlyContinue
+        if (-not $helm) {
+          Write-Host 'helm is not on PATH; chart tests stay inconclusive.'
+          exit 0
+        }
+        & helm version
+        if ($LASTEXITCODE -ne 0) { throw "helm version exited $LASTEXITCODE" }
+    - name: Build PromptGuard
+      shell: pwsh
+      run: |
+        dotnet restore tools/PromptGuard/PromptGuard.csproj
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet build tools/PromptGuard/PromptGuard.csproj -c Release --no-restore --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Test
+      shell: pwsh
+      run: |
+        $settings = 'tests/test.runsettings'
+        # UnitTests touches the current-user certificate store and a shared cert disk cache.
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory!=Fuzz-Nightly" --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        dotnet test tests/Titanium.Xds.Tests/Titanium.Xds.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        $unitJobs = @(
+          @{ Project = 'tests/Titanium.Web.Proxy.Configuration.Tests/Titanium.Web.Proxy.Configuration.Tests.csproj' },
+          @{ Project = 'tests/Titanium.Manager.Tests/Titanium.Manager.Tests.csproj' },
+          @{ Project = 'tests/Titanium.Web.Proxy.Scripting.Tests/Titanium.Web.Proxy.Scripting.Tests.csproj' },
+          @{ Project = 'tests/Titanium.Gateway.Tests/Titanium.Gateway.Tests.csproj' },
+          @{ Project = 'tests/Titanium.Cli.GeoIp.Tests/Titanium.Cli.GeoIp.Tests.csproj' }
+        )
+        $unitFailures = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
+        $unitJobs | ForEach-Object -Parallel {
+          $job = $_
+          $failures = $using:unitFailures
+          $settingsPath = $using:settings
+          $args = @(
+            'test', $job.Project,
+            '--configuration', 'Release',
+            '--no-build', '--no-restore',
+            '--settings', $settingsPath,
+            '--nologo'
+          )
+          Write-Host ">>> dotnet $($args -join ' ')"
+          & dotnet @args
+          if ($LASTEXITCODE -ne 0) {
+            [void]$failures.Add("$($job.Project) exited $LASTEXITCODE")
+          }
+        } -ThrottleLimit 4
+        if ($unitFailures.Count -gt 0) {
+          $unitFailures | ForEach-Object { Write-Error $_ }
+          exit 1
+        }
+
+  heavy-suites:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+      INCLUDE_PLAYWRIGHT_PRODUCT_UI: ${{ inputs.include_playwright_product_ui }}
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+    - name: Detect scripting RID
+      id: heavy-scripting-rid
+      shell: pwsh
+      run: |
+        $rid = if ($IsWindows) { 'win-x64' }
+          elseif ($IsMacOS) { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'osx-arm64' } else { 'osx-x64' } }
+          else { if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'linux-arm64' } else { 'linux-x64' } }
+        "rid=$rid" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        Write-Host "scripting RID=$rid"
+    - name: Cache scripting natives
+      uses: actions/cache@v4
+      with:
+        path: tools/packaging/.cache/scripting-natives
+        key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.heavy-scripting-rid.outputs.rid }}
+    - name: Restore and build
+      shell: pwsh
+      run: |
+        $projects = @(
+          'tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj',
+          'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj',
+          'tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj',
+          'tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj'
+        )
+        foreach ($proj in $projects) {
+          dotnet restore $proj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $proj --configuration Release --no-restore --warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+    - name: Bundle scripting natives beside CLI
+      shell: pwsh
+      run: |
+        $rid = '${{ steps.heavy-scripting-rid.outputs.rid }}'
+        $dirs = @(
+          (Get-ChildItem -Recurse -Filter titanium.dll src/Titanium.Cli/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName,
+          (Get-ChildItem -Recurse -Filter Titanium.Cli.Tests.dll tests/Titanium.Cli.Tests/bin/Release -ErrorAction SilentlyContinue | Select-Object -First 1).DirectoryName
+        ) | Where-Object { $_ } | Select-Object -Unique
+        if ($dirs.Count -eq 0) { throw 'no Release output dirs found for scripting natives' }
+        foreach ($out in $dirs) {
+          Write-Host "Bundling scripting natives into $out"
+          ./tools/packaging/bundle-scripting-native.ps1 -Rid $rid -PublishDir $out
+          if (-not (Get-ChildItem -LiteralPath $out -Filter '*wasmtime*' -ErrorAction SilentlyContinue)) {
+            throw "wasmtime native missing from $out after bundle-scripting-native.ps1"
+          }
+        }
+    - name: Test
+      shell: pwsh
+      run: |
+        $settings = 'tests/test.runsettings'
+        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load.
+        $plusOk = $false
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+          dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+          if ($LASTEXITCODE -eq 0) { $plusOk = $true; break }
+          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying."
+          Start-Sleep -Seconds 5
+        }
+        if (-not $plusOk) { exit 1 }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        # Exclude CliHosted* Playwright leaves — those need Chromium (ui-portable / cli-e2e install it).
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E&FullyQualifiedName~Cli&FullyQualifiedName!~CliHosted&FullyQualifiedName!~Playwright" --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --filter "TestCategory=E2E-UI" --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        if ($env:INCLUDE_PLAYWRIGHT_PRODUCT_UI -eq 'true') {
+          $pw = Join-Path (Resolve-Path 'tests/Titanium.E2E.Tests/bin/Release/net10.0') 'playwright.ps1'
+          & $pw install chromium
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test tests/Titanium.E2E.Tests/Titanium.E2E.Tests.csproj --configuration Release --no-build --nologo `
+            --filter "TestCategory=E2E-UI-Headless|TestCategory=E2E-UI-Visual|TestCategory=E2E-UI-Plus-Dashboard"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+
+  regression:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+    - name: Restore and build
+      shell: pwsh
+      run: |
+        $projects = @(
+          'tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj',
+          'tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj',
+          'tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj'
+        )
+        foreach ($proj in $projects) {
+          dotnet restore $proj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build $proj --configuration Release --no-restore --warnaserror
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+    - name: Regression-2026-10-07 gate
+      shell: pwsh
+      run: |
+        dotnet test tests/Titanium.Web.Proxy.UnitTests/Titanium.Web.Proxy.UnitTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --blame-hang --blame-hang-timeout 5m --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Regression-2026-10-07" --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  integration:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    env:
+      TITANIUM_ALLOW_WILDCARD_BIND_TESTS: 1
+      TITANIUM_SKIP_ROOT_STORE_UI: 1
+      TITANIUM_NO_ELEVATE: 1
+      TITANIUM_REQUIRE_QUIC: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v6
+      with:
+        dotnet-version: |
+          10.0.x
+        cache: true
+        cache-dependency-path: '**/*.csproj'
+    - name: Assert in-box MsQuic (Windows)
+      shell: pwsh
+      run: |
+        if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+          throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+        }
+    - name: Restore and build integration tests
+      run: |
+        dotnet restore tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --warnaserror -p:NuGetAudit=true -p:NuGetAuditLevel=high
+        dotnet build tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj --configuration Release --no-restore --warnaserror
+    - name: Integration shard
+      shell: pwsh
+      run: |
+        pwsh -NoProfile -ExecutionPolicy Bypass -File tools/ci/Invoke-IntegrationShard.ps1 -ShardIndex ${{ matrix.shard }} -ShardCount 4
+
+  test-gate:
+    name: test-gate
+    if: always()
+    needs: [unit, heavy-suites, regression, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Windows suite
+        env:
+          UNIT: ${{ needs.unit.result }}
+          HEAVY: ${{ needs.heavy-suites.result }}
+          REGRESSION: ${{ needs.regression.result }}
+          INTEGRATION: ${{ needs.integration.result }}
+        run: |
+          set -euo pipefail
+          echo "unit=$UNIT heavy-suites=$HEAVY regression=$REGRESSION integration=$INTEGRATION"
+          for result in "$UNIT" "$HEAVY" "$REGRESSION" "$INTEGRATION"; do
+            if [[ "$result" != "success" ]]; then
+              echo "::error::windows-full-tests needs success from unit, heavy-suites, regression, and integration (got $result)"
+              exit 1
+            fi
+          done
+          echo "test-gate passed"
