@@ -430,7 +430,24 @@ internal sealed partial class TranslationPass
                 Warn(owner, "CanaryIgnored", $"{entry.Description}: permanent-redirect does not use a backend, so the canary is not served.");
             }
 
-            drafts.Add(MakePermanentRedirect(entry, settings));
+            drafts.Add(MakeIngressDraft(
+                entry,
+                entry.Id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new RedirectConfig
+                {
+                    Status = settings.PermanentRedirectCode ?? 301,
+                    Scheme = settings.PermanentRedirectScheme,
+                    Host = settings.PermanentRedirectHost,
+                    Port = settings.PermanentRedirectPort,
+                    Path = settings.PermanentRedirectPath,
+                    PreserveQuery = false,
+                }));
             return;
         }
 
@@ -627,11 +644,13 @@ internal sealed partial class TranslationPass
         List<WeightedCluster>? weighted,
         List<TransformConfig>? transforms,
         List<string>? policies,
-        int? directStatus)
+        int? directStatus,
+        RedirectConfig? redirect = null)
     {
         var host = entry.Host;
         var meta = entry.Owner.Ingress.Metadata;
         var hostRank = Hostnames.Rank(host);
+        var terminal = directStatus is not null || redirect is not null;
         return new RouteDraft
         {
             Id = id,
@@ -648,7 +667,7 @@ internal sealed partial class TranslationPass
             Factory = order => new RouteConfig
             {
                 Id = id,
-                ClusterId = directStatus is null && clusterId is not null ? clusterId : NoCluster,
+                ClusterId = terminal || clusterId is null ? NoCluster : clusterId,
                 Order = order,
                 Match = new RouteMatch
                 {
@@ -658,10 +677,11 @@ internal sealed partial class TranslationPass
                     Headers = headers,
                     PathCaseSensitive = true,
                 },
-                Transforms = directStatus is null ? transforms : null,
-                Policies = directStatus is null ? policies : null,
-                Clusters = directStatus is null ? weighted : null,
+                Transforms = terminal ? null : transforms,
+                Policies = terminal ? null : policies,
+                Clusters = terminal ? null : weighted,
                 DirectResponse = directStatus is { } status ? new DirectResponseConfig { Status = status } : null,
+                Redirect = redirect,
             },
         };
     }
@@ -695,75 +715,26 @@ internal sealed partial class TranslationPass
     private static RouteDraft MakeAppRoot(IngressOutcome owner, string? host, string path)
     {
         var id = $"ingress/{owner.Key}/app-root/{host ?? "*"}";
-        var meta = owner.Ingress.Metadata;
-        return new RouteDraft
-        {
-            Id = id,
-            HostRank = Hostnames.Rank(host),
-            HostLength = host?.Length ?? 0,
-            PathRank = 0,
-            PathLength = 1,
-            Created = meta.CreationTimestamp ?? DateTimeOffset.MaxValue,
-            NamespaceName = "ingress/" + owner.Key,
-            RuleIndex = -1,
-            MatchIndex = -1,
-            Factory = order => new RouteConfig
+        return MakeIngressDraft(
+            new IngressEntry
             {
+                Owner = owner,
+                Host = host,
+                Path = "/",
+                PathKind = PathMatchKind.Exact,
+                Backend = new IngressBackend(),
                 Id = id,
-                ClusterId = NoCluster,
-                Order = order,
-                Match = new RouteMatch
-                {
-                    Hosts = host is null ? null : new[] { host },
-                    Path = "/",
-                    PathKind = PathMatchKind.Exact,
-                    PathCaseSensitive = true,
-                },
-                Redirect = new RedirectConfig { Status = 302, Path = path, PreserveQuery = false },
+                RuleIndex = -1,
+                PathIndex = -1,
             },
-        };
-    }
-
-    private static RouteDraft MakePermanentRedirect(IngressEntry entry, IngressSettings settings)
-    {
-        var host = entry.Host;
-        var meta = entry.Owner.Ingress.Metadata;
-        var id = entry.Id;
-        return new RouteDraft
-        {
-            Id = id,
-            HostRank = Hostnames.Rank(host),
-            HostLength = host?.Length ?? 0,
-            PathRank = entry.PathKind == PathMatchKind.Exact ? 0 : 2,
-            PathLength = entry.Path?.Length ?? 0,
-            Created = meta.CreationTimestamp ?? DateTimeOffset.MaxValue,
-            NamespaceName = "ingress/" + entry.Owner.Key,
-            RuleIndex = entry.RuleIndex,
-            MatchIndex = entry.PathIndex,
-            Tail = entry.IsDefault ? 1 : 0,
-            Factory = order => new RouteConfig
-            {
-                Id = id,
-                ClusterId = NoCluster,
-                Order = order,
-                Match = new RouteMatch
-                {
-                    Hosts = host is null ? null : new[] { host },
-                    Path = entry.Path,
-                    PathKind = entry.PathKind,
-                    PathCaseSensitive = true,
-                },
-                Redirect = new RedirectConfig
-                {
-                    Status = settings.PermanentRedirectCode ?? 301,
-                    Scheme = settings.PermanentRedirectScheme,
-                    Host = settings.PermanentRedirectHost,
-                    Port = settings.PermanentRedirectPort,
-                    Path = settings.PermanentRedirectPath,
-                    PreserveQuery = false,
-                },
-            },
-        };
+            id,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            new RedirectConfig { Status = 302, Path = path, PreserveQuery = false });
     }
 
     private static RetryConfig BuildRetry(IngressSettings settings)

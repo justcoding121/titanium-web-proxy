@@ -345,10 +345,9 @@ public static partial class IngressAnnotations
 
                 break;
             case "whitelist-source-range":
-                var ranges = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (ranges.Length > 0 && ranges.All(r => CidrPrefix.TryParse(r, out _)))
+                if (TryCidrList(value, out var ranges))
                 {
-                    settings.WhitelistRanges = string.Join(",", ranges);
+                    settings.WhitelistRanges = ranges;
                 }
                 else
                 {
@@ -495,7 +494,7 @@ public static partial class IngressAnnotations
 
                 break;
             case "proxy-connect-timeout":
-                if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var connectSeconds) && connectSeconds is >= 1 and <= 3600)
+                if (TryInt(value, 1, 3600, out var connectSeconds))
                 {
                     settings.ConnectTimeoutSeconds = connectSeconds;
                 }
@@ -513,7 +512,7 @@ public static partial class IngressAnnotations
 
                 break;
             case "proxy-next-upstream-tries":
-                if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var tries) && tries is >= 1 and <= 1_000_000)
+                if (TryInt(value, 1, 1_000_000, out var tries))
                 {
                     settings.RetryTries = tries;
                 }
@@ -524,7 +523,7 @@ public static partial class IngressAnnotations
 
                 break;
             case "proxy-next-upstream-timeout":
-                if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var trySeconds) && trySeconds is >= 1 and <= 3600)
+                if (TryInt(value, 1, 3600, out var trySeconds))
                 {
                     settings.RetryPerTryTimeoutSeconds = trySeconds;
                 }
@@ -546,10 +545,9 @@ public static partial class IngressAnnotations
 
                 break;
             case "denylist-source-range":
-                var denied = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (denied.Length > 0 && denied.All(r => CidrPrefix.TryParse(r, out _)))
+                if (TryCidrList(value, out var denied))
                 {
-                    settings.DenyRanges = string.Join(",", denied);
+                    settings.DenyRanges = denied;
                 }
                 else
                 {
@@ -594,6 +592,22 @@ public static partial class IngressAnnotations
 
                 break;
         }
+    }
+
+    private static bool TryInt(string value, int min, int max, out int number) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out number) && number >= min && number <= max;
+
+    private static bool TryCidrList(string value, out string canonical)
+    {
+        var ranges = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (ranges.Length > 0 && ranges.All(range => CidrPrefix.TryParse(range, out _)))
+        {
+            canonical = string.Join(",", ranges);
+            return true;
+        }
+
+        canonical = string.Empty;
+        return false;
     }
 
     private static bool TryNextUpstream(string value, IngressSettings settings, out string problem)
