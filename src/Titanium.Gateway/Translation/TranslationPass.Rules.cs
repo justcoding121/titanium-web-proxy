@@ -127,6 +127,9 @@ internal sealed class RedirectSpec
     /// replaced is the match's own, so it is resolved per match when the route is emitted.
     /// </summary>
     public string? PrefixReplacement { get; init; }
+
+    /// <summary>The redirect keeps the request host and no concrete route hostname can be named in it.</summary>
+    public bool UseRequestHost { get; init; }
 }
 
 internal sealed class RulePlan

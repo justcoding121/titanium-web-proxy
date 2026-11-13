@@ -26,9 +26,10 @@ public class GatewayRedirectMirrorAndRewriteCoverageBehaviorTests
     }
 
     [TestMethod]
-    public void Redirect_WithoutHostname_AndOnlyWildcardHosts_IsUnsupported()
+    public void Redirect_WithoutHostname_AndOnlyWildcardHosts_UsesTheRequestHost()
     {
-        // Bug class: wildcard hosts (Rank != 0) must not expand into absolute Location hosts.
+        // Bug class: wildcard hosts (Rank != 0) must not expand into absolute Location hosts; the data plane uses
+        // the host the client sent instead.
         var b = Basic();
         var rule = new HttpRouteRule
         {
@@ -45,11 +46,59 @@ public class GatewayRedirectMirrorAndRewriteCoverageBehaviorTests
         AssertValid(result);
 
         var route = result.Config.UserRoutes().Single();
-        Assert.AreEqual(500, route.DirectResponse?.Status);
-        Assert.IsNull(route.Redirect);
-        Assert.IsTrue(
+        Assert.IsNull(route.DirectResponse);
+        Assert.IsNotNull(route.Redirect);
+        Assert.IsNull(route.Redirect!.Host, "no host is baked in");
+        Assert.IsTrue(route.Redirect.UseRequestHost);
+        Assert.AreEqual("https", route.Redirect.Scheme);
+        Assert.IsFalse(
             result.StatusPatches.Single(p => p.Kind == StatusKind.HttpRoute).Parents!.Single()
                 .Conditions.Any(c => c.Type == "PartiallyInvalid" && c.Status == "True"));
+    }
+
+    [TestMethod]
+    public void Redirect_WithoutHostname_OnARouteWithNoHostnames_UsesTheRequestHost()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect { Scheme = "https", StatusCode = 301 },
+                },
+            ],
+        };
+        var result = Render(b, Route("r", "default", null, rule));
+        AssertValid(result);
+
+        var route = result.Config.UserRoutes().Single();
+        Assert.IsNull(route.DirectResponse);
+        Assert.IsTrue(route.Redirect!.UseRequestHost);
+        Assert.AreEqual(301, route.Redirect.Status);
+    }
+
+    [TestMethod]
+    public void Redirect_WithoutHostname_OnConcreteHosts_StillBakesEachHostIn()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect { Scheme = "https" },
+                },
+            ],
+        };
+        var routes = Render(b, Route("r", "default", ["a.example", "b.example"], rule)).Config.UserRoutes();
+
+        CollectionAssert.AreEquivalent(new[] { "a.example", "b.example" }, routes.Select(r => r.Redirect!.Host).ToArray());
+        Assert.IsTrue(routes.All(r => !r.Redirect!.UseRequestHost));
     }
 
     [TestMethod]

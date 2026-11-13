@@ -366,7 +366,7 @@ public class GatewayTranslatorBackendTests
     }
 
     [TestMethod]
-    public void Redirect_WithoutAnyHostname_IsUnsupported()
+    public void Redirect_WithoutAnyHostname_UsesTheRequestHost()
     {
         var b = Basic();
         var rule = new HttpRouteRule
@@ -375,8 +375,10 @@ public class GatewayTranslatorBackendTests
         };
         var result = Render(b, Route("r", "default", null, rule));
 
-        Assert.AreEqual(500, result.Config.UserRoutes().Single().DirectResponse?.Status);
-        Assert.AreEqual("True", Cond(Parent(result).Conditions, "PartiallyInvalid").Status);
+        var route = result.Config.UserRoutes().Single();
+        Assert.IsNull(route.DirectResponse);
+        Assert.IsTrue(route.Redirect!.UseRequestHost);
+        Assert.AreEqual("True", Cond(Parent(result).Conditions, "Accepted").Status);
     }
 
     private static HttpRouteRule PrefixRedirectRule(HttpRouteMatch match, string? replacement, int? status = null) => new()
