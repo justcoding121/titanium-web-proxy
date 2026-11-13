@@ -155,8 +155,16 @@ public static class SessionDisplayFormat
 
     public static double RoundMs(double milliseconds) => Math.Round(milliseconds, 1);
 
-    /// <summary>Compact body-size label: B below 1 KB, else KB / MB (1024-based).</summary>
-    public static string FormatByteSize(long? bytes)
+    /// <summary>
+    /// Compact body-size label: B below 1 KB, else KB / MB (1024-based). The decimal mark follows
+    /// <see cref="CultureInfo.CurrentCulture"/>. The unit is chosen from the rounded number, so
+    /// 1024 KB is shown as 1.0 MB and 9.96 KB is shown as 10 KB.
+    /// </summary>
+    public static string FormatByteSize(long? bytes) =>
+        FormatByteSize(bytes, CultureInfo.CurrentCulture);
+
+    /// <summary>Same label as <see cref="FormatByteSize(long?)"/> in a chosen culture. Clipboard text uses the invariant culture.</summary>
+    public static string FormatByteSize(long? bytes, CultureInfo culture)
     {
         if (bytes is null or < 0)
         {
@@ -165,24 +173,69 @@ public static class SessionDisplayFormat
 
         if (bytes < 1024)
         {
-            return bytes + " B";
+            return bytes.Value.ToString("0", culture) + " B";
         }
 
-        var kb = bytes.Value / 1024.0;
-        if (kb < 1024)
+        var kb = RoundSize(bytes.Value / 1024d);
+        if (kb < 1024d)
         {
-            var kbText = kb < 10
-                ? kb.ToString("0.0", CultureInfo.InvariantCulture)
-                : kb.ToString("0", CultureInfo.InvariantCulture);
-            return kbText + " KB";
+            return FormatSizeNumber(kb, culture) + " KB";
         }
 
-        var mb = kb / 1024.0;
-        var mbText = mb < 10
-            ? mb.ToString("0.0", CultureInfo.InvariantCulture)
-            : mb.ToString("0", CultureInfo.InvariantCulture);
-        return mbText + " MB";
+        var mb = RoundSize(bytes.Value / (1024d * 1024d));
+        return FormatSizeNumber(mb, culture) + " MB";
     }
+
+    /// <summary>
+    /// Whole milliseconds for the Duration and Wait columns. Grouping follows
+    /// <paramref name="culture"/> (<c>12,000</c> or <c>12.000</c>). Halves round away from zero.
+    /// </summary>
+    public static string FormatWholeMilliseconds(double? milliseconds, CultureInfo? culture = null)
+    {
+        if (milliseconds is null || double.IsNaN(milliseconds.Value) || double.IsInfinity(milliseconds.Value))
+        {
+            return "";
+        }
+
+        var rounded = Math.Round(milliseconds.Value, 0, MidpointRounding.AwayFromZero);
+        return rounded.ToString("N0", culture ?? CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>Whole milliseconds with invariant digits and no grouping, for text pasted into other tools.</summary>
+    public static string FormatWholeMillisecondsInvariant(double? milliseconds)
+    {
+        if (milliseconds is null || double.IsNaN(milliseconds.Value) || double.IsInfinity(milliseconds.Value))
+        {
+            return "";
+        }
+
+        var rounded = Math.Round(milliseconds.Value, 0, MidpointRounding.AwayFromZero);
+        return rounded.ToString("0", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>Fractional milliseconds for statistics (<c>12.5</c> or <c>12,5</c>). A trailing zero is omitted.</summary>
+    public static string FormatFractionalMilliseconds(double milliseconds) =>
+        milliseconds.ToString("0.#", CultureInfo.CurrentCulture);
+
+    /// <summary>
+    /// One decimal below 10, otherwise an integer. A value that rounds up to the next threshold
+    /// (9.96 → 10, 1023.6 → 1024) is returned at that threshold so the caller can change units.
+    /// </summary>
+    private static double RoundSize(double value)
+    {
+        if (value < 10d)
+        {
+            var tenths = Math.Round(value, 1, MidpointRounding.AwayFromZero);
+            return tenths >= 10d ? 10d : tenths;
+        }
+
+        return Math.Round(value, 0, MidpointRounding.AwayFromZero);
+    }
+
+    private static string FormatSizeNumber(double rounded, CultureInfo culture) =>
+        rounded < 10d
+            ? rounded.ToString("0.0", culture)
+            : rounded.ToString("0", culture);
 
     public static HttpStatusClass GetStatusClass(int? statusCode)
     {

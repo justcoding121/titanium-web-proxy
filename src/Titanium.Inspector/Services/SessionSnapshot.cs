@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
@@ -237,8 +238,11 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// <summary>Content-Type column text without parameters; <see cref="ContentType"/> stays the raw value.</summary>
     public string ContentTypeDisplay => SessionDisplayFormat.FormatContentType(ContentType);
 
-    /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB).</summary>
+    /// <summary>Grid display for <see cref="BodySize"/> (B / KB / MB), in the PC's regional format.</summary>
     public string BodySizeDisplay => SessionDisplayFormat.FormatByteSize(BodySize);
+
+    /// <summary>Size text copied from the grid. Invariant digits so a paste does not depend on the PC's decimal mark.</summary>
+    public string BodySizeClipboard => SessionDisplayFormat.FormatByteSize(BodySize, CultureInfo.InvariantCulture);
 
     /// <summary>How the request body was retained for Inspect.</summary>
     public BodyCaptureState RequestBodyCapture
@@ -350,11 +354,23 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         set => SetField(ref _durationMs, value);
     }
 
+    /// <summary>Duration column text, whole milliseconds in the PC's regional format.</summary>
+    public string DurationDisplay => SessionDisplayFormat.FormatWholeMilliseconds(DurationMs);
+
+    /// <summary>Duration text copied from the grid. Invariant digits, no grouping.</summary>
+    public string DurationClipboard => SessionDisplayFormat.FormatWholeMillisecondsInvariant(DurationMs);
+
     public double? TtfbMs
     {
         get => _ttfbMs;
         set => SetField(ref _ttfbMs, value);
     }
+
+    /// <summary>Wait column text, whole milliseconds in the PC's regional format.</summary>
+    public string TtfbDisplay => SessionDisplayFormat.FormatWholeMilliseconds(TtfbMs);
+
+    /// <summary>Wait text copied from the grid. Invariant digits, no grouping.</summary>
+    public string TtfbClipboard => SessionDisplayFormat.FormatWholeMillisecondsInvariant(TtfbMs);
 
     /// <summary>HAR phases in milliseconds. Null means the phase does not apply. Not notified per property.</summary>
     public double? BlockedMs { get; set; }
@@ -484,6 +500,19 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
         if (name is nameof(BodySize))
         {
             RaiseChanged(nameof(BodySizeDisplay));
+            RaiseChanged(nameof(BodySizeClipboard));
+        }
+
+        if (name is nameof(DurationMs))
+        {
+            RaiseChanged(nameof(DurationDisplay));
+            RaiseChanged(nameof(DurationClipboard));
+        }
+
+        if (name is nameof(TtfbMs))
+        {
+            RaiseChanged(nameof(TtfbDisplay));
+            RaiseChanged(nameof(TtfbClipboard));
         }
 
         return true;
