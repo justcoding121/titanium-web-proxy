@@ -33,7 +33,29 @@ public static class SessionDisplayFormat
     /// Clock used when a format call does not pass one. The Options menu sets this.
     /// Tests that change it must put the previous value back.
     /// </summary>
-    public static InspectorClock Clock { get; set; } = InspectorClock.Local;
+    public static InspectorClock Clock { get; private set; } = InspectorClock.Local;
+
+    /// <summary>Raised when <see cref="SetClock"/> changes the on-screen clock.</summary>
+    public static event EventHandler? ClockChanged;
+
+    /// <summary>Sets <see cref="Clock"/> and raises <see cref="ClockChanged"/> when the value changes.</summary>
+    public static bool SetClock(InspectorClock clock)
+    {
+        if (Clock == clock)
+        {
+            return false;
+        }
+
+        Clock = clock;
+        ClockChanged?.Invoke(null, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>Started column header tip for the active clock.</summary>
+    public static string StartedColumnTip =>
+        Clock == InspectorClock.Utc
+            ? "When the request started (UTC). Hover a row for the full date and time."
+            : "When the request started (this PC). Hover a row for the full date and time.";
 
     public static string FormatHttpProtocol(Version? version)
     {

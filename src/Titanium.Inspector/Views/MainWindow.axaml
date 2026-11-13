@@ -102,6 +102,16 @@
                     Command="{Binding SetThemeAutomaticCommand}"
                     AutomationProperties.AutomationId="MenuThemeAutomatic" />
         </MenuItem>
+        <MenuItem Header="{loc:Loc menu.time}" AutomationProperties.AutomationId="MenuTime">
+          <MenuItem Header="{loc:Loc menu.timeLocal}" ToggleType="Radio"
+                    IsChecked="{Binding TimeDisplayIsLocal, Mode=OneWay}"
+                    Command="{Binding SetTimeDisplayLocalCommand}"
+                    AutomationProperties.AutomationId="MenuTimeLocal" />
+          <MenuItem Header="{loc:Loc menu.timeUtc}" ToggleType="Radio"
+                    IsChecked="{Binding TimeDisplayIsUtc, Mode=OneWay}"
+                    Command="{Binding SetTimeDisplayUtcCommand}"
+                    AutomationProperties.AutomationId="MenuTimeUtc" />
+        </MenuItem>
         <MenuItem Header="{loc:Loc menu.language}" AutomationProperties.AutomationId="MenuLanguage">
           <MenuItem Header="{loc:Loc menu.languageAutomatic}" ToggleType="Radio"
                     IsChecked="{Binding UiLanguage, Mode=OneWay, Converter={x:Static conv:LanguageMatchConverter.Instance}, ConverterParameter=auto}"

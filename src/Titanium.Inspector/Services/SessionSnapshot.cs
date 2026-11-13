@@ -226,11 +226,18 @@ public sealed class SessionSnapshot : INotifyPropertyChanged
     /// </summary>
     public string UrlDisplay => SessionDisplayFormat.FormatUrlForGrid(Url, Host);
 
-    /// <summary>Started column text (<see cref="StartedUtc"/> in local time).</summary>
+    /// <summary>Started column text for <see cref="StartedUtc"/> in <see cref="SessionDisplayFormat.Clock"/>.</summary>
     public string StartedDisplay => SessionDisplayFormat.FormatStarted(StartedUtc, DateTimeOffset.UtcNow);
 
-    /// <summary>Full local date-time for the Started tooltip.</summary>
+    /// <summary>Full date-time for the Started tooltip, in <see cref="SessionDisplayFormat.Clock"/>.</summary>
     public string StartedFullDisplay => SessionDisplayFormat.FormatStartedFull(StartedUtc);
+
+    /// <summary>Tells the grid to re-read the Started text after the clock changes. The stored instant stays put.</summary>
+    public void NotifyTimeDisplayChanged()
+    {
+        RaiseChanged(nameof(StartedDisplay));
+        RaiseChanged(nameof(StartedFullDisplay));
+    }
 
     /// <summary>Scheme column text (<c>https</c>, <c>wss</c>, …); empty for CONNECT targets.</summary>
     public string Scheme => SessionDisplayFormat.GetScheme(Url);

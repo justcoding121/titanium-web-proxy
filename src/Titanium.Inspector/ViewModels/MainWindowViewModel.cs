@@ -224,6 +224,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             SetThemeMode(ThemeMode.Automatic);
             return Task.CompletedTask;
         });
+        SetTimeDisplayLocalCommand = Cmd(() =>
+        {
+            SetTimeDisplay(InspectorClock.Local);
+            return Task.CompletedTask;
+        });
+        SetTimeDisplayUtcCommand = Cmd(() =>
+        {
+            SetTimeDisplay(InspectorClock.Utc);
+            return Task.CompletedTask;
+        });
         SetUiLanguageCommand = CmdWithParameter(parameter =>
         {
             SetUiLanguage(parameter as string ?? LanguageService.AutomaticSetting);
@@ -1569,6 +1579,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     public ICommand SetThemeLightCommand { get; }
     public ICommand SetThemeDarkCommand { get; }
     public ICommand SetThemeAutomaticCommand { get; }
+    public ICommand SetTimeDisplayLocalCommand { get; }
+    public ICommand SetTimeDisplayUtcCommand { get; }
     public ICommand ToggleCheckForUpdatesOnStartupCommand { get; }
     public ICommand ExportHarCommand { get; }
     public ICommand ExportSelectedHarCommand { get; }
@@ -2339,6 +2351,10 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     public bool ThemeModeIsAutomatic => _settings.Current.ThemeMode == ThemeMode.Automatic;
 
+    public bool TimeDisplayIsLocal => _settings.Current.TimeDisplay == InspectorClock.Local;
+
+    public bool TimeDisplayIsUtc => _settings.Current.TimeDisplay == InspectorClock.Utc;
+
     /// <summary><c>auto</c> or a shipped culture name. Radios bind this; it is not the resolved catalog.</summary>
     public string UiLanguage =>
         string.IsNullOrWhiteSpace(_settings.Current.UiLanguage)
@@ -3101,6 +3117,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         ApplyInspectLayoutFromSettings();
         ApplyAlwaysOnTop();
         RefreshCustomSettings();
+        ApplySavedTimeDisplay();
     }
 
     /// <summary>Applies <see cref="AlwaysOnTop"/> to the main window only. Dialogs are left alone.</summary>
@@ -3155,6 +3172,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsLight)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsDark)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsAutomatic)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TimeDisplayIsLocal)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TimeDisplayIsUtc)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(AlwaysOnTop)));
         ThemeService.ApplyThemeMode(_settings.Current.ThemeMode);
     }
@@ -3199,6 +3218,35 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsLight)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsDark)));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThemeModeIsAutomatic)));
+    }
+
+    private void SetTimeDisplay(InspectorClock clock)
+    {
+        if (_settings.Current.TimeDisplay == clock)
+        {
+            return;
+        }
+
+        _settings.Current.TimeDisplay = clock;
+        _settings.Save();
+        ApplySavedTimeDisplay();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TimeDisplayIsLocal)));
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TimeDisplayIsUtc)));
+    }
+
+    private void ApplySavedTimeDisplay()
+    {
+        if (!SessionDisplayFormat.SetClock(_settings.Current.TimeDisplay))
+        {
+            return;
+        }
+
+        foreach (var session in _store.Sessions)
+        {
+            session.NotifyTimeDisplayChanged();
+        }
+
+        RefreshSessionCountText();
     }
 
     /// <summary>Rebind theme-aware brushes after <see cref="Application.ActualThemeVariant"/> changes.</summary>
