@@ -73,10 +73,21 @@ public class DecryptFailureBypassInspectorTests
             learnedAtUtc: new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc),
             expiresAtUtc: DateTime.UtcNow.AddMinutes(30),
             bypassActive: true);
-        var display = ExcludedHostsWindow.FormatLearnedDisplay(entry);
+        var zone = TimeZoneInfo.CreateCustomTimeZone("UTC-6", TimeSpan.FromHours(-6), "UTC-6", "UTC-6");
+        var display = ExcludedHostsWindow.FormatLearnedDisplay(entry, InspectorClock.Local, zone);
         StringAssert.Contains(display, "pin.example.com");
         StringAssert.Contains(display, "Decrypt failure");
-        StringAssert.Contains(display, "2026-01-02");
+        StringAssert.EndsWith(display, "2026-01-01 21:04:05 -06:00");
+
+        var unspecified = new DecryptFailureBypassEntry(
+            "pin.example.com",
+            strikes: 2,
+            learnedAtUtc: new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Unspecified),
+            expiresAtUtc: DateTime.UtcNow.AddMinutes(30),
+            bypassActive: true);
+        Assert.AreEqual(
+            display,
+            ExcludedHostsWindow.FormatLearnedDisplay(unspecified, InspectorClock.Local, zone));
     }
 
     [TestMethod]
