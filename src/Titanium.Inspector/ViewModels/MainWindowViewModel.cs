@@ -661,7 +661,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 $"Proxy running on {FormatBindDisplay()}:{BindPort}, but system proxy failed to enable — use the System proxy checkbox.",
                 StatusSeverity.Warning);
         }
-        // On success the SystemProxy setter already shows restart-browser guidance — do not overwrite with Ready.
+        // On success the SystemProxy setter already shows "System proxy enabled" — do not overwrite with Ready.
     }
 
     /// <summary>
@@ -2163,8 +2163,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             {
                 SetOutcomeStatus(
                     SystemProxyEnabledStatusMessage(),
-                    StatusSeverity.Success,
-                    toastImportant: OperatingSystem.IsWindows());
+                    StatusSeverity.Success);
             }
             else
             {
@@ -3980,9 +3979,6 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
 
     private static string SystemProxyEnabledStatusMessage()
     {
-        if (OperatingSystem.IsWindows())
-            return "System proxy enabled. For Chrome: disable QUIC (--disable-quic) or H3 may bypass the proxy.";
-
         if (OperatingSystem.IsMacOS())
             return "System proxy enabled. Restart Firefox if it was already open so it picks up the proxy.";
 
