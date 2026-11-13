@@ -73,7 +73,7 @@ public class InspectorClockOptionTests
             Assert.AreEqual(localHar, utcHar);
             StringAssert.StartsWith(localHar, "2026-01-02T03:04:05");
             Assert.IsTrue(
-                localHar.EndsWith("Z", StringComparison.Ordinal) ||
+                localHar.EndsWith('Z') ||
                 localHar.Contains("+00:00", StringComparison.Ordinal),
                 localHar);
             Assert.AreEqual(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), session.StartedUtc);

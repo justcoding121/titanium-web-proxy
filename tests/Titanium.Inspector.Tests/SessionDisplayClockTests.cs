@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.Views;
@@ -11,7 +12,7 @@ namespace Titanium.Inspector.Tests;
 /// still fails when the conversion is skipped.
 /// </summary>
 [TestClass]
-public class SessionDisplayClockTests
+public partial class SessionDisplayClockTests
 {
     private static readonly TimeZoneInfo Minus6 =
         TimeZoneInfo.CreateCustomTimeZone("UTC-6", TimeSpan.FromHours(-6), "UTC-6", "UTC-6");
@@ -20,6 +21,9 @@ public class SessionDisplayClockTests
         TimeZoneInfo.CreateCustomTimeZone("UTC+2", TimeSpan.FromHours(2), "UTC+2", "UTC+2");
 
     private static readonly DateTimeOffset Sample = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+
+    [GeneratedRegex(@"-\d{4}")]
+    private static partial Regex NegativeYear();
 
     [TestMethod]
     public void FormatAbsolute_ConvertsWithTheGivenOffset_AndTreatsUnspecifiedAsUtc()
@@ -110,7 +114,7 @@ public class SessionDisplayClockTests
 
         foreach (var text in texts)
         {
-            StringAssert.DoesNotMatch(text, new System.Text.RegularExpressions.Regex(@"-\d{4}"));
+            StringAssert.DoesNotMatch(text, NegativeYear());
             Assert.IsFalse(text.Contains("-0001", StringComparison.Ordinal), text);
         }
 
