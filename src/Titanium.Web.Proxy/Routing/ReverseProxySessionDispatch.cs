@@ -434,16 +434,18 @@ internal static class ReverseProxySessionDispatch
         var target = OriginForm(request.RequestUriString8.GetString());
         var path = RedirectPath(target, redirect);
         var query = PreservedQuery(target, redirect.PreserveQuery);
-        if (!string.IsNullOrEmpty(redirect.Host))
+        var host = string.IsNullOrEmpty(redirect.Host) && redirect.UseRequestHost ? RequestHostName(request) : redirect.Host;
+        // The path may still carry the request's own query; the preserved query is appended below.
+        if (path.Contains('?', StringComparison.Ordinal))
+        {
+            path = path[..path.IndexOf('?')];
+        }
+
+        if (!string.IsNullOrEmpty(host))
         {
             var scheme = RedirectScheme(request, redirect);
             var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
-            if (path.Contains('?', StringComparison.Ordinal))
-            {
-                path = path[..path.IndexOf('?')];
-            }
-
-            return scheme + "://" + redirect.Host + port + path + query;
+            return scheme + "://" + host + port + path + query;
         }
 
         return path + query;
@@ -500,6 +502,56 @@ internal static class ReverseProxySessionDispatch
 
         var q = target.IndexOf('?');
         return q >= 0 ? target[q..] : "";
+    }
+
+    /// <summary>
+    /// The client's requested host without a port, or null when it is not a plain DNS name, IPv4 address or bracketed
+    /// IPv6 literal, so a crafted <c>Host</c> cannot steer the <c>Location</c> to another authority.
+    /// </summary>
+    private static string? RequestHostName(Request request)
+    {
+        var host = request.Host;
+        if (string.IsNullOrEmpty(host))
+        {
+            return null;
+        }
+
+        if (host[0] == '[')
+        {
+            var end = host.IndexOf(']');
+            if (end < 2)
+            {
+                return null;
+            }
+
+            var literal = host[1..end];
+            foreach (var c in literal)
+            {
+                if (!(char.IsAsciiHexDigit(c) || c is ':' or '.'))
+                {
+                    return null;
+                }
+            }
+
+            return host[..(end + 1)];
+        }
+
+        var colon = host.IndexOf(':');
+        var name = colon >= 0 ? host[..colon] : host;
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        foreach (var c in name)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_'))
+            {
+                return null;
+            }
+        }
+
+        return name;
     }
 
     private static string RedirectScheme(Request request, RedirectConfig redirect)

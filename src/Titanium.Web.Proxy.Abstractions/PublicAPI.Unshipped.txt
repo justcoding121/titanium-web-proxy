@@ -660,6 +660,8 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Methods.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxBodyBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Limit.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.HttpToHttps.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.UseRequestHost.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.UseRequestHost.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixFrom.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixFrom.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixTo.get -> string?

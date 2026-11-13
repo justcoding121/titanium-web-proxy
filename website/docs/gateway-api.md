@@ -128,7 +128,6 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 | `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
 | Header `RegularExpression` that uses lookahead, a backreference, or an unbalanced parenthesis | The rule answers `500` (`UnsupportedValue`). |
 | `RequestRedirect` with `ReplacePrefixMatch` on a match that is not a `PathPrefix` | The rule answers `500` (a prefix is needed to replace). |
-| `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
 | More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
 | A listener on a port not in `dataPlane.ports` | Listener not programmed, reason `PortUnavailable`. |
 
