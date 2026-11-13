@@ -263,7 +263,81 @@ public class RoutePolicyLiteTests
         Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out var status, out _, out _));
         Assert.AreEqual(503, status);
         RoutePolicies.Release(options, "slots");
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
         Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_PerClient_DoesNotShareASlot_AndDropsTheCounterAtZero()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 1, Key = "client" });
+
+        Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
+        Assert.IsFalse(Handle(options, Req(), "10.0.0.2", out _, out _, out _), "another client has its own slot");
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out var first, out _, out _));
+        Assert.AreEqual(503, first);
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.2", out var second, out _, out _));
+        Assert.AreEqual(503, second);
+
+        RoutePolicies.Release(options, "slots\u001e10.0.0.1");
+        Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _), "releasing one client does not free the other");
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.2", out var stillHeld, out _, out _));
+        Assert.AreEqual(503, stillHeld);
+
+        RoutePolicies.Release(options, "slots\u001e10.0.0.1");
+        RoutePolicies.Release(options, "slots\u001e10.0.0.2");
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_AThousandClients_LeaveNoCounters()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 1, Key = "client" });
+        var names = new string[1000];
+        for (var i = 0; i < names.Length; i++)
+        {
+            var address = "10." + (i / 256) + "." + (i % 256) + ".1";
+            Assert.IsFalse(Handle(options, Req(), address, out _, out _, out _), address);
+            names[i] = "slots\u001e" + address;
+        }
+
+        Assert.AreEqual(1000, RoutePolicies.ConnectionSlotCount(options));
+        foreach (var name in names)
+        {
+            RoutePolicies.Release(options, name);
+        }
+
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_ParallelAcquires_NeverExceedTheLimit_AndEndAtZero()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 4, Key = "client" });
+        var held = 0;
+        System.Threading.Tasks.Parallel.For(0, 32, _index =>
+        {
+            if (!Handle(options, Req(), "10.9.9.9", out _, out _, out _))
+            {
+                System.Threading.Interlocked.Increment(ref held);
+            }
+        });
+
+        Assert.IsTrue(held <= 4, "held " + held);
+        Assert.IsTrue(held > 0);
+        for (var i = 0; i < held; i++)
+        {
+            RoutePolicies.Release(options, "slots\u001e10.9.9.9");
+        }
+
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_KeyedStillBlocksTerminateLite()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = "route" });
+        Assert.IsTrue(RoutePolicies.HoldsConnectionSlot(options));
     }
 
     [TestMethod]

@@ -427,6 +427,32 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void ConnectionLimit_AcceptsClientForwardedClientAndRoute_AndRejectsHeaderKeys()
+    {
+        foreach (var key in new[] { "client", "forwardedClient", "route" })
+        {
+            var ok = new TwpConfig
+            {
+                Clusters = [Cluster("c")],
+                Policies = [new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = key }],
+                Routes = [Route("r", "c", "slots")],
+            };
+            Assert.AreEqual(0, TwpConfigValidator.Validate(ok).Count, key);
+        }
+
+        foreach (var key in new[] { "header:X-User", "cookie:sid", "ip" })
+        {
+            var bad = new TwpConfig
+            {
+                Clusters = [Cluster("c")],
+                Policies = [new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = key }],
+                Routes = [Route("r", "c", "slots")],
+            };
+            StringAssert.Contains(Errors(bad), "connectionLimit");
+        }
+    }
+
+    [TestMethod]
     public void Regexes_ThatDoNotCompile_AreRejected()
     {
         var config = new TwpConfig

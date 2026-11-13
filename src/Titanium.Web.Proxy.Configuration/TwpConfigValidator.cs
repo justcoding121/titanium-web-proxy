@@ -926,6 +926,11 @@ public static class TwpConfigValidator
                 {
                     ValidateRateLimit(policy, errors);
                 }
+                else if (policy.Key is not null && policy.Key is not ("client" or "forwardedClient" or "route"))
+                {
+                    errors.Add(
+                        $"Policy '{name}' (connectionLimit) key '{policy.Key}' must be client, forwardedClient, or route.");
+                }
 
                 break;
             case "ipAllowDeny":

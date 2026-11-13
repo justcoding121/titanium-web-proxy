@@ -252,6 +252,8 @@ public sealed class RoutePolicyConfig
     /// <c>forwardedClient</c> (rightmost X-Forwarded-For entry that is not a trusted proxy),
     /// <c>header:&lt;Name&gt;</c>, <c>cookie:&lt;Name&gt;</c> (a request without the value falls back to the client address),
     /// or <c>route</c> (one counter per route).
+    /// <c>connectionLimit</c> accepts only <c>client</c>, <c>forwardedClient</c>, and <c>route</c>.
+    /// Unset means one counter for the whole policy.
     /// </summary>
     public string? Key { get; init; }
 
