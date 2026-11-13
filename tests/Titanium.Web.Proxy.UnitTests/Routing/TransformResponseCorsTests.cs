@@ -11,6 +11,7 @@ namespace Titanium.Web.Proxy.UnitTests.Routing;
 public class TransformResponseCorsTests
 {
     private const string AllowOrigin = "Access-Control-Allow-Origin";
+    private static readonly string[] RequiredOriginsParameter = ["origins"];
 
     private static TransformRequestContext Apply(string origins, string? requestOrigin, string? allowCredentials = null, string? exposeHeaders = null)
     {
@@ -44,7 +45,7 @@ public class TransformResponseCorsTests
     public void Kind_RequiresTheOriginsParameter()
     {
         Assert.IsTrue(TransformKinds.TryGetRequiredParameters(TransformKinds.ResponseCors, out var required));
-        CollectionAssert.AreEqual(new[] { "origins" }, new List<string>(required));
+        CollectionAssert.AreEqual(RequiredOriginsParameter, new List<string>(required));
     }
 
     [TestMethod]

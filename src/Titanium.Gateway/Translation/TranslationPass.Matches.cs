@@ -7,6 +7,7 @@ namespace Titanium.Gateway.Translation;
 internal sealed partial class TranslationPass
 {
     private const string PatternTransformKey = "pattern";
+    private const string RegularExpressionType = "RegularExpression";
 
     private sealed class MatchSpec
     {
@@ -147,7 +148,7 @@ internal sealed partial class TranslationPass
                         Host = redirect.Hostname ?? redirectHost,
                         Port = redirect.Port,
                         Path = redirect.FullPath,
-                        ReplacePrefixFrom = redirect.PrefixReplacement is null ? null : spec.Prefix,
+                        ReplacePrefixFrom = PrefixReplacementFrom(redirect, spec),
                         ReplacePrefixTo = redirect.PrefixReplacement,
                         PreserveQuery = true,
                     },
@@ -157,6 +158,9 @@ internal sealed partial class TranslationPass
             },
         };
     }
+
+    private static string? PrefixReplacementFrom(RedirectSpec redirect, MatchSpec spec) =>
+        redirect.PrefixReplacement is null ? null : spec.Prefix;
 
     private static List<RouteDraft> SortDrafts(List<RouteDraft> drafts) =>
         drafts
@@ -198,7 +202,7 @@ internal sealed partial class TranslationPass
 
         foreach (var header in match.Headers ?? [])
         {
-            if (header.Type is not (null or "Exact" or "RegularExpression"))
+            if (header.Type is not (null or "Exact" or RegularExpressionType))
             {
                 problems.Add($"header match '{header.Name}' type '{header.Type}' is not supported (Exact and RegularExpression only)");
                 continue;
@@ -211,7 +215,7 @@ internal sealed partial class TranslationPass
                 continue;
             }
 
-            if (header.Type == "RegularExpression")
+            if (header.Type == RegularExpressionType)
             {
                 if (!CompilesAsWholeValueRegex(header.Value))
                 {
@@ -230,8 +234,8 @@ internal sealed partial class TranslationPass
 
         foreach (var query in match.QueryParams ?? [])
         {
-            var regex = query.Type == "RegularExpression";
-            if (query.Type is not (null or "Exact" or "RegularExpression"))
+            var regex = query.Type == RegularExpressionType;
+            if (query.Type is not (null or "Exact" or RegularExpressionType))
             {
                 problems.Add($"query parameter match '{query.Name}' type '{query.Type}' is not supported");
                 continue;
@@ -295,7 +299,7 @@ internal sealed partial class TranslationPass
                 }
 
                 break;
-            case "RegularExpression":
+            case RegularExpressionType:
                 if (!CompilesAsWholeValueRegex(value))
                 {
                     problems.Add("path regular expression is not supported by the data plane");

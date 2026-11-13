@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Titanium.Web.Proxy.Routing;
@@ -34,7 +35,7 @@ internal static class CorsOriginMatcher
             return null;
         }
 
-        return Cache.GetOrAdd(configured, static value => CompiledList.Parse(value)).Match(origin);
+        return Cache.GetOrAdd(configured, static value => CompiledList.Parse(value)).MatchOrigin(origin);
     }
 
     /// <summary>True when <paramref name="entry"/> is <c>https://*.example.com</c> with an optional port.</summary>
@@ -134,14 +135,11 @@ internal static class CorsOriginMatcher
             return new CompiledList(exact.ToArray(), wildcards.ToArray(), regexes.ToArray());
         }
 
-        internal string? Match(string origin)
+        internal string? MatchOrigin(string origin)
         {
-            for (var i = 0; i < exact.Length; i++)
+            if (MatchesExact(origin))
             {
-                if (string.Equals(exact[i], origin, StringComparison.Ordinal))
-                {
-                    return origin;
-                }
+                return origin;
             }
 
             if (IsClosed(origin))
@@ -149,18 +147,48 @@ internal static class CorsOriginMatcher
                 return null;
             }
 
-            if (Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.HostNameType is UriHostNameType.Dns)
+            if (MatchesWildcard(origin))
             {
-                var explicitPort = OriginHasExplicitPort(origin);
-                for (var i = 0; i < wildcards.Length; i++)
+                return origin;
+            }
+
+            return FirstRegexMatch(origin);
+        }
+
+        private bool MatchesExact(string origin)
+        {
+            for (var i = 0; i < exact.Length; i++)
+            {
+                if (string.Equals(exact[i], origin, StringComparison.Ordinal))
                 {
-                    if (wildcards[i].Matches(uri, explicitPort))
-                    {
-                        return origin;
-                    }
+                    return true;
                 }
             }
 
+            return false;
+        }
+
+        private bool MatchesWildcard(string origin)
+        {
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.HostNameType is not UriHostNameType.Dns)
+            {
+                return false;
+            }
+
+            var explicitPort = OriginHasExplicitPort(origin);
+            for (var i = 0; i < wildcards.Length; i++)
+            {
+                if (wildcards[i].Matches(uri, explicitPort))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private string? FirstRegexMatch(string origin)
+        {
             for (var i = 0; i < regexes.Length; i++)
             {
                 try
@@ -182,18 +210,7 @@ internal static class CorsOriginMatcher
         private static bool IsClosed(string origin) =>
             origin.Length > 256 || string.Equals(origin, "null", StringComparison.Ordinal) || HasControl(origin);
 
-        private static bool HasControl(string origin)
-        {
-            foreach (var ch in origin)
-            {
-                if (char.IsControl(ch))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
+        private static bool HasControl(string origin) => origin.Any(char.IsControl);
 
         private static bool OriginHasExplicitPort(string origin)
         {
@@ -259,20 +276,8 @@ internal static class CorsOriginMatcher
             }
 
             var label = host[..(host.Length - Suffix.Length - 1)];
-            if (label.Length == 0 || label.Contains('.'))
-            {
-                return false;
-            }
-
-            foreach (var ch in label)
-            {
-                if (!char.IsAsciiLetterOrDigit(ch) && ch != '-')
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return label.Length > 0 && !label.Contains('.') &&
+                label.All(static ch => char.IsAsciiLetterOrDigit(ch) || ch == '-');
         }
     }
 }

@@ -432,11 +432,7 @@ internal static class ReverseProxySessionDispatch
     internal static string BuildRedirect(Request request, RedirectConfig redirect)
     {
         var target = OriginForm(request.RequestUriString8.GetString());
-        var path = string.IsNullOrEmpty(redirect.Path)
-            ? redirect.ReplacePrefixFrom is not null
-                ? ReplacePathPrefix(target, redirect.ReplacePrefixFrom, redirect.ReplacePrefixTo ?? string.Empty)
-                : target
-            : redirect.Path;
+        var path = RedirectPath(target, redirect);
         var query = PreservedQuery(target, redirect.PreserveQuery);
         if (!string.IsNullOrEmpty(redirect.Host))
         {
@@ -451,6 +447,21 @@ internal static class ReverseProxySessionDispatch
         }
 
         return path + query;
+    }
+
+    private static string RedirectPath(string target, RedirectConfig redirect)
+    {
+        if (!string.IsNullOrEmpty(redirect.Path))
+        {
+            return redirect.Path;
+        }
+
+        if (redirect.ReplacePrefixFrom is not null)
+        {
+            return ReplacePathPrefix(target, redirect.ReplacePrefixFrom, redirect.ReplacePrefixTo ?? string.Empty);
+        }
+
+        return target;
     }
 
     /// <summary>Swaps a leading segment prefix of the path (query dropped; the caller re-adds it). No match keeps the path.</summary>
@@ -1124,6 +1135,19 @@ internal static class ReverseProxySessionDispatch
             transparent.ForwardPort ?? 80);
     }
 
+    private static string PathAndQuery(Request request)
+    {
+        var path = request.RequestUriString8.GetString();
+        if ((path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+            Uri.TryCreate(path, UriKind.Absolute, out var absolute))
+        {
+            return absolute.PathAndQuery;
+        }
+
+        return path;
+    }
+
     private static bool ApplyTransforms(
         Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         IReadOnlyList<TransformConfig> transforms,
@@ -1131,13 +1155,7 @@ internal static class ReverseProxySessionDispatch
         SessionEventArgsBase session)
     {
         var engine = options.TransformEngine ?? new TransformEngine();
-        var path = request.RequestUriString8.GetString();
-        if ((path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-             path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
-            Uri.TryCreate(path, UriKind.Absolute, out var absolute))
-        {
-            path = absolute.PathAndQuery;
-        }
+        var path = PathAndQuery(request);
 
         var ctx = new TransformRequestContext { Path = path };
         if (HasKind(transforms, TransformKinds.RequestHeaderAppend) || HasKind(transforms, TransformKinds.ResponseCors))

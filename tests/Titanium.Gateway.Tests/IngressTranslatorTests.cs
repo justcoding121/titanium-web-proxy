@@ -20,6 +20,8 @@ public class IngressTranslatorTests
     private static readonly string[] TlsHostsAppAndWww = ["app.test", "www.app.test"];
     private static readonly string[] WildcardHosts = ["*"];
     private static readonly string[] PolicyOrderKinds = ["ipAllowDeny", "cors", "rateLimit", "extAuth", "maxRequestBodySize"];
+    private static readonly string[] SslRedirectPolicyOrder = ["ipAllowDeny", "httpsRedirect", "cors"];
+    private static readonly int[] UpstreamRetryStatuses = [500, 429];
 
     private static RenderResult Render(StateBuilder b, bool validate = true, GatewayTranslatorOptions? options = null)
     {
@@ -659,7 +661,7 @@ public class IngressTranslatorTests
             (A("whitelist-source-range"), "10.0.0.0/8"));
 
         var kinds = route.Policies!.Select(n => result.Config.Policies.Single(p => p.Name == n).Kind).ToArray();
-        CollectionAssert.AreEqual(new[] { "ipAllowDeny", "httpsRedirect", "cors" }, kinds);
+        CollectionAssert.AreEqual(SslRedirectPolicyOrder, kinds);
     }
 
     [TestMethod]
@@ -945,7 +947,7 @@ public class IngressTranslatorTests
         Assert.AreEqual("https://app.example.com", policy.Origins);
         Assert.AreEqual("GET,PUT", policy.Methods);
         Assert.AreEqual("X-Trace,X-Tenant", policy.HeaderName);
-        Assert.AreEqual(true, policy.AllowCredentials);
+        Assert.IsTrue(policy.AllowCredentials is true);
         Assert.AreEqual("X-Request-Id", policy.ExposeHeaders);
         Assert.AreEqual(600, policy.MaxAgeSeconds);
 
@@ -1132,7 +1134,7 @@ public class IngressTranslatorTests
 
         var retry = result.Config.Clusters.Single().Retry!;
         Assert.AreEqual(2, retry.Attempts);
-        CollectionAssert.AreEqual(new[] { 500, 429 }, retry.StatusCodes!.ToArray());
+        CollectionAssert.AreEqual(UpstreamRetryStatuses, retry.StatusCodes!.ToArray());
         Assert.IsTrue(retry.RetryNonIdempotent);
         Assert.AreEqual(2000, retry.PerTryTimeoutMilliseconds);
         StringAssert.Contains(result.Config.Clusters.Single().Id, "@ing:default/ing");
@@ -1211,7 +1213,7 @@ public class IngressTranslatorTests
     {
         var result = OnePath("Exact", "/", annotations: new() { [A("app-root")] = "/app" });
 
-        Assert.AreEqual(1, result.Config.UserRoutes().Count());
+        Assert.AreEqual(1, result.Config.UserRoutes().Count);
         Assert.IsNull(result.Config.UserRoutes().Single().Redirect);
         Assert.IsNotNull(EventFor(result, "AppRootSkipped"));
     }

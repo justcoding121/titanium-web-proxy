@@ -101,7 +101,14 @@ public static class TwpConfigSchema
     /// </summary>
     private static void ApplyKnownConstraints(JsonObject schema, System.Reflection.PropertyInfo property)
     {
-        switch (property.DeclaringType?.Name + "." + property.Name)
+        var key = property.DeclaringType?.Name + "." + property.Name;
+        ApplyTransportConstraints(schema, key);
+        ApplyExtensionConstraints(schema, key);
+    }
+
+    private static void ApplyTransportConstraints(JsonObject schema, string key)
+    {
+        switch (key)
         {
             case "ClusterHttpClientConfig.MaxConnectionsPerServer":
                 schema["description"] =
@@ -165,6 +172,13 @@ public static class TwpConfigSchema
             case "RouteConfig.Compression":
                 schema["enum"] = new JsonArray { "off" };
                 break;
+        }
+    }
+
+    private static void ApplyExtensionConstraints(JsonObject schema, string key)
+    {
+        switch (key)
+        {
             case "PluginConfig.FailMode":
                 schema["enum"] = new JsonArray { "closed", "open" };
                 break;

@@ -56,10 +56,18 @@ public static class ReverseProxyFastPath
         }
 
         var dest = cluster.Destinations[0];
-        if (DestinationHasExtraBehavior(dest))
-        {
-            return false;
-        }
+        return !DestinationHasExtraBehavior(dest) &&
+            DestinationAcceptsForward(dest, snapshot, forwardHost, forwardPort, checkOriginScheme, forwardCleartext);
+    }
+
+    private static bool DestinationAcceptsForward(
+        DestinationConfig dest,
+        ImmutableClusterSnapshot snapshot,
+        string forwardHost,
+        int forwardPort,
+        bool checkOriginScheme,
+        bool forwardCleartext)
+    {
         if (snapshot.DestinationStates.TryGetValue(dest.Id, out var state) &&
             state is not DestinationState.Healthy)
         {
@@ -71,7 +79,6 @@ public static class ReverseProxyFastPath
         {
             port = dest.UseHttps ? 443 : 80;
         }
-
         if (checkOriginScheme && dest.UseHttps == forwardCleartext)
         {
             // Cleartext forward with an https destination, or TLS forward with a cleartext destination.

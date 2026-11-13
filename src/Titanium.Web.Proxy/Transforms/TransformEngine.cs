@@ -9,6 +9,7 @@ namespace Titanium.Web.Proxy.Transforms;
 public sealed class TransformEngine : ITransformEngine
 {
     private const string ValueParameter = "value";
+    private const string AllowOriginHeader = "Access-Control-Allow-Origin";
     private const char Slash = '/';
     /// <summary>Extra kinds. Null (the default) does not allocate or change built-in transforms.</summary>
     public IReadOnlyList<IRouteTransformFactory>? Factories { get; init; }
@@ -187,8 +188,8 @@ public sealed class TransformEngine : ITransformEngine
         var echoed = false;
         if (allowed == "*")
         {
-            context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = "*";
-            context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
+            context.ResponseHeadersToSet[AllowOriginHeader] = "*";
+            context.ResponseHeadersToAppend?.Remove(AllowOriginHeader);
             echoed = true;
         }
         else
@@ -197,8 +198,8 @@ public sealed class TransformEngine : ITransformEngine
             var origin = context.ExistingRequestHeader?.Invoke("Origin");
             if (!string.IsNullOrEmpty(origin) && Routing.RoutePolicies.AllowedOrigin(allowed, origin) is { } echoedOrigin)
             {
-                context.ResponseHeadersToSet["Access-Control-Allow-Origin"] = echoedOrigin;
-                context.ResponseHeadersToAppend?.Remove("Access-Control-Allow-Origin");
+                context.ResponseHeadersToSet[AllowOriginHeader] = echoedOrigin;
+                context.ResponseHeadersToAppend?.Remove(AllowOriginHeader);
                 echoed = true;
             }
         }

@@ -912,56 +912,16 @@ public static class TwpConfigValidator
                 errors.Add($"Policy '{name}' (timeout) needs timeoutSeconds > 0.");
                 break;
             case RateLimitPolicyKind or "connectionLimit":
-                if (policy.Limit is < 1)
-                {
-                    errors.Add($"Policy '{name}' limit must be >= 1.");
-                }
-
-                if (policy.WindowSeconds is < 1)
-                {
-                    errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
-                }
-
-                if (policy.Kind == RateLimitPolicyKind)
-                {
-                    ValidateRateLimit(policy, errors);
-                }
-                else if (policy.Key is not null && policy.Key is not ("client" or "forwardedClient" or "route"))
-                {
-                    errors.Add(
-                        $"Policy '{name}' (connectionLimit) key '{policy.Key}' must be client, forwardedClient, or route.");
-                }
-
+                ValidateLimitPolicy(policy, errors);
                 break;
             case "httpsRedirect":
-                if (policy.RedirectStatus is int status && status is not (301 or 302 or 307 or 308))
-                {
-                    errors.Add($"Policy '{name}' (httpsRedirect) status {status} must be 301, 302, 307, or 308.");
-                }
-
-                if (policy.Port is < 1 or > 65535)
-                {
-                    errors.Add($"Policy '{name}' (httpsRedirect) port must be 1-65535.");
-                }
-
+                ValidateHttpsRedirect(policy, errors);
                 break;
             case "ipAllowDeny":
-                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
-                {
-                    errors.Add($"Policy '{name}' (ipAllowDeny) needs allow or deny.");
-                }
-
-                ValidatePrefixList(name, AllowValue, policy.Allow, errors);
-                ValidatePrefixList(name, "deny", policy.Deny, errors);
+                ValidateAllowOrDeny(policy, errors, "ipAllowDeny", ValidatePrefixList);
                 break;
             case "geo":
-                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
-                {
-                    errors.Add($"Policy '{name}' (geo) needs allow or deny.");
-                }
-
-                ValidateCountryList(name, AllowValue, policy.Allow, errors);
-                ValidateCountryList(name, "deny", policy.Deny, errors);
+                ValidateAllowOrDeny(policy, errors, "geo", ValidateCountryList);
                 break;
             case "extAuth":
                 ValidateExtAuth(policy, errors);
@@ -1005,37 +965,7 @@ public static class TwpConfigValidator
         var sawOther = false;
         foreach (var part in origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            if (part == "*")
-            {
-                sawStar = true;
-                continue;
-            }
-
-            sawOther = true;
-            if (part.StartsWith("regex:", StringComparison.Ordinal))
-            {
-                if (!CompilesAsWholeValueRegex(part["regex:".Length..]))
-                {
-                    errors.Add($"Policy '{name}' (cors) origins regex does not compile as a whole-value pattern.");
-                }
-
-                continue;
-            }
-
-            if (part.Contains('*'))
-            {
-                if (!IsCorsWildcard(part))
-                {
-                    errors.Add($"Policy '{name}' (cors) origins wildcard '{part}' must be http(s)://*.example.com with an optional port.");
-                }
-
-                continue;
-            }
-
-            if (!IsCorsExactOrigin(part))
-            {
-                errors.Add($"Policy '{name}' (cors) origins entry '{part}' is not an http(s) origin.");
-            }
+            ClassifyCorsOrigin(name, part, errors, ref sawStar, ref sawOther);
         }
 
         if (sawStar && sawOther)
@@ -1096,15 +1026,97 @@ public static class TwpConfigValidator
             return true;
         }
 
-        foreach (var part in origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        return origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Any(static part => part == "*");
+    }
+
+    private static void ValidateLimitPolicy(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.Limit is < 1)
         {
-            if (part == "*")
-            {
-                return true;
-            }
+            errors.Add($"Policy '{name}' limit must be >= 1.");
         }
 
-        return false;
+        if (policy.WindowSeconds is < 1)
+        {
+            errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
+        }
+
+        if (policy.Kind == RateLimitPolicyKind)
+        {
+            ValidateRateLimit(policy, errors);
+        }
+        else if (policy.Key is not null && policy.Key is not ("client" or "forwardedClient" or "route"))
+        {
+            errors.Add(
+                $"Policy '{name}' (connectionLimit) key '{policy.Key}' must be client, forwardedClient, or route.");
+        }
+    }
+
+    private static void ValidateHttpsRedirect(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.RedirectStatus is int status && status is not (301 or 302 or 307 or 308))
+        {
+            errors.Add($"Policy '{name}' (httpsRedirect) status {status} must be 301, 302, 307, or 308.");
+        }
+
+        if (policy.Port is < 1 or > 65535)
+        {
+            errors.Add($"Policy '{name}' (httpsRedirect) port must be 1-65535.");
+        }
+    }
+
+    private static void ValidateAllowOrDeny(
+        RoutePolicyConfig policy,
+        List<string> errors,
+        string kind,
+        Action<string, string, string?, List<string>> validateList)
+    {
+        var name = policy.Name;
+        if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
+        {
+            errors.Add($"Policy '{name}' ({kind}) needs allow or deny.");
+        }
+
+        validateList(name, AllowValue, policy.Allow, errors);
+        validateList(name, "deny", policy.Deny, errors);
+    }
+
+    private static void ClassifyCorsOrigin(string name, string part, List<string> errors, ref bool sawStar, ref bool sawOther)
+    {
+        if (part == "*")
+        {
+            sawStar = true;
+            return;
+        }
+
+        sawOther = true;
+        if (part.StartsWith("regex:", StringComparison.Ordinal))
+        {
+            if (!CompilesAsWholeValueRegex(part["regex:".Length..]))
+            {
+                errors.Add($"Policy '{name}' (cors) origins regex does not compile as a whole-value pattern.");
+            }
+
+            return;
+        }
+
+        if (part.Contains('*'))
+        {
+            if (!IsCorsWildcard(part))
+            {
+                errors.Add($"Policy '{name}' (cors) origins wildcard '{part}' must be http(s)://*.example.com with an optional port.");
+            }
+
+            return;
+        }
+
+        if (!IsCorsExactOrigin(part))
+        {
+            errors.Add($"Policy '{name}' (cors) origins entry '{part}' is not an http(s) origin.");
+        }
     }
 
     private static void ValidateWaf(RoutePolicyConfig policy, List<string> errors) // NOSONAR S3776 -- WAF policy validation checks mode, thresholds, and exclusions together.

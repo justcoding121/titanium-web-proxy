@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -23,6 +24,9 @@ namespace Titanium.Web.Proxy.Routing;
 /// <summary>Enforces route policies before a destination is selected. No work when the route lists none.</summary>
 internal static class RoutePolicies
 {
+    private const string OriginHeader = "Origin";
+    private static readonly SearchValues<char> Ipv6HostChars = SearchValues.Create("0123456789abcdefABCDEF:.");
+
     /// <summary>
     ///     Counters and slots that belong to one <see cref="ReverseProxyOptions" /> instance, so two proxies in a process
     ///     do not share them and a reload (a new options instance) starts clean.
@@ -444,7 +448,7 @@ internal static class RoutePolicies
         if (value[0] == '[')
         {
             var end = value.IndexOf(']');
-            if (end <= 1 || value.AsSpan(1, end - 1).IndexOfAnyExcept("0123456789abcdefABCDEF:.") >= 0)
+            if (end <= 1 || value.AsSpan(1, end - 1).IndexOfAnyExcept(Ipv6HostChars) >= 0)
             {
                 return false;
             }
@@ -733,7 +737,7 @@ internal static class RoutePolicies
             return null;
         }
 
-        var origin = HeaderValue(request, "Origin");
+        var origin = HeaderValue(request, OriginHeader);
         var requestMethod = HeaderValue(request, "Access-Control-Request-Method");
         if (string.IsNullOrEmpty(origin) || string.IsNullOrEmpty(requestMethod))
         {
@@ -803,7 +807,7 @@ internal static class RoutePolicies
             return null;
         }
 
-        var origin = HeaderValue(request, "Origin");
+        var origin = HeaderValue(request, OriginHeader);
         if (string.IsNullOrEmpty(origin))
         {
             return null;
@@ -833,7 +837,7 @@ internal static class RoutePolicies
         var configured = policy.Origins?.Trim();
         if (!string.IsNullOrWhiteSpace(configured) && !string.Equals(configured, "*", StringComparison.Ordinal))
         {
-            headers.Add(new("Vary", "Origin"));
+            headers.Add(new("Vary", OriginHeader));
         }
 
         return headers;
@@ -959,7 +963,7 @@ internal static class RoutePolicies
             return false;
         }
 
-        return !string.IsNullOrEmpty(HeaderValue(request, "Origin"))
+        return !string.IsNullOrEmpty(HeaderValue(request, OriginHeader))
             && !string.IsNullOrEmpty(HeaderValue(request, "Access-Control-Request-Method"));
     }
 

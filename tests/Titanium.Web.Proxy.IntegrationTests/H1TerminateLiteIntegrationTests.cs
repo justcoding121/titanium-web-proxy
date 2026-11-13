@@ -711,7 +711,7 @@ public class H1TerminateLiteIntegrationTests
             listener.Start();
             var enabledBy = Environment.TickCount64 + 1_000;
             while (!ProxyMetrics.RequestMetricsEnabled && Environment.TickCount64 < enabledBy)
-                Thread.Sleep(1);
+                await Task.Delay(1);
             Assert.IsTrue(ProxyMetrics.RequestMetricsEnabled, "the listener did not attach before the request");
             using var client = MakeClient();
             var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/");
@@ -719,7 +719,7 @@ public class H1TerminateLiteIntegrationTests
             // The response bytes are on the wire before the counter is updated, so wait for that update.
             var countedBy = Environment.TickCount64 + 2_000;
             while (requests == 0 && Environment.TickCount64 < countedBy)
-                Thread.Sleep(1);
+                await Task.Delay(1);
             Assert.AreEqual(1, requests);
             Assert.AreEqual("h1", protocol);
             Assert.AreEqual(1, duration);
@@ -777,7 +777,7 @@ public class H1TerminateLiteIntegrationTests
             // Lite must not record the fallback. The session path records after the body is written.
             var countedBy = Environment.TickCount64 + 2_000;
             while (requests == 0 && Environment.TickCount64 < countedBy)
-                Thread.Sleep(1);
+                await Task.Delay(1);
             Assert.AreEqual(1, requests);
         }
         finally { proxy.Stop(); proxy.Dispose(); }

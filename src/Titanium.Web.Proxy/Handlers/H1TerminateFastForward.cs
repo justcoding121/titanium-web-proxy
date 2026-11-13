@@ -382,7 +382,7 @@ public partial class ProxyServer
                             HandledBodyBytes = cacheDecision.Serve.Body,
                             HandledIsCacheHit = true,
                         }, cancellationToken, clientRequestedClose).ConfigureAwait(false);
-                    CompleteLite(ref metricsStart, cacheDecision.Serve!.StatusCode,
+                    CompleteLite(ref metricsStart, cacheDecision.Serve.StatusCode,
                         LiteStatusError(cacheDecision.Serve.StatusCode), cacheDecision.Serve.Body?.Length ?? 0);
                     return !clientRequestedClose;
                 }
@@ -511,7 +511,6 @@ public partial class ProxyServer
             if (metricsStart != 0)
             {
                 ProxyMetrics.AddActiveRequest(-1);
-                metricsStart = 0;
             }
 
             if (connection != null)

@@ -35,6 +35,7 @@ internal enum BackendProtocol
 public static partial class IngressAnnotations
 {
     public const string Prefix = "titanium.io/";
+    private const string HttpsScheme = "https";
 
     private static readonly string[] CanaryDependents = ["canary-weight", "canary-by-header"];
 
@@ -149,7 +150,7 @@ public static partial class IngressAnnotations
         Used with `permanent-redirect`. Default 301.
         """;
 
-    private static IReadOnlyList<AnnotationSpec> InsertAdded(IReadOnlyList<AnnotationSpec> specs)
+    private static List<AnnotationSpec> InsertAdded(IReadOnlyList<AnnotationSpec> specs)
     {
         var list = new List<AnnotationSpec>(specs.Count + 9);
         foreach (var spec in specs)
@@ -235,6 +236,18 @@ public static partial class IngressAnnotations
             ParseOne(settings, name, value.Trim(), ingressNamespace);
         }
 
+        NoteAnnotationProblems(settings, annotations);
+        return settings;
+    }
+
+    private static void NoteAnnotationProblems(IngressSettings settings, IReadOnlyDictionary<string, string> annotations)
+    {
+        NoteCanaryAndCorsParents(settings, annotations);
+        NoteAnnotationConflicts(settings);
+    }
+
+    private static void NoteCanaryAndCorsParents(IngressSettings settings, IReadOnlyDictionary<string, string> annotations)
+    {
         if (!settings.Canary)
         {
             foreach (var dependent in CanaryDependents.Where(d => annotations.ContainsKey(Prefix + d)))
@@ -259,7 +272,10 @@ public static partial class IngressAnnotations
         {
             settings.Problems.Add($"{Prefix}cors-allow-credentials cannot be combined with {Prefix}cors-allow-origin \"*\".");
         }
+    }
 
+    private static void NoteAnnotationConflicts(IngressSettings settings)
+    {
         if (settings.RetryOff && (settings.RetryTries is not null || settings.RetryPerTryTimeoutSeconds is not null || settings.RetryRequested))
         {
             settings.Problems.Add($"{Prefix}proxy-next-upstream: \"off\" cannot be combined with other retry annotations.");
@@ -274,8 +290,6 @@ public static partial class IngressAnnotations
         {
             settings.Problems.Add($"{Prefix}permanent-redirect cannot be combined with {Prefix}canary: \"true\".");
         }
-
-        return settings;
     }
 
     private static void ParseOne(IngressSettings settings, string name, string value, string ingressNamespace) // NOSONAR S3776 -- Annotation kinds share one problem reporter; splitting the switch would scatter validation messages.
@@ -487,7 +501,7 @@ public static partial class IngressAnnotations
                 break;
             case "auth-url":
                 if (Uri.TryCreate(value, UriKind.Absolute, out var url) &&
-                    url.Scheme is "http" or "https" && string.IsNullOrEmpty(url.UserInfo))
+                    url.Scheme is "http" or HttpsScheme && string.IsNullOrEmpty(url.UserInfo))
                 {
                     settings.AuthUrl = value;
                 }
@@ -737,7 +751,7 @@ public static partial class IngressAnnotations
         port = null;
         path = "/";
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("http" or "https") ||
+            uri.Scheme is not ("http" or HttpsScheme) ||
             !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment) ||
             !string.IsNullOrEmpty(uri.UserInfo))
@@ -814,7 +828,7 @@ public static partial class IngressAnnotations
         }
 
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-            uri.Scheme is "http" or "https" &&
+            uri.Scheme is "http" or HttpsScheme &&
             string.IsNullOrEmpty(uri.UserInfo) &&
             (uri.AbsolutePath is "" or "/") && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment) &&
             !value.EndsWith('/');
@@ -823,7 +837,7 @@ public static partial class IngressAnnotations
     private static bool IsWildcardOrigin(string value)
     {
         var schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
-        if (schemeEnd <= 0 || value[..schemeEnd] is not ("http" or "https"))
+        if (schemeEnd <= 0 || value[..schemeEnd] is not ("http" or HttpsScheme))
         {
             return false;
         }
