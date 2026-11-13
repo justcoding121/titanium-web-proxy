@@ -61,7 +61,12 @@ public partial class ExcludedHostsWindow : Window
         CancelButton.Click += (_, _) => Close();
         UpdateLearningPausedUi();
         SubscribeLearnedUpdates();
-        Closed += (_, _) => UnsubscribeLearnedUpdates();
+        SessionDisplayFormat.ClockChanged += OnClockChanged;
+        Closed += (_, _) =>
+        {
+            UnsubscribeLearnedUpdates();
+            SessionDisplayFormat.ClockChanged -= OnClockChanged;
+        };
     }
 
     public bool Saved => _saved;
@@ -108,6 +113,9 @@ public partial class ExcludedHostsWindow : Window
         _interception.DecryptFailureBypassLearned -= OnDecryptFailureBypassLearned;
         _subscribed = false;
     }
+
+    private void OnClockChanged(object? sender, EventArgs e) =>
+        MarshalToUi(() => RefreshLearnedList());
 
     private void OnDecryptFailureBypassLearned(object? sender, DecryptFailureBypassEntry entry)
     {

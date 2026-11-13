@@ -115,6 +115,9 @@ public sealed class InspectorSettings
     /// <summary>App color theme: follow OS (Automatic), Light, or Dark.</summary>
     public ThemeMode ThemeMode { get; set; } = ThemeMode.Automatic;
 
+    /// <summary>On-screen clock. Old settings files omit this and stay on this PC.</summary>
+    public InspectorClock TimeDisplay { get; set; } = InspectorClock.Local;
+
     /// <summary>UI language: <c>auto</c> follows the OS UI language, or a shipped culture name such as <c>de</c>.</summary>
     public string UiLanguage { get; set; } = "auto";
 
