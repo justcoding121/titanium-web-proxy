@@ -160,7 +160,10 @@ public partial class ExcludedHostsWindow : Window
     }
 
     internal static string FormatLearnedDisplay(DecryptFailureBypassEntry e) =>
-        $"{e.Host}  ·  Decrypt failure  ·  {e.LearnedAtUtc:u}";
+        FormatLearnedDisplay(e, SessionDisplayFormat.Clock, TimeZoneInfo.Local);
+
+    internal static string FormatLearnedDisplay(DecryptFailureBypassEntry e, InspectorClock clock, TimeZoneInfo zone) =>
+        $"{e.Host}  ·  Decrypt failure  ·  {SessionDisplayFormat.FormatAbsolute(SessionDisplayFormat.AsUtc(e.LearnedAtUtc), clock, zone)}";
 
     private DecryptFailureBypassEntry? SelectedLearned()
     {

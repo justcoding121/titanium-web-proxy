@@ -14,11 +14,27 @@ public enum HttpStatusClass
     Other,
 }
 
+/// <summary>On-screen clock. Stored instants stay UTC; only the text changes.</summary>
+public enum InspectorClock
+{
+    /// <summary>The PC's time zone.</summary>
+    Local = 0,
+
+    /// <summary>Coordinated Universal Time.</summary>
+    Utc = 1,
+}
+
 /// <summary>
 /// Brief client→server protocol labels for the session grid (h1.1 → h2, h2 → h3).
 /// </summary>
 public static class SessionDisplayFormat
 {
+    /// <summary>
+    /// Clock used when a format call does not pass one. The Options menu sets this.
+    /// Tests that change it must put the previous value back.
+    /// </summary>
+    public static InspectorClock Clock { get; set; } = InspectorClock.Local;
+
     public static string FormatHttpProtocol(Version? version)
     {
         if (version is null || version.Major == 0)
@@ -97,20 +113,117 @@ public static class SessionDisplayFormat
     }
 
     /// <summary>
-    /// Started column text in local time: <c>HH:mm:ss</c> when the session began today, otherwise with the
-    /// date (<c>Oct 6, 14:05:03</c>) so a capture left running past midnight is not misread.
+    /// Started column text: <c>HH:mm:ss</c> when the session began today in the selected clock, otherwise
+    /// with the date (<c>Jan 1, 23:00:00</c>) so a capture left running past midnight is not misread.
+    /// UTC text ends in <c>Z</c>. Uses <see cref="Clock"/> and <see cref="TimeZoneInfo.Local"/>.
     /// </summary>
-    public static string FormatStarted(DateTimeOffset startedUtc, DateTimeOffset nowUtc)
+    public static string FormatStarted(DateTimeOffset startedUtc, DateTimeOffset nowUtc) =>
+        FormatStarted(startedUtc, nowUtc, Clock, TimeZoneInfo.Local);
+
+    /// <summary>Started column text in <paramref name="clock"/>, using <paramref name="zone"/> when the clock is this PC.</summary>
+    public static string FormatStarted(
+        DateTimeOffset startedUtc,
+        DateTimeOffset nowUtc,
+        InspectorClock clock,
+        TimeZoneInfo zone)
     {
-        var started = startedUtc.ToLocalTime();
-        return started.Date == nowUtc.ToLocalTime().Date
+        var started = Project(startedUtc, clock, zone, out var fellBack);
+        var now = Project(nowUtc, clock, zone, out _);
+        var text = started.Date == now.Date
             ? started.ToString("HH:mm:ss", CultureInfo.CurrentCulture)
             : started.ToString("MMM d, HH:mm:ss", CultureInfo.CurrentCulture);
+        return clock == InspectorClock.Utc || fellBack ? text + "Z" : text;
     }
 
-    /// <summary>Full local date-time for the Started tooltip.</summary>
+    /// <summary>
+    /// Full date-time for the Started tooltip. This PC includes the offset at that instant
+    /// (<c>2026-01-01 21:04:05.000 -06:00</c>). UTC ends in <c>Z</c>.
+    /// </summary>
     public static string FormatStartedFull(DateTimeOffset startedUtc) =>
-        startedUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        FormatStartedFull(startedUtc, Clock, TimeZoneInfo.Local);
+
+    /// <summary>Tooltip text in <paramref name="clock"/>, using <paramref name="zone"/> when the clock is this PC.</summary>
+    public static string FormatStartedFull(DateTimeOffset startedUtc, InspectorClock clock, TimeZoneInfo zone) =>
+        FormatStamp(startedUtc, clock, zone, "yyyy-MM-dd HH:mm:ss.fff");
+
+    /// <summary>
+    /// Date and time to the second, with the zone. Used for the auto-tunnel learned row, which is not a dense column.
+    /// </summary>
+    public static string FormatAbsolute(DateTimeOffset instant) =>
+        FormatAbsolute(instant, Clock, TimeZoneInfo.Local);
+
+    /// <summary>Second-precision stamp in <paramref name="clock"/>.</summary>
+    public static string FormatAbsolute(DateTimeOffset instant, InspectorClock clock, TimeZoneInfo zone) =>
+        FormatStamp(instant, clock, zone, "yyyy-MM-dd HH:mm:ss");
+
+    /// <summary>
+    /// Status-line “since” text: <c>HH:mm</c> when the oldest session began today in the selected clock,
+    /// otherwise with the date. UTC text ends in <c>Z</c>.
+    /// </summary>
+    public static string FormatSince(
+        DateTimeOffset oldestUtc,
+        DateTimeOffset nowUtc,
+        InspectorClock clock,
+        TimeZoneInfo zone)
+    {
+        var oldest = Project(oldestUtc, clock, zone, out var fellBack);
+        var now = Project(nowUtc, clock, zone, out _);
+        var text = oldest.Date == now.Date
+            ? oldest.ToString("HH:mm", CultureInfo.CurrentCulture)
+            : oldest.ToString("MMM d, HH:mm", CultureInfo.CurrentCulture);
+        return clock == InspectorClock.Utc || fellBack ? text + "Z" : text;
+    }
+
+    /// <summary>
+    /// Treats <see cref="DateTimeKind.Unspecified"/> as UTC. <see cref="DateTime.ToLocalTime"/> does not,
+    /// so a learned time built without a kind would otherwise be shown unconverted.
+    /// </summary>
+    public static DateTimeOffset AsUtc(DateTime value)
+    {
+        var utc = value.Kind == DateTimeKind.Local
+            ? value.ToUniversalTime()
+            : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
+    }
+
+    private static string FormatStamp(DateTimeOffset instant, InspectorClock clock, TimeZoneInfo zone, string pattern)
+    {
+        var shown = Project(instant, clock, zone, out var fellBack);
+        if (clock == InspectorClock.Utc || fellBack)
+        {
+            return shown.UtcDateTime.ToString(pattern, CultureInfo.InvariantCulture) + "Z";
+        }
+
+        return shown.ToString(pattern + " zzz", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Projects <paramref name="instant"/> into the clock. An instant the zone cannot represent
+    /// (the edges of <see cref="DateTimeOffset"/>) falls back to UTC and sets <paramref name="fellBack"/>.
+    /// </summary>
+    private static DateTimeOffset Project(
+        DateTimeOffset instant,
+        InspectorClock clock,
+        TimeZoneInfo zone,
+        out bool fellBack)
+    {
+        if (clock == InspectorClock.Utc)
+        {
+            fellBack = false;
+            return instant.ToUniversalTime();
+        }
+
+        try
+        {
+            fellBack = false;
+            return TimeZoneInfo.ConvertTime(instant, zone);
+        }
+        catch (ArgumentException)
+        {
+            fellBack = true;
+            return instant.ToUniversalTime();
+        }
+    }
 
     /// <summary>Media type without parameters (<c>application/json; charset=utf-8</c> -&gt; <c>application/json</c>).</summary>
     public static string FormatContentType(string? contentType)
