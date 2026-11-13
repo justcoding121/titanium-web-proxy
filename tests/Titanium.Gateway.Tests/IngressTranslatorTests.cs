@@ -947,7 +947,7 @@ public class IngressTranslatorTests
         Assert.AreEqual("https://app.example.com", policy.Origins);
         Assert.AreEqual("GET,PUT", policy.Methods);
         Assert.AreEqual("X-Trace,X-Tenant", policy.HeaderName);
-        Assert.IsTrue(policy.AllowCredentials is true);
+        Assert.IsTrue(policy.AllowCredentials.GetValueOrDefault());
         Assert.AreEqual("X-Request-Id", policy.ExposeHeaders);
         Assert.AreEqual(600, policy.MaxAgeSeconds);
 
