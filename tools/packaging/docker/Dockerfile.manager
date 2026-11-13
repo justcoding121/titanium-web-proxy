@@ -49,6 +49,7 @@ LABEL org.opencontainers.image.title="Titanium Manager" \
 
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /out/ /app/
+COPY --chown=1654:1654 src/Titanium.Manager/LICENSE /app/LICENSE
 
 ENV PATH="/app:${PATH}" \
     HOME=/tmp \

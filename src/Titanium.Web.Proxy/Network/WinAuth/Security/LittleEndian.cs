@@ -5,6 +5,8 @@
 // Author:
 //   Bernie Solomon
 //
+// Copyright (C) 2004 Novell, Inc (http://www.novell.com)
+//
 // Rewritten without unsafe code for Sonar S6640.
 //
 

@@ -4,8 +4,8 @@
 
 ## Edition impact
 
-- [ ] MIT only (`Titanium.Web.Proxy` / Abstractions / Configuration / Cli)
-- [ ] PolyForm NC (`Titanium.Plus` / `Titanium.Inspector`) — maintainers only
+- [ ] MIT only (`Titanium.Web.Proxy` / Abstractions / Configuration / Scripting / Cli / Gateway / Manager)
+- [ ] PolyForm NC (`Titanium.Plus` / `Titanium.Inspector` / `Titanium.Xds` / `Titanium.Cli.GeoIp`) — maintainers only
 
 ## Checklist
 

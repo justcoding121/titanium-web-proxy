@@ -73,6 +73,7 @@ WORKDIR /app
 COPY --from=build --chown=1654:1654 /out/ /app/
 COPY --from=scripting --chown=1654:1654 /natives/liblua54.so /natives/libwasmtime.so /app/
 COPY --from=scripting --chown=1654:1654 /natives/THIRD-PARTY-SCRIPTING.txt /natives/LICENSE-WASMTIME.txt /app/
+COPY --chown=1654:1654 tools/packaging/THIRD-PARTY-CLI.txt /app/THIRD-PARTY-CLI.txt
 
 # Read-only root friendly: nothing is written under /app. Scratch files go to /tmp (mount an emptyDir or tmpfs).
 # Diagnostics are off because the .NET diagnostic IPC socket would otherwise need a writable /tmp.

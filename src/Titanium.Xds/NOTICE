@@ -13,4 +13,5 @@ Protobuf package names, import paths, and type URL prefixes that appear in the
 wire protocol are retained for Aggregated Discovery Service (ADS) interop.
 Product documentation refers to this feature as Titanium's xDS / ADS client.
 
-Full license text: https://www.apache.org/licenses/LICENSE-2.0
+Full license text: LICENSE.Apache-2.0.txt
+(also https://www.apache.org/licenses/LICENSE-2.0)

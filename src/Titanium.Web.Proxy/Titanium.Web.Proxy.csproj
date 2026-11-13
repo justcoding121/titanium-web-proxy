@@ -49,6 +49,7 @@
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <None Include="LICENSE" Pack="true" PackagePath="" />
+    <None Include="NOTICE" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <ItemGroup>

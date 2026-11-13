@@ -416,6 +416,7 @@ jobs:
         run: |
           $rid = "${{ matrix.rid }}"
           $out = "artifacts/cli/$rid"
+          Copy-Item tools/packaging/THIRD-PARTY-CLI.txt "$out/THIRD-PARTY-CLI.txt"
           if ($IsWindows) {
             Compress-Archive -Path "$out/*" -DestinationPath "Titanium.Cli-$rid.zip"
           } else {

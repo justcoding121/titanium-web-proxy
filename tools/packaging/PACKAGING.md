@@ -156,6 +156,8 @@ Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistrib
 
 `bundle-scripting-native.ps1 -Rid <rid> -PublishDir <dir>` downloads, verifies, and copies them. Release CI **hard-fails** the CLI matrix when natives are missing (`-Strict` on matching hosts; musl Lua builds inside Alpine). Inspector zips do **not** bundle scripting natives. Licenses: `THIRD-PARTY-SCRIPTING.txt`. Local dev: `tools/scripting/README.md`. Bump Wasmtime by updating the version, URLs, and the GitHub asset digests together.
 
+Managed libraries that ship inside the CLI zip, and are not already named in `THIRD-PARTY-HTTP3.txt` or `THIRD-PARTY-SCRIPTING.txt`, are listed in [`THIRD-PARTY-CLI.txt`](THIRD-PARTY-CLI.txt). Release CI copies that file into each CLI publish folder before the zip. The CLI container image copies the same file into `/app`. The Gateway image copies [`THIRD-PARTY-GATEWAY.txt`](THIRD-PARTY-GATEWAY.txt) and `src/Titanium.Gateway/LICENSE` into `/app`. The Manager image copies `src/Titanium.Manager/LICENSE` into `/app`.
+
 ## CI
 
 See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):

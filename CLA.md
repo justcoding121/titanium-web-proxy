@@ -21,7 +21,7 @@ On your first pull request, reply with:
 I have read the CLA and I hereby sign the CLA.
 ```
 
-The CLA bot (or maintainer) records your signature. Subsequent contributions from the same GitHub account are covered unless you revoke in writing to the maintainers.
+The CLA bot (or maintainer) records your signature on the `cla-signatures` branch at `signatures/version1/cla.json`. Subsequent contributions from the same GitHub account are covered unless you revoke in writing to the maintainers.
 
 ## Questions
 

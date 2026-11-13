@@ -1,0 +1,27 @@
+Titanium.Web.Proxy — third-party notices
+=========================================
+
+This assembly is MIT (see LICENSE). The portions below keep their own
+copyright notices and licenses. Those terms stay with the files.
+
+Http2/Hpack/
+  Copyright 2014 Twitter, Inc.
+  Derivative work modified by Ringo Leese.
+  Licensed under the Apache License, Version 2.0.
+  http://www.apache.org/licenses/LICENSE-2.0
+  The Apache header is in each file under Http2/Hpack/.
+
+ProxySocket/
+  Copyright 2002, The KPD-Team
+  http://www.mentalis.org/
+  BSD-style terms are in each file under ProxySocket/. Source
+  redistributions must retain that notice. The KPD-Team name may not be
+  used to endorse derived products without prior written permission.
+
+Network/WinAuth/
+  Portions are derived from the Mono / Nancy NTLM protocol code.
+  (C) 2003 Motus Technologies Inc. (http://www.motus.com)
+  Copyright (C) 2004 Novell, Inc (http://www.novell.com)
+  Network/WinAuth/Security/LittleEndian.cs is derived from
+  Mono.Security.BitConverterLE.cs by Bernie Solomon.
+  Those files are MIT. The permission text is in the source headers.

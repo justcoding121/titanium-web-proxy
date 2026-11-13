@@ -152,9 +152,9 @@ Actively maintained by [justcoding121](https://github.com/justcoding121). Past c
 
 ## License
 
-Titanium.Web.Proxy and Titanium.Cli are [MIT](LICENSE). Titanium Inspector, Titanium.Plus, Titanium.Xds, and Titanium.Cli.GeoIp are [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protos keep their Apache-2.0 NOTICE under `src/Titanium.Xds/NOTICE`.
+Titanium.Web.Proxy, Titanium.Cli, Titanium.Manager, and Titanium.Gateway are [MIT](LICENSE). Titanium Inspector, Titanium.Plus, Titanium.Xds, and Titanium.Cli.GeoIp are [PolyForm Noncommercial 1.0.0](licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protos keep their Apache-2.0 text in `src/Titanium.Xds/LICENSE.Apache-2.0.txt` and `src/Titanium.Xds/NOTICE`. Third-party notices for the MIT library are in `src/Titanium.Web.Proxy/NOTICE`.
 
 | Folder | License |
 |--------|---------|
-| `src/Titanium.Web.Proxy*`, `src/Titanium.Cli`, `src/Titanium.Manager`, examples, website | MIT |
-| `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp` | PolyForm Noncommercial 1.0.0 |
+| `src/Titanium.Web.Proxy`, `src/Titanium.Web.Proxy.Abstractions`, `src/Titanium.Web.Proxy.Configuration`, `src/Titanium.Web.Proxy.Scripting`, `src/Titanium.Cli`, `src/Titanium.Manager`, `src/Titanium.Gateway`, examples, website, docs, wiki, tools, deploy, and tests other than the four PolyForm test projects | MIT |
+| `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp`, `tests/Titanium.Plus.Tests`, `tests/Titanium.Inspector.Tests`, `tests/Titanium.Xds.Tests`, `tests/Titanium.Cli.GeoIp.Tests` | PolyForm Noncommercial 1.0.0 |
