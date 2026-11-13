@@ -44,9 +44,9 @@ public static partial class IngressAnnotations
     /// <summary>Every annotation, in the order the docs list them.</summary>
     public static IReadOnlyList<AnnotationSpec> All { get; } = InsertAdded(
     [
-        new("ssl-redirect", "`false` (default)",
-            "none",
-            "`false` is accepted. `true` is rejected: the data plane matches routes by host, path, header, query, and method, not by scheme, so a redirect route would also redirect HTTPS requests in a loop."),
+        new("ssl-redirect", "`true` or `false` (default)",
+            "`httpsRedirect` policy",
+            "`true` redirects a cleartext request to https and leaves an https request alone. A trusted proxy that sends `X-Forwarded-Proto: https` is treated as already secure. `false` does nothing."),
         new("rewrite-target", "a path starting with `/`",
             "`PathRegexReplace` transform",
             "Replaces the matched prefix (`Prefix`, `ImplementationSpecific`) or the whole path (`Exact`). Capture groups (`$1`) are not supported and are rejected. The query string is kept."),
@@ -292,7 +292,7 @@ public static partial class IngressAnnotations
                 }
                 else if (redirect)
                 {
-                    settings.Problems.Add($"{key}: \"true\" cannot be honored. The data plane matches routes by host and path, not by scheme, so a redirect would loop on HTTPS. Set it to \"false\" or remove it.");
+                    settings.SslRedirect = true;
                 }
 
                 break;
@@ -927,6 +927,8 @@ internal sealed class IngressSettings
     public int? LimitRps { get; set; }
 
     public int? LimitConnections { get; set; }
+
+    public bool SslRedirect { get; set; }
 
     public string? CorsOrigins { get; set; }
 

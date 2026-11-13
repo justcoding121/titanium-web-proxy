@@ -1110,6 +1110,11 @@
               "type": "string"
             }
           },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
           "postLoginRedirectAllowlist": {
             "type": "array",
             "items": {
@@ -1121,6 +1126,15 @@
           },
           "redirectPath": {
             "type": "string"
+          },
+          "redirectStatus": {
+            "type": "integer",
+            "enum": [
+              301,
+              302,
+              307,
+              308
+            ]
           },
           "refreshTokens": {
             "type": "boolean"

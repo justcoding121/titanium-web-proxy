@@ -601,6 +601,11 @@ internal sealed partial class TranslationPass
             });
         }
 
+        if (settings.SslRedirect)
+        {
+            Add(new RoutePolicyConfig { Name = prefix + "https", Kind = "httpsRedirect" });
+        }
+
         if (settings.CorsOrigins is { } origins)
         {
             Add(new RoutePolicyConfig

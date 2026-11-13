@@ -257,6 +257,12 @@ public sealed class RoutePolicyConfig
     /// </summary>
     public string? Key { get; init; }
 
+    /// <summary><c>httpsRedirect</c>: port written on the Location when it is not 443. Omitted means 443.</summary>
+    public int? Port { get; init; }
+
+    /// <summary><c>httpsRedirect</c>: 301, 302, 307, or 308. Default 308.</summary>
+    public int? RedirectStatus { get; init; }
+
     /// <summary><c>rateLimit</c>: <c>fixedWindow</c> (default) or <c>tokenBucket</c>.</summary>
     public string? Algorithm { get; init; }
 

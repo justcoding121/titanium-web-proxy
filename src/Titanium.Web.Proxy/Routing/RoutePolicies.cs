@@ -16,6 +16,7 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Transforms;
 
 namespace Titanium.Web.Proxy.Routing;
 
@@ -339,6 +340,8 @@ internal static class RoutePolicies
                 return CorsPreflight(policy, request);
             case "rateLimit":
                 return CheckRate(runtime, policy, route, request, client, trustedProxies);
+            case "httpsRedirect":
+                return HttpsRedirect(policy, request, client, trustedProxies);
             case "connectionLimit" when !AllowConnection(runtime, policy, route, request, client, trustedProxies):
                 return Stop(503, string.Empty);
             case "connectionLimit":
@@ -353,6 +356,134 @@ internal static class RoutePolicies
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    ///     Redirects a cleartext request. An https request passes, and so does a cleartext request whose
+    ///     socket peer is a trusted proxy and whose <c>X-Forwarded-Proto</c> is <c>https</c>.
+    /// </summary>
+    private static PolicyDecision? HttpsRedirect(
+        RoutePolicyConfig policy,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
+    {
+        if (request.IsHttps)
+        {
+            return null;
+        }
+
+        if (client is not null &&
+            ForwardedHeadersApplier.IsTrusted(client, trustedProxies) &&
+            string.Equals(HeaderValue(request, "X-Forwarded-Proto"), "https", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!TryHttpsLocation(request, policy.Port, out var location))
+        {
+            return Stop(400, string.Empty);
+        }
+
+        return new PolicyDecision
+        {
+            Rejected = true,
+            Status = policy.RedirectStatus ?? 308,
+            Body = string.Empty,
+            Headers = [new KeyValuePair<string, string>("Location", location)],
+        };
+    }
+
+    private static bool TryHttpsLocation(Request request, int? port, out string location)
+    {
+        location = string.Empty;
+        if (!TryHostWithoutPort(request.Host, out var host))
+        {
+            return false;
+        }
+
+        var suffix = port is int configured && configured != 443
+            ? ":" + configured.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+        location = "https://" + host + suffix + RequestPathAndQuery(request);
+        return true;
+    }
+
+    private static string RequestPathAndQuery(Request request)
+    {
+        var raw = request.RequestUriString8.GetString();
+        if (string.IsNullOrEmpty(raw))
+        {
+            return "/";
+        }
+
+        if (raw[0] == '/')
+        {
+            return raw;
+        }
+
+        var scheme = raw.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0)
+        {
+            var slash = raw.IndexOf('/', scheme + 3);
+            return slash >= 0 ? raw[slash..] : "/";
+        }
+
+        return "/";
+    }
+
+    /// <summary>Host is letters, digits, hyphen, and dot, or an IPv6 address in brackets, with an optional port.</summary>
+    private static bool TryHostWithoutPort(string? value, out string host)
+    {
+        host = string.Empty;
+        if (string.IsNullOrEmpty(value) || value.Contains(' ') || value.Contains('@') || value.Contains('/'))
+        {
+            return false;
+        }
+
+        if (value[0] == '[')
+        {
+            var end = value.IndexOf(']');
+            if (end <= 1 || value.AsSpan(1, end - 1).IndexOfAnyExcept("0123456789abcdefABCDEF:.") >= 0)
+            {
+                return false;
+            }
+
+            host = value[..(end + 1)];
+            var rest = value[(end + 1)..];
+            return rest.Length == 0 || (rest[0] == ':' && IsPort(rest[1..]));
+        }
+
+        var colon = value.LastIndexOf(':');
+        if (colon > 0 && value.IndexOf(':') == colon)
+        {
+            host = value[..colon];
+            return IsHostName(host) && IsPort(value[(colon + 1)..]);
+        }
+
+        host = value;
+        return IsHostName(host);
+    }
+
+    private static bool IsPort(string text) =>
+        ushort.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port > 0;
+
+    private static bool IsHostName(string name)
+    {
+        if (name.Length is 0 or > 253 || name[0] is '.' or '-' || name[^1] is '.' or '-')
+        {
+            return false;
+        }
+
+        foreach (var c in name)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '-'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static PolicyDecision Stop(int status, string body) => new()

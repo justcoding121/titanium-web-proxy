@@ -334,6 +334,79 @@ public class RoutePolicyLiteTests
     }
 
     [TestMethod]
+    public void HttpsRedirect_RedirectsCleartext_AndPassesHttpsAndATrustedProto()
+    {
+        var options = Options(["https"], new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect" });
+        var clear = Req();
+        clear.Host = "app.test";
+        clear.RequestUriString8 = (ByteString)"/old?x=1";
+        Assert.IsTrue(Handle(options, clear, "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(308, status);
+        Assert.IsNotNull(headers);
+        Assert.AreEqual("https://app.test/old?x=1", headers.Single(h => h.Key == "Location").Value);
+
+        var secure = Req();
+        secure.IsHttps = true;
+        secure.Host = "app.test";
+        Assert.IsFalse(Handle(options, secure, "10.0.0.1", out _, out _, out _));
+
+        var trusted = Req();
+        trusted.Host = "app.test";
+        trusted.Headers.AddHeader("X-Forwarded-Proto", "https");
+        Assert.IsFalse(RoutePolicies.TryHandleLite(options, EndPoint, trusted, new IPEndPoint(IPAddress.Parse("10.0.0.8"), 1), out _, out _, out _, ["10.0.0.0/8"]));
+
+        var untrusted = Req();
+        untrusted.Host = "app.test";
+        untrusted.RequestUriString8 = (ByteString)"/old";
+        untrusted.Headers.AddHeader("X-Forwarded-Proto", "https");
+        Assert.IsTrue(Handle(options, untrusted, "192.0.2.1", out var spoofed, out _, out var spoofedHeaders));
+        Assert.AreEqual(308, spoofed);
+        Assert.AreEqual("https://app.test/old", spoofedHeaders!.Single(h => h.Key == "Location").Value);
+
+        var httpProto = Req();
+        httpProto.Host = "app.test";
+        httpProto.RequestUriString8 = (ByteString)"/old";
+        httpProto.Headers.AddHeader("X-Forwarded-Proto", "http");
+        Assert.IsTrue(RoutePolicies.TryHandleLite(options, EndPoint, httpProto, new IPEndPoint(IPAddress.Parse("10.0.0.8"), 1), out var still, out _, out _, ["10.0.0.0/8"]));
+        Assert.AreEqual(308, still);
+    }
+
+    [TestMethod]
+    public void HttpsRedirect_UsesTheConfiguredPortAndStatus_AndRejectsAMalformedHost()
+    {
+        var options = Options(["https"], new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect", Port = 8443, RedirectStatus = 301 });
+        var request = Req();
+        request.Host = "app.test:8080";
+        request.RequestUriString8 = (ByteString)"/old";
+        Assert.IsTrue(Handle(options, request, "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(301, status);
+        Assert.AreEqual("https://app.test:8443/old", headers!.Single(h => h.Key == "Location").Value);
+
+        var broken = Req();
+        broken.Host = "not a host";
+        Assert.IsTrue(Handle(options, broken, "10.0.0.1", out var bad, out _, out var badHeaders));
+        Assert.AreEqual(400, bad);
+        Assert.IsNull(badHeaders);
+    }
+
+    [TestMethod]
+    public void HttpsRedirect_SessionPath_RedirectsCleartext()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var options = Options(["https"], new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect" });
+        proxy.ReverseProxy = options;
+        var session = TestSessions.Create(proxy, "192.0.2.9");
+        session.HttpClient.Request.Host = "app.test";
+        session.HttpClient.Request.RequestUriString8 = (ByteString)"/from-session?q=1";
+        session.HttpClient.Request.IsHttps = false;
+
+        var route = options.Routes![0];
+        Assert.IsTrue(RoutePolicies.TryDeny(proxy, session, route));
+        Assert.AreEqual(308, (int)session.HttpClient.Response.StatusCode);
+        Assert.AreEqual("https://app.test/from-session?q=1", session.HttpClient.Response.Headers.GetHeaderValueOrNull("Location"));
+    }
+
+    [TestMethod]
     public void ConnectionLimit_KeyedStillBlocksTerminateLite()
     {
         var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = "route" });

@@ -86,7 +86,7 @@ Annotations use the prefix `titanium.io/`. The values are strings, as Kubernetes
 <!-- annotations:start -->
 | Annotation | Value | Data-plane feature | Notes |
 |------------|-------|--------------------|-------|
-| `titanium.io/ssl-redirect` | `false` (default) | none | `false` is accepted. `true` is rejected: the data plane matches routes by host, path, header, query, and method, not by scheme, so a redirect route would also redirect HTTPS requests in a loop. |
+| `titanium.io/ssl-redirect` | `true` or `false` (default) | `httpsRedirect` policy | `true` redirects a cleartext request to https and leaves an https request alone. A trusted proxy that sends `X-Forwarded-Proto: https` is treated as already secure. `false` does nothing. |
 | `titanium.io/rewrite-target` | a path starting with `/` | `PathRegexReplace` transform | Replaces the matched prefix (`Prefix`, `ImplementationSpecific`) or the whole path (`Exact`). Capture groups (`$1`) are not supported and are rejected. The query string is kept. |
 | `titanium.io/proxy-read-timeout` | seconds, 1-3600 | cluster `httpClient.requestTimeout` | How long the data plane waits for the backend's response headers. Gives the backend its own cluster. |
 | `titanium.io/proxy-connect-timeout` | seconds, 1-3600 | cluster `httpClient.connectTimeout` | How long the data plane waits to open the backend connection. Gives the backend its own cluster. |
@@ -126,7 +126,7 @@ An Ingress with `titanium.io/canary: "true"` is the canary of the Ingress that s
 
 These follow from the data plane. They are listed so nothing surprises you.
 
-- **`ssl-redirect: "true"` is rejected.** Routes are matched by host, path, header, query, and method, not by scheme, so a redirect rule would also catch HTTPS requests. Terminate and redirect at the load balancer in front, or use an `HTTPRoute` with `RequestRedirect`.
+- **`ssl-redirect: "true"` redirects cleartext only.** An https request is left alone, including a request from a trusted proxy that sends `X-Forwarded-Proto: https`. `false` does nothing.
 - **CORS answers a real preflight, and forwards any other OPTIONS.** A preflight is `OPTIONS` with both `Origin` and `Access-Control-Request-Method`. A plain `OPTIONS` reaches the origin. An origin that is not listed gets no `Access-Control-Allow-*` header. `cors-allow-methods`, `cors-allow-headers`, `cors-allow-credentials`, `cors-expose-headers`, and `cors-max-age` need `cors-allow-origin`, and credentials cannot be combined with `*`. Responses the proxy itself generates on that route (policy denials, rate-limit, redirect, direct response, bad gateway) carry `Access-Control-Allow-Origin` when the request `Origin` is allowed. A real preflight is not refused by `apiKey` or `requireHeader` listed earlier; `ipAllowDeny`, `rateLimit`, and `geo` still run. `extAuth` and `oidc` run on the session path only.
 - **`H2C` and `GRPC` follow the client.** The data plane speaks HTTP/2 to the backend when the client does, so there is no separate setting for it.
 - **`proxy-body-size` reads `Content-Length`.** A chunked request with no length is not checked.

@@ -207,6 +207,13 @@ public static class TwpConfigSchema
                 schema["description"] =
                     "Empty (the root), or a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters. replacePrefixTo requires replacePrefixFrom, and neither may be set with path.";
                 break;
+            case "RoutePolicyConfig.Port":
+                schema[MinimumKey] = 1;
+                schema[MaximumKey] = 65535;
+                break;
+            case "RoutePolicyConfig.RedirectStatus":
+                schema["enum"] = new JsonArray { 301, 302, 307, 308 };
+                break;
             case "RoutePolicyConfig.MaxAgeSeconds":
                 schema[MinimumKey] = 0;
                 schema[MaximumKey] = 86_400;
