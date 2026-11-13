@@ -747,11 +747,14 @@
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
           <DataGridTextColumn Header="{loc:Loc menu.col.protocol}" Binding="{Binding Protocol}" Width="130" MinWidth="120" />
-          <DataGridTextColumn Header="{loc:Loc grid.duration}" Binding="{Binding DurationMs, StringFormat={}{0:0}}"
+          <DataGridTextColumn Header="{loc:Loc grid.duration}" Binding="{Binding DurationDisplay}"
+                              ClipboardContentBinding="{Binding DurationClipboard}"
                               Width="120" MinWidth="120" SortMemberPath="DurationMs" />
-          <DataGridTextColumn Header="{loc:Loc grid.wait}" Binding="{Binding TtfbMs, StringFormat={}{0:0}}"
+          <DataGridTextColumn Header="{loc:Loc grid.wait}" Binding="{Binding TtfbDisplay}"
+                              ClipboardContentBinding="{Binding TtfbClipboard}"
                               Width="100" MinWidth="100" SortMemberPath="TtfbMs" />
           <DataGridTextColumn Header="{loc:Loc menu.col.size}" Binding="{Binding BodySizeDisplay}"
+                              ClipboardContentBinding="{Binding BodySizeClipboard}"
                               Width="80" MinWidth="70" SortMemberPath="BodySize" />
           <DataGridTextColumn Header="{loc:Loc menu.col.process}" Binding="{Binding ProcessDisplay}" Width="140" MinWidth="100" />
           <!-- Optional columns (hidden until chosen from Options > Columns or the header menu). Appended last so
