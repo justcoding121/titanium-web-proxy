@@ -102,10 +102,13 @@ public class SessionRawHttpBodyAndHarBase64CoverageBehaviorTests
     [TestMethod]
     public void SessionDisplayFormat_ByteSizeKbMbBranches_AndRoundMs()
     {
-        Assert.AreEqual("9.5 KB", SessionDisplayFormat.FormatByteSize(9728));
-        Assert.AreEqual("12 KB", SessionDisplayFormat.FormatByteSize(12 * 1024));
-        Assert.AreEqual("1.5 MB", SessionDisplayFormat.FormatByteSize((long)(1.5 * 1024 * 1024)));
-        Assert.AreEqual("12 MB", SessionDisplayFormat.FormatByteSize(12L * 1024 * 1024));
+        using (CulturePin.Use("en-US"))
+        {
+            Assert.AreEqual("9.5 KB", SessionDisplayFormat.FormatByteSize(9728));
+            Assert.AreEqual("12 KB", SessionDisplayFormat.FormatByteSize(12 * 1024));
+            Assert.AreEqual("1.5 MB", SessionDisplayFormat.FormatByteSize((long)(1.5 * 1024 * 1024)));
+            Assert.AreEqual("12 MB", SessionDisplayFormat.FormatByteSize(12L * 1024 * 1024));
+        }
         Assert.AreEqual(1.3, SessionDisplayFormat.RoundMs(1.26));
         Assert.AreEqual(HttpStatusClass.Success, SessionDisplayFormat.GetStatusClass(200));
         Assert.AreEqual(HttpStatusClass.ClientError, SessionDisplayFormat.GetStatusClass(404));

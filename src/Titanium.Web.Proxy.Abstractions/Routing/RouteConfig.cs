@@ -32,6 +32,31 @@ public sealed class QueryParameterMatch
     public QueryMatchKind Kind { get; init; } = QueryMatchKind.Exact;
 }
 
+/// <summary>How a <see cref="HeaderValueMatch"/> compares the header value.</summary>
+public enum HeaderMatchKind
+{
+    /// <summary>Ordinal, case-sensitive equality.</summary>
+    Exact = 0,
+
+    /// <summary>
+    ///     The whole value must match the regular expression (non-backtracking engine). The pattern must compile on
+    ///     its own, so unbalanced parentheses are rejected.
+    /// </summary>
+    Regex = 1,
+}
+
+/// <summary>One request header constraint that can use a regular expression.</summary>
+public sealed class HeaderValueMatch
+{
+    /// <summary>Header name, compared case-insensitively.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Expected value, or a regular expression when <see cref="Kind"/> is <see cref="HeaderMatchKind.Regex"/>.</summary>
+    public required string Value { get; init; }
+
+    public HeaderMatchKind Kind { get; init; } = HeaderMatchKind.Exact;
+}
+
 /// <summary>Declarative route match criteria (host, path, method, headers, query).</summary>
 public sealed class RouteMatch
 {
@@ -47,6 +72,12 @@ public sealed class RouteMatch
     ///     adds no constraint and no per-request work.
     /// </summary>
     public IReadOnlyList<QueryParameterMatch>? QueryParameters { get; init; }
+
+    /// <summary>
+    ///     Header matches that can use a regular expression. Every entry must match. Null (the default) adds no
+    ///     constraint and no per-request work.
+    /// </summary>
+    public IReadOnlyList<HeaderValueMatch>? HeaderMatches { get; init; }
 
     public IReadOnlyList<string>? Hosts { get; init; }
     public IReadOnlyList<string>? Methods { get; init; }
@@ -165,6 +196,27 @@ public sealed class RoutePolicyConfig
     public string? Origins { get; init; }
     public string? Methods { get; init; }
 
+    /// <summary>
+    /// <c>cors</c>: add <c>Access-Control-Allow-Credentials: true</c>.
+    /// Rejected when <c>origins</c> is missing or contains <c>*</c>.
+    /// </summary>
+    public bool? AllowCredentials { get; init; }
+
+    /// <summary>
+    /// <c>cors</c>: when true, a preflight that sends <c>Access-Control-Request-Private-Network: true</c>
+    /// for an allowed origin also sends <c>Access-Control-Allow-Private-Network: true</c>.
+    /// </summary>
+    public bool? AllowPrivateNetwork { get; init; }
+
+    /// <summary>
+    /// <c>cors</c>: <c>Access-Control-Expose-Headers</c> for the actual response.
+    /// The <c>ResponseCors</c> transform carries the same list.
+    /// </summary>
+    public string? ExposeHeaders { get; init; }
+
+    /// <summary><c>cors</c>: <c>Access-Control-Max-Age</c> in seconds, 0-86400.</summary>
+    public int? MaxAgeSeconds { get; init; }
+
     /// <summary><c>extAuth</c>: absolute http or https URL of the authorization service. Fixed in config.</summary>
     public string? Url { get; init; }
 
@@ -200,8 +252,16 @@ public sealed class RoutePolicyConfig
     /// <c>forwardedClient</c> (rightmost X-Forwarded-For entry that is not a trusted proxy),
     /// <c>header:&lt;Name&gt;</c>, <c>cookie:&lt;Name&gt;</c> (a request without the value falls back to the client address),
     /// or <c>route</c> (one counter per route).
+    /// <c>connectionLimit</c> accepts only <c>client</c>, <c>forwardedClient</c>, and <c>route</c>.
+    /// Unset means one counter for the whole policy.
     /// </summary>
     public string? Key { get; init; }
+
+    /// <summary><c>httpsRedirect</c>: port written on the Location when it is not 443. Omitted means 443.</summary>
+    public int? Port { get; init; }
+
+    /// <summary><c>httpsRedirect</c>: 301, 302, 307, or 308. Default 308.</summary>
+    public int? RedirectStatus { get; init; }
 
     /// <summary><c>rateLimit</c>: <c>fixedWindow</c> (default) or <c>tokenBucket</c>.</summary>
     public string? Algorithm { get; init; }
@@ -324,10 +384,29 @@ public sealed class RedirectConfig
     public string? Host { get; init; }
     public int? Port { get; init; }
     public string? Path { get; init; }
+
+    /// <summary>
+    /// With <see cref="ReplacePrefixTo"/>: the leading path segment prefix to replace (no trailing slash; empty means
+    /// the root). Ignored when <see cref="Path"/> is set. A request path that does not start with the prefix on a
+    /// segment boundary keeps its path.
+    /// </summary>
+    public string? ReplacePrefixFrom { get; init; }
+
+    /// <summary>With <see cref="ReplacePrefixFrom"/>: what replaces the prefix (no trailing slash; empty means the root).</summary>
+    public string? ReplacePrefixTo { get; init; }
+
     public bool PreserveQuery { get; init; } = true;
 
     /// <summary>When the request is cleartext, the redirect scheme is https.</summary>
     public bool HttpToHttps { get; init; }
+
+    /// <summary>
+    /// When <see cref="Host"/> is unset, build an absolute <c>Location</c> from the host the client asked for (the
+    /// request <c>Host</c> or <c>:authority</c>). The request port is kept only when neither <see cref="Scheme"/> nor
+    /// <see cref="Port"/> is set (and <see cref="HttpToHttps"/> did not upgrade). An absolute-form request target or a
+    /// host that is not a plain name or address falls back to a relative <c>Location</c>.
+    /// </summary>
+    public bool UseRequestHost { get; init; }
 }
 
 /// <summary>Response produced without an upstream.</summary>

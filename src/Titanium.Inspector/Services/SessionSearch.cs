@@ -383,16 +383,20 @@ public static class SessionSearch
     }
 
     /// <summary>
-    /// Local start time of the oldest kept session: <c>HH:mm</c> when it is today, otherwise with the
-    /// date (<c>Oct 6, 14:05</c>) so a capture left running past midnight is not misread as today.
+    /// Start time of the oldest kept session in <see cref="SessionDisplayFormat.Clock"/>:
+    /// <c>HH:mm</c> when it is today in that clock, otherwise with the date
+    /// (<c>Jan 1, 23:00</c>) so a capture left running past midnight is not misread as today.
     /// </summary>
-    public static string FormatSince(DateTimeOffset oldestUtc, DateTimeOffset nowUtc)
-    {
-        var oldest = oldestUtc.ToLocalTime();
-        return oldest.Date == nowUtc.ToLocalTime().Date
-            ? oldest.ToString("HH:mm", CultureInfo.CurrentCulture)
-            : oldest.ToString("MMM d, HH:mm", CultureInfo.CurrentCulture);
-    }
+    public static string FormatSince(DateTimeOffset oldestUtc, DateTimeOffset nowUtc) =>
+        FormatSince(oldestUtc, nowUtc, SessionDisplayFormat.Clock, TimeZoneInfo.Local);
+
+    /// <summary>Same text as <see cref="FormatSince(DateTimeOffset, DateTimeOffset)"/> for an explicit clock and zone.</summary>
+    public static string FormatSince(
+        DateTimeOffset oldestUtc,
+        DateTimeOffset nowUtc,
+        InspectorClock clock,
+        TimeZoneInfo zone) =>
+        SessionDisplayFormat.FormatSince(oldestUtc, nowUtc, clock, zone);
 
     /// <summary>Compact round thousands (<c>10k</c>) so a retention cap is readable in the status bar.</summary>
     private static string FormatSessionCount(int count) =>

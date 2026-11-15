@@ -7,6 +7,7 @@ namespace Titanium.Gateway.Translation;
 internal sealed partial class TranslationPass
 {
     private const string PatternTransformKey = "pattern";
+    private const string RegularExpressionType = "RegularExpression";
 
     private sealed class MatchSpec
     {
@@ -20,6 +21,9 @@ internal sealed partial class TranslationPass
         public string? Method { get; set; }
 
         public Dictionary<string, string>? Headers { get; set; }
+
+        /// <summary>Header matches of type <c>RegularExpression</c>.</summary>
+        public List<HeaderValueMatch>? HeaderRegexes { get; set; }
 
         public List<QueryParameterMatch>? Query { get; set; }
     }
@@ -49,6 +53,14 @@ internal sealed partial class TranslationPass
         }
 
         var redirect = direct500 ? null : plan.Redirect;
+        if (redirect is { PrefixReplacement: not null } && spec.Prefix is null)
+        {
+            // Like URLRewrite, ReplacePrefixMatch only has a prefix to replace when the match is a PathPrefix.
+            route.Unsupported.Add($"rule {ruleIndex} match {matchIndex}: RequestRedirect ReplacePrefixMatch needs a PathPrefix match");
+            redirect = null;
+            direct500 = true;
+        }
+
         if (redirect is { Hostname: null })
         {
             // The data plane builds an absolute Location only when it is given a host, so a redirect that keeps the
@@ -63,10 +75,16 @@ internal sealed partial class TranslationPass
                 return;
             }
 
-            route.Unsupported.Add(
-                $"rule {ruleIndex} match {matchIndex}: RequestRedirect without hostname needs the route or listener to name concrete hostnames");
-            redirect = null;
-            direct500 = true;
+            // Wildcard or no hostnames: let the data plane use the host the client sent.
+            redirect = new RedirectSpec
+            {
+                Status = redirect.Status,
+                Scheme = redirect.Scheme,
+                Port = redirect.Port,
+                FullPath = redirect.FullPath,
+                PrefixReplacement = redirect.PrefixReplacement,
+                UseRequestHost = true,
+            };
         }
 
         drafts.Add(MakeDraft(route, ruleIndex, matchIndex, spec, hosts, plan, transforms, redirect, null, direct500));
@@ -103,7 +121,7 @@ internal sealed partial class TranslationPass
             },
             PathLength = spec.PathKind == PathMatchKind.Regex ? 0 : pathLength,
             HasMethod = spec.Method is not null,
-            HeaderCount = spec.Headers?.Count ?? 0,
+            HeaderCount = (spec.Headers?.Count ?? 0) + (spec.HeaderRegexes?.Count ?? 0),
             QueryCount = spec.Query?.Count ?? 0,
             Created = routeMeta.CreationTimestamp ?? DateTimeOffset.MaxValue,
             NamespaceName = route.Key,
@@ -121,6 +139,7 @@ internal sealed partial class TranslationPass
                     PathKind = spec.PathKind,
                     Method = spec.Method,
                     Headers = spec.Headers,
+                    HeaderMatches = spec.HeaderRegexes,
                     QueryParameters = spec.Query,
                     PathCaseSensitive = true,
                 },
@@ -133,8 +152,11 @@ internal sealed partial class TranslationPass
                         Status = redirect.Status,
                         Scheme = redirect.Scheme,
                         Host = redirect.Hostname ?? redirectHost,
+                        UseRequestHost = redirect.UseRequestHost,
                         Port = redirect.Port,
                         Path = redirect.FullPath,
+                        ReplacePrefixFrom = PrefixReplacementFrom(redirect, spec),
+                        ReplacePrefixTo = redirect.PrefixReplacement,
                         PreserveQuery = true,
                     },
                 DirectResponse = direct500 && redirect is null ? new DirectResponseConfig { Status = 500 } : null,
@@ -143,6 +165,9 @@ internal sealed partial class TranslationPass
             },
         };
     }
+
+    private static string? PrefixReplacementFrom(RedirectSpec redirect, MatchSpec spec) =>
+        redirect.PrefixReplacement is null ? null : spec.Prefix;
 
     private static List<RouteDraft> SortDrafts(List<RouteDraft> drafts) =>
         drafts
@@ -184,26 +209,46 @@ internal sealed partial class TranslationPass
 
         foreach (var header in match.Headers ?? [])
         {
-            if (header.Type is not (null or "Exact"))
+            if (header.Type is not (null or "Exact" or RegularExpressionType))
             {
-                problems.Add($"header match '{header.Name}' type '{header.Type}' is not supported (Exact only)");
+                problems.Add($"header match '{header.Name}' type '{header.Type}' is not supported (Exact and RegularExpression only)");
+                continue;
+            }
+
+            // The first match for a header name wins, whatever its type.
+            if ((spec.Headers?.ContainsKey(header.Name) ?? false)
+                || (spec.HeaderRegexes?.Any(h => string.Equals(h.Name, header.Name, StringComparison.OrdinalIgnoreCase)) ?? false))
+            {
+                continue;
+            }
+
+            if (header.Type == RegularExpressionType)
+            {
+                if (!CompilesAsWholeValueRegex(header.Value))
+                {
+                    problems.Add($"header match '{header.Name}' regular expression is not supported by the data plane");
+                    continue;
+                }
+
+                spec.HeaderRegexes ??= [];
+                spec.HeaderRegexes.Add(new HeaderValueMatch { Name = header.Name, Value = header.Value, Kind = HeaderMatchKind.Regex });
                 continue;
             }
 
             spec.Headers ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            spec.Headers.TryAdd(header.Name, header.Value);
+            spec.Headers.Add(header.Name, header.Value);
         }
 
         foreach (var query in match.QueryParams ?? [])
         {
-            var regex = query.Type == "RegularExpression";
-            if (query.Type is not (null or "Exact" or "RegularExpression"))
+            var regex = query.Type == RegularExpressionType;
+            if (query.Type is not (null or "Exact" or RegularExpressionType))
             {
                 problems.Add($"query parameter match '{query.Name}' type '{query.Type}' is not supported");
                 continue;
             }
 
-            if (regex && !CompilesAsRegex("^(?:" + query.Value + ")$"))
+            if (regex && !CompilesAsWholeValueRegex(query.Value))
             {
                 problems.Add($"query parameter '{query.Name}' regular expression is not supported by the data plane");
                 continue;
@@ -261,14 +306,14 @@ internal sealed partial class TranslationPass
                 }
 
                 break;
-            case "RegularExpression":
-                var anchored = "^(?:" + value + ")$";
-                if (!CompilesAsRegex(anchored))
+            case RegularExpressionType:
+                if (!CompilesAsWholeValueRegex(value))
                 {
                     problems.Add("path regular expression is not supported by the data plane");
                     return;
                 }
 
+                var anchored = "^(?:" + value + ")$";
                 spec.Path = anchored;
                 spec.PathKind = PathMatchKind.Regex;
                 break;
@@ -290,6 +335,9 @@ internal sealed partial class TranslationPass
             return false;
         }
     }
+
+    private static bool CompilesAsWholeValueRegex(string pattern) =>
+        CompilesAsRegex(pattern) && CompilesAsRegex("^(?:" + pattern + ")$");
 
     private static bool AddRewrite(List<TransformConfig> transforms, HttpUrlRewrite rewrite, MatchSpec spec, out string problem)
     {

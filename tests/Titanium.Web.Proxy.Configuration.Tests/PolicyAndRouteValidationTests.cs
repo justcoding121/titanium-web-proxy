@@ -143,6 +143,68 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void CorsPolicy_RejectsCredentialsWithAnyOrigin_AndAnOutOfRangeMaxAge()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "star", Kind = "cors", Origins = "*", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "missing", Kind = "cors", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "mixed", Kind = "cors", Origins = "https://a.test,*", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "age", Kind = "cors", Origins = "https://a.test", MaxAgeSeconds = 86401 },
+                new RoutePolicyConfig { Name = "neg", Kind = "cors", MaxAgeSeconds = -1 },
+                new RoutePolicyConfig { Name = "ok", Kind = "cors", Origins = "https://a.test", AllowCredentials = true, MaxAgeSeconds = 0 },
+            ],
+            Routes = [Route("r", "c", "ok")],
+        };
+
+        var errors = Errors(config);
+        StringAssert.Contains(errors, "'star' (cors) allowCredentials");
+        StringAssert.Contains(errors, "'missing' (cors) allowCredentials");
+        StringAssert.Contains(errors, "'mixed' (cors) allowCredentials");
+        StringAssert.Contains(errors, "'age' (cors) maxAgeSeconds");
+        StringAssert.Contains(errors, "'neg' (cors) maxAgeSeconds");
+        Assert.IsFalse(errors.Contains("'ok'", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void CorsOrigins_AcceptWildcardAndRegex_AndRejectABrokenList()
+    {
+        var config = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies =
+            [
+                new RoutePolicyConfig { Name = "wild", Kind = "cors", Origins = "https://*.example.com", AllowCredentials = true },
+                new RoutePolicyConfig { Name = "pattern", Kind = "cors", Origins = "regex:https://app\\.example\\.com" },
+                new RoutePolicyConfig { Name = "both", Kind = "cors", Origins = "https://app.example.com,https://*.example.com" },
+                new RoutePolicyConfig { Name = "starMixed", Kind = "cors", Origins = "*,https://a.test" },
+                new RoutePolicyConfig { Name = "starOnly", Kind = "cors", Origins = "https://*" },
+                new RoutePolicyConfig { Name = "oneLabel", Kind = "cors", Origins = "https://*.com" },
+                new RoutePolicyConfig { Name = "embedded", Kind = "cors", Origins = "https://a*.example.com" },
+                new RoutePolicyConfig { Name = "double", Kind = "cors", Origins = "https://*.*.example.com" },
+                new RoutePolicyConfig { Name = "bare", Kind = "cors", Origins = "*.example.com" },
+                new RoutePolicyConfig { Name = "broken", Kind = "cors", Origins = "regex:(" },
+            ],
+            Routes = [Route("r", "c", "wild")],
+        };
+
+        var errors = Errors(config);
+        Assert.IsFalse(errors.Contains("'wild'", StringComparison.Ordinal), errors);
+        Assert.IsFalse(errors.Contains("'pattern'", StringComparison.Ordinal), errors);
+        Assert.IsFalse(errors.Contains("'both'", StringComparison.Ordinal), errors);
+        StringAssert.Contains(errors, "'starMixed'");
+        StringAssert.Contains(errors, "'starOnly'");
+        StringAssert.Contains(errors, "'oneLabel'");
+        StringAssert.Contains(errors, "'embedded'");
+        StringAssert.Contains(errors, "'double'");
+        StringAssert.Contains(errors, "'bare'");
+        StringAssert.Contains(errors, "'broken'");
+    }
+
+    [TestMethod]
     public void ExtAuthPolicy_RequiresAnAbsoluteHttpUrl_AndSaneLimitsAndHeaders()
     {
         var config = new TwpConfig
@@ -365,6 +427,54 @@ public class PolicyAndRouteValidationTests
     }
 
     [TestMethod]
+    public void ConnectionLimit_AcceptsClientForwardedClientAndRoute_AndRejectsHeaderKeys()
+    {
+        foreach (var key in new[] { "client", "forwardedClient", "route" })
+        {
+            var ok = new TwpConfig
+            {
+                Clusters = [Cluster("c")],
+                Policies = [new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = key }],
+                Routes = [Route("r", "c", "slots")],
+            };
+            Assert.AreEqual(0, TwpConfigValidator.Validate(ok).Count, key);
+        }
+
+        foreach (var key in new[] { "header:X-User", "cookie:sid", "ip" })
+        {
+            var bad = new TwpConfig
+            {
+                Clusters = [Cluster("c")],
+                Policies = [new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = key }],
+                Routes = [Route("r", "c", "slots")],
+            };
+            StringAssert.Contains(Errors(bad), "connectionLimit");
+        }
+    }
+
+    [TestMethod]
+    public void HttpsRedirect_AcceptsTheStatusSet_AndRejectsAnythingElse()
+    {
+        var ok = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies = [new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect", Port = 8443, RedirectStatus = 301 }],
+            Routes = [Route("r", "c", "https")],
+        };
+        Assert.AreEqual(0, TwpConfigValidator.Validate(ok).Count, Errors(ok));
+
+        var bad = new TwpConfig
+        {
+            Clusters = [Cluster("c")],
+            Policies = [new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect", Port = 0, RedirectStatus = 200 }],
+            Routes = [Route("r", "c", "https")],
+        };
+        var errors = Errors(bad);
+        StringAssert.Contains(errors, "port");
+        StringAssert.Contains(errors, "status");
+    }
+
+    [TestMethod]
     public void Regexes_ThatDoNotCompile_AreRejected()
     {
         var config = new TwpConfig
@@ -450,6 +560,45 @@ public class PolicyAndRouteValidationTests
         StringAssert.Contains(errors, "samplePercent must be 0-100");
         StringAssert.Contains(errors, "redirect status 200 is not a 3xx code");
     }
+
+    [TestMethod]
+    public void RedirectPrefix_RejectsAReplacementWithoutAPrefix_AndBadCharacters()
+    {
+        var errors = Errors(RedirectConfigOf(new RedirectConfig { ReplacePrefixTo = "/new" }));
+        StringAssert.Contains(errors, "replacePrefixTo needs replacePrefixFrom");
+
+        errors = Errors(RedirectConfigOf(new RedirectConfig
+        {
+            ReplacePrefixFrom = "/old",
+            ReplacePrefixTo = "/new",
+            Path = "/fixed",
+        }));
+        StringAssert.Contains(errors, "cannot be combined");
+
+        foreach (var bad in new[] { "/", "/old/", "old", "/old?x=1", "/old#f", "/old x", "/old\r\nSet-Cookie" })
+        {
+            errors = Errors(RedirectConfigOf(new RedirectConfig { ReplacePrefixFrom = bad, ReplacePrefixTo = "/new" }));
+            StringAssert.Contains(errors, "replacePrefixFrom must be empty or a path", bad);
+        }
+
+        errors = Errors(RedirectConfigOf(new RedirectConfig { ReplacePrefixFrom = "/old", ReplacePrefixTo = string.Empty }));
+        Assert.IsFalse(errors.Contains("replacePrefix", StringComparison.Ordinal), errors);
+    }
+
+    private static TwpConfig RedirectConfigOf(RedirectConfig redirect) => new()
+    {
+        Clusters = [Cluster("c")],
+        Routes =
+        [
+            new RouteConfig
+            {
+                Id = "rd",
+                ClusterId = "c",
+                Redirect = redirect,
+                Match = new RouteMatch { Path = "/r", PathKind = PathMatchKind.Prefix },
+            },
+        ],
+    };
 
     private static TwpConfig WithCompression(ResponseCompressionConfig compression, params RouteConfig[] routes) => new()
     {

@@ -11,6 +11,8 @@ public sealed class GatewayOptionsAndObserverTests
 {
     private static readonly Dictionary<string, string?> NoEnvironment = [];
     private static readonly string[] SecretNamespacesAb = ["a", "b"];
+    private static readonly string[] TrustedProxyCidr10 = ["10.0.0.0/8"];
+    private static readonly string[] TrustedProxyCidr10AndHost = ["10.0.0.0/8", "192.168.1.1"];
     private static readonly string[] IgnoredKubernetesServiceEnv =
     [
         "TITANIUM_GATEWAY_DATA_PORT", "TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS",
@@ -128,6 +130,50 @@ public sealed class GatewayOptionsAndObserverTests
         Assert.IsTrue(options.WatchLegacyAnnotation);
         Assert.AreEqual("example.com/mine", options.IngressControllerName);
         Assert.AreEqual(0, options.IgnoredEnvironment.Count);
+    }
+
+    [TestMethod]
+    public void TrustedProxies_AreReadFromFlagsAndPassedToTheTranslator()
+    {
+        var options = GatewayOptions.Parse(
+            ["--data-plane-service", "titanium", "--trusted-proxies", "10.0.0.0/8,192.168.1.1"],
+            new Dictionary<string, string?> { ["POD_NAMESPACE"] = "gw" });
+
+        CollectionAssert.AreEqual(TrustedProxyCidr10AndHost, options.TrustedProxies.ToArray());
+        CollectionAssert.AreEqual(TrustedProxyCidr10AndHost, options.ToControllerOptions().Translator.TrustedProxies.ToArray());
+    }
+
+    [TestMethod]
+    public void TrustedProxies_AreReadFromTheEnvironment()
+    {
+        var options = GatewayOptions.Parse([], new Dictionary<string, string?>
+        {
+            ["POD_NAMESPACE"] = "gw",
+            ["TITANIUM_GATEWAY_DATA_PLANE_SERVICE"] = "titanium",
+            ["TITANIUM_GATEWAY_TRUSTED_PROXIES"] = "10.0.0.0/8",
+        });
+
+        CollectionAssert.AreEqual(TrustedProxyCidr10, options.TrustedProxies.ToArray());
+    }
+
+    [TestMethod]
+    [DataRow("not-a-cidr")]
+    [DataRow("10.0.0.0/99")]
+    public void TrustedProxies_RejectBadEntries(string value)
+    {
+        var ex = Assert.ThrowsExactly<ArgumentException>(() => GatewayOptions.Parse(
+            ["--data-plane-service", "titanium", "--trusted-proxies", value],
+            new Dictionary<string, string?> { ["POD_NAMESPACE"] = "gw" }));
+        StringAssert.Contains(ex.Message, "--trusted-proxies");
+    }
+
+    [TestMethod]
+    public void TrustedProxies_EmptyListLeavesForwardedHeadersUnset()
+    {
+        var options = GatewayOptions.Parse(
+            ["--data-plane-service", "titanium", "--trusted-proxies", ""],
+            new Dictionary<string, string?> { ["POD_NAMESPACE"] = "gw" });
+        Assert.AreEqual(0, options.TrustedProxies.Count);
     }
 
     [TestMethod]

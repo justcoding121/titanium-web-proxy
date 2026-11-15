@@ -4,6 +4,7 @@ using Titanium.Gateway.Control;
 using Titanium.Gateway.Kube;
 using Titanium.Gateway.Model;
 using Titanium.Gateway.Translation;
+using Titanium.Web.Proxy.Abstractions.Network;
 
 namespace Titanium.Gateway;
 
@@ -53,6 +54,13 @@ public sealed class GatewayOptions
 
     public IReadOnlyList<string> SecretNamespaces { get; private set; } = [];
 
+    /// <summary>
+    ///     Addresses or CIDR prefixes of hops in front of the data plane. Written into
+    ///     <c>server.forwardedHeaders.trustedProxies</c> so <c>httpsRedirect</c> and
+    ///     <c>forwardedClient</c> keys honor <c>X-Forwarded-*</c> from those peers.
+    /// </summary>
+    public IReadOnlyList<string> TrustedProxies { get; private set; } = [];
+
     /// <summary><c>IngressClass.spec.controller</c> this controller owns.</summary>
     public string IngressControllerName { get; private set; } = IngressApiNames.DefaultControllerName;
 
@@ -74,8 +82,8 @@ public sealed class GatewayOptions
     {
         "controller-name", "data-plane-namespace", "data-plane-service", "data-plane-deployment", "config-map", "tls-secret",
         "config-key", "lease-name", "lease-namespace", "identity", "no-leader-election", "admin-port", "admin-token-env",
-        "health-port", "tls-mount-path", "port-map", "secret-namespaces", "min-reconcile-ms", "verbose", "pod-namespace", "pod-name",
-        "ingress-controller-name", "watch-legacy-annotation", "enable-backend-tls-policy",
+        "health-port", "tls-mount-path", "port-map", "secret-namespaces", "trusted-proxies", "min-reconcile-ms", "verbose",
+        "pod-namespace", "pod-name", "ingress-controller-name", "watch-legacy-annotation", "enable-backend-tls-policy",
     };
 
     private static string KnownList => string.Join(", ", Known.Order(StringComparer.Ordinal));
@@ -185,8 +193,28 @@ public sealed class GatewayOptions
             options.SecretNamespaces = namespaces.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        if (Get("trusted-proxies") is { } proxies)
+        {
+            options.TrustedProxies = ParseTrustedProxies(proxies);
+        }
+
         options.Validate();
         return options;
+    }
+
+    /// <summary>Parses a comma-separated list of addresses or CIDR prefixes.</summary>
+    public static IReadOnlyList<string> ParseTrustedProxies(string text)
+    {
+        var parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var part in parts)
+        {
+            if (!CidrPrefix.TryParse(part, out _))
+            {
+                throw new ArgumentException($"--trusted-proxies entry '{part}' is not an address or CIDR prefix.");
+            }
+        }
+
+        return parts;
     }
 
     /// <summary>Parses <c>80=8080,443=8443,53/udp=5353</c>.</summary>
@@ -256,6 +284,7 @@ public sealed class GatewayOptions
             DataPlaneServiceName = DataPlaneService,
             IngressControllerName = IngressControllerName,
             WatchLegacyAnnotation = WatchLegacyAnnotation,
+            TrustedProxies = TrustedProxies,
         },
         Output = new OutputOptions
         {

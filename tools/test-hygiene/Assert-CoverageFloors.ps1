@@ -16,6 +16,7 @@ $ErrorActionPreference = 'Stop'
 $floorsDoc = Get-Content -LiteralPath $Floors -Raw | ConvertFrom-Json
 $allow = [double]$floorsDoc.dropAllowance
 $failed = $false
+$floorsAdvisory = $false
 
 $assemblies = @($floorsDoc.assemblies.PSObject.Properties) | Sort-Object { $_.Name.Length } -Descending
 
@@ -229,9 +230,26 @@ foreach ($prop in $assemblies) {
     $limit = [math]::Round($floor - $allow, 2)
     Write-Host ("{0}: {1}% (floor {2}, via {3})" -f $name, $pct, $floor, $sourceLabel)
     if ($pct + 0.001 -lt $limit) {
-        Write-Host ("::error::{0} line coverage {1} is below {2}" -f $name, $pct, $limit)
-        $failed = $true
+        # Advisory only for a fork pull request that had to use coverage.xml because the
+        # Sonar token is withheld. A present token (including a same-repo run whose token
+        # is missing or rotated, and any push) stays strict even when the XML tally is the
+        # only measure we could read.
+        $advisory = ($env:TWP_FLOORS_ADVISORY -eq 'true') -and
+            [string]::IsNullOrWhiteSpace($env:SONAR_TOKEN) -and
+            ($sourceLabel -eq 'coverage.xml')
+        if ($advisory) {
+            Write-Host ("::warning::{0} line coverage {1} is below {2} (coverage.xml on a fork pull request; advisory)" -f $name, $pct, $limit)
+            $script:floorsAdvisory = $true
+        }
+        else {
+            Write-Host ("::error::{0} line coverage {1} is below {2}" -f $name, $pct, $limit)
+            $failed = $true
+        }
     }
+}
+
+if ($script:floorsAdvisory) {
+    Write-Host '::notice::Coverage floors are measured on develop with the Sonar metric. A maintainer can mirror this pull request with tools/ci/Mirror-ForkPr.ps1 so that metric is applied.'
 }
 
 if ($failed) { exit 1 }

@@ -250,7 +250,10 @@ internal static class ProxyMetrics
         Meter.CreateCounter<long>("twp.proxy.requests.failed", RequestUnit, "Failed proxy requests.");
 
     private static readonly Counter<long> ProxyBytes =
-        Meter.CreateCounter<long>("twp.proxy.bytes", "By", "Bytes observed on a proxied request.");
+        Meter.CreateCounter<long>(
+            "twp.proxy.bytes",
+            "By",
+            "Bytes observed on a proxied request. Response bytes come from Content-Length, so a chunked body adds zero.");
 
     private static readonly Counter<long> UpstreamRetries =
         Meter.CreateCounter<long>("twp.proxy.upstream.retries", "{retry}", "Upstream retry attempts.");

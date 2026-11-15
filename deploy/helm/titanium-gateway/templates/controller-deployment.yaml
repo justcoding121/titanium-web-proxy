@@ -98,6 +98,10 @@ spec:
             - name: TITANIUM_GATEWAY_SECRET_NAMESPACES
               value: {{ join "," . | quote }}
             {{- end }}
+            {{- with .Values.controller.trustedProxies }}
+            - name: TITANIUM_GATEWAY_TRUSTED_PROXIES
+              value: {{ join "," . | quote }}
+            {{- end }}
             - name: TITANIUM_ADMIN_TOKEN
               valueFrom:
                 secretKeyRef:

@@ -72,6 +72,8 @@ public static class JsonReverseProxyDocument
                         Methods = r.Match?.Methods,
                         Headers = r.Match?.Headers,
                         Query = r.Match?.Query,
+                        HeaderMatches = r.Match?.HeaderMatches,
+                        QueryParameters = r.Match?.QueryParameters,
                     },
                     Limits = r.Limits is null
                         ? null
@@ -252,6 +254,8 @@ public static class JsonReverseProxyDocument
         public string? Method { get; set; }
         public Dictionary<string, string>? Headers { get; set; }
         public Dictionary<string, string>? Query { get; set; }
+        public List<HeaderValueMatch>? HeaderMatches { get; set; }
+        public List<QueryParameterMatch>? QueryParameters { get; set; }
     }
 
     private sealed class ClusterDto

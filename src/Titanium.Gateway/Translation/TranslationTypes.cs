@@ -48,6 +48,12 @@ public sealed record GatewayTranslatorOptions
     /// </summary>
     public bool WatchLegacyAnnotation { get; init; }
 
+    /// <summary>
+    ///     Addresses or CIDR prefixes of hops in front of the data plane. Empty (the default) leaves
+    ///     <c>server.forwardedHeaders</c> unset so the bootstrap config stays unchanged.
+    /// </summary>
+    public IReadOnlyList<string> TrustedProxies { get; init; } = [];
+
     /// <summary>Port an Ingress is served on over HTTP. It must be a key of <see cref="ListenerPortMap"/>.</summary>
     public int IngressHttpPort { get; init; } = 80;
 

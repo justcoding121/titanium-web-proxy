@@ -1,6 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
@@ -15,12 +17,16 @@ using Titanium.Web.Proxy.Abstractions.Routing;
 using Titanium.Web.Proxy.EventArguments;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
+using Titanium.Web.Proxy.Transforms;
 
 namespace Titanium.Web.Proxy.Routing;
 
 /// <summary>Enforces route policies before a destination is selected. No work when the route lists none.</summary>
 internal static class RoutePolicies
 {
+    private const string OriginHeader = "Origin";
+    private static readonly SearchValues<char> Ipv6HostChars = SearchValues.Create("0123456789abcdefABCDEF:.");
+
     /// <summary>
     ///     Counters and slots that belong to one <see cref="ReverseProxyOptions" /> instance, so two proxies in a process
     ///     do not share them and a reload (a new options instance) starts clean.
@@ -66,6 +72,9 @@ internal static class RoutePolicies
 
     private const char HeldSeparator = '\u001f';
 
+    /// <summary>Separates a policy name from a per-client or per-route slot. Not the held-list separator.</summary>
+    private const char SlotSeparator = '\u001e';
+
     /// <summary>Gives back every slot named in a held-policy value (one name, or several joined by a separator).</summary>
     public static void Release(ReverseProxyOptions options, string policyNames) => ReleaseHeld(RuntimeFor(options), policyNames);
 
@@ -76,9 +85,14 @@ internal static class RoutePolicies
             return;
         }
 
-        foreach (var policyName in policyNames.Split(HeldSeparator))
+        foreach (var slot in policyNames.Split(HeldSeparator))
         {
-            runtime.Connections.AddOrUpdate(policyName, 0, (_, count) => count > 0 ? count - 1 : 0);
+            var left = runtime.Connections.AddOrUpdate(slot, 0, static (_, count) => count > 0 ? count - 1 : 0);
+            if (left == 0)
+            {
+                // Drops the entry only while it is still zero, so a concurrent acquire is left in place.
+                ((ICollection<KeyValuePair<string, int>>)runtime.Connections).Remove(new KeyValuePair<string, int>(slot, 0));
+            }
         }
     }
 
@@ -277,7 +291,8 @@ internal static class RoutePolicies
             if (stop is { } denied)
             {
                 ReleaseHeld(runtime, heldNames);
-                return denied;
+                // A preflight already carries its own CORS headers. Any other local refusal inherits the route's cors policy.
+                return denied.Status == 204 ? denied : WithLocalCors(options, route, request, denied);
             }
         }
 
@@ -309,32 +324,33 @@ internal static class RoutePolicies
         ref PolicyDecision decision,
         ref string? heldNames)
     {
-        var method = request.Method;
         var contentLength = request.ContentLength;
         switch (policy.Kind)
         {
             case "maxRequestBodySize" when policy.MaxRequestBodyBytes is long max && contentLength > max:
                 return Stop(413, "payload too large");
+            case "requireHeader" when IsRealPreflight(request) && FindCorsPolicy(options, route) is not null:
+                return null;
             case "requireHeader" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: true):
                 return Stop(401, string.Empty);
+            case "apiKey" when IsRealPreflight(request) && FindCorsPolicy(options, route) is not null:
+                return null;
             case "apiKey" when !HeaderSatisfies(HeaderValue(request, policy.HeaderName ?? ""), policy.HeaderValue, valueOptional: false):
                 return Stop(401, string.Empty);
             case "timeout" when policy.TimeoutSeconds is int seconds:
                 decision = decision with { TimeoutSeconds = seconds };
                 return null;
-            case "cors" when string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase):
-                return new PolicyDecision
-                {
-                    Rejected = true,
-                    Status = 204,
-                    Headers = CorsHeaders(policy, HeaderValue(request, "Origin")),
-                };
+            case "cors":
+                return CorsPreflight(policy, request);
             case "rateLimit":
                 return CheckRate(runtime, policy, route, request, client, trustedProxies);
-            case "connectionLimit" when !AllowConnection(runtime, policy):
+            case "httpsRedirect":
+                return HttpsRedirect(policy, request, client, trustedProxies);
+            case "connectionLimit" when !AllowConnection(runtime, policy, route, request, client, trustedProxies):
                 return Stop(503, string.Empty);
             case "connectionLimit":
-                heldNames = heldNames is null ? policy.Name : heldNames + HeldSeparator + policy.Name;
+                var slot = ConnectionSlotName(policy, route, request, client, trustedProxies);
+                heldNames = heldNames is null ? slot : heldNames + HeldSeparator + slot;
                 decision = decision with { Held = heldNames, HeldRuntime = runtime };
                 return null;
             case "ipAllowDeny" when !AllowAddress(policy, client):
@@ -346,6 +362,134 @@ internal static class RoutePolicies
         }
     }
 
+    /// <summary>
+    ///     Redirects a cleartext request. An https request passes, and so does a cleartext request whose
+    ///     socket peer is a trusted proxy and whose <c>X-Forwarded-Proto</c> is <c>https</c>.
+    /// </summary>
+    private static PolicyDecision? HttpsRedirect(
+        RoutePolicyConfig policy,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
+    {
+        if (request.IsHttps)
+        {
+            return null;
+        }
+
+        if (client is not null &&
+            ForwardedHeadersApplier.IsTrusted(client, trustedProxies) &&
+            string.Equals(HeaderValue(request, "X-Forwarded-Proto"), "https", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (!TryHttpsLocation(request, policy.Port, out var location))
+        {
+            return Stop(400, string.Empty);
+        }
+
+        return new PolicyDecision
+        {
+            Rejected = true,
+            Status = policy.RedirectStatus ?? 308,
+            Body = string.Empty,
+            Headers = [new KeyValuePair<string, string>("Location", location)],
+        };
+    }
+
+    private static bool TryHttpsLocation(Request request, int? port, out string location)
+    {
+        location = string.Empty;
+        if (!TryHostWithoutPort(request.Host, out var host))
+        {
+            return false;
+        }
+
+        var suffix = port is int configured && configured != 443
+            ? ":" + configured.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+        location = "https://" + host + suffix + RequestPathAndQuery(request);
+        return true;
+    }
+
+    private static string RequestPathAndQuery(Request request)
+    {
+        var raw = request.RequestUriString8.GetString();
+        if (string.IsNullOrEmpty(raw))
+        {
+            return "/";
+        }
+
+        if (raw[0] == '/')
+        {
+            return raw;
+        }
+
+        var scheme = raw.IndexOf("://", StringComparison.Ordinal);
+        if (scheme >= 0)
+        {
+            var slash = raw.IndexOf('/', scheme + 3);
+            return slash >= 0 ? raw[slash..] : "/";
+        }
+
+        return "/";
+    }
+
+    /// <summary>Host is letters, digits, hyphen, and dot, or an IPv6 address in brackets, with an optional port.</summary>
+    private static bool TryHostWithoutPort(string? value, out string host)
+    {
+        host = string.Empty;
+        if (string.IsNullOrEmpty(value) || value.Contains(' ') || value.Contains('@') || value.Contains('/'))
+        {
+            return false;
+        }
+
+        if (value[0] == '[')
+        {
+            var end = value.IndexOf(']');
+            if (end <= 1 || value.AsSpan(1, end - 1).IndexOfAnyExcept(Ipv6HostChars) >= 0)
+            {
+                return false;
+            }
+
+            host = value[..(end + 1)];
+            var rest = value[(end + 1)..];
+            return rest.Length == 0 || (rest[0] == ':' && IsPort(rest[1..]));
+        }
+
+        var colon = value.LastIndexOf(':');
+        if (colon > 0 && value.IndexOf(':') == colon)
+        {
+            host = value[..colon];
+            return IsHostName(host) && IsPort(value[(colon + 1)..]);
+        }
+
+        host = value;
+        return IsHostName(host);
+    }
+
+    private static bool IsPort(string text) =>
+        ushort.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port > 0;
+
+    private static bool IsHostName(string name)
+    {
+        if (name.Length is 0 or > 253 || name[0] is '.' or '-' || name[^1] is '.' or '-')
+        {
+            return false;
+        }
+
+        foreach (var c in name)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '-'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private static PolicyDecision Stop(int status, string body) => new()
     {
         Rejected = true,
@@ -355,6 +499,9 @@ internal static class RoutePolicies
 
     /// <summary>Rate-limit counters held for <paramref name="options" />.</summary>
     internal static int RateWindowCount(ReverseProxyOptions options) => RuntimeFor(options).Rates.Count;
+
+    /// <summary>Connection-limit counters held for <paramref name="options" />. Zero after every slot is released.</summary>
+    internal static int ConnectionSlotCount(ReverseProxyOptions options) => RuntimeFor(options).Connections.Count;
 
     /// <summary>Null means the request passes. Otherwise a 429 with Retry-After, and RateLimit-* when asked.</summary>
     private static PolicyDecision? CheckRate(
@@ -391,23 +538,69 @@ internal static class RoutePolicies
         };
     }
 
-    private static bool AllowConnection(Runtime runtime, RoutePolicyConfig policy)
+    private static bool AllowConnection(
+        Runtime runtime,
+        RoutePolicyConfig policy,
+        RouteConfig route,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
     {
         var limit = policy.Limit ?? 1;
+        var slot = ConnectionSlotName(policy, route, request, client, trustedProxies);
         var connections = runtime.Connections;
         while (true)
         {
-            var count = connections.GetOrAdd(policy.Name, 0);
+            var count = connections.GetOrAdd(slot, 0);
             if (count >= limit)
             {
                 return false;
             }
 
-            if (connections.TryUpdate(policy.Name, count + 1, count))
+            if (connections.TryUpdate(slot, count + 1, count))
             {
                 return true;
             }
         }
+    }
+
+    /// <summary>
+    ///     Unset <see cref="RoutePolicyConfig.Key"/> is one counter named for the policy.
+    ///     <c>client</c> and <c>forwardedClient</c> append the address; <c>route</c> appends the route id.
+    ///     A value that contains a separator is hashed so release cannot split the wrong slot.
+    /// </summary>
+    internal static string ConnectionSlotName(
+        RoutePolicyConfig policy,
+        RouteConfig route,
+        Request request,
+        IPAddress? client,
+        IReadOnlyList<string>? trustedProxies)
+    {
+        if (string.IsNullOrEmpty(policy.Key))
+        {
+            return policy.Name;
+        }
+
+        string value;
+        if (policy.Key.Equals("route", StringComparison.OrdinalIgnoreCase))
+        {
+            value = route.Id;
+        }
+        else if (policy.Key.Equals("forwardedClient", StringComparison.OrdinalIgnoreCase))
+        {
+            value = RateLimiter.ResolveForwardedClient(request, client, trustedProxies)?.ToString() ?? string.Empty;
+        }
+        else
+        {
+            value = client?.ToString() ?? string.Empty;
+        }
+
+        if (value.Contains(HeldSeparator) || value.Contains(SlotSeparator))
+        {
+            value = RateLimiter.HashValue(value);
+        }
+
+        return policy.Name + SlotSeparator + value;
     }
 
     private static bool AllowAddress(RoutePolicyConfig policy, IPAddress? client)
@@ -533,25 +726,284 @@ internal static class RoutePolicies
         return false;
     }
 
-    private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, string? origin)
+    /// <summary>
+    /// A preflight is <c>OPTIONS</c> with both <c>Origin</c> and <c>Access-Control-Request-Method</c>.
+    /// Anything else, including a plain <c>OPTIONS</c>, is left for the origin.
+    /// </summary>
+    private static PolicyDecision? CorsPreflight(RoutePolicyConfig policy, Request request)
     {
-        var allowOrigin = policy.Origins ?? "*";
-        if (allowOrigin != "*" && origin is not null && !allowOrigin.Split(',', StringSplitOptions.TrimEntries).Contains(origin, StringComparer.Ordinal))
+        if (!string.Equals(request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
         {
-            allowOrigin = allowOrigin.Split(',', StringSplitOptions.TrimEntries)[0];
-        }
-        else if (allowOrigin != "*" && origin is not null)
-        {
-            allowOrigin = origin;
+            return null;
         }
 
-        return
-        [
+        var origin = HeaderValue(request, OriginHeader);
+        var requestMethod = HeaderValue(request, "Access-Control-Request-Method");
+        if (string.IsNullOrEmpty(origin) || string.IsNullOrEmpty(requestMethod))
+        {
+            return null;
+        }
+
+        return new PolicyDecision
+        {
+            Rejected = true,
+            Status = 204,
+            Headers = CorsHeaders(policy, request, origin, HeaderValue(request, "Access-Control-Request-Headers")),
+        };
+    }
+
+    private static List<KeyValuePair<string, string>> CorsHeaders(RoutePolicyConfig policy, Request request, string origin, string? requestHeaders)
+    {
+        var headers = new List<KeyValuePair<string, string>>
+        {
+            new("Vary", "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"),
+        };
+
+        var allowOrigin = AllowedOrigin(policy.Origins, origin);
+        if (allowOrigin is null)
+        {
+            return headers;
+        }
+
+        headers.Add(new("Access-Control-Allow-Origin", allowOrigin));
+        headers.Add(new("Access-Control-Allow-Methods", string.IsNullOrWhiteSpace(policy.Methods) ? "GET, POST, OPTIONS" : policy.Methods));
+        if (AllowHeaders(policy, requestHeaders) is { } allowHeaders)
+        {
+            headers.Add(new("Access-Control-Allow-Headers", allowHeaders));
+        }
+
+        if (policy.AllowCredentials == true)
+        {
+            headers.Add(new("Access-Control-Allow-Credentials", "true"));
+        }
+
+        if (policy.MaxAgeSeconds is int maxAge)
+        {
+            headers.Add(new("Access-Control-Max-Age", maxAge.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (policy.AllowPrivateNetwork == true &&
+            string.Equals(HeaderValue(request, "Access-Control-Request-Private-Network"), "true", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.Add(new("Access-Control-Allow-Private-Network", "true"));
+            headers[0] = new KeyValuePair<string, string>(
+                headers[0].Key,
+                headers[0].Value + ", Access-Control-Request-Private-Network");
+        }
+
+        return headers;
+    }
+
+    /// <summary>
+    /// Headers for a proxy-generated response on a route that lists <c>cors</c>.
+    /// Null when the route has no such policy, the request has no <c>Origin</c>, or the origin is not allowed.
+    /// </summary>
+    internal static List<KeyValuePair<string, string>>? TryGetCorsResponseHeaders(
+        RouteConfig route, Request request, ReverseProxyOptions options)
+    {
+        var policy = FindCorsPolicy(options, route);
+        if (policy is null)
+        {
+            return null;
+        }
+
+        var origin = HeaderValue(request, OriginHeader);
+        if (string.IsNullOrEmpty(origin))
+        {
+            return null;
+        }
+
+        var allowOrigin = AllowedOrigin(policy.Origins, origin);
+        if (allowOrigin is null)
+        {
+            return null;
+        }
+
+        var headers = new List<KeyValuePair<string, string>>(4)
+        {
             new("Access-Control-Allow-Origin", allowOrigin),
-            new("Vary", "Origin"),
-            new("Access-Control-Allow-Methods", policy.Methods ?? "GET, POST, OPTIONS"),
-            new("Access-Control-Allow-Headers", policy.HeaderName ?? "*"),
-        ];
+        };
+        if (policy.AllowCredentials == true && !string.Equals(allowOrigin, "*", StringComparison.Ordinal))
+        {
+            headers.Add(new("Access-Control-Allow-Credentials", "true"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(policy.ExposeHeaders))
+        {
+            headers.Add(new("Access-Control-Expose-Headers", policy.ExposeHeaders.Trim()));
+        }
+
+        // A wildcard answer does not vary. A list does, so caches do not reuse one origin's reply for another.
+        var configured = policy.Origins?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured) && !string.Equals(configured, "*", StringComparison.Ordinal))
+        {
+            headers.Add(new("Vary", OriginHeader));
+        }
+
+        return headers;
+    }
+
+    /// <summary>Writes <see cref="TryGetCorsResponseHeaders"/> onto a response, merging an existing <c>Vary</c>.</summary>
+    internal static void ApplyLocalCors(Response response, RouteConfig route, Request request, ReverseProxyOptions options)
+    {
+        var extra = TryGetCorsResponseHeaders(route, request, options);
+        if (extra is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < extra.Count; i++)
+        {
+            AddMerged(response.Headers, extra[i]);
+        }
+    }
+
+    private static PolicyDecision WithLocalCors(
+        ReverseProxyOptions options, RouteConfig route, Request request, PolicyDecision denied)
+    {
+        var extra = TryGetCorsResponseHeaders(route, request, options);
+        if (extra is null)
+        {
+            return denied;
+        }
+
+        if (denied.Headers is not { Count: > 0 })
+        {
+            return denied with { Headers = extra };
+        }
+
+        var merged = new List<KeyValuePair<string, string>>(denied.Headers);
+        for (var i = 0; i < extra.Count; i++)
+        {
+            merged = MergeHeader(merged, extra[i]);
+        }
+
+        return denied with { Headers = merged };
+    }
+
+    private static List<KeyValuePair<string, string>> MergeHeader(
+        List<KeyValuePair<string, string>> headers, KeyValuePair<string, string> extra)
+    {
+        if (!string.Equals(extra.Key, "Vary", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.Add(extra);
+            return headers;
+        }
+
+        for (var i = 0; i < headers.Count; i++)
+        {
+            if (!string.Equals(headers[i].Key, "Vary", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!ContainsToken(headers[i].Value, extra.Value))
+            {
+                headers[i] = new KeyValuePair<string, string>(headers[i].Key, headers[i].Value + ", " + extra.Value);
+            }
+
+            return headers;
+        }
+
+        headers.Add(extra);
+        return headers;
+    }
+
+    private static void AddMerged(HeaderCollection headers, KeyValuePair<string, string> extra)
+    {
+        if (!string.Equals(extra.Key, "Vary", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.AddHeader(extra.Key, extra.Value);
+            return;
+        }
+
+        var existing = headers.GetHeaders("Vary");
+        if (existing is not { Count: > 0 })
+        {
+            headers.AddHeader("Vary", extra.Value);
+            return;
+        }
+
+        if (ContainsToken(existing[0].Value, extra.Value))
+        {
+            return;
+        }
+
+        var merged = existing[0].Value + ", " + extra.Value;
+        headers.RemoveHeader("Vary");
+        headers.AddHeader("Vary", merged);
+    }
+
+    private static bool ContainsToken(string list, string token)
+    {
+        var start = 0;
+        while (start < list.Length)
+        {
+            var comma = list.IndexOf(',', start);
+            if (comma < 0)
+            {
+                comma = list.Length;
+            }
+
+            if (string.Equals(list[start..comma].Trim(), token, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            start = comma + 1;
+        }
+
+        return false;
+    }
+
+    private static bool IsRealPreflight(Request request)
+    {
+        if (!string.Equals(request.Method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrEmpty(HeaderValue(request, OriginHeader))
+            && !string.IsNullOrEmpty(HeaderValue(request, "Access-Control-Request-Method"));
+    }
+
+    private static RoutePolicyConfig? FindCorsPolicy(ReverseProxyOptions options, RouteConfig route)
+    {
+        if (route.Policies is not { Count: > 0 } names || options.Policies is not { Count: > 0 } policies)
+        {
+            return null;
+        }
+
+        for (var i = 0; i < names.Count; i++)
+        {
+            var policy = FindNamedPolicy(policies, names[i]);
+            if (policy is not null && string.Equals(policy.Kind, "cors", StringComparison.Ordinal))
+            {
+                return policy;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary><c>*</c> or a missing list allows every origin. A list echoes a match, and an unlisted origin gets nothing.</summary>
+    internal static string? AllowedOrigin(string? configured, string origin) =>
+        CorsOriginMatcher.Match(configured, origin);
+
+    private static string? AllowHeaders(RoutePolicyConfig policy, string? requestHeaders)
+    {
+        if (!string.IsNullOrWhiteSpace(policy.HeaderName))
+        {
+            return policy.HeaderName;
+        }
+
+        // A credentialed preflight cannot send Allow-Headers: *. Reflect the headers the browser asked for.
+        if (policy.AllowCredentials == true)
+        {
+            return string.IsNullOrWhiteSpace(requestHeaders) ? null : requestHeaders;
+        }
+
+        return "*";
     }
 
     /// <summary>

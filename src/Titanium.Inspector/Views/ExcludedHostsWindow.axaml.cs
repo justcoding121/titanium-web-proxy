@@ -61,7 +61,12 @@ public partial class ExcludedHostsWindow : Window
         CancelButton.Click += (_, _) => Close();
         UpdateLearningPausedUi();
         SubscribeLearnedUpdates();
-        Closed += (_, _) => UnsubscribeLearnedUpdates();
+        SessionDisplayFormat.ClockChanged += OnClockChanged;
+        Closed += (_, _) =>
+        {
+            UnsubscribeLearnedUpdates();
+            SessionDisplayFormat.ClockChanged -= OnClockChanged;
+        };
     }
 
     public bool Saved => _saved;
@@ -108,6 +113,9 @@ public partial class ExcludedHostsWindow : Window
         _interception.DecryptFailureBypassLearned -= OnDecryptFailureBypassLearned;
         _subscribed = false;
     }
+
+    private void OnClockChanged(object? sender, EventArgs e) =>
+        MarshalToUi(() => RefreshLearnedList());
 
     private void OnDecryptFailureBypassLearned(object? sender, DecryptFailureBypassEntry entry)
     {
@@ -160,7 +168,10 @@ public partial class ExcludedHostsWindow : Window
     }
 
     internal static string FormatLearnedDisplay(DecryptFailureBypassEntry e) =>
-        $"{e.Host}  ·  Decrypt failure  ·  {e.LearnedAtUtc:u}";
+        FormatLearnedDisplay(e, SessionDisplayFormat.Clock, TimeZoneInfo.Local);
+
+    internal static string FormatLearnedDisplay(DecryptFailureBypassEntry e, InspectorClock clock, TimeZoneInfo zone) =>
+        $"{e.Host}  ·  Decrypt failure  ·  {SessionDisplayFormat.FormatAbsolute(SessionDisplayFormat.AsUtc(e.LearnedAtUtc), clock, zone)}";
 
     private DecryptFailureBypassEntry? SelectedLearned()
     {

@@ -20,6 +20,9 @@ public class IngressTranslatorTests
     private static readonly string[] TlsHostsAppAndWww = ["app.test", "www.app.test"];
     private static readonly string[] WildcardHosts = ["*"];
     private static readonly string[] PolicyOrderKinds = ["ipAllowDeny", "cors", "rateLimit", "extAuth", "maxRequestBodySize"];
+    private static readonly string[] SslRedirectPolicyOrder = ["ipAllowDeny", "httpsRedirect", "cors"];
+    private static readonly string[] TrustedProxyCidr10 = ["10.0.0.0/8"];
+    private static readonly int[] UpstreamRetryStatuses = [500, 429];
 
     private static RenderResult Render(StateBuilder b, bool validate = true, GatewayTranslatorOptions? options = null)
     {
@@ -41,12 +44,18 @@ public class IngressTranslatorTests
 
     private static string Id(string ingress, int rule = 0, int path = 0) => $"ingress/default/{ingress}/r{rule}p{path}";
 
-    private static RenderResult OnePath(string type, string path, string? host = Host, Dictionary<string, string>? annotations = null, Action<StateBuilder>? arrange = null)
+    private static RenderResult OnePath(
+        string type,
+        string path,
+        string? host = Host,
+        Dictionary<string, string>? annotations = null,
+        Action<StateBuilder>? arrange = null,
+        GatewayTranslatorOptions? options = null)
     {
         var b = IngressOnly();
         arrange?.Invoke(b);
         b.Ingresses.Add(Ingress("ing", "titanium", [IRule(host, IPath(path, type))], annotations));
-        return Render(b);
+        return Render(b, options: options);
     }
 
     private static (RenderResult Result, RouteConfig Route) Annotated(params (string Key, string Value)[] annotations)
@@ -629,17 +638,54 @@ public class IngressTranslatorTests
     }
 
     [TestMethod]
-    public void Annotations_SslRedirectFalse_IsAccepted_AndTrueIsRejectedLoudly()
+    public void Annotations_SslRedirect_TrueBecomesAnHttpsRedirect_AndFalseDoesNothing()
     {
         var (accepted, okRoute) = Annotated((A("ssl-redirect"), "false"));
         Assert.AreEqual(0, accepted.Events.Count);
         Assert.IsNull(okRoute.DirectResponse);
+        Assert.AreEqual(0, accepted.Config.Policies.Count);
 
-        var (rejected, route) = Annotated((A("ssl-redirect"), "true"));
-        Assert.AreEqual(500, route.DirectResponse?.Status);
-        var warning = EventFor(rejected, "InvalidAnnotation")!;
-        StringAssert.Contains(warning.Message, "ssl-redirect");
-        StringAssert.Contains(warning.Message, "scheme");
+        var (redirected, route) = Annotated((A("ssl-redirect"), "true"));
+        var policy = redirected.Config.Policies.Single();
+        Assert.AreEqual("httpsRedirect", policy.Kind);
+        Assert.IsNull(policy.Port);
+        Assert.IsNull(policy.RedirectStatus);
+        CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
+        Assert.IsNull(route.DirectResponse);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(redirected.Config).Count);
+    }
+
+    [TestMethod]
+    public void TrustedProxies_AppearOnTheServerBlock_OnlyWhenConfigured()
+    {
+        var without = Annotated((A("ssl-redirect"), "true")).Result;
+        Assert.IsNull(without.Config.Server?.ForwardedHeaders);
+
+        var with = OnePath(
+            "Prefix",
+            "/api",
+            annotations: new Dictionary<string, string> { [A("ssl-redirect")] = "true" },
+            options: new GatewayTranslatorOptions { TrustedProxies = ["10.0.0.0/8"] });
+        Assert.IsNotNull(with.Config.Server?.ForwardedHeaders?.TrustedProxies);
+        CollectionAssert.AreEqual(TrustedProxyCidr10, with.Config.Server!.ForwardedHeaders!.TrustedProxies!.ToArray());
+        Assert.AreEqual("httpsRedirect", with.Config.Policies.Single().Kind);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(with.Config).Count);
+    }
+
+    [TestMethod]
+    public void Annotations_SslRedirect_ThatIsNotABoolean_Answers500() =>
+        Assert.AreEqual(500, Annotated((A("ssl-redirect"), "yes")).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_SslRedirect_RunsAfterTheAllowListAndBeforeCors()
+    {
+        var (result, route) = Annotated(
+            (A("ssl-redirect"), "true"),
+            (A("cors-allow-origin"), "*"),
+            (A("whitelist-source-range"), "10.0.0.0/8"));
+
+        var kinds = route.Policies!.Select(n => result.Config.Policies.Single(p => p.Name == n).Kind).ToArray();
+        CollectionAssert.AreEqual(SslRedirectPolicyOrder, kinds);
     }
 
     [TestMethod]
@@ -832,9 +878,31 @@ public class IngressTranslatorTests
         Assert.AreEqual(500, Annotated((A("limit-rps"), value)).Route.DirectResponse?.Status);
 
     [TestMethod]
+    public void Annotations_LimitConnections_BecomesAPerClientConnectionLimit()
+    {
+        var (result, route) = Annotated((A("limit-connections"), "40"));
+
+        var policy = result.Config.Policies.Single();
+        Assert.AreEqual("connectionLimit", policy.Kind);
+        Assert.AreEqual(40, policy.Limit);
+        Assert.AreEqual("client", policy.Key);
+        CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    [DataRow("0")]
+    [DataRow("1000001")]
+    [DataRow("many")]
+    public void Annotations_LimitConnections_OutOfRange_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("limit-connections"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
     [DataRow("*")]
     [DataRow("https://app.example.com")]
     [DataRow("https://a.example.com, http://b.example.com:8080")]
+    [DataRow("https://*.example.com")]
+    [DataRow("https://*.example.com:8443")]
     public void Annotations_CorsAllowOrigin_BecomesACorsPolicy(string value)
     {
         var (result, _) = Annotated((A("cors-allow-origin"), value));
@@ -845,13 +913,94 @@ public class IngressTranslatorTests
     }
 
     [TestMethod]
+    [DataRow("*")]
+    [DataRow("https://a.example.com, http://b.example.com:8080")]
+    public void Annotations_CorsAllowOrigin_AlsoAddsTheAllowHeaderToTheRealResponse(string value)
+    {
+        var (result, route) = Annotated((A("cors-allow-origin"), value));
+
+        var cors = route.Transforms!.Single(t => t.Kind == TransformKinds.ResponseCors);
+        Assert.AreEqual(string.Join(",", value.Split(',', StringSplitOptions.TrimEntries)), cors.Parameters!["origins"]);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    public void Annotations_CorsAllowOrigin_KeepsTheRewriteTransformsToo()
+    {
+        var (_, route) = Annotated((A("cors-allow-origin"), "*"), (A("rewrite-target"), "/v2"));
+
+        var kinds = route.Transforms!.Select(t => t.Kind).ToArray();
+        CollectionAssert.Contains(kinds, TransformKinds.ResponseCors);
+        Assert.IsTrue(kinds.Length > 1, "the rewrite transforms are still present");
+    }
+
+    [TestMethod]
+    public void Annotations_WithoutCors_AddNoResponseCorsTransform()
+    {
+        var (_, route) = Annotated((A("limit-rps"), "5"));
+
+        Assert.IsNull(route.Transforms);
+    }
+
+    [TestMethod]
     [DataRow("app.example.com")]
     [DataRow("https://app.example.com/")]
     [DataRow("https://app.example.com/path")]
     [DataRow("*,https://a.example.com")]
     [DataRow("ftp://a.example.com")]
+    [DataRow("https://*")]
+    [DataRow("https://*.com")]
+    [DataRow("https://a*.example.com")]
+    [DataRow("https://*.*.example.com")]
+    [DataRow("regex:https://.*")]
     public void Annotations_CorsAllowOrigin_Invalid_Answers500(string value) =>
         Assert.AreEqual(500, Annotated((A("cors-allow-origin"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_CorsCompanions_ThreadIntoThePolicyAndTheTransform()
+    {
+        var (result, route) = Annotated(
+            (A("cors-allow-origin"), "https://app.example.com"),
+            (A("cors-allow-methods"), "GET, PUT"),
+            (A("cors-allow-headers"), "X-Trace, X-Tenant"),
+            (A("cors-allow-credentials"), "true"),
+            (A("cors-expose-headers"), "X-Request-Id"),
+            (A("cors-max-age"), "600"));
+
+        var policy = result.Config.Policies.Single();
+        Assert.AreEqual("https://app.example.com", policy.Origins);
+        Assert.AreEqual("GET,PUT", policy.Methods);
+        Assert.AreEqual("X-Trace,X-Tenant", policy.HeaderName);
+        Assert.IsTrue(policy.AllowCredentials.GetValueOrDefault());
+        Assert.AreEqual("X-Request-Id", policy.ExposeHeaders);
+        Assert.AreEqual(600, policy.MaxAgeSeconds);
+
+        var cors = route.Transforms!.Single(t => t.Kind == TransformKinds.ResponseCors);
+        Assert.AreEqual("https://app.example.com", cors.Parameters!["origins"]);
+        Assert.AreEqual("true", cors.Parameters["allowCredentials"]);
+        Assert.AreEqual("X-Request-Id", cors.Parameters["exposeHeaders"]);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    [DataRow("cors-allow-methods", "GET")]
+    [DataRow("cors-allow-headers", "*")]
+    [DataRow("cors-allow-credentials", "true")]
+    [DataRow("cors-expose-headers", "X-Request-Id")]
+    [DataRow("cors-max-age", "60")]
+    public void Annotations_CorsCompanions_WithoutOrigin_Answer500(string name, string value) =>
+        Assert.AreEqual(500, Annotated((A(name), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_CorsCredentialsWithWildcard_Answers500() =>
+        Assert.AreEqual(500, Annotated((A("cors-allow-origin"), "*"), (A("cors-allow-credentials"), "true")).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    [DataRow("-1")]
+    [DataRow("86401")]
+    [DataRow("soon")]
+    public void Annotations_CorsMaxAge_OutOfRange_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("cors-allow-origin"), "*"), (A("cors-max-age"), value)).Route.DirectResponse?.Status);
 
     [TestMethod]
     public void Annotations_AuthUrl_BecomesAnExtAuthPolicy_ThatFailsClosed()
@@ -917,6 +1066,257 @@ public class IngressTranslatorTests
         StringAssert.Contains(warning.Message, A("limit-rps"));
         StringAssert.Contains(warning.Message, "500");
     }
+
+    [TestMethod]
+    public void Annotations_Absent_LeaveThePlainIngressOnTheSharedCluster()
+    {
+        var result = OnePath("Prefix", "/api");
+        var route = result.Config.UserRoutes().Single();
+
+        Assert.AreEqual("default/web:8080", route.ClusterId);
+        Assert.IsNull(route.Redirect);
+        Assert.IsNull(route.Policies);
+        Assert.IsNull(route.Transforms);
+        Assert.IsNull(result.Config.Clusters.Single().Retry);
+        Assert.IsNull(result.Config.Clusters.Single().HttpClient);
+        Assert.AreEqual(0, result.Config.Policies.Count);
+    }
+
+    [TestMethod]
+    public void Annotations_ProxyConnectTimeout_SetsTheClusterConnectTimeout_OnAClusterOfItsOwn()
+    {
+        var (result, route) = Annotated((A("proxy-connect-timeout"), "12"));
+
+        var cluster = result.Config.Clusters.Single();
+        Assert.AreEqual(TimeSpan.FromSeconds(12), cluster.HttpClient!.ConnectTimeout);
+        Assert.AreEqual(cluster.Id, route.ClusterId);
+        StringAssert.Contains(cluster.Id, "@ing:default/ing");
+    }
+
+    [TestMethod]
+    [DataRow("0")]
+    [DataRow("3601")]
+    [DataRow("slow")]
+    public void Annotations_ProxyConnectTimeout_OutOfRange_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("proxy-connect-timeout"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_DenylistSourceRange_BecomesADenyList_AndCombinesWithTheAllowList()
+    {
+        var (denied, route) = Annotated((A("denylist-source-range"), "10.9.0.0/16, 192.0.2.1"));
+        var policy = denied.Config.Policies.Single();
+        Assert.AreEqual("ipAllowDeny", policy.Kind);
+        Assert.IsNull(policy.Allow);
+        Assert.AreEqual("10.9.0.0/16,192.0.2.1", policy.Deny);
+        CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
+
+        var (both, _) = Annotated((A("whitelist-source-range"), "10.0.0.0/8"), (A("denylist-source-range"), "10.1.0.0/16"));
+        var combined = both.Config.Policies.Single();
+        Assert.AreEqual("10.0.0.0/8", combined.Allow);
+        Assert.AreEqual("10.1.0.0/16", combined.Deny);
+    }
+
+    [TestMethod]
+    [DataRow("10.0.0.0/33")]
+    [DataRow("office")]
+    public void Annotations_DenylistSourceRange_Invalid_FailsClosed(string value) =>
+        Assert.AreEqual(500, Annotated((A("denylist-source-range"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_UpstreamVhost_SetsHostAfterTheRewrite()
+    {
+        var result = OnePath("Prefix", "/api", annotations: new()
+        {
+            [A("rewrite-target")] = "/v2",
+            [A("upstream-vhost")] = "Origin.Internal",
+        });
+        var transforms = result.Config.UserRoutes().Single().Transforms!;
+
+        Assert.AreEqual(TransformKinds.RequestHeaderSet, transforms[^1].Kind);
+        var ctx = new TransformRequestContext { Path = "/api/users" };
+        new TransformEngine().ApplyRequestTransforms(transforms, ctx);
+
+        Assert.AreEqual("/v2/users", ctx.Path);
+        Assert.AreEqual("Origin.Internal", ctx.Headers["Host"]);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count);
+    }
+
+    [TestMethod]
+    [DataRow("https://origin.internal")]
+    [DataRow("origin.internal:8443")]
+    [DataRow("origin.internal/app")]
+    public void Annotations_UpstreamVhost_ThatIsNotADnsName_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("upstream-vhost"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_ProxyNextUpstream_MapsStatusesTriesAndThePerTryTimeout()
+    {
+        var (result, _) = Annotated(
+            (A("proxy-next-upstream"), "http_500, http_429, non_idempotent, timeout"),
+            (A("proxy-next-upstream-tries"), "3"),
+            (A("proxy-next-upstream-timeout"), "2"));
+
+        var retry = result.Config.Clusters.Single().Retry!;
+        Assert.AreEqual(2, retry.Attempts);
+        CollectionAssert.AreEqual(UpstreamRetryStatuses, retry.StatusCodes!.ToArray());
+        Assert.IsTrue(retry.RetryNonIdempotent);
+        Assert.AreEqual(2000, retry.PerTryTimeoutMilliseconds);
+        StringAssert.Contains(result.Config.Clusters.Single().Id, "@ing:default/ing");
+    }
+
+    [TestMethod]
+    public void Annotations_ProxyNextUpstreamTries_OfOne_LeavesTheSharedClusterWithoutRetry()
+    {
+        var (result, route) = Annotated((A("proxy-next-upstream"), "http_502"), (A("proxy-next-upstream-tries"), "1"));
+
+        Assert.IsNull(result.Config.Clusters.Single().Retry);
+        Assert.AreEqual("default/web:8080", route.ClusterId);
+    }
+
+    [TestMethod]
+    [DataRow("error")]
+    [DataRow("http_404")]
+    [DataRow("off, http_502")]
+    [DataRow("0")]
+    public void Annotations_ProxyNextUpstream_UnknownOrError_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("proxy-next-upstream"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    [DataRow("0")]
+    [DataRow("1000001")]
+    public void Annotations_ProxyNextUpstreamTries_OutOfRange_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("proxy-next-upstream-tries"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_ProxyNextUpstreamOff_RejectsATimeoutBesideIt() =>
+        Assert.AreEqual(500, Annotated((A("proxy-next-upstream"), "off"), (A("proxy-next-upstream-timeout"), "2")).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_ConnectTimeout_DoesNotLeakOntoAnIngressThatSharesTheService()
+    {
+        var b = IngressOnly();
+        b.Ingresses.Add(Ingress("plain", "titanium", [IRule("a.test", IPath("/", "Prefix"))]));
+        b.Ingresses.Add(Ingress("tuned", "titanium", [IRule("b.test", IPath("/", "Prefix"))], new() { [A("proxy-connect-timeout")] = "9" }));
+
+        var result = Render(b);
+
+        Assert.IsNull(result.Config.Clusters.Single(c => c.Id == "default/web:8080").HttpClient);
+        Assert.AreEqual(TimeSpan.FromSeconds(9), result.Config.Clusters.Single(c => c.Id.Contains("@ing:default/tuned", StringComparison.Ordinal)).HttpClient!.ConnectTimeout);
+    }
+
+    [TestMethod]
+    public void Annotations_AppRoot_AddsAnExactRootRedirect_AheadOfTheIngressRule()
+    {
+        var result = OnePath("Prefix", "/api", annotations: new() { [A("app-root")] = "/app" });
+        var routes = result.Config.UserRoutes().OrderBy(r => r.Order).ToArray();
+
+        Assert.AreEqual(2, routes.Length);
+        var match = routes[0].Match;
+        var redirect = routes[0].Redirect;
+        Assert.IsNotNull(match);
+        Assert.IsNotNull(redirect);
+        Assert.AreEqual(PathMatchKind.Exact, match.PathKind);
+        Assert.AreEqual("/", match.Path);
+        Assert.AreEqual(302, redirect.Status);
+        Assert.AreEqual("/app", redirect.Path);
+        Assert.IsFalse(redirect.PreserveQuery);
+        Assert.IsNull(routes[1].Redirect);
+        Assert.IsTrue(routes[0].Order < routes[1].Order);
+
+        var listed = result.Config.UserRoutes().ToList();
+        var matcher = new RouteMatcher();
+        var atRoot = matcher.Match(new RouteMatchContext(Host, "/", "GET", null, null), listed);
+        var deeper = matcher.Match(new RouteMatchContext(Host, "/api/users", "GET", null, null), listed);
+        Assert.AreEqual("/app", atRoot!.Redirect!.Path);
+        Assert.IsNull(deeper!.Redirect);
+        Assert.AreEqual("default/web:8080", deeper.ClusterId);
+    }
+
+    [TestMethod]
+    public void Annotations_AppRoot_IsSkippedWhenTheHostAlreadyHasAnExactRoot()
+    {
+        var result = OnePath("Exact", "/", annotations: new() { [A("app-root")] = "/app" });
+
+        Assert.AreEqual(1, result.Config.UserRoutes().Count);
+        Assert.IsNull(result.Config.UserRoutes().Single().Redirect);
+        Assert.IsNotNull(EventFor(result, "AppRootSkipped"));
+    }
+
+    [TestMethod]
+    public void Annotations_AppRoot_IsSkippedWhenAnotherIngressOwnsExactRoot()
+    {
+        var b = IngressOnly();
+        b.Ingresses.Add(Ingress("root", "titanium", [IRule(Host, IPath("/", "Exact"))]));
+        b.Ingresses.Add(Ingress("api", "titanium", [IRule(Host, IPath("/api", "Prefix"))], new() { [A("app-root")] = "/app" }));
+
+        var result = Render(b);
+
+        Assert.IsNotNull(EventFor(result, "AppRootSkipped", "api"));
+        Assert.IsFalse(result.Config.UserRoutes().Any(r => r.Id.Contains("app-root", StringComparison.Ordinal)));
+        Assert.AreEqual("/", result.Config.UserRoutes().Single(r => r.Id.Contains("/root/", StringComparison.Ordinal)).Match.Path);
+    }
+
+    [TestMethod]
+    [DataRow("app")]
+    [DataRow("/app?x=1")]
+    public void Annotations_AppRoot_ThatIsNotAnAbsolutePath_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("app-root"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_PermanentRedirect_BecomesARedirectRouteWithNoBackend()
+    {
+        var (result, route) = Annotated(
+            (A("permanent-redirect"), "https://example.com:8443/gone"),
+            (A("permanent-redirect-code"), "308"));
+
+        Assert.AreEqual(0, result.Config.Clusters.Count);
+        Assert.AreEqual(308, route.Redirect!.Status);
+        Assert.AreEqual("https", route.Redirect.Scheme);
+        Assert.AreEqual("example.com", route.Redirect.Host);
+        Assert.AreEqual(8443, route.Redirect.Port);
+        Assert.AreEqual("/gone", route.Redirect.Path);
+        Assert.IsFalse(route.Redirect.PreserveQuery);
+        Assert.IsNull(route.DirectResponse);
+    }
+
+    [TestMethod]
+    public void Annotations_PermanentRedirect_DefaultsTo301_AndDropsTheDefaultPort()
+    {
+        var (_, route) = Annotated((A("permanent-redirect"), "http://example.com/away"));
+
+        Assert.AreEqual(301, route.Redirect!.Status);
+        Assert.AreEqual("http", route.Redirect.Scheme);
+        Assert.AreEqual("example.com", route.Redirect.Host);
+        Assert.IsNull(route.Redirect.Port);
+        Assert.AreEqual("/away", route.Redirect.Path);
+    }
+
+    [TestMethod]
+    [DataRow("https://example.com/away?x=1")]
+    [DataRow("https://user:pw@example.com/")]
+    [DataRow("/relative")]
+    [DataRow("ftp://example.com/")]
+    public void Annotations_PermanentRedirect_ThatIsNotABareHttpUrl_Answers500(string value) =>
+        Assert.AreEqual(500, Annotated((A("permanent-redirect"), value)).Route.DirectResponse?.Status);
+
+    [TestMethod]
+    public void Annotations_PermanentRedirect_WithCanary_IsRejected()
+    {
+        var result = OnePath("Prefix", "/api", annotations: new()
+        {
+            [A("permanent-redirect")] = "https://example.com/",
+            [A("canary")] = "true",
+        });
+
+        Assert.AreEqual(0, result.Config.UserRoutes().Count);
+        var warning = EventFor(result, "InvalidAnnotation")!;
+        StringAssert.Contains(warning.Message, "permanent-redirect");
+        StringAssert.Contains(warning.Message, "canary");
+    }
+
+    [TestMethod]
+    public void Annotations_PermanentRedirectCode_WithoutTheUrl_Answers500() =>
+        Assert.AreEqual(500, Annotated((A("permanent-redirect-code"), "302")).Route.DirectResponse?.Status);
 
     // ---- canary ----
 

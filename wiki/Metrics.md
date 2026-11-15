@@ -71,7 +71,7 @@ Generated from the instruments the core meter declares. A unit test fails when t
 | `twp.plugin.errors` | Counter | `{error}` | not exposed | Per-route plugin calls that failed, tagged by plugin name and kind: exception, timeout, or unloaded. |
 | `twp.policy.breaches` | Counter | `{breach}` | not exposed | Resource-bound policy family breaches, tagged by family, the mode that was active, and whether the breach was enforced. |
 | `twp.pool.outcomes` | Counter | `{connection}` | `twp_pool_outcomes_total` (counter) | Upstream connection pool outcomes: reuse, retry after a dead pooled connection, or protocol downgrade. |
-| `twp.proxy.bytes` | Counter | `By` | `twp_proxy_bytes_total` (counter) | Bytes observed on a proxied request. |
+| `twp.proxy.bytes` | Counter | `By` | `twp_proxy_bytes_total` (counter) | Bytes observed on a proxied request. Response bytes come from Content-Length, so a chunked body adds zero. |
 | `twp.proxy.destination.ejections` | Counter | `{ejection}` | `twp_proxy_destination_ejections_total` (counter) | Destinations marked unhealthy. |
 | `twp.proxy.mirror.drops` | Counter | `{drop}` | `twp_proxy_mirror_drops_total` (counter) | Mirrored requests dropped because the queue was full. |
 | `twp.proxy.mirror.failed` | Counter | `{request}` | `twp_proxy_mirror_failed_total` (counter) | Mirrored requests that failed before a response was discarded. |

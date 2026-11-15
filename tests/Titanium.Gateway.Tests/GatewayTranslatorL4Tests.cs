@@ -461,7 +461,7 @@ public class GatewayTranslatorL4Tests
                     RequestRedirect = new HttpRequestRedirect
                     {
                         Hostname = "x.example.com",
-                        StatusCode = 303,
+                        StatusCode = 418,
                     },
                 },
             ],

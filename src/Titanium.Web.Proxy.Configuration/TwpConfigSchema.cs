@@ -101,7 +101,14 @@ public static class TwpConfigSchema
     /// </summary>
     private static void ApplyKnownConstraints(JsonObject schema, System.Reflection.PropertyInfo property)
     {
-        switch (property.DeclaringType?.Name + "." + property.Name)
+        var key = property.DeclaringType?.Name + "." + property.Name;
+        ApplyTransportConstraints(schema, key);
+        ApplyExtensionConstraints(schema, key);
+    }
+
+    private static void ApplyTransportConstraints(JsonObject schema, string key)
+    {
+        switch (key)
         {
             case "ClusterHttpClientConfig.MaxConnectionsPerServer":
                 schema["description"] =
@@ -165,6 +172,13 @@ public static class TwpConfigSchema
             case "RouteConfig.Compression":
                 schema["enum"] = new JsonArray { "off" };
                 break;
+        }
+    }
+
+    private static void ApplyExtensionConstraints(JsonObject schema, string key)
+    {
+        switch (key)
+        {
             case "PluginConfig.FailMode":
                 schema["enum"] = new JsonArray { "closed", "open" };
                 break;
@@ -201,6 +215,25 @@ public static class TwpConfigSchema
                 break;
             case "RoutePolicyConfig.Key":
                 schema["pattern"] = "^(client|forwardedClient|route|header:[!#$%&'*+.^_`|~0-9A-Za-z-]+|cookie:[!#$%&'*+.^_`|~0-9A-Za-z-]+)$";
+                break;
+            case "HeaderValueMatch.Kind":
+                schema["enum"] = new JsonArray { "Exact", "Regex" };
+                break;
+            case "RedirectConfig.ReplacePrefixFrom":
+            case "RedirectConfig.ReplacePrefixTo":
+                schema["description"] =
+                    "Empty (the root), or a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters. replacePrefixTo requires replacePrefixFrom, and neither may be set with path.";
+                break;
+            case "RoutePolicyConfig.Port":
+                schema[MinimumKey] = 1;
+                schema[MaximumKey] = 65535;
+                break;
+            case "RoutePolicyConfig.RedirectStatus":
+                schema["enum"] = new JsonArray { 301, 302, 307, 308 };
+                break;
+            case "RoutePolicyConfig.MaxAgeSeconds":
+                schema[MinimumKey] = 0;
+                schema[MaximumKey] = 86_400;
                 break;
             case "RoutePolicyConfig.MaxKeys":
                 schema[MinimumKey] = 1000;

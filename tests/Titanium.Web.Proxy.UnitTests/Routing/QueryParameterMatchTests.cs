@@ -71,4 +71,29 @@ public class QueryParameterMatchTests
         };
         Assert.IsNull(Winner(routes, new Dictionary<string, string> { ["v"] = "(" }));
     }
+
+    [TestMethod]
+    public void Regex_AGroupedAlternation_MatchesOnlyTheWholeValue()
+    {
+        var routes = new[] { Route("q", new QueryParameterMatch { Name = "v", Value = "(a)|(b)", Kind = QueryMatchKind.Regex }) };
+        Assert.AreEqual("q", Winner(routes, new Dictionary<string, string> { ["v"] = "a" }));
+        Assert.AreEqual("q", Winner(routes, new Dictionary<string, string> { ["v"] = "b" }));
+        Assert.IsNull(Winner(routes, new Dictionary<string, string> { ["v"] = "aEXTRA" }));
+        Assert.IsNull(Winner(routes, new Dictionary<string, string> { ["v"] = "EXTRAb" }));
+        Assert.IsNull(Winner(routes, new Dictionary<string, string> { ["v"] = "ab" }));
+    }
+
+    [DataTestMethod]
+    [DataRow("a)|(b")]
+    [DataRow("a)(")]
+    [DataRow("(")]
+    [DataRow("(?=x)")]
+    public void Regex_APatternThatCannotBeWrapped_NeverMatches(string pattern)
+    {
+        var routes = new[] { Route("q", new QueryParameterMatch { Name = "v", Value = pattern, Kind = QueryMatchKind.Regex }) };
+        foreach (var value in new[] { "a", "b", "aEXTRA", "EXTRAb", pattern, string.Empty })
+        {
+            Assert.IsNull(Winner(routes, new Dictionary<string, string> { ["v"] = value }), value);
+        }
+    }
 }

@@ -19,7 +19,20 @@ public static class ReverseProxyFastPath
         IReadOnlyList<RouteConfig>? routes,
         ImmutableClusterSnapshot? snapshot,
         string? forwardHost,
-        int forwardPort)
+        int forwardPort) =>
+        IsForwardHostEquivalent(routes, snapshot, forwardHost, forwardPort, checkOriginScheme: false, forwardCleartext: false);
+
+    /// <summary>
+    ///     When <paramref name="checkOriginScheme"/> is set, a cleartext forward requires a cleartext destination
+    ///     and a TLS forward requires <c>UseHttps</c>. The public helper has no listener, so it skips this.
+    /// </summary>
+    private static bool IsForwardHostEquivalent(
+        IReadOnlyList<RouteConfig>? routes,
+        ImmutableClusterSnapshot? snapshot,
+        string? forwardHost,
+        int forwardPort,
+        bool checkOriginScheme,
+        bool forwardCleartext)
     {
         if (string.IsNullOrEmpty(forwardHost) || routes is null || routes.Count != 1 || snapshot is null)
         {
@@ -27,7 +40,7 @@ public static class ReverseProxyFastPath
         }
 
         var route = routes[0];
-        if (RouteHasExtraBehavior(route))
+        if (RouteHasExtraBehavior(route) || !RouteMatcher.IsUnconstrained(route.Match))
         {
             return false;
         }
@@ -43,10 +56,18 @@ public static class ReverseProxyFastPath
         }
 
         var dest = cluster.Destinations[0];
-        if (DestinationHasExtraBehavior(dest))
-        {
-            return false;
-        }
+        return !DestinationHasExtraBehavior(dest) &&
+            DestinationAcceptsForward(dest, snapshot, forwardHost, forwardPort, checkOriginScheme, forwardCleartext);
+    }
+
+    private static bool DestinationAcceptsForward(
+        DestinationConfig dest,
+        ImmutableClusterSnapshot snapshot,
+        string forwardHost,
+        int forwardPort,
+        bool checkOriginScheme,
+        bool forwardCleartext)
+    {
         if (snapshot.DestinationStates.TryGetValue(dest.Id, out var state) &&
             state is not DestinationState.Healthy)
         {
@@ -57,6 +78,11 @@ public static class ReverseProxyFastPath
         if (port == 0)
         {
             port = dest.UseHttps ? 443 : 80;
+        }
+        if (checkOriginScheme && dest.UseHttps == forwardCleartext)
+        {
+            // Cleartext forward with an https destination, or TLS forward with a cleartext destination.
+            return false;
         }
 
         return string.Equals(dest.Address, forwardHost, StringComparison.OrdinalIgnoreCase) &&
@@ -74,23 +100,27 @@ public static class ReverseProxyFastPath
         string? forwardHost,
         int forwardPort)
     {
+        var forwardCleartext = endPoint is TransparentBaseProxyEndPoint transparent && transparent.ForwardCleartext;
         var cache = endPoint.ForwardHostEquivalence;
         if (cache is not null &&
             ReferenceEquals(cache.Routes, routes) &&
             ReferenceEquals(cache.Snapshot, snapshot) &&
             cache.Port == forwardPort &&
+            cache.ForwardCleartext == forwardCleartext &&
             string.Equals(cache.Host, forwardHost, StringComparison.Ordinal))
         {
             return cache.Result;
         }
 
-        var result = IsForwardHostEquivalent(routes, snapshot, forwardHost, forwardPort);
+        var result = IsForwardHostEquivalent(
+            routes, snapshot, forwardHost, forwardPort, checkOriginScheme: true, forwardCleartext);
         endPoint.ForwardHostEquivalence = new ForwardHostEquivalenceCache
         {
             Routes = routes,
             Snapshot = snapshot,
             Host = forwardHost,
             Port = forwardPort,
+            ForwardCleartext = forwardCleartext,
             Result = result,
         };
         return result;
@@ -138,11 +168,12 @@ public static class ReverseProxyFastPath
         cluster.Retry is { Attempts: > 0 } || cluster.Queue is not null || cluster.SlowStartSeconds > 0 ||
         cluster.SessionAffinity is not null || cluster.HashKey is not null ||
         !string.IsNullOrEmpty(cluster.LoadBalancingPolicy) ||
-        !string.IsNullOrEmpty(cluster.HttpClient?.ConnectionKey);
+        !string.IsNullOrEmpty(cluster.HttpClient?.ConnectionKey) ||
+        cluster.HealthCheck?.Passive is { Enabled: true };
 
     private static bool DestinationHasExtraBehavior(DestinationConfig dest) =>
         dest.MaxConcurrentRequests is not null || dest.Priority != 0 || dest.Backup || dest.SlowStartSeconds > 0 ||
-        dest.DnsRefreshSeconds > 0;
+        dest.DnsRefreshSeconds > 0 || dest.UseDestinationHost;
 }
 
 internal sealed class ForwardHostEquivalenceCache
@@ -151,5 +182,6 @@ internal sealed class ForwardHostEquivalenceCache
     public ImmutableClusterSnapshot? Snapshot { get; init; }
     public string? Host { get; init; }
     public int Port { get; init; }
+    public bool ForwardCleartext { get; init; }
     public bool Result { get; init; }
 }

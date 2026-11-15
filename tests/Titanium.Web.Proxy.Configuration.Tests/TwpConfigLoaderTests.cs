@@ -144,6 +144,27 @@ public class TwpConfigLoaderTests
     }
 
     [TestMethod]
+    public void JsonReverseProxyDocument_CarriesHeaderMatchesAndQueryParameters()
+    {
+        var json = """
+            {
+              "clusters": [{ "id": "backend", "destinations": [{ "address": "127.0.0.1" }] }],
+              "routes": [{ "clusterId": "backend", "match": {
+                "path": "/a",
+                "headerMatches": [{ "name": "X-Build", "value": "v[0-9]+", "kind": "regex" }],
+                "queryParameters": [{ "name": "env", "value": "lab" }] } }]
+            }
+            """;
+        var config = JsonReverseProxyDocument.Parse(json);
+        var match = config.Routes[0].Match;
+
+        Assert.AreEqual(HeaderMatchKind.Regex, match.HeaderMatches!.Single().Kind);
+        Assert.AreEqual("v[0-9]+", match.HeaderMatches!.Single().Value);
+        Assert.AreEqual(QueryMatchKind.Exact, match.QueryParameters!.Single().Kind);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(config).Count);
+    }
+
+    [TestMethod]
     public void JsonReverseProxyDocument_ParsesRouteRetry()
     {
         var json = """

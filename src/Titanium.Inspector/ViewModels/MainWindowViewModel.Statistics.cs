@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using System.Windows.Input;
 using Titanium.Inspector.Localization;
@@ -302,5 +301,5 @@ public sealed partial class MainWindowViewModel
     }
 
     private static string FormatMs(double milliseconds) =>
-        milliseconds.ToString("0.#", CultureInfo.InvariantCulture);
+        SessionDisplayFormat.FormatFractionalMilliseconds(milliseconds);
 }
