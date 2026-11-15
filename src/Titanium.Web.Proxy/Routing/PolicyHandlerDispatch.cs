@@ -40,7 +40,7 @@ internal static class PolicyHandlerDispatch
             var handler = FindHandler(options.PolicyHandlers, policy.Kind);
             if (handler is null)
             {
-                Refuse(session, 503);
+                Refuse(session, 503, options, route);
                 return true;
             }
 
@@ -53,7 +53,7 @@ internal static class PolicyHandlerDispatch
             catch (Exception ex) when (ex is not OutOfMemoryException and not OperationCanceledException)
             {
                 // The handler reports its own failures. Whatever escapes is refused rather than let through.
-                Refuse(session, 503);
+                Refuse(session, 503, options, route);
                 return true;
             }
 
@@ -109,10 +109,14 @@ internal static class PolicyHandlerDispatch
         return null;
     }
 
-    private static void Refuse(SessionEventArgs session, int status)
+    private static void Refuse(SessionEventArgs session, int status, ReverseProxyOptions options, RouteConfig route)
     {
         RoutePolicies.ReleaseSessionSlot(session);
         session.ForwarderError = ForwarderError.PolicyDenied;
         session.GenericResponse(string.Empty, (System.Net.HttpStatusCode)status, (IEnumerable<HttpHeader>?)null);
+        if (session.HttpClient.Response is { } response)
+        {
+            RoutePolicies.ApplyLocalCors(response, route, session.HttpClient.Request, options);
+        }
     }
 }

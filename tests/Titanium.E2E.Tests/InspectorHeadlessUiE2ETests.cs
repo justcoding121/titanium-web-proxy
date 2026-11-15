@@ -20,6 +20,8 @@ public class InspectorHeadlessUiE2ETests
         var settingsPath = Path.Combine(Path.GetTempPath(), "twp-insp-e2e-" + Guid.NewGuid().ToString("N") + ".json");
         var settings = new SettingsService(settingsPath);
         settings.Current.AutoSystemProxyOnStart = false;
+        // Skip the PAC-replace confirm so a leftover AutoConfigURL on the agent cannot cancel the toggle.
+        settings.Current.WarnedAboutPacReplace = true;
         settings.Save();
         var registry = new SessionRegistry();
         var buffer = new SessionStreamBuffer(registry);
@@ -28,85 +30,95 @@ public class InspectorHeadlessUiE2ETests
         var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
         var vm = new MainWindowViewModel(buffer, registry, updates, settings, interception);
 
-        Assert.IsNotNull(vm.StartCaptureCommand);
-        Assert.IsNotNull(vm.InstallCaCommand);
-        Assert.IsNotNull(vm.ToggleSystemProxyCommand);
-
-        vm.BindPort = 0;
-        vm.BindAddress = "127.0.0.1";
-
-        // Execute commands like the Avalonia bindings do (RelayCommand is async void).
-        vm.StartCaptureCommand.Execute(null);
-        var deadline = DateTime.UtcNow.AddSeconds(15);
-        while ((!interception.IsRunning || vm.StatusText != "Ready") && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(50);
-        }
-
-        Assert.IsTrue(interception.IsRunning, vm.StatusText);
-        Assert.IsTrue(vm.Capturing);
-        Assert.AreEqual("Ready", vm.StatusText);
-        Assert.IsTrue(
-            vm.EndpointStatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase),
-            vm.EndpointStatusText);
-
-        vm.InstallCaCommand.Execute(null);
-        await Task.Delay(100);
-
-        vm.ToggleSystemProxyCommand.Execute(null);
-        var deadlineProxy = DateTime.UtcNow.AddSeconds(10);
-        while (recorder.SetCount < 1 && DateTime.UtcNow < deadlineProxy)
-        {
-            await Task.Delay(50);
-        }
-
-        Assert.AreEqual(1, recorder.SetCount, "System proxy should go through controller seam");
-        Assert.IsTrue(vm.SystemProxy);
-        Assert.IsTrue(
-            vm.StatusText.StartsWith("System proxy enabled", StringComparison.Ordinal),
-            vm.StatusText);
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.IsTrue(vm.StatusText.Contains("quic", StringComparison.OrdinalIgnoreCase), vm.StatusText);
-        }
-        else if (OperatingSystem.IsMacOS())
-        {
-            Assert.IsTrue(vm.StatusText.Contains("Firefox", StringComparison.OrdinalIgnoreCase), vm.StatusText);
-        }
-
-        vm.AutoResponderMatch = "*ui-e2e*";
-        vm.AutoResponderStatus = 201;
-        vm.AutoResponderBody = "from-ui";
-        vm.AddAutoResponderRuleCommand.Execute(null);
-        Assert.AreEqual(1, vm.AutoResponder.Rules.Count);
-
-        using var origin = new EchoOrigin();
-        vm.ComposerMethod = "GET";
-        vm.ComposerUrl = origin.BaseUrl + "ui-composer";
-        vm.SendComposerCommand.Execute(null);
-        // Do not match "Composer sending…" (set immediately before ReplayAsync); wait for settle.
-        deadline = DateTime.UtcNow.AddSeconds(20);
-        while (!IsComposerSettled(vm) && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(50);
-        }
-
-        Assert.IsTrue(IsComposerSettled(vm), vm.StatusText);
-
-        vm.StopCaptureCommand.Execute(null);
-        await Task.Delay(100);
-        Assert.IsFalse(interception.IsRunning);
-
         try
         {
-            if (File.Exists(settingsPath))
+            Assert.IsNotNull(vm.StartCaptureCommand);
+            Assert.IsNotNull(vm.InstallCaCommand);
+            Assert.IsNotNull(vm.ToggleSystemProxyCommand);
+
+            vm.BindPort = 0;
+            vm.BindAddress = "127.0.0.1";
+
+            // Execute commands like the Avalonia bindings do (RelayCommand is async void).
+            vm.StartCaptureCommand.Execute(null);
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while ((!interception.IsRunning || vm.StatusText != "Ready") && DateTime.UtcNow < deadline)
             {
-                File.Delete(settingsPath);
+                await Task.Delay(50);
             }
+
+            Assert.IsTrue(interception.IsRunning, vm.StatusText);
+            Assert.IsTrue(vm.Capturing);
+            Assert.AreEqual("Ready", vm.StatusText);
+            Assert.IsTrue(
+                vm.EndpointStatusText.Contains("Proxy running", StringComparison.OrdinalIgnoreCase),
+                vm.EndpointStatusText);
+
+            vm.InstallCaCommand.Execute(null);
+            var deadlineCa = DateTime.UtcNow.AddSeconds(10);
+            while (!vm.StatusText.Contains("Root CA", StringComparison.Ordinal) && DateTime.UtcNow < deadlineCa)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.IsTrue(
+                vm.StatusText.Contains("Root CA", StringComparison.Ordinal),
+                vm.StatusText);
+
+            vm.ToggleSystemProxyCommand.Execute(null);
+            var deadlineProxy = DateTime.UtcNow.AddSeconds(10);
+            while ((recorder.SetCount < 1
+                    || !vm.StatusText.StartsWith("System proxy enabled", StringComparison.Ordinal))
+                   && DateTime.UtcNow < deadlineProxy)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.AreEqual(1, recorder.SetCount, "System proxy should go through controller seam");
+            Assert.IsTrue(vm.SystemProxy);
+            Assert.IsTrue(
+                vm.StatusText.StartsWith("System proxy enabled", StringComparison.Ordinal),
+                vm.StatusText);
+            if (OperatingSystem.IsMacOS())
+            {
+                Assert.IsTrue(vm.StatusText.Contains("Firefox", StringComparison.OrdinalIgnoreCase), vm.StatusText);
+            }
+
+            vm.AutoResponderMatch = "*ui-e2e*";
+            vm.AutoResponderStatus = 201;
+            vm.AutoResponderBody = "from-ui";
+            vm.AddAutoResponderRuleCommand.Execute(null);
+            Assert.AreEqual(1, vm.AutoResponder.Rules.Count);
+
+            using var origin = new EchoOrigin();
+            vm.ComposerMethod = "GET";
+            vm.ComposerUrl = origin.BaseUrl + "ui-composer";
+            vm.SendComposerCommand.Execute(null);
+            // Do not match "Composer sending…" (set immediately before ReplayAsync); wait for settle.
+            deadline = DateTime.UtcNow.AddSeconds(20);
+            while (!IsComposerSettled(vm) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(50);
+            }
+
+            Assert.IsTrue(IsComposerSettled(vm), vm.StatusText);
+
+            vm.EnsureShutdown();
+            Assert.IsFalse(interception.IsRunning);
         }
-        catch
+        finally
         {
-            // ignore
+            try
+            {
+                if (File.Exists(settingsPath))
+                {
+                    File.Delete(settingsPath);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
         }
     }
 

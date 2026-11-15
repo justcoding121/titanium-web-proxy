@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -311,6 +313,8 @@ public class LuaEngineTests
         using var stop = new CancellationTokenSource();
         var seen = new System.Collections.Concurrent.ConcurrentBag<string>();
         var errors = 0;
+        // Null until the live plugin is the reloaded instance; only that instance's answers are collected.
+        LuaPlugin? live = null;
 
         var load = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
         {
@@ -320,7 +324,12 @@ public class LuaEngineTests
                 try
                 {
                     var r = await plugin.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
-                    seen.Add(r.SetHeaders?["x-version"] ?? "deny");
+                    // Ignore in-flight answers from the retired plugin that finish after the swap.
+                    if (ReferenceEquals(plugin, Volatile.Read(ref live)) &&
+                        r.SetHeaders?.TryGetValue("x-version", out var version) == true)
+                    {
+                        seen.Add(version);
+                    }
                 }
                 catch (ObjectDisposedException)
                 {
@@ -333,16 +342,33 @@ public class LuaEngineTests
             }
         })).ToArray();
 
-        await Task.Delay(100);
+        await Task.Delay(50);
         // A broken candidate never replaces the running plugin.
         Assert.IsNotNull(CreateError(Config("function on_request_headers(ctx")));
         var next = Create(Version(2), poolSize: 2);
         var old = Interlocked.Exchange(ref current, next);
-        await Task.Delay(100);
+
+        var swapped = Stopwatch.GetTimestamp() + (long)(2 * Stopwatch.Frequency);
+        while (Stopwatch.GetTimestamp() < swapped)
+        {
+            var probe = await next.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
+            if (probe.SetHeaders?.TryGetValue("x-version", out var version) == true && version == "2")
+            {
+                break;
+            }
+
+            await Task.Delay(10);
+        }
+
         old.Dispose();
-        await Task.Delay(100);
-        seen.Clear();
-        await Task.Delay(100);
+        Volatile.Write(ref live, next);
+
+        var deadline = Stopwatch.GetTimestamp() + (long)(2 * Stopwatch.Frequency);
+        while (seen.IsEmpty && Stopwatch.GetTimestamp() < deadline)
+        {
+            await Task.Delay(10);
+        }
+
         stop.Cancel();
         await Task.WhenAll(load);
         next.Dispose();
@@ -350,5 +376,43 @@ public class LuaEngineTests
         Assert.AreEqual(0, errors);
         Assert.IsFalse(seen.IsEmpty);
         Assert.IsTrue(seen.All(v => v == "2"), string.Join(",", seen.Distinct()));
+    }
+
+    [TestMethod]
+    public async Task Disposed_plugin_honors_fail_mode_on_phase_calls()
+    {
+        using var closed = Create(Config("function on_request_headers(ctx) end", failMode: "closed"));
+        closed.Dispose();
+        var denied = await closed.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
+        Assert.AreEqual(ScriptAction.Deny, denied.Action);
+        Assert.AreEqual(503, denied.LocalResponse?.Status);
+
+        using var open = Create(Config("function on_request_headers(ctx) end", failMode: "open"));
+        open.Dispose();
+        var continued = await open.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
+        Assert.AreEqual(ScriptAction.Continue, continued.Action);
+    }
+
+    [TestMethod]
+    public async Task Disposed_plugin_swallows_log_and_stream_failures()
+    {
+        using var plugin = Create(Config("""
+            function on_request_headers(ctx) end
+            function on_log(ctx) end
+            function on_connect(ctx) end
+            function on_data(ctx) end
+            """));
+        plugin.Dispose();
+
+        await plugin.OnLogAsync(Phase(ScriptPhases.Log), CancellationToken.None);
+
+        var connection = new StreamConnectionContext
+        {
+            ClientEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 1),
+            LocalEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 443),
+            Items = new Dictionary<string, object?>(),
+        };
+        // Stream path returns Deny when CallAsync fails under fail-closed (the default).
+        Assert.AreEqual(ScriptAction.Deny, (await plugin.OnNewConnectionAsync(connection, default)).Action);
     }
 }

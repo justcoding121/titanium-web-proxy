@@ -8,7 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SignAssembly>True</SignAssembly>
     <AssemblyOriginatorKeyFile>StrongNameKey.snk</AssemblyOriginatorKeyFile>
-    <VersionPrefix>8.0.2</VersionPrefix>
+    <VersionPrefix>8.0.3</VersionPrefix>
     <Authors>Jehonathan Thomas</Authors>
     <Description>Embedded scripting engines for Titanium Web Proxy plugins: sandboxed Lua 5.4 scripts and proxy-wasm modules on the Wasmtime C API.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -33,5 +33,6 @@
     <AdditionalFiles Include="PublicAPI.Shipped.txt" />
     <AdditionalFiles Include="PublicAPI.Unshipped.txt" />
     <None Include="README.md" Pack="true" PackagePath="" />
+    <None Include="LICENSE" Pack="true" PackagePath="" />
   </ItemGroup>
 </Project>

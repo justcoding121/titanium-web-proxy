@@ -1,6 +1,6 @@
 # Editions & licenses
 
-**CLI**, core engine, and this website are **MIT**. **Inspector**, **Plus**, and the Plus satellites (**Titanium.Xds**, **Titanium.Cli.GeoIp**) are optional PolyForm Noncommercial add-ons; license details are in [License](#license) below.
+**CLI**, **Gateway**, **Manager**, the core engine, and this website are **MIT**. **Inspector**, **Plus**, and the Plus satellites (**Titanium.Xds**, **Titanium.Cli.GeoIp**) are optional PolyForm Noncommercial add-ons; license details are in [License](#license) below.
 
 | Product | Role | How you get it |
 |---------|------|----------------|
@@ -13,7 +13,7 @@ CLI and Plus target reverse-proxy / edge workloads (routing, load balancing, hea
 
 ## License
 
-The Library and CLI are [MIT](https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE). Inspector, Plus, the xDS satellite (`Titanium.Xds`), and the GeoIP satellite (`Titanium.Cli.GeoIp`) are [PolyForm Noncommercial 1.0.0](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protocol definitions keep Apache-2.0 attribution in `src/Titanium.Xds/NOTICE`.
+The Library, CLI, Gateway, and Manager are [MIT](https://github.com/justcoding121/titanium-web-proxy/blob/develop/LICENSE). Inspector, Plus, the xDS satellite (`Titanium.Xds`), and the GeoIP satellite (`Titanium.Cli.GeoIp`) are [PolyForm Noncommercial 1.0.0](https://github.com/justcoding121/titanium-web-proxy/blob/develop/licenses/PolyForm-Noncommercial-1.0.0.txt). Vendored xDS protocol definitions keep Apache-2.0 attribution in `src/Titanium.Xds/NOTICE` and `src/Titanium.Xds/LICENSE.Apache-2.0.txt`.
 
 Plus, Inspector, and the xDS / GeoIP satellites are for non-commercial use only.
 

@@ -27,6 +27,13 @@ public static class TransformKinds
     public const string RequestTrailerSet = "RequestTrailerSet";
     public const string ResponseTrailerSet = "ResponseTrailerSet";
 
+    /// <summary>
+    ///     Stages <c>Access-Control-Allow-Origin</c> on the response. Parameter <c>origins</c> is <c>*</c> or a
+    ///     comma-separated origin list; a list is matched against the request <c>Origin</c> and also stages
+    ///     <c>Vary: Origin</c>.
+    /// </summary>
+    public const string ResponseCors = "ResponseCors";
+
     public static bool TryGetRequiredParameters(string kind, out IReadOnlyList<string> required)
     {
         switch (kind)
@@ -74,6 +81,9 @@ public static class TransformKinds
             case RequestHeadersAllowed:
             case ResponseHeadersAllowed:
                 required = ["headers"];
+                return true;
+            case ResponseCors:
+                required = ["origins"];
                 return true;
             case ClientCertHeader:
             case RequestTrailerSet:

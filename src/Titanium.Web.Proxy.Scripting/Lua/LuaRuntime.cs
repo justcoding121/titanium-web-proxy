@@ -140,8 +140,9 @@ internal sealed partial class LuaRuntime : IDisposable
 
     /// <summary>
     /// Runs <paramref name="function"/> with <paramref name="snapshot"/> as <c>ctx</c>. Throws <see cref="LuaScriptException"/>
-    /// when the script fails or the wall timeout passes; throws <see cref="OperationCanceledException"/> only when
-    /// <paramref name="cancellationToken"/> is cancelled.
+    /// when the script fails or the wall timeout passes; throws <see cref="ObjectDisposedException"/> when this runtime is
+    /// disposed mid-call; throws <see cref="OperationCanceledException"/> only when <paramref name="cancellationToken"/>
+    /// is cancelled.
     /// </summary>
     public async ValueTask<LuaCallResult> CallAsync(string function, ReadOnlyMemory<byte> snapshot, CancellationToken cancellationToken)
     {
@@ -152,6 +153,12 @@ internal sealed partial class LuaRuntime : IDisposable
         try
         {
             return await RunAsync(function, snapshot, token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_disposed.IsCancellationRequested)
+        {
+            // Dispose cancels the same linked token as the wall clock. Do not report that as a script timeout
+            // (which becomes Deny and looks like a failed match under reload).
+            throw new ObjectDisposedException(nameof(LuaRuntime));
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

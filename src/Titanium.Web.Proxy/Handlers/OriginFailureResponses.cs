@@ -43,6 +43,7 @@ internal static class OriginFailureResponses
                     "Service Unavailable. The upstream connection limit was reached.",
                     HttpStatusCode.ServiceUnavailable,
                     [new HttpHeader("Retry-After", "1")]);
+                AddRouteCors(args);
                 return;
             }
         }
@@ -50,5 +51,14 @@ internal static class OriginFailureResponses
         var status = StatusFor(ex);
         var label = status == HttpStatusCode.GatewayTimeout ? "Gateway Timeout" : "Bad Gateway";
         args.GenericResponse($"{label}. {ex.Message}", status);
+        AddRouteCors(args);
+    }
+
+    private static void AddRouteCors(SessionEventArgs args)
+    {
+        if (args.MatchedRoute is { } route && args.Server.ReverseProxy is { } options && args.HttpClient.Response is { } response)
+        {
+            Routing.RoutePolicies.ApplyLocalCors(response, route, args.HttpClient.Request, options);
+        }
     }
 }

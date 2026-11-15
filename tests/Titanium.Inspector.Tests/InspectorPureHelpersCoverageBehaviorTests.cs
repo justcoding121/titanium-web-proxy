@@ -105,11 +105,14 @@ public class InspectorPureHelpersCoverageBehaviorTests
         Assert.AreEqual("", SessionDisplayFormat.FormatUrlForGrid("host.example:443", "host.example"));
         Assert.AreEqual("https://other/x", SessionDisplayFormat.FormatUrlForGrid("https://other/x", "host.example"));
 
-        Assert.AreEqual("", SessionDisplayFormat.FormatByteSize(null));
-        Assert.AreEqual("", SessionDisplayFormat.FormatByteSize(-1));
-        Assert.AreEqual("12 B", SessionDisplayFormat.FormatByteSize(12));
-        Assert.AreEqual("1.5 KB", SessionDisplayFormat.FormatByteSize(1536));
-        Assert.AreEqual("2.0 MB", SessionDisplayFormat.FormatByteSize(2L * 1024 * 1024));
+        using (CulturePin.Use("en-US"))
+        {
+            Assert.AreEqual("", SessionDisplayFormat.FormatByteSize(null));
+            Assert.AreEqual("", SessionDisplayFormat.FormatByteSize(-1));
+            Assert.AreEqual("12 B", SessionDisplayFormat.FormatByteSize(12));
+            Assert.AreEqual("1.5 KB", SessionDisplayFormat.FormatByteSize(1536));
+            Assert.AreEqual("2.0 MB", SessionDisplayFormat.FormatByteSize(2L * 1024 * 1024));
+        }
 
         Assert.AreEqual("h2", SessionDisplayFormat.FormatHttpProtocol(new Version(2, 0)));
         Assert.AreEqual("h1.1", SessionDisplayFormat.FormatHttpProtocol(new Version(1, 1)));

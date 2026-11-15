@@ -26,8 +26,8 @@ REPORT="${REPORT:-$ROOT/artifacts/gateway-conformance-report.yaml}"
 VERSION="$(sed -n 's/^appVersion: "\(.*\)"/\1/p' "$ROOT/deploy/helm/titanium-gateway/Chart.yaml")"
 
 # Extended features this controller claims (see website/docs/gateway-api.md). Everything not listed is not claimed.
-# Not claimed, because the data plane cannot honor them: response header add (it keeps one value per header) and a
-# redirect without a hostname (HTTPRouteSchemeRedirect, HTTPRoutePortRedirect, HTTPRoutePathRedirect).
+# Not claimed until the suite has been re-run: response header add (the data plane now appends) and hostless redirects
+# (HTTPRouteSchemeRedirect, HTTPRoutePortRedirect, HTTPRoutePathRedirect — the data plane builds them).
 SUPPORTED_FEATURES="HTTPRouteQueryParamMatching,HTTPRouteMethodMatching,HTTPRouteHostRewrite,HTTPRoutePathRewrite,HTTPRouteRequestMirror"
 
 cleanup() {

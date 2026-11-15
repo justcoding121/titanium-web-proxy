@@ -174,7 +174,8 @@ public class GatewayObserverLeaderSoftCoverageWave18BehaviorTests
         var ssl = IngressAnnotations.Parse(
             new Dictionary<string, string> { [IngressAnnotations.Prefix + "ssl-redirect"] = "true" },
             "default");
-        Assert.IsTrue(ssl.Problems.Exists(p => p.Contains("ssl-redirect", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsTrue(ssl.SslRedirect);
+        Assert.AreEqual(0, ssl.Problems.Count);
 
         var rps = IngressAnnotations.Parse(
             new Dictionary<string, string> { [IngressAnnotations.Prefix + "limit-rps"] = "0" },

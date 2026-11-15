@@ -50,6 +50,11 @@ controller:
   # namespace (a ClusterRole rule). A list limits both the watch and the RBAC to those namespaces.
   secretNamespaces: []
 
+  # Addresses or CIDR prefixes of the load balancer or ingress hops in front of the data plane. Written into
+  # server.forwardedHeaders.trustedProxies so ssl-redirect and forwardedClient keys honor X-Forwarded-* from those peers.
+  # Empty (the default) leaves forwarded headers unset.
+  trustedProxies: []
+
   # Extra flags (--verbose, --min-reconcile-ms 500, ...) and environment for the controller container.
   extraArgs: []
   extraEnv: []

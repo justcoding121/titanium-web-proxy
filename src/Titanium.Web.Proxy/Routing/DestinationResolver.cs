@@ -348,6 +348,7 @@ internal sealed class RouteTableRequirements
             foreach (var match in options.Routes.Select(static route => route.Match))
             {
                 AddKeys(match.Headers, ref headers, StringComparer.OrdinalIgnoreCase);
+                AddHeaderMatchNames(match.HeaderMatches, ref headers);
                 AddKeys(match.Query, ref query, StringComparer.Ordinal);
                 AddQueryParameterNames(match.QueryParameters, ref query);
             }
@@ -361,6 +362,20 @@ internal sealed class RouteTableRequirements
         };
         options.Compiled = next;
         return next;
+    }
+
+    private static void AddHeaderMatchNames(IReadOnlyList<HeaderValueMatch>? source, ref HashSet<string>? set)
+    {
+        if (source is not { Count: > 0 })
+        {
+            return;
+        }
+
+        set ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < source.Count; i++)
+        {
+            set.Add(source[i].Name);
+        }
     }
 
     private static void AddQueryParameterNames(IReadOnlyList<QueryParameterMatch>? source, ref HashSet<string>? set)

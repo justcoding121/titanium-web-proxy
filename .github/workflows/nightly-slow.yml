@@ -1,6 +1,7 @@
 name: nightly-slow
 
-# Slow integration tests (external sites, stress, large downloads). Retry once, then warn.
+# Slow integration tests (external sites, stress, large downloads). Four class-stable
+# shards overlap the serialized DoNotParallelize classes. Retry once, then warn.
 # A warning is still a recorded result. The job does not go green by skipping the tests.
 
 on:
@@ -15,25 +16,47 @@ jobs:
   integration-slow:
     runs-on: windows-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     env:
       TITANIUM_SKIP_ROOT_STORE_UI: '1'
       TITANIUM_NO_ELEVATE: '1'
       TITANIUM_ALLOW_WILDCARD_BIND_TESTS: '1'
+      TITANIUM_REQUIRE_QUIC: '1'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
-      - name: Slow integration
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+      - name: Assert in-box MsQuic (Windows)
         shell: pwsh
         run: |
-          dotnet build tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj -c Release --nologo
+          if (-not [System.Net.Quic.QuicListener]::IsSupported) {
+            throw 'QuicListener.IsSupported is false on windows-latest (expected in-box MsQuic)'
+          }
+      - name: Restore and build
+        run: |
+          dotnet restore tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj
+          dotnet build tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj -c Release --no-restore --nologo
+      - name: Slow integration shard
+        shell: pwsh
+        run: |
           $ok = $false
           foreach ($attempt in 1..2) {
-            Write-Host "Slow integration attempt $attempt"
-            dotnet test tests/Titanium.Web.Proxy.IntegrationTests/Titanium.Web.Proxy.IntegrationTests.csproj -c Release --no-build --filter "TestCategory=Slow" --blame-hang --blame-hang-timeout 5m
+            Write-Host "Slow integration shard ${{ matrix.shard }} attempt $attempt"
+            pwsh -NoProfile -ExecutionPolicy Bypass -File tools/ci/Invoke-IntegrationShard.ps1 `
+              -ShardIndex ${{ matrix.shard }} `
+              -ShardCount 4 `
+              -CategoryFilter 'TestCategory=Slow' `
+              -MaxAttempts 1 `
+              -ResultsRoot 'coverage/integration-slow'
             if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            Start-Sleep -Seconds 5
           }
           if (-not $ok) {
-            Write-Host "::warning::Slow integration failed after 2 attempts. External sites can flake. The log above is the result."
+            Write-Host "::warning::Slow integration shard ${{ matrix.shard }} failed after 2 attempts. External sites can flake. The log above is the result."
           }

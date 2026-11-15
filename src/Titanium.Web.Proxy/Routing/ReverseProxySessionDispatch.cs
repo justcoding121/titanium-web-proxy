@@ -393,6 +393,7 @@ internal static class ReverseProxySessionDispatch
             var location = BuildRedirect(args.HttpClient.Request, redirect);
             args.GenericResponse(string.Empty, (HttpStatusCode)redirect.Status,
                 [new HttpHeader("Location", location)]);
+            ApplyTerminalCors(args, route);
             return;
         }
 
@@ -417,26 +418,96 @@ internal static class ReverseProxySessionDispatch
         }
 
         args.GenericResponse(direct.Body ?? string.Empty, (HttpStatusCode)direct.Status, headers);
+        ApplyTerminalCors(args, route);
+    }
+
+    private static void ApplyTerminalCors(SessionEventArgs args, RouteConfig route)
+    {
+        if (args.HttpClient.Response is { } response && args.Server.ReverseProxy is { } options)
+        {
+            RoutePolicies.ApplyLocalCors(response, route, args.HttpClient.Request, options);
+        }
     }
 
     internal static string BuildRedirect(Request request, RedirectConfig redirect)
     {
         var target = OriginForm(request.RequestUriString8.GetString());
-        var path = string.IsNullOrEmpty(redirect.Path) ? target : redirect.Path;
+        var path = RedirectPath(target, redirect);
         var query = PreservedQuery(target, redirect.PreserveQuery);
+
+        string? host;
+        int? requestPort = null;
+        var hostFromRequest = false;
         if (!string.IsNullOrEmpty(redirect.Host))
         {
-            var scheme = RedirectScheme(request, redirect);
-            var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
-            if (path.Contains('?', StringComparison.Ordinal))
-            {
-                path = path[..path.IndexOf('?')];
-            }
-
-            return scheme + "://" + redirect.Host + port + path + query;
+            host = redirect.Host;
+        }
+        else if (redirect.UseRequestHost && TryRequestAuthority(request, out var requestHost, out requestPort))
+        {
+            host = requestHost;
+            hostFromRequest = true;
+        }
+        else
+        {
+            host = null;
         }
 
-        return path + query;
+        // Absolute Location, or a relative one that re-appends the query, must not keep a ? already on the path.
+        var absolute = !string.IsNullOrEmpty(host);
+        if ((absolute || redirect.PreserveQuery) && path.Contains('?', StringComparison.Ordinal))
+        {
+            path = path[..path.IndexOf('?')];
+        }
+
+        if (!absolute)
+        {
+            return path + query;
+        }
+
+        var scheme = RedirectScheme(request, redirect);
+        return scheme + "://" + host + RedirectPortSuffix(redirect, scheme, hostFromRequest ? requestPort : null) + path + query;
+    }
+
+    private static string RedirectPath(string target, RedirectConfig redirect)
+    {
+        if (!string.IsNullOrEmpty(redirect.Path))
+        {
+            return redirect.Path;
+        }
+
+        if (redirect.ReplacePrefixFrom is not null)
+        {
+            return ReplacePathPrefix(target, redirect.ReplacePrefixFrom, redirect.ReplacePrefixTo ?? string.Empty);
+        }
+
+        return target;
+    }
+
+    /// <summary>Swaps a leading segment prefix of the path (query dropped; the caller re-adds it). No match keeps the path.</summary>
+    private static string ReplacePathPrefix(string target, string from, string to)
+    {
+        var q = target.IndexOf('?');
+        var path = q >= 0 ? target[..q] : target;
+        string rest;
+        if (from.Length == 0)
+        {
+            rest = path;
+        }
+        else if (path.Equals(from, StringComparison.Ordinal))
+        {
+            rest = string.Empty;
+        }
+        else if (path.Length > from.Length && path.StartsWith(from, StringComparison.Ordinal) && path[from.Length] == '/')
+        {
+            rest = path[from.Length..];
+        }
+        else
+        {
+            return path;
+        }
+
+        var result = to + rest;
+        return result.Length == 0 ? "/" : result;
     }
 
     private static string PreservedQuery(string target, bool preserve)
@@ -449,6 +520,97 @@ internal static class ReverseProxySessionDispatch
         var q = target.IndexOf('?');
         return q >= 0 ? target[q..] : "";
     }
+
+    /// <summary>
+    /// The client's requested host for an absolute <c>Location</c>. Absolute-form targets and authorities that are not a
+    /// plain DNS name, IPv4 address, or bracketed IPv6 literal return false so the redirect stays relative.
+    /// </summary>
+    private static bool TryRequestAuthority(Request request, out string host, out int? requestPort)
+    {
+        host = string.Empty;
+        requestPort = null;
+        if (UriExtensions.GetScheme(request.RequestUriString8).Length > 0)
+        {
+            return false;
+        }
+
+        var authority = request.Host;
+        if (string.IsNullOrEmpty(authority))
+        {
+            if (request.Authority.Length == 0)
+            {
+                return false;
+            }
+
+            authority = request.Authority.GetString();
+        }
+
+        if (!AuthorityParser.TryParse(authority, 0, out var parsed, out var port))
+        {
+            return false;
+        }
+
+        if (parsed.Contains(':', StringComparison.Ordinal))
+        {
+            host = HttpHostHeader.Format(parsed, 0);
+        }
+        else
+        {
+            if (parsed.Length == 0 || !IsSafeHostName(parsed))
+            {
+                return false;
+            }
+
+            host = parsed;
+        }
+
+        if (port > 0)
+        {
+            requestPort = port;
+        }
+
+        return true;
+    }
+
+    private static bool IsSafeHostName(string name)
+    {
+        foreach (var c in name)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Port for an absolute <c>Location</c>. A configured port wins (omitted when it is the scheme default). A configured
+    /// scheme or an http-to-https upgrade uses the well-known port. Otherwise a request host may keep its non-default port.
+    /// </summary>
+    private static string RedirectPortSuffix(RedirectConfig redirect, string scheme, int? requestPort)
+    {
+        if (redirect.Port is int configured and > 0)
+        {
+            return OmitDefaultPort(scheme, configured) ? "" : ":" + configured.ToString();
+        }
+
+        if (redirect.Scheme is not null || redirect.HttpToHttps)
+        {
+            return "";
+        }
+
+        if (requestPort is int inherited)
+        {
+            return OmitDefaultPort(scheme, inherited) ? "" : ":" + inherited.ToString();
+        }
+
+        return "";
+    }
+
+    private static bool OmitDefaultPort(string scheme, int port) =>
+        (scheme == "http" && port == 80) || (scheme == "https" && port == 443);
 
     private static string RedirectScheme(Request request, RedirectConfig redirect)
     {
@@ -517,6 +679,11 @@ internal static class ReverseProxySessionDispatch
         }
 
         session.HttpClient.Response.Headers.AddHeader(KnownHeaders.Connection, KnownHeaders.ConnectionClose);
+        if (session.MatchedRoute is { } route && session.Server.ReverseProxy is { } options)
+        {
+            RoutePolicies.ApplyLocalCors(session.HttpClient.Response, route, request, options);
+        }
+
         await clientStream.WriteResponseAsync(session.HttpClient.Response, cancellationToken).ConfigureAwait(false);
         session.IsClientResponseCommitted = true;
     }
@@ -531,6 +698,11 @@ internal static class ReverseProxySessionDispatch
                 new HttpHeader("grpc-status", "14"),
                 new HttpHeader("grpc-message", "no available destination"),
             ]);
+            if (session.MatchedRoute is { } grpcRoute && session.Server.ReverseProxy is { } grpcOptions && session.HttpClient.Response is { } grpcResponse)
+            {
+                RoutePolicies.ApplyLocalCors(grpcResponse, grpcRoute, session.HttpClient.Request, grpcOptions);
+            }
+
             return;
         }
 
@@ -540,6 +712,10 @@ internal static class ReverseProxySessionDispatch
             new HttpHeader("Retry-After", "1"),
             new HttpHeader(KnownHeaders.ContentType.String, page?.ContentType ?? "text/plain"),
         ]);
+        if (session.MatchedRoute is { } route && session.Server.ReverseProxy is { } options && session.HttpClient.Response is { } response)
+        {
+            RoutePolicies.ApplyLocalCors(response, route, session.HttpClient.Request, options);
+        }
     }
 
     private static void ApplyErrorPage(SessionEventArgsBase session, int status)
@@ -1069,6 +1245,19 @@ internal static class ReverseProxySessionDispatch
             transparent.ForwardPort ?? 80);
     }
 
+    private static string PathAndQuery(Request request)
+    {
+        var path = request.RequestUriString8.GetString();
+        if ((path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+            Uri.TryCreate(path, UriKind.Absolute, out var absolute))
+        {
+            return absolute.PathAndQuery;
+        }
+
+        return path;
+    }
+
     private static bool ApplyTransforms(
         Titanium.Web.Proxy.Abstractions.ReverseProxyOptions options,
         IReadOnlyList<TransformConfig> transforms,
@@ -1076,19 +1265,13 @@ internal static class ReverseProxySessionDispatch
         SessionEventArgsBase session)
     {
         var engine = options.TransformEngine ?? new TransformEngine();
-        var path = request.RequestUriString8.GetString();
-        if ((path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-             path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
-            Uri.TryCreate(path, UriKind.Absolute, out var absolute))
-        {
-            path = absolute.PathAndQuery;
-        }
+        var path = PathAndQuery(request);
 
         var ctx = new TransformRequestContext { Path = path };
-        if (HasKind(transforms, TransformKinds.RequestHeaderAppend))
+        if (HasKind(transforms, TransformKinds.RequestHeaderAppend) || HasKind(transforms, TransformKinds.ResponseCors))
         {
-            // Append extends what the client sent (Gateway API Add semantics). Only wired when a transform
-            // needs it, so the common path pays no closure.
+            // Append extends what the client sent (Gateway API Add semantics), and ResponseCors reads Origin.
+            // Only wired when a transform needs it, so the common path pays no closure.
             var clientHeaders = request.Headers;
             ctx.ExistingRequestHeader = name => JoinHeaderValues(clientHeaders.GetHeaders(name));
         }
@@ -1297,7 +1480,28 @@ internal static class ReverseProxySessionDispatch
             return ForwarderError.PolicyDenied;
         }
 
-        var ex = session.Exception;
+        if (session.Exception is not null)
+        {
+            return ClassifyException(session.Exception);
+        }
+
+        var status = session.HttpClient.Response.StatusCode;
+        if (status == 503 && session.MatchedRoute is not null && session.UpstreamDestinationId is null)
+        {
+            return ForwarderError.NoAvailableDestination;
+        }
+
+        return status switch
+        {
+            504 => ForwarderError.RequestTimedOut,
+            502 => ForwarderError.RequestBodyDestination,
+            _ => ForwarderError.None,
+        };
+    }
+
+    /// <summary>The exception half of <see cref="Classify"/>. A null exception is <see cref="ForwarderError.None"/>.</summary>
+    internal static ForwarderError ClassifyException(Exception? ex)
+    {
         if (IsCapacityFailure(ex))
         {
             return ForwarderError.NoAvailableDestination;
@@ -1318,23 +1522,7 @@ internal static class ReverseProxySessionDispatch
             return ForwarderError.RequestBodyDestination;
         }
 
-        if (ex is not null)
-        {
-            return ForwarderError.Other;
-        }
-
-        var status = session.HttpClient.Response.StatusCode;
-        if (status == 503 && session.MatchedRoute is not null && session.UpstreamDestinationId is null)
-        {
-            return ForwarderError.NoAvailableDestination;
-        }
-
-        return status switch
-        {
-            504 => ForwarderError.RequestTimedOut,
-            502 => ForwarderError.RequestBodyDestination,
-            _ => ForwarderError.None,
-        };
+        return ex is null ? ForwarderError.None : ForwarderError.Other;
     }
 
     private static string TakeRequestId(SessionEventArgsBase session, string headerName)

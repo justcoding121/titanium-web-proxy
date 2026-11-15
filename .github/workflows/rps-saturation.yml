@@ -312,7 +312,7 @@ jobs:
 
       - name: Cache scripting natives (editions)
         if: env.RPS_MODE == 'compare-editions' || startsWith(env.RPS_MODE, 'twp-cli-script-')
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: tools/packaging/.cache/scripting-natives
           key: scripting-natives-${{ hashFiles('tools/packaging/scripting-native.lock.json') }}-${{ steps.scripting-rid.outputs.rid }}

@@ -58,6 +58,7 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         Opened += OnOpened;
         DataContextChanged += OnDataContextChanged;
+        SessionDisplayFormat.ClockChanged += OnClockChanged;
         SessionsGrid.Loaded += OnSessionsGridLoaded;
         SessionsGrid.LoadingRow += (_, e) => ApplySessionMark(e.Row);
         SessionsGrid.UnloadingRow += (_, e) => ClearSessionMark(e.Row);
@@ -343,8 +344,20 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnClockChanged(object? sender, EventArgs e)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            ApplySessionColumnHeaderTips();
+            return;
+        }
+
+        Dispatcher.UIThread.Post(ApplySessionColumnHeaderTips);
+    }
+
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        SessionDisplayFormat.ClockChanged -= OnClockChanged;
         CaptureAndPersistSessionGridLayout();
         HookSessionsCollection(null);
         HookStatusAttention(null);
@@ -1278,7 +1291,7 @@ public partial class MainWindow : Window
                 "TTFB" => "Time until first response byte (TTFB), in milliseconds.",
                 "Protocol" => "HTTP/1.1, HTTP/2, … between client and proxy.",
                 "Size" => "Response body size (B below 1 KB, otherwise KB / MB).",
-                "Started" => "When the request started (local time). Hover a row for the full date and time.",
+                "Started" => SessionDisplayFormat.StartedColumnTip,
                 "Scheme" => "URL scheme (http, https, ws, wss). Empty for CONNECT tunnels.",
                 "Content-Type" => "Response media type, without charset and other parameters.",
                 _ => null,

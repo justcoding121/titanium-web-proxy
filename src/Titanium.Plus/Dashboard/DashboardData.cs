@@ -254,9 +254,14 @@ internal static class DashboardData
         }
 
         // Header and query values can carry credentials; only the names are shown.
-        if (match.Headers is { Count: > 0 })
+        var headerNames = (match.Headers?.Keys ?? Enumerable.Empty<string>())
+            .Concat(match.HeaderMatches?.Select(h => h.Name) ?? Enumerable.Empty<string>())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (headerNames.Count > 0)
         {
-            parts.Add("headers " + string.Join(",", match.Headers.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase)));
+            parts.Add("headers " + string.Join(",", headerNames));
         }
 
         var queryNames = (match.Query?.Keys ?? Enumerable.Empty<string>())

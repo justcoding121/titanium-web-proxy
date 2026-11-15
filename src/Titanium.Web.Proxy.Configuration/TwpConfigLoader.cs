@@ -30,6 +30,7 @@ public static class TwpConfigLoader
         .WithTypeMapping<IReadOnlyList<TransformConfig>, List<TransformConfig>>()
         .WithTypeMapping<IReadOnlyList<ErrorPageConfig>, List<ErrorPageConfig>>()
         .WithTypeMapping<IReadOnlyList<QueryParameterMatch>, List<QueryParameterMatch>>()
+        .WithTypeMapping<IReadOnlyList<HeaderValueMatch>, List<HeaderValueMatch>>()
         .WithTypeMapping<IReadOnlyList<string>, List<string>>()
         .WithTypeMapping<IReadOnlyList<int>, List<int>>()
         .WithTypeMapping<IReadOnlyDictionary<string, string>, Dictionary<string, string>>()

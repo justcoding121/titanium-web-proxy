@@ -826,7 +826,7 @@ public static class TwpConfigValidator
 
     private static readonly HashSet<string> KnownPolicyKinds = new(StringComparer.Ordinal)
     {
-        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", RateLimitPolicyKind, "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf",
+        "maxRequestBodySize", "requireHeader", "apiKey", "timeout", "cors", RateLimitPolicyKind, "connectionLimit", "ipAllowDeny", "geo", "extAuth", "oidc", "waf", "httpsRedirect",
     };
 
     private static readonly HashSet<string> WafModes = new(StringComparer.OrdinalIgnoreCase)
@@ -912,39 +912,16 @@ public static class TwpConfigValidator
                 errors.Add($"Policy '{name}' (timeout) needs timeoutSeconds > 0.");
                 break;
             case RateLimitPolicyKind or "connectionLimit":
-                if (policy.Limit is < 1)
-                {
-                    errors.Add($"Policy '{name}' limit must be >= 1.");
-                }
-
-                if (policy.WindowSeconds is < 1)
-                {
-                    errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
-                }
-
-                if (policy.Kind == RateLimitPolicyKind)
-                {
-                    ValidateRateLimit(policy, errors);
-                }
-
+                ValidateLimitPolicy(policy, errors);
+                break;
+            case "httpsRedirect":
+                ValidateHttpsRedirect(policy, errors);
                 break;
             case "ipAllowDeny":
-                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
-                {
-                    errors.Add($"Policy '{name}' (ipAllowDeny) needs allow or deny.");
-                }
-
-                ValidatePrefixList(name, AllowValue, policy.Allow, errors);
-                ValidatePrefixList(name, "deny", policy.Deny, errors);
+                ValidateAllowOrDeny(policy, errors, "ipAllowDeny", ValidatePrefixList);
                 break;
             case "geo":
-                if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
-                {
-                    errors.Add($"Policy '{name}' (geo) needs allow or deny.");
-                }
-
-                ValidateCountryList(name, AllowValue, policy.Allow, errors);
-                ValidateCountryList(name, "deny", policy.Deny, errors);
+                ValidateAllowOrDeny(policy, errors, "geo", ValidateCountryList);
                 break;
             case "extAuth":
                 ValidateExtAuth(policy, errors);
@@ -955,6 +932,190 @@ public static class TwpConfigValidator
             case "waf":
                 ValidateWaf(policy, errors);
                 break;
+            case "cors":
+                ValidateCors(policy, errors);
+                break;
+        }
+    }
+
+    private static void ValidateCors(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.AllowCredentials == true && CorsOriginsAllowAny(policy.Origins))
+        {
+            errors.Add($"Policy '{name}' (cors) allowCredentials cannot be combined with origins \"*\" or a missing origin list.");
+        }
+
+        if (policy.MaxAgeSeconds is < 0 or > 86_400)
+        {
+            errors.Add($"Policy '{name}' (cors) maxAgeSeconds must be 0-86400.");
+        }
+
+        ValidateCorsOriginList(name, policy.Origins, errors);
+    }
+
+    private static void ValidateCorsOriginList(string name, string? origins, List<string> errors)
+    {
+        if (string.IsNullOrWhiteSpace(origins))
+        {
+            return;
+        }
+
+        var sawStar = false;
+        var sawOther = false;
+        foreach (var part in origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            ClassifyCorsOrigin(name, part, errors, ref sawStar, ref sawOther);
+        }
+
+        if (sawStar && sawOther)
+        {
+            errors.Add($"Policy '{name}' (cors) origins cannot mix \"*\" with other entries.");
+        }
+    }
+
+    private static bool IsCorsExactOrigin(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        {
+            return false;
+        }
+
+        return string.IsNullOrEmpty(uri.UserInfo) &&
+            uri.AbsolutePath is "" or "/" &&
+            string.IsNullOrEmpty(uri.Query) &&
+            string.IsNullOrEmpty(uri.Fragment) &&
+            !value.EndsWith('/') &&
+            !value.Contains('*');
+    }
+
+    private static bool IsCorsWildcard(string value)
+    {
+        var schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd <= 0 || value[..schemeEnd] is not ("http" or "https"))
+        {
+            return false;
+        }
+
+        var rest = value[(schemeEnd + 3)..];
+        if (!rest.StartsWith("*.", StringComparison.Ordinal) || rest.AsSpan(2).Contains('*') || rest.Contains('/') || rest.Contains('?') || rest.Contains('#'))
+        {
+            return false;
+        }
+
+        var host = rest[2..];
+        var colon = host.LastIndexOf(':');
+        if (colon >= 0)
+        {
+            if (!int.TryParse(host[(colon + 1)..], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var port) || port is < 1 or > 65535)
+            {
+                return false;
+            }
+
+            host = host[..colon];
+        }
+
+        var dot = host.IndexOf('.');
+        return dot > 0 && dot < host.Length - 1 && !host.EndsWith('.');
+    }
+
+    private static bool CorsOriginsAllowAny(string? origins)
+    {
+        if (string.IsNullOrWhiteSpace(origins))
+        {
+            return true;
+        }
+
+        return origins.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Any(static part => part == "*");
+    }
+
+    private static void ValidateLimitPolicy(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.Limit is < 1)
+        {
+            errors.Add($"Policy '{name}' limit must be >= 1.");
+        }
+
+        if (policy.WindowSeconds is < 1)
+        {
+            errors.Add($"Policy '{name}' windowSeconds must be >= 1.");
+        }
+
+        if (policy.Kind == RateLimitPolicyKind)
+        {
+            ValidateRateLimit(policy, errors);
+        }
+        else if (policy.Key is not null && policy.Key is not ("client" or "forwardedClient" or "route"))
+        {
+            errors.Add(
+                $"Policy '{name}' (connectionLimit) key '{policy.Key}' must be client, forwardedClient, or route.");
+        }
+    }
+
+    private static void ValidateHttpsRedirect(RoutePolicyConfig policy, List<string> errors)
+    {
+        var name = policy.Name;
+        if (policy.RedirectStatus is int status && status is not (301 or 302 or 307 or 308))
+        {
+            errors.Add($"Policy '{name}' (httpsRedirect) status {status} must be 301, 302, 307, or 308.");
+        }
+
+        if (policy.Port is < 1 or > 65535)
+        {
+            errors.Add($"Policy '{name}' (httpsRedirect) port must be 1-65535.");
+        }
+    }
+
+    private static void ValidateAllowOrDeny(
+        RoutePolicyConfig policy,
+        List<string> errors,
+        string kind,
+        Action<string, string, string?, List<string>> validateList)
+    {
+        var name = policy.Name;
+        if (string.IsNullOrWhiteSpace(policy.Allow) && string.IsNullOrWhiteSpace(policy.Deny))
+        {
+            errors.Add($"Policy '{name}' ({kind}) needs allow or deny.");
+        }
+
+        validateList(name, AllowValue, policy.Allow, errors);
+        validateList(name, "deny", policy.Deny, errors);
+    }
+
+    private static void ClassifyCorsOrigin(string name, string part, List<string> errors, ref bool sawStar, ref bool sawOther)
+    {
+        if (part == "*")
+        {
+            sawStar = true;
+            return;
+        }
+
+        sawOther = true;
+        if (part.StartsWith("regex:", StringComparison.Ordinal))
+        {
+            if (!CompilesAsWholeValueRegex(part["regex:".Length..]))
+            {
+                errors.Add($"Policy '{name}' (cors) origins regex does not compile as a whole-value pattern.");
+            }
+
+            return;
+        }
+
+        if (part.Contains('*'))
+        {
+            if (!IsCorsWildcard(part))
+            {
+                errors.Add($"Policy '{name}' (cors) origins wildcard '{part}' must be http(s)://*.example.com with an optional port.");
+            }
+
+            return;
+        }
+
+        if (!IsCorsExactOrigin(part))
+        {
+            errors.Add($"Policy '{name}' (cors) origins entry '{part}' is not an http(s) origin.");
         }
     }
 
@@ -1511,6 +1672,7 @@ public static class TwpConfigValidator
         }
 
         ValidateQueryParameters(route, errors);
+        ValidateHeaderMatches(route, errors);
 
         if (route.Match.PathKind == PathMatchKind.Template)
         {
@@ -1522,6 +1684,28 @@ public static class TwpConfigValidator
             !CompilesAsRegex(route.Match.Path))
         {
             errors.Add($"Route '{route.Id}' has a path regex that does not compile.");
+        }
+    }
+
+    private static void ValidateHeaderMatches(RouteConfig route, List<string> errors)
+    {
+        if (route.Match.HeaderMatches is not { } entries)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            if (entry is null || string.IsNullOrEmpty(entry.Name))
+            {
+                errors.Add($"Route '{route.Id}' has a headerMatches entry without a name.");
+                continue;
+            }
+
+            if (entry.Kind == HeaderMatchKind.Regex && !CompilesAsWholeValueRegex(entry.Value))
+            {
+                errors.Add($"Route '{route.Id}' headerMatches '{entry.Name}' has a regex that does not compile.");
+            }
         }
     }
 
@@ -1540,7 +1724,7 @@ public static class TwpConfigValidator
                 continue;
             }
 
-            if (entry.Kind == QueryMatchKind.Regex && !CompilesAsRegex("^(?:" + entry.Value + ")$"))
+            if (entry.Kind == QueryMatchKind.Regex && !CompilesAsWholeValueRegex(entry.Value))
             {
                 errors.Add($"Route '{route.Id}' queryParameters '{entry.Name}' has a regex that does not compile.");
             }
@@ -1794,9 +1978,51 @@ public static class TwpConfigValidator
 
     private static void ValidateRouteRedirect(RouteConfig route, List<string> errors)
     {
-        if (route.Redirect is { Status: < 300 or > 399 } badRedirect)
+        if (route.Redirect is not { } redirect)
         {
-            errors.Add($"Route '{route.Id}' redirect status {badRedirect.Status} is not a 3xx code.");
+            return;
+        }
+
+        if (redirect.Status is < 300 or > 399)
+        {
+            errors.Add($"Route '{route.Id}' redirect status {redirect.Status} is not a 3xx code.");
+        }
+
+        if (redirect.ReplacePrefixTo is not null && redirect.ReplacePrefixFrom is null)
+        {
+            errors.Add($"Route '{route.Id}' redirect replacePrefixTo needs replacePrefixFrom.");
+        }
+
+        ValidateRedirectPrefix(route.Id, "replacePrefixFrom", redirect.ReplacePrefixFrom, errors);
+        ValidateRedirectPrefix(route.Id, "replacePrefixTo", redirect.ReplacePrefixTo, errors);
+        if (!string.IsNullOrEmpty(redirect.Path) &&
+            (redirect.ReplacePrefixFrom is not null || redirect.ReplacePrefixTo is not null))
+        {
+            errors.Add($"Route '{route.Id}' redirect path cannot be combined with replacePrefixFrom or replacePrefixTo.");
+        }
+    }
+
+    /// <summary>Empty is the root. Otherwise a path that starts with / and has no trailing slash, query, fragment, whitespace, or control characters.</summary>
+    private static void ValidateRedirectPrefix(string routeId, string name, string? value, List<string> errors)
+    {
+        if (value is null || value.Length == 0)
+        {
+            return;
+        }
+
+        var ok = value[0] == '/' && value[^1] != '/';
+        for (var i = 0; ok && i < value.Length; i++)
+        {
+            var ch = value[i];
+            if (ch is '?' or '#' or ' ' or '\t' or '\r' or '\n' || char.IsControl(ch))
+            {
+                ok = false;
+            }
+        }
+
+        if (!ok)
+        {
+            errors.Add($"Route '{routeId}' redirect {name} must be empty or a path that starts with \"/\" and has no trailing slash, query, fragment, whitespace, or control characters.");
         }
     }
 
@@ -2422,6 +2648,12 @@ public static class TwpConfigValidator
             return false;
         }
     }
+
+    /// <summary>Same two-step check the matcher uses: the pattern must compile alone and as ^(?:pattern)$.</summary>
+    private static bool CompilesAsWholeValueRegex(string? pattern) =>
+        pattern is not null &&
+        (pattern.Length == 0 || CompilesAsRegex(pattern)) &&
+        CompilesAsRegex("^(?:" + pattern + ")$");
 
     private static void ValidateTemplate(RouteConfig route, List<string> errors)
     {

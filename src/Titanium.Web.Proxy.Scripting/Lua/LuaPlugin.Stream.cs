@@ -124,5 +124,10 @@ internal sealed partial class LuaPlugin : IStreamScriptFilter
                 LuaScriptException.Reason(ex.Failure), ex.Message);
             return null;
         }
+        catch (ObjectDisposedException)
+        {
+            // Reload disposed this plugin mid-call. Treat it like a script failure for the stream path.
+            return null;
+        }
     }
 }

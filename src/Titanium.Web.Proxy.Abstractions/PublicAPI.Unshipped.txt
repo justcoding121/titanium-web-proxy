@@ -645,6 +645,14 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Allow.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Deny.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Origins.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Origins.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowCredentials.get -> bool?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowCredentials.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowPrivateNetwork.get -> bool?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.AllowPrivateNetwork.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ExposeHeaders.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.ExposeHeaders.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxAgeSeconds.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxAgeSeconds.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Methods.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>?
 Titanium.Web.Proxy.Abstractions.Routing.DirectResponseConfig.Headers.init -> void
@@ -652,8 +660,15 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Methods.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxBodyBytes.get -> int
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Limit.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.HttpToHttps.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.UseRequestHost.get -> bool
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.UseRequestHost.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixFrom.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixFrom.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixTo.get -> string?
+Titanium.Web.Proxy.Abstractions.Routing.RedirectConfig.ReplacePrefixTo.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.LoadBalanceContext.LoadBalanceContext(string? affinityKey = null, string? hashInput = null) -> void
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.RequestTrailerSet = "RequestTrailerSet" -> string!
+const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseCors = "ResponseCors" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.TransformKinds.ResponseTrailerSet = "ResponseTrailerSet" -> string!
 const Titanium.Web.Proxy.Abstractions.Routing.MirrorConfig.MaxAllowedBodyBytes = 1048576 -> int
 static Titanium.Web.Proxy.Abstractions.Network.ClientCertificateAuthorityFiles.Load(string! path) -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection!
@@ -697,6 +712,10 @@ Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.EmitHeaders.get -> boo
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.EmitHeaders.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Key.get -> string?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Key.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Port.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.Port.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RedirectStatus.get -> int?
+Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.RedirectStatus.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.get -> int?
 Titanium.Web.Proxy.Abstractions.Routing.RoutePolicyConfig.MaxKeys.init -> void
 const Titanium.Web.Proxy.Abstractions.Routing.ResponseCompressionConfig.DefaultMaxBytes = 1048576 -> int
@@ -818,6 +837,19 @@ Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Name.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.QueryParameterMatch() -> void
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.get -> string!
 Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch.Value.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind.Exact = 0 -> Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind.Regex = 1 -> Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.HeaderValueMatch() -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Kind.get -> Titanium.Web.Proxy.Abstractions.Routing.HeaderMatchKind
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Kind.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Name.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Name.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Value.get -> string!
+Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch.Value.init -> void
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.HeaderMatches.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.HeaderValueMatch!>?
+Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.HeaderMatches.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.QueryParameterMatch!>?
 Titanium.Web.Proxy.Abstractions.Routing.RouteMatch.QueryParameters.init -> void
 Titanium.Web.Proxy.Abstractions.Routing.TransformRequestContext.ExistingRequestHeader.get -> System.Func<string!, string?>?

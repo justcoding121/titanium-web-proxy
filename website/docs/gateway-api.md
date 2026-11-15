@@ -25,9 +25,9 @@ The chart installs, in one release:
 
 Helm installs the CRDs on `helm install` and never upgrades them. To move to another Gateway API release, apply that release's standard-channel CRDs with `kubectl apply --server-side`, then upgrade the chart.
 
-The controller lists `referencegrants.gateway.networking.k8s.io` at **v1**. On a cluster whose ReferenceGrant CRD only serves `v1beta1`, the process stays up and `/healthz` answers `200`, but `/readyz` stays `503` (`caches not synced`) and the pod never becomes Ready. Helm will not replace that CRD. Apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side` before expecting the 8.0.2 controller to become Ready.
+The controller lists `referencegrants.gateway.networking.k8s.io` at **v1**. On a cluster whose ReferenceGrant CRD only serves `v1beta1`, the process stays up and `/healthz` answers `200`, but `/readyz` stays `503` (`caches not synced`) and the pod never becomes Ready. Helm will not replace that CRD. Apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side` before expecting the 8.0.3 controller to become Ready.
 
-There is no single `image.tag` on this chart. Set `controller.image.tag` and `dataPlane.image.tag`. An empty tag is the chart `appVersion` (`8.0.2` on chart `1.0.2`), so a beta install sets both to `8.0.2-beta`. `--set image.tag=...` does not change either image.
+There is no single `image.tag` on this chart. Set `controller.image.tag` and `dataPlane.image.tag`. An empty tag is the chart `appVersion` (`8.0.3` on chart `1.0.3`), so a beta install sets both to `8.0.3-beta`. `--set image.tag=...` does not change either image.
 
 A cluster that already has GatewayClass `titanium` needs a second release to set its own `gatewayClass.name`, `ingressClass.name`, `controller.controllerName`, and `controller.ingressControllerName`. Two controllers must not own the same class.
 
@@ -109,11 +109,11 @@ A `certificateRef` in another namespace needs a `ReferenceGrant`.
 | `HTTPRoute` | `parentRefs` (with `sectionName` and `port`), `hostnames`, and `rules` with the matches, filters, and backends below. Status per parent: `Accepted`, `ResolvedRefs`. |
 | `ReferenceGrant` | Cross-namespace `backendRefs`, `RequestMirror` backends, and `certificateRefs`. The controller watches **v1**. |
 
-**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
+**Matches:** path `Exact`, `PathPrefix` (on a path-segment boundary), `RegularExpression`; headers (`Exact`, `RegularExpression`); query parameters (`Exact`, `RegularExpression`); `method`. Several matches in one rule are alternatives, as the API defines. Routes are ordered by the Gateway API precedence rules: exact path, then the longest prefix, then method, then the number of header and query matches, then oldest creation time and name.
 
 **Backends:** `backendRefs` to `Service` with `weight`. Destinations are the **ready** endpoints of the Service's `EndpointSlice`s, so a pod that is not ready receives no traffic. A weight of `0` takes no traffic.
 
-**Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier` (set, add, remove), `URLRewrite` (`hostname`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestRedirect` (301 and 302, `scheme`, `hostname`, `port`, `ReplaceFullPath`), `RequestMirror` (`percent` or `fraction`).
+**Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier` (set, add, remove), `URLRewrite` (`hostname`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestRedirect` (301, 302, 303, 307 and 308, `scheme`, `hostname`, `port`, `ReplaceFullPath`, `ReplacePrefixMatch`), `RequestMirror` (`percent` or `fraction`).
 
 **Timeouts:** `timeouts.request` and `timeouts.backendRequest`.
 
@@ -126,9 +126,8 @@ The controller never guesses. A rule it cannot honor is answered with `500` and 
 | `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy` | Not watched. The standard CRDs for `GRPCRoute` are installed, but no controller acts on them. |
 | TLS `Passthrough`, protocols other than `HTTP` and `HTTPS` | Listener `Accepted` `False`, reason `UnsupportedProtocol`. |
 | `Gateway.spec.addresses` | `Accepted` `False`, reason `UnsupportedAddress`. The address comes from the data-plane Service. |
-| Header matches of type `RegularExpression` | The rule answers `500` (`UnsupportedValue`). |
-| `RequestRedirect` with `ReplacePrefixMatch`, or a status other than 301 and 302 | The rule answers `500`. |
-| `RequestRedirect` without a `hostname` | The redirect needs a concrete host, so the route must list concrete `hostnames`. |
+| Header `RegularExpression` that uses lookahead, a backreference, or an unbalanced parenthesis | The rule answers `500` (`UnsupportedValue`). |
+| `RequestRedirect` with `ReplacePrefixMatch` on a match that is not a `PathPrefix` | The rule answers `500` (a prefix is needed to replace). |
 | More than one `RequestMirror` in a rule | The rule answers `500`; the data plane mirrors to one cluster. |
 | A listener on a port not in `dataPlane.ports` | Listener not programmed, reason `PortUnavailable`. |
 
@@ -139,8 +138,10 @@ These follow from how the data plane works. They are deliberate and listed so no
 - **Gateways of one class share one data plane.** Listeners of different Gateways on the same port merge into one data-plane listener, and routes are not scoped to a Gateway. Two listeners with the same hostname conflict only inside one Gateway. A request no route matches answers `404`; it is never forwarded to the host the client named.
 - **`add` in a header modifier joins values with `, `.** A request or response header that already carries a value gets the new one appended (`foo` and `bar` become `foo, bar`), which is the same list as the specification's `foo,bar`. Repeated lines of one header collapse into one. `Set-Cookie` is the exception: each added cookie keeps its own line.
 - **Routes are global across listeners.** The data plane matches routes by host, path, header, query, and method, not by listener port. Two Gateway listeners that would serve different routes on different ports serve the same routes.
+- **A hostless `RequestRedirect` keeps a non-default request port only when the redirect sets neither `scheme` nor `port`.** The request `Host` is the only listener-port signal the data plane has. A configured scheme (or `httpToHttps`) uses the well-known port and omits it from `Location`.
 - **A mix of valid and invalid backends answers `503` for the invalid share**, where the specification says `500`. When no backend of a rule is usable, the rule answers `500`.
-- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive.
+- **Header names match case-insensitively**, and so do `Exact` header values. The specification makes values case-sensitive. `RegularExpression` header values are case-sensitive and match the whole value, and only the first value of a repeated header is tested.
+- **Upgrade the data plane with the controller.** An older data plane ignores `headerMatches` and routes without that constraint.
 - **A listener with a mix of supported and unsupported `allowedRoutes.kinds`** serves the supported ones (`supportedKinds` lists `HTTPRoute`) and reports `ResolvedRefs` `False`, reason `InvalidRouteKinds`.
 - **Privileged ports are mapped.** The data plane runs as non-root, so Gateway port `80` is bound as `8080` and `443` as `8443` (`dataPlane.ports`). The Service maps them back.
 
@@ -151,7 +152,7 @@ The repository runs the upstream Gateway API conformance suite (v1.2.1, profile 
 - `tools/gateway-conformance/run.sh` builds both images, creates a `kind` cluster, installs MetalLB (so the data-plane Service gets an address), installs the chart with `deploy/helm/titanium-gateway/ci/kind-values.yaml`, runs the suite in a `golang` container on the `kind` network, and writes the report to `artifacts/gateway-conformance-report.yaml`.
 - `.github/workflows/gateway-conformance.yml` runs it on Linux for pull requests that touch the controller, the chart, or the images, and weekly. It uploads the report. **The first runs report only**: a failing suite does not fail the workflow until the repository variable `GATEWAY_CONFORMANCE_ENFORCE` is `true`.
 - **It needs Linux, Docker, `kind`, `kubectl`, and Helm. It does not run on a Windows host**, because the suite reaches the Gateway address over the container network; use WSL 2 or a Linux machine.
-- Only features this controller implements are claimed (`--supported-features`). Not claimed: `HTTPRouteResponseHeaderModification` (response header `add` now appends, but the feature is not claimed until the suite has been re-run against it), redirects without a hostname, the request and backend timeout features (not yet verified against the suite), `GRPCRoute`, `TLSRoute`, and port-based listener features. The report lists what passed, failed, and was skipped.
+- Only features this controller implements are claimed (`--supported-features`). Not claimed: `HTTPRouteResponseHeaderModification` (response header `add` now appends, but the feature is not claimed until the suite has been re-run against it), hostless redirects (`HTTPRouteSchemeRedirect`, `HTTPRoutePortRedirect`, `HTTPRoutePathRedirect` — the data plane builds them, but the suite has not been re-run), the request and backend timeout features (not yet verified against the suite), `GRPCRoute`, `TLSRoute`, and port-based listener features. The report lists what passed, failed, and was skipped.
 
 **Status.** The suite was last run on a `kind` cluster (Linux containers on Docker Desktop) before two data-plane fixes: 31 of the 33 core tests passed, and 2 of the 5 extended tests. The failures had two causes, both in the data plane rather than the controller, and both are now fixed in the data plane:
 
@@ -173,6 +174,7 @@ The controller reads flags or the matching `TITANIUM_GATEWAY_*` environment vari
 | `--config-map` / `--tls-secret` | the Service name, and the Service name plus `-tls` | Objects the controller writes |
 | `--port-map` | `80=8080,443=8443` | Gateway port to data-plane port |
 | `--secret-namespaces` | all | Namespaces whose TLS Secrets are read |
+| `--trusted-proxies` | none | Addresses or CIDR prefixes of hops in front of the data plane (`server.forwardedHeaders.trustedProxies`). Needed for Ingress `ssl-redirect` behind a TLS-terminating load balancer. Chart value: `controller.trustedProxies`. |
 | `--ingress-controller-name` | `titanium.io/ingress-controller` | `IngressClass.spec.controller` to own |
 | `--watch-legacy-annotation` | off | Also own Ingresses that carry the `kubernetes.io/ingress.class` annotation. See [Ingress](/docs/ingress#choosing-the-ingresses-this-controller-serves). |
 | `--admin-port` | `9901` | Data-plane admin port. `TITANIUM_ADMIN_TOKEN` is the bearer token. |

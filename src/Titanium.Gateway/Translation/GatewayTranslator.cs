@@ -212,6 +212,9 @@ internal sealed partial class TranslationPass
                 PreStopDelaySeconds = 5,
                 Readiness = new AdminReadinessConfig { RequireHealthyClusters = false },
             },
+            ForwardedHeaders = _options.TrustedProxies is { Count: > 0 } proxies
+                ? new ForwardedHeadersConfig { TrustedProxies = proxies }
+                : null,
         };
 
         tlsFiles = files.Values.OrderBy(f => f.FileName, StringComparer.Ordinal).ToList();

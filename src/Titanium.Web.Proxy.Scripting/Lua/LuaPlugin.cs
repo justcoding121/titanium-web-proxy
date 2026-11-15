@@ -91,6 +91,10 @@ internal sealed partial class LuaPlugin : IProxyMiddleware, IScriptPhaseHost, IR
         {
             Logger?.LogWarning(ex, "Lua plugin '{Plugin}' on_log failed.", Name);
         }
+        catch (ObjectDisposedException)
+        {
+            // The plugin was swapped out during a reload. The log phase never changes the request outcome.
+        }
     }
 
     private async ValueTask<ScriptPhaseResult> RunPhaseAsync(ScriptPhaseContext context, CancellationToken cancellationToken)
@@ -101,6 +105,9 @@ internal sealed partial class LuaPlugin : IProxyMiddleware, IScriptPhaseHost, IR
             return ScriptPhaseResult.Continue;
         }
 
+        // Options stays readable after dispose; only Pool throws. Capture failMode before the call so a
+        // mid-call dispose still honors the plugin's configured mode.
+        var failOpen = Runtime.Options.FailOpen;
         LuaCallResult result;
         try
         {
@@ -110,6 +117,11 @@ internal sealed partial class LuaPlugin : IProxyMiddleware, IScriptPhaseHost, IR
         catch (LuaScriptException ex)
         {
             return Failed(function, ex);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Reload disposed this plugin mid-call. Fail-open continues; fail-closed refuses like a timeout.
+            return failOpen ? ScriptPhaseResult.Continue : ScriptPhaseResult.Deny(503, "Script failed.");
         }
 
         if (result.Vars is not null)

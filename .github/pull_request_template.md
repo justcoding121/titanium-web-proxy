@@ -4,8 +4,8 @@
 
 ## Edition impact
 
-- [ ] MIT only (`Titanium.Web.Proxy` / Abstractions / Configuration / Cli)
-- [ ] PolyForm NC (`Titanium.Plus` / `Titanium.Inspector`) — maintainers only
+- [ ] MIT only (`Titanium.Web.Proxy` / Abstractions / Configuration / Scripting / Cli / Gateway / Manager)
+- [ ] PolyForm NC (`Titanium.Plus` / `Titanium.Inspector` / `Titanium.Xds` / `Titanium.Cli.GeoIp`) — maintainers only
 
 ## Checklist
 
@@ -16,4 +16,5 @@
 - [ ] Hot-path / terminate-lite behavior preserved when routes unset or ForwardHost-equivalent
 - [ ] PublicAPI.Shipped.txt / Unshipped.txt updated if public surface changed
 - [ ] Target branch is `develop` (unless directed otherwise)
+- [ ] Fork PRs: coverage floors are advisory and diff coverage still blocks; SonarCloud does not analyze them. A maintainer can run `tools/ci/Mirror-ForkPr.ps1` for the full quality gate.
 - [ ] New or changed **supported** capability has a smoke entry in `tests/smoke-matrix.yml` (test FQN or workflow job)

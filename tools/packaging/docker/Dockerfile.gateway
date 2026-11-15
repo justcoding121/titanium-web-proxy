@@ -43,6 +43,8 @@ LABEL org.opencontainers.image.title="Titanium Gateway" \
 
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /out/ /app/
+COPY --chown=1654:1654 src/Titanium.Gateway/LICENSE /app/LICENSE
+COPY --chown=1654:1654 tools/packaging/THIRD-PARTY-GATEWAY.txt /app/THIRD-PARTY-GATEWAY.txt
 
 ENV HOME=/tmp \
     DOTNET_EnableDiagnostics=0 \

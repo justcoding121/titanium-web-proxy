@@ -6,7 +6,7 @@
 helm install titanium-gateway ./deploy/helm/titanium-gateway --namespace gateway-system --create-namespace
 ```
 
-The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that are already installed. If `/healthz` is `200` and `/readyz` stays `503` (`caches not synced`), the cluster's ReferenceGrant CRD is still `v1beta1` only: apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side`. Image tags are `controller.image.tag` and `dataPlane.image.tag` (there is no `image.tag`). An empty tag is the chart `appVersion` (`8.0.2`). A `ClusterIP` Service still supplies `Gateway.status.addresses` from its cluster IP, so `Programmed` does not wait for a load balancer.
+The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that are already installed. If `/healthz` is `200` and `/readyz` stays `503` (`caches not synced`), the cluster's ReferenceGrant CRD is still `v1beta1` only: apply `deploy/helm/titanium-gateway/crds/gateway-api-standard-v1.7.0.yaml` with `kubectl apply --server-side`. Image tags are `controller.image.tag` and `dataPlane.image.tag` (there is no `image.tag`). An empty tag is the chart `appVersion` (`8.0.3`). A `ClusterIP` Service still supplies `Gateway.status.addresses` from its cluster IP, so `Programmed` does not wait for a load balancer.
 
 ## How it works
 
@@ -21,23 +21,24 @@ The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that ar
 ## Supported
 
 - **Gateway:** `HTTP` and `HTTPS` (Terminate) listeners, `hostname`, `allowedRoutes`, `certificateRefs` (a cross-namespace Secret needs a `ReferenceGrant`), `attachedRoutes`, addresses from the data-plane Service.
-- **HTTPRoute:** path `Exact`, `PathPrefix`, `RegularExpression`; header `Exact`; query parameter `Exact` and `RegularExpression`; `method`; Gateway API precedence.
+- **HTTPRoute:** path `Exact`, `PathPrefix`, `RegularExpression`; header `Exact` and `RegularExpression`; query parameter `Exact` and `RegularExpression`; `method`; Gateway API precedence.
 - **Backends:** `Service` backends with `weight`, from **ready** `EndpointSlice` endpoints only.
 - **Filters:** `RequestHeaderModifier`, `ResponseHeaderModifier`, `URLRewrite`, `RequestRedirect`, `RequestMirror`; `timeouts.request` and `timeouts.backendRequest`.
 
 ## Not supported, and differences
 
 - `GRPCRoute`, `TCPRoute`, `UDPRoute`, `TLSRoute`, `BackendTLSPolicy`, TLS `Passthrough`, and `Gateway.spec.addresses` are not handled.
-- A rule that uses an unsupported value (header regular expression, `ReplacePrefixMatch` redirect, a redirect status other than 301 and 302, a second mirror) answers `500`, and the reason is in the route status.
+- A rule that uses an unsupported value (a regular expression the data plane cannot match, a `RequestRedirect` status other than 301, 302, 303, 307, or 308, a `ReplacePrefixMatch` redirect on a match that is not a path prefix, a second mirror) answers `500`, and the reason is in the route status.
 - Routes are global across listeners: the data plane does not scope a route to a listener port. Gateways of one class share one data plane, and their listeners on one port merge. A request no route matches answers `404`.
 - A header modifier `add` appends to a value that is already there, joined with `, ` (`Set-Cookie` keeps one line per cookie).
 - A rule that mixes usable and unusable backends answers `503` for the unusable share, where the specification says `500`.
-- Header values match case-insensitively. `ResponseHeaderModifier` add acts as set.
+- `Exact` header values match case-insensitively. A header `RegularExpression` matches the whole value and is case-sensitive, and only the first value of a repeated header is tested. A header regular expression that uses lookahead or has an unbalanced parenthesis answers `500`. `ResponseHeaderModifier` add acts as set.
+- Upgrade the data plane with the controller (both default to the chart `appVersion`). An older data plane ignores `headerMatches`, so the route would match without that header constraint.
 - Gateway ports `80` and `443` are bound as `8080` and `8443` because the data plane is non-root (`dataPlane.ports`).
 
 ## Conformance
 
-`tools/gateway-conformance/run.sh` runs the upstream Gateway API conformance suite (v1.2.1, `GATEWAY-HTTP`) against the controller in a `kind` cluster; `.github/workflows/gateway-conformance.yml` runs it on Linux and uploads the report. It needs Linux, Docker, `kind`, `kubectl`, and Helm, and does not run on a Windows host (use WSL 2). Only implemented features are claimed. The last run (before the data-plane header-append and SNI-handshake fixes) passed 31 of 33 core tests; it has not been re-run since. The first runs report only; setting the repository variable `GATEWAY_CONFORMANCE_ENFORCE` to `true` makes a failing suite fail the workflow.
+`tools/gateway-conformance/run.sh` runs the upstream Gateway API conformance suite (v1.2.1, `GATEWAY-HTTP`) against the controller in a `kind` cluster; `.github/workflows/gateway-conformance.yml` runs it on Linux and uploads the report. It needs Linux, Docker, `kind`, `kubectl`, and Helm, and does not run on a Windows host (use WSL 2). Only implemented features are claimed; hostless redirects and response-header `add` stay unclaimed until the suite has been re-run. The last run (before the data-plane header-append and SNI-handshake fixes) passed 31 of 33 core tests; it has not been re-run since. The first runs report only; setting the repository variable `GATEWAY_CONFORMANCE_ENFORCE` to `true` makes a failing suite fail the workflow.
 
 ## Ingress
 
@@ -45,4 +46,4 @@ The controller also serves `networking.k8s.io/v1` `Ingress` resources of its `In
 
 ## Security
 
-RBAC is least privilege: reads on the watched kinds, status writes, and `update` and `patch` by name on the data-plane ConfigMap, certificate Secret, Deployment, and Lease, plus `patch` on pods in the release namespace so a config change reaches the pods in seconds. Reading TLS Secrets is cluster-wide by default; set `controller.secretNamespaces` to narrow it. Private keys stay in the controller's memory. Both images run as UID `1654`, read-only, with no capabilities.
+RBAC is least privilege: reads on the watched kinds, status writes, and `update` and `patch` by name on the data-plane ConfigMap, certificate Secret, Deployment, and Lease, plus `patch` on pods in the release namespace so a config change reaches the pods in seconds. Reading TLS Secrets is cluster-wide by default; set `controller.secretNamespaces` to narrow it. Set `controller.trustedProxies` (or `--trusted-proxies`) so Ingress `ssl-redirect` behind a TLS-terminating load balancer honors `X-Forwarded-Proto`. Private keys stay in the controller's memory. Both images run as UID `1654`, read-only, with no capabilities.

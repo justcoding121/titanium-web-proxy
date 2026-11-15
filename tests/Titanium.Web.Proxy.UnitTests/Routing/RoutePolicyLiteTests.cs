@@ -16,7 +16,7 @@ namespace Titanium.Web.Proxy.UnitTests.Routing;
 [DoNotParallelize]
 public class RoutePolicyLiteTests
 {
-    private static readonly TransparentProxyEndPoint EndPoint = new(IPAddress.Loopback, 0, false) { ForwardHost = "127.0.0.1", ForwardPort = 80 };
+    private static readonly TransparentProxyEndPoint EndPoint = new(IPAddress.Loopback, 0, false) { ForwardHost = "127.0.0.1", ForwardPort = 80, ForwardCleartext = true };
 
     [TestInitialize]
     public void Reset() => RoutePolicies.ResetForTests();
@@ -93,21 +93,100 @@ public class RoutePolicyLiteTests
     public void Cors_AnswersAPreflightAndLeavesOtherMethodsAlone()
     {
         var options = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://a.test, https://b.test", Methods = "GET", HeaderName = "X-Custom" });
-        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://b.test")]), "10.0.0.1", out var status, out _, out var headers));
+        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://b.test"), ("Access-Control-Request-Method", "GET")]), "10.0.0.1", out var status, out _, out var headers));
         Assert.AreEqual(204, status);
         Assert.AreEqual("https://b.test", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
         Assert.AreEqual("GET", headers!.Single(h => h.Key == "Access-Control-Allow-Methods").Value);
         Assert.AreEqual("X-Custom", headers!.Single(h => h.Key == "Access-Control-Allow-Headers").Value);
 
-        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://evil.test")]), "10.0.0.1", out _, out _, out headers));
-        Assert.AreEqual("https://a.test", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
+        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://evil.test"), ("Access-Control-Request-Method", "PUT")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(204, status);
+        Assert.IsFalse(headers!.Any(h => h.Key.StartsWith("Access-Control-Allow-", StringComparison.Ordinal)));
 
         Assert.IsFalse(Handle(options, Req("GET"), "10.0.0.1", out _, out _, out _));
 
         var open = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors" });
-        Assert.IsTrue(Handle(open, Req("OPTIONS"), "10.0.0.1", out _, out _, out headers));
+        Assert.IsTrue(Handle(open, Req("OPTIONS", headers: [("Origin", "https://any.test"), ("Access-Control-Request-Method", "GET")]), "10.0.0.1", out _, out _, out headers));
         Assert.AreEqual("*", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
         Assert.AreEqual("GET, POST, OPTIONS", headers!.Single(h => h.Key == "Access-Control-Allow-Methods").Value);
+    }
+
+    [TestMethod]
+    public void Cors_CredentialsReflectTheRequestedHeaders_AndSendMaxAge()
+    {
+        var options = Options(["cors"], new RoutePolicyConfig
+        {
+            Name = "cors",
+            Kind = "cors",
+            Origins = "https://a.test",
+            AllowCredentials = true,
+            MaxAgeSeconds = 600,
+        });
+        Assert.IsTrue(Handle(
+            options,
+            Req("OPTIONS", headers:
+            [
+                ("Origin", "https://a.test"),
+                ("Access-Control-Request-Method", "GET"),
+                ("Access-Control-Request-Headers", "X-Trace"),
+            ]),
+            "10.0.0.1",
+            out _,
+            out _,
+            out var headers));
+        var sent = headers ?? throw new InvalidOperationException("preflight headers");
+        Assert.AreEqual("true", sent.Single(h => h.Key == "Access-Control-Allow-Credentials").Value);
+        Assert.AreEqual("X-Trace", sent.Single(h => h.Key == "Access-Control-Allow-Headers").Value);
+        Assert.AreEqual("600", sent.Single(h => h.Key == "Access-Control-Max-Age").Value);
+    }
+
+    [TestMethod]
+    public void Cors_AnswersOnlyARealPreflight_AndDoesNotEchoAnUnlistedOrigin()
+    {
+        var options = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://a.test, https://b.test" });
+
+        Assert.IsFalse(Handle(options, Req("OPTIONS"), "10.0.0.1", out _, out _, out _), "a plain OPTIONS is not a preflight");
+        Assert.IsFalse(
+            Handle(options, Req("OPTIONS", headers: [("Origin", "https://a.test")]), "10.0.0.1", out _, out _, out _),
+            "Origin alone is not a preflight");
+        Assert.IsFalse(
+            Handle(options, Req("OPTIONS", headers: [("Access-Control-Request-Method", "GET")]), "10.0.0.1", out _, out _, out _),
+            "a request method without Origin is not a preflight");
+
+        Assert.IsTrue(Handle(
+            options,
+            Req("OPTIONS", headers: [("Origin", "https://b.test"), ("Access-Control-Request-Method", "GET")]),
+            "10.0.0.1",
+            out var status,
+            out _,
+            out var headers));
+        Assert.AreEqual(204, status);
+        Assert.IsNotNull(headers);
+        Assert.AreEqual("https://b.test", headers.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
+        StringAssert.Contains(headers.Single(h => h.Key == "Vary").Value, "Access-Control-Request-Method");
+        StringAssert.Contains(headers.Single(h => h.Key == "Vary").Value, "Access-Control-Request-Headers");
+
+        Assert.IsTrue(Handle(
+            options,
+            Req("OPTIONS", headers: [("Origin", "https://evil.test"), ("Access-Control-Request-Method", "PUT")]),
+            "10.0.0.1",
+            out status,
+            out _,
+            out headers));
+        Assert.AreEqual(204, status);
+        Assert.IsNotNull(headers);
+        Assert.IsFalse(headers.Any(h => h.Key.StartsWith("Access-Control-Allow-", StringComparison.Ordinal)));
+        StringAssert.Contains(headers.Single(h => h.Key == "Vary").Value, "Origin");
+
+        var open = Options(["cors"], new RoutePolicyConfig { Name = "cors", Kind = "cors" });
+        Assert.IsTrue(Handle(
+            open,
+            Req("OPTIONS", headers: [("Origin", "https://any.test"), ("Access-Control-Request-Method", "DELETE")]),
+            "10.0.0.1",
+            out _,
+            out _,
+            out headers));
+        Assert.AreEqual("*", headers!.Single(h => h.Key == "Access-Control-Allow-Origin").Value);
     }
 
     [TestMethod]
@@ -138,6 +217,18 @@ public class RoutePolicyLiteTests
         var deny = Options(["net"], new RoutePolicyConfig { Name = "net", Kind = "ipAllowDeny", Deny = "10.0.0.0/8, bad/8, 10.0.0.0/x" });
         Assert.IsTrue(Handle(deny, Req(), "10.9.9.9", out _, out _, out _));
         Assert.IsFalse(Handle(deny, Req(), "11.0.0.1", out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void DenylistSourceRange_DeniesTheListedAddress_AndPassesTheRest()
+    {
+        var options = Options(["net"], new RoutePolicyConfig { Name = "net", Kind = "ipAllowDeny", Deny = "10.9.0.0/16,192.0.2.1" });
+
+        Assert.IsTrue(Handle(options, Req(), "10.9.1.1", out var status, out _, out _));
+        Assert.AreEqual(403, status);
+        Assert.IsTrue(Handle(options, Req(), "192.0.2.1", out var exact, out _, out _));
+        Assert.AreEqual(403, exact);
+        Assert.IsFalse(Handle(options, Req(), "10.8.0.1", out _, out _, out _));
     }
 
     [TestMethod]
@@ -172,7 +263,154 @@ public class RoutePolicyLiteTests
         Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out var status, out _, out _));
         Assert.AreEqual(503, status);
         RoutePolicies.Release(options, "slots");
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
         Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_PerClient_DoesNotShareASlot_AndDropsTheCounterAtZero()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 1, Key = "client" });
+
+        Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _));
+        Assert.IsFalse(Handle(options, Req(), "10.0.0.2", out _, out _, out _), "another client has its own slot");
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out var first, out _, out _));
+        Assert.AreEqual(503, first);
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.2", out var second, out _, out _));
+        Assert.AreEqual(503, second);
+
+        RoutePolicies.Release(options, "slots\u001e10.0.0.1");
+        Assert.IsFalse(Handle(options, Req(), "10.0.0.1", out _, out _, out _), "releasing one client does not free the other");
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.2", out var stillHeld, out _, out _));
+        Assert.AreEqual(503, stillHeld);
+
+        RoutePolicies.Release(options, "slots\u001e10.0.0.1");
+        RoutePolicies.Release(options, "slots\u001e10.0.0.2");
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_AThousandClients_LeaveNoCounters()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 1, Key = "client" });
+        var names = new string[1000];
+        for (var i = 0; i < names.Length; i++)
+        {
+            var address = "10." + (i / 256) + "." + (i % 256) + ".1";
+            Assert.IsFalse(Handle(options, Req(), address, out _, out _, out _), address);
+            names[i] = "slots\u001e" + address;
+        }
+
+        Assert.AreEqual(1000, RoutePolicies.ConnectionSlotCount(options));
+        foreach (var name in names)
+        {
+            RoutePolicies.Release(options, name);
+        }
+
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_ParallelAcquires_NeverExceedTheLimit_AndEndAtZero()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 4, Key = "client" });
+        var held = 0;
+        System.Threading.Tasks.Parallel.For(0, 32, _index =>
+        {
+            if (!Handle(options, Req(), "10.9.9.9", out _, out _, out _))
+            {
+                System.Threading.Interlocked.Increment(ref held);
+            }
+        });
+
+        Assert.IsTrue(held <= 4, "held " + held);
+        Assert.IsTrue(held > 0);
+        for (var i = 0; i < held; i++)
+        {
+            RoutePolicies.Release(options, "slots\u001e10.9.9.9");
+        }
+
+        Assert.AreEqual(0, RoutePolicies.ConnectionSlotCount(options));
+    }
+
+    [TestMethod]
+    public void HttpsRedirect_RedirectsCleartext_AndPassesHttpsAndATrustedProto()
+    {
+        var options = Options(["https"], new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect" });
+        var clear = Req();
+        clear.Host = "app.test";
+        clear.RequestUriString8 = (ByteString)"/old?x=1";
+        Assert.IsTrue(Handle(options, clear, "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(308, status);
+        Assert.IsNotNull(headers);
+        Assert.AreEqual("https://app.test/old?x=1", headers.Single(h => h.Key == "Location").Value);
+
+        var secure = Req();
+        secure.IsHttps = true;
+        secure.Host = "app.test";
+        Assert.IsFalse(Handle(options, secure, "10.0.0.1", out _, out _, out _));
+
+        var trusted = Req();
+        trusted.Host = "app.test";
+        trusted.Headers.AddHeader("X-Forwarded-Proto", "https");
+        Assert.IsFalse(RoutePolicies.TryHandleLite(options, EndPoint, trusted, new IPEndPoint(IPAddress.Parse("10.0.0.8"), 1), out _, out _, out _, ["10.0.0.0/8"]));
+
+        var untrusted = Req();
+        untrusted.Host = "app.test";
+        untrusted.RequestUriString8 = (ByteString)"/old";
+        untrusted.Headers.AddHeader("X-Forwarded-Proto", "https");
+        Assert.IsTrue(Handle(options, untrusted, "192.0.2.1", out var spoofed, out _, out var spoofedHeaders));
+        Assert.AreEqual(308, spoofed);
+        Assert.AreEqual("https://app.test/old", spoofedHeaders!.Single(h => h.Key == "Location").Value);
+
+        var httpProto = Req();
+        httpProto.Host = "app.test";
+        httpProto.RequestUriString8 = (ByteString)"/old";
+        httpProto.Headers.AddHeader("X-Forwarded-Proto", "http");
+        Assert.IsTrue(RoutePolicies.TryHandleLite(options, EndPoint, httpProto, new IPEndPoint(IPAddress.Parse("10.0.0.8"), 1), out var still, out _, out _, ["10.0.0.0/8"]));
+        Assert.AreEqual(308, still);
+    }
+
+    [TestMethod]
+    public void HttpsRedirect_UsesTheConfiguredPortAndStatus_AndRejectsAMalformedHost()
+    {
+        var options = Options(["https"], new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect", Port = 8443, RedirectStatus = 301 });
+        var request = Req();
+        request.Host = "app.test:8080";
+        request.RequestUriString8 = (ByteString)"/old";
+        Assert.IsTrue(Handle(options, request, "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(301, status);
+        Assert.AreEqual("https://app.test:8443/old", headers!.Single(h => h.Key == "Location").Value);
+
+        var broken = Req();
+        broken.Host = "not a host";
+        Assert.IsTrue(Handle(options, broken, "10.0.0.1", out var bad, out _, out var badHeaders));
+        Assert.AreEqual(400, bad);
+        Assert.IsNull(badHeaders);
+    }
+
+    [TestMethod]
+    public void HttpsRedirect_SessionPath_RedirectsCleartext()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var options = Options(["https"], new RoutePolicyConfig { Name = "https", Kind = "httpsRedirect" });
+        proxy.ReverseProxy = options;
+        var session = TestSessions.Create(proxy, "192.0.2.9");
+        session.HttpClient.Request.Host = "app.test";
+        session.HttpClient.Request.RequestUriString8 = (ByteString)"/from-session?q=1";
+        session.HttpClient.Request.IsHttps = false;
+
+        var route = options.Routes![0];
+        Assert.IsTrue(RoutePolicies.TryDeny(proxy, session, route));
+        Assert.AreEqual(308, (int)session.HttpClient.Response.StatusCode);
+        Assert.AreEqual("https://app.test/from-session?q=1", session.HttpClient.Response.Headers.GetHeaderValueOrNull("Location"));
+    }
+
+    [TestMethod]
+    public void ConnectionLimit_KeyedStillBlocksTerminateLite()
+    {
+        var options = Options(["slots"], new RoutePolicyConfig { Name = "slots", Kind = "connectionLimit", Limit = 2, Key = "route" });
+        Assert.IsTrue(RoutePolicies.HoldsConnectionSlot(options));
     }
 
     [TestMethod]
@@ -248,5 +486,126 @@ public class RoutePolicyLiteTests
             Policies = [new RoutePolicyConfig { Name = "rate", Kind = "rateLimit", Limit = 1 }],
         };
         Assert.IsTrue(ReverseProxyFastPath.RequiresPerRequestDispatch(guarded, EndPoint));
+    }
+
+    [TestMethod]
+    public void Denial_OnACorsRoute_EchoesTheListedOrigin()
+    {
+        var cors = new RoutePolicyConfig
+        {
+            Name = "cors",
+            Kind = "cors",
+            Origins = "https://app.example.com",
+            ExposeHeaders = "X-Trace",
+            AllowCredentials = true,
+        };
+        var key = new RoutePolicyConfig { Name = "key", Kind = "apiKey", HeaderName = "X-Api-Key", HeaderValue = "secret" };
+        var options = Options(["key", "cors"], key, cors);
+
+        Assert.IsTrue(Handle(options, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(401, status);
+        Assert.AreEqual("https://app.example.com", One(headers, "Access-Control-Allow-Origin"));
+        Assert.AreEqual("Origin", One(headers, "Vary"));
+        Assert.AreEqual("true", One(headers, "Access-Control-Allow-Credentials"));
+        Assert.AreEqual("X-Trace", One(headers, "Access-Control-Expose-Headers"));
+
+        Assert.IsTrue(Handle(options, Req(headers: [("Origin", "https://evil.example")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(401, status);
+        Assert.IsNull(One(headers, "Access-Control-Allow-Origin"));
+
+        Assert.IsTrue(Handle(options, Req(), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(401, status);
+        Assert.IsNull(One(headers, "Access-Control-Allow-Origin"));
+
+        var bare = Options(["key"], key);
+        Assert.IsTrue(Handle(bare, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out _, out _, out headers));
+        Assert.IsNull(One(headers, "Access-Control-Allow-Origin"));
+    }
+
+    [TestMethod]
+    public void RealPreflight_SkipsApiKeyAndRequireHeader_WithoutDoublingHeaders()
+    {
+        var cors = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://app.example.com", Methods = "GET" };
+        var key = new RoutePolicyConfig { Name = "key", Kind = "apiKey", HeaderName = "X-Api-Key", HeaderValue = "secret" };
+        var options = Options(["key", "cors"], key, cors);
+        var preflight = Req("OPTIONS", headers: [("Origin", "https://app.example.com"), ("Access-Control-Request-Method", "GET")]);
+        Assert.IsTrue(Handle(options, preflight, "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(204, status);
+        Assert.IsNotNull(headers);
+        Assert.AreEqual(1, headers.Count(h => h.Key == "Access-Control-Allow-Origin"));
+        Assert.AreEqual(1, headers.Count(h => h.Key == "Vary"));
+
+        Assert.IsTrue(Handle(options, Req("OPTIONS", headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(401, status);
+        Assert.AreEqual("https://app.example.com", One(headers, "Access-Control-Allow-Origin"));
+
+        var need = new RoutePolicyConfig { Name = "need", Kind = "requireHeader", HeaderName = "X-Tenant", HeaderValue = "t1" };
+        var guarded = Options(["need", "cors"], need, cors);
+        Assert.IsTrue(Handle(guarded, preflight, "10.0.0.1", out status, out _, out _));
+        Assert.AreEqual(204, status);
+    }
+
+    [TestMethod]
+    public void BodyRateAndAddressDenials_CarryCors_AndAPreflightStillHitsTheAddressPolicy()
+    {
+        var star = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "*" };
+        var cap = Options(
+            ["cap", "cors"],
+            new RoutePolicyConfig { Name = "cap", Kind = "maxRequestBodySize", MaxRequestBodyBytes = 1 },
+            star);
+        Assert.IsTrue(Handle(cap, Req("POST", 10, ("Origin", "https://app.example.com")), "10.0.0.1", out var status, out _, out var headers));
+        Assert.AreEqual(413, status);
+        Assert.AreEqual("*", One(headers, "Access-Control-Allow-Origin"));
+        Assert.IsNull(One(headers, "Vary"));
+
+        RoutePolicies.Clock = new ManualTimeProvider();
+        var rate = Options(
+            ["rate", "cors"],
+            new RoutePolicyConfig { Name = "rate", Kind = "rateLimit", Limit = 1, WindowSeconds = 60 },
+            star);
+        Assert.IsFalse(Handle(rate, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out _, out _, out _));
+        Assert.IsTrue(Handle(rate, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(429, status);
+        Assert.AreEqual("*", One(headers, "Access-Control-Allow-Origin"));
+        Assert.IsNotNull(One(headers, "Retry-After"));
+
+        var listed = new RoutePolicyConfig { Name = "cors", Kind = "cors", Origins = "https://app.example.com" };
+        var net = Options(
+            ["net", "cors"],
+            new RoutePolicyConfig { Name = "net", Kind = "ipAllowDeny", Allow = "10.1.0.0/16" },
+            listed);
+        Assert.IsTrue(Handle(net, Req(headers: [("Origin", "https://app.example.com")]), "10.0.0.1", out status, out _, out headers));
+        Assert.AreEqual(403, status);
+        Assert.AreEqual("https://app.example.com", One(headers, "Access-Control-Allow-Origin"));
+        Assert.IsTrue(Handle(
+            net,
+            Req("OPTIONS", headers: [("Origin", "https://app.example.com"), ("Access-Control-Request-Method", "GET")]),
+            "10.0.0.1",
+            out status,
+            out _,
+            out _));
+        Assert.AreEqual(403, status);
+    }
+
+    private static string? One(List<KeyValuePair<string, string>>? headers, string name)
+    {
+        if (headers is null)
+        {
+            return null;
+        }
+
+        string? value = null;
+        var seen = 0;
+        foreach (var pair in headers)
+        {
+            if (pair.Key == name)
+            {
+                seen++;
+                value = pair.Value;
+            }
+        }
+
+        Assert.IsTrue(seen <= 1, name);
+        return value;
     }
 }

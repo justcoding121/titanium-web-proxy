@@ -17,6 +17,7 @@ public sealed partial class GatewayChartTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string ChartDir = Path.Combine(RepoRoot, "deploy", "helm", "titanium-gateway");
+    private static readonly string[] TrustedProxyCidr10 = ["10.0.0.0/8"];
 
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([ChartDir, .. parts]));
 
@@ -73,11 +74,20 @@ public sealed partial class GatewayChartTests
         environment["TITANIUM_GATEWAY_PORT_MAP"] = "80=8080";
         environment["TITANIUM_GATEWAY_ADMIN_PORT"] = "9901";
         environment["TITANIUM_GATEWAY_HEALTH_PORT"] = "8081";
+        // A CIDR is required; the chart only sets this when controller.trustedProxies is non-empty.
+        if (environment.ContainsKey("TITANIUM_GATEWAY_TRUSTED_PROXIES"))
+        {
+            environment["TITANIUM_GATEWAY_TRUSTED_PROXIES"] = "10.0.0.0/8";
+        }
 
         // An option the controller does not know is rejected, so a typo in the chart fails here and not in a pod.
         var options = GatewayOptions.Parse([], environment);
         Assert.AreEqual("x", options.DataPlaneService);
         Assert.AreEqual("x", options.DataPlaneDeployment);
+        if (names.Contains("TITANIUM_GATEWAY_TRUSTED_PROXIES"))
+        {
+            CollectionAssert.AreEqual(TrustedProxyCidr10, options.TrustedProxies.ToArray());
+        }
     }
 
     [TestMethod]

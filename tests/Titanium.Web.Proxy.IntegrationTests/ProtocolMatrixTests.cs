@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -45,6 +46,55 @@ public class ProtocolMatrixTests
         using var response = await SendAsync(proxy, kind, "/api", headers: [("X-Lane", "east")]);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
         StringAssert.Contains(await response.Content.ReadAsStringAsync(), "/east/api");
+    }
+
+    [DataTestMethod]
+    [DataRow(ClientKind.H1Cleartext)]
+    [DataRow(ClientKind.H1Tls)]
+    [DataRow(ClientKind.H2Tls)]
+    [Timeout(30_000)]
+    public async Task HeaderRegex_SelectsTheRouteOnlyForAWholeValueMatch(ClientKind kind)
+    {
+        await using var origin = new RecordingOrigin((request, _) => (200, FirstLine(request)));
+        await using var proxy = await StartAsync(origin.Port, RoutesForHeaderRegex(), kind);
+
+        using var hit = await SendAsync(proxy, kind, "/api", headers: [("X-Build", "v12")]);
+        Assert.AreEqual(HttpStatusCode.OK, hit.StatusCode);
+        StringAssert.Contains(await hit.Content.ReadAsStringAsync(), "/build/api");
+
+        foreach (var value in new[] { "v12x", "V12", "xv12" })
+        {
+            using var miss = await SendAsync(proxy, kind, "/api", headers: [("X-Build", value)]);
+            var body = await miss.Content.ReadAsStringAsync();
+            Assert.IsFalse(body.Contains("/build/api", StringComparison.Ordinal), $"{value}: {body}");
+            StringAssert.Contains(body, "/api");
+        }
+
+        using var missing = await SendAsync(proxy, kind, "/api");
+        var missingBody = await missing.Content.ReadAsStringAsync();
+        Assert.IsFalse(missingBody.Contains("/build/api", StringComparison.Ordinal), missingBody);
+    }
+
+    [DataTestMethod]
+    [DataRow("X-Build: nope\r\nX-Build: v9\r\n", false)]
+    [DataRow("X-Build: v9\r\nX-Build: nope\r\n", true)]
+    [Timeout(30_000)]
+    public async Task HeaderRegex_TestsOnlyTheFirstLineOfARepeatedHeader(string headerLines, bool expectRegexRoute)
+    {
+        await using var origin = new RecordingOrigin((request, _) => (200, FirstLine(request)));
+        await using var proxy = await StartAsync(origin.Port, RoutesForHeaderRegex(), ClientKind.H1Cleartext);
+
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, proxy.Clear.Port);
+        await using var stream = client.GetStream();
+        var request = "GET http://matrix.test/api HTTP/1.1\r\nHost: matrix.test\r\n" + headerLines +
+                      "Connection: close\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(request));
+        using var reader = new StreamReader(stream, Encoding.ASCII);
+        var response = await reader.ReadToEndAsync();
+
+        StringAssert.Contains(response, "200");
+        Assert.AreEqual(expectRegexRoute, response.Contains("/build/api", StringComparison.Ordinal), response);
     }
 
     [DataTestMethod]
@@ -260,6 +310,37 @@ public class ProtocolMatrixTests
                 PathKind = PathMatchKind.Prefix,
                 Headers = new Dictionary<string, string> { ["X-Lane"] = "west" },
             },
+        },
+    ];
+
+    private static RouteConfig[] RoutesForHeaderRegex() =>
+    [
+        new RouteConfig
+        {
+            Id = "build",
+            ClusterId = "c1",
+            Order = 1,
+            Match = new RouteMatch
+            {
+                Path = "/",
+                PathKind = PathMatchKind.Prefix,
+                HeaderMatches = [new HeaderValueMatch { Name = "X-Build", Value = "v[0-9]+", Kind = HeaderMatchKind.Regex }],
+            },
+            Transforms =
+            [
+                new TransformConfig
+                {
+                    Kind = "PathPrefix",
+                    Parameters = new Dictionary<string, string> { ["prefix"] = "/build" },
+                },
+            ],
+        },
+        new RouteConfig
+        {
+            Id = "fallback",
+            ClusterId = "c1",
+            Order = 2,
+            Match = new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix },
         },
     ];
 
