@@ -47,7 +47,7 @@ public static partial class IngressAnnotations
     [
         new("ssl-redirect", "`true` or `false` (default)",
             "`httpsRedirect` policy",
-            "`true` redirects a cleartext request to https and leaves an https request alone. A trusted proxy that sends `X-Forwarded-Proto: https` is treated as already secure. `false` does nothing."),
+            "`true` redirects a cleartext request to https and leaves an https request alone. A peer in `controller.trustedProxies` (or `--trusted-proxies`) that sends `X-Forwarded-Proto: https` is treated as already secure. Without that list, a TLS-terminating load balancer in front of the data plane will redirect forever. `false` does nothing."),
         new("rewrite-target", "a path starting with `/`",
             "`PathRegexReplace` transform",
             "Replaces the matched prefix (`Prefix`, `ImplementationSpecific`) or the whole path (`Exact`). Capture groups (`$1`) are not supported and are rejected. The query string is kept."),

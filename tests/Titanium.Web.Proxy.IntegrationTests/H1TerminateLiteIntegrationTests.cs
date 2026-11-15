@@ -785,6 +785,83 @@ public class H1TerminateLiteIntegrationTests
 
     [TestMethod]
     [Timeout(30_000)]
+    public async Task CancelledLiteRequest_IsNotRecordedAs502()
+    {
+        var originReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var originHold = new CancellationTokenSource();
+        await using var origin = Http11Origin.Start(async s =>
+        {
+            await DrainRequestAsync(s);
+            originReady.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, originHold.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                // The test releases the hold after the proxy has been stopped.
+            }
+        });
+        var (proxy, ep) = StartProxy(origin.Port);
+        try
+        {
+            await AttachRouteAsync(proxy, origin.Port, new RouteMatch { Path = "/", PathKind = PathMatchKind.Prefix });
+            using var listener = new MeterListener();
+            long requests = 0;
+            string? statusClass = null;
+            listener.InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == ProxyMetrics.MeterName && instrument.Name == "twp.proxy.requests")
+                    meterListener.EnableMeasurementEvents(instrument);
+            };
+            listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+            {
+                if (instrument.Name != "twp.proxy.requests")
+                    return;
+
+                requests += measurement;
+                foreach (var tag in tags)
+                {
+                    if (tag.Key == "status_class")
+                        statusClass = tag.Value?.ToString();
+                }
+            });
+            listener.Start();
+
+            using var client = MakeClient();
+            var send = client.GetAsync($"https://127.0.0.1:{ep.Port}/");
+            await originReady.Task.WaitAsync(Step);
+            // Stopping cancels the accept-loop token that lite observes as OperationCanceledException.
+            proxy.Stop();
+            try
+            {
+                await send;
+            }
+            catch (HttpRequestException)
+            {
+            }
+            catch (TaskCanceledException)
+            {
+            }
+
+            var countedBy = Environment.TickCount64 + 2_000;
+            while (requests == 0 && Environment.TickCount64 < countedBy)
+                await Task.Delay(1);
+
+            Assert.AreEqual(1, requests);
+            Assert.AreEqual("none", statusClass);
+        }
+        finally
+        {
+            await originHold.CancelAsync();
+            if (proxy.ProxyRunning)
+                proxy.Stop();
+            proxy.Dispose();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(30_000)]
     public async Task OriginCloses_CountsOneFailedLiteRequest()
     {
         await using var origin = Http11Origin.Start(s =>

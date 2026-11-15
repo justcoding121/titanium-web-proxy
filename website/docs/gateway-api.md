@@ -174,6 +174,7 @@ The controller reads flags or the matching `TITANIUM_GATEWAY_*` environment vari
 | `--config-map` / `--tls-secret` | the Service name, and the Service name plus `-tls` | Objects the controller writes |
 | `--port-map` | `80=8080,443=8443` | Gateway port to data-plane port |
 | `--secret-namespaces` | all | Namespaces whose TLS Secrets are read |
+| `--trusted-proxies` | none | Addresses or CIDR prefixes of hops in front of the data plane (`server.forwardedHeaders.trustedProxies`). Needed for Ingress `ssl-redirect` behind a TLS-terminating load balancer. Chart value: `controller.trustedProxies`. |
 | `--ingress-controller-name` | `titanium.io/ingress-controller` | `IngressClass.spec.controller` to own |
 | `--watch-legacy-annotation` | off | Also own Ingresses that carry the `kubernetes.io/ingress.class` annotation. See [Ingress](/docs/ingress#choosing-the-ingresses-this-controller-serves). |
 | `--admin-port` | `9901` | Data-plane admin port. `TITANIUM_ADMIN_TOKEN` is the bearer token. |
