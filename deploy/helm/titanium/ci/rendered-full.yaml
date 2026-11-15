@@ -42,7 +42,6 @@ spec:
         protocol: TCP
       to:
       - namespaceSelector: {}
-
 ---
 # Source: titanium/templates/pdb.yaml
 apiVersion: policy/v1
@@ -61,7 +60,6 @@ spec:
     matchLabels:
       app.kubernetes.io/name: titanium
       app.kubernetes.io/instance: rel
-
 ---
 # Source: titanium/templates/serviceaccount.yaml
 apiVersion: v1
@@ -75,7 +73,6 @@ metadata:
     app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 automountServiceAccountToken: false
-
 ---
 # Source: titanium/templates/secret.yaml
 apiVersion: v1
@@ -91,7 +88,6 @@ metadata:
 type: Opaque
 data:
   admin-token: "Y2ktc25hcHNob3QtYWRtaW4tdG9rZW4tbm90LWEtc2VjcmV0"
-
 ---
 # Source: titanium/templates/configmap.yaml
 apiVersion: v1
@@ -142,7 +138,6 @@ data:
         preStopDelaySeconds: 10
         readiness:
           requireHealthyClusters: true
-
 ---
 # Source: titanium/templates/service.yaml
 apiVersion: v1
@@ -166,7 +161,6 @@ spec:
   selector:
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-
 ---
 # Source: titanium/templates/service.yaml
 apiVersion: v1
@@ -190,7 +184,6 @@ spec:
   selector:
     app.kubernetes.io/name: titanium
     app.kubernetes.io/instance: rel
-
 ---
 # Source: titanium/templates/deployment.yaml
 apiVersion: apps/v1
@@ -322,7 +315,6 @@ spec:
         - name: plus-secret
           secret:
             secretName: titanium-plus
-
 ---
 # Source: titanium/templates/hpa.yaml
 apiVersion: autoscaling/v2
@@ -355,7 +347,6 @@ spec:
         target:
           type: Utilization
           averageUtilization: 80
-
 ---
 # Source: titanium/templates/servicemonitor.yaml
 apiVersion: monitoring.coreos.com/v1
