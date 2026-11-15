@@ -5,9 +5,9 @@ kind: PodDisruptionBudget
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 spec:
   minAvailable: 1
@@ -16,6 +16,7 @@ spec:
       app.kubernetes.io/name: titanium-gateway
       app.kubernetes.io/instance: rel
       app.kubernetes.io/component: controller
+
 ---
 # Source: titanium-gateway/templates/dataplane.yaml
 apiVersion: policy/v1
@@ -23,9 +24,9 @@ kind: PodDisruptionBudget
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 spec:
   maxUnavailable: 1
@@ -34,6 +35,7 @@ spec:
       app.kubernetes.io/name: titanium-gateway
       app.kubernetes.io/instance: rel
       app.kubernetes.io/component: data-plane
+
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 # The controller's service account. It reads the cluster, writes status on Gateway API resources, and writes only the
@@ -43,13 +45,14 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
     app.kubernetes.io/component: controller
+
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 # The data plane never talks to the Kubernetes API.
@@ -58,14 +61,15 @@ kind: ServiceAccount
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
     app.kubernetes.io/component: data-plane
 automountServiceAccountToken: false
+
 ---
 # Source: titanium-gateway/templates/bootstrap.yaml
 apiVersion: v1
@@ -73,9 +77,9 @@ kind: Secret
 metadata:
   name: rel-titanium-gateway-data-tls
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -83,6 +87,7 @@ metadata:
   annotations:
     helm.sh/resource-policy: keep
 type: Opaque
+
 ---
 # Source: titanium-gateway/templates/bootstrap.yaml
 apiVersion: v1
@@ -90,13 +95,14 @@ kind: Secret
 metadata:
   name: rel-titanium-gateway-admin
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 type: Opaque
 data:
   admin-token: "Y2ktc25hcHNob3QtYWRtaW4tdG9rZW4tbm90LWEtc2VjcmV0"
+
 ---
 # Source: titanium-gateway/templates/bootstrap.yaml
 apiVersion: v1
@@ -104,9 +110,9 @@ kind: ConfigMap
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -116,6 +122,7 @@ metadata:
 data:
   twp.yaml: |
     {"schemaVersion":"7.1","listeners":[],"routes":[{"id":"titanium-gateway-no-match","clusterId":"titanium-gateway-none","match":{"path":"/","pathKind":"prefix","pathCaseSensitive":true},"order":1,"directResponse":{"status":404},"grpcWeb":false}],"clusters":[],"policies":[],"server":{"admin":{"enabled":true,"host":"0.0.0.0","port":9901,"authTokenEnv":"TITANIUM_ADMIN_TOKEN","readiness":{"requireHealthyClusters":false},"preStopDelaySeconds":5}}}
+
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -123,9 +130,9 @@ kind: ClusterRole
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 rules:
   - apiGroups: ["gateway.networking.k8s.io"]
@@ -155,6 +162,7 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     verbs: ["get", "list", "watch"]
+
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -162,9 +170,9 @@ kind: ClusterRoleBinding
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -174,6 +182,7 @@ subjects:
   - kind: ServiceAccount
     name: rel-titanium-gateway-controller
     namespace: gateway-system
+
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -181,9 +190,9 @@ kind: Role
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 rules:
   # Leader election.
@@ -213,6 +222,7 @@ rules:
     resources: ["deployments"]
     resourceNames: ["rel-titanium-gateway-data"]
     verbs: ["get", "patch"]
+
 ---
 # Source: titanium-gateway/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -220,9 +230,9 @@ kind: RoleBinding
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 roleRef:
   apiGroup: rbac.authorization.k8s.io
@@ -232,6 +242,7 @@ subjects:
   - kind: ServiceAccount
     name: rel-titanium-gateway-controller
     namespace: gateway-system
+
 ---
 # Source: titanium-gateway/templates/dataplane.yaml
 # The Service the Gateway status address comes from, and the one whose ready EndpointSlice endpoints the controller polls.
@@ -240,9 +251,9 @@ kind: Service
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -262,6 +273,7 @@ spec:
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
     app.kubernetes.io/component: data-plane
+
 ---
 # Source: titanium-gateway/templates/controller-deployment.yaml
 apiVersion: apps/v1
@@ -269,9 +281,9 @@ kind: Deployment
 metadata:
   name: rel-titanium-gateway-controller
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -286,9 +298,9 @@ spec:
   template:
     metadata:
       labels:
-        helm.sh/chart: titanium-gateway-1.0.2
+        helm.sh/chart: titanium-gateway-1.0.3
         app.kubernetes.io/part-of: titanium-gateway
-        app.kubernetes.io/version: "8.0.2"
+        app.kubernetes.io/version: "8.0.3"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: titanium-gateway
         app.kubernetes.io/instance: rel
@@ -306,7 +318,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: controller
-          image: "ghcr.io/justcoding121/titanium-gateway:8.0.2"
+          image: "ghcr.io/justcoding121/titanium-gateway:8.0.3"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -383,6 +395,7 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 32Mi
+
 ---
 # Source: titanium-gateway/templates/dataplane.yaml
 # The data plane: the Titanium proxy image running `titanium run --config /etc/titanium/twp.yaml --watch`. The controller
@@ -393,9 +406,9 @@ kind: Deployment
 metadata:
   name: rel-titanium-gateway-data
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/name: titanium-gateway
     app.kubernetes.io/instance: rel
@@ -415,9 +428,9 @@ spec:
   template:
     metadata:
       labels:
-        helm.sh/chart: titanium-gateway-1.0.2
+        helm.sh/chart: titanium-gateway-1.0.3
         app.kubernetes.io/part-of: titanium-gateway
-        app.kubernetes.io/version: "8.0.2"
+        app.kubernetes.io/version: "8.0.3"
         app.kubernetes.io/managed-by: Helm
         app.kubernetes.io/name: titanium-gateway
         app.kubernetes.io/instance: rel
@@ -436,7 +449,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: titanium
-          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.2"
+          image: "ghcr.io/justcoding121/titanium-web-proxy:8.0.3"
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -511,6 +524,7 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 64Mi
+
 ---
 # Source: titanium-gateway/templates/ingressclass.yaml
 apiVersion: networking.k8s.io/v1
@@ -518,12 +532,13 @@ kind: IngressClass
 metadata:
   name: titanium
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 spec:
   controller: titanium.io/ingress-controller
+
 ---
 # Source: titanium-gateway/templates/gatewayclass.yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -531,9 +546,9 @@ kind: GatewayClass
 metadata:
   name: titanium
   labels:
-    helm.sh/chart: titanium-gateway-1.0.2
+    helm.sh/chart: titanium-gateway-1.0.3
     app.kubernetes.io/part-of: titanium-gateway
-    app.kubernetes.io/version: "8.0.2"
+    app.kubernetes.io/version: "8.0.3"
     app.kubernetes.io/managed-by: Helm
 spec:
   controllerName: titaniumproxy.com/gateway-controller
