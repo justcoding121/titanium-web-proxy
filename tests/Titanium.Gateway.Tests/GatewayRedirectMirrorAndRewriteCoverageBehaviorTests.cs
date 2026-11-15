@@ -16,6 +16,8 @@ namespace Titanium.Gateway.Tests;
 [TestClass]
 public class GatewayRedirectMirrorAndRewriteCoverageBehaviorTests
 {
+    private static readonly string[] ConcreteRedirectHosts = ["a.example", "b.example"];
+
     private static void AssertValid(RenderResult result) =>
         Assert.AreEqual(0, TwpConfigValidator.Validate(result.Config).Count, string.Join("; ", TwpConfigValidator.Validate(result.Config)));
 
@@ -95,9 +97,9 @@ public class GatewayRedirectMirrorAndRewriteCoverageBehaviorTests
                 },
             ],
         };
-        var routes = Render(b, Route("r", "default", ["a.example", "b.example"], rule)).Config.UserRoutes();
+        var routes = Render(b, Route("r", "default", ConcreteRedirectHosts, rule)).Config.UserRoutes();
 
-        CollectionAssert.AreEquivalent(new[] { "a.example", "b.example" }, routes.Select(r => r.Redirect!.Host).ToArray());
+        CollectionAssert.AreEquivalent(ConcreteRedirectHosts, routes.Select(r => r.Redirect!.Host).ToArray());
         Assert.IsTrue(routes.All(r => !r.Redirect!.UseRequestHost));
     }
 
