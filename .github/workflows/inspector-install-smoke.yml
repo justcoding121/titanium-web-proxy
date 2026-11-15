@@ -40,15 +40,38 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $root = $pwd.Path
           $browsers = Start-Job -ScriptBlock {
-            $ErrorActionPreference = 'Stop'
-            $ok = $false
-            for ($i = 1; $i -le 3 -and -not $ok; $i++) {
-              choco install brave opera -y --no-progress
-              $brave = Test-Path "${env:ProgramFiles}\BraveSoftware\Brave-Browser\Application\brave.exe"
-              $opera = (Test-Path "${env:ProgramFiles}\Opera\opera.exe") -or (Test-Path "$env:LOCALAPPDATA\Programs\Opera\opera.exe")
-              if ($brave -and $opera) { $ok = $true } else { Start-Sleep -Seconds 5 }
+            $ErrorActionPreference = 'Continue'
+            function Find-Exe([string[]]$candidates, [string]$leaf) {
+              foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
+              foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)) {
+                if (-not $root -or -not (Test-Path $root)) { continue }
+                $hit = Get-ChildItem -Path $root -Filter $leaf -Recurse -Depth 5 -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -notmatch 'chocolatey' } |
+                  Select-Object -First 1
+                if ($hit) { return $hit.FullName }
+              }
+              return $null
             }
-            if (-not $ok) { throw 'Brave or Opera did not install' }
+            $bravePath = $null
+            $operaPath = $null
+            for ($i = 1; $i -le 3 -and (-not $bravePath -or -not $operaPath); $i++) {
+              choco install brave opera -y --no-progress
+              $bravePath = Find-Exe @(
+                "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
+                "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
+              ) 'brave.exe'
+              $operaPath = Find-Exe @(
+                "$env:ProgramFiles\Opera\opera.exe",
+                "$env:ProgramFiles\Opera\launcher.exe",
+                "$env:LOCALAPPDATA\Programs\Opera\opera.exe"
+              ) 'opera.exe'
+              if (-not $operaPath -and (Test-Path "$env:ProgramFiles\Opera\launcher.exe")) {
+                $operaPath = "$env:ProgramFiles\Opera\launcher.exe"
+              }
+            }
+            Write-Output "brave=$bravePath"
+            Write-Output "opera=$operaPath"
+            if (-not $bravePath -or -not $operaPath) { throw 'Brave or Opera did not install' }
           }
           $download = Start-Job -ArgumentList $root, $env:GH_TOKEN, $env:GITHUB_REPOSITORY -ScriptBlock {
             param($root, $token, $repo)
