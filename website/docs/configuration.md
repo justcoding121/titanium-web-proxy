@@ -353,6 +353,30 @@ Match fields typically include host, path (`Exact` / `Prefix` / `Template`), met
 
 A `rateLimit` policy counts requests per key and answers 429 with `Retry-After` (whole seconds until the window ends or a token is back) when the limit is spent. `key` picks what is counted: `client` (default, the socket address), `forwardedClient` (the rightmost `X-Forwarded-For` entry that is not in `server.forwardedHeaders.trustedProxies`, used only when the peer itself is trusted, otherwise the socket address), `header:<Name>`, `cookie:<Name>`, or `route`. A header or cookie value is stored as a 16-byte SHA-256 prefix, and a request without it is counted by client address. `algorithm` is `fixedWindow` (default, `limit` requests per `windowSeconds`) or `tokenBucket` (refills `limit` tokens per `windowSeconds` up to `burst`, which defaults to `limit`). `maxKeys` (1000 to 10000000, default 100000) bounds the counters kept per policy: when full, expired counters are dropped, and any further new key shares one overflow counter, so a client that rotates header values cannot grow memory or dodge the limit. `emitHeaders` (default false) adds `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` to the 429. With the default keys and algorithm, counting is unchanged. The default `scope` is `node`: counters stay in process memory per proxy instance.
 
+### Connection limit (route policy `connectionLimit`) {#connection-limit}
+
+A `connectionLimit` policy caps how many requests may hold a slot at once and answers `503` when the limit is spent. The slot is released when the request ends. Unset `key` means one counter for the whole policy. `key` may be `client` (the socket address), `forwardedClient` (same resolution as rate limit), or `route` (one counter per route id). `header:` and `cookie:` keys are rejected when the config loads. A route that lists a connection limit leaves terminate-lite.
+
+### HTTPS redirect (route policy `httpsRedirect`) {#https-redirect}
+
+An `httpsRedirect` policy redirects a cleartext request to https and leaves an https request alone. A peer in `server.forwardedHeaders.trustedProxies` that sends `X-Forwarded-Proto: https` is treated as already secure. `port` (1-65535) is written on the `Location` when it is not 443; omit it for the default. `redirectStatus` is 301, 302, 307, or 308 (default 308). A request whose `Host` cannot be used in a `Location` answers `400`.
+
+```yaml twp-fragment
+policies:
+  - name: force-https
+    kind: httpsRedirect
+    redirectStatus: 308
+routes:
+  - id: app
+    clusterId: web
+    match: { path: /, pathKind: Prefix }
+    policies: [force-https]
+```
+
+### Redirects {#redirects}
+
+A route `redirect` answers without an upstream. `status` must be a 3xx code. `path` sets the path (and may include a query that `preserveQuery` can re-append). `replacePrefixFrom` with `replacePrefixTo` swaps a leading path segment prefix and keeps the rest; empty means the root; neither may be set together with `path`, and `replacePrefixTo` needs `replacePrefixFrom`. `httpToHttps` upgrades a cleartext redirect. With `useRequestHost` and no `host`, the absolute `Location` is built from the host the client sent; the request port is kept only when neither `scheme` nor `port` is set (and `httpToHttps` did not upgrade). An absolute-form request target or a host that is not a plain name or address falls back to a relative `Location`.
+
 ### Geo (route policy `geo`) {#geo-route-policy-geo}
 
 A route can allow or deny clients by country using an operator-supplied MaxMind DB (MMDB) country database. This is a Plus feature: set `plus.enabled: true`, set `server.geoIpDatabasePath` to the file path, then attach a `geo` policy to the route. `titanium test` rejects a geo policy or database path without Plus. The policy reuses the same `allow` and `deny` fields as `ipAllowDeny`, but values are comma-separated two-letter ISO 3166-1 country codes (for example `US, CA, GB`).

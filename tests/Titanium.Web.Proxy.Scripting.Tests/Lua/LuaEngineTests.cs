@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Net;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Abstractions.Plugins;
@@ -374,5 +376,43 @@ public class LuaEngineTests
         Assert.AreEqual(0, errors);
         Assert.IsFalse(seen.IsEmpty);
         Assert.IsTrue(seen.All(v => v == "2"), string.Join(",", seen.Distinct()));
+    }
+
+    [TestMethod]
+    public async Task Disposed_plugin_honors_fail_mode_on_phase_calls()
+    {
+        using var closed = Create(Config("function on_request_headers(ctx) end", failMode: "closed"));
+        closed.Dispose();
+        var denied = await closed.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
+        Assert.AreEqual(ScriptAction.Deny, denied.Action);
+        Assert.AreEqual(503, denied.LocalResponse?.Status);
+
+        using var open = Create(Config("function on_request_headers(ctx) end", failMode: "open"));
+        open.Dispose();
+        var continued = await open.OnRequestHeadersAsync(Phase(ScriptPhases.RequestHeaders), CancellationToken.None);
+        Assert.AreEqual(ScriptAction.Continue, continued.Action);
+    }
+
+    [TestMethod]
+    public async Task Disposed_plugin_swallows_log_and_stream_failures()
+    {
+        using var plugin = Create(Config("""
+            function on_request_headers(ctx) end
+            function on_log(ctx) end
+            function on_connect(ctx) end
+            function on_data(ctx) end
+            """));
+        plugin.Dispose();
+
+        await plugin.OnLogAsync(Phase(ScriptPhases.Log), CancellationToken.None);
+
+        var connection = new StreamConnectionContext
+        {
+            ClientEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 1),
+            LocalEndPoint = new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, 443),
+            Items = new Dictionary<string, object?>(),
+        };
+        // Stream path returns Deny when CallAsync fails under fail-closed (the default).
+        Assert.AreEqual(ScriptAction.Deny, (await plugin.OnNewConnectionAsync(connection, default)).Action);
     }
 }

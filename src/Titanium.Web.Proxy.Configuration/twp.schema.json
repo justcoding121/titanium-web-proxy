@@ -1276,7 +1276,11 @@
                   "additionalProperties": false,
                   "properties": {
                     "kind": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": [
+                        "Exact",
+                        "Regex"
+                      ]
                     },
                     "name": {
                       "type": "string"

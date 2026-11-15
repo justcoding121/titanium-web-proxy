@@ -43,12 +43,18 @@ public class IngressTranslatorTests
 
     private static string Id(string ingress, int rule = 0, int path = 0) => $"ingress/default/{ingress}/r{rule}p{path}";
 
-    private static RenderResult OnePath(string type, string path, string? host = Host, Dictionary<string, string>? annotations = null, Action<StateBuilder>? arrange = null)
+    private static RenderResult OnePath(
+        string type,
+        string path,
+        string? host = Host,
+        Dictionary<string, string>? annotations = null,
+        Action<StateBuilder>? arrange = null,
+        GatewayTranslatorOptions? options = null)
     {
         var b = IngressOnly();
         arrange?.Invoke(b);
         b.Ingresses.Add(Ingress("ing", "titanium", [IRule(host, IPath(path, type))], annotations));
-        return Render(b);
+        return Render(b, options: options);
     }
 
     private static (RenderResult Result, RouteConfig Route) Annotated(params (string Key, string Value)[] annotations)
@@ -646,6 +652,23 @@ public class IngressTranslatorTests
         CollectionAssert.AreEqual(new[] { policy.Name }, route.Policies!.ToArray());
         Assert.IsNull(route.DirectResponse);
         Assert.AreEqual(0, TwpConfigValidator.Validate(redirected.Config).Count);
+    }
+
+    [TestMethod]
+    public void TrustedProxies_AppearOnTheServerBlock_OnlyWhenConfigured()
+    {
+        var without = Annotated((A("ssl-redirect"), "true")).Result;
+        Assert.IsNull(without.Config.Server?.ForwardedHeaders);
+
+        var with = OnePath(
+            "Prefix",
+            "/api",
+            annotations: new Dictionary<string, string> { [A("ssl-redirect")] = "true" },
+            options: new GatewayTranslatorOptions { TrustedProxies = ["10.0.0.0/8"] });
+        Assert.IsNotNull(with.Config.Server?.ForwardedHeaders?.TrustedProxies);
+        CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, with.Config.Server!.ForwardedHeaders!.TrustedProxies!.ToArray());
+        Assert.AreEqual("httpsRedirect", with.Config.Policies.Single().Kind);
+        Assert.AreEqual(0, TwpConfigValidator.Validate(with.Config).Count);
     }
 
     [TestMethod]

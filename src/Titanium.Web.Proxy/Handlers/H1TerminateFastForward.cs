@@ -500,6 +500,13 @@ public partial class ProxyServer
             closeConnection = true;
             throw;
         }
+        catch (OperationCanceledException)
+        {
+            // The client went away. Record a cancelled sample, not a 502.
+            closeConnection = true;
+            CompleteLite(ref metricsStart, 0, Abstractions.Diagnostics.ForwarderError.Other, 0);
+            throw;
+        }
         catch (Exception ex)
         {
             closeConnection = true;

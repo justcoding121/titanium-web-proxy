@@ -216,6 +216,9 @@ public static class TwpConfigSchema
             case "RoutePolicyConfig.Key":
                 schema["pattern"] = "^(client|forwardedClient|route|header:[!#$%&'*+.^_`|~0-9A-Za-z-]+|cookie:[!#$%&'*+.^_`|~0-9A-Za-z-]+)$";
                 break;
+            case "HeaderValueMatch.Kind":
+                schema["enum"] = new JsonArray { "Exact", "Regex" };
+                break;
             case "RedirectConfig.ReplacePrefixFrom":
             case "RedirectConfig.ReplacePrefixTo":
                 schema["description"] =
