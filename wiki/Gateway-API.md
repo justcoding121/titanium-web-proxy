@@ -38,7 +38,7 @@ The controller watches ReferenceGrant **v1**. Helm does not upgrade CRDs that ar
 
 ## Conformance
 
-`tools/gateway-conformance/run.sh` runs the upstream Gateway API conformance suite (v1.2.1, `GATEWAY-HTTP`) against the controller in a `kind` cluster; `.github/workflows/gateway-conformance.yml` runs it on Linux and uploads the report. It needs Linux, Docker, `kind`, `kubectl`, and Helm, and does not run on a Windows host (use WSL 2). Only implemented features are claimed. The last run (before the data-plane header-append and SNI-handshake fixes) passed 31 of 33 core tests; it has not been re-run since. The first runs report only; setting the repository variable `GATEWAY_CONFORMANCE_ENFORCE` to `true` makes a failing suite fail the workflow.
+`tools/gateway-conformance/run.sh` runs the upstream Gateway API conformance suite (v1.2.1, `GATEWAY-HTTP`) against the controller in a `kind` cluster; `.github/workflows/gateway-conformance.yml` runs it on Linux and uploads the report. It needs Linux, Docker, `kind`, `kubectl`, and Helm, and does not run on a Windows host (use WSL 2). Only implemented features are claimed; hostless redirects and response-header `add` stay unclaimed until the suite has been re-run. The last run (before the data-plane header-append and SNI-handshake fixes) passed 31 of 33 core tests; it has not been re-run since. The first runs report only; setting the repository variable `GATEWAY_CONFORMANCE_ENFORCE` to `true` makes a failing suite fail the workflow.
 
 ## Ingress
 

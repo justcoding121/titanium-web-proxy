@@ -1413,6 +1413,9 @@
               },
               "status": {
                 "type": "integer"
+              },
+              "useRequestHost": {
+                "type": "boolean"
               }
             }
           },

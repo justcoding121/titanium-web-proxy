@@ -75,10 +75,16 @@ internal sealed partial class TranslationPass
                 return;
             }
 
-            route.Unsupported.Add(
-                $"rule {ruleIndex} match {matchIndex}: RequestRedirect without hostname needs the route or listener to name concrete hostnames");
-            redirect = null;
-            direct500 = true;
+            // Wildcard or no hostnames: let the data plane use the host the client sent.
+            redirect = new RedirectSpec
+            {
+                Status = redirect.Status,
+                Scheme = redirect.Scheme,
+                Port = redirect.Port,
+                FullPath = redirect.FullPath,
+                PrefixReplacement = redirect.PrefixReplacement,
+                UseRequestHost = true,
+            };
         }
 
         drafts.Add(MakeDraft(route, ruleIndex, matchIndex, spec, hosts, plan, transforms, redirect, null, direct500));
@@ -146,6 +152,7 @@ internal sealed partial class TranslationPass
                         Status = redirect.Status,
                         Scheme = redirect.Scheme,
                         Host = redirect.Hostname ?? redirectHost,
+                        UseRequestHost = redirect.UseRequestHost,
                         Port = redirect.Port,
                         Path = redirect.FullPath,
                         ReplacePrefixFrom = PrefixReplacementFrom(redirect, spec),

@@ -434,19 +434,38 @@ internal static class ReverseProxySessionDispatch
         var target = OriginForm(request.RequestUriString8.GetString());
         var path = RedirectPath(target, redirect);
         var query = PreservedQuery(target, redirect.PreserveQuery);
+
+        string? host;
+        int? requestPort = null;
+        var hostFromRequest = false;
         if (!string.IsNullOrEmpty(redirect.Host))
         {
-            var scheme = RedirectScheme(request, redirect);
-            var port = redirect.Port is int p and > 0 ? ":" + p.ToString() : "";
-            if (path.Contains('?', StringComparison.Ordinal))
-            {
-                path = path[..path.IndexOf('?')];
-            }
-
-            return scheme + "://" + redirect.Host + port + path + query;
+            host = redirect.Host;
+        }
+        else if (redirect.UseRequestHost && TryRequestAuthority(request, out var requestHost, out requestPort))
+        {
+            host = requestHost;
+            hostFromRequest = true;
+        }
+        else
+        {
+            host = null;
         }
 
-        return path + query;
+        // Absolute Location, or a relative one that re-appends the query, must not keep a ? already on the path.
+        var absolute = !string.IsNullOrEmpty(host);
+        if ((absolute || redirect.PreserveQuery) && path.Contains('?', StringComparison.Ordinal))
+        {
+            path = path[..path.IndexOf('?')];
+        }
+
+        if (!absolute)
+        {
+            return path + query;
+        }
+
+        var scheme = RedirectScheme(request, redirect);
+        return scheme + "://" + host + RedirectPortSuffix(redirect, scheme, hostFromRequest ? requestPort : null) + path + query;
     }
 
     private static string RedirectPath(string target, RedirectConfig redirect)
@@ -501,6 +520,97 @@ internal static class ReverseProxySessionDispatch
         var q = target.IndexOf('?');
         return q >= 0 ? target[q..] : "";
     }
+
+    /// <summary>
+    /// The client's requested host for an absolute <c>Location</c>. Absolute-form targets and authorities that are not a
+    /// plain DNS name, IPv4 address, or bracketed IPv6 literal return false so the redirect stays relative.
+    /// </summary>
+    private static bool TryRequestAuthority(Request request, out string host, out int? requestPort)
+    {
+        host = string.Empty;
+        requestPort = null;
+        if (UriExtensions.GetScheme(request.RequestUriString8).Length > 0)
+        {
+            return false;
+        }
+
+        var authority = request.Host;
+        if (string.IsNullOrEmpty(authority))
+        {
+            if (request.Authority.Length == 0)
+            {
+                return false;
+            }
+
+            authority = request.Authority.GetString();
+        }
+
+        if (!AuthorityParser.TryParse(authority, 0, out var parsed, out var port))
+        {
+            return false;
+        }
+
+        if (parsed.Contains(':', StringComparison.Ordinal))
+        {
+            host = HttpHostHeader.Format(parsed, 0);
+        }
+        else
+        {
+            if (parsed.Length == 0 || !IsSafeHostName(parsed))
+            {
+                return false;
+            }
+
+            host = parsed;
+        }
+
+        if (port > 0)
+        {
+            requestPort = port;
+        }
+
+        return true;
+    }
+
+    private static bool IsSafeHostName(string name)
+    {
+        foreach (var c in name)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Port for an absolute <c>Location</c>. A configured port wins (omitted when it is the scheme default). A configured
+    /// scheme or an http-to-https upgrade uses the well-known port. Otherwise a request host may keep its non-default port.
+    /// </summary>
+    private static string RedirectPortSuffix(RedirectConfig redirect, string scheme, int? requestPort)
+    {
+        if (redirect.Port is int configured and > 0)
+        {
+            return OmitDefaultPort(scheme, configured) ? "" : ":" + configured.ToString();
+        }
+
+        if (redirect.Scheme is not null || redirect.HttpToHttps)
+        {
+            return "";
+        }
+
+        if (requestPort is int inherited)
+        {
+            return OmitDefaultPort(scheme, inherited) ? "" : ":" + inherited.ToString();
+        }
+
+        return "";
+    }
+
+    private static bool OmitDefaultPort(string scheme, int port) =>
+        (scheme == "http" && port == 80) || (scheme == "https" && port == 443);
 
     private static string RedirectScheme(Request request, RedirectConfig redirect)
     {
