@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Titanium.Inspector.DesktopProbe.Shared;
 
-/// <summary>Locate Chrome / Edge / Firefox / Safari without requiring --proxy-server.</summary>
+/// <summary>Locate Chrome, Edge, Brave, Opera, Firefox, and Safari without requiring --proxy-server.</summary>
 public static class BrowserPaths
 {
     public static string? FindChrome()
@@ -57,6 +57,38 @@ public static class BrowserPaths
         return Which("firefox");
     }
 
+    public static string? FindBrave()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return FirstExisting(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"));
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return FirstExisting("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser");
+
+        return Which("brave-browser") ?? Which("brave");
+    }
+
+    public static string? FindOpera()
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return FirstExisting(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Opera", "opera.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Opera", "opera.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Opera", "opera.exe"));
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            return FirstExisting("/Applications/Opera.app/Contents/MacOS/Opera");
+
+        return Which("opera") ?? Which("opera-stable");
+    }
+
     /// <summary>Safari is macOS-only and always uses CFNetwork / system proxy.</summary>
     public static string? FindSafari()
     {
@@ -75,6 +107,10 @@ public static class BrowserPaths
             yield return ("safari", safari);
         if (FindFirefox() is { } firefox)
             yield return ("firefox", firefox);
+        if (FindBrave() is { } brave)
+            yield return ("brave", brave);
+        if (FindOpera() is { } opera)
+            yield return ("opera", opera);
     }
 
     public static string? Resolve(string browser)
@@ -86,6 +122,8 @@ public static class BrowserPaths
             "chrome" => FindChrome(),
             "safari" => FindSafari(),
             "firefox" => FindFirefox(),
+            "brave" => FindBrave(),
+            "opera" => FindOpera(),
             _ => null,
         };
     }

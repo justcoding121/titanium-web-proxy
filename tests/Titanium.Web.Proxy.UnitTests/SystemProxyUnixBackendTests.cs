@@ -560,6 +560,14 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void PolicyDirectories_IncludeOpera()
+    {
+        Assert.IsTrue(LinuxBrowserLaunchProxy.PolicyDirectories()
+            .Any(p => p.Contains($"{Path.DirectorySeparatorChar}opera{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                      || p.Contains("/opera/", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [TestMethod]
     public void PolicyDirectories_IncludeMicrosoftEdge()
     {
         Assert.IsTrue(LinuxBrowserLaunchProxy.PolicyDirectories()

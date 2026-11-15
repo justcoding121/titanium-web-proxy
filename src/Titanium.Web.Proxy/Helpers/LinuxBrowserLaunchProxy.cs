@@ -49,6 +49,7 @@ internal static class LinuxBrowserLaunchProxy
         "/usr/share/applications/brave-browser.desktop",
         "/usr/share/applications/microsoft-edge.desktop",
         "/usr/share/applications/microsoft-edge-stable.desktop",
+        "/usr/share/applications/opera.desktop",
     ];
 
     private static readonly string[] ChromeBinaries =
@@ -61,6 +62,8 @@ internal static class LinuxBrowserLaunchProxy
         "/usr/bin/brave-browser",
         "/usr/bin/microsoft-edge-stable",
         "/usr/bin/microsoft-edge",
+        "/usr/bin/opera",
+        "/usr/bin/opera-stable",
     ];
 
     /// <summary>Returns true when at least one browser-launch hook was written and re-validated.</summary>
@@ -315,6 +318,7 @@ internal static class LinuxBrowserLaunchProxy
         yield return Path.Combine(home, ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, MicrosoftEdgeDirName, PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, "opera", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "current", ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", MicrosoftEdgeDirName, "common", MicrosoftEdgeDirName, PoliciesManaged, ManagedDirName);
@@ -329,6 +333,7 @@ internal static class LinuxBrowserLaunchProxy
         yield return "/etc/opt/chrome/policies/managed";
         yield return "/etc/chromium/policies/managed";
         yield return "/etc/opt/edge/policies/managed";
+        yield return "/etc/opera/policies/managed";
     }
 
     private static int WriteBrowserDesktopOverrides(string hostname, int port)

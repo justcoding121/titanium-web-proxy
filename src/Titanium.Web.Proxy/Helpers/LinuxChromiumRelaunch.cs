@@ -19,6 +19,7 @@ internal static class LinuxChromiumRelaunch
         Chromium,
         Brave,
         Edge,
+        Opera,
     }
 
     private static readonly (BrowserFamily Family, string[] Binaries)[] FamilyLaunchers =
@@ -42,6 +43,11 @@ internal static class LinuxChromiumRelaunch
         [
             "/usr/bin/microsoft-edge-stable",
             "/usr/bin/microsoft-edge",
+        ]),
+        (BrowserFamily.Opera,
+        [
+            "/usr/bin/opera",
+            "/usr/bin/opera-stable",
         ]),
     ];
 
@@ -277,9 +283,16 @@ internal static class LinuxChromiumRelaunch
             return true;
         }
 
-        if (exe.Contains("brave", StringComparison.OrdinalIgnoreCase) || name is "brave")
+        if (exe.Contains("brave", StringComparison.OrdinalIgnoreCase) || name is "brave" or "brave-browser")
         {
             family = BrowserFamily.Brave;
+            return true;
+        }
+
+        if (exe.Contains("/opera", StringComparison.OrdinalIgnoreCase) ||
+            name is "opera" or "opera-stable")
+        {
+            family = BrowserFamily.Opera;
             return true;
         }
 

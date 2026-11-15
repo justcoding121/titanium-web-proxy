@@ -1,0 +1,125 @@
+name: inspector-install-smoke
+
+# Packaged Inspector install smoke. Windows first. Linux and macOS join after this job is green.
+# Promotion PRs into beta and stable run it with no path filter, so a docs-only PR cannot leave a required check pending.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [beta, stable]
+  push:
+    branches: [beta, stable]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: install-smoke-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  install-smoke:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        os: [windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Browsers, previous package, and candidate publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $pwd.Path
+          $browsers = Start-Job -ScriptBlock {
+            $ErrorActionPreference = 'Stop'
+            $ok = $false
+            for ($i = 1; $i -le 3 -and -not $ok; $i++) {
+              choco install brave opera -y --no-progress
+              $brave = Test-Path "${env:ProgramFiles}\BraveSoftware\Brave-Browser\Application\brave.exe"
+              $opera = (Test-Path "${env:ProgramFiles}\Opera\opera.exe") -or (Test-Path "$env:LOCALAPPDATA\Programs\Opera\opera.exe")
+              if ($brave -and $opera) { $ok = $true } else { Start-Sleep -Seconds 5 }
+            }
+            if (-not $ok) { throw 'Brave or Opera did not install' }
+          }
+          $download = Start-Job -ArgumentList $root, $env:GH_TOKEN, $env:GITHUB_REPOSITORY -ScriptBlock {
+            param($root, $token, $repo)
+            $ErrorActionPreference = 'Stop'
+            $env:GH_TOKEN = $token
+            Set-Location $root
+            $prefix = Select-String -Path src\Titanium.Inspector\Titanium.Inspector.csproj -Pattern '<VersionPrefix>([^<]+)</VersionPrefix>' |
+              ForEach-Object { $_.Matches[0].Groups[1].Value }
+            $tags = gh api "repos/$repo/releases" --paginate --jq '.[] | select(.draft==false and .prerelease==false) | .tag_name'
+            $older = @($tags | Where-Object { $_ -ne "v$prefix" })
+            if ($older.Count -eq 0) { $older = @($tags) }
+            $tag = $older | Select-Object -First 1
+            if ([string]::IsNullOrWhiteSpace($tag)) { throw 'no published release to upgrade from' }
+            New-Item -ItemType Directory -Force -Path artifacts\prev | Out-Null
+            gh release download $tag --repo $repo --pattern 'TitaniumInspector-win-x64.msi' --dir artifacts\prev --clobber
+            Set-Content artifacts\prev\tag.txt $tag
+            Write-Output "previous=$tag"
+          }
+          Write-Host 'publishing candidate'
+          $ver = (Select-String -Path src\Titanium.Inspector\Titanium.Inspector.csproj -Pattern '<VersionPrefix>([^<]+)</VersionPrefix>').Matches[0].Groups[1].Value
+          dotnet publish src\Titanium.Inspector\Titanium.Inspector.csproj -c Release -r win-x64 --self-contained true -o artifacts\inspector\win-x64 -p:Version=$ver --nologo
+          if ($LASTEXITCODE -ne 0) { throw "publish failed $LASTEXITCODE" }
+          ./tools/packaging/build-inspector-msi.ps1 -PayloadDir artifacts/inspector/win-x64 -OutputMsi artifacts/candidate/TitaniumInspector-win-x64.msi -Version $ver
+          dotnet build tools\InspectorInstallSmoke\InspectorInstallSmoke.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw "smoke driver build failed $LASTEXITCODE" }
+          Wait-Job $browsers, $download | Out-Null
+          Receive-Job $browsers, $download -ErrorAction Continue
+          if ($browsers.State -ne 'Completed' -or $download.State -ne 'Completed') {
+            throw "browser install $($browsers.State); previous download $($download.State)"
+          }
+
+      - name: Upgrade then fresh install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prev = Join-Path $pwd 'artifacts\prev\TitaniumInspector-win-x64.msi'
+          $cand = Join-Path $pwd 'artifacts\candidate\TitaniumInspector-win-x64.msi'
+          $driver = Join-Path $pwd 'tools\InspectorInstallSmoke\bin\Release\net10.0\InspectorInstallSmoke.exe'
+          $installed = "${env:ProgramFiles}\Titanium Inspector\TitaniumInspector.exe"
+          $log = Join-Path $env:RUNNER_TEMP 'install-smoke'
+          New-Item -ItemType Directory -Force -Path $log | Out-Null
+          function Invoke-Msi([string]$args) {
+            $p = Start-Process msiexec -ArgumentList $args -Wait -PassThru
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "msiexec $args exited $($p.ExitCode)" }
+          }
+          Invoke-Msi "/i `"$prev`" /qn /norestart /l*v `"$log\prev-install.log`""
+          & $driver upgrade-seed --exe $installed --browsers firefox --out $log
+          if ($LASTEXITCODE -ne 0) { throw "upgrade-seed failed $LASTEXITCODE" }
+          Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\upgrade.log`""
+          & $driver upgrade-verify --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
+          if ($LASTEXITCODE -ne 0) { throw "upgrade-verify failed $LASTEXITCODE" }
+          Invoke-Msi "/x `"$cand`" /qn /norestart /l*v `"$log\uninstall.log`""
+          & $driver wipe --out $log
+          Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\fresh-install.log`""
+          & $driver fresh --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
+          if ($LASTEXITCODE -ne 0) { throw "fresh failed $LASTEXITCODE" }
+          @"
+          ### install-smoke (windows-latest)
+          | cell | result |
+          | --- | --- |
+          | upgrade-seed | pass |
+          | upgrade-verify | pass |
+          | fresh | pass |
+          "@ | Add-Content -Path $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-smoke-windows-logs
+          path: |
+            ${{ runner.temp }}/install-smoke
+          if-no-files-found: ignore
+          retention-days: 7
