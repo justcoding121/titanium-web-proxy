@@ -838,9 +838,9 @@ public sealed class InterceptionService : IDisposable
             LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
             IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
-            return CompleteRootTrustInstall(
-                IsRootTrusted ||
-                LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+            // MacNeedsManualTrustConfirm: CA may be present but not SSL-trusted — do not
+            // report install success (caller may still open Keychain Always Trust UX).
+            return CompleteRootTrustInstall(IsRootTrusted);
         }
 
         // Full trust (stores + orphan prune + Unix) - non-UI callers only.
@@ -855,9 +855,7 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     /// <summary>CryptUI Root Add only - must run on a pumping UI thread.</summary>
@@ -966,9 +964,7 @@ public sealed class InterceptionService : IDisposable
             IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
         }
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     private static bool CompleteRootTrustInstall(bool installed)
@@ -1005,9 +1001,7 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                                _proxy.CertificateManager.VerifyOsUserSslTrust());
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     /// <summary>
@@ -1039,9 +1033,7 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     /// <summary>Installs certutil (package/brew) then retries user SSL trust.</summary>

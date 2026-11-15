@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Collections;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Notifications;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -320,6 +321,23 @@ public partial class MainWindow : Window
         }
 
         _autoStartStarted = true;
+        try
+        {
+            if (await vm.TryOfferMacDmgMoveAsync())
+            {
+                // Installed copy is launching — exit this DMG-hosted process.
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    desktop.Shutdown();
+                else
+                    Close();
+                return;
+            }
+        }
+        catch
+        {
+            // never block startup on DMG relocate failure
+        }
+
         try
         {
             await vm.TryAutoStartAsync();

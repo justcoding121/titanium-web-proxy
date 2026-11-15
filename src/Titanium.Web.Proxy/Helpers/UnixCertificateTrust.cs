@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -18,6 +19,10 @@ internal static class UnixCertificateTrust
     private const string KeychainsDirName = "Keychains";
     private const string LoginKeychainDbFile = "login.keychain-db";
     private const string LoginKeychainFile = "login.keychain";
+
+    private static readonly Regex MacTrustSettingsCountRegex = new(
+        @"Number of trust settings\s*:\s*(\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly string[] WindowsCertutilCandidates =
     [
@@ -465,7 +470,7 @@ internal static class UnixCertificateTrust
     private static CertificateOsTrustResult TrustMacUserDetailed(
         IProcessRunner runner, string cerPath, X509Certificate2 certificate)
     {
-        var added = TrustMacUser(runner, cerPath);
+        var added = TrustMacUser(runner, cerPath, certificate);
         if (!added)
         {
             return CertificateOsTrustResult.Fail(
@@ -481,8 +486,14 @@ internal static class UnixCertificateTrust
             "Root CA was added to Keychain but may need Always Trust for SSL. Open Keychain Access, find the certificate, and set Trust → Always Trust.");
     }
 
-    private static bool TrustMacUser(IProcessRunner runner, string cerPath)
+    private static bool TrustMacUser(
+        IProcessRunner runner, string cerPath, X509Certificate2? certificate = null)
     {
+        // Drop same-CN Keychain copies that are not this generation so Chrome/Safari do not
+        // keep an untrusted/stale Titanium root while we add the current one.
+        if (certificate is not null)
+            TryRemoveStaleMacSameCommonNameRoots(runner, certificate);
+
         // User trust domain (no -d). Using -d writes admin-domain stubs and often leaves
         // System.keychain copies that Chrome keeps trusting after "Remove CA".
         // -r trustRoot: trust as root CA in the login keychain.
@@ -496,6 +507,35 @@ internal static class UnixCertificateTrust
         result = runner.Run(SecurityBinary,
             $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         return result is { Succeeded: true };
+    }
+
+    /// <summary>
+    ///     Best-effort: delete login-keychain certificates that share the Titanium root CN
+    ///     but not the current SHA-1 (stale generations after rotate / reinstall).
+    /// </summary>
+    private static void TryRemoveStaleMacSameCommonNameRoots(
+        IProcessRunner runner, X509Certificate2 certificate)
+    {
+        var keepSha1 = certificate.GetCertHashString();
+        if (string.IsNullOrWhiteSpace(keepSha1))
+            return;
+
+        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cn in MacRootCommonNames(
+                     certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "",
+                     certificate))
+        {
+            CollectMacCertificateHashes(runner, cn, hashes);
+        }
+
+        foreach (var hash in hashes)
+        {
+            if (string.Equals(hash, keepSha1, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // -t also clears user trust-settings stubs for that hash.
+            runner.Run(SecurityBinary, $"delete-certificate -Z {hash} -t");
+        }
     }
 
     private static bool VerifyMacSslTrust(IProcessRunner runner, X509Certificate2 certificate)
@@ -514,16 +554,23 @@ internal static class UnixCertificateTrust
     internal static bool HasExplicitMacSslTrustSettings(IProcessRunner runner, X509Certificate2 certificate)
     {
         var sha1 = certificate.GetCertHashString();
-        var commonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "";
+        if (string.IsNullOrEmpty(sha1))
+            return false;
 
-        if (DumpTrustSettingsMentionsPolicies(runner, sha1, commonName))
+        // Match by SHA-1 only — same CN can be a stale Keychain generation.
+        if (DumpTrustSettingsHasPoliciesForSha1(runner, sha1))
             return true;
 
         return TrustSettingsExportHasPolicies(runner, sha1);
     }
 
-    private static bool DumpTrustSettingsMentionsPolicies(
-        IProcessRunner runner, string sha1, string commonName)
+    /// <summary>
+    ///     True when <c>security dump-trust-settings</c> lists this SHA-1 with a non-zero
+    ///     policy count and a TrustRoot/Proceed result. Stubs with
+    ///     <c>Number of trust settings : 0</c> (or CN-only rows for another generation) are
+    ///     not trusted.
+    /// </summary>
+    private static bool DumpTrustSettingsHasPoliciesForSha1(IProcessRunner runner, string sha1)
     {
         foreach (var args in MacDumpTrustSettingsArgs)
         {
@@ -535,19 +582,34 @@ internal static class UnixCertificateTrust
             if (text.Contains("No Trust Settings were found", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var mentionsCert =
-                (!string.IsNullOrEmpty(sha1) &&
-                 text.Contains(sha1, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(commonName) &&
-                 text.Contains(commonName, StringComparison.OrdinalIgnoreCase));
-            if (!mentionsCert)
+            if (DumpTextHasSslTrustPoliciesForSha1(text, sha1))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Parses one dump-trust-settings document for a SHA-1 cert block with real policies.</summary>
+    internal static bool DumpTextHasSslTrustPoliciesForSha1(string text, string sha1)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(sha1))
+            return false;
+
+        // Split into "Cert N: ..." blocks; require the SHA-1 inside the same block as policies.
+        var parts = text.Split(["Cert "], StringSplitOptions.None);
+        foreach (var part in parts)
+        {
+            if (!part.Contains(sha1, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            // dump-trust-settings only lists certs that have policy rows when healthy.
-            if (text.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
-                text.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
-                text.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("Number of trust settings", StringComparison.OrdinalIgnoreCase))
+            // "Number of trust settings : 0" must not count as trusted.
+            var countMatch = MacTrustSettingsCountRegex.Match(part);
+            if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
+                continue;
+
+            if (part.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+                part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+                part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }

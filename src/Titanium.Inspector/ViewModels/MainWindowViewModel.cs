@@ -629,6 +629,50 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
     /// <summary>
+    ///     macOS DMG: offer to copy into Applications. Returns true when this process
+    ///     should exit (relaunch of the installed copy was started).
+    /// </summary>
+    public async Task<bool> TryOfferMacDmgMoveAsync()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return false;
+
+        if (!MacAppRelocation.ShouldOfferMove(_settings.Current))
+            return false;
+
+        var owner = TryGetMainWindow();
+        var move = await SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Install Titanium Inspector",
+            "Titanium Inspector is running from a disk image. Move it to Applications for a normal install (recommended), then eject the DMG.",
+            accept: "Move to Applications",
+            cancel: "Not Now",
+            height: 220).ConfigureAwait(true);
+
+        if (!move)
+        {
+            _settings.Current.MacDmgMovePromptDismissed = true;
+            _settings.Save();
+            return false;
+        }
+
+        try
+        {
+            var installed = MacAppRelocation.CopyBundleToApplications();
+            MacAppRelocation.RelaunchInstalledApp(installed);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SetOutcomeStatus(
+                "Could not copy to Applications: " + ex.Message,
+                StatusSeverity.Error,
+                toastImportant: true);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// After the main window is shown: optionally start capture and system proxy.
     /// Idempotent if already running.
     /// </summary>
@@ -3771,7 +3815,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             showedSystemProxyGuidance = SystemProxy;
         }
 
-        // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
+        // Upgrade / persisted Decrypt-on: trust was refreshed during StartAsync. If the
+        // current root is not SSL-trusted (stale Keychain generation or stub), force Decrypt
+        // off and warn — same mental model as a clean install.
         if (_decryptHttps && !_interception.IsRootTrusted)
         {
             await ForceDecryptHttpsOffAsync();
@@ -3797,8 +3843,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         var where = $"Proxy running on {FormatBindDisplay()}:{BindPort}";
         return SystemProxy
-            ? where + "; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-            : where + " — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            ? where + "; system proxy on — Decrypt HTTPS off (CA not trusted for this root). Install CA…"
+            : where + " — Decrypt HTTPS off (CA not trusted for this root). Install CA…";
     }
 
     /// <summary>Parses bind address/port for start; shows error status and returns false on invalid input.</summary>

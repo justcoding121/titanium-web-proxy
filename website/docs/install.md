@@ -6,6 +6,7 @@ Prefer the [Download](/download) page for buttons. This page is a short install 
 
 1. Open [Download](/download) and pick **Inspector** for your OS (Windows MSI, macOS DMG, Linux AppImage / deb / rpm, or a portable zip).
 2. Install or extract, then launch **Titanium Inspector**.
+   - **macOS DMG:** open the disk image, drag **Titanium Inspector** into **Applications**, eject the DMG, then open the app from Applications. If you open the app from the DMG instead, Inspector offers to move itself into Applications.
 3. Follow [Inspector](/docs/inspector) to capture and decrypt traffic.
 
 ## CLI (reverse proxy)

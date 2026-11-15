@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -187,6 +188,56 @@ public class UnixCertificateTrustTests
         var runner = new FakeProcessRunner();
         runner.When("security", "dump-trust-settings -d", dump);
         Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+    }
+
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_ZeroTrustSettingsCount_ReturnsFalse()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var cn = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "Titanium Root";
+        var dump = $"""
+            Number of trusted certs = 1
+            Cert 0: {cn}
+               SHA-1 hash: {sha1}
+               Number of trust settings : 0
+            """;
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        runner.When("security", "dump-trust-settings", dump);
+        runner.When("security", "trust-settings-export", "ok\n");
+        runner.WriteFileOnMatch = "trust-settings-export";
+        runner.When("plutil", "-p",
+            "{\n  \"trustList\" => {\n    \"" + sha1 + "\" => {\n" +
+            "      \"issuerName\" => {length = 48, bytes = 0xab}\n" +
+            "      \"modDate\" => 2026-09-04 22:15:04 +0000\n" +
+            "      \"serialNumber\" => {length = 8, bytes = 0xcd}\n" +
+            "    }\n  }\n  \"trustVersion\" => 1\n}\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+        Assert.IsFalse(UnixCertificateTrust.DumpTextHasSslTrustPoliciesForSha1(dump, sha1));
+    }
+
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_SameCnDifferentSha1_ReturnsFalse()
+    {
+        using var cert = CreateEphemeralRoot();
+        var cn = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "Titanium Root";
+        var dump = $"""
+            Number of trusted certs = 1
+            Cert 0: {cn}
+               SHA-1 hash: DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF
+               Number of trust settings : 1
+               Trust Setting 0:
+                  Result Type           : kSecTrustSettingsResultTrustRoot
+            """;
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        runner.When("security", "dump-trust-settings", dump);
+        runner.When("security", "trust-settings-export", "ok\n");
+        runner.WriteFileOnMatch = "trust-settings-export";
+        runner.When("plutil", "-p",
+            "{\n  \"trustList\" => {\n    \"DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF\" => {\n" +
+            "      \"trustSettings\" => [\n        result = kSecTrustSettingsResultTrustRoot\n      ]\n" +
+            "    }\n  }\n  \"trustVersion\" => 1\n}\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
     }
 
     [TestMethod]

@@ -221,8 +221,9 @@ public class UnixCertificateTrustCoverageTests
 
             var addRunner = new FakeProcessRunner();
             addRunner.When("security", "add-trusted-cert", "ok");
+            addRunner.When("security", "find-certificate", $"SHA-1 hash: {sha1}\n");
             addRunner.When("security", "dump-trust-settings",
-                $"{cn}\nTrust Root\nNumber of trust settings: 1\n");
+                $"Cert 0: {cn}\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
             var detailed = (CertificateOsTrustResult)Invoke(
                 "TrustMacUserDetailed",
                 [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
@@ -355,8 +356,11 @@ public class UnixCertificateTrustCoverageTests
         runner.When("sh", "command -v certutil", planted.Path);
         runner.When("certutil", "-N --empty-password", "");
         runner.When("security", "add-trusted-cert", "ok");
+        runner.When("security", "find-certificate", $"SHA-1 hash: {cert.GetCertHashString()}\n");
         runner.When("security", "dump-trust-settings",
-            cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) + "\nTrust Root\n");
+            $"Cert 0: {cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false)}\n" +
+            $"SHA-1 hash: {cert.GetCertHashString()}\n" +
+            "Number of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
 
         var nssDir = (string?)Invoke("EnsureLinuxNssDb", [typeof(IProcessRunner)], runner);
         Assert.IsFalse(string.IsNullOrEmpty(nssDir));
@@ -385,7 +389,10 @@ public class UnixCertificateTrustCoverageTests
         var cerPath = UnixCertificateTrust.WriteTempCer(cert, forUserGuidance: true);
         try
         {
-            Assert.IsTrue((bool)Invoke("TrustMacUser", [typeof(IProcessRunner), typeof(string)], runner, cerPath)!);
+            Assert.IsTrue((bool)Invoke(
+                "TrustMacUser",
+                [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
+                runner, cerPath, cert)!);
             Assert.IsTrue((bool)Invoke("VerifyMacSslTrust", [typeof(IProcessRunner), typeof(X509Certificate2)], runner, cert)!);
         }
         finally
@@ -474,17 +481,20 @@ public class UnixCertificateTrustCoverageTests
         var dumpEmpty = new FakeProcessRunner();
         dumpEmpty.When("security", "dump-trust-settings", "No Trust Settings were found\n");
         Assert.IsFalse((bool)Invoke(
-            "DumpTrustSettingsMentionsPolicies",
-            [typeof(IProcessRunner), typeof(string), typeof(string)],
-            dumpEmpty, sha1, cn)!);
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            dumpEmpty, sha1)!);
 
         var dumpHit = new FakeProcessRunner();
         dumpHit.When("security", "dump-trust-settings",
-            $"SHA-1 hash: {sha1}\n{cn}\nkSecTrustSettingsResultTrustRoot\n");
+            $"Cert 0: {cn}\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
         Assert.IsTrue((bool)Invoke(
-            "DumpTrustSettingsMentionsPolicies",
-            [typeof(IProcessRunner), typeof(string), typeof(string)],
-            dumpHit, sha1, cn)!);
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            dumpHit, sha1)!);
+        Assert.IsTrue(UnixCertificateTrust.DumpTextHasSslTrustPoliciesForSha1(
+            $"Cert 0: {cn}\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n",
+            sha1));
 
         var export = new FakeProcessRunner { WriteFileOnMatch = "trust-settings-export" };
         export.When("security", "trust-settings-export", "");
