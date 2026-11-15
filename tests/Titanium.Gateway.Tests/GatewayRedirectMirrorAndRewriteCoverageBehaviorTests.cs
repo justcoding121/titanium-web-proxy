@@ -102,6 +102,83 @@ public class GatewayRedirectMirrorAndRewriteCoverageBehaviorTests
     }
 
     [TestMethod]
+    public void Redirect_WithoutHostname_OnMixedConcreteAndWildcardHosts_UsesTheRequestHost()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect { Scheme = "https" },
+                },
+            ],
+        };
+        var routes = Render(b, Route("r", "default", ["a.example.com", "*.example.com"], rule)).Config.UserRoutes();
+
+        Assert.AreEqual(1, routes.Count);
+        Assert.IsNull(routes[0].Redirect!.Host);
+        Assert.IsTrue(routes[0].Redirect!.UseRequestHost);
+    }
+
+    [TestMethod]
+    public void Redirect_ReplacePrefixMatch_WithoutHostname_UsesTheRequestHost()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Matches = [PathPrefix("/old")],
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect
+                    {
+                        Scheme = "https",
+                        Path = new HttpPathModifier { Type = "ReplacePrefixMatch", ReplacePrefixMatch = "/new" },
+                    },
+                },
+            ],
+        };
+        var route = Render(b, Route("r", "default", ["*.example.com"], rule)).Config.UserRoutes().Single();
+
+        Assert.IsTrue(route.Redirect!.UseRequestHost);
+        Assert.IsNull(route.Redirect.Host);
+        Assert.AreEqual("/old", route.Redirect.ReplacePrefixFrom);
+        Assert.AreEqual("/new", route.Redirect.ReplacePrefixTo);
+    }
+
+    [TestMethod]
+    public void Redirect_WithoutHostname_SurvivesConfigRoundTrip()
+    {
+        var b = Basic();
+        var rule = new HttpRouteRule
+        {
+            Filters =
+            [
+                new HttpRouteFilter
+                {
+                    Type = "RequestRedirect",
+                    RequestRedirect = new HttpRequestRedirect { Scheme = "https", StatusCode = 301 },
+                },
+            ],
+        };
+        var result = Render(b, Route("r", "default", null, rule));
+        AssertValid(result);
+
+        var loaded = TwpConfigLoader.LoadJson(TwpConfigLoader.ToJson(result.Config));
+        Assert.AreEqual(0, TwpConfigValidator.Validate(loaded).Count, string.Join("; ", TwpConfigValidator.Validate(loaded)));
+        var redirect = loaded.UserRoutes().Single().Redirect!;
+        Assert.IsTrue(redirect.UseRequestHost);
+        Assert.IsNull(redirect.Host);
+        Assert.AreEqual("https", redirect.Scheme);
+        Assert.AreEqual(301, redirect.Status);
+    }
+
+    [TestMethod]
     public void DualRequestMirror_IsUnsupported_AndLeavesPrimaryRoute()
     {
         var b = Basic();

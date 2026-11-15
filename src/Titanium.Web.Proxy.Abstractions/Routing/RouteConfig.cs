@@ -402,8 +402,9 @@ public sealed class RedirectConfig
 
     /// <summary>
     /// When <see cref="Host"/> is unset, build an absolute <c>Location</c> from the host the client asked for (the
-    /// request <c>Host</c> without its port). A host that is not a plain name or address falls back to a relative
-    /// <c>Location</c>.
+    /// request <c>Host</c> or <c>:authority</c>). The request port is kept only when neither <see cref="Scheme"/> nor
+    /// <see cref="Port"/> is set (and <see cref="HttpToHttps"/> did not upgrade). An absolute-form request target or a
+    /// host that is not a plain name or address falls back to a relative <c>Location</c>.
     /// </summary>
     public bool UseRequestHost { get; init; }
 }
