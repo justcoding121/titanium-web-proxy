@@ -21,6 +21,7 @@ public class IngressTranslatorTests
     private static readonly string[] WildcardHosts = ["*"];
     private static readonly string[] PolicyOrderKinds = ["ipAllowDeny", "cors", "rateLimit", "extAuth", "maxRequestBodySize"];
     private static readonly string[] SslRedirectPolicyOrder = ["ipAllowDeny", "httpsRedirect", "cors"];
+    private static readonly string[] TrustedProxyCidr10 = ["10.0.0.0/8"];
     private static readonly int[] UpstreamRetryStatuses = [500, 429];
 
     private static RenderResult Render(StateBuilder b, bool validate = true, GatewayTranslatorOptions? options = null)
@@ -666,7 +667,7 @@ public class IngressTranslatorTests
             annotations: new Dictionary<string, string> { [A("ssl-redirect")] = "true" },
             options: new GatewayTranslatorOptions { TrustedProxies = ["10.0.0.0/8"] });
         Assert.IsNotNull(with.Config.Server?.ForwardedHeaders?.TrustedProxies);
-        CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, with.Config.Server!.ForwardedHeaders!.TrustedProxies!.ToArray());
+        CollectionAssert.AreEqual(TrustedProxyCidr10, with.Config.Server!.ForwardedHeaders!.TrustedProxies!.ToArray());
         Assert.AreEqual("httpsRedirect", with.Config.Policies.Single().Kind);
         Assert.AreEqual(0, TwpConfigValidator.Validate(with.Config).Count);
     }

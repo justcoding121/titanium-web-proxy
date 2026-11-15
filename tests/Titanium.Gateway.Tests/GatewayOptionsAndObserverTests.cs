@@ -11,6 +11,8 @@ public sealed class GatewayOptionsAndObserverTests
 {
     private static readonly Dictionary<string, string?> NoEnvironment = [];
     private static readonly string[] SecretNamespacesAb = ["a", "b"];
+    private static readonly string[] TrustedProxyCidr10 = ["10.0.0.0/8"];
+    private static readonly string[] TrustedProxyCidr10AndHost = ["10.0.0.0/8", "192.168.1.1"];
     private static readonly string[] IgnoredKubernetesServiceEnv =
     [
         "TITANIUM_GATEWAY_DATA_PORT", "TITANIUM_GATEWAY_DATA_SERVICE_PORT_HTTPS",
@@ -137,8 +139,8 @@ public sealed class GatewayOptionsAndObserverTests
             ["--data-plane-service", "titanium", "--trusted-proxies", "10.0.0.0/8,192.168.1.1"],
             new Dictionary<string, string?> { ["POD_NAMESPACE"] = "gw" });
 
-        CollectionAssert.AreEqual(new[] { "10.0.0.0/8", "192.168.1.1" }, options.TrustedProxies.ToArray());
-        CollectionAssert.AreEqual(new[] { "10.0.0.0/8", "192.168.1.1" }, options.ToControllerOptions().Translator.TrustedProxies.ToArray());
+        CollectionAssert.AreEqual(TrustedProxyCidr10AndHost, options.TrustedProxies.ToArray());
+        CollectionAssert.AreEqual(TrustedProxyCidr10AndHost, options.ToControllerOptions().Translator.TrustedProxies.ToArray());
     }
 
     [TestMethod]
@@ -151,7 +153,7 @@ public sealed class GatewayOptionsAndObserverTests
             ["TITANIUM_GATEWAY_TRUSTED_PROXIES"] = "10.0.0.0/8",
         });
 
-        CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, options.TrustedProxies.ToArray());
+        CollectionAssert.AreEqual(TrustedProxyCidr10, options.TrustedProxies.ToArray());
     }
 
     [TestMethod]
