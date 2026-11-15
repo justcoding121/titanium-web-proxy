@@ -677,8 +677,11 @@ jobs:
           ./tools/packaging/osx/build-app-bundle.sh \
             "artifacts/inspector/$rid" "TitaniumInspector.app" "$ver"
           if [[ -n "${APPLE_CERTIFICATE_P12:-}" ]]; then
+            # Codesign is required; notary can 403 on an expired Apple developer agreement.
+            # Soft-fail like the DMG path so Win/Linux/CLI assets still publish.
             ./tools/packaging/osx/sign-and-notarize.sh \
-              TitaniumInspector.app tools/packaging/osx/TitaniumInspector.entitlements
+              TitaniumInspector.app tools/packaging/osx/TitaniumInspector.entitlements \
+              || echo "::warning::Inspector .app notarize failed (codesign may still be present); accept pending Apple developer agreements and re-run release.yml"
           else
             echo "Apple secrets not set — building unsigned DMG for CI artifact shape"
           fi
