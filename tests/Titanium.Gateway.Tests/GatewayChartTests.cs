@@ -17,6 +17,7 @@ public sealed partial class GatewayChartTests
 {
     private static readonly string RepoRoot = FindRepoRoot();
     private static readonly string ChartDir = Path.Combine(RepoRoot, "deploy", "helm", "titanium-gateway");
+    private static readonly string[] TrustedProxyCidr10 = ["10.0.0.0/8"];
 
     private static string Read(params string[] parts) => File.ReadAllText(Path.Combine([ChartDir, .. parts]));
 
@@ -85,7 +86,7 @@ public sealed partial class GatewayChartTests
         Assert.AreEqual("x", options.DataPlaneDeployment);
         if (names.Contains("TITANIUM_GATEWAY_TRUSTED_PROXIES"))
         {
-            CollectionAssert.AreEqual(new[] { "10.0.0.0/8" }, options.TrustedProxies.ToArray());
+            CollectionAssert.AreEqual(TrustedProxyCidr10, options.TrustedProxies.ToArray());
         }
     }
 
