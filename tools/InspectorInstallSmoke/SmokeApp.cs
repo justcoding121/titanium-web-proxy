@@ -481,12 +481,29 @@ internal static class SmokeApp
         try
         {
             var certutil = Path.Combine(Environment.SystemDirectory, "certutil.exe");
-            Run(certutil, "-user -addstore -f Root \"" + cer + "\"", 20000);
+            var (code, output) = RunCapture(certutil, "-user -addstore -f Root \"" + cer + "\"", 20000);
+            Console.WriteLine($"certutil -user exit={code} {TrimOneLine(output)}");
+            if (!UserRootContains(cert.Thumbprint))
+                throw new InvalidOperationException("user Root store does not contain " + cert.Thumbprint + " after certutil");
+            Console.WriteLine("root in user store: " + cert.Thumbprint);
         }
         finally
         {
             TryDelete(cer);
         }
+    }
+
+    private static bool UserRootContains(string thumb)
+    {
+        using var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+        store.Open(OpenFlags.ReadOnly);
+        return store.Certificates.Find(X509FindType.FindByThumbprint, thumb, validOnly: false).Count > 0;
+    }
+
+    private static string TrimOneLine(string text)
+    {
+        var line = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return line.Length <= 180 ? line : line[..180];
     }
 
     private static void TrustLinuxNss(string pfx)
@@ -770,7 +787,7 @@ internal static class SmokeApp
         await Task.Delay(500);
     }
 
-    private static void Run(string file, string args, int timeoutMs)
+    private static (int Code, string Output) RunCapture(string file, string args, int timeoutMs)
     {
         using var p = Process.Start(new ProcessStartInfo
         {
@@ -781,8 +798,20 @@ internal static class SmokeApp
             RedirectStandardError = true,
             RedirectStandardOutput = true,
         });
-        p?.WaitForExit(timeoutMs);
+        if (p is null)
+            return (-1, "did not start");
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        var stderr = p.StandardError.ReadToEndAsync();
+        if (!p.WaitForExit(timeoutMs))
+        {
+            try { p.Kill(entireProcessTree: true); } catch { /* dialog */ }
+            return (-1, "timed out");
+        }
+
+        return (p.ExitCode, stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult());
     }
+
+    private static void Run(string file, string args, int timeoutMs) => RunCapture(file, args, timeoutMs);
 
     private static string Capture(string file, string args)
     {
