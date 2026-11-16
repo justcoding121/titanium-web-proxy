@@ -327,12 +327,15 @@ internal static class SmokeApp
         {
             var before = DateTime.UtcNow.AddSeconds(-2);
             using var launched = LaunchBrowser(name, browserPath, url);
-            var ok = await WaitForHarAsync(before, url, TimeSpan.FromSeconds(45), () =>
+            var ok = await WaitForHarAsync(before, url, TimeSpan.FromSeconds(60), () =>
             {
-                if (!OperatingSystem.IsLinux() || LinuxDesktopId(name) is null)
-                    return;
                 Console.WriteLine("relaunch " + name + " " + url);
-                TryGtkLaunch(name, url);
+                if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
+                    TryGtkLaunch(name, url);
+                else if (OperatingSystem.IsMacOS()
+                         && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
+                         && !name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+                    TryStartAgain(browserPath, url);
             });
             launched.Kill();
             if (!ok)
@@ -619,6 +622,23 @@ internal static class SmokeApp
 
         static string? reqUrl(JsonElement entry) =>
             entry.TryGetProperty("request", out var req) && req.TryGetProperty("url", out var u) ? u.GetString() : null;
+    }
+
+    private static void TryStartAgain(string browserPath, string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = browserPath,
+                Arguments = "--no-first-run --disable-quic \"" + url + "\"",
+                UseShellExecute = false,
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("relaunch failed: " + ex.Message);
+        }
     }
 
     private static void TryGtkLaunch(string name, string url)
