@@ -281,7 +281,7 @@ internal static class SmokeApp
             var deadline = DateTime.UtcNow.AddSeconds(10);
             while (DateTime.UtcNow < deadline)
             {
-                if (File.Exists(log) && File.ReadAllText(log).Contains("https://example.com", StringComparison.OrdinalIgnoreCase))
+                if (File.Exists(log) && ReadSharedText(log).Contains("https://example.com", StringComparison.OrdinalIgnoreCase))
                 {
                     Console.WriteLine("cli decrypted https://example.com");
                     return 0;
@@ -771,6 +771,20 @@ internal static class SmokeApp
 
     private static string LocalDir() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TitaniumInspector");
+
+    private static string ReadSharedText(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            return reader.ReadToEnd();
+        }
+        catch (IOException)
+        {
+            return "";
+        }
+    }
 
     private static void RequireCliVersion(string titanium)
     {

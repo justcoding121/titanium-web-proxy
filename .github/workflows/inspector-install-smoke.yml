@@ -172,7 +172,11 @@ jobs:
           echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | sudo tee /etc/apt/sources.list.d/mozilla.list >/dev/null
           printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' | sudo tee /etc/apt/preferences.d/mozilla >/dev/null
           sudo apt-get update
-          sudo apt-get install -y firefox
+          firefox_bin=$(command -v firefox || true)
+          if [[ -z "${firefox_bin}" ]] || [[ "$(readlink -f "${firefox_bin}" || true)" == *snap* ]]; then
+            sudo apt-get install -y --allow-downgrades firefox
+          fi
+          firefox --version
           if ! command -v google-chrome >/dev/null && ! command -v google-chrome-stable >/dev/null; then
             wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
             sudo apt-get install -y /tmp/chrome.deb
@@ -297,23 +301,47 @@ jobs:
             printf '%s\n' "$out_attach"
             MOUNT_ROOT="$(printf '%s\n' "$out_attach" | awk -F'\t' '/\/Volumes\//{print $NF; exit}')"
             if [[ -z "${MOUNT_ROOT}" || ! -d "${MOUNT_ROOT}" ]]; then
+              MOUNT_ROOT="$(printf '%s\n' "$out_attach" | sed -n 's#.*\(/Volumes/.*\)#\1#p' | tail -1)"
+            fi
+            if [[ -z "${MOUNT_ROOT}" || ! -d "${MOUNT_ROOT}" ]]; then
               echo "could not read the DMG mount point" >&2
+              printf '%s\n' "$out_attach" >&2
               exit 1
             fi
+            echo "mounted ${MOUNT_ROOT}"
+            ls -la "${MOUNT_ROOT}"
+          }
+          app_bundle() {
+            local i found=""
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+              found=$(find "${MOUNT_ROOT}" -maxdepth 2 -name '*.app' -print -quit || true)
+              if [[ -n "${found}" && -d "${found}" ]]; then
+                echo "bundle ${found}" >&2
+                printf '%s' "${found}"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "no .app under ${MOUNT_ROOT}" >&2
+            ls -la "${MOUNT_ROOT}" >&2 || true
+            return 1
           }
           run_driver() { "$driver" "$@" | tee -a "$log/driver.log"; }
           attach artifacts/prev/TitaniumInspector-osx-arm64.dmg
-          ditto "${MOUNT_ROOT}/Titanium Inspector.app" "/Applications/Titanium Inspector.app"
+          prev_app="$(app_bundle)"
+          ditto "${prev_app}" "/Applications/Titanium Inspector.app"
           detach
           trap - EXIT
           run_driver upgrade-seed --exe "$installed" --browsers firefox --out "$log"
           attach artifacts/candidate/TitaniumInspector-osx-arm64.dmg
           trap detach EXIT
-          ditto "${MOUNT_ROOT}/Titanium Inspector.app" "/Applications/Titanium Inspector.app"
+          cand_app="$(app_bundle)"
+          ditto "${cand_app}" "/Applications/Titanium Inspector.app"
           run_driver upgrade-verify --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           rm -rf "/Applications/Titanium Inspector.app"
           run_driver wipe --out "$log"
-          vol="${MOUNT_ROOT}/Titanium Inspector.app/Contents/MacOS/TitaniumInspector"
+          vol="${cand_app}/Contents/MacOS/TitaniumInspector"
+          test -x "$vol"
           run_driver fresh --exe "$vol" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           detach
           trap - EXIT
