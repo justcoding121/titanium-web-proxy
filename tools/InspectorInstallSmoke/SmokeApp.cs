@@ -266,10 +266,10 @@ internal static class SmokeApp
                 return Fail(1, "titanium run did not listen");
             var pem = ExportCliRootPem(dir);
             var curl = OperatingSystem.IsWindows() ? "curl.exe" : "curl";
-            var curlResult = RunCapture(
-                curl,
-                $"--silent --show-error --max-time 30 --proxy http://127.0.0.1:{port} --cacert \"{pem}\" https://example.com/",
-                35000);
+            var curlArgs = OperatingSystem.IsWindows()
+                ? $"--silent --show-error --ssl-no-revoke --max-time 30 --proxy http://127.0.0.1:{port} --cacert \"{pem}\" https://example.com/"
+                : $"--silent --show-error --max-time 30 --proxy http://127.0.0.1:{port} --cacert \"{pem}\" https://example.com/";
+            var curlResult = RunCapture(curl, curlArgs, 35000);
             Console.WriteLine("curl exit=" + curlResult.Code + " " + TrimOneLine(curlResult.Output));
             var deadline = DateTime.UtcNow.AddSeconds(15);
             while (DateTime.UtcNow < deadline)
@@ -327,8 +327,9 @@ internal static class SmokeApp
             launched.Kill();
             if (!ok)
             {
+                PrintRecentHarEntries(before);
                 DumpDiagnostics(null);
-                Console.Error.WriteLine($"no decrypted GET for {url} via {name}");
+                Console.WriteLine($"no decrypted GET for {url} via {name}");
                 return false;
             }
         }
@@ -351,7 +352,18 @@ internal static class SmokeApp
                 "user_pref(\"security.enterprise_roots.enabled\", true);\n");
             Console.WriteLine("firefox: seeded enterprise_roots");
             if (OperatingSystem.IsLinux())
+            {
+                var port = ReadBindPort();
+                File.AppendAllText(Path.Combine(profile, "user.js"),
+                    "user_pref(\"network.proxy.type\", 1);\n" +
+                    "user_pref(\"network.proxy.http\", \"127.0.0.1\");\n" +
+                    "user_pref(\"network.proxy.http_port\", " + port + ");\n" +
+                    "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
+                    "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
+                    "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
+                Console.WriteLine("firefox: manual proxy prefs for the Linux temp profile");
                 ImportRootIntoFirefoxProfile(profile);
+            }
             var proc = SystemProxyBrowserCapture.StartFirefox(path, profile, url);
             return new BrowserLaunch(proc, safari: false, profile);
         }
@@ -361,14 +373,21 @@ internal static class SmokeApp
         if (OperatingSystem.IsMacOS())
         {
             var app = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
-            var proc = Process.Start(new ProcessStartInfo
+            var psi = new ProcessStartInfo
             {
                 FileName = "open",
-                Arguments =
-                    $"-na \"{app}\" --args --disable-quic --no-first-run --disable-extensions " +
-                    $"--disable-background-networking --user-data-dir=\"{dir}\" \"{url}\"",
                 UseShellExecute = false,
-            }) ?? throw new InvalidOperationException("open -na did not start " + name);
+            };
+            psi.ArgumentList.Add("-na");
+            psi.ArgumentList.Add(app);
+            psi.ArgumentList.Add("--args");
+            psi.ArgumentList.Add("--disable-quic");
+            psi.ArgumentList.Add("--no-first-run");
+            psi.ArgumentList.Add("--disable-extensions");
+            psi.ArgumentList.Add("--disable-background-networking");
+            psi.ArgumentList.Add("--user-data-dir=" + dir);
+            psi.ArgumentList.Add(url);
+            var proc = Process.Start(psi) ?? throw new InvalidOperationException("open -na did not start " + name);
             return new BrowserLaunch(proc, safari: false, dir, MacKillName(name));
         }
 
@@ -396,6 +415,50 @@ internal static class SmokeApp
         Run("certutil", $"-N -d sql:{profile} --empty-password", 15000);
         Run("certutil", $"-d sql:{profile} -A -t \"C,,\" -n \"Titanium Smoke Root\" -i \"{pem}\"", 15000);
         Console.WriteLine("firefox: imported root into the temp profile");
+    }
+
+    private static void PrintRecentHarEntries(DateTime notBeforeUtc)
+    {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TitaniumInspector",
+            "session-cache");
+        if (!Directory.Exists(root))
+            return;
+        foreach (var file in Directory.EnumerateFiles(root, "*.har", SearchOption.AllDirectories))
+        {
+            DateTime write;
+            try { write = File.GetLastWriteTimeUtc(file); }
+            catch { continue; }
+            if (write < notBeforeUtc)
+                continue;
+            string text;
+            try { text = ReadSharedText(file); }
+            catch { continue; }
+            try
+            {
+                using var doc = JsonDocument.Parse(text);
+                if (!doc.RootElement.TryGetProperty("log", out var log) || !log.TryGetProperty("entries", out var entries))
+                    continue;
+                foreach (var entry in entries.EnumerateArray())
+                {
+                    var method = entry.TryGetProperty("request", out var req) && req.TryGetProperty("method", out var m) ? m.GetString() : "?";
+                    var entryUrl = reqUrl(entry);
+                    var status = entry.TryGetProperty("response", out var resp) && resp.TryGetProperty("status", out var st) ? st.GetInt32() : 0;
+                    var reason = "";
+                    if (entry.TryGetProperty("_inspector", out var ext) && ext.TryGetProperty("opaqueReason", out var opaque))
+                        reason = opaque.GetString() ?? "";
+                    Console.WriteLine($"har-entry {method} {status} {reason} {entryUrl}");
+                }
+            }
+            catch
+            {
+                Console.WriteLine("har-entry unreadable " + file);
+            }
+        }
+
+        static string? reqUrl(JsonElement entry) =>
+            entry.TryGetProperty("request", out var req) && req.TryGetProperty("url", out var u) ? u.GetString() : null;
     }
 
     private static async Task<bool> WaitForHarAsync(DateTime notBeforeUtc, string url, TimeSpan timeout)
