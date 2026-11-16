@@ -259,8 +259,6 @@ internal static class SmokeApp
             Arguments = "run --config \"" + yaml + "\"",
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
         }) ?? throw new InvalidOperationException("titanium did not start");
         try
         {
@@ -268,17 +266,12 @@ internal static class SmokeApp
                 return Fail(1, "titanium run did not listen");
             var pem = ExportCliRootPem(dir);
             var curl = OperatingSystem.IsWindows() ? "curl.exe" : "curl";
-            var curlProc = Process.Start(new ProcessStartInfo
-            {
-                FileName = curl,
-                Arguments = $"--silent --show-error --max-time 30 --proxy http://127.0.0.1:{port} --cacert \"{pem}\" https://example.com/",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-            curlProc?.WaitForExit(35000);
-            var deadline = DateTime.UtcNow.AddSeconds(10);
+            var curlResult = RunCapture(
+                curl,
+                $"--silent --show-error --max-time 30 --proxy http://127.0.0.1:{port} --cacert \"{pem}\" https://example.com/",
+                35000);
+            Console.WriteLine("curl exit=" + curlResult.Code + " " + TrimOneLine(curlResult.Output));
+            var deadline = DateTime.UtcNow.AddSeconds(15);
             while (DateTime.UtcNow < deadline)
             {
                 if (File.Exists(log) && ReadSharedText(log).Contains("https://example.com", StringComparison.OrdinalIgnoreCase))
@@ -289,6 +282,7 @@ internal static class SmokeApp
                 await Task.Delay(300);
             }
 
+            Console.WriteLine("access log: " + TrimOneLine(File.Exists(log) ? ReadSharedText(log) : "(missing)"));
             return Fail(1, "access log has no decrypted https://example.com");
         }
         finally
@@ -356,14 +350,52 @@ internal static class SmokeApp
             File.AppendAllText(Path.Combine(profile, "user.js"),
                 "user_pref(\"security.enterprise_roots.enabled\", true);\n");
             Console.WriteLine("firefox: seeded enterprise_roots");
+            if (OperatingSystem.IsLinux())
+                ImportRootIntoFirefoxProfile(profile);
             var proc = SystemProxyBrowserCapture.StartFirefox(path, profile, url);
             return new BrowserLaunch(proc, safari: false, profile);
         }
 
         var dir = Path.Combine(Path.GetTempPath(), "twp-smoke-" + name + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        if (OperatingSystem.IsMacOS())
+        {
+            var app = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
+            var proc = Process.Start(new ProcessStartInfo
+            {
+                FileName = "open",
+                Arguments =
+                    $"-na \"{app}\" --args --disable-quic --no-first-run --disable-extensions " +
+                    $"--disable-background-networking --user-data-dir=\"{dir}\" \"{url}\"",
+                UseShellExecute = false,
+            }) ?? throw new InvalidOperationException("open -na did not start " + name);
+            return new BrowserLaunch(proc, safari: false, dir, MacKillName(name));
+        }
+
         var chrome = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
         return new BrowserLaunch(chrome, safari: false, dir);
+    }
+
+    private static string? MacKillName(string name) => name.ToLowerInvariant() switch
+    {
+        "chrome" => "Google Chrome",
+        "edge" => "Microsoft Edge",
+        "brave" => "Brave Browser",
+        "opera" => "Opera",
+        "firefox" => "firefox",
+        _ => null,
+    };
+
+    private static void ImportRootIntoFirefoxProfile(string profile)
+    {
+        var pfx = Path.Combine(ProfileDir(), "rootCert.pfx");
+        if (!File.Exists(pfx))
+            return;
+        var pem = Path.Combine(profile, "smoke-root.pem");
+        File.WriteAllText(pem, ExportPem(pfx));
+        Run("certutil", $"-N -d sql:{profile} --empty-password", 15000);
+        Run("certutil", $"-d sql:{profile} -A -t \"C,,\" -n \"Titanium Smoke Root\" -i \"{pem}\"", 15000);
+        Console.WriteLine("firefox: imported root into the temp profile");
     }
 
     private static async Task<bool> WaitForHarAsync(DateTime notBeforeUtc, string url, TimeSpan timeout)
@@ -838,13 +870,27 @@ internal static class SmokeApp
 
     private static void DumpDiagnostics(string? outDir)
     {
+        var root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TitaniumInspector",
+            "session-cache");
+        if (Directory.Exists(root))
+        {
+            foreach (var file in Directory.EnumerateFiles(root, "*.har", SearchOption.AllDirectories))
+                Console.WriteLine("har " + file);
+        }
+        else
+        {
+            Console.WriteLine("har directory missing " + root);
+        }
+
         var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
         if (!File.Exists(ux))
             return;
         var lines = File.ReadAllLines(ux);
         var tail = string.Join(Environment.NewLine, lines.TakeLast(40));
-        Console.Error.WriteLine("--- ux-trace ---");
-        Console.Error.WriteLine(tail);
+        Console.WriteLine("--- ux-trace ---");
+        Console.WriteLine(tail);
         if (!string.IsNullOrEmpty(outDir))
         {
             Directory.CreateDirectory(outDir);
@@ -951,7 +997,7 @@ internal static class SmokeApp
 
     private static int Fail(int code, string message)
     {
-        Console.Error.WriteLine(message);
+        Console.WriteLine(message);
         return code;
     }
 }
@@ -1063,12 +1109,14 @@ internal sealed class BrowserLaunch : IDisposable
     private readonly Process? _process;
     private readonly bool _safari;
     private readonly string? _dir;
+    private readonly string? _killName;
 
-    public BrowserLaunch(Process? process, bool safari, string? dir = null)
+    public BrowserLaunch(Process? process, bool safari, string? dir = null, string? killName = null)
     {
         _process = process;
         _safari = safari;
         _dir = dir;
+        _killName = killName;
     }
 
     public void Kill()
@@ -1079,6 +1127,16 @@ internal sealed class BrowserLaunch : IDisposable
                 SystemProxyBrowserCapture.KillSafariProcesses();
             else if (_process is { HasExited: false })
                 _process.Kill(entireProcessTree: true);
+            if (!string.IsNullOrEmpty(_killName))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "killall",
+                    Arguments = "\"" + _killName + "\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                })?.WaitForExit(3000);
+            }
         }
         catch { /* already gone */ }
         if (_dir is not null)
