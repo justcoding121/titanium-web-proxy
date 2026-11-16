@@ -370,6 +370,22 @@ internal static class SmokeApp
 
         var dir = Path.Combine(Path.GetTempPath(), "twp-smoke-" + name + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        if (OperatingSystem.IsLinux())
+        {
+            var desktop = LinuxDesktopId(name);
+            if (desktop is not null)
+            {
+                Console.WriteLine("launch " + name + " via " + desktop);
+                var proc = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "gtk-launch",
+                    ArgumentList = { desktop, url },
+                    UseShellExecute = false,
+                }) ?? throw new InvalidOperationException("gtk-launch did not start " + name);
+                return new BrowserLaunch(proc, safari: false, dir, LinuxKillName(name));
+            }
+        }
+
         if (OperatingSystem.IsMacOS())
         {
             var app = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
@@ -380,19 +396,53 @@ internal static class SmokeApp
             };
             psi.ArgumentList.Add("-na");
             psi.ArgumentList.Add(app);
+            psi.ArgumentList.Add(url);
             psi.ArgumentList.Add("--args");
             psi.ArgumentList.Add("--disable-quic");
             psi.ArgumentList.Add("--no-first-run");
             psi.ArgumentList.Add("--disable-extensions");
             psi.ArgumentList.Add("--disable-background-networking");
             psi.ArgumentList.Add("--user-data-dir=" + dir);
-            psi.ArgumentList.Add(url);
             var proc = Process.Start(psi) ?? throw new InvalidOperationException("open -na did not start " + name);
             return new BrowserLaunch(proc, safari: false, dir, MacKillName(name));
         }
 
         var chrome = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
         return new BrowserLaunch(chrome, safari: false, dir);
+    }
+
+    private static string? LinuxKillName(string name) => name.ToLowerInvariant() switch
+    {
+        "chrome" => "chrome",
+        "edge" => "msedge",
+        "brave" => "brave",
+        "opera" => "opera",
+        _ => null,
+    };
+
+    private static string? LinuxDesktopId(string name)
+    {
+        var files = name.ToLowerInvariant() switch
+        {
+            "chrome" => new[] { "google-chrome.desktop", "google-chrome-stable.desktop" },
+            "edge" => new[] { "microsoft-edge.desktop", "microsoft-edge-stable.desktop" },
+            "brave" => new[] { "brave-browser.desktop" },
+            "opera" => new[] { "opera.desktop" },
+            _ => null,
+        };
+        if (files is null)
+            return null;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        foreach (var file in files)
+        {
+            var path = Path.Combine(home, ".local", "share", "applications", file);
+            if (!File.Exists(path))
+                continue;
+            return Path.GetFileNameWithoutExtension(path);
+        }
+
+        Console.WriteLine("desktop missing for " + name);
+        return null;
     }
 
     private static string? MacKillName(string name) => name.ToLowerInvariant() switch
