@@ -384,6 +384,7 @@ public class LinuxBrowserLaunchProxyTests
         StringAssert.Contains(built.Value.Desktop, "Exec=/home/runner/.local/share/titanium-inspector/launchers/google-chrome.sh %U");
         Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
         StringAssert.Contains(built.Value.Script, "exec \"/usr/bin/google-chrome-stable\"");
+        StringAssert.Contains(built.Value.Script, "export http_proxy=\"http://127.0.0.1:8866\"");
         StringAssert.Contains(built.Value.Script, "--proxy-server=http://127.0.0.1:8866");
         Assert.IsFalse(built.Value.Script.Contains("<-loopback>", StringComparison.Ordinal));
     }
