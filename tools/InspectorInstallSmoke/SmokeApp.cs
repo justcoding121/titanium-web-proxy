@@ -388,6 +388,10 @@ internal static class SmokeApp
             var desktop = LinuxDesktopId(name);
             if (desktop is not null)
             {
+                KillLinuxFamily(name);
+                Environment.SetEnvironmentVariable(
+                    "TITANIUM_SMOKE_BROWSER_FLAGS",
+                    "--disable-component-update --disable-background-networking");
                 Console.WriteLine("launch " + name + " via " + desktop);
                 PrintDesktopExec(desktop);
                 var proc = Process.Start(new ProcessStartInfo
@@ -407,6 +411,34 @@ internal static class SmokeApp
         var killName = OperatingSystem.IsMacOS() ? MacKillName(name) : null;
         var chromium = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
         return new BrowserLaunch(chromium, safari: false, dir, killName);
+    }
+
+    private static void KillLinuxFamily(string name)
+    {
+        foreach (var proc in LinuxKillNames(name))
+            RunCapture("killall", proc, 4000);
+        Thread.Sleep(400);
+    }
+
+    private static IEnumerable<string> LinuxKillNames(string name)
+    {
+        var primary = LinuxKillName(name);
+        if (primary is not null)
+            yield return primary;
+        switch (name.ToLowerInvariant())
+        {
+            case "chrome":
+                yield return "google-chrome";
+                yield return "google-chrome-stable";
+                yield break;
+            case "edge":
+                yield return "microsoft-edge";
+                yield return "microsoft-edge-stable";
+                yield break;
+            case "brave":
+                yield return "brave-browser";
+                yield break;
+        }
     }
 
     private static string? LinuxKillName(string name) => name.ToLowerInvariant() switch
@@ -705,14 +737,14 @@ internal static class SmokeApp
                 text = reader.ReadToEnd();
             }
             catch { continue; }
-            if (EntryMatches(text, host))
+            if (EntryMatches(text, host, notBeforeUtc))
                 return true;
         }
 
         return false;
     }
 
-    private static bool EntryMatches(string har, string host)
+    private static bool EntryMatches(string har, string host, DateTime notBeforeUtc)
     {
         try
         {
@@ -722,6 +754,8 @@ internal static class SmokeApp
                 return false;
             foreach (var entry in entries.EnumerateArray())
             {
+                if (!StartedAfter(entry, notBeforeUtc))
+                    continue;
                 if (!entry.TryGetProperty("request", out var req))
                     continue;
                 var method = req.TryGetProperty("method", out var m) ? m.GetString() : null;
@@ -752,6 +786,26 @@ internal static class SmokeApp
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// HAR files are flushed after the browser that made the request has exited.
+    /// A file timestamp alone would credit Chrome's example.com GET to the next browser.
+    /// </summary>
+    private static bool StartedAfter(JsonElement entry, DateTime notBeforeUtc)
+    {
+        if (!entry.TryGetProperty("startedDateTime", out var started))
+            return false;
+        var text = started.GetString();
+        if (string.IsNullOrEmpty(text))
+            return false;
+        if (!DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var when))
+            return false;
+        var utc = when.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(when, DateTimeKind.Utc)
+            : when.ToUniversalTime();
+        return utc >= notBeforeUtc;
     }
 
     private static bool HostMatches(string entryUrl, string host)
@@ -1405,13 +1459,16 @@ internal sealed class BrowserLaunch : IDisposable
                 _process.Kill(entireProcessTree: true);
             if (!string.IsNullOrEmpty(_killName))
             {
-                Process.Start(new ProcessStartInfo
+                foreach (var proc in new[] { _killName }.Concat(ExtraKillNames(_killName)))
                 {
-                    FileName = "killall",
-                    Arguments = "\"" + _killName + "\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                })?.WaitForExit(3000);
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "killall",
+                        ArgumentList = { proc },
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    })?.WaitForExit(3000);
+                }
             }
         }
         catch { /* already gone */ }
@@ -1422,6 +1479,15 @@ internal sealed class BrowserLaunch : IDisposable
     }
 
     public void Dispose() => Kill();
+
+    private static IEnumerable<string> ExtraKillNames(string killName) => killName switch
+    {
+        "msedge" => ["microsoft-edge", "microsoft-edge-stable"],
+        "chrome" => ["google-chrome", "google-chrome-stable"],
+        "brave" => ["brave-browser"],
+        "opera" => ["opera-stable"],
+        _ => [],
+    };
 }
 
 /// <summary>

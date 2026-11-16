@@ -462,6 +462,8 @@ internal static class LinuxBrowserLaunchProxy
         // page, so the proxy sees no session. Skip that flow, and pass the proxy both as
         // an environment variable and as a switch.
         var proxyUrl = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium proxy URL is http.
+        // TITANIUM_SMOKE_BROWSER_FLAGS is empty for a normal launch. The install smoke sets it
+        // so the browser opens the page instead of spending the wait on component downloads.
         var script = "#!/bin/sh\n" +
                      "# " + DesktopMarker + "\n" +
                      "export http_proxy=" + QuoteShellArg(proxyUrl) + "\n" +
@@ -469,8 +471,12 @@ internal static class LinuxBrowserLaunchProxy
                      "export HTTP_PROXY=\"$http_proxy\"\n" +
                      "export HTTPS_PROXY=\"$http_proxy\"\n" +
                      "unset no_proxy NO_PROXY\n" +
+                     "extra=\n" +
+                     "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
+                     "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
+                     "fi\n" +
                      "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port) +
-                     " --no-first-run --no-default-browser-check \"$@\"\n";
+                     " --no-first-run --no-default-browser-check$extra \"$@\"\n";
         return (body.ToString(), script);
     }
 

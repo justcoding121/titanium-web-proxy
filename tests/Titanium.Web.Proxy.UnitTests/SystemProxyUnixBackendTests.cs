@@ -387,6 +387,7 @@ public class LinuxBrowserLaunchProxyTests
         StringAssert.Contains(built.Value.Script, "export http_proxy=\"http://127.0.0.1:8866\"");
         StringAssert.Contains(built.Value.Script, "--proxy-server=http://127.0.0.1:8866");
         StringAssert.Contains(built.Value.Script, "--no-first-run");
+        StringAssert.Contains(built.Value.Script, "TITANIUM_SMOKE_BROWSER_FLAGS");
         Assert.IsFalse(built.Value.Script.Contains("<-loopback>", StringComparison.Ordinal));
     }
 
