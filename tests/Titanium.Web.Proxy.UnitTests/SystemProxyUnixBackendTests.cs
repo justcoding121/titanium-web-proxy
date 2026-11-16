@@ -403,7 +403,8 @@ public class LinuxBrowserLaunchProxyTests
         Assert.IsNotNull(built);
         // An unquoted < is a redirection in the wrapper and a reserved character in Exec.
         StringAssert.Contains(built.Value.Script, "\"--proxy-bypass-list=<-loopback>\"");
-        StringAssert.Contains(built.Value.Desktop, "\"--proxy-bypass-list=<-loopback>\"");
+        // The desktop entry only points at the launcher, so the rule never reaches an Exec line.
+        Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
     }
 
     [TestMethod]
