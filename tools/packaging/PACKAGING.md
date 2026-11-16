@@ -165,6 +165,7 @@ See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 - Matrix RID × matching runner (`windows-latest` for `win-x64`; `ubuntu-24.04-arm` for linux-arm64 / musl-arm64; `macos-15-intel` for `osx-x64`; `macos-latest` for `osx-arm64`; Alpine container for musl Lua).
 - Azure Artifact Signing on Windows; optional Apple notarize when secrets exist; optional GPG on checksums.
 - Smoke: `linux-x64` / `linux-musl-x64` HTTP/3; `linux-x64` + `win-x64` scripting (`titanium scripting-deps status` + native files).
+- Install smoke: [`inspector-install-smoke.yml`](../../.github/workflows/inspector-install-smoke.yml) installs the packaged Inspector (MSI, deb, DMG) and CLI on Windows, Linux, and macOS. An upgrade keeps Decrypt on. A fresh install starts with Decrypt off until it is turned on. Both must record a decrypted GET. The three OS checks are required on `beta` and `stable`. The release pull request author fixes a red run.
 - Helm: package three charts onto the Release and `helm push` to OCI (`setup-helm` v5).
 
 Native bundling for CLI scripting runs on **release** and hard-fails the cut when incomplete.

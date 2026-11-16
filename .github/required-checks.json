@@ -24,7 +24,10 @@
         "dependency-review",
         "tests-or-waiver",
         "guard-nc-paths",
-        "cla"
+        "cla",
+        "install-smoke (windows-latest)",
+        "install-smoke (ubuntu-latest)",
+        "install-smoke (macos-latest)"
       ]
     },
     "stable": {
@@ -37,7 +40,10 @@
         "dependency-review",
         "tests-or-waiver",
         "guard-nc-paths",
-        "cla"
+        "cla",
+        "install-smoke (windows-latest)",
+        "install-smoke (ubuntu-latest)",
+        "install-smoke (macos-latest)"
       ]
     }
   }

@@ -12,7 +12,7 @@ The only list of check contexts is [`.github/required-checks.json`](required-che
 | Block force pushes | yes |
 | Require a pull request before merging | **yes** (1 approval, stale reviews dismissed, threads resolved) |
 | Require status checks to pass | **yes**, strict |
-| Required checks | `merge-gate`, `rps (ubuntu-latest)`, `rps (windows-latest)`, `rps (macos-15)`, `gitleaks`, `dependency-review`, `tests-or-waiver`, `guard-nc-paths`, `cla` |
+| Required checks | `merge-gate`, `rps (ubuntu-latest)`, `rps (windows-latest)`, `rps (macos-15)`, `gitleaks`, `dependency-review`, `tests-or-waiver`, `guard-nc-paths`, `cla`, `install-smoke (windows-latest)`, `install-smoke (ubuntu-latest)`, `install-smoke (macos-latest)` |
 | Code scanning | CodeQL, high-or-higher security alerts, error alerts |
 | Admin bypass | repository admin role, **pull request only** (no direct push) |
 
@@ -26,9 +26,9 @@ gh api -X PUT repos/justcoding121/titanium-web-proxy/rulesets/24311415 --input .
 
 ## Release ladder
 
-1. **Pull request into `beta` or `stable`.** The ruleset above, plus the CodeQL rule. `rps` runs `compare-spot` on three OS.
-2. **Push to `beta` or `stable`.** `.NET` runs `merge-gate`, then `rps-publish-gate` (edition comparison) and `rps-peer-gate` (spot matrix) on the merge commit. Those push jobs are the evidence on the release SHA, because pull-request checks attach to the PR head, not the merge commit. `cut-product-tag` then dispatches `release.yml`. The six readiness workflows (`conformance`, `soak`, `kubernetes-smoke`, `inspector-unattended`, `fuzz-nightly`, `dast`) also run on that push.
-3. **`release.yml`.** `release-readiness` waits for those six workflows on the same SHA. `gate-evidence` records whether the push `.NET` run already passed `merge-gate`, `rps-publish-gate`, and `rps-peer-gate`. `test` and `cli-e2e` run only when that evidence is missing. `release-gate` then unlocks the CLI, Plus, and Inspector builds. `smoke-http3` and `smoke-scripting` must pass. `rps-product-smoke` runs on stable only. `publish-release` creates the GitHub Release. `publish-nuget` runs only after that. Images, Chocolatey, charts, and the image scan follow.
+1. **Pull request into `beta` or `stable`.** The ruleset above, plus the CodeQL rule. `rps` runs `compare-spot` on three OS. `inspector-install-smoke` runs on one runner per OS. There is no waiver label and no `continue-on-error`. The author of the release pull request fixes a red run on that branch. Do not merge it with an admin bypass.
+2. **Push to `beta` or `stable`.** `.NET` runs `merge-gate`, then `rps-publish-gate` (edition comparison) and `rps-peer-gate` (spot matrix) on the merge commit. Those push jobs are the evidence on the release SHA, because pull-request checks attach to the PR head, not the merge commit. `cut-product-tag` then dispatches `release.yml`. The readiness workflows (`conformance`, `soak`, `kubernetes-smoke`, `inspector-unattended`, `fuzz-nightly`, `dast`, `inspector-install-smoke`) also run on that push.
+3. **`release.yml`.** `release-readiness` waits for those workflows on the same SHA. `gate-evidence` records whether the push `.NET` run already passed `merge-gate`, `rps-publish-gate`, and `rps-peer-gate`. `test` and `cli-e2e` run only when that evidence is missing. `release-gate` then unlocks the CLI, Plus, and Inspector builds. `smoke-http3` and `smoke-scripting` must pass. `rps-product-smoke` runs on stable only. `publish-release` creates the GitHub Release. `publish-nuget` runs only after that. Images, Chocolatey, charts, and the image scan follow.
 
 `publish-charts.yml`, `chocolatey-publish.yml`, and `packaging-catalog-smoke.yml` are manual fallbacks. They are not a second release pipeline.
 
