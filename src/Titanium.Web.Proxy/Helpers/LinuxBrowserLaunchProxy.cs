@@ -458,8 +458,8 @@ internal static class LinuxBrowserLaunchProxy
                 body.Insert(header + 1, DesktopMarker + "\n");
         }
 
-        // Chrome 157 keeps --proxy-server on argv and still opens a direct connection.
-        // The process environment is what that build actually uses.
+        // A --proxy-server switch on this Chrome build produces no connection at all.
+        // Export the proxy instead, and do not pass that switch.
         var proxyUrl = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium proxy URL is http.
         var script = "#!/bin/sh\n" +
                      "# " + DesktopMarker + "\n" +
@@ -468,7 +468,7 @@ internal static class LinuxBrowserLaunchProxy
                      "export HTTP_PROXY=\"$http_proxy\"\n" +
                      "export HTTPS_PROXY=\"$http_proxy\"\n" +
                      "unset no_proxy NO_PROXY\n" +
-                     "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port) + " \"$@\"\n";
+                     "exec " + QuoteShellArg(binary) + " --disable-quic \"$@\"\n";
         return (body.ToString(), script);
     }
 

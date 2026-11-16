@@ -389,6 +389,7 @@ internal static class SmokeApp
                 }) ?? throw new InvalidOperationException("gtk-launch did not start " + name);
                 Thread.Sleep(2500);
                 PrintMatchingProcessArgs(name);
+                ProbeProxyWithCurl();
                 return new BrowserLaunch(proc, safari: false, dir, LinuxKillName(name));
             }
         }
@@ -455,6 +456,23 @@ internal static class SmokeApp
             Console.WriteLine("launcher " + script);
             foreach (var scriptLine in File.ReadLines(script))
                 Console.WriteLine("launcher " + scriptLine);
+        }
+    }
+
+    private static void ProbeProxyWithCurl()
+    {
+        try
+        {
+            var port = ReadBindPort();
+            var curl = RunCapture(
+                "curl",
+                "-sS -o /dev/null -w %{http_code} --proxy http://127.0.0.1:" + port + " --max-time 15 https://example.com/",
+                20000);
+            Console.WriteLine("proxy-probe curl exit=" + curl.Code + " http=" + TrimOneLine(curl.Output));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("proxy-probe failed: " + ex.Message);
         }
     }
 
