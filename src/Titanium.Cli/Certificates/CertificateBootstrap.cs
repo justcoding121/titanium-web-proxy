@@ -265,7 +265,7 @@ internal static class CertificateBootstrap
 
         if (!string.IsNullOrEmpty(second))
         {
-            return second!;
+            return second;
         }
 
         return fallback;

@@ -149,7 +149,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         return desktopError;
     }
 
-    private void TryApplyProcessEnvironment(
+    private static void TryApplyProcessEnvironment(
         string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
         // Process env alone does not affect Chrome/Firefox already running in the desktop session.
