@@ -113,9 +113,11 @@ jobs:
           $installed = "${env:ProgramFiles}\Titanium Inspector\TitaniumInspector.exe"
           $log = Join-Path $env:RUNNER_TEMP 'install-smoke'
           New-Item -ItemType Directory -Force -Path $log | Out-Null
-          function Invoke-Msi([string]$args) {
-            $p = Start-Process msiexec -ArgumentList $args -Wait -PassThru
-            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "msiexec $args exited $($p.ExitCode)" }
+          function Invoke-Msi([string]$msiArgs) {
+            Write-Host "msiexec $msiArgs"
+            $p = Start-Process msiexec -ArgumentList $msiArgs -PassThru
+            if (-not $p.WaitForExit(480000)) { throw "msiexec timed out: $msiArgs" }
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { throw "msiexec $msiArgs exited $($p.ExitCode)" }
           }
           Invoke-Msi "/i `"$prev`" /qn /norestart /l*v `"$log\prev-install.log`""
           & $driver upgrade-seed --exe $installed --browsers firefox --out $log
