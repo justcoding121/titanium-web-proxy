@@ -204,9 +204,13 @@ internal static class SmokeApp
             if (!move.Ok)
             {
                 Console.WriteLine("click: FALLBACK (ditto to Applications)");
-                var bundle = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(exe)!, "..", "..", ".."));
-                Run("ditto", $"\"{bundle}\" \"/Applications/Titanium Inspector.app\"", 60000);
                 await mover.QuitAsync();
+                // Contents/MacOS -> the .app bundle is two levels up.
+                var bundle = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(exe)!, "..", ".."));
+                var copied = RunCapture("ditto", $"\"{bundle}\" \"/Applications/Titanium Inspector.app\"", 60000);
+                Console.WriteLine("ditto " + bundle + " exit=" + copied.Code);
+                if (copied.Code != 0 && !string.IsNullOrWhiteSpace(copied.Output))
+                    Console.WriteLine(TrimOneLine(copied.Output));
             }
             else
             {
