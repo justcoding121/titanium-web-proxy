@@ -481,11 +481,19 @@ internal static class SmokeApp
         try
         {
             var certutil = Path.Combine(Environment.SystemDirectory, "certutil.exe");
-            var (code, output) = RunCapture(certutil, "-user -addstore -f Root \"" + cer + "\"", 20000);
-            Console.WriteLine($"certutil -user exit={code} {TrimOneLine(output)}");
+            // -user can wait on a console confirmation on a hosted image. Answer that prompt.
+            // A GUI sheet still times out and is not clicked.
+            var user = RunCapture(certutil, "-user -addstore -f Root \"" + cer + "\"", 15000, "y\r\n");
+            Console.WriteLine($"certutil -user exit={user.Code} {TrimOneLine(user.Output)}");
             if (!UserRootContains(cert.Thumbprint))
-                throw new InvalidOperationException("user Root store does not contain " + cert.Thumbprint + " after certutil");
-            Console.WriteLine("root in user store: " + cert.Thumbprint);
+            {
+                var machine = RunCapture(certutil, "-addstore -f Root \"" + cer + "\"", 20000);
+                Console.WriteLine($"certutil -machine exit={machine.Code} {TrimOneLine(machine.Output)}");
+            }
+
+            if (!UserRootContains(cert.Thumbprint) && !MachineRootContains(cert.Thumbprint))
+                throw new InvalidOperationException("Root store does not contain " + cert.Thumbprint + " after certutil");
+            Console.WriteLine("root in store: " + cert.Thumbprint + " user=" + UserRootContains(cert.Thumbprint));
         }
         finally
         {
@@ -493,11 +501,22 @@ internal static class SmokeApp
         }
     }
 
-    private static bool UserRootContains(string thumb)
+    private static bool UserRootContains(string thumb) => StoreContains(StoreLocation.CurrentUser, thumb);
+
+    private static bool MachineRootContains(string thumb) => StoreContains(StoreLocation.LocalMachine, thumb);
+
+    private static bool StoreContains(StoreLocation location, string thumb)
     {
-        using var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
-        store.Open(OpenFlags.ReadOnly);
-        return store.Certificates.Find(X509FindType.FindByThumbprint, thumb, validOnly: false).Count > 0;
+        try
+        {
+            using var store = new X509Store(StoreName.Root, location);
+            store.Open(OpenFlags.ReadOnly);
+            return store.Certificates.Find(X509FindType.FindByThumbprint, thumb, validOnly: false).Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string TrimOneLine(string text)
@@ -787,7 +806,7 @@ internal static class SmokeApp
         await Task.Delay(500);
     }
 
-    private static (int Code, string Output) RunCapture(string file, string args, int timeoutMs)
+    private static (int Code, string Output) RunCapture(string file, string args, int timeoutMs, string? stdin = null)
     {
         using var p = Process.Start(new ProcessStartInfo
         {
@@ -797,11 +816,18 @@ internal static class SmokeApp
             CreateNoWindow = true,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
+            RedirectStandardInput = stdin is not null,
         });
         if (p is null)
             return (-1, "did not start");
         var stdout = p.StandardOutput.ReadToEndAsync();
         var stderr = p.StandardError.ReadToEndAsync();
+        if (stdin is not null)
+        {
+            p.StandardInput.Write(stdin);
+            p.StandardInput.Close();
+        }
+
         if (!p.WaitForExit(timeoutMs))
         {
             try { p.Kill(entireProcessTree: true); } catch { /* dialog */ }

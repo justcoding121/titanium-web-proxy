@@ -1079,7 +1079,7 @@ public sealed class InterceptionService : IDisposable
         // Windows: Root store presence is trust. Unix: require real SSL trust verification -
         // Keychain/NSS can hold the CA without trusting it for SSL (Chrome MITM fails).
         var ok = OperatingSystem.IsWindows()
-            ? IsRootPresentInStore(false)
+            ? IsRootPresentInStore(false) || IsRootPresentInStore(true)
             : _proxy.CertificateManager.VerifyOsUserSslTrust();
         IsRootTrusted = ok;
         return ok;
@@ -1673,11 +1673,11 @@ public sealed class InterceptionService : IDisposable
             return IsRootTrusted;
         }
 
-        // Windows Root store presence == trust. On macOS/Linux, presence is not enough -
-        // VerifyOsUserSslTrust checks Keychain/NSS SSL trust (security verify-cert / certutil).
+        // Windows Root store presence is trust, in the user store or the machine store.
+        // A machine-wide root is already trusted for every user; do not require a second user copy.
         if (OperatingSystem.IsWindows())
         {
-            IsRootTrusted = IsRootPresentInStore(machineStore);
+            IsRootTrusted = IsRootPresentInStore(machineStore) || WindowsMachineRootCounts(machineStore);
             return IsRootTrusted;
         }
 
@@ -1690,6 +1690,10 @@ public sealed class InterceptionService : IDisposable
         IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
         return IsRootTrusted;
     }
+
+    /// <summary>When the caller asked about the user store, a machine-wide copy also counts.</summary>
+    private bool WindowsMachineRootCounts(bool machineStore) =>
+        !machineStore && IsRootPresentInStore(true);
 
     public bool IsRootPresentInStore(bool machineStore)
     {
