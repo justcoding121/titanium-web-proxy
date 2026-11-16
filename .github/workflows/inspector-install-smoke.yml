@@ -363,13 +363,21 @@ jobs:
           run_driver fresh --exe "$vol" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           detach
           trap - EXIT
-          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r osx-arm64 --self-contained true -o artifacts/cli/osx-arm64
-          rm -f artifacts/Titanium.Cli-osx-arm64.zip
-          (cd artifacts/cli/osx-arm64 && zip -qr ../../Titanium.Cli-osx-arm64.zip .)
-          rm -rf "${RUNNER_TEMP}/cli-install"
-          mkdir -p "${RUNNER_TEMP}/cli-install"
-          unzip -q artifacts/Titanium.Cli-osx-arm64.zip -d "${RUNNER_TEMP}/cli-install"
-          chmod +x "${RUNNER_TEMP}/cli-install/titanium"
+          {
+            echo "cli-publish begin"
+            dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r osx-arm64 --self-contained true -o artifacts/cli/osx-arm64
+            echo "cli-publish done"
+            rm -f artifacts/Titanium.Cli-osx-arm64.zip
+            (cd artifacts/cli/osx-arm64 && zip -qr ../../Titanium.Cli-osx-arm64.zip .)
+            rm -rf "${RUNNER_TEMP}/cli-install"
+            mkdir -p "${RUNNER_TEMP}/cli-install"
+            unzip -q artifacts/Titanium.Cli-osx-arm64.zip -d "${RUNNER_TEMP}/cli-install"
+            ls -la "${RUNNER_TEMP}/cli-install"
+            # Unsigned arm64 binaries are killed. Ad-hoc sign, same as the app bundle.
+            codesign --force --sign - "${RUNNER_TEMP}/cli-install/titanium"
+            chmod +x "${RUNNER_TEMP}/cli-install/titanium"
+            echo "cli-layout done"
+          } 2>&1 | tee -a "$log/driver.log"
           run_driver cli --titanium "${RUNNER_TEMP}/cli-install/titanium" --out "$log/cli"
           {
             echo "### install-smoke macos"
