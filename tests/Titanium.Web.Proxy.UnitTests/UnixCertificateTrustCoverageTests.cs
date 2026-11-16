@@ -557,6 +557,24 @@ public class UnixCertificateTrustCoverageTests
     }
 
     [TestMethod]
+    public void HasExplicitMacSslTrustSettings_SystemKeychainBasicVerify()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var trusted = new FakeProcessRunner { DefaultSuccess = false };
+        trusted.When("security", "dump-trust-settings", "No Trust Settings were found\n");
+        trusted.When("security", "find-certificate", "SHA-1 hash: " + sha1 + "\n");
+        trusted.When("security", "verify-cert", "certificate verification successful.\n");
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(trusted, cert));
+
+        var other = new FakeProcessRunner { DefaultSuccess = false };
+        other.When("security", "dump-trust-settings", "No Trust Settings were found\n");
+        other.When("security", "find-certificate", "SHA-1 hash: 00112233445566778899AABBCCDDEEFF00112233\n");
+        other.When("security", "verify-cert", "certificate verification successful.\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(other, cert));
+    }
+
+    [TestMethod]
     public void TrustExportText_MatchesSpacedSha1AndRejectsDeny()
     {
         const string sha1 = "5B927118266541D27B0B625DC3D4E0CADA00ED04";

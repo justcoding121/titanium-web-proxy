@@ -561,7 +561,38 @@ internal static class UnixCertificateTrust
         if (DumpTrustSettingsHasPoliciesForSha1(runner, sha1))
             return true;
 
-        return TrustSettingsExportHasPolicies(runner, sha1);
+        if (TrustSettingsExportHasPolicies(runner, sha1))
+            return true;
+
+        // Admin-domain add-trusted-cert puts the anchor in the System keychain.
+        // dump-trust-settings often has no hash line, and a login-keychain copy with
+        // no policy must not count: require this hash in System.keychain and a
+        // successful basic verify.
+        return SystemKeychainPassesBasicVerify(runner, certificate, sha1);
+    }
+
+    private static bool SystemKeychainPassesBasicVerify(
+        IProcessRunner runner, X509Certificate2 certificate, string sha1)
+    {
+        var listed = runner.Run(SecurityBinary,
+            "find-certificate -a -Z /Library/Keychains/System.keychain");
+        if (listed is not { Succeeded: true })
+            return false;
+
+        var folded = NormalizeSha1(listed.StandardOutput + listed.StandardError);
+        if (!folded.Contains(NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var cerPath = WriteTempCer(certificate);
+        try
+        {
+            var verify = runner.Run(SecurityBinary, $"verify-cert -p basic -c \"{cerPath}\"");
+            return verify is { Succeeded: true };
+        }
+        finally
+        {
+            TryDelete(cerPath);
+        }
     }
 
     /// <summary>
