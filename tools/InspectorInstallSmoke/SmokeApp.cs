@@ -631,7 +631,7 @@ internal static class SmokeApp
             Process.Start(new ProcessStartInfo
             {
                 FileName = browserPath,
-                Arguments = "--no-first-run --disable-quic \"" + url + "\"",
+                Arguments = "--no-first-run --disable-quic --disable-component-update --disable-background-networking \"" + url + "\"",
                 UseShellExecute = false,
             });
         }

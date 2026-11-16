@@ -25,7 +25,8 @@ public static class SystemProxyBrowserCapture
         {
             FileName = browserPath,
             Arguments =
-                $"{headlessArg}{quic}--no-first-run --disable-extensions --disable-background-networking " +
+                $"{headlessArg}{quic}--no-first-run --disable-extensions --disable-component-update " +
+                "--disable-background-networking --disable-sync " +
                 $"--user-data-dir=\"{userDataDir}\" " +
                 $"\"{url}\"",
             UseShellExecute = false,
