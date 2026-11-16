@@ -386,14 +386,9 @@ internal static class SmokeApp
             }
         }
 
-        if (OperatingSystem.IsMacOS())
-        {
-            var chrome = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
-            return new BrowserLaunch(chrome, safari: false, dir, MacKillName(name));
-        }
-
-        var chrome = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
-        return new BrowserLaunch(chrome, safari: false, dir);
+        var killName = OperatingSystem.IsMacOS() ? MacKillName(name) : null;
+        var chromium = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
+        return new BrowserLaunch(chromium, safari: false, dir, killName);
     }
 
     private static string? LinuxKillName(string name) => name.ToLowerInvariant() switch
