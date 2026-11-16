@@ -245,14 +245,32 @@ internal static class CertificateBootstrap
     {
         var envCert = Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH");
         var envKey = Environment.GetEnvironmentVariable("TITANIUM_ACME_KEY_PATH");
-        var certPath = !string.IsNullOrEmpty(envCert) ? envCert
-            : !string.IsNullOrEmpty(certificates.CertificatePath) ? certificates.CertificatePath
-            : Path.Combine(AppContext.BaseDirectory, "acme-cert.pem");
-        var keyPath = !string.IsNullOrEmpty(envKey) ? envKey
-            : !string.IsNullOrEmpty(certificates.PrivateKeyPath) ? certificates.PrivateKeyPath
-            : Path.Combine(AppContext.BaseDirectory, "acme-key.pem");
+        var certPath = FirstNonEmpty(
+            envCert,
+            certificates.CertificatePath,
+            Path.Combine(AppContext.BaseDirectory, "acme-cert.pem"));
+        var keyPath = FirstNonEmpty(
+            envKey,
+            certificates.PrivateKeyPath,
+            Path.Combine(AppContext.BaseDirectory, "acme-key.pem"));
         return (certPath, keyPath);
     }
+
+    private static string FirstNonEmpty(string? first, string? second, string fallback)
+    {
+        if (!string.IsNullOrEmpty(first))
+        {
+            return first;
+        }
+
+        if (!string.IsNullOrEmpty(second))
+        {
+            return second!;
+        }
+
+        return fallback;
+    }
+
     /// <summary>
     ///     True when <see cref="CertificatesConfig.CertificatePath"/> loads and has more than
     ///     <see cref="ExpiryWarnWindow"/> remaining. Applies the leaf and skips ACME.

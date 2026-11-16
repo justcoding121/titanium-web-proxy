@@ -28,10 +28,7 @@ public static class SniCertificateSelector
 
         SniCertificateBinding? exactValid = null;
         SniCertificateBinding? exactAny = null;
-        SniCertificateBinding? wildcardValid = null;
-        SniCertificateBinding? wildcardAny = null;
-        var wildcardValidLength = -1;
-        var wildcardAnyLength = -1;
+        var wildcards = new WildcardCandidates();
 
         for (var i = 0; i < bindings.Count; i++)
         {
@@ -51,16 +48,14 @@ public static class SniCertificateSelector
                     continue;
                 }
 
-                ConsiderWildcard(host, serverName, binding, utcNow,
-                    ref wildcardValid, ref wildcardValidLength,
-                    ref wildcardAny, ref wildcardAnyLength);
+                ConsiderWildcard(host, serverName, binding, utcNow, ref wildcards);
             }
         }
 
         return exactValid?.Certificate
                ?? exactAny?.Certificate
-               ?? wildcardValid?.Certificate
-               ?? wildcardAny?.Certificate;
+               ?? wildcards.Valid?.Certificate
+               ?? wildcards.Any?.Certificate;
     }
 
     private static bool IsExactHost(string host, string serverName) =>
@@ -71,10 +66,7 @@ public static class SniCertificateSelector
         string serverName,
         SniCertificateBinding binding,
         DateTime utcNow,
-        ref SniCertificateBinding? wildcardValid,
-        ref int wildcardValidLength,
-        ref SniCertificateBinding? wildcardAny,
-        ref int wildcardAnyLength)
+        ref WildcardCandidates wildcards)
     {
         if (host.Length == 0 || host[0] != '*')
         {
@@ -88,16 +80,30 @@ public static class SniCertificateSelector
             return;
         }
 
-        if (suffix.Length > wildcardAnyLength)
+        if (suffix.Length > wildcards.AnyLength)
         {
-            wildcardAny = binding;
-            wildcardAnyLength = suffix.Length;
+            wildcards.Any = binding;
+            wildcards.AnyLength = suffix.Length;
         }
 
-        if (binding.IsValidAt(utcNow) && suffix.Length > wildcardValidLength)
+        if (binding.IsValidAt(utcNow) && suffix.Length > wildcards.ValidLength)
         {
-            wildcardValid = binding;
-            wildcardValidLength = suffix.Length;
+            wildcards.Valid = binding;
+            wildcards.ValidLength = suffix.Length;
+        }
+    }
+
+    private struct WildcardCandidates
+    {
+        public SniCertificateBinding? Valid;
+        public int ValidLength;
+        public SniCertificateBinding? Any;
+        public int AnyLength;
+
+        public WildcardCandidates()
+        {
+            ValidLength = -1;
+            AnyLength = -1;
         }
     }
 }

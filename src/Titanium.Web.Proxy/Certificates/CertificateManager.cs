@@ -1746,13 +1746,6 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     True after an expired root was discarded from disk or memory so a replacement can be minted.
-    ///     Stays set across the replacement mint so UI can explain why trust was lost; cleared on the
-    ///     next successful load of a non-expired root from disk.
-    /// </summary>
-    public bool RootCertificateWasReplacedDueToExpiry { get; private set; }
-
-    /// <summary>
     ///     Manually load a Root certificate file from give path (.pfx file).
     /// </summary>
     /// <param name="pfxFilePath">
@@ -1780,6 +1773,13 @@ public sealed class CertificateManager : IDisposable
 
         return RootCertificate != null;
     }
+
+    /// <summary>
+    ///     True after an expired root was discarded from disk or memory so a replacement can be minted.
+    ///     Stays set across the replacement mint so UI can explain why trust was lost; cleared on the
+    ///     next successful load of a non-expired root from disk.
+    /// </summary>
+    public bool RootCertificateWasReplacedDueToExpiry { get; private set; }
 
     /// <summary>Last OS/browser trust outcome from <see cref="TrustRootCertificate"/> / related helpers.</summary>
     public CertificateOsTrustResult? LastOsTrustResult { get; private set; }

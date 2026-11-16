@@ -353,7 +353,6 @@ public sealed partial class MainWindowViewModel
                     return false;
                 // Elevate/recovery may have added the CA without SSL Always Trust yet.
                 ok = _interception.IsRootTrusted;
-                result = _interception.LastOsTrustResult;
                 continue;
             }
 

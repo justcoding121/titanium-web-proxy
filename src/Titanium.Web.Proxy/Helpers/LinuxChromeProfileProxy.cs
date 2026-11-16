@@ -23,6 +23,9 @@ internal static class LinuxChromeProfileProxy
     private const string ProxyKey = "proxy";
     private const string FixedServersMode = "fixed_servers";
     private const string ChromiumDirName = "chromium";
+    private const string GoogleChromeDirName = "google-chrome";
+    private const string BraveSoftwareDirName = "BraveSoftware";
+    private const string BraveBrowserDirName = "Brave-Browser";
     private const string MicrosoftEdgeDirName = "microsoft-edge";
     private const string FlatpakConfigDirName = "config";
 
@@ -123,15 +126,16 @@ internal static class LinuxChromeProfileProxy
 
         // Marker file that exists only when that browser is installed, and the config
         // directory under ~/.config.
+        var braveRelative = Path.Combine(BraveSoftwareDirName, BraveBrowserDirName);
         (string Marker, string Relative)[] installed =
         [
-            ("/usr/bin/google-chrome-stable", "google-chrome"),
-            ("/usr/bin/google-chrome", "google-chrome"),
-            ("/usr/share/applications/google-chrome.desktop", "google-chrome"),
+            ("/usr/bin/google-chrome-stable", GoogleChromeDirName),
+            ("/usr/bin/google-chrome", GoogleChromeDirName),
+            ("/usr/share/applications/google-chrome.desktop", GoogleChromeDirName),
             ("/usr/bin/chromium", ChromiumDirName),
             ("/usr/bin/chromium-browser", ChromiumDirName),
-            ("/usr/bin/brave-browser", Path.Combine("BraveSoftware", "Brave-Browser")),
-            ("/usr/share/applications/brave-browser.desktop", Path.Combine("BraveSoftware", "Brave-Browser")),
+            ("/usr/bin/brave-browser", braveRelative),
+            ("/usr/share/applications/brave-browser.desktop", braveRelative),
             ("/usr/bin/microsoft-edge-stable", MicrosoftEdgeDirName),
             ("/usr/bin/microsoft-edge", MicrosoftEdgeDirName),
             ("/usr/bin/opera", "opera"),
@@ -197,19 +201,19 @@ internal static class LinuxChromeProfileProxy
 
     private static IEnumerable<string> BrowserConfigRoots(string home)
     {
-        yield return Path.Combine(home, ConfigDirName, "google-chrome");
-        yield return Path.Combine(home, ConfigDirName, "google-chrome-beta");
-        yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable");
+        yield return Path.Combine(home, ConfigDirName, GoogleChromeDirName);
+        yield return Path.Combine(home, ConfigDirName, GoogleChromeDirName + "-beta");
+        yield return Path.Combine(home, ConfigDirName, GoogleChromeDirName + "-unstable");
         yield return Path.Combine(home, ConfigDirName, ChromiumDirName);
-        yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser");
+        yield return Path.Combine(home, ConfigDirName, BraveSoftwareDirName, BraveBrowserDirName);
         yield return Path.Combine(home, ConfigDirName, MicrosoftEdgeDirName);
         yield return Path.Combine(home, ConfigDirName, "opera");
         yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName);
         yield return Path.Combine(home, "snap", MicrosoftEdgeDirName, "common", MicrosoftEdgeDirName);
-        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", FlatpakConfigDirName, "google-chrome");
+        yield return Path.Combine(home, ".var", "app", "com.google.Chrome", FlatpakConfigDirName, GoogleChromeDirName);
         yield return Path.Combine(home, ".var", "app", "org.chromium.Chromium", FlatpakConfigDirName, ChromiumDirName);
-        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", FlatpakConfigDirName, "BraveSoftware",
-            "Brave-Browser");
+        yield return Path.Combine(home, ".var", "app", "com.brave.Browser", FlatpakConfigDirName, BraveSoftwareDirName,
+            BraveBrowserDirName);
         yield return Path.Combine(home, ".var", "app", "com.microsoft.Edge", FlatpakConfigDirName, MicrosoftEdgeDirName);
     }
 

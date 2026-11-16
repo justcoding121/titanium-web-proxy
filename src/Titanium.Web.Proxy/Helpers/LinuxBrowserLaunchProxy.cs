@@ -20,6 +20,8 @@ internal static class LinuxBrowserLaunchProxy
     internal const string PolicyFileName = "titanium-inspector-proxy.json";
     internal const string DesktopMarker = "X-Titanium-Inspector-Proxy=true";
     internal const string ProxyBypassList = "<-loopback>";
+    private const string DesktopExecPrefix = "Exec=";
+    private const string SudoBinary = "/usr/bin/sudo";
 
     /// <summary>
     ///     Chromium managed-policy floor we target: modern <c>ProxyMode</c> string enum plus
@@ -292,7 +294,7 @@ internal static class LinuxBrowserLaunchProxy
         {
             var info = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = "sudo",
+                FileName = SudoBinary,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardInput = stdin is not null,
@@ -425,7 +427,7 @@ internal static class LinuxBrowserLaunchProxy
         if (execLine.Contains("--proxy-server=", StringComparison.Ordinal))
             return execLine;
 
-        var prefix = execLine.StartsWith("Exec=", StringComparison.Ordinal) ? "Exec=" : "";
+        var prefix = execLine.StartsWith(DesktopExecPrefix, StringComparison.Ordinal) ? DesktopExecPrefix : "";
         var rest = prefix.Length > 0 ? execLine[prefix.Length..] : execLine;
 
         // Insert before desktop field codes so every Chromium-family Exec line picks up flags.
@@ -469,38 +471,8 @@ internal static class LinuxBrowserLaunchProxy
         var sawDbus = false;
         foreach (var rawLine in sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
         {
-            var line = rawLine;
-            if (line.StartsWith("DBusActivatable=", StringComparison.OrdinalIgnoreCase))
-            {
-                line = "DBusActivatable=false";
-                sawDbus = true;
-            }
-            else if (line.StartsWith("Exec=", StringComparison.Ordinal))
-            {
-                var rest = line["Exec=".Length..];
-                var fieldAt = FieldCodeIndex(rest);
-                var command = (fieldAt >= 0 ? rest[..fieldAt] : rest).Trim();
-                var field = fieldAt >= 0 ? rest[fieldAt..] : string.Empty;
-                var token = FirstToken(command);
-                if (string.IsNullOrEmpty(token))
-                {
-                    body.Append(line);
-                    body.Append('\n');
-                    continue;
-                }
-
-                binary ??= token;
-                if (!string.Equals(token, binary, StringComparison.Ordinal))
-                {
-                    line = InjectChromeProxyArgs(line, hostname, port, proxyLoopback);
-                }
-                else
-                {
-                    var extra = command.Length > token.Length ? command[token.Length..] : string.Empty;
-                    line = "Exec=" + QuoteDesktopPath(scriptPath) + extra + field;
-                }
-            }
-
+            var line = RewriteDesktopLine(
+                rawLine, scriptPath, hostname, port, proxyLoopback, ref binary, ref sawDbus);
             body.Append(line);
             body.Append('\n');
         }
@@ -509,41 +481,79 @@ internal static class LinuxBrowserLaunchProxy
             return null;
 
         if (!sawDbus)
-        {
-            var text = body.ToString();
-            var header = text.IndexOf('\n');
-            if (header >= 0)
-                body.Insert(header + 1, "DBusActivatable=false\n");
-        }
+            InsertAfterDesktopHeader(body, "DBusActivatable=false\n");
 
         if (!body.ToString().Contains(DesktopMarker, StringComparison.Ordinal))
+            InsertAfterDesktopHeader(body, DesktopMarker + "\n");
+
+        return (body.ToString(), BuildDesktopLaunchScript(binary, hostname, port, proxyLoopback));
+    }
+
+    private static string RewriteDesktopLine(
+        string rawLine,
+        string scriptPath,
+        string hostname,
+        int port,
+        bool proxyLoopback,
+        ref string? binary,
+        ref bool sawDbus)
+    {
+        var line = rawLine;
+        if (line.StartsWith("DBusActivatable=", StringComparison.OrdinalIgnoreCase))
         {
-            var text = body.ToString();
-            var header = text.IndexOf('\n');
-            if (header >= 0)
-                body.Insert(header + 1, DesktopMarker + "\n");
+            sawDbus = true;
+            return "DBusActivatable=false";
         }
 
+        if (!line.StartsWith(DesktopExecPrefix, StringComparison.Ordinal))
+            return line;
+
+        var rest = line[DesktopExecPrefix.Length..];
+        var fieldAt = FieldCodeIndex(rest);
+        var command = (fieldAt >= 0 ? rest[..fieldAt] : rest).Trim();
+        var field = fieldAt >= 0 ? rest[fieldAt..] : string.Empty;
+        var token = FirstToken(command);
+        if (string.IsNullOrEmpty(token))
+            return line;
+
+        binary ??= token;
+        if (!string.Equals(token, binary, StringComparison.Ordinal))
+            return InjectChromeProxyArgs(line, hostname, port, proxyLoopback);
+
+        var extra = command.Length > token.Length ? command[token.Length..] : string.Empty;
+        return DesktopExecPrefix + QuoteDesktopPath(scriptPath) + extra + field;
+    }
+
+    private static void InsertAfterDesktopHeader(StringBuilder body, string line)
+    {
+        var text = body.ToString();
+        var header = text.IndexOf('\n');
+        if (header >= 0)
+            body.Insert(header + 1, line);
+    }
+
+    private static string BuildDesktopLaunchScript(
+        string binary, string hostname, int port, bool proxyLoopback)
+    {
         // First launch on a new profile sits on the welcome flow and never requests the
         // page, so the proxy sees no session. Skip that flow, and pass the proxy both as
         // an environment variable and as a switch.
         var proxyUrl = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium proxy URL is http.
         // TITANIUM_SMOKE_BROWSER_FLAGS is empty for a normal launch. The install smoke sets it
         // so the browser opens the page instead of spending the wait on component downloads.
-        var script = "#!/bin/sh\n" +
-                     "# " + DesktopMarker + "\n" +
-                     "export http_proxy=" + QuoteShellArg(proxyUrl) + "\n" +
-                     "export https_proxy=\"$http_proxy\"\n" +
-                     "export HTTP_PROXY=\"$http_proxy\"\n" +
-                     "export HTTPS_PROXY=\"$http_proxy\"\n" +
-                     "unset no_proxy NO_PROXY\n" +
-                     "extra=\n" +
-                     "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
-                     "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
-                     "fi\n" +
-                     "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
-                     " --no-first-run --no-default-browser-check$extra \"$@\"\n";
-        return (body.ToString(), script);
+        return "#!/bin/sh\n" +
+               "# " + DesktopMarker + "\n" +
+               "export http_proxy=" + QuoteShellArg(proxyUrl) + "\n" +
+               "export https_proxy=\"$http_proxy\"\n" +
+               "export HTTP_PROXY=\"$http_proxy\"\n" +
+               "export HTTPS_PROXY=\"$http_proxy\"\n" +
+               "unset no_proxy NO_PROXY\n" +
+               "extra=\n" +
+               "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
+               "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
+               "fi\n" +
+               "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
+               " --no-first-run --no-default-browser-check$extra \"$@\"\n";
     }
 
     private static int FieldCodeIndex(string rest)
@@ -695,34 +705,14 @@ internal static class LinuxBrowserLaunchProxy
         {
             if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                File.SetUnixFileMode(scriptPath,
-                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                // chmod u+x: add the owner execute bit and leave the mode WriteAllText created.
+                var mode = File.GetUnixFileMode(scriptPath);
+                File.SetUnixFileMode(scriptPath, mode | UnixFileMode.UserExecute);
             }
         }
         catch
         {
-            // best-effort
-        }
-
-        try
-        {
-            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "chmod",
-                ArgumentList = { "u+x", scriptPath },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-            if (process is not null && !process.WaitForExit(2000))
-            {
-                try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
-            }
-        }
-        catch
-        {
-            // best-effort
+            // best-effort; File.SetUnixFileMode is the same chmod u+x without spawning a process
         }
     }
 

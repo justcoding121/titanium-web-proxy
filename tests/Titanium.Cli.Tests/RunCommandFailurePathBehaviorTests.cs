@@ -90,6 +90,10 @@ public class RunCommandFailurePathBehaviorTests
     {
         var proxyPort = FreePort();
         using var dir = new TempDir();
+        // Isolate ACME PEM paths so a leftover acme-cert.pem next to the test host
+        // (ResolveAcmePaths default under AppContext.BaseDirectory) cannot skip IssueOverride.
+        var missingCert = Path.Combine(dir.Path, "missing-acme-cert.pem");
+        var missingKey = Path.Combine(dir.Path, "missing-acme-key.pem");
         var path = dir.Write("twp.yaml", $"""
             schemaVersion: "7.1"
             listeners:
@@ -99,6 +103,8 @@ public class RunCommandFailurePathBehaviorTests
             server:
               drainTimeoutSeconds: 0
             certificates:
+              certificatePath: "{missingCert.Replace("\\", "/")}"
+              privateKeyPath: "{missingKey.Replace("\\", "/")}"
               acmeEmail: "ops@example.test"
               acmeDomain: "acme-failure.example.test"
               acmeDirectory: "http://127.0.0.1:1/directory"

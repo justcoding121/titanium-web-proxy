@@ -11,7 +11,7 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     macOS Keychain / Linux NSS + optional elevated system CA trust helpers.
 /// </summary>
-internal static class UnixCertificateTrust
+internal static partial class UnixCertificateTrust
 {
     private const string SecurityBinary = "security";
     private const string NssDbDirName = "nssdb";
@@ -20,9 +20,11 @@ internal static class UnixCertificateTrust
     private const string LoginKeychainDbFile = "login.keychain-db";
     private const string LoginKeychainFile = "login.keychain";
 
-    private static readonly Regex MacTrustSettingsCountRegex = new(
+    [GeneratedRegex(
         @"Number of trust settings\s*:\s*(\d+)",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex MacTrustSettingsCountRegex();
 
     private static readonly string[] WindowsCertutilCandidates =
     [
@@ -661,7 +663,7 @@ internal static class UnixCertificateTrust
 
     private static bool BlockHasExplicitTrustRoot(string part)
     {
-        var countMatch = MacTrustSettingsCountRegex.Match(part);
+        var countMatch = MacTrustSettingsCountRegex().Match(part);
         if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
             return false;
 
@@ -750,7 +752,7 @@ internal static class UnixCertificateTrust
                 continue;
 
             // "Number of trust settings : 0" must not count as trusted.
-            var countMatch = MacTrustSettingsCountRegex.Match(part);
+            var countMatch = MacTrustSettingsCountRegex().Match(part);
             if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
                 continue;
 

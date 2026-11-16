@@ -172,7 +172,20 @@ internal sealed class CliHostStatus : IPlusHostStatus
                 var cert = certificates[i];
                 var notAfter = new DateTimeOffset(cert.NotAfter.ToUniversalTime(), TimeSpan.Zero);
                 var days = (int)Math.Floor((notAfter - DateTimeOffset.UtcNow).TotalDays);
-                var status = days < 0 ? "expired" : days < 30 ? "expiring" : "ok";
+                string status;
+                if (days < 0)
+                {
+                    status = "expired";
+                }
+                else if (days < 30)
+                {
+                    status = "expiring";
+                }
+                else
+                {
+                    status = "ok";
+                }
+
                 list.Add(new PlusCertificateInfo
                 {
                     Name = total > 1 ? $"{name} ({i + 1}/{total})" : name,
