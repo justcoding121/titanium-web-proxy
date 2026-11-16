@@ -626,10 +626,15 @@ internal static class UnixCertificateTrust
         if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
             return false;
 
-        return part.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
-               part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
-               part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase);
+        return BlockHasTrustResult(part);
     }
+
+    private static bool BlockHasTrustResult(string part) =>
+        part.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+        part.Contains("kSecTrustSettingsResultTrustAsRoot", StringComparison.Ordinal) ||
+        part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+        part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
+        part.Contains("Trust As Root", StringComparison.OrdinalIgnoreCase);
 
     private static bool BlockMentionsOtherSha1(string part, string sha1)
     {
@@ -710,12 +715,8 @@ internal static class UnixCertificateTrust
             if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
                 continue;
 
-            if (part.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
-                part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
-                part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase))
-            {
+            if (BlockHasTrustResult(part))
                 return true;
-            }
         }
 
         return false;
@@ -747,29 +748,8 @@ internal static class UnixCertificateTrust
                 if (printed is null)
                     continue;
 
-                var text = printed.StandardOutput;
-                // Look for our SHA-1 key block; require a nested trustSettings array nearby.
-                var keyIdx = text.IndexOf(sha1, StringComparison.OrdinalIgnoreCase);
-                if (keyIdx < 0)
-                    continue;
-
-                // Heuristic: within the next ~2KB after the hash key, require trustSettings.
-                var window = text.Substring(keyIdx, Math.Min(2048, text.Length - keyIdx));
-                if (!window.Contains("trustSettings", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                // Empty array / missing policies: reject.
-                if (window.Contains("trustSettings => [\n  ]", StringComparison.Ordinal) ||
-                    window.Contains("trustSettings => []", StringComparison.Ordinal))
-                    continue;
-
-                if (window.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
-                    window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
-                    window.Contains("TrustRoot", StringComparison.OrdinalIgnoreCase) ||
-                    window.Contains("result", StringComparison.OrdinalIgnoreCase))
-                {
+                if (TrustExportTextHasPoliciesForSha1(printed.StandardOutput, sha1))
                     return true;
-                }
             }
             finally
             {
@@ -777,7 +757,93 @@ internal static class UnixCertificateTrust
             }
         }
 
+        // trust-settings-export -d often fails without root. Admin.plist is the same
+        // record add-trusted-cert -d writes, and plutil can read it as the user.
+        foreach (var plist in MacTrustSettingsPlistCandidates())
+        {
+            if (!File.Exists(plist))
+                continue;
+            var printed = runner.Run("plutil", $"-p \"{plist}\"");
+            if (printed is null)
+                continue;
+            if (TrustExportTextHasPoliciesForSha1(printed.StandardOutput + "\n" + printed.StandardError, sha1))
+                return true;
+        }
+
         return false;
+    }
+
+    /// <summary>
+    ///     True when plutil text for a trust-settings plist has a non-empty trustSettings
+    ///     policy for <paramref name="sha1"/>. Keys are often spaced hex inside angle
+    ///     brackets (<c>&lt;5b92 7118 ...&gt;</c>), not a contiguous thumbprint.
+    /// </summary>
+    internal static bool TrustExportTextHasPoliciesForSha1(string text, string sha1)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(sha1))
+            return false;
+
+        var folded = FoldTrustExport(text);
+        var hash = NormalizeSha1(sha1);
+        if (hash.Length < 40)
+            return false;
+
+        var keyIdx = folded.IndexOf(hash, StringComparison.OrdinalIgnoreCase);
+        if (keyIdx < 0)
+            return false;
+
+        var window = folded.Substring(keyIdx, Math.Min(2500, folded.Length - keyIdx));
+        if (!window.Contains("trustSettings", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Folding removes '>' so "=> 1" and "=> []" become "=1" and "=[]".
+        if (window.Contains("trustSettings=[]", StringComparison.Ordinal))
+            return false;
+
+        return window.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+               window.Contains("kSecTrustSettingsResultTrustAsRoot", StringComparison.Ordinal) ||
+               window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+               HasFoldedTrustResult(window, "=1") ||
+               HasFoldedTrustResult(window, "=2") ||
+               window.Contains("TrustAsRoot", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasFoldedTrustResult(string window, string resultToken)
+    {
+        var token = "kSecTrustSettingsResult" + resultToken;
+        var idx = 0;
+        while ((idx = window.IndexOf(token, idx, StringComparison.Ordinal)) >= 0)
+        {
+            var after = idx + token.Length;
+            if (after >= window.Length || !char.IsDigit(window[after]))
+                return true;
+            idx = after;
+        }
+
+        return false;
+    }
+
+    private static string FoldTrustExport(string text) =>
+        text.Replace(" ", "", StringComparison.Ordinal)
+            .Replace("\t", "", StringComparison.Ordinal)
+            .Replace("\r", "", StringComparison.Ordinal)
+            .Replace("\n", "", StringComparison.Ordinal)
+            .Replace(":", "", StringComparison.Ordinal)
+            .Replace("<", "", StringComparison.Ordinal)
+            .Replace(">", "", StringComparison.Ordinal)
+            .Replace("\"", "", StringComparison.Ordinal);
+
+    private static IEnumerable<string> MacTrustSettingsPlistCandidates()
+    {
+        yield return "/Library/Security/Trust Settings/Admin.plist";
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home))
+            yield break;
+        var dir = Path.Combine(home, "Library", "Security", "Trust Settings");
+        if (!Directory.Exists(dir))
+            yield break;
+        foreach (var file in Directory.EnumerateFiles(dir, "*.plist"))
+            yield return file;
     }
 
     /// <summary>

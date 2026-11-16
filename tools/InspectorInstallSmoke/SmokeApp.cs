@@ -376,6 +376,7 @@ internal static class SmokeApp
             if (desktop is not null)
             {
                 Console.WriteLine("launch " + name + " via " + desktop);
+                PrintDesktopExec(desktop);
                 var proc = Process.Start(new ProcessStartInfo
                 {
                     FileName = "gtk-launch",
@@ -423,6 +424,20 @@ internal static class SmokeApp
 
         Console.WriteLine("desktop missing for " + name);
         return null;
+    }
+
+    private static void PrintDesktopExec(string desktopId)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var path = Path.Combine(home, ".local", "share", "applications", desktopId + ".desktop");
+        if (!File.Exists(path))
+            return;
+        foreach (var line in File.ReadLines(path))
+        {
+            if (line.StartsWith("Exec=", StringComparison.Ordinal) ||
+                line.StartsWith("DBusActivatable=", StringComparison.Ordinal))
+                Console.WriteLine("desktop " + line);
+        }
     }
 
     private static string? MacKillName(string name) => name.ToLowerInvariant() switch

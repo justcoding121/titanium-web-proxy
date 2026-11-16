@@ -557,6 +557,35 @@ public class UnixCertificateTrustCoverageTests
     }
 
     [TestMethod]
+    public void TrustExportText_MatchesSpacedSha1AndRejectsDeny()
+    {
+        const string sha1 = "5B927118266541D27B0B625DC3D4E0CADA00ED04";
+        var spaced = """
+            {
+              "trustList" => {
+                <5b92 7118 2665 41d2 7b0b 625d c3d4 e0ca da00 ed04> => {
+                  "trustSettings" => [
+                    0 => {
+                      "kSecTrustSettingsResult" => 1
+                    }
+                  ]
+                }
+              }
+            }
+            """;
+        Assert.IsTrue(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(spaced, sha1));
+
+        var deny = spaced.Replace("=> 1", "=> 3", StringComparison.Ordinal);
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(deny, sha1));
+
+        var stub = """
+            { "trustList" => { "<5b92 7118 2665 41d2 7b0b 625d c3d4 e0ca da00 ed04>" => {
+              "issuerName" => {length = 48, bytes = 0xab} } } }
+            """;
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(stub, sha1));
+    }
+
+    [TestMethod]
     public void DumpTrustSettings_MatchesTrustRootBlockByKeychainName()
     {
         using var cert = CreateEphemeralRoot("CN=Titanium Root Certificate Authority");

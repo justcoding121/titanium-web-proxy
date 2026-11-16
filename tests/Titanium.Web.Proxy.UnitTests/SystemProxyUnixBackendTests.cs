@@ -372,6 +372,23 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void BuildDesktopOverride_UsesWrapperAndDisablesDbusActivation()
+    {
+        var built = LinuxBrowserLaunchProxy.BuildDesktopOverride(
+            "[Desktop Entry]\nDBusActivatable=true\nExec=/usr/bin/google-chrome-stable %U\n",
+            "/home/runner/.local/share/titanium-inspector/launchers/google-chrome.sh",
+            "127.0.0.1",
+            8866);
+        Assert.IsNotNull(built);
+        StringAssert.Contains(built.Value.Desktop, "DBusActivatable=false");
+        StringAssert.Contains(built.Value.Desktop, "Exec=/home/runner/.local/share/titanium-inspector/launchers/google-chrome.sh %U");
+        Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
+        StringAssert.Contains(built.Value.Script, "exec \"/usr/bin/google-chrome-stable\"");
+        StringAssert.Contains(built.Value.Script, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(built.Value.Script, "--proxy-bypass-list='<-loopback>'");
+    }
+
+    [TestMethod]
     public void InjectChromeProxyArgs_IsIdempotent()
     {
         var once = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(

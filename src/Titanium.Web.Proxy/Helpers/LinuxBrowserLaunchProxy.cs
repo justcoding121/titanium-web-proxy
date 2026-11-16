@@ -105,6 +105,8 @@ internal static class LinuxBrowserLaunchProxy
         foreach (var dest in UserDesktopOverridePaths())
             DeleteMarkedDesktopOverride(dest);
 
+        DeleteLauncherScripts();
+
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
@@ -311,6 +313,118 @@ internal static class LinuxBrowserLaunchProxy
         // unquoted <-loopback> is parsed as a redirect and Chromium starts with no proxy.
         $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list=\"{ProxyBypassList}\" --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
 
+    /// <summary>
+    ///     Shell form of the proxy flags. The desktop file points at a wrapper so
+    ///     <c>&lt;-loopback&gt;</c> never appears in Exec (glib drops the whole command).
+    /// </summary>
+    internal static string ChromeProxyShellFlags(string hostname, int port) =>
+        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list='{ProxyBypassList}' --disable-quic"; // NOSONAR S5332
+
+    /// <summary>
+    ///     Rewrites a vendor desktop file so launches use <paramref name="scriptPath"/>
+    ///     and <c>DBusActivatable=false</c>. D-Bus activation ignores Exec, which is how
+    ///     Chromium was starting with no proxy flags.
+    /// </summary>
+    internal static (string Desktop, string Script)? BuildDesktopOverride(
+        string sourceText, string scriptPath, string hostname, int port)
+    {
+        string? binary = null;
+        var body = new StringBuilder();
+        var sawDbus = false;
+        foreach (var rawLine in sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var line = rawLine;
+            if (line.StartsWith("DBusActivatable=", StringComparison.OrdinalIgnoreCase))
+            {
+                line = "DBusActivatable=false";
+                sawDbus = true;
+            }
+            else if (line.StartsWith("Exec=", StringComparison.Ordinal))
+            {
+                var rest = line["Exec=".Length..];
+                var fieldAt = FieldCodeIndex(rest);
+                var command = (fieldAt >= 0 ? rest[..fieldAt] : rest).Trim();
+                var field = fieldAt >= 0 ? rest[fieldAt..] : string.Empty;
+                var token = FirstToken(command);
+                if (string.IsNullOrEmpty(token))
+                {
+                    body.Append(line);
+                    body.Append('\n');
+                    continue;
+                }
+
+                binary ??= token;
+                if (!string.Equals(token, binary, StringComparison.Ordinal))
+                {
+                    line = InjectChromeProxyArgs(line, hostname, port);
+                }
+                else
+                {
+                    var extra = command.Length > token.Length ? command[token.Length..] : string.Empty;
+                    line = "Exec=" + QuoteDesktopPath(scriptPath) + extra + field;
+                }
+            }
+
+            body.Append(line);
+            body.Append('\n');
+        }
+
+        if (string.IsNullOrEmpty(binary))
+            return null;
+
+        if (!sawDbus)
+        {
+            var text = body.ToString();
+            var header = text.IndexOf('\n');
+            if (header >= 0)
+                body.Insert(header + 1, "DBusActivatable=false\n");
+        }
+
+        if (!body.ToString().Contains(DesktopMarker, StringComparison.Ordinal))
+        {
+            var text = body.ToString();
+            var header = text.IndexOf('\n');
+            if (header >= 0)
+                body.Insert(header + 1, DesktopMarker + "\n");
+        }
+
+        var script = "#!/bin/sh\n" +
+                     "# " + DesktopMarker + "\n" +
+                     "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port) + " \"$@\"\n";
+        return (body.ToString(), script);
+    }
+
+    private static int FieldCodeIndex(string rest)
+    {
+        var insertAt = -1;
+        foreach (var code in DesktopFieldCodes)
+        {
+            var idx = rest.IndexOf(code, StringComparison.Ordinal);
+            if (idx >= 0 && (insertAt < 0 || idx < insertAt))
+                insertAt = idx;
+        }
+
+        return insertAt;
+    }
+
+    private static string FirstToken(string command)
+    {
+        var trimmed = command.Trim();
+        if (trimmed.Length == 0)
+            return string.Empty;
+        if (trimmed[0] == '"')
+        {
+            var end = trimmed.IndexOf('"', 1);
+            return end > 1 ? trimmed[1..end] : trimmed.Trim('"');
+        }
+
+        var space = trimmed.IndexOf(' ');
+        return space < 0 ? trimmed : trimmed[..space];
+    }
+
+    private static string QuoteDesktopPath(string path) =>
+        path.IndexOfAny([' ', '\t', '"', '\'', '<', '>']) >= 0 ? QuoteShellArg(path) : path;
+
     internal static IEnumerable<string> PolicyDirectories()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -368,33 +482,73 @@ internal static class LinuxBrowserLaunchProxy
         try
         {
             var text = File.ReadAllText(source);
-            var rewritten = new StringBuilder();
-            foreach (var rawLine in text.Replace("\r\n", "\n").Split('\n'))
-            {
-                var line = rawLine;
-                if (line.StartsWith("Exec=", StringComparison.Ordinal))
-                    line = InjectChromeProxyArgs(line, hostname, port);
-                rewritten.Append(line);
-                rewritten.Append('\n');
-            }
+            var scriptPath = LauncherScriptPath(dest);
+            var built = BuildDesktopOverride(text, scriptPath, hostname, port);
+            if (built is null)
+                return false;
 
-            if (!rewritten.ToString().Contains(DesktopMarker, StringComparison.Ordinal))
-            {
-                var firstNl = rewritten.ToString().IndexOf('\n');
-                if (firstNl >= 0)
-                    rewritten.Insert(firstNl + 1, DesktopMarker + "\n");
-            }
-
+            Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+            File.WriteAllText(scriptPath, built.Value.Script.Replace("\r\n", "\n", StringComparison.Ordinal));
+            TryMakeExecutable(scriptPath);
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.WriteAllText(dest, rewritten.ToString());
+            File.WriteAllText(dest, built.Value.Desktop);
 
             var verify = File.ReadAllText(dest);
+            var script = File.ReadAllText(scriptPath);
             return verify.Contains(DesktopMarker, StringComparison.Ordinal) &&
-                   verify.Contains("--proxy-server=", StringComparison.Ordinal);
+                   verify.Contains("DBusActivatable=false", StringComparison.Ordinal) &&
+                   script.Contains("--proxy-server=", StringComparison.Ordinal);
         }
         catch
         {
             return false;
+        }
+    }
+
+    private static string LauncherScriptPath(string desktopDest)
+    {
+        var name = Path.GetFileNameWithoutExtension(desktopDest);
+        return Path.Combine(LauncherDirectory(), name + ".sh");
+    }
+
+    private static string LauncherDirectory()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(home, LocalDirName, ShareDirName, "titanium-inspector", "launchers");
+    }
+
+    private static void DeleteLauncherScripts()
+    {
+        try
+        {
+            var dir = LauncherDirectory();
+            if (!Directory.Exists(dir))
+                return;
+            foreach (var file in Directory.EnumerateFiles(dir, "*.sh"))
+            {
+                var text = File.ReadAllText(file);
+                if (text.Contains(DesktopMarker, StringComparison.Ordinal))
+                    File.Delete(file);
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static void TryMakeExecutable(string scriptPath)
+    {
+        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
+            return;
+        try
+        {
+            File.SetUnixFileMode(scriptPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        catch
+        {
+            // best-effort
         }
     }
 
