@@ -342,7 +342,7 @@ public class LinuxBrowserLaunchProxyTests
         var line = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
             "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
         StringAssert.Contains(line, "--proxy-server=http://127.0.0.1:8866");
-        StringAssert.Contains(line, "--proxy-bypass-list=\"<-loopback>\"");
+        Assert.IsFalse(line.Contains("<-loopback>", StringComparison.Ordinal), line);
         StringAssert.Contains(line, "--disable-quic");
         Assert.IsTrue(line.EndsWith(" %U", StringComparison.Ordinal), line);
     }
@@ -385,7 +385,7 @@ public class LinuxBrowserLaunchProxyTests
         Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
         StringAssert.Contains(built.Value.Script, "exec \"/usr/bin/google-chrome-stable\"");
         StringAssert.Contains(built.Value.Script, "--proxy-server=http://127.0.0.1:8866");
-        StringAssert.Contains(built.Value.Script, "--proxy-bypass-list='<-loopback>'");
+        Assert.IsFalse(built.Value.Script.Contains("<-loopback>", StringComparison.Ordinal));
     }
 
     [TestMethod]
@@ -409,7 +409,7 @@ public class LinuxBrowserLaunchProxyTests
             Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
             StringAssert.Contains(json, "fixed_servers");
             StringAssert.Contains(json, "http://127.0.0.1:8866");
-            StringAssert.Contains(json, "<-loopback>");
+            Assert.IsFalse(json.Contains("<-loopback>", StringComparison.Ordinal));
             StringAssert.Contains(json, "\"QuicAllowed\": false");
             // Legacy int enum for older Chromium builds that still read ProxyServerMode.
             StringAssert.Contains(json, "\"ProxyServerMode\": 2");

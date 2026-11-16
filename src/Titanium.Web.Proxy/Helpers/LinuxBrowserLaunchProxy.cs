@@ -284,7 +284,6 @@ internal static class LinuxBrowserLaunchProxy
             // Deprecated int enum (2 = Use a fixed proxy server). Harmless on modern Chrome.
             ["ProxyServerMode"] = LegacyProxyServerModeFixedServers,
             ["ProxyServer"] = server,
-            ["ProxyBypassList"] = ProxyBypassList,
             ["QuicAllowed"] = false,
         };
 
@@ -383,16 +382,13 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     internal static string ChromeProxyFlags(string hostname, int port) =>
-        // Quote the bypass token. Desktop Exec treats < and > as reserved, so an
-        // unquoted <-loopback> is parsed as a redirect and Chromium starts with no proxy.
-        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list=\"{ProxyBypassList}\" --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
+        // Do not pass <-loopback> here. Chromium drops the proxy switches when that
+        // token is on the command line, so the browser starts and never connects.
+        $"--proxy-server=http://{hostname}:{port} --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
 
-    /// <summary>
-    ///     Shell form of the proxy flags. The desktop file points at a wrapper so
-    ///     <c>&lt;-loopback&gt;</c> never appears in Exec (glib drops the whole command).
-    /// </summary>
+    /// <summary>Same flags, for a shell wrapper. No bypass token.</summary>
     internal static string ChromeProxyShellFlags(string hostname, int port) =>
-        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list='{ProxyBypassList}' --disable-quic"; // NOSONAR S5332
+        ChromeProxyFlags(hostname, port);
 
     /// <summary>
     ///     Rewrites a vendor desktop file so launches use <paramref name="scriptPath"/>

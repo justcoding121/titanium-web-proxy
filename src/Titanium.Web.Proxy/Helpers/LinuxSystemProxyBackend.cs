@@ -79,6 +79,21 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         var kde = HasKde();
         Exception? desktopError = null;
 
+        // Write Chromium launch hooks before gsettings flips. Callers treat "proxy on"
+        // as the signal to start a browser, and a stale desktop file still has the
+        // bypass token that makes Chromium ignore --proxy-server.
+        if (_applyBrowserLaunchHooks)
+        {
+            try
+            {
+                LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride);
+            }
+            catch
+            {
+                // best-effort; the later call reports whether any hook stuck
+            }
+        }
+
         // Apply every desktop path that exists. GNOME verify must not skip XFCE/KDE/Chrome hooks.
         if (gnome)
         {

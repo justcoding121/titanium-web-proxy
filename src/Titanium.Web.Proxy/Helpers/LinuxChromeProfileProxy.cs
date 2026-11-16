@@ -290,7 +290,6 @@ internal static class LinuxChromeProfileProxy
         {
             ["mode"] = FixedServersMode,
             ["server"] = $"http://{hostname}:{port}", // NOSONAR S5332 -- Chromium proxy.mode fixed_servers requires an http proxy URL.
-            ["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList,
         };
 
     private static void AtomicWriteJson(string prefsPath, JsonObject root)
