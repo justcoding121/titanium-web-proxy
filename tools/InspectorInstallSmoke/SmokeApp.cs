@@ -325,13 +325,16 @@ internal static class SmokeApp
     {
         foreach (var url in urls)
         {
-            var before = DateTime.UtcNow.AddSeconds(-2);
+            var before = DateTime.UtcNow;
             using var launched = LaunchBrowser(name, browserPath, url);
             var ok = await WaitForHarAsync(before, url, TimeSpan.FromSeconds(60), () =>
             {
                 Console.WriteLine("relaunch " + name + " " + url);
                 if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
+                {
+                    KillLinuxFamily(name);
                     TryGtkLaunch(name, url);
+                }
                 else if (OperatingSystem.IsMacOS()
                          && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
                          && !name.Equals("safari", StringComparison.OrdinalIgnoreCase))
@@ -391,7 +394,7 @@ internal static class SmokeApp
                 KillLinuxFamily(name);
                 Environment.SetEnvironmentVariable(
                     "TITANIUM_SMOKE_BROWSER_FLAGS",
-                    "--disable-component-update --disable-background-networking");
+                    "--new-window --disable-component-update --disable-background-networking");
                 Console.WriteLine("launch " + name + " via " + desktop);
                 PrintDesktopExec(desktop);
                 var proc = Process.Start(new ProcessStartInfo
@@ -777,6 +780,7 @@ internal static class SmokeApp
                         continue;
                 }
 
+                Console.WriteLine("matched GET " + entryUrl);
                 return true;
             }
         }
@@ -961,6 +965,7 @@ internal static class SmokeApp
             BindPort = port,
             BindAddress = "127.0.0.1",
             DecryptHttps = decrypt,
+            EnableDecryptFailureBypass = false,
             AutoStartCapture = true,
             AutoSystemProxyOnStart = true,
             CheckForUpdatesOnStartup = false,
