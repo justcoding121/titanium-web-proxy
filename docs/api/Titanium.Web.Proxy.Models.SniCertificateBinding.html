@@ -123,7 +123,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_SniCertificateBinding_Certificate.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L19">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L22">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_SniCertificateBinding_Certificate_" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate*"></a>
   <h4 id="Titanium_Web_Proxy_Models_SniCertificateBinding_Certificate" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate">Certificate</h4>
@@ -183,17 +183,16 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_SniCertificateBinding_NotAfterUtc.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L25">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L34">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_SniCertificateBinding_NotAfterUtc_" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc*"></a>
   <h4 id="Titanium_Web_Proxy_Models_SniCertificateBinding_NotAfterUtc" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc">NotAfterUtc</h4>
-  <div class="markdown level1 summary"><p>Cached UTC end of validity from <a class="xref" href="Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_Certificate">Certificate</a> at construction so the handshake
-selector never reads certificate properties.</p>
+  <div class="markdown level1 summary"><p>UTC end of validity of <a class="xref" href="Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_Certificate">Certificate</a>, cached when the certificate is assigned.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
   <div class="codewrapper">
-    <pre><code class="lang-csharp hljs">public DateTime NotAfterUtc { get; init; }</code></pre>
+    <pre><code class="lang-csharp hljs">public DateTime NotAfterUtc { get; }</code></pre>
   </div>
   <h5 class="propertyValue">Property Value</h5>
   <table class="table table-bordered table-condensed">
@@ -217,11 +216,11 @@ selector never reads certificate properties.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_SniCertificateBinding_Create_System_Collections_Generic_IReadOnlyList_System_String__System_Security_Cryptography_X509Certificates_X509Certificate2_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList%7BSystem.String%7D%2CSystem.Security.Cryptography.X509Certificates.X509Certificate2)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L28">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L37">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_SniCertificateBinding_Create_" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.Create*"></a>
   <h4 id="Titanium_Web_Proxy_Models_SniCertificateBinding_Create_System_Collections_Generic_IReadOnlyList_System_String__System_Security_Cryptography_X509Certificates_X509Certificate2_" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList{System.String},System.Security.Cryptography.X509Certificates.X509Certificate2)">Create(IReadOnlyList&lt;string&gt;, X509Certificate2)</h4>
-  <div class="markdown level1 summary"><p>Builds a binding and caches <a class="xref" href="Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_NotAfterUtc">NotAfterUtc</a> from the certificate.</p>
+  <div class="markdown level1 summary"><p>Builds a binding for the given hosts and certificate.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>
@@ -270,7 +269,7 @@ selector never reads certificate properties.</p>
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Models_SniCertificateBinding_IsValidAt_System_DateTime_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L39">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Models/SniCertificateBinding.cs/#L41">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Models_SniCertificateBinding_IsValidAt_" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt*"></a>
   <h4 id="Titanium_Web_Proxy_Models_SniCertificateBinding_IsValidAt_System_DateTime_" data-uid="Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime)">IsValidAt(DateTime)</h4>
