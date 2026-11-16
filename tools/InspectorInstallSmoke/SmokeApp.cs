@@ -161,6 +161,7 @@ internal static class SmokeApp
         var exe = Require(opt.Exe, "--exe");
         var port = FreePort();
         WriteFreshSettings(port, decrypt: false);
+        exe = await MoveMacDmgAppIfNeededAsync(exe);
         var app = await InspectorProcess.StartAsync(exe, port);
         try
         {
@@ -191,9 +192,52 @@ internal static class SmokeApp
         return 0;
     }
 
+    private static async Task<string> MoveMacDmgAppIfNeededAsync(string exe)
+    {
+        if (!OperatingSystem.IsMacOS() || !exe.Contains("/Volumes/", StringComparison.Ordinal))
+            return exe;
+
+        var mover = await InspectorProcess.StartAsync(exe, 0);
+        try
+        {
+            var move = await UiClicks.ClickMoveToApplicationsAsync(mover.Pid, TimeSpan.FromSeconds(20));
+            if (!move.Ok)
+            {
+                Console.WriteLine("click: FALLBACK (ditto to Applications)");
+                var bundle = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(exe)!, "..", "..", ".."));
+                Run("ditto", $"\"{bundle}\" \"/Applications/Titanium Inspector.app\"", 60000);
+                await mover.QuitAsync();
+            }
+            else
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(40);
+                while (!mover.HasExited && DateTime.UtcNow < deadline)
+                    await Task.Delay(300);
+            }
+        }
+        finally
+        {
+            await mover.DisposeAsync();
+        }
+
+        foreach (var root in new[]
+                 {
+                     "/Applications",
+                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Applications"),
+                 })
+        {
+            var installed = Path.Combine(root, "Titanium Inspector.app", "Contents", "MacOS", "TitaniumInspector");
+            if (File.Exists(installed))
+                return installed;
+        }
+
+        throw new InvalidOperationException("Move to Applications did not install Titanium Inspector.app");
+    }
+
     private static async Task<int> CliAsync(Options opt)
     {
         var titanium = Require(opt.Titanium, "--titanium");
+        RequireCliVersion(titanium);
         var port = FreePort();
         var dir = opt.Out ?? Path.Combine(Path.GetTempPath(), "titanium-cli-smoke");
         Directory.CreateDirectory(dir);
@@ -728,6 +772,14 @@ internal static class SmokeApp
     private static string LocalDir() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TitaniumInspector");
 
+    private static void RequireCliVersion(string titanium)
+    {
+        var result = RunCapture(titanium, "version", 20000);
+        Console.WriteLine("titanium version exit=" + result.Code + " " + TrimOneLine(result.Output));
+        if (result.Code != 0)
+            throw new InvalidOperationException("titanium version failed");
+    }
+
     private static string ExportCliRootPem(string dir)
     {
         var baseDir = OperatingSystem.IsWindows()
@@ -894,6 +946,7 @@ internal sealed class InspectorProcess : IAsyncDisposable
 {
     private readonly Process _process;
     public int Pid => _process.Id;
+    public bool HasExited => _process.HasExited;
     public DateTime StartedUtc { get; }
 
     private InspectorProcess(Process process)
