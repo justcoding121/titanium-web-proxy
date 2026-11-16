@@ -1575,9 +1575,6 @@
             "certificateValidDays": {
               "type": "integer"
             },
-            "rootCertificateValidDays": {
-              "type": "integer"
-            },
             "disableWildCardCertificates": {
               "type": "boolean"
             },
@@ -1598,6 +1595,9 @@
             },
             "rootCertificateName": {
               "type": "string"
+            },
+            "rootCertificateValidDays": {
+              "type": "integer"
             },
             "saveFakeCertificates": {
               "type": "boolean"

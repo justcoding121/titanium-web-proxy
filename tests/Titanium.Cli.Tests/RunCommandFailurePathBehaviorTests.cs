@@ -105,8 +105,10 @@ public class RunCommandFailurePathBehaviorTests
             """);
 
         var previousOverride = CertificateBootstrap.IssueOverride;
+        var previousDelay = CertificateBootstrap.DelayAsync;
         CertificateBootstrap.IssueOverride = static (_, _, _) =>
             throw new InvalidOperationException("directory unreachable (test)");
+        CertificateBootstrap.DelayAsync = (_, ct) => Task.Delay(Timeout.Infinite, ct);
         var stdoutBuffer = new StringWriter();
         var stderrBuffer = new StringWriter();
         var stdout = TextWriter.Synchronized(stdoutBuffer);
@@ -125,7 +127,9 @@ public class RunCommandFailurePathBehaviorTests
                 async () =>
                 {
                     await AsyncConsole.FlushAsync();
-                    return stderrBuffer.ToString().Contains("ACME IssueOrRenew failed: directory unreachable (test)", StringComparison.Ordinal);
+                    var text = stderrBuffer.ToString();
+                    return text.Contains("directory unreachable (test)", StringComparison.Ordinal)
+                           && text.Contains("ACME renewal failed", StringComparison.Ordinal);
                 },
                 TimeSpan.FromSeconds(30),
                 () => stdoutBuffer + Environment.NewLine + stderrBuffer);
@@ -137,6 +141,7 @@ public class RunCommandFailurePathBehaviorTests
         finally
         {
             CertificateBootstrap.IssueOverride = previousOverride;
+            CertificateBootstrap.DelayAsync = previousDelay;
             if (!cts.IsCancellationRequested)
             {
                 await cts.CancelAsync();
