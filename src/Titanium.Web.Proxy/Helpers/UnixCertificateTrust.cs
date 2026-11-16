@@ -634,17 +634,25 @@ internal static class UnixCertificateTrust
     private static bool DumpNamedTrustRootMatchesSha1(IProcessRunner runner, string text, string sha1)
     {
         var parts = text.Split(["Cert "], StringSplitOptions.None);
+        // Each name costs two `security` launches. Look a name up once per verify.
+        var looked = new HashSet<string>(StringComparer.Ordinal);
         foreach (var part in parts)
         {
             if (!BlockHasExplicitTrustRoot(part) || BlockMentionsOtherSha1(part, sha1))
                 continue;
 
             var name = CertBlockDisplayName(part);
-            if (string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(name) || !looked.Add(name))
                 continue;
 
-            if (KeychainHashesForName(runner, name).Any(hash =>
-                    string.Equals(NormalizeSha1(hash), NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase)))
+            // A name shared by an older generation is ambiguous: the policy block could belong to
+            // the stale copy. Leave that case to the System keychain basic-verify check.
+            var hashes = KeychainHashesForName(runner, name)
+                .Select(NormalizeSha1)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (hashes.Count == 1 &&
+                string.Equals(hashes[0], NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

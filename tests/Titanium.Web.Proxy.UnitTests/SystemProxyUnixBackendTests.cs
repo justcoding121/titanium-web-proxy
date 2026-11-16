@@ -392,6 +392,40 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void BuildDesktopOverride_KeepsLocalhostOnTheProxyWhenAsked_AndQuotesTheRule()
+    {
+        var built = LinuxBrowserLaunchProxy.BuildDesktopOverride(
+            "[Desktop Entry]\nExec=/usr/bin/google-chrome-stable %U\nActions=new\n[Desktop Action new]\nExec=/usr/bin/google-chrome-stable --incognito\n",
+            "/home/u/.local/share/titanium-inspector/launchers/google-chrome.sh",
+            "127.0.0.1",
+            8866,
+            proxyLoopback: true);
+        Assert.IsNotNull(built);
+        // An unquoted < is a redirection in the wrapper and a reserved character in Exec.
+        StringAssert.Contains(built.Value.Script, "\"--proxy-bypass-list=<-loopback>\"");
+        StringAssert.Contains(built.Value.Desktop, "\"--proxy-bypass-list=<-loopback>\"");
+    }
+
+    [TestMethod]
+    public void WantsProxyLoopback_FollowsTheBypassList()
+    {
+        Assert.IsTrue(LinuxBrowserLaunchProxy.WantsProxyLoopback("<-loopback>;*.corp"));
+        Assert.IsTrue(LinuxBrowserLaunchProxy.WantsProxyLoopback("localhost; <-LOOPBACK> "));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.WantsProxyLoopback("localhost;127.0.0.1;<local>"));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.WantsProxyLoopback(null));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 8866)
+            .Contains("bypass", StringComparison.Ordinal));
+        StringAssert.Contains(
+            LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 8866, proxyLoopback: true),
+            "--proxy-bypass-list=<-loopback>");
+        StringAssert.Contains(
+            LinuxBrowserLaunchProxy.BuildPolicyJson("127.0.0.1", 8866, proxyLoopback: true),
+            "\"ProxyBypassList\": \"<-loopback>\"");
+        Assert.IsFalse(LinuxBrowserLaunchProxy.BuildPolicyJson("127.0.0.1", 8866)
+            .Contains("ProxyBypassList", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void EnsureDefaultProfile_WritesFirstRunSentinel()
     {
         var root = Path.Combine(Path.GetTempPath(), "twp-chrome-profile-" + Guid.NewGuid().ToString("N"));

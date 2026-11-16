@@ -77,7 +77,7 @@ fi
 if ! hdiutil detach "${MOUNT_ROOT}" -quiet; then
   hdiutil detach "${MOUNT_ROOT}" -force -quiet || true
 fi
-if hdiutil info | grep -F "${MOUNT_ROOT}" >/dev/null; then
+if mount | grep -F " on ${MOUNT_ROOT} (" >/dev/null; then
   echo "error: could not detach ${MOUNT_ROOT}" >&2
   exit 1
 fi

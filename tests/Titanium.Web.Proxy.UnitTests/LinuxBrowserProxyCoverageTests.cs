@@ -80,11 +80,15 @@ public class LinuxBrowserProxyCoverageTests
 
             var dest = Path.Combine(desktopDir, "twp-cov.desktop");
             Invoke("WriteMarkedDesktopExec",
-                [typeof(string), typeof(string), typeof(string), typeof(int)],
-                fakeDesktop, dest, "127.0.0.1", 9050);
+                [typeof(string), typeof(string), typeof(string), typeof(int), typeof(bool)],
+                fakeDesktop, dest, "127.0.0.1", 9050, false);
             Assert.IsTrue(File.Exists(dest));
-            StringAssert.Contains(File.ReadAllText(dest), "--proxy-server=");
+            // The desktop entry now points at a launcher script that carries the proxy flags.
+            StringAssert.Contains(File.ReadAllText(dest), "DBusActivatable=false");
+            var script = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers", "twp-cov.sh");
+            StringAssert.Contains(File.ReadAllText(script), "--proxy-server=");
             Invoke("DeleteMarkedDesktopOverride", [typeof(string)], dest);
+            TryDelete(script);
 
             Invoke("TryUpdateDesktopDatabase", Type.EmptyTypes);
             _ = LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 9050);
@@ -182,7 +186,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void XfceHelpers_AndPolicyRejects_AndChromeMarkerCorruptPrefs()
     {
-        Assert.IsFalse((bool)Invoke("WriteXfceWebBrowserHelper", [typeof(string), typeof(int)], "127.0.0.1", 8866)!);
+        Assert.IsFalse((bool)Invoke("WriteXfceWebBrowserHelper", [typeof(string), typeof(int), typeof(bool)], "127.0.0.1", 8866, false)!);
 
         var rcPath = (string)Invoke("UserXfceHelpersRcPath", Type.EmptyTypes)!;
         var helperPath = (string)Invoke("UserXfceChromeHelperPath", Type.EmptyTypes)!;

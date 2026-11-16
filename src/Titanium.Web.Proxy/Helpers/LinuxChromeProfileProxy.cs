@@ -31,10 +31,14 @@ internal static class LinuxChromeProfileProxy
     private static readonly int[] ClearRetryDelaysMs = [300, 800, 1500, 3000];
     private static string? _activeHost;
     private static int _activePort;
+    private static bool _activeLoopback;
     private static CancellationTokenSource? _clearRetryCts;
 
-    /// <summary>Writes fixed proxy into Chromium-family profile Preferences; returns profiles updated.</summary>
-    internal static int Apply(string hostname, int port)
+    /// <summary>
+    ///     Writes fixed proxy into Chromium-family profile Preferences; returns profiles updated.
+    ///     <paramref name="proxyLoopback"/> keeps localhost on the proxy (the Inspector "send localhost" option).
+    /// </summary>
+    internal static int Apply(string hostname, int port, bool proxyLoopback = false)
     {
         lock (Gate)
         {
@@ -42,6 +46,7 @@ internal static class LinuxChromeProfileProxy
             LinuxProxyFailOpen.Stop();
             _activeHost = hostname;
             _activePort = port;
+            _activeLoopback = proxyLoopback;
             WriteMarker(hostname, port);
             EnsureInstalledDefaultProfiles();
 
@@ -344,12 +349,17 @@ internal static class LinuxChromeProfileProxy
         }
     }
 
-    private static JsonObject BuildFixedServersProxy(string hostname, int port) =>
-        new()
+    private static JsonObject BuildFixedServersProxy(string hostname, int port)
+    {
+        var proxy = new JsonObject
         {
             ["mode"] = FixedServersMode,
             ["server"] = $"http://{hostname}:{port}", // NOSONAR S5332 -- Chromium proxy.mode fixed_servers requires an http proxy URL.
         };
+        if (_activeLoopback)
+            proxy["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList;
+        return proxy;
+    }
 
     private static void AtomicWriteJson(string prefsPath, JsonObject root)
     {

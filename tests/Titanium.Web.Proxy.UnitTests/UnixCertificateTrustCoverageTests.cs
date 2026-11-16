@@ -198,6 +198,27 @@ public class UnixCertificateTrustCoverageTests
     }
 
     [TestMethod]
+    public void MacDumpWithoutHashLine_OnlyCountsWhenTheNameBelongsToThisCertificate()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var cn = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "TWP";
+        var dump = $"Cert 0: {cn}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n";
+
+        var sole = new FakeProcessRunner();
+        sole.When("security", "dump-trust-settings", dump);
+        sole.When("security", "find-certificate", $"SHA-1 hash: {sha1}\n");
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(sole, cert));
+
+        // An older generation shares the name, so the policy block may be for the stale copy.
+        var ambiguous = new FakeProcessRunner { DefaultSuccess = false };
+        ambiguous.When("security", "dump-trust-settings", dump);
+        ambiguous.When("security", "find-certificate",
+            $"SHA-1 hash: {sha1}\nSHA-1 hash: 0000000000000000000000000000000000000001\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(ambiguous, cert));
+    }
+
+    [TestMethod]
     public void MacTrustHelpers_CoverDumpExportUntrustAndSystem()
     {
         using var cert = CreateEphemeralRoot();

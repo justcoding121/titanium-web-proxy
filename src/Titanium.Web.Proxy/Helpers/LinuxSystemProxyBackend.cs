@@ -86,7 +86,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             try
             {
-                LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride);
+                LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride, relaunch: false);
             }
             catch
             {
