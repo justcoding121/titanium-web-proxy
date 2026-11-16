@@ -43,6 +43,7 @@ internal static class LinuxChromeProfileProxy
             _activeHost = hostname;
             _activePort = port;
             WriteMarker(hostname, port);
+            EnsureInstalledDefaultProfiles();
 
             var written = EnumeratePreferencesPaths().Count(prefsPath => TryWritePreferences(prefsPath, hostname, port));
 
@@ -98,6 +99,64 @@ internal static class LinuxChromeProfileProxy
                     // ignore
                 }
             }, _clearRetryCts?.Token ?? CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    ///     Create a Chromium user-data directory for each installed browser that does not
+    ///     have one yet, and mark first-run complete. A missing profile makes the browser
+    ///     sit on the welcome flow and never open the requested page, so the proxy sees
+    ///     no session. The directory is then picked up by <see cref="EnumeratePreferencesPaths"/>.
+    /// </summary>
+    private static void EnsureInstalledDefaultProfiles()
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(home))
+            return;
+
+        // Marker file that exists only when that browser is installed, and the config
+        // directory under ~/.config.
+        (string Marker, string Relative)[] installed =
+        [
+            ("/usr/bin/google-chrome-stable", "google-chrome"),
+            ("/usr/bin/google-chrome", "google-chrome"),
+            ("/usr/share/applications/google-chrome.desktop", "google-chrome"),
+            ("/usr/bin/chromium", ChromiumDirName),
+            ("/usr/bin/chromium-browser", ChromiumDirName),
+            ("/usr/bin/brave-browser", Path.Combine("BraveSoftware", "Brave-Browser")),
+            ("/usr/share/applications/brave-browser.desktop", Path.Combine("BraveSoftware", "Brave-Browser")),
+            ("/usr/bin/microsoft-edge-stable", MicrosoftEdgeDirName),
+            ("/usr/bin/microsoft-edge", MicrosoftEdgeDirName),
+            ("/usr/bin/opera", "opera"),
+            ("/usr/share/applications/opera.desktop", "opera"),
+        ];
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (marker, relative) in installed)
+        {
+            if (!File.Exists(marker))
+                continue;
+            var root = Path.Combine(home, ConfigDirName, relative);
+            if (!seen.Add(root))
+                continue;
+            EnsureDefaultProfile(root);
+        }
+    }
+
+    /// <summary>Creates <c>Default/</c>, the first-run sentinel, and a minimal Local State.</summary>
+    internal static void EnsureDefaultProfile(string root)
+    {
+        Directory.CreateDirectory(Path.Combine(root, "Default"));
+        var sentinel = Path.Combine(root, "First Run");
+        if (!File.Exists(sentinel))
+            File.WriteAllText(sentinel, string.Empty);
+        var localState = Path.Combine(root, "Local State");
+        if (!File.Exists(localState))
+        {
+            File.WriteAllText(localState,
+                "{\"profile\":{\"info_cache\":{\"Default\":{\"name\":\"Person 1\"}}}}");
         }
     }
 

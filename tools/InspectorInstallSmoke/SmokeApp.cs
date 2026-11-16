@@ -389,6 +389,7 @@ internal static class SmokeApp
                 }) ?? throw new InvalidOperationException("gtk-launch did not start " + name);
                 Thread.Sleep(2500);
                 PrintMatchingProcessArgs(name);
+                PrintLinuxProxyHooks();
                 ProbeProxyWithCurl();
                 return new BrowserLaunch(proc, safari: false, dir, LinuxKillName(name));
             }
@@ -459,6 +460,28 @@ internal static class SmokeApp
         }
     }
 
+    private static void PrintLinuxProxyHooks()
+    {
+        try
+        {
+            var policy = "/etc/opt/chrome/policies/managed/titanium-inspector-proxy.json";
+            Console.WriteLine(File.Exists(policy)
+                ? "machine-policy " + TrimOneLine(File.ReadAllText(policy))
+                : "machine-policy missing");
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var prefs = Path.Combine(home, ".config", "google-chrome", "Default", "Preferences");
+            Console.WriteLine(File.Exists(prefs)
+                ? "chrome-prefs " + TrimOneLine(File.ReadAllText(prefs))
+                : "chrome-prefs missing");
+            var mode = RunCapture("gsettings", "get org.gnome.system.proxy mode", 8000);
+            Console.WriteLine("gsettings-mode " + TrimOneLine(mode.Output));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("proxy-hooks failed: " + ex.Message);
+        }
+    }
+
     private static void ProbeProxyWithCurl()
     {
         try
@@ -483,7 +506,7 @@ internal static class SmokeApp
             var probe = Process.Start(new ProcessStartInfo
             {
                 FileName = "ps",
-                ArgumentList = { "-eo", "args" },
+                ArgumentList = { "-eo", "pid,args" },
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -497,6 +520,27 @@ internal static class SmokeApp
                 if (line.Contains(name, StringComparison.OrdinalIgnoreCase) ||
                     line.Contains("titanium-inspector/launchers", StringComparison.Ordinal))
                     Console.WriteLine("argv " + line.Trim());
+            }
+
+            if (OperatingSystem.IsLinux())
+            {
+                foreach (var line in text.Split('\n'))
+                {
+                    var trimmed = line.Trim();
+                    if (!trimmed.Contains("/opt/google/chrome/chrome", StringComparison.Ordinal) ||
+                        trimmed.Contains("--type=", StringComparison.Ordinal))
+                        continue;
+                    var pid = trimmed.Split(' ', 2)[0];
+                    var envPath = "/proc/" + pid + "/environ";
+                    if (!File.Exists(envPath))
+                        continue;
+                    foreach (var item in System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(envPath)).Split('\0'))
+                    {
+                        if (item.Contains("proxy", StringComparison.OrdinalIgnoreCase))
+                            Console.WriteLine("chrome-env " + item);
+                    }
+                    break;
+                }
             }
         }
         catch (Exception ex)

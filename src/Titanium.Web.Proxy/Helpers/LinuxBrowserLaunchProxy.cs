@@ -458,8 +458,9 @@ internal static class LinuxBrowserLaunchProxy
                 body.Insert(header + 1, DesktopMarker + "\n");
         }
 
-        // A --proxy-server switch on this Chrome build produces no connection at all.
-        // Export the proxy instead, and do not pass that switch.
+        // First launch on a new profile sits on the welcome flow and never requests the
+        // page, so the proxy sees no session. Skip that flow, and pass the proxy both as
+        // an environment variable and as a switch.
         var proxyUrl = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium proxy URL is http.
         var script = "#!/bin/sh\n" +
                      "# " + DesktopMarker + "\n" +
@@ -468,7 +469,8 @@ internal static class LinuxBrowserLaunchProxy
                      "export HTTP_PROXY=\"$http_proxy\"\n" +
                      "export HTTPS_PROXY=\"$http_proxy\"\n" +
                      "unset no_proxy NO_PROXY\n" +
-                     "exec " + QuoteShellArg(binary) + " --disable-quic \"$@\"\n";
+                     "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port) +
+                     " --no-first-run --no-default-browser-check \"$@\"\n";
         return (body.ToString(), script);
     }
 

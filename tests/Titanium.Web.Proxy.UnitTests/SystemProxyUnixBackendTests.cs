@@ -385,8 +385,27 @@ public class LinuxBrowserLaunchProxyTests
         Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
         StringAssert.Contains(built.Value.Script, "exec \"/usr/bin/google-chrome-stable\"");
         StringAssert.Contains(built.Value.Script, "export http_proxy=\"http://127.0.0.1:8866\"");
-        Assert.IsFalse(built.Value.Script.Contains("--proxy-server=", StringComparison.Ordinal));
+        StringAssert.Contains(built.Value.Script, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(built.Value.Script, "--no-first-run");
         Assert.IsFalse(built.Value.Script.Contains("<-loopback>", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void EnsureDefaultProfile_WritesFirstRunSentinel()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "twp-chrome-profile-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            LinuxChromeProfileProxy.EnsureDefaultProfile(root);
+            Assert.IsTrue(File.Exists(Path.Combine(root, "First Run")));
+            Assert.IsTrue(Directory.Exists(Path.Combine(root, "Default")));
+            Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(
+                Path.Combine(root, "Default", "Preferences"), "127.0.0.1", 8866));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+        }
     }
 
     [TestMethod]

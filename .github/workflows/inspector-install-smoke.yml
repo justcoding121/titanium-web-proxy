@@ -227,7 +227,14 @@ jobs:
           test -x /opt/titanium-inspector/TitaniumInspector
           log="${RUNNER_TEMP}/install-smoke"
           mkdir -p "$log"
-          run_driver() { xvfb-run -a dbus-run-session -- "$driver" "$@" 2>&1 | tee -a "$log/driver.log"; }
+          run_driver() {
+            set +e
+            xvfb-run -a dbus-run-session -- "$driver" "$@" 2>&1 | tee -a "$log/driver.log"
+            local code=${PIPESTATUS[0]}
+            set -e
+            echo "driver-exit ${code} $*" | tee -a "$log/driver.log"
+            return "${code}"
+          }
           run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log"
           sudo dpkg -i "$cand" || sudo apt-get install -y -f
           run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
@@ -330,7 +337,14 @@ jobs:
             ls -la "${MOUNT_ROOT}" >&2 || true
             return 1
           }
-          run_driver() { "$driver" "$@" 2>&1 | tee -a "$log/driver.log"; }
+          run_driver() {
+            set +e
+            "$driver" "$@" 2>&1 | tee -a "$log/driver.log"
+            local code=${PIPESTATUS[0]}
+            set -e
+            echo "driver-exit ${code} $*" | tee -a "$log/driver.log"
+            return "${code}"
+          }
           attach artifacts/prev/TitaniumInspector-osx-arm64.dmg
           prev_app="$(app_bundle)"
           ditto "${prev_app}" "/Applications/Titanium Inspector.app"
