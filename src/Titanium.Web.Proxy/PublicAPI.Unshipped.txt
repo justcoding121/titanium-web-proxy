@@ -363,7 +363,6 @@ Titanium.Web.Proxy.Models.SniCertificateBinding.SniCertificateBinding() -> void
 static Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList<string!>! hosts, System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> Titanium.Web.Proxy.Models.SniCertificateBinding!
 Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime utcNow) -> bool
 Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc.get -> System.DateTime
-Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc.init -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.get -> bool
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.set -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls.get -> bool

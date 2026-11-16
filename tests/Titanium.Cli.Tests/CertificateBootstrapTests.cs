@@ -331,6 +331,216 @@ public class CertificateBootstrapTests
         File.WriteAllBytes(path, cert.Export(X509ContentType.Pfx, "secret"));
     }
 
+    [TestMethod]
+    public void ReportServedCertificateExpiry_RecordsExpiringAndExpiredButNotFresh()
+    {
+        var fresh = "fresh-" + Guid.NewGuid().ToString("N");
+        var soon = "soon-" + Guid.NewGuid().ToString("N");
+        var gone = "gone-" + Guid.NewGuid().ToString("N");
+        using var freshCert = MakeCert(90);
+        using var soonCert = MakeCert(10);
+        using var goneCert = MakeCert(-2);
+
+        CertificateBootstrap.ReportServedCertificateExpiry(fresh, freshCert);
+        CertificateBootstrap.ReportServedCertificateExpiry(soon, soonCert);
+        CertificateBootstrap.ReportServedCertificateExpiry(gone, goneCert);
+
+        var reported = (System.Collections.IDictionary)typeof(CertificateBootstrap)
+            .GetField("ReportedExpiry", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .GetValue(null)!;
+        Assert.IsFalse(reported.Contains(fresh), "more than 30 days left is not reported");
+        Assert.IsTrue(reported.Contains(soon), "30 days or less is reported");
+        Assert.IsTrue(reported.Contains(gone), "an expired certificate is reported");
+
+        static X509Certificate2 MakeCert(int days)
+        {
+            using var rsa = RSA.Create(2048);
+            var req = new CertificateRequest("CN=report", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(days));
+        }
+    }
+
+    [TestMethod]
+    public void ResolveAcmePaths_PrefersEnvironmentThenConfigThenDefault()
+    {
+        var oldCert = Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH");
+        var oldKey = Environment.GetEnvironmentVariable("TITANIUM_ACME_KEY_PATH");
+        try
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_ACME_CERT_PATH", null);
+            Environment.SetEnvironmentVariable("TITANIUM_ACME_KEY_PATH", null);
+
+            var (defCert, defKey) = CertificateBootstrap.ResolveAcmePaths(new CertificatesConfig());
+            Assert.AreEqual(Path.Combine(AppContext.BaseDirectory, "acme-cert.pem"), defCert);
+            Assert.AreEqual(Path.Combine(AppContext.BaseDirectory, "acme-key.pem"), defKey);
+
+            var (cfgCert, cfgKey) = CertificateBootstrap.ResolveAcmePaths(
+                new CertificatesConfig { CertificatePath = "c.pem", PrivateKeyPath = "k.pem" });
+            Assert.AreEqual("c.pem", cfgCert);
+            Assert.AreEqual("k.pem", cfgKey);
+
+            Environment.SetEnvironmentVariable("TITANIUM_ACME_CERT_PATH", "env-c.pem");
+            Environment.SetEnvironmentVariable("TITANIUM_ACME_KEY_PATH", "env-k.pem");
+            var (envCert, envKey) = CertificateBootstrap.ResolveAcmePaths(
+                new CertificatesConfig { CertificatePath = "c.pem", PrivateKeyPath = "k.pem" });
+            Assert.AreEqual("env-c.pem", envCert);
+            Assert.AreEqual("env-k.pem", envKey);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TITANIUM_ACME_CERT_PATH", oldCert);
+            Environment.SetEnvironmentVariable("TITANIUM_ACME_KEY_PATH", oldKey);
+        }
+    }
+
+    [TestMethod]
+    public async Task RunAcmeRenewalLoop_FreshCertificate_DoesNotContactAcmeAndWaitsTheCheckInterval()
+    {
+        var issueCalls = 0;
+        var delays = new List<TimeSpan>();
+        using var cts = new CancellationTokenSource();
+        CertificateBootstrap.IssueOverride = (_, _, _) =>
+        {
+            Interlocked.Increment(ref issueCalls);
+            return Task.CompletedTask;
+        };
+        CertificateBootstrap.DelayAsync = (ts, ct) =>
+        {
+            delays.Add(ts);
+            if (delays.Count >= 2) cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-loop-fresh-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var certPath = Path.Combine(dir, "leaf.pem");
+        var keyPath = Path.Combine(dir, "leaf.key");
+        try
+        {
+            WriteSelfSignedPem(certPath, keyPath, validDays: 90);
+            using var proxy = new ProxyServer(false, false, false);
+            var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+            proxy.AddEndPoint(ep);
+
+            await CertificateBootstrap.RunAcmeRenewalLoopAsync(proxy, new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+                AcmeDomain = "example.test",
+                AcmeEmail = "ops@example.test",
+                AcmeDirectory = "https://acme.example/directory",
+            }, cts.Token).ConfigureAwait(false);
+
+            Assert.AreEqual(0, issueCalls, "a certificate with more than 30 days left must not trigger issuance");
+            Assert.IsNotNull(ep.GenericCertificate, "the existing fresh certificate is still applied");
+            Assert.IsTrue(delays.All(d => d >= CertificateBootstrap.RenewalCheckInterval), string.Join(",", delays));
+        }
+        finally
+        {
+            CertificateBootstrap.IssueOverride = null;
+            CertificateBootstrap.DelayAsync = null;
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task RunAcmeRenewalLoop_RenewsWithinThirtyDays_AndHotSwapsTheCertificate()
+    {
+        var issueCalls = 0;
+        using var cts = new CancellationTokenSource();
+        var dir = Path.Combine(Path.GetTempPath(), "twp-loop-renew-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var certPath = Path.Combine(dir, "leaf.pem");
+        var keyPath = Path.Combine(dir, "leaf.key");
+        CertificateBootstrap.IssueOverride = (_, _, _) =>
+        {
+            Interlocked.Increment(ref issueCalls);
+            WriteSelfSignedPem(certPath, keyPath, validDays: 90);
+            return Task.CompletedTask;
+        };
+        CertificateBootstrap.DelayAsync = (_, _) =>
+        {
+            cts.Cancel();
+            return Task.CompletedTask;
+        };
+        try
+        {
+            WriteSelfSignedPem(certPath, keyPath, validDays: 5);
+            using var proxy = new ProxyServer(false, false, false);
+            var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+            proxy.AddEndPoint(ep);
+            CertificateBootstrap.ReplaceCertificate(proxy, certPath, keyPath);
+            var before = ep.GenericCertificate!.NotAfter;
+
+            await CertificateBootstrap.RunAcmeRenewalLoopAsync(proxy, new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+                AcmeDomain = "example.test",
+                AcmeEmail = "ops@example.test",
+                AcmeDirectory = "https://acme.example/directory",
+            }, cts.Token).ConfigureAwait(false);
+
+            Assert.AreEqual(1, issueCalls);
+            Assert.IsTrue(ep.GenericCertificate!.NotAfter > before.AddDays(60),
+                $"served certificate was not swapped: {ep.GenericCertificate.NotAfter:u}");
+        }
+        finally
+        {
+            CertificateBootstrap.IssueOverride = null;
+            CertificateBootstrap.DelayAsync = null;
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task RunAcmeRenewalLoop_Failure_KeepsTheCurrentCertificateAndBacksOff()
+    {
+        var delays = new List<TimeSpan>();
+        using var cts = new CancellationTokenSource();
+        CertificateBootstrap.IssueOverride = (_, _, _) => throw new InvalidOperationException("acme down");
+        CertificateBootstrap.DelayAsync = (ts, _) =>
+        {
+            delays.Add(ts);
+            if (delays.Count >= 3) cts.Cancel();
+            return Task.CompletedTask;
+        };
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-loop-fail-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var certPath = Path.Combine(dir, "leaf.pem");
+        var keyPath = Path.Combine(dir, "leaf.key");
+        try
+        {
+            WriteSelfSignedPem(certPath, keyPath, validDays: 5);
+            using var proxy = new ProxyServer(false, false, false);
+            var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+            proxy.AddEndPoint(ep);
+            CertificateBootstrap.ReplaceCertificate(proxy, certPath, keyPath);
+            var current = ep.GenericCertificate;
+
+            await CertificateBootstrap.RunAcmeRenewalLoopAsync(proxy, new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+                AcmeDomain = "example.test",
+                AcmeEmail = "ops@example.test",
+                AcmeDirectory = "https://acme.example/directory",
+            }, cts.Token).ConfigureAwait(false);
+
+            Assert.AreSame(current, ep.GenericCertificate, "a failed renewal must not replace the served certificate");
+            CollectionAssert.AreEqual(
+                new[] { TimeSpan.FromHours(1), TimeSpan.FromHours(2), TimeSpan.FromHours(4) },
+                delays.ToArray());
+        }
+        finally
+        {
+            CertificateBootstrap.IssueOverride = null;
+            CertificateBootstrap.DelayAsync = null;
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
     private static void WriteSelfSignedPem(string certPath, string keyPath, int validDays = 30)
     {
         using var rsa = RSA.Create(2048);

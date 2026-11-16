@@ -110,6 +110,7 @@ public class TwpConfigValidatorCoverageTests
                     CertificateEngine = "OpenSsl",
                     LeafCertificateKeyAlgorithm = "Ed25519",
                     CertificateValidDays = 0,
+                    RootCertificateValidDays = 0,
                     CertificateGraceDays = -1,
                     CertificateCacheTimeOutMinutes = 0,
                 },
@@ -125,6 +126,7 @@ public class TwpConfigValidatorCoverageTests
         Assert.IsTrue(errors.Any(e => e.Contains("accessLog.path", StringComparison.Ordinal)));
         Assert.IsTrue(errors.Any(e => e.Contains("policyModes.bodyBudget", StringComparison.Ordinal)));
         Assert.IsTrue(errors.Any(e => e.Contains("certificateEngine", StringComparison.Ordinal)));
+        Assert.IsTrue(errors.Any(e => e.Contains("rootCertificateValidDays", StringComparison.Ordinal)));
     }
 
     [TestMethod]

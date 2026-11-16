@@ -1,5 +1,7 @@
 #pragma warning disable TWP001
 using System;
+using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
@@ -144,6 +146,98 @@ public class CertificateExpiryHardeningTests
 
         var selected = SniCertificateSelector.Select("app.example", bindings, DateTime.UtcNow);
         Assert.AreSame(exact, selected);
+    }
+
+    [TestMethod]
+    public void SniCertificateBinding_ObjectInitializerStillCachesNotAfter()
+    {
+        using var cert = MakeLeaf("CN=legacy", days: 60);
+        var binding = new SniCertificateBinding { Hosts = ["legacy.example"], Certificate = cert };
+        Assert.IsTrue(binding.IsValidAt(DateTime.UtcNow), "a binding built without Create must not look expired");
+        Assert.IsTrue(binding.NotAfterUtc > DateTime.UtcNow.AddDays(59));
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public async Task LeafMint_RotatesExpiredRoot_WhenOverwritePfxFileIsTrue()
+    {
+        var pfx = Path.Combine(Path.GetTempPath(), "twp-expired-root-" + Guid.NewGuid().ToString("N") + ".pfx");
+        try
+        {
+            using var mgr = NewMgr();
+            mgr.PfxFilePath = pfx;
+            mgr.RootCertificateValidDays = -1;
+            Assert.IsTrue(mgr.CreateRootCertificate(persistToFile: false));
+            Assert.IsTrue(mgr.RootCertificate!.NotAfter < DateTime.Now, "precondition: root is expired");
+
+            mgr.RootCertificateValidDays = 3650;
+            mgr.OverwritePfxFile = true;
+            using var leaf = await mgr.CreateServerCertificate("rotate.example");
+
+            Assert.IsNotNull(leaf);
+            Assert.IsTrue(mgr.RootCertificate!.NotAfter > DateTime.Now.AddDays(3000));
+            Assert.IsTrue(mgr.RootCertificateWasReplacedDueToExpiry);
+            Assert.IsTrue(leaf!.NotAfter > DateTime.Now);
+        }
+        finally
+        {
+            try { File.Delete(pfx); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public async Task LeafMint_DoesNotRotateExpiredRoot_WhenOverwritePfxFileIsFalse()
+    {
+        using var mgr = NewMgr();
+        mgr.RootCertificateValidDays = -1;
+        Assert.IsTrue(mgr.CreateRootCertificate(persistToFile: false));
+        var expiredThumbprint = mgr.RootCertificate!.Thumbprint;
+
+        mgr.RootCertificateValidDays = 3650;
+        mgr.OverwritePfxFile = false;
+        X509Certificate2? leaf = null;
+        try
+        {
+            leaf = await mgr.CreateServerCertificate("no-rotate.example");
+        }
+        catch (InvalidOperationException)
+        {
+            // the clear failure is acceptable
+        }
+
+        Assert.IsNull(leaf, "no leaf may be signed by an expired root when overwrite is disabled");
+        Assert.AreEqual(expiredThumbprint, mgr.RootCertificate!.Thumbprint, "the root must not be replaced");
+        leaf?.Dispose();
+    }
+
+    [TestMethod]
+    [Timeout(120_000)]
+    public async Task LeafMint_ConcurrentHandshakes_RotateExpiredRootOnce()
+    {
+        var pfx = Path.Combine(Path.GetTempPath(), "twp-expired-root-" + Guid.NewGuid().ToString("N") + ".pfx");
+        try
+        {
+            using var mgr = NewMgr();
+            mgr.PfxFilePath = pfx;
+            mgr.RootCertificateValidDays = -1;
+            Assert.IsTrue(mgr.CreateRootCertificate(persistToFile: false));
+            mgr.RootCertificateValidDays = 3650;
+            mgr.OverwritePfxFile = true;
+
+            var leaves = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(i => Task.Run(() => mgr.CreateServerCertificate($"c{i}.example"))));
+
+            Assert.IsTrue(leaves.All(l => l is not null));
+            var thumbprint = mgr.RootCertificate!.Thumbprint;
+            foreach (var l in leaves) l!.Dispose();
+            Assert.AreEqual(thumbprint, mgr.RootCertificate!.Thumbprint);
+            Assert.IsTrue(mgr.RootCertificate.NotAfter > DateTime.Now);
+        }
+        finally
+        {
+            try { File.Delete(pfx); } catch { /* ignore */ }
+        }
     }
 
     private static X509Certificate2 MakeLeaf(string subject, int days)

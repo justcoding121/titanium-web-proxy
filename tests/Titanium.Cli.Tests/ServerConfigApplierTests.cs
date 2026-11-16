@@ -249,6 +249,7 @@ public class ServerConfigApplierTests
                 PfxPassword = "secret",
                 OverwritePfxFile = true,
                 CertificateValidDays = 365,
+                RootCertificateValidDays = 1234,
                 CertificateGraceDays = 7,
                 CertificateCacheTimeOutMinutes = 60,
                 RootCertificateName = "TWP Test Root",
@@ -324,6 +325,7 @@ public class ServerConfigApplierTests
         Assert.AreEqual("secret", proxy.CertificateManager.PfxPassword);
         Assert.IsTrue(proxy.CertificateManager.OverwritePfxFile);
         Assert.AreEqual(365, proxy.CertificateManager.CertificateValidDays);
+        Assert.AreEqual(1234, proxy.CertificateManager.RootCertificateValidDays);
         Assert.AreEqual(7, proxy.CertificateManager.CertificateGraceDays);
         Assert.AreEqual(60, proxy.CertificateManager.CertificateCacheTimeOutMinutes);
         Assert.AreEqual("TWP Test Root", proxy.CertificateManager.RootCertificateName);

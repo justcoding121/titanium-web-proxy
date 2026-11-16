@@ -1288,24 +1288,33 @@ public sealed class CertificateManager : IDisposable
     /// </summary>
     private void EnsureUsableRootForLeafMint()
     {
-        if (RootCertificate == null)
+        var current = RootCertificate;
+        if (current != null && current.NotAfter > DateTime.Now)
+            return;
+
+        // Serialize rotation so concurrent handshakes mint exactly one replacement root.
+        lock (rootCertCreationLock)
         {
+            current = RootCertificate;
+            if (current == null)
+            {
+                CreateRootCertificate();
+                return;
+            }
+
+            if (current.NotAfter > DateTime.Now)
+                return;
+
+            OnException(new Exception("Root certificate has expired."));
+            if (!OverwritePfxFile)
+                throw new InvalidOperationException(
+                    "Root certificate has expired and OverwritePfxFile is false; replace the root PFX or enable overwrite.");
+
+            RootCertificateWasReplacedDueToExpiry = true;
+            // Do not dispose: in-flight handshakes may still be signing with the old instance.
+            RootCertificate = null;
             CreateRootCertificate();
-            return;
         }
-
-        if (RootCertificate.NotAfter > DateTime.Now)
-            return;
-
-        OnException(new Exception("Root certificate has expired."));
-        if (!OverwritePfxFile)
-            throw new InvalidOperationException(
-                "Root certificate has expired and OverwritePfxFile is false; replace the root PFX or enable overwrite.");
-
-        RootCertificateWasReplacedDueToExpiry = true;
-        try { RootCertificate.Dispose(); } catch { /* best effort */ }
-        RootCertificate = null;
-        CreateRootCertificate();
     }
 
     /// <summary>

@@ -838,6 +838,68 @@ public class InterceptionCaptureCoverageTests
     }
 
     [TestMethod]
+    public async Task Interception_RootCertificateExpiryHelpers_ReflectTheLoadedRoot()
+    {
+        using var interception = new InterceptionService(new RecordingSystemProxyController())
+        {
+            UseInMemoryTrustState = true,
+        };
+        Assert.IsNull(interception.RootCertificateDaysRemaining);
+        Assert.IsFalse(interception.IsRootCertificateExpired);
+        Assert.IsFalse(interception.IsRootCertificateExpiringSoon);
+
+        await interception.StartAsync(IPAddress.Loopback, 0);
+        try
+        {
+            Assert.IsTrue(interception.RootCertificateDaysRemaining > 0);
+            Assert.IsFalse(interception.IsRootCertificateExpired);
+
+            var proxyField = typeof(InterceptionService).GetField("_proxy", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var proxy = (ProxyServer)proxyField.GetValue(interception)!;
+            var original = proxy.CertificateManager.RootCertificate;
+            System.Security.Cryptography.X509Certificates.X509Certificate2? soon = null, gone = null;
+            try
+            {
+                soon = MakeRoot(TimeSpan.FromDays(5));
+                proxy.CertificateManager.RootCertificate = soon;
+                Assert.IsTrue(interception.IsRootCertificateExpiringSoon);
+                Assert.IsFalse(interception.IsRootCertificateExpired);
+
+                gone = MakeRoot(TimeSpan.FromDays(-2));
+                proxy.CertificateManager.RootCertificate = gone;
+                Assert.IsTrue(interception.IsRootCertificateExpired);
+                Assert.IsFalse(interception.IsRootCertificateExpiringSoon);
+                Assert.IsTrue(interception.RootCertificateDaysRemaining < 0);
+                Assert.IsFalse(interception.IsRootPresentInStore(false),
+                    "an expired matching root must not count as trusted");
+            }
+            finally
+            {
+                proxy.CertificateManager.RootCertificate = original;
+                soon?.Dispose();
+                gone?.Dispose();
+            }
+        }
+        finally
+        {
+            interception.EnsureShutdown();
+        }
+
+        static System.Security.Cryptography.X509Certificates.X509Certificate2 MakeRoot(TimeSpan lifetime)
+        {
+            using var rsa = System.Security.Cryptography.RSA.Create(2048);
+            var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                "CN=twp-expiry-test-root", rsa, System.Security.Cryptography.HashAlgorithmName.SHA256,
+                System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+            var notAfter = DateTimeOffset.UtcNow.Add(lifetime);
+            var notBefore = notAfter - TimeSpan.FromDays(10);
+            using var cert = req.CreateSelfSigned(notBefore, notAfter);
+            return System.Security.Cryptography.X509Certificates.X509CertificateLoader.LoadPkcs12(
+                cert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pfx), null);
+        }
+    }
+
+    [TestMethod]
     public async Task Interception_SessionIdLoggingPfxAndTunnelSnapshotSeams()
     {
         using var interception = new InterceptionService(new RecordingSystemProxyController())

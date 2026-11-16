@@ -238,18 +238,34 @@ internal static class CertificateBootstrap
     }
 
     /// <summary>
+    ///     Resolves the ACME certificate and key paths: <c>TITANIUM_ACME_CERT_PATH</c> / <c>TITANIUM_ACME_KEY_PATH</c>,
+    ///     then the configured paths, then <c>acme-cert.pem</c> / <c>acme-key.pem</c> next to the executable.
+    /// </summary>
+    internal static (string CertPath, string KeyPath) ResolveAcmePaths(CertificatesConfig certificates)
+    {
+        var envCert = Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH");
+        var envKey = Environment.GetEnvironmentVariable("TITANIUM_ACME_KEY_PATH");
+        var certPath = !string.IsNullOrEmpty(envCert) ? envCert
+            : !string.IsNullOrEmpty(certificates.CertificatePath) ? certificates.CertificatePath
+            : Path.Combine(AppContext.BaseDirectory, "acme-cert.pem");
+        var keyPath = !string.IsNullOrEmpty(envKey) ? envKey
+            : !string.IsNullOrEmpty(certificates.PrivateKeyPath) ? certificates.PrivateKeyPath
+            : Path.Combine(AppContext.BaseDirectory, "acme-key.pem");
+        return (certPath, keyPath);
+    }
+    /// <summary>
     ///     True when <see cref="CertificatesConfig.CertificatePath"/> loads and has more than
     ///     <see cref="ExpiryWarnWindow"/> remaining. Applies the leaf and skips ACME.
     /// </summary>
     internal static bool TryApplyExistingFreshCertificate(ProxyServer proxy, CertificatesConfig certificates)
     {
-        var certPath = certificates.CertificatePath;
-        if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
+        var (certPath, keyPath) = ResolveAcmePaths(certificates);
+        if (!File.Exists(certPath))
         {
             return false;
         }
 
-        if (!TryLoadLeaf(certPath, certificates.PrivateKeyPath, out var leaf) || leaf is null)
+        if (!TryLoadLeaf(certPath, keyPath, out var leaf) || leaf is null)
         {
             return false;
         }
@@ -280,14 +296,22 @@ internal static class CertificateBootstrap
         ArgumentNullException.ThrowIfNull(certificates);
 
         var backoff = TimeSpan.FromHours(1);
+        var first = true;
         var delay = DelayAsync ?? ((ts, ct) => Task.Delay(ts, ct));
 
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await IssueOrRenewAsync(proxy, certificates, cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
+                // First pass always runs so an existing fresh certificate is applied; later passes only
+                // contact the ACME server when the served certificate is within the renewal window.
+                if (first || NeedsRenewal(certificates))
+                {
+                    first = false;
+                    await IssueOrRenewAsync(proxy, certificates, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
                 backoff = TimeSpan.FromHours(1);
 
                 if (!NeedsRenewal(certificates))
@@ -322,15 +346,12 @@ internal static class CertificateBootstrap
     /// <summary>True when the configured certificate is missing, unreadable, or within the warn window.</summary>
     internal static bool NeedsRenewal(CertificatesConfig certificates)
     {
-        var certPath = certificates.CertificatePath
-                       ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH");
-        if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
+        var (certPath, keyPath) = ResolveAcmePaths(certificates);
+        if (!File.Exists(certPath))
         {
             return true;
         }
 
-        var keyPath = certificates.PrivateKeyPath
-                      ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_KEY_PATH");
         if (!TryLoadLeaf(certPath, keyPath, out var leaf) || leaf is null)
         {
             return true;
@@ -388,10 +409,7 @@ internal static class CertificateBootstrap
 
         var certPem = cert.ToPem();
         var keyPem = privateKey.ToPem();
-        var certPath = certificates.CertificatePath
-                       ?? Path.Combine(AppContext.BaseDirectory, "acme-cert.pem");
-        var keyPath = certificates.PrivateKeyPath
-                      ?? Path.Combine(AppContext.BaseDirectory, "acme-key.pem");
+        var (certPath, keyPath) = ResolveAcmePaths(certificates);
         await File.WriteAllTextAsync(certPath, certPem, cancellationToken).ConfigureAwait(false);
         await File.WriteAllTextAsync(keyPath, keyPem, cancellationToken).ConfigureAwait(false);
         ReplaceCertificate(proxy, certPath, keyPath);
@@ -421,13 +439,9 @@ internal static class CertificateBootstrap
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var envCert = Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH");
-            var envKey = Environment.GetEnvironmentVariable("TITANIUM_ACME_KEY_PATH");
-            var certPath = !string.IsNullOrEmpty(envCert) ? envCert : certificates.CertificatePath;
-            var keyPath = !string.IsNullOrEmpty(envKey) ? envKey : certificates.PrivateKeyPath;
+            var (certPath, keyPath) = ResolveAcmePaths(certificates);
 
-            if (!string.IsNullOrEmpty(certPath) &&
-                File.Exists(certPath) &&
+            if (File.Exists(certPath) &&
                 TryLoadLeaf(certPath, keyPath, out _))
             {
                 ReplaceCertificate(proxy, certPath, keyPath);
