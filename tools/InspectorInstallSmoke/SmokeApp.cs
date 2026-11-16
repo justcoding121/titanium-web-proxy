@@ -336,8 +336,13 @@ internal static class SmokeApp
                     TryGtkLaunch(name, url);
                 }
                 else if (OperatingSystem.IsMacOS()
-                         && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase)
-                         && !name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+                         && name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+                {
+                    SystemProxyBrowserCapture.KillSafariProcesses();
+                    SystemProxyBrowserCapture.StartSafari(url);
+                }
+                else if (OperatingSystem.IsMacOS()
+                         && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
                     TryStartAgain(browserPath, url);
             });
             launched.Kill();

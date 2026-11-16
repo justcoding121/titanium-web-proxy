@@ -150,34 +150,43 @@ public sealed partial class CliProcessHarness : IDisposable
     public static int GetFreePort() => GetFreePorts(1)[0];
 
     /// <summary>
-    /// Reserve several loopback ports while the sockets stay bound, so a second call cannot
-    /// reuse a port that was just released (listen + controlPlane TOCTOU on busy runners).
+    /// Pick loopback ports the CLI can bind. The probe socket is closed only after an exclusive
+    /// re-bind succeeds, so a port still held by that probe is not handed to the process.
     /// </summary>
     public static int[] GetFreePorts(int count)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
 
-        var listeners = new TcpListener[count];
         var ports = new int[count];
-        try
-        {
-            for (var i = 0; i < count; i++)
-            {
-                var listener = new TcpListener(IPAddress.Loopback, 0);
-                listener.Start();
-                listeners[i] = listener;
-                ports[i] = ((IPEndPoint)listener.LocalEndpoint!).Port;
-            }
+        for (var i = 0; i < count; i++)
+            ports[i] = ReserveLoopbackPort();
 
-            return ports;
-        }
-        finally
+        return ports;
+    }
+
+    private static int ReserveLoopbackPort()
+    {
+        for (var attempt = 0; attempt < 8; attempt++)
         {
-            foreach (var listener in listeners)
+            var probe = BindLoopback(0);
+            var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+            probe.Stop();
+
+            TcpListener? confirm = null;
+            try
+            {
+                confirm = BindLoopback(port);
+                return port;
+            }
+            catch (SocketException)
+            {
+                // The probe socket has not released the port yet.
+            }
+            finally
             {
                 try
                 {
-                    listener?.Stop();
+                    confirm?.Stop();
                 }
                 catch
                 {
@@ -185,6 +194,24 @@ public sealed partial class CliProcessHarness : IDisposable
                 }
             }
         }
+
+        throw new InvalidOperationException("Could not reserve a free loopback port.");
+    }
+
+    private static TcpListener BindLoopback(int port)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, port);
+        try
+        {
+            listener.ExclusiveAddressUse = true;
+        }
+        catch (Exception ex) when (ex is SocketException or InvalidOperationException or PlatformNotSupportedException)
+        {
+            // Some platforms reject exclusive bind. A successful Start is still a free port.
+        }
+
+        listener.Start();
+        return listener;
     }
 
     /// <summary>
