@@ -584,10 +584,113 @@ internal static class UnixCertificateTrust
 
             if (DumpTextHasSslTrustPoliciesForSha1(text, sha1))
                 return true;
+
+            // dump-trust-settings names the certificate and does not print its SHA-1.
+            // A TrustRoot block still counts when that name is this hash in the login
+            // or System keychain (admin-domain add-trusted-cert -d -r trustRoot).
+            if (DumpNamedTrustRootMatchesSha1(runner, text, sha1))
+                return true;
         }
 
         return false;
     }
+
+    /// <summary>
+    ///     Match a TrustRoot policy block to <paramref name="sha1"/> by looking the
+    ///     displayed certificate name up in the keychains. Real
+    ///     <c>security dump-trust-settings</c> output has no hash line.
+    /// </summary>
+    private static bool DumpNamedTrustRootMatchesSha1(IProcessRunner runner, string text, string sha1)
+    {
+        var parts = text.Split(["Cert "], StringSplitOptions.None);
+        foreach (var part in parts)
+        {
+            if (!BlockHasExplicitTrustRoot(part) || BlockMentionsOtherSha1(part, sha1))
+                continue;
+
+            var name = CertBlockDisplayName(part);
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            if (KeychainHashesForName(runner, name).Any(hash =>
+                    string.Equals(NormalizeSha1(hash), NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase)))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool BlockHasExplicitTrustRoot(string part)
+    {
+        var countMatch = MacTrustSettingsCountRegex.Match(part);
+        if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
+            return false;
+
+        return part.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+               part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+               part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool BlockMentionsOtherSha1(string part, string sha1)
+    {
+        const string marker = "SHA-1 hash:";
+        var idx = part.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return false;
+
+        var hash = part[(idx + marker.Length)..].Trim();
+        var end = hash.IndexOfAny(['\r', '\n', ' ']);
+        if (end > 0)
+            hash = hash[..end];
+        hash = NormalizeSha1(hash);
+        return hash.Length >= 40 &&
+               !string.Equals(hash, NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? CertBlockDisplayName(string part)
+    {
+        var line = part.Split(['\r', '\n'], 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(line))
+            return null;
+
+        var colon = line.IndexOf(':');
+        if (colon < 0 || colon > 6)
+            return null;
+
+        var name = line[(colon + 1)..].Trim();
+        return name.Length == 0 ? null : name;
+    }
+
+    private static IEnumerable<string> KeychainHashesForName(IProcessRunner runner, string commonName)
+    {
+        var searches = new[]
+        {
+            $"find-certificate -a -c \"{Escape(commonName)}\" -Z",
+            $"find-certificate -a -c \"{Escape(commonName)}\" -Z /Library/Keychains/System.keychain",
+        };
+
+        foreach (var args in searches)
+        {
+            var dump = runner.Run(SecurityBinary, args);
+            if (dump is null)
+                continue;
+
+            foreach (var line in (dump.StandardOutput + "\n" + dump.StandardError)
+                     .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                const string marker = "SHA-1 hash:";
+                var idx = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (idx < 0)
+                    continue;
+                var hash = NormalizeSha1(line[(idx + marker.Length)..]);
+                if (hash.Length >= 40)
+                    yield return hash;
+            }
+        }
+    }
+
+    private static string NormalizeSha1(string value) =>
+        value.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal).Trim();
 
     /// <summary>Parses one dump-trust-settings document for a SHA-1 cert block with real policies.</summary>
     internal static bool DumpTextHasSslTrustPoliciesForSha1(string text, string sha1)

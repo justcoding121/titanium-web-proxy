@@ -388,23 +388,8 @@ internal static class SmokeApp
 
         if (OperatingSystem.IsMacOS())
         {
-            var app = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
-            var psi = new ProcessStartInfo
-            {
-                FileName = "open",
-                UseShellExecute = false,
-            };
-            psi.ArgumentList.Add("-na");
-            psi.ArgumentList.Add(app);
-            psi.ArgumentList.Add(url);
-            psi.ArgumentList.Add("--args");
-            psi.ArgumentList.Add("--disable-quic");
-            psi.ArgumentList.Add("--no-first-run");
-            psi.ArgumentList.Add("--disable-extensions");
-            psi.ArgumentList.Add("--disable-background-networking");
-            psi.ArgumentList.Add("--user-data-dir=" + dir);
-            var proc = Process.Start(psi) ?? throw new InvalidOperationException("open -na did not start " + name);
-            return new BrowserLaunch(proc, safari: false, dir, MacKillName(name));
+            var chrome = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
+            return new BrowserLaunch(chrome, safari: false, dir, MacKillName(name));
         }
 
         var chrome = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);

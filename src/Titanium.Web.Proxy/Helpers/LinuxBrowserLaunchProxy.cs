@@ -307,7 +307,9 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     internal static string ChromeProxyFlags(string hostname, int port) =>
-        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list={ProxyBypassList} --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
+        // Quote the bypass token. Desktop Exec treats < and > as reserved, so an
+        // unquoted <-loopback> is parsed as a redirect and Chromium starts with no proxy.
+        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list=\"{ProxyBypassList}\" --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
 
     internal static IEnumerable<string> PolicyDirectories()
     {

@@ -556,6 +556,35 @@ public class UnixCertificateTrustCoverageTests
         Assert.IsTrue(dirs.Count >= 1);
     }
 
+    [TestMethod]
+    public void DumpTrustSettings_MatchesTrustRootBlockByKeychainName()
+    {
+        using var cert = CreateEphemeralRoot("CN=Titanium Root Certificate Authority");
+        var sha1 = cert.GetCertHashString();
+        var dump = new FakeProcessRunner();
+        dump.When("security", "dump-trust-settings",
+            "Cert 0: Titanium Root Certificate Authority\n" +
+            "   Number of trust settings : 1\n" +
+            "   Trust Setting 0:\n" +
+            "      Result Type           : kSecTrustSettingsResultTrustRoot\n");
+        dump.When("security", "find-certificate", "SHA-1 hash: " + sha1 + "\n");
+        Assert.IsTrue((bool)Invoke(
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            dump, sha1)!);
+
+        var other = new FakeProcessRunner();
+        other.When("security", "dump-trust-settings",
+            "Cert 0: Titanium Root Certificate Authority\n" +
+            "   Number of trust settings : 1\n" +
+            "      Result Type           : kSecTrustSettingsResultTrustRoot\n");
+        other.When("security", "find-certificate", "SHA-1 hash: 00112233445566778899AABBCCDDEEFF00112233\n");
+        Assert.IsFalse((bool)Invoke(
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            other, sha1)!);
+    }
+
     /// <summary>
     /// On macOS/Linux <c>FindCertutil</c> asks the runner for <c>command -v certutil</c>.
     /// Without this, a real Homebrew certutil (or a missing one) is used instead of the fake.

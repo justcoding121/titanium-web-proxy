@@ -342,7 +342,7 @@ public class LinuxBrowserLaunchProxyTests
         var line = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
             "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
         StringAssert.Contains(line, "--proxy-server=http://127.0.0.1:8866");
-        StringAssert.Contains(line, "--proxy-bypass-list=<-loopback>");
+        StringAssert.Contains(line, "--proxy-bypass-list=\"<-loopback>\"");
         StringAssert.Contains(line, "--disable-quic");
         Assert.IsTrue(line.EndsWith(" %U", StringComparison.Ordinal), line);
     }
