@@ -793,6 +793,10 @@ Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Name.get -> string!
 Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Name.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.NotAfterUtc.get -> System.DateTimeOffset?
 Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.NotAfterUtc.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.DaysToExpiry.get -> int?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.DaysToExpiry.init -> void
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.ExpiryStatus.get -> string?
+Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.ExpiryStatus.init -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.PlusCertificateInfo() -> void
 Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Role.get -> string!
 Titanium.Web.Proxy.Abstractions.Plugins.PlusCertificateInfo.Role.init -> void

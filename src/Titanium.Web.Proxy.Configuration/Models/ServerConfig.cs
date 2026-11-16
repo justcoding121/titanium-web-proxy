@@ -510,6 +510,9 @@ public sealed class CertificateManagerConfig
 
     public int? CertificateGraceDays { get; set; }
 
+    /// <summary>Days a newly minted inspection root CA is valid for. Defaults to 3650 when unset.</summary>
+    public int? RootCertificateValidDays { get; set; }
+
     public int? CertificateCacheTimeOutMinutes { get; set; }
 
     public string? RootCertificateName { get; set; }

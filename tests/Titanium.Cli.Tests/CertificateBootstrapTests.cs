@@ -73,6 +73,110 @@ public class CertificateBootstrapTests
     }
 
     [TestMethod]
+    public void TryApplyExistingFreshCertificate_SkipsWhenMoreThanThirtyDaysRemain()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-fresh-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var certPath = Path.Combine(dir, "leaf.pem");
+        var keyPath = Path.Combine(dir, "leaf.key");
+        try
+        {
+            WriteSelfSignedPem(certPath, keyPath, validDays: 90);
+            using var proxy = new ProxyServer(false, false, false);
+            var ep = new ExplicitProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true);
+            proxy.AddEndPoint(ep);
+
+            var applied = CertificateBootstrap.TryApplyExistingFreshCertificate(proxy, new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+                AcmeDomain = "example.test",
+                AcmeEmail = "ops@example.test",
+            });
+
+            Assert.IsTrue(applied);
+            Assert.IsNotNull(ep.GenericCertificate);
+            Assert.IsFalse(CertificateBootstrap.NeedsRenewal(new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+            }));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void NeedsRenewal_TrueWhenWithinThirtyDays()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-renew-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var certPath = Path.Combine(dir, "leaf.pem");
+        var keyPath = Path.Combine(dir, "leaf.key");
+        try
+        {
+            WriteSelfSignedPem(certPath, keyPath, validDays: 10);
+            Assert.IsTrue(CertificateBootstrap.NeedsRenewal(new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+            }));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public async Task RunAcmeRenewalLoop_UsesIssueOverrideAndStopsOnCancel()
+    {
+        var calls = 0;
+        CertificateBootstrap.IssueOverride = (_, _, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.CompletedTask;
+        };
+        CertificateBootstrap.DelayAsync = (_, ct) => Task.Delay(Timeout.Infinite, ct);
+        CertificateBootstrap.RenewalCheckInterval = TimeSpan.FromMilliseconds(1);
+
+        var dir = Path.Combine(Path.GetTempPath(), "twp-loop-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var certPath = Path.Combine(dir, "leaf.pem");
+        var keyPath = Path.Combine(dir, "leaf.key");
+        try
+        {
+            WriteSelfSignedPem(certPath, keyPath, validDays: 5);
+            using var proxy = new ProxyServer(false, false, false);
+            using var cts = new CancellationTokenSource();
+            var loop = CertificateBootstrap.RunAcmeRenewalLoopAsync(proxy, new CertificatesConfig
+            {
+                CertificatePath = certPath,
+                PrivateKeyPath = keyPath,
+                AcmeDomain = "example.test",
+                AcmeEmail = "ops@example.test",
+                AcmeDirectory = "https://acme.example/directory",
+            }, cts.Token);
+
+            await Task.Delay(100).ConfigureAwait(false);
+            cts.Cancel();
+            try { await loop.ConfigureAwait(false); }
+            catch (OperationCanceledException) { /* expected */ }
+
+            Assert.IsTrue(calls >= 1, "expected at least one ACME issue attempt");
+        }
+        finally
+        {
+            CertificateBootstrap.IssueOverride = null;
+            CertificateBootstrap.DelayAsync = null;
+            CertificateBootstrap.RenewalCheckInterval = TimeSpan.FromHours(12);
+            try { Directory.Delete(dir, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void Apply_WithAcmeDomain_RegistersChallengeHandler()
     {
         using var proxy = new ProxyServer(false, false, false);
@@ -227,11 +331,13 @@ public class CertificateBootstrapTests
         File.WriteAllBytes(path, cert.Export(X509ContentType.Pfx, "secret"));
     }
 
-    private static void WriteSelfSignedPem(string certPath, string keyPath)
+    private static void WriteSelfSignedPem(string certPath, string keyPath, int validDays = 30)
     {
         using var rsa = RSA.Create(2048);
         var req = new CertificateRequest("CN=twp-test", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        using var cert = req.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddDays(validDays));
         File.WriteAllText(certPath, cert.ExportCertificatePem());
         File.WriteAllText(keyPath, rsa.ExportPkcs8PrivateKeyPem());
     }

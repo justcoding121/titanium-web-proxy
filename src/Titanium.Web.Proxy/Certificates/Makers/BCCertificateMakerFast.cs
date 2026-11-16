@@ -33,6 +33,7 @@ internal class BcCertificateMakerFast : ICertificateMaker
 
     private readonly int certificateValidDays;
     private readonly int certificateGraceDays;
+    private readonly int rootCertificateValidDays;
 
     /// <summary>
     ///     Shared key pair used for every leaf. Roots always get a fresh RSA-2048 pair so the
@@ -44,10 +45,12 @@ internal class BcCertificateMakerFast : ICertificateMaker
     private readonly AsymmetricCipherKeyPair leafKeyPair;
 
     internal BcCertificateMakerFast(int certificateValidDays, int certificateGraceDays,
-        CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048)
+        CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048,
+        int rootCertificateValidDays = 3650)
     {
         this.certificateValidDays = certificateValidDays;
         this.certificateGraceDays = certificateGraceDays;
+        this.rootCertificateValidDays = rootCertificateValidDays;
         leafKeyPair = leafKeyAlgorithm == CertificateKeyAlgorithm.EcdsaP256
             ? LeafKeyPairSource.GenerateEcdsaP256()
             : LeafKeyPairSource.GenerateRsa(LeafKeyPairSource.BufferedRsaKeyStrength);
@@ -280,8 +283,20 @@ internal class BcCertificateMakerFast : ICertificateMaker
         X509Certificate2? signingCert = null)
     {
         var host = CertificateHostName.Normalize(subject);
-        return MakeCertificateInternal(host, $"CN={host}",
-            DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
-            signingCert);
+        var nowUtc = DateTime.UtcNow;
+        var validFrom = nowUtc.AddDays(-certificateGraceDays);
+        var validTo = signingCert == null
+            ? nowUtc.AddDays(rootCertificateValidDays)
+            : ClampLeafNotAfter(nowUtc.AddDays(certificateValidDays), signingCert);
+        return MakeCertificateInternal(host, $"CN={host}", validFrom, validTo, signingCert);
+    }
+
+    /// <summary>A leaf must not outlive its issuer.</summary>
+    internal static DateTime ClampLeafNotAfter(DateTime proposedNotAfterUtc, X509Certificate2 signingCertificate)
+    {
+        var rootEnd = signingCertificate.NotAfter.Kind == DateTimeKind.Utc
+            ? signingCertificate.NotAfter
+            : signingCertificate.NotAfter.ToUniversalTime();
+        return proposedNotAfterUtc <= rootEnd ? proposedNotAfterUtc : rootEnd;
     }
 }

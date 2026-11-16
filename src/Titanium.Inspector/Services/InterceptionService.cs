@@ -147,6 +147,44 @@ public sealed class InterceptionService : IDisposable
     public X509Certificate2? RootCertificate => _proxy?.CertificateManager.RootCertificate;
     public bool IsRootTrusted { get; private set; }
 
+    /// <summary>How soon the in-memory inspection root expires. Used for startup warnings only.</summary>
+    public static readonly TimeSpan RootExpiringSoonWindow = TimeSpan.FromDays(30);
+
+    /// <summary>
+    ///     Days remaining until the current root's <c>NotAfter</c> (negative when already expired).
+    ///     Null when no root is loaded.
+    /// </summary>
+    public double? RootCertificateDaysRemaining
+    {
+        get
+        {
+            var cert = RootCertificate;
+            if (cert is null) return null;
+            return (cert.NotAfter - DateTime.Now).TotalDays;
+        }
+    }
+
+    /// <summary>True when a root is loaded and its NotAfter is in the past.</summary>
+    public bool IsRootCertificateExpired =>
+        RootCertificate is { } cert && cert.NotAfter <= DateTime.Now;
+
+    /// <summary>
+    ///     True when startup (or a leaf mint) discarded an expired root and minted a replacement.
+    ///     The new root is not yet trusted in the OS store.
+    /// </summary>
+    public bool RootCertificateWasReplacedDueToExpiry =>
+        _proxy?.CertificateManager.RootCertificateWasReplacedDueToExpiry == true;
+
+    /// <summary>True when a root is still valid but within <see cref="RootExpiringSoonWindow"/>.</summary>
+    public bool IsRootCertificateExpiringSoon
+    {
+        get
+        {
+            var days = RootCertificateDaysRemaining;
+            return days is not null && days.Value >= 0 && days.Value <= RootExpiringSoonWindow.TotalDays;
+        }
+    }
+
     /// <summary>Last OS trust outcome from Install root CA (Keychain / NSS / package hints).</summary>
     public CertificateOsTrustResult? LastOsTrustResult { get; private set; }
 
@@ -1714,7 +1752,18 @@ public sealed class InterceptionService : IDisposable
                 machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadOnly);
             var found = store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, validOnly: false);
-            return found.Count > 0;
+            if (found.Count == 0)
+                return false;
+
+            // An expired copy with the same thumbprint must not count as trusted.
+            var now = DateTime.Now;
+            for (var i = 0; i < found.Count; i++)
+            {
+                if (found[i].NotAfter > now)
+                    return true;
+            }
+
+            return false;
         }
         catch
         {

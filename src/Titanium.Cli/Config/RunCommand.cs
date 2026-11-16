@@ -473,6 +473,8 @@ internal static class RunCommand
                 return 1;
             }
 
+            WarnInspectionRootExpiry(proxy);
+
             overloadHost.Apply(loaded.Config.Server?.Overload);
 
             if (previousProcess is not null && udpListeners.Count > 0)
@@ -519,7 +521,7 @@ internal static class RunCommand
                 }
             }
 
-            StartAcmeIfConfigured(proxy, loaded.Config);
+            StartAcmeIfConfigured(proxy, loaded.Config, stoppingToken);
 
             if (serviceMode)
             {
@@ -1417,7 +1419,40 @@ internal static class RunCommand
     }
 #pragma warning restore CA1068
 
-    private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config)
+    /// <summary>
+    ///     Warns when the inspection (MITM) root is expired or within 30 days of expiry.
+    ///     Served listener certificates are covered separately by <see cref="CertificateBootstrap"/>.
+    /// </summary>
+    internal static void WarnInspectionRootExpiry(ProxyServer proxy)
+    {
+        var root = proxy.CertificateManager.RootCertificate;
+        if (root is null)
+        {
+            return;
+        }
+
+        var remaining = root.NotAfter - DateTime.Now;
+        if (proxy.CertificateManager.RootCertificateWasReplacedDueToExpiry || remaining <= TimeSpan.Zero)
+        {
+            var message =
+                "Inspection root CA expired and was replaced; trust the new root before decrypting HTTPS.";
+            proxy.Logger.LogWarning("{Message}", message);
+            AsyncConsole.WriteError(message);
+            return;
+        }
+
+        if (remaining <= TimeSpan.FromDays(30))
+        {
+            var days = Math.Max(0, (int)Math.Ceiling(remaining.TotalDays));
+            var message =
+                $"Inspection root CA expires in {days} day(s); rotate the root before then.";
+            proxy.Logger.LogWarning("{Message}", message);
+            AsyncConsole.WriteLine(message);
+        }
+    }
+
+    private static void StartAcmeIfConfigured(ProxyServer proxy, TwpConfig config,
+        CancellationToken stoppingToken = default)
     {
         if (config.Certificates is not { AcmeEmail: not null, AcmeDomain: not null } certs)
         {
@@ -1435,13 +1470,18 @@ internal static class RunCommand
         {
             try
             {
-                await CertificateBootstrap.IssueOrRenewAsync(proxy, certs).ConfigureAwait(false);
+                await CertificateBootstrap.RunAcmeRenewalLoopAsync(proxy, certs, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Host is shutting down.
             }
             catch (Exception ex)
             {
                 AsyncConsole.WriteError($"ACME IssueOrRenew failed: {ex.Message}");
             }
-        });
+        }, stoppingToken);
     }
 
     internal static void ConfigureProxyFlags(ProxyServer proxy, TwpConfig config, bool requiresSessionPath)

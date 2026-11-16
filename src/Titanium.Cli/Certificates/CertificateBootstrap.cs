@@ -15,9 +15,19 @@ namespace Titanium.Cli.Certificates;
 internal static class CertificateBootstrap
 {
     private static readonly Dictionary<string, string> AcmeTokens = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, (string Kind, DateOnly Day)> ReportedExpiry = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Warn when a served certificate has this much time or less remaining.</summary>
+    internal static readonly TimeSpan ExpiryWarnWindow = TimeSpan.FromDays(30);
+
+    /// <summary>How often the ACME renewal loop re-checks a still-valid certificate.</summary>
+    internal static TimeSpan RenewalCheckInterval { get; set; } = TimeSpan.FromHours(12);
 
     /// <summary>Optional test hook replacing Certes issuance.</summary>
     internal static Func<ProxyServer, CertificatesConfig, CancellationToken, Task>? IssueOverride { get; set; }
+
+    /// <summary>Optional delay hook for the renewal loop (tests can no-op or advance immediately).</summary>
+    internal static Func<TimeSpan, CancellationToken, Task>? DelayAsync { get; set; }
 
     public static void Apply(ProxyServer proxy, CertificatesConfig? certificates)
     {
@@ -46,6 +56,7 @@ internal static class CertificateBootstrap
         AsyncConsole.WriteLine($"Certificate path configured: {certificates.CertificatePath}");
         if (TryLoadLeaf(certificates.CertificatePath, certificates.PrivateKeyPath, out var leaf) && leaf is not null)
         {
+            ReportServedCertificateExpiry(certificates.CertificatePath, leaf);
             AssignGenericCertificate(proxy, leaf);
             AsyncConsole.WriteLine("Loaded leaf certificate onto DecryptSsl endpoints.");
         }
@@ -53,6 +64,54 @@ internal static class CertificateBootstrap
         {
             AsyncConsole.WriteLine(
                 "Certificate file present but could not load (need PEM+PrivateKeyPath or PFX).");
+        }
+    }
+
+    /// <summary>
+    ///     Logs when a served certificate is expired or within <see cref="ExpiryWarnWindow"/>.
+    ///     Does not refuse the certificate. Dedupes one message per file path per day.
+    /// </summary>
+    internal static void ReportServedCertificateExpiry(string path, X509Certificate2 certificate)
+    {
+        var remaining = certificate.NotAfter - DateTime.Now;
+        string kind;
+        string message;
+        if (remaining <= TimeSpan.Zero)
+        {
+            kind = "expired";
+            message =
+                $"Served certificate '{path}' has expired (NotAfter={certificate.NotAfter:u}).";
+        }
+        else if (remaining <= ExpiryWarnWindow)
+        {
+            kind = "expiring";
+            var days = Math.Max(0, (int)Math.Ceiling(remaining.TotalDays));
+            message =
+                $"Served certificate '{path}' expires in {days} day(s) (NotAfter={certificate.NotAfter:u}).";
+        }
+        else
+        {
+            return;
+        }
+
+        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        lock (ReportedExpiry)
+        {
+            if (ReportedExpiry.TryGetValue(path, out var prior) && prior.Kind == kind && prior.Day == day)
+            {
+                return;
+            }
+
+            ReportedExpiry[path] = (kind, day);
+        }
+
+        if (kind == "expired")
+        {
+            AsyncConsole.WriteError(message);
+        }
+        else
+        {
+            AsyncConsole.WriteLine(message);
         }
     }
 
@@ -136,6 +195,8 @@ internal static class CertificateBootstrap
     /// <summary>
     /// Issues a certificate via ACME HTTP-01 when <see cref="CertificatesConfig.AcmeDirectory"/> is set;
     /// otherwise documents the operator path and seeds challenge tokens from env.
+    /// Skips the ACME order when an existing certificate still has more than
+    /// <see cref="ExpiryWarnWindow"/> remaining.
     /// </summary>
     public static async Task IssueAcmeCertificateAsync(ProxyServer proxy, CertificatesConfig certificates,
         CancellationToken cancellationToken = default)
@@ -144,6 +205,11 @@ internal static class CertificateBootstrap
         ArgumentNullException.ThrowIfNull(certificates);
 
         if (string.IsNullOrEmpty(certificates.AcmeEmail) || string.IsNullOrEmpty(certificates.AcmeDomain))
+        {
+            return;
+        }
+
+        if (TryApplyExistingFreshCertificate(proxy, certificates))
         {
             return;
         }
@@ -169,6 +235,115 @@ internal static class CertificateBootstrap
 
         AsyncConsole.WriteLine($"ACME: issuing for {certificates.AcmeDomain} via {directory}");
         await IssueWithCertesAsync(proxy, certificates, directory, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     True when <see cref="CertificatesConfig.CertificatePath"/> loads and has more than
+    ///     <see cref="ExpiryWarnWindow"/> remaining. Applies the leaf and skips ACME.
+    /// </summary>
+    internal static bool TryApplyExistingFreshCertificate(ProxyServer proxy, CertificatesConfig certificates)
+    {
+        var certPath = certificates.CertificatePath;
+        if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
+        {
+            return false;
+        }
+
+        if (!TryLoadLeaf(certPath, certificates.PrivateKeyPath, out var leaf) || leaf is null)
+        {
+            return false;
+        }
+
+        if (leaf.NotAfter - DateTime.Now <= ExpiryWarnWindow)
+        {
+            leaf.Dispose();
+            return false;
+        }
+
+        ReportServedCertificateExpiry(certPath, leaf);
+        AssignGenericCertificate(proxy, leaf);
+        AsyncConsole.WriteLine(
+            $"ACME: existing certificate at {certPath} still has more than {ExpiryWarnWindow.TotalDays:0} days left; skipping issue.");
+        return true;
+    }
+
+    /// <summary>
+    ///     Issues or renews once, then rechecks every <see cref="RenewalCheckInterval"/> with jitter.
+    ///     Renews when 30 days or less remain. On failure keeps the current cert and backs off.
+    /// </summary>
+    public static async Task RunAcmeRenewalLoopAsync(
+        ProxyServer proxy,
+        CertificatesConfig certificates,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(proxy);
+        ArgumentNullException.ThrowIfNull(certificates);
+
+        var backoff = TimeSpan.FromHours(1);
+        var delay = DelayAsync ?? ((ts, ct) => Task.Delay(ts, ct));
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await IssueOrRenewAsync(proxy, certificates, cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                backoff = TimeSpan.FromHours(1);
+
+                if (!NeedsRenewal(certificates))
+                {
+                    var jitterMs = Random.Shared.Next(0, (int)TimeSpan.FromMinutes(30).TotalMilliseconds);
+                    await delay(RenewalCheckInterval + TimeSpan.FromMilliseconds(jitterMs), cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AsyncConsole.WriteError(
+                    $"ACME renewal failed; keeping current certificate. Retry in {backoff.TotalHours:0.##}h: {ex.Message}");
+                await delay(backoff, cancellationToken).ConfigureAwait(false);
+                var nextHours = Math.Min(12, backoff.TotalHours * 2);
+                backoff = TimeSpan.FromHours(nextHours);
+                continue;
+            }
+
+            // Still needs renewal after a successful IssueOrRenew (for example poll timeout) — back off briefly.
+            await delay(backoff, cancellationToken).ConfigureAwait(false);
+            var doubled = Math.Min(12, backoff.TotalHours * 2);
+            backoff = TimeSpan.FromHours(doubled);
+        }
+    }
+
+    /// <summary>True when the configured certificate is missing, unreadable, or within the warn window.</summary>
+    internal static bool NeedsRenewal(CertificatesConfig certificates)
+    {
+        var certPath = certificates.CertificatePath
+                       ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_CERT_PATH");
+        if (string.IsNullOrEmpty(certPath) || !File.Exists(certPath))
+        {
+            return true;
+        }
+
+        var keyPath = certificates.PrivateKeyPath
+                      ?? Environment.GetEnvironmentVariable("TITANIUM_ACME_KEY_PATH");
+        if (!TryLoadLeaf(certPath, keyPath, out var leaf) || leaf is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            return leaf.NotAfter - DateTime.Now <= ExpiryWarnWindow;
+        }
+        finally
+        {
+            leaf.Dispose();
+        }
     }
 
     private static async Task IssueWithCertesAsync(
@@ -299,7 +474,8 @@ internal static class CertificateBootstrap
                 continue;
             }
 
-            bindings.Add(new SniCertificateBinding { Hosts = hosts, Certificate = certificate });
+            ReportServedCertificateExpiry(item.Path, certificate);
+            bindings.Add(SniCertificateBinding.Create(hosts, certificate));
         }
 
         if (bindings.Count == 0)

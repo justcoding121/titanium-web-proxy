@@ -585,6 +585,11 @@ internal static class ServerConfigApplier
             cm.CertificateGraceDays = graceDays;
         }
 
+        if (certs.RootCertificateValidDays is int rootValidDays)
+        {
+            cm.RootCertificateValidDays = rootValidDays;
+        }
+
         if (certs.CertificateCacheTimeOutMinutes is int cacheMinutes)
         {
             cm.CertificateCacheTimeOutMinutes = cacheMinutes;

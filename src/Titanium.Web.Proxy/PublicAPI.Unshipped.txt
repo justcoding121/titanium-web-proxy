@@ -26,6 +26,10 @@ Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.EcdsaP256 = 1 -> Titanium.Web
 Titanium.Web.Proxy.Network.CertificateKeyAlgorithm.Rsa2048 = 0 -> Titanium.Web.Proxy.Network.CertificateKeyAlgorithm
 Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.get -> Titanium.Web.Proxy.Network.CertificateKeyAlgorithm
 Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays.get -> int
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays.set -> void
+Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry.get -> bool
+static readonly Titanium.Web.Proxy.Network.CertificateManager.LeafRenewalMargin -> System.TimeSpan
 Titanium.Web.Proxy.Network.CertificateManager.ApplyFastColdStartLeafSettings() -> void
 static Titanium.Web.Proxy.Network.DefaultCertificateDiskCache.GetSharedLeafCertificateDirectory() -> string!
 static Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize.get -> int
@@ -356,7 +360,10 @@ Titanium.Web.Proxy.Models.ClientCertificateMode.Allow = 1 -> Titanium.Web.Proxy.
 Titanium.Web.Proxy.Models.ClientCertificateMode
 Titanium.Web.Proxy.Models.SniCertificateBinding
 Titanium.Web.Proxy.Models.SniCertificateBinding.SniCertificateBinding() -> void
-Titanium.Web.Proxy.Certificates.SniCertificateSelector
+static Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList<string!>! hosts, System.Security.Cryptography.X509Certificates.X509Certificate2! certificate) -> Titanium.Web.Proxy.Models.SniCertificateBinding!
+Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime utcNow) -> bool
+Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc.get -> System.DateTime
+Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc.init -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.get -> bool
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.Passthrough.set -> void
 Titanium.Web.Proxy.Models.TransparentBaseProxyEndPoint.TerminateTls.get -> bool
@@ -394,7 +401,9 @@ Titanium.Web.Proxy.Configuration.ProxyConfigHost.ProxyConfigHost(System.Collecti
 Titanium.Web.Proxy.Transforms.TransformEngine.Factories.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Routing.IRouteTransformFactory!>?
 Titanium.Web.Proxy.Transforms.TransformEngine.Factories.init -> void
 Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.get -> System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Abstractions.Clusters.ILoadBalancingPolicy!>?
+Titanium.Web.Proxy.Certificates.SniCertificateSelector
 static Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(string? serverName, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>! bindings) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
+static Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(string? serverName, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding!>! bindings, System.DateTime utcNow) -> System.Security.Cryptography.X509Certificates.X509Certificate2?
 Titanium.Web.Proxy.Clusters.LoadBalancer.Policies.set -> void
 static Titanium.Web.Proxy.Network.ProxyProtocolReader.TryParse(System.ReadOnlySpan<byte> buffer, out System.Net.IPEndPoint? client, out int consumed) -> bool
 static Titanium.Web.Proxy.Network.ProxyProtocolReader.TryReadAsync(System.Net.Sockets.Socket! socket, System.Threading.CancellationToken cancellationToken, System.Net.IPEndPoint? client = null) -> System.Threading.Tasks.ValueTask<bool>

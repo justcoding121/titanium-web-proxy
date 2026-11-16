@@ -170,13 +170,18 @@ internal sealed class CliHostStatus : IPlusHostStatus
             for (var i = 0; i < Math.Min(total, MaxCertificatesPerFile); i++)
             {
                 var cert = certificates[i];
+                var notAfter = new DateTimeOffset(cert.NotAfter.ToUniversalTime(), TimeSpan.Zero);
+                var days = (int)Math.Floor((notAfter - DateTimeOffset.UtcNow).TotalDays);
+                var status = days < 0 ? "expired" : days < 30 ? "expiring" : "ok";
                 list.Add(new PlusCertificateInfo
                 {
                     Name = total > 1 ? $"{name} ({i + 1}/{total})" : name,
                     Role = role,
                     Subject = cert.Subject,
                     Issuer = cert.Issuer,
-                    NotAfterUtc = new DateTimeOffset(cert.NotAfter.ToUniversalTime(), TimeSpan.Zero),
+                    NotAfterUtc = notAfter,
+                    DaysToExpiry = days,
+                    ExpiryStatus = status,
                 });
             }
 

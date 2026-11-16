@@ -3835,13 +3835,30 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         if (!showedSystemProxyGuidance &&
             (IsStatusBusy || StatusText.StartsWith("Starting proxy", StringComparison.Ordinal)))
         {
-            SetSteadyStatus(StatusReady);
+            if (_interception.IsRootCertificateExpiringSoon)
+            {
+                var days = Math.Max(0, (int)Math.Ceiling(_interception.RootCertificateDaysRemaining ?? 0));
+                SetStatus(
+                    $"Root CA expires in {days} day(s). Rotate and Install CA before then.",
+                    StatusSeverity.Warning);
+            }
+            else
+            {
+                SetSteadyStatus(StatusReady);
+            }
         }
     }
 
     private string UntrustedRootStatus()
     {
         var where = $"Proxy running on {FormatBindDisplay()}:{BindPort}";
+        if (_interception.IsRootCertificateExpired || _interception.RootCertificateWasReplacedDueToExpiry)
+        {
+            return SystemProxy
+                ? where + "; system proxy on — Decrypt HTTPS off (Root CA expired; created a new one, trust it to enable Decrypt)."
+                : where + " — Decrypt HTTPS off (Root CA expired; created a new one, trust it to enable Decrypt).";
+        }
+
         return SystemProxy
             ? where + "; system proxy on — Decrypt HTTPS off (CA not trusted for this root). Install CA…"
             : where + " — Decrypt HTTPS off (CA not trusted for this root). Install CA…";

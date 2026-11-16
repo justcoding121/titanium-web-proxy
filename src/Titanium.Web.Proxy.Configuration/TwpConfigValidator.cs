@@ -3216,6 +3216,11 @@ public static class TwpConfigValidator
             errors.Add("server.certificateManager.certificateGraceDays must be >= 0.");
         }
 
+        if (certs.RootCertificateValidDays is <= 0)
+        {
+            errors.Add("server.certificateManager.rootCertificateValidDays must be positive.");
+        }
+
         if (certs.CertificateCacheTimeOutMinutes is <= 0)
         {
             errors.Add("server.certificateManager.certificateCacheTimeOutMinutes must be positive.");

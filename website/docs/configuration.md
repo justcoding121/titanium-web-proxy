@@ -613,6 +613,10 @@ certificates:
 
 Use real paths and emails in your environment. Do not commit private keys. MITM engine knobs are under `server.certificateManager`; this section is for listener leaf PEM/PFX and ACME.
 
+**Expiry and renewal.** On load and when certificate files change on disk, the CLI warns when a served certificate has 30 days or less remaining and errors when it has already expired (the listener still starts so you can recover). When `acmeDirectory` is set, a restart does not re-issue if the existing certificate still has more than 30 days left. A background loop checks about every 12 hours and renews within that 30-day window, then hot-swaps the leaf without a process restart. On renewal failure the current certificate keeps serving and the loop backs off.
+
+**Inspection root.** `server.certificateManager.rootCertificateValidDays` (default `3650`) is the lifetime of a newly minted decrypt root CA. Leaf certificates stay at `certificateValidDays` (default `396`) and never outlive the root. The CLI and Inspector warn when the root has 30 days or less left; an expired root is replaced and must be trusted again before decrypt works.
+
 ## Logging
 
 ```yaml twp
@@ -806,6 +810,7 @@ server:
     overwritePfxFile: true
     certificateValidDays: 396
     certificateGraceDays: 2
+    rootCertificateValidDays: 3650
     certificateCacheTimeOutMinutes: 60
     rootCertificateName: null
     rootCertificateIssuerName: null
@@ -997,7 +1002,8 @@ titanium reload -c twp.yaml
 | Routes, transforms, clusters / destinations, LB algorithm | Yes |
 | `server:` timeouts, pooling, protocol flags, decrypt skip hosts | Yes |
 | Listeners (bind / port / type) | No — restart |
-| Certificates / ACME | No — restart |
+| Certificate files on disk (paths under `certificates` / SNI items) | Yes — content watch hot-reloads PEM/PFX |
+| ACME config keys / first issue | Background issue and renewal; no restart for file swap |
 | Plus plugins (WAF, JWT, gRPC-JSON, discovery options) | No — restart |
 | Static files, access log path | No — restart |
 
