@@ -222,15 +222,8 @@ jobs:
       shell: pwsh
       run: |
         $settings = 'tests/test.runsettings'
-        # Plus OIDC listeners intermittently reset under GitHub-hosted Windows load.
-        $plusOk = $false
-        for ($attempt = 1; $attempt -le 3; $attempt++) {
-          dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
-          if ($LASTEXITCODE -eq 0) { $plusOk = $true; break }
-          Write-Host "Plus attempt $attempt failed with $LASTEXITCODE; retrying."
-          Start-Sleep -Seconds 5
-        }
-        if (-not $plusOk) { exit 1 }
+        dotnet test tests/Titanium.Plus.Tests/Titanium.Plus.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Inspector.Tests/Titanium.Inspector.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         dotnet test tests/Titanium.Cli.Tests/Titanium.Cli.Tests.csproj --configuration Release --no-build --no-restore --settings $settings --nologo

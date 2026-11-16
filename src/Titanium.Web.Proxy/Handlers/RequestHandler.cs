@@ -406,10 +406,18 @@ public partial class ProxyServer
 
                         if (routeDispatch == Routing.ReverseProxySessionDispatch.RouteDispatchResult.Handled)
                         {
-                            closeServerConnection = true;
                             await clientStream.WriteResponseAsync(args.HttpClient.Response, cancellationToken);
                             args.IsClientResponseCommitted = true;
-                            return;
+                            // Local replies (login redirects, auth challenges, direct responses) are complete
+                            // HTTP messages. Ending the client socket here without Connection: close lets an
+                            // HTTP/1.1 client pool the connection and then take a reset on the next request.
+                            if (!args.HttpClient.Response.KeepAlive)
+                            {
+                                closeServerConnection = true;
+                                return;
+                            }
+
+                            continue;
                         }
 
                         var requestHeaderRelayBaseline = request.Headers.TakeMitmRelayBaseline();
