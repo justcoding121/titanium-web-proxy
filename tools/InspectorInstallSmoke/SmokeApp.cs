@@ -327,7 +327,13 @@ internal static class SmokeApp
         {
             var before = DateTime.UtcNow.AddSeconds(-2);
             using var launched = LaunchBrowser(name, browserPath, url);
-            var ok = await WaitForHarAsync(before, url, TimeSpan.FromSeconds(45));
+            var ok = await WaitForHarAsync(before, url, TimeSpan.FromSeconds(45), () =>
+            {
+                if (!OperatingSystem.IsLinux() || LinuxDesktopId(name) is null)
+                    return;
+                Console.WriteLine("relaunch " + name + " " + url);
+                TryGtkLaunch(name, url);
+            });
             launched.Kill();
             if (!ok)
             {
@@ -615,14 +621,41 @@ internal static class SmokeApp
             entry.TryGetProperty("request", out var req) && req.TryGetProperty("url", out var u) ? u.GetString() : null;
     }
 
-    private static async Task<bool> WaitForHarAsync(DateTime notBeforeUtc, string url, TimeSpan timeout)
+    private static void TryGtkLaunch(string name, string url)
+    {
+        var desktop = LinuxDesktopId(name);
+        if (desktop is null)
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "gtk-launch",
+                ArgumentList = { desktop, url },
+                UseShellExecute = false,
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("relaunch failed: " + ex.Message);
+        }
+    }
+
+    private static async Task<bool> WaitForHarAsync(DateTime notBeforeUtc, string url, TimeSpan timeout, Action? nudge = null)
     {
         var host = new Uri(url).Host;
         var deadline = DateTime.UtcNow + timeout;
+        var nudgeAt = DateTime.UtcNow.AddSeconds(15);
+        var nudged = false;
         while (DateTime.UtcNow < deadline)
         {
             if (HarHasDecryptedGet(notBeforeUtc, host))
                 return true;
+            if (!nudged && nudge is not null && DateTime.UtcNow >= nudgeAt)
+            {
+                nudged = true;
+                nudge();
+            }
             await Task.Delay(500);
         }
 
@@ -827,6 +860,12 @@ internal static class SmokeApp
         File.WriteAllText(pem, ExportPem(pfx));
         Run("certutil", $"-N -d sql:{db} --empty-password", 15000);
         Run("certutil", $"-d sql:{db} -A -t \"C,,\" -n \"Titanium Smoke Root\" -i \"{pem}\"", 15000);
+        // Edge reads the system CA bundle. NSS alone is enough for Chrome.
+        var crt = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.crt");
+        File.Copy(pem, crt, overwrite: true);
+        Run("sudo", $"cp \"{crt}\" /usr/local/share/ca-certificates/titanium-smoke-root.crt", 15000);
+        Run("sudo", "update-ca-certificates", 20000);
+        Console.WriteLine("root in system CA bundle");
     }
 
     private static void TrustMac(string pfx, string thumb)
