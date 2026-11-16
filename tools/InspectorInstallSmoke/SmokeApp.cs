@@ -383,6 +383,8 @@ internal static class SmokeApp
                     ArgumentList = { desktop, url },
                     UseShellExecute = false,
                 }) ?? throw new InvalidOperationException("gtk-launch did not start " + name);
+                Thread.Sleep(2500);
+                PrintMatchingProcessArgs(name);
                 return new BrowserLaunch(proc, safari: false, dir, LinuxKillName(name));
             }
         }
@@ -432,11 +434,52 @@ internal static class SmokeApp
         var path = Path.Combine(home, ".local", "share", "applications", desktopId + ".desktop");
         if (!File.Exists(path))
             return;
+        var printedScript = false;
         foreach (var line in File.ReadLines(path))
         {
-            if (line.StartsWith("Exec=", StringComparison.Ordinal) ||
-                line.StartsWith("DBusActivatable=", StringComparison.Ordinal))
+            if (line.StartsWith("DBusActivatable=", StringComparison.Ordinal))
                 Console.WriteLine("desktop " + line);
+            if (!line.StartsWith("Exec=", StringComparison.Ordinal))
+                continue;
+            Console.WriteLine("desktop " + line);
+            if (printedScript)
+                continue;
+            var script = line["Exec=".Length..].Trim().Split(' ', 2)[0].Trim('"');
+            if (!script.EndsWith(".sh", StringComparison.Ordinal) || !File.Exists(script))
+                continue;
+            printedScript = true;
+            Console.WriteLine("launcher " + script);
+            foreach (var scriptLine in File.ReadLines(script))
+                Console.WriteLine("launcher " + scriptLine);
+        }
+    }
+
+    private static void PrintMatchingProcessArgs(string name)
+    {
+        try
+        {
+            var probe = Process.Start(new ProcessStartInfo
+            {
+                FileName = "ps",
+                ArgumentList = { "-eo", "args" },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            if (probe is null)
+                return;
+            var text = probe.StandardOutput.ReadToEnd();
+            probe.WaitForExit(3000);
+            foreach (var line in text.Split('\n'))
+            {
+                if (line.Contains(name, StringComparison.OrdinalIgnoreCase) ||
+                    line.Contains("titanium-inspector/launchers", StringComparison.Ordinal))
+                    Console.WriteLine("argv " + line.Trim());
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("argv probe failed: " + ex.Message);
         }
     }
 

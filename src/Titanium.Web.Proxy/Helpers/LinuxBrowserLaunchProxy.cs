@@ -102,6 +102,8 @@ internal static class LinuxBrowserLaunchProxy
             }
         }
 
+        TrySyncMachinePolicies(null);
+
         foreach (var dest in UserDesktopOverridePaths())
             DeleteMarkedDesktopOverride(dest);
 
@@ -189,7 +191,79 @@ internal static class LinuxBrowserLaunchProxy
             }
         }
 
+        // Official Chrome reads only the machine policy directory. A non-interactive
+        // sudo installs it when the user is already an admin; a password prompt is never shown.
+        if (directories is null)
+            TrySyncMachinePolicies(json);
+
         return written;
+    }
+
+    /// <summary>
+    ///     Install or remove managed policy under <c>/etc</c> without prompting.
+    ///     Pass null to remove the files this writer owns.
+    /// </summary>
+    private static void TrySyncMachinePolicies(string? json)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        var dirs = PolicyDirectories()
+            .Where(d => d.StartsWith("/etc/", StringComparison.Ordinal))
+            .Append("/etc/brave/policies/managed")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (json is null)
+        {
+            foreach (var dir in dirs)
+            {
+                TrySudoNonInteractive("rm -f -- " + QuoteShellArg(Path.Combine(dir, PolicyFileName)));
+            }
+
+            return;
+        }
+
+        var temp = Path.Combine(Path.GetTempPath(), PolicyFileName);
+        try
+        {
+            File.WriteAllText(temp, json);
+            foreach (var dir in dirs)
+            {
+                var dest = Path.Combine(dir, PolicyFileName);
+                TrySudoNonInteractive(
+                    "install -D -m 644 -- " + QuoteShellArg(temp) + " " + QuoteShellArg(dest));
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static void TrySudoNonInteractive(string command)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "sudo",
+                ArgumentList = { "-n", "sh", "-c", command },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            if (process is null)
+                return;
+            if (!process.WaitForExit(8000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
+            }
+        }
+        catch
+        {
+            // sudo missing or not permitted
+        }
     }
 
     /// <summary>
@@ -539,12 +613,34 @@ internal static class LinuxBrowserLaunchProxy
 
     private static void TryMakeExecutable(string scriptPath)
     {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-            return;
         try
         {
-            File.SetUnixFileMode(scriptPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            {
+                File.SetUnixFileMode(scriptPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "chmod",
+                ArgumentList = { "u+x", scriptPath },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            });
+            if (process is not null && !process.WaitForExit(2000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
+            }
         }
         catch
         {
