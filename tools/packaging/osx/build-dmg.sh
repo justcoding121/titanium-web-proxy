@@ -72,7 +72,15 @@ EOF
   sleep 1
 fi
 
-hdiutil detach "${MOUNT_ROOT}" -quiet || hdiutil detach "${MOUNT_ROOT}" -force
+# The first detach can unmount and still return non-zero. The follow-up then
+# fails with "No such file or directory" and, under set -e, fails the package.
+if ! hdiutil detach "${MOUNT_ROOT}" -quiet; then
+  hdiutil detach "${MOUNT_ROOT}" -force -quiet || true
+fi
+if hdiutil info | grep -F "${MOUNT_ROOT}" >/dev/null; then
+  echo "error: could not detach ${MOUNT_ROOT}" >&2
+  exit 1
+fi
 MOUNT_ROOT=""
 
 rm -f "${DMG_PATH}"
