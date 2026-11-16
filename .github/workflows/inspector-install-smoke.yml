@@ -295,6 +295,11 @@ jobs:
           dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
           driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
           chmod +x "$driver"
+          # Publish the CLI before any system proxy is turned on. A later publish
+          # goes through the Inspector listener and NuGet gets "connection refused".
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r osx-arm64 --self-contained true -o artifacts/cli/osx-arm64
+          rm -f artifacts/Titanium.Cli-osx-arm64.zip
+          (cd artifacts/cli/osx-arm64 && zip -qr ../../Titanium.Cli-osx-arm64.zip .)
           installed="/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector"
           log="${RUNNER_TEMP}/install-smoke"
           mkdir -p "$log"
@@ -363,12 +368,19 @@ jobs:
           run_driver fresh --exe "$vol" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           detach
           trap - EXIT
+          # Killing the Inspector skips its proxy restore, so NuGet and the CLI would
+          # still be pointed at a dead listener.
+          while IFS= read -r service; do
+            service="${service#\*}"
+            service="${service#"${service%%[![:space:]]*}"}"
+            if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
+              continue
+            fi
+            networksetup -setwebproxystate "${service}" off || true
+            networksetup -setsecurewebproxystate "${service}" off || true
+          done < <(networksetup -listallnetworkservices)
           {
-            echo "cli-publish begin"
-            dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r osx-arm64 --self-contained true -o artifacts/cli/osx-arm64
-            echo "cli-publish done"
-            rm -f artifacts/Titanium.Cli-osx-arm64.zip
-            (cd artifacts/cli/osx-arm64 && zip -qr ../../Titanium.Cli-osx-arm64.zip .)
+            echo "cli-layout begin"
             rm -rf "${RUNNER_TEMP}/cli-install"
             mkdir -p "${RUNNER_TEMP}/cli-install"
             unzip -q artifacts/Titanium.Cli-osx-arm64.zip -d "${RUNNER_TEMP}/cli-install"
