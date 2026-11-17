@@ -666,6 +666,108 @@ public class UnixCertificateTrustCoverageTests
             new ProcessRunResult(0, fake + "\n", ""));
     }
 
+    [TestMethod]
+    public void MacTrustExportAndStaleHashHelpers_CoverRemainingBranches()
+    {
+        using var cert = CreateEphemeralRoot();
+        var stale = new ScriptedProcessRunner
+        {
+            Default = new ProcessRunResult(0, "SHA-1 hash: " + new string('A', 40) + "\n", ""),
+        };
+        Invoke("TryRemoveStaleMacSameCommonNameRoots",
+            [typeof(IProcessRunner), typeof(X509Certificate2)], stale, cert);
+
+        Assert.IsNull(Invoke("CertBlockDisplayName", [typeof(string)], "   \n"));
+        Assert.IsNull(Invoke("CertBlockDisplayName", [typeof(string)], "not-a-short-label: name"));
+        Assert.AreEqual("Example", Invoke("CertBlockDisplayName", [typeof(string)], "Cert 1: Example"));
+
+        Assert.IsFalse(UnixCertificateTrust.DumpTextHasSslTrustPoliciesForSha1("", "abc"));
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1("", new string('b', 40)));
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1("text", "abcd"));
+        var sha = new string('b', 40);
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(
+            "trustSettings=[] " + sha, sha));
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(
+            sha + " trustSettings kSecTrustSettingsResult=12", sha));
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trustDir = Path.Combine(home, "Library", "Security", "Trust Settings");
+        var keychainDir = Path.Combine(home, "Library", "Keychains");
+        Directory.CreateDirectory(trustDir);
+        Directory.CreateDirectory(keychainDir);
+        var plist = Path.Combine(trustDir, "twp-cov-match.plist");
+        var login = Path.Combine(keychainDir, "login.keychain-db");
+        var createdPlist = !File.Exists(plist);
+        var createdLogin = !File.Exists(login);
+        File.WriteAllText(plist, "plist");
+        if (createdLogin)
+            File.WriteAllText(login, "");
+        try
+        {
+            var listed = ((IEnumerable<string>)Invoke("MacTrustSettingsPlistCandidates", Type.EmptyTypes)!).ToList();
+            Assert.IsTrue(listed.Any(path => path.EndsWith("twp-cov-match.plist", StringComparison.Ordinal)));
+
+            var runner = new TrustPlistRunner(sha);
+            Assert.IsTrue((bool)Invoke(
+                "TrustSettingsExportHasPolicies",
+                [typeof(IProcessRunner), typeof(string)],
+                runner, sha)!);
+
+            runner.ReturnNull = true;
+            Assert.IsFalse((bool)Invoke(
+                "TrustSettingsExportHasPolicies",
+                [typeof(IProcessRunner), typeof(string)],
+                runner, sha)!);
+
+            Invoke("CollectMacCertificateHashes",
+                [typeof(IProcessRunner), typeof(string), typeof(HashSet<string>)],
+                stale, "Titanium Root Certificate Authority", new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (createdPlist)
+                TryDeleteFile(plist);
+            if (createdLogin)
+                TryDeleteFile(login);
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private sealed class TrustPlistRunner : IProcessRunner
+    {
+        private readonly string _sha;
+
+        public TrustPlistRunner(string sha) => _sha = sha;
+
+        public bool ReturnNull { get; set; }
+
+        public ProcessRunResult? Run(
+            string fileName, string arguments, IDictionary<string, string?>? environment = null,
+            string? workingDirectory = null, TimeSpan? timeout = null)
+        {
+            if (!string.Equals(fileName, "plutil", StringComparison.Ordinal))
+                return new ProcessRunResult(1, "", "");
+            if (ReturnNull || !arguments.Contains("twp-cov-match.plist", StringComparison.Ordinal))
+                return null;
+            return new ProcessRunResult(
+                0,
+                _sha + " trustSettings kSecTrustSettingsResultTrustRoot",
+                "");
+        }
+    }
+
     private static object? Invoke(string name, Type[] types, params object?[] args)
     {
         var method = typeof(UnixCertificateTrust).GetMethod(name, PrivStatic, types)

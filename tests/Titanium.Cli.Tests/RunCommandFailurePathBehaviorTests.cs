@@ -2,6 +2,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Config;
@@ -445,6 +447,38 @@ public class RunCommandFailurePathBehaviorTests
         }
 
         Assert.Fail(detail());
+    }
+
+    [TestMethod]
+    public void WarnInspectionRootExpiry_ReportsExpiredAndSoonRoots()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        using var expired = MakeRoot(DateTimeOffset.UtcNow.AddDays(-40), DateTimeOffset.UtcNow.AddDays(-1));
+        proxy.CertificateManager.RootCertificate = expired;
+        RunCommand.WarnInspectionRootExpiry(proxy);
+
+        typeof(Titanium.Web.Proxy.Network.CertificateManager)
+            .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
+            .SetValue(proxy.CertificateManager, true);
+        using var current = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(400));
+        proxy.CertificateManager.RootCertificate = current;
+        RunCommand.WarnInspectionRootExpiry(proxy);
+
+        typeof(Titanium.Web.Proxy.Network.CertificateManager)
+            .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
+            .SetValue(proxy.CertificateManager, false);
+        using var soon = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(10));
+        proxy.CertificateManager.RootCertificate = soon;
+        RunCommand.WarnInspectionRootExpiry(proxy);
+    }
+
+    private static X509Certificate2 MakeRoot(DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=twp-inspection-root", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        return request.CreateSelfSigned(notBefore, notAfter);
     }
 
     private sealed class TempDir : IDisposable

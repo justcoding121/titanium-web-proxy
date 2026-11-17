@@ -225,12 +225,22 @@ internal static class LinuxBrowserLaunchProxy
         if (!OperatingSystem.IsLinux())
             return;
 
+        SyncMachinePolicies(json, MachinePolicyVendors);
+    }
+
+    /// <summary>Runs the machine-policy sync against caller-supplied vendor roots (tests).</summary>
+    internal static void SyncMachinePoliciesForTests(
+        string? json, (string Root, string[] Binaries)[] vendors) =>
+        SyncMachinePolicies(json, vendors);
+
+    private static void SyncMachinePolicies(string? json, (string Root, string[] Binaries)[] vendors)
+    {
         try
         {
             if (json is null)
             {
                 // Only ask for sudo when a file we own is actually there to remove.
-                var owned = MachinePolicyFiles(installedOnly: false).Where(File.Exists).ToList();
+                var owned = MachinePolicyFiles(installedOnly: false, vendors).Where(File.Exists).ToList();
                 if (owned.Count > 0)
                     TrySudoNonInteractive(["rm", "-f", "--", .. owned], stdin: null);
                 return;
@@ -239,7 +249,7 @@ internal static class LinuxBrowserLaunchProxy
             // One sudo call, only for installed browsers, and only when the file would change.
             // The JSON travels on stdin: a predictable file under /tmp could be swapped for a
             // link, and root would then install attacker-chosen policy for every user.
-            var targets = MachinePolicyFiles(installedOnly: true)
+            var targets = MachinePolicyFiles(installedOnly: true, vendors)
                 .Where(path => !MachinePolicyMatches(path, json))
                 .ToList();
             if (targets.Count == 0)
@@ -265,9 +275,17 @@ internal static class LinuxBrowserLaunchProxy
         ("/etc/opera", ["/usr/bin/opera", "/usr/bin/opera-stable"]),
     ];
 
-    private static IEnumerable<string> MachinePolicyFiles(bool installedOnly)
+    private static IEnumerable<string> MachinePolicyFiles(bool installedOnly) =>
+        MachinePolicyFiles(installedOnly, MachinePolicyVendors);
+
+    internal static List<string> MachinePolicyFilesForTests(
+        bool installedOnly, (string Root, string[] Binaries)[] vendors) =>
+        MachinePolicyFiles(installedOnly, vendors).ToList();
+
+    private static IEnumerable<string> MachinePolicyFiles(
+        bool installedOnly, (string Root, string[] Binaries)[] vendors)
     {
-        foreach (var (root, binaries) in MachinePolicyVendors)
+        foreach (var (root, binaries) in vendors)
         {
             if (installedOnly && !Directory.Exists(root) && !binaries.Any(File.Exists))
                 continue;
@@ -288,13 +306,22 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     /// <summary>Runs <c>sudo -n</c>: never prompts, fails fast when sudo needs a password.</summary>
-    private static void TrySudoNonInteractive(IReadOnlyList<string> command, string? stdin)
+    private static void TrySudoNonInteractive(IReadOnlyList<string> command, string? stdin) =>
+        TrySudoNonInteractive(command, stdin, SudoBinary, waitMilliseconds: 8000);
+
+    /// <summary>Same sudo launch with the executable and wait supplied by the caller (tests).</summary>
+    internal static void TrySudoNonInteractiveForTests(
+        IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds) =>
+        TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
+
+    private static void TrySudoNonInteractive(
+        IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds)
     {
         try
         {
             var info = new System.Diagnostics.ProcessStartInfo
             {
-                FileName = SudoBinary,
+                FileName = sudoExecutable,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardInput = stdin is not null,
@@ -314,7 +341,7 @@ internal static class LinuxBrowserLaunchProxy
                 process.StandardInput.Close();
             }
 
-            if (!process.WaitForExit(8000))
+            if (!process.WaitForExit(waitMilliseconds))
             {
                 try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
             }
@@ -614,12 +641,20 @@ internal static class LinuxBrowserLaunchProxy
         yield return "/etc/opera/policies/managed";
     }
 
-    private static int WriteBrowserDesktopOverrides(string hostname, int port, bool proxyLoopback)
+    private static int WriteBrowserDesktopOverrides(string hostname, int port, bool proxyLoopback) =>
+        WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, DesktopSources);
+
+    internal static int WriteBrowserDesktopOverridesForTests(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> sources) =>
+        WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, sources);
+
+    private static int WriteBrowserDesktopOverrides(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> sources)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         var written = 0;
-        foreach (var source in DesktopSources)
+        foreach (var source in sources)
         {
             if (!File.Exists(source))
                 continue;
@@ -699,15 +734,24 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
-    private static void TryMakeExecutable(string scriptPath)
+    private static void TryMakeExecutable(string scriptPath) =>
+        TryMakeExecutable(scriptPath, OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+
+    internal static void TryMakeExecutableForTests(string scriptPath) =>
+        TryMakeExecutable(scriptPath, applyUnixMode: true);
+
+    private static void TryMakeExecutable(string scriptPath, bool applyUnixMode)
     {
         try
         {
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            if (applyUnixMode)
             {
                 // chmod u+x: add the owner execute bit and leave the mode WriteAllText created.
+                // Tests pass applyUnixMode on Windows; the call throws and the catch stays best-effort.
+#pragma warning disable CA1416
                 var mode = File.GetUnixFileMode(scriptPath);
                 File.SetUnixFileMode(scriptPath, mode | UnixFileMode.UserExecute);
+#pragma warning restore CA1416
             }
         }
         catch
@@ -732,9 +776,17 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
-    private static bool WriteXfceWebBrowserHelper(string hostname, int port, bool proxyLoopback)
+    private static bool WriteXfceWebBrowserHelper(string hostname, int port, bool proxyLoopback) =>
+        WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, ChromeBinaries);
+
+    internal static bool WriteXfceWebBrowserHelperForTests(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries) =>
+        WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, chromeBinaries);
+
+    private static bool WriteXfceWebBrowserHelper(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries)
     {
-        var chrome = ChromeBinaries.FirstOrDefault(File.Exists);
+        var chrome = chromeBinaries.FirstOrDefault(File.Exists);
         if (chrome is null)
             return false;
 

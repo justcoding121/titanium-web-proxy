@@ -853,6 +853,7 @@ public class InterceptionCaptureCoverageTests
         {
             Assert.IsTrue(interception.RootCertificateDaysRemaining > 0);
             Assert.IsFalse(interception.IsRootCertificateExpired);
+            Assert.IsFalse(interception.RootCertificateWasReplacedDueToExpiry);
 
             var proxyField = typeof(InterceptionService).GetField("_proxy", BindingFlags.NonPublic | BindingFlags.Instance)!;
             var proxy = (ProxyServer)proxyField.GetValue(interception)!;

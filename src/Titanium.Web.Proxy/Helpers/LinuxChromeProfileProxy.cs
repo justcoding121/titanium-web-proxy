@@ -120,7 +120,12 @@ internal static class LinuxChromeProfileProxy
     {
         if (!OperatingSystem.IsLinux())
             return;
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        EnsureInstalledDefaultProfiles(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+    }
+
+    /// <summary>Creates default profiles for the usual browser install markers under <paramref name="home"/>.</summary>
+    internal static void EnsureInstalledDefaultProfiles(string? home)
+    {
         if (string.IsNullOrWhiteSpace(home))
             return;
 
@@ -141,7 +146,16 @@ internal static class LinuxChromeProfileProxy
             ("/usr/bin/opera", "opera"),
             ("/usr/share/applications/opera.desktop", "opera"),
         ];
+        EnsureInstalledProfiles(home, installed);
+    }
 
+    internal static void EnsureInstalledProfilesForTests(
+        string home, (string Marker, string Relative)[] installed) =>
+        EnsureInstalledProfiles(home, installed);
+
+    private static void EnsureInstalledProfiles(
+        string home, (string Marker, string Relative)[] installed)
+    {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (marker, relative) in installed)
         {

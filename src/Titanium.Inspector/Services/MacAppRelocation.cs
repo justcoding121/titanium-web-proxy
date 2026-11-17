@@ -13,12 +13,15 @@ internal static class MacAppRelocation
 
     /// <summary>True when this process is running from a mounted disk image volume.</summary>
     [SupportedOSPlatform("macos")]
-    public static bool IsRunningFromDmgVolume()
+    public static bool IsRunningFromDmgVolume() =>
+        IsRunningFromDmgVolume(OperatingSystem.IsMacOS(), TryFindAppBundlePath());
+
+    /// <summary>Same check with the OS and bundle path supplied by the caller (tests).</summary>
+    internal static bool IsRunningFromDmgVolume(bool isMacOs, string? bundle)
     {
-        if (!OperatingSystem.IsMacOS())
+        if (!isMacOs)
             return false;
 
-        var bundle = TryFindAppBundlePath();
         if (bundle is null)
             return false;
 
@@ -29,12 +32,16 @@ internal static class MacAppRelocation
     ///     True when we should offer Move to Applications (DMG launch, not yet dismissed).
     /// </summary>
     [SupportedOSPlatform("macos")]
-    public static bool ShouldOfferMove(InspectorSettings settings)
+    public static bool ShouldOfferMove(InspectorSettings settings) =>
+        ShouldOfferMove(settings, OperatingSystem.IsMacOS(), IsRunningFromDmgVolume());
+
+    /// <summary>Same decision with the OS and DMG result supplied by the caller (tests).</summary>
+    internal static bool ShouldOfferMove(InspectorSettings settings, bool isMacOs, bool runningFromDmg)
     {
-        if (!OperatingSystem.IsMacOS() || settings.MacDmgMovePromptDismissed)
+        if (!isMacOs || settings.MacDmgMovePromptDismissed)
             return false;
 
-        return IsRunningFromDmgVolume();
+        return runningFromDmg;
     }
 
     /// <summary>
@@ -47,23 +54,40 @@ internal static class MacAppRelocation
         var source = TryFindAppBundlePath()
             ?? throw new InvalidOperationException("Could not locate Titanium Inspector.app");
 
-        var systemApps = Path.Combine("/Applications", BundleDisplayName);
-        var userAppsDir = Path.Combine(
+        return CopyBundleToApplications(
+            source,
+            "/Applications",
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "Applications");
+            "/usr/bin/ditto",
+            "/usr/bin/xattr");
+    }
+
+    /// <summary>
+    ///     Copies <paramref name="source"/> into Applications, falling back to the user
+    ///     Applications folder when the system folder rejects the copy.
+    /// </summary>
+    internal static string CopyBundleToApplications(
+        string source,
+        string applicationsDirectory,
+        string userProfile,
+        string dittoExecutable,
+        string xattrExecutable)
+    {
+        var systemApps = Path.Combine(applicationsDirectory, BundleDisplayName);
+        var userAppsDir = Path.Combine(userProfile, "Applications");
         var userApps = Path.Combine(userAppsDir, BundleDisplayName);
 
         string dest;
         try
         {
             dest = systemApps;
-            CopyBundle(source, dest);
+            CopyBundle(source, dest, dittoExecutable);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
             Directory.CreateDirectory(userAppsDir);
             dest = userApps;
-            CopyBundle(source, dest);
+            CopyBundle(source, dest, dittoExecutable);
         }
 
         // Clear quarantine on the installed copy (Gatekeeper less surprising for local copies).
@@ -71,7 +95,7 @@ internal static class MacAppRelocation
         {
             Process.Start(new ProcessStartInfo
             {
-                FileName = "/usr/bin/xattr",
+                FileName = xattrExecutable,
                 ArgumentList = { "-dr", "com.apple.quarantine", dest },
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -87,20 +111,27 @@ internal static class MacAppRelocation
 
     /// <summary>Opens the installed .app and requests this process exit.</summary>
     [SupportedOSPlatform("macos")]
-    public static void RelaunchInstalledApp(string installedAppPath)
+    public static void RelaunchInstalledApp(string installedAppPath) =>
+        RelaunchInstalledApp(installedAppPath, "/usr/bin/open");
+
+    /// <summary>Same relaunch with the <c>open</c> executable supplied by the caller (tests).</summary>
+    internal static void RelaunchInstalledApp(string installedAppPath, string openExecutable)
     {
         Process.Start(new ProcessStartInfo
         {
-            FileName = "/usr/bin/open",
+            FileName = openExecutable,
             ArgumentList = { installedAppPath },
             UseShellExecute = false,
         });
     }
 
     /// <summary>Walks up from MacOS/ to the enclosing .app bundle.</summary>
-    internal static string? TryFindAppBundlePath()
+    internal static string? TryFindAppBundlePath() =>
+        TryFindAppBundlePath(AppContext.BaseDirectory);
+
+    /// <summary>Walks up from <paramref name="dir"/> to the enclosing .app bundle.</summary>
+    internal static string? TryFindAppBundlePath(string? dir)
     {
-        var dir = AppContext.BaseDirectory;
         for (var i = 0; i < 6 && !string.IsNullOrEmpty(dir); i++)
         {
             if (dir.EndsWith(".app", StringComparison.OrdinalIgnoreCase) ||
@@ -127,7 +158,10 @@ internal static class MacAppRelocation
         return null;
     }
 
-    private static void CopyBundle(string source, string dest)
+    internal static void CopyBundleForTests(string source, string dest, string dittoExecutable) =>
+        CopyBundle(source, dest, dittoExecutable);
+
+    private static void CopyBundle(string source, string dest, string dittoExecutable)
     {
         if (Directory.Exists(dest))
             Directory.Delete(dest, recursive: true);
@@ -135,7 +169,7 @@ internal static class MacAppRelocation
         // ditto preserves resource forks / code signature better than recursive File.Copy.
         var psi = new ProcessStartInfo
         {
-            FileName = "/usr/bin/ditto",
+            FileName = dittoExecutable,
             ArgumentList = { source, dest },
             UseShellExecute = false,
             CreateNoWindow = true,
