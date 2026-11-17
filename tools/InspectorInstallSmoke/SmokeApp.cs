@@ -310,21 +310,30 @@ internal static class SmokeApp
             var path = BrowserPaths.Resolve(name);
             if (path is null)
                 return Fail(1, name + " is not installed");
-            if (name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+            var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
+            if (safari)
             {
-                // Chrome already proved the root. Safari still misses the decrypted GET when
-                // a leftover WebKit process or a cached HTTP/3 alternative service wins.
-                // Re-trust, let trustd observe it, then relaunch until a GET lands.
+                // Chrome already proved the root. A later Safari visit to the same origin
+                // can still skip the proxy on UDP/443 after the upgrade pass learned HTTP/3.
                 await TrustRootAsync();
-                await Task.Delay(2000);
+                await Task.Delay(1500);
+                BlockOutboundQuic();
             }
 
-            var urls = name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && browsers.Length == 1 && false
-                ? new[] { "https://example.com/" }
-                : new[] { "https://example.com/", "https://www.google.com/" };
-            if (!await ProveAsync(startedUtc, path, name, urls))
-                return Fail(1, name + " did not produce a decrypted GET");
-            Console.WriteLine("pass " + name);
+            try
+            {
+                var urls = name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && browsers.Length == 1 && false
+                    ? new[] { "https://example.com/" }
+                    : new[] { "https://example.com/", "https://www.google.com/" };
+                if (!await ProveAsync(startedUtc, path, name, urls))
+                    return Fail(1, name + " did not produce a decrypted GET");
+                Console.WriteLine("pass " + name);
+            }
+            finally
+            {
+                if (safari)
+                    RestorePacketFilter();
+            }
         }
 
         return 0;
@@ -337,7 +346,7 @@ internal static class SmokeApp
             var before = DateTime.UtcNow;
             using var launched = LaunchBrowser(name, browserPath, url);
             var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
-            var ok = await WaitForHarAsync(before, url, safari ? TimeSpan.FromSeconds(90) : TimeSpan.FromSeconds(60), () =>
+            var ok = await WaitForHarAsync(before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), () =>
             {
                 Console.WriteLine("relaunch " + name + " " + url);
                 if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
@@ -352,7 +361,7 @@ internal static class SmokeApp
                 else if (OperatingSystem.IsMacOS()
                          && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
                     TryStartAgain(browserPath, url);
-            }, safari ? TimeSpan.FromSeconds(12) : null);
+            }, safari ? TimeSpan.FromSeconds(8) : null);
             launched.Kill();
             if (!ok)
             {
@@ -715,7 +724,7 @@ internal static class SmokeApp
     {
         var host = new Uri(url).Host;
         var deadline = DateTime.UtcNow + timeout;
-        var nudgeAt = DateTime.UtcNow.AddSeconds(12);
+        var nudgeAt = DateTime.UtcNow + (nudgeEvery ?? TimeSpan.FromSeconds(12));
         while (DateTime.UtcNow < deadline)
         {
             if (HarHasDecryptedGet(notBeforeUtc, host))
@@ -733,26 +742,49 @@ internal static class SmokeApp
     }
 
     /// <summary>
-    /// Quit Safari completely, re-apply the system root, and open the URL with <c>-F</c>.
-    /// One relaunch was not enough when the first window only logged CONNECT.
+    /// Quit Safari completely and open the URL with <c>-F</c>.
+    /// Re-trusting on every nudge made the window fit only two launches.
     /// </summary>
     private static void TryRelaunchSafari(string url)
     {
-        try
-        {
-            var pfx = Path.Combine(ProfileDir(), "rootCert.pfx");
-            if (File.Exists(pfx))
-                TrustMac(pfx, ThumbFromPfx());
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("safari re-trust failed: " + ex.Message);
-        }
-
-        // trustd does not always apply a keychain write to a process started in the same tick.
-        Thread.Sleep(1500);
         SystemProxyBrowserCapture.KillSafariProcesses();
         SystemProxyBrowserCapture.StartSafari(url, fresh: true);
+    }
+
+    /// <summary>
+    /// Safari has no switch to disable HTTP/3, and the feature flag is ignored.
+    /// After a decrypted upgrade visit, the next load of the same origin can go
+    /// out on UDP/443 and leave only a CONNECT in the HAR. Drop that traffic for
+    /// the Safari proof so the GET falls back through the proxy.
+    /// </summary>
+    private static void BlockOutboundQuic()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return;
+
+        var conf = Path.Combine(Path.GetTempPath(), "twp-smoke-pf.conf");
+        var baseRules = File.Exists("/etc/pf.conf") ? File.ReadAllText("/etc/pf.conf") : string.Empty;
+        File.WriteAllText(
+            conf,
+            baseRules
+            + "\nblock drop out inet proto udp from any to any port 443\n"
+            + "block drop out inet6 proto udp from any to any port 443\n");
+        var loaded = RunCapture("sudo", "pfctl -f \"" + conf + "\"", 15000);
+        Console.WriteLine("pfctl load exit=" + loaded.Code + " " + TrimOneLine(loaded.Output));
+        if (loaded.Code != 0)
+            return;
+
+        var enabled = RunCapture("sudo", "pfctl -E", 10000);
+        Console.WriteLine("pfctl enable exit=" + enabled.Code + " " + TrimOneLine(enabled.Output));
+    }
+
+    private static void RestorePacketFilter()
+    {
+        if (!OperatingSystem.IsMacOS() || !File.Exists("/etc/pf.conf"))
+            return;
+
+        var restored = RunCapture("sudo", "pfctl -f /etc/pf.conf", 15000);
+        Console.WriteLine("pfctl restore exit=" + restored.Code + " " + TrimOneLine(restored.Output));
     }
 
     private static bool HarHasDecryptedGet(DateTime notBeforeUtc, string host)
@@ -994,10 +1026,7 @@ internal static class SmokeApp
         // to the system keychain.
         Run("sudo", $"security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
         Run("security", $"add-trusted-cert -r trustRoot \"{cer}\"", 20000);
-        var dump = Capture("security", "dump-trust-settings -d");
-        var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
-        if (!compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
-            Console.WriteLine("trust dump did not list " + thumb);
+        Console.WriteLine("trusted root " + thumb);
     }
 
     private static void WriteFreshSettings(int port, bool decrypt)

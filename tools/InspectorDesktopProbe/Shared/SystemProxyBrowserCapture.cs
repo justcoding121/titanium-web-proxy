@@ -129,18 +129,8 @@ public static class SystemProxyBrowserCapture
             // ignore
         }
 
-        foreach (var name in new[]
-        {
-            "Safari",
-            "com.apple.WebKit.Networking",
-            "com.apple.WebKit.WebContent",
-            "com.apple.WebKit.GPU",
-        })
-        {
-            TryKillall(name, force: false);
-        }
-
-        var deadline = DateTime.UtcNow.AddSeconds(8);
+        TryKillall(force: false);
+        var deadline = DateTime.UtcNow.AddSeconds(3);
         while (DateTime.UtcNow < deadline && SafariFamilyStillRunning())
             Thread.Sleep(200);
 
@@ -148,18 +138,8 @@ public static class SystemProxyBrowserCapture
         // evaluation and any HTTP/3 alternative service. SIGTERM is not enough then.
         if (SafariFamilyStillRunning())
         {
-            foreach (var name in new[]
-            {
-                "Safari",
-                "com.apple.WebKit.Networking",
-                "com.apple.WebKit.WebContent",
-                "com.apple.WebKit.GPU",
-            })
-            {
-                TryKillall(name, force: true);
-            }
-
-            deadline = DateTime.UtcNow.AddSeconds(4);
+            TryKillall(force: true);
+            deadline = DateTime.UtcNow.AddSeconds(2);
             while (DateTime.UtcNow < deadline && SafariFamilyStillRunning())
                 Thread.Sleep(200);
         }
@@ -171,7 +151,7 @@ public static class SystemProxyBrowserCapture
         ClearSafariAlternativeServices();
     }
 
-    private static void TryKillall(string name, bool force)
+    private static void TryKillall(bool force)
     {
         try
         {
@@ -185,7 +165,17 @@ public static class SystemProxyBrowserCapture
             };
             if (force)
                 start.ArgumentList.Add("-9");
-            start.ArgumentList.Add(name);
+            foreach (var name in new[]
+            {
+                "Safari",
+                "com.apple.WebKit.Networking",
+                "com.apple.WebKit.WebContent",
+                "com.apple.WebKit.GPU",
+            })
+            {
+                start.ArgumentList.Add(name);
+            }
+
             using var kill = Process.Start(start);
             kill?.WaitForExit(3000);
         }
@@ -250,10 +240,12 @@ public static class SystemProxyBrowserCapture
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         foreach (var root in new[]
         {
-            Path.Combine(home, "Library", "Containers", "com.apple.Safari", "Data", "Library", "Caches"),
-            Path.Combine(home, "Library", "Containers", "com.apple.WebKit.Networking", "Data", "Library", "Caches"),
+            Path.Combine(home, "Library", "Containers", "com.apple.Safari", "Data"),
+            Path.Combine(home, "Library", "Containers", "com.apple.WebKit.Networking", "Data"),
+            Path.Combine(home, "Library", "Group Containers", "group.com.apple.Safari"),
             Path.Combine(home, "Library", "Caches", "com.apple.Safari"),
             Path.Combine(home, "Library", "Caches", "WebKit"),
+            Path.Combine(home, "Library", "HTTPStorages"),
         })
         {
             DeleteAlternativeServiceFiles(root);
