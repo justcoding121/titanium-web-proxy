@@ -398,7 +398,7 @@ jobs:
 
       - name: Upload logs
         if: always() && runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: install-smoke-windows-logs
           path: |
@@ -409,7 +409,7 @@ jobs:
 
       - name: Upload logs (Linux)
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: install-smoke-linux-logs
           path: ${{ runner.temp }}/install-smoke
@@ -418,7 +418,7 @@ jobs:
 
       - name: Upload logs (macOS)
         if: always() && runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: install-smoke-macos-logs
           path: ${{ runner.temp }}/install-smoke
