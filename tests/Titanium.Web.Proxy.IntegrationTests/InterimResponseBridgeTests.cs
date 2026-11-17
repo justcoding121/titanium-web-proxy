@@ -73,12 +73,23 @@ public class InterimResponseBridgeTests
         Assert.IsTrue(statusLine != null && statusLine.StartsWith("HTTP/1.1 200"),
             $"Expected HTTP/1.1 200, got: '{statusLine}'.");
 
-        while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+        var contentLength = -1;
+        var chunked = false;
+        string? headerLine;
+        while (!string.IsNullOrEmpty(headerLine = await reader.ReadLineAsync()))
         {
-            // drain response headers
+            if (headerLine.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                contentLength = int.Parse(headerLine.Substring("Content-Length:".Length).Trim());
+            else if (headerLine.StartsWith("Transfer-Encoding:", StringComparison.OrdinalIgnoreCase)
+                     && headerLine.Contains("chunked", StringComparison.OrdinalIgnoreCase))
+                chunked = true;
         }
 
-        var body = await reader.ReadToEndAsync();
+        // A finished HTTP/2 body may already be complete (Content-Length) or still open (chunked)
+        // depending on scheduling. Either framing is correct; the decoded body bytes are the check.
+        var body = contentLength >= 0 || chunked
+            ? await ReadKeepAliveBodyAsync(reader, contentLength, chunked)
+            : await reader.ReadToEndAsync();
         Assert.AreEqual("ok", body);
     }
 
