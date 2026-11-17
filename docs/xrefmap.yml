@@ -3759,6 +3759,25 @@ references:
   commentId: N:Titanium.Web.Proxy.Helpers
   fullName: Titanium.Web.Proxy.Helpers
   nameWithType: Titanium.Web.Proxy.Helpers
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+  name: InstalledProxyCleanup
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html
+  commentId: T:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+  nameWithType: InstalledProxyCleanup
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  name: ForceClear()
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_ForceClear
+  commentId: M:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear()
+  nameWithType: InstalledProxyCleanup.ForceClear()
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear*
+  name: ForceClear
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_ForceClear_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  nameWithType: InstalledProxyCleanup.ForceClear
 - uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
   name: UnixProxyBypassMapper
   href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html
@@ -9250,6 +9269,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile
   nameWithType: FirefoxCertificateTrust.TrustDefaultProfile
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
+  name: TrustInstalledProfiles(X509Certificate2, string)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustInstalledProfiles_System_Security_Cryptography_X509Certificates_X509Certificate2_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
+  name.vb: TrustInstalledProfiles(X509Certificate2, String)
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2, string)
+  fullName.vb: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2, String)
+  nameWithType: FirefoxCertificateTrust.TrustInstalledProfiles(X509Certificate2, string)
+  nameWithType.vb: FirefoxCertificateTrust.TrustInstalledProfiles(X509Certificate2, String)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles*
+  name: TrustInstalledProfiles
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustInstalledProfiles_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles
+  nameWithType: FirefoxCertificateTrust.TrustInstalledProfiles
 - uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
   name: TryClearWindowsEnterpriseRoots()
   href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryClearWindowsEnterpriseRoots
