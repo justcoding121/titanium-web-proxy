@@ -764,11 +764,14 @@ internal static class SmokeApp
 
         var conf = Path.Combine(Path.GetTempPath(), "twp-smoke-pf.conf");
         var baseRules = File.Exists("/etc/pf.conf") ? File.ReadAllText("/etc/pf.conf") : string.Empty;
+        // The runner ruleset passes outbound UDP with "quick", so a block appended
+        // after it never matches. A leading quick block wins and forces the GET
+        // back through the proxy on the fresh Safari visit.
         File.WriteAllText(
             conf,
-            baseRules
-            + "\nblock drop out inet proto udp from any to any port 443\n"
-            + "block drop out inet6 proto udp from any to any port 443\n");
+            "block drop out quick inet proto udp from any to any port 443\n"
+            + "block drop out quick inet6 proto udp from any to any port 443\n"
+            + baseRules);
         var loaded = RunCapture("sudo", "pfctl -f \"" + conf + "\"", 15000);
         Console.WriteLine("pfctl load exit=" + loaded.Code + " " + TrimOneLine(loaded.Output));
         if (loaded.Code != 0)

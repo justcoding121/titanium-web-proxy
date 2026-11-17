@@ -363,9 +363,11 @@ jobs:
           run_driver upgrade-verify --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           rm -rf "/Applications/Titanium Inspector.app"
           run_driver wipe --out "$log"
-          vol="${cand_app}/Contents/MacOS/TitaniumInspector"
-          test -x "$vol"
-          run_driver fresh --exe "$vol" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
+          # Launch the copy outside the disk image. The fresh Safari proof only
+          # recorded CONNECT while the binary was still on the mounted image.
+          ditto "${cand_app}" "/Applications/Titanium Inspector.app"
+          test -x "$installed"
+          run_driver fresh --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           detach
           trap - EXIT
           # Killing the Inspector skips its proxy restore, so NuGet and the CLI would
