@@ -28,14 +28,21 @@ internal static class UiClicks
         if (!OperatingSystem.IsMacOS())
             return new ClickResult(false, "n/a", "Move to Applications is macOS-only.");
 
+        // Install / Replace / OpenExisting use different accept labels.
+        var buttons = new[] { "Move to Applications", "Update Applications", "Open Applications copy" };
         for (var attempt = 1; attempt <= 3; attempt++)
         {
-            if (Run("osascript", """-e "tell application \"System Events\" to tell process \"TitaniumInspector\" to click button \"Move to Applications\" of window 1" """))
-                return new ClickResult(true, "osascript", null);
+            foreach (var label in buttons)
+            {
+                if (Run("osascript",
+                        $"""-e "tell application \"System Events\" to tell process \"TitaniumInspector\" to click button \"{label}\" of window 1" """))
+                    return new ClickResult(true, "osascript:" + label, null);
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(1));
         }
 
-        return new ClickResult(false, "click", "Move to Applications click failed after 3 attempts.");
+        return new ClickResult(false, "click", "DMG relocate click failed after 3 attempts.");
     }
 
     private static bool ClickLinuxToolbar()

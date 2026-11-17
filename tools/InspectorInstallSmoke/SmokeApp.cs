@@ -910,16 +910,12 @@ internal static class SmokeApp
     {
         await TrustRootAsync();
         var click = await UiClicks.ClickDecryptHttpsAsync(app.Pid, TimeSpan.FromSeconds(30));
-        var deadline = DateTime.UtcNow.AddSeconds(20);
-        while (DateTime.UtcNow < deadline)
+        // Product EnableDecryptHttps / background probe can flip decrypt off for ~12s after
+        // the first true write. Require a stable on past that window before declaring success.
+        if (await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(14)))
         {
-            if (await ReadDecryptAsync())
-            {
-                Console.WriteLine("click: " + click.How);
-                return app;
-            }
-
-            await Task.Delay(400);
+            Console.WriteLine("click: " + click.How);
+            return app;
         }
 
         if (OperatingSystem.IsWindows())
@@ -930,6 +926,33 @@ internal static class SmokeApp
         PatchDecrypt(true);
         Console.WriteLine("click: FALLBACK (settings seed)");
         return await InspectorProcess.StartAsync(exe, port);
+    }
+
+    /// <summary>
+    ///     True when <c>decryptHttps</c> becomes true and stays true for <paramref name="settle"/>
+    ///     (covers the post-enable MITM probe that can turn decrypt back off).
+    /// </summary>
+    private static async Task<bool> WaitDecryptStableAsync(TimeSpan timeout, TimeSpan settle)
+    {
+        var deadline = DateTime.UtcNow + timeout + settle;
+        DateTime? firstTrue = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await ReadDecryptAsync())
+            {
+                firstTrue ??= DateTime.UtcNow;
+                if (DateTime.UtcNow - firstTrue.Value >= settle)
+                    return true;
+            }
+            else
+            {
+                firstTrue = null;
+            }
+
+            await Task.Delay(400);
+        }
+
+        return false;
     }
 
     private static async Task<string> TrustRootAsync()
@@ -1023,13 +1046,19 @@ internal static class SmokeApp
     {
         var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.cer");
         File.WriteAllBytes(cer, ExportCer(pfx));
-        // Unrestricted trustRoot. An ssl-only policy left the thumb out of the
-        // admin trust dump and Chrome opened CONNECT tunnels with no decrypted GET.
-        // The login keychain is what a fresh Safari process evaluates in addition
-        // to the system keychain.
-        Run("sudo", $"security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
-        Run("security", $"add-trusted-cert -r trustRoot \"{cer}\"", 20000);
-        Console.WriteLine("trusted root " + thumb);
+        // Match product TrustMacSystemDetailed: System.keychain + SSL policy (-p ssl).
+        // Unrestricted trustRoot used to paper over Policy-OID dumps the product now accepts.
+        // Login keychain keeps a fresh Safari process evaluating the same SSL policies.
+        Run("sudo",
+            $"security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cer}\"",
+            20000);
+        Run("security", $"add-trusted-cert -r trustRoot -p ssl \"{cer}\"", 20000);
+        var dump = Capture("security", "dump-trust-settings -d");
+        var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
+        if (!compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "admin trust dump does not list " + thumb + " after add-trusted-cert -p ssl");
+        Console.WriteLine("trusted root " + thumb + " (ssl policy)");
     }
 
     private static void WriteFreshSettings(int port, bool decrypt)
