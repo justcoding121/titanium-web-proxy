@@ -584,6 +584,13 @@ public sealed partial class CliProcessHarness : IDisposable
 
         _process = StartProcess(ResolveFileName(), BuildArgList(args.ToArray()), env);
         await WaitForOutputAsync("Titanium proxy running", TimeSpan.FromSeconds(45));
+        if (!OperatingSystem.IsWindows())
+        {
+            // "Titanium proxy running" is printed before PosixSignalRegistration.Create(SIGTERM).
+            // sighup-handler-registered is printed only after that handler exists. A SIGTERM
+            // in the gap uses the default terminate action, so /readyz never returns 503.
+            await WaitForOutputAsync("sighup-handler-registered", TimeSpan.FromSeconds(15));
+        }
     }
 
     public async Task WaitForOutputAsync(string substring, TimeSpan timeout)
@@ -669,11 +676,28 @@ public sealed partial class CliProcessHarness : IDisposable
             return;
         }
 
-        // SIGTERM = 15
-        if (NativeKill(_process.Id, 15) != 0)
+        // SIGTERM = 15. A hard kill skips BeginDrain, so /readyz never returns 503.
+        // Retry a busy pid; do not fall back to Process.Kill.
+        var errno = 0;
+        for (var attempt = 1; attempt <= 5; attempt++)
         {
-            TryKill(_process);
+            if (_process.HasExited)
+            {
+                throw new InvalidOperationException(
+                    "CLI exited before SIGTERM was delivered. " + StdOut + StdErr);
+            }
+
+            if (NativeKill(_process.Id, 15) == 0)
+            {
+                return;
+            }
+
+            errno = Marshal.GetLastPInvokeError();
+            Thread.Sleep(50);
         }
+
+        throw new InvalidOperationException(
+            $"kill(SIGTERM) failed for pid {_process.Id} (errno {errno}).");
     }
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]

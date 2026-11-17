@@ -310,6 +310,15 @@ internal static class SmokeApp
             var path = BrowserPaths.Resolve(name);
             if (path is null)
                 return Fail(1, name + " is not installed");
+            if (name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+            {
+                // Chrome already proved the root. Safari still misses the decrypted GET when
+                // a leftover WebKit process or a cached HTTP/3 alternative service wins.
+                // Re-trust, let trustd observe it, then relaunch until a GET lands.
+                await TrustRootAsync();
+                await Task.Delay(2000);
+            }
+
             var urls = name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && browsers.Length == 1 && false
                 ? new[] { "https://example.com/" }
                 : new[] { "https://example.com/", "https://www.google.com/" };
@@ -327,7 +336,8 @@ internal static class SmokeApp
         {
             var before = DateTime.UtcNow;
             using var launched = LaunchBrowser(name, browserPath, url);
-            var ok = await WaitForHarAsync(before, url, TimeSpan.FromSeconds(60), () =>
+            var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
+            var ok = await WaitForHarAsync(before, url, safari ? TimeSpan.FromSeconds(90) : TimeSpan.FromSeconds(60), () =>
             {
                 Console.WriteLine("relaunch " + name + " " + url);
                 if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
@@ -335,16 +345,14 @@ internal static class SmokeApp
                     KillLinuxFamily(name);
                     TryGtkLaunch(name, url);
                 }
-                else if (OperatingSystem.IsMacOS()
-                         && name.Equals("safari", StringComparison.OrdinalIgnoreCase))
+                else if (safari)
                 {
-                    SystemProxyBrowserCapture.KillSafariProcesses();
-                    SystemProxyBrowserCapture.StartSafari(url);
+                    TryRelaunchSafari(url);
                 }
                 else if (OperatingSystem.IsMacOS()
                          && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
                     TryStartAgain(browserPath, url);
-            });
+            }, safari ? TimeSpan.FromSeconds(12) : null);
             launched.Kill();
             if (!ok)
             {
@@ -362,7 +370,8 @@ internal static class SmokeApp
     {
         if (name.Equals("safari", StringComparison.OrdinalIgnoreCase))
         {
-            SystemProxyBrowserCapture.StartSafari(url);
+            SystemProxyBrowserCapture.KillSafariProcesses();
+            SystemProxyBrowserCapture.StartSafari(url, fresh: true);
             return new BrowserLaunch(null, safari: true);
         }
 
@@ -701,25 +710,49 @@ internal static class SmokeApp
         }
     }
 
-    private static async Task<bool> WaitForHarAsync(DateTime notBeforeUtc, string url, TimeSpan timeout, Action? nudge = null)
+    private static async Task<bool> WaitForHarAsync(
+        DateTime notBeforeUtc, string url, TimeSpan timeout, Action? nudge = null, TimeSpan? nudgeEvery = null)
     {
         var host = new Uri(url).Host;
         var deadline = DateTime.UtcNow + timeout;
-        var nudgeAt = DateTime.UtcNow.AddSeconds(15);
-        var nudged = false;
+        var nudgeAt = DateTime.UtcNow.AddSeconds(12);
         while (DateTime.UtcNow < deadline)
         {
             if (HarHasDecryptedGet(notBeforeUtc, host))
                 return true;
-            if (!nudged && nudge is not null && DateTime.UtcNow >= nudgeAt)
+            if (nudge is not null && DateTime.UtcNow >= nudgeAt)
             {
-                nudged = true;
                 nudge();
+                nudgeAt = nudgeEvery is null ? DateTime.MaxValue : DateTime.UtcNow + nudgeEvery.Value;
             }
+
             await Task.Delay(500);
         }
 
         return HarHasDecryptedGet(notBeforeUtc, host);
+    }
+
+    /// <summary>
+    /// Quit Safari completely, re-apply the system root, and open the URL with <c>-F</c>.
+    /// One relaunch was not enough when the first window only logged CONNECT.
+    /// </summary>
+    private static void TryRelaunchSafari(string url)
+    {
+        try
+        {
+            var pfx = Path.Combine(ProfileDir(), "rootCert.pfx");
+            if (File.Exists(pfx))
+                TrustMac(pfx, ThumbFromPfx());
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("safari re-trust failed: " + ex.Message);
+        }
+
+        // trustd does not always apply a keychain write to a process started in the same tick.
+        Thread.Sleep(1500);
+        SystemProxyBrowserCapture.KillSafariProcesses();
+        SystemProxyBrowserCapture.StartSafari(url, fresh: true);
     }
 
     private static bool HarHasDecryptedGet(DateTime notBeforeUtc, string host)
@@ -955,11 +988,15 @@ internal static class SmokeApp
     {
         var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.cer");
         File.WriteAllBytes(cer, ExportCer(pfx));
-        Run("sudo", $"security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
+        // System trust is what Chromium reads. Safari also evaluates the login
+        // keychain, and an SSL policy makes trustd apply the new root to :443
+        // before the next WebKit.Networking process starts.
+        Run("sudo", $"security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
+        Run("security", $"add-trusted-cert -r trustRoot -p ssl \"{cer}\"", 20000);
         var dump = Capture("security", "dump-trust-settings -d");
         var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
         if (!compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
-            Run("security", $"add-trusted-cert -r trustRoot \"{cer}\"", 20000);
+            Console.WriteLine("trust dump did not list " + thumb);
     }
 
     private static void WriteFreshSettings(int port, bool decrypt)
