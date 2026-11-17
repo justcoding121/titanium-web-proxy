@@ -681,6 +681,14 @@ public sealed class InterceptionService : IDisposable
     /// Optional gate evaluated under the system-proxy lock before mutating OS settings.
     /// Used to cancel a superseded optimistic enable/disable (e.g. Stop while enable is in flight).
     /// </param>
+    /// <summary>
+    ///     Clears localhost system proxy entries aimed at dead ports (hard kill / power loss).
+    ///     Safe before capture starts.
+    /// </summary>
+    public SystemProxyChangeResult ClearOrphanedLocalSystemProxy(
+        Func<string, int, bool>? isListening = null) =>
+        _systemProxy.ClearOrphanedLocalSystemProxy(isListening);
+
     public bool SetSystemProxy(bool enable, InspectorSettings? settings = null, Func<bool>? stillWanted = null)
     {
         LastSystemProxyError = null;

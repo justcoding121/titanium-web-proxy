@@ -231,6 +231,38 @@ public class MacOsSystemProxyBackendTests
         result = new ProcessRunResult(0, "Auto Proxy Discovery: On\n", "");
         Assert.IsTrue(MacOsSystemProxyBackend.ParseAutoDiscovery(result));
     }
+
+    [TestMethod]
+    public void GetOrphanedLocalProxyProtocols_WhenDeadLocalPort_ReportsHttpAndHttps()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
+        runner.When("networksetup", "-getwebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        runner.When("networksetup", "-getsecurewebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
+
+        var orphaned = backend.GetOrphanedLocalProxyProtocols((_, _) => false);
+
+        Assert.AreEqual(ProxyProtocolType.Http | ProxyProtocolType.Https, orphaned);
+    }
+
+    [TestMethod]
+    public void GetOrphanedLocalProxyProtocols_WhenPortListening_IsNone()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
+        runner.When("networksetup", "-getwebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        runner.When("networksetup", "-getsecurewebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
+
+        var orphaned = backend.GetOrphanedLocalProxyProtocols((_, _) => true);
+
+        Assert.AreEqual(ProxyProtocolType.None, orphaned);
+    }
 }
 
 [TestClass]

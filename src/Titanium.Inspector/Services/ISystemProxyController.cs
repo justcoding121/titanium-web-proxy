@@ -8,6 +8,12 @@ public interface ISystemProxyController
 {
     SystemProxyChangeResult SetAsSystemProxy(ProxyServer proxy, ExplicitProxyEndPoint endPoint, InspectorSettings settings);
     SystemProxyChangeResult RestoreOriginalProxySettings(ProxyServer proxy);
+
+    /// <summary>
+    ///     Clears localhost system proxy entries aimed at ports that are not listening
+    ///     (hard-kill / power-loss leftovers). Safe before capture starts.
+    /// </summary>
+    SystemProxyChangeResult ClearOrphanedLocalSystemProxy(Func<string, int, bool>? isListening = null);
 }
 
 /// <summary>Production controller that configures the OS system proxy via <see cref="ProxyServer"/>.</summary>
@@ -21,6 +27,9 @@ public sealed class ProxyServerSystemProxyController : ISystemProxyController
 
     public SystemProxyChangeResult RestoreOriginalProxySettings(ProxyServer proxy) =>
         proxy.TryRestoreOriginalProxySettings();
+
+    public SystemProxyChangeResult ClearOrphanedLocalSystemProxy(Func<string, int, bool>? isListening = null) =>
+        ProxyServer.TryClearOrphanedLocalSystemProxy(isListening);
 }
 
 /// <summary>Backward-compatible alias for <see cref="ProxyServerSystemProxyController"/>.</summary>
@@ -33,6 +42,9 @@ public sealed class WinInetSystemProxyController : ISystemProxyController
 
     public SystemProxyChangeResult RestoreOriginalProxySettings(ProxyServer proxy) =>
         _inner.RestoreOriginalProxySettings(proxy);
+
+    public SystemProxyChangeResult ClearOrphanedLocalSystemProxy(Func<string, int, bool>? isListening = null) =>
+        _inner.ClearOrphanedLocalSystemProxy(isListening);
 }
 
 /// <summary>Test double that records calls without touching OS proxy settings.</summary>
@@ -40,6 +52,7 @@ public sealed class RecordingSystemProxyController : ISystemProxyController
 {
     public int SetCount { get; private set; }
     public int RestoreCount { get; private set; }
+    public int ClearOrphanedCount { get; private set; }
     public bool LastEnabled { get; private set; }
     public InspectorSettings? LastSettings { get; private set; }
 
@@ -69,5 +82,11 @@ public sealed class RecordingSystemProxyController : ISystemProxyController
         if (FailRestore)
             return SystemProxyChangeResult.Fail("recorded restore failure");
         return SystemProxyChangeResult.Ok("System proxy restore recorded");
+    }
+
+    public SystemProxyChangeResult ClearOrphanedLocalSystemProxy(Func<string, int, bool>? isListening = null)
+    {
+        ClearOrphanedCount++;
+        return SystemProxyChangeResult.Ok("Orphaned local system proxy clear recorded");
     }
 }

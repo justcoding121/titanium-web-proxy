@@ -861,6 +861,7 @@ public static class UpdateApplyHelper
         string version,
         string channel)
     {
+        var plistVersion = StripPrereleaseSuffix(version);
         var sb = new StringBuilder();
         sb.AppendLine("#!/usr/bin/env bash");
         sb.AppendLine("set -euo pipefail");
@@ -868,6 +869,8 @@ public static class UpdateApplyHelper
         sb.AppendLine($"package={BashQuote(packagePath)}");
         sb.AppendLine($"install_dir={BashQuote(installDir)}");
         sb.AppendLine($"relaunch={BashQuote(relaunchPath)}");
+        sb.AppendLine($"version={BashQuote(version)}");
+        sb.AppendLine($"plist_version={BashQuote(plistVersion)}");
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
@@ -884,6 +887,15 @@ public static class UpdateApplyHelper
         sb.AppendLine("  fi");
         sb.AppendLine("  chmod +x \"$macos_dir/TitaniumInspector\" 2>/dev/null || true");
         sb.AppendLine("  rm -rf \"$tmp\"");
+        // Keep Finder / MacAppRelocation version in sync with the applied release
+        // (zip only replaces Contents/MacOS; Info.plist would otherwise lag).
+        sb.AppendLine("  plist=\"$relaunch/Contents/Info.plist\"");
+        sb.AppendLine("  if [[ -f \"$plist\" ]] && [[ -x /usr/libexec/PlistBuddy ]]; then");
+        sb.AppendLine("    /usr/libexec/PlistBuddy -c \"Set :CFBundleShortVersionString $plist_version\" \"$plist\" 2>/dev/null \\");
+        sb.AppendLine("      || /usr/libexec/PlistBuddy -c \"Add :CFBundleShortVersionString string $plist_version\" \"$plist\"");
+        sb.AppendLine("    /usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $plist_version\" \"$plist\" 2>/dev/null \\");
+        sb.AppendLine("      || /usr/libexec/PlistBuddy -c \"Add :CFBundleVersion string $plist_version\" \"$plist\"");
+        sb.AppendLine("  fi");
         sb.AppendLine("  open \"$relaunch\" || true");
         sb.AppendLine("else");
         sb.AppendLine("  cp -a \"$tmp\"/. \"$install_dir\"/");
@@ -893,8 +905,20 @@ public static class UpdateApplyHelper
         sb.AppendLine("    (cd \"$install_dir\" && nohup \"$relaunch\" >/dev/null 2>&1 &)");
         sb.AppendLine("  fi");
         sb.AppendLine("fi");
-        sb.AppendLine($"echo 'Updated Inspector to {version} ({channel}).'");
+        sb.AppendLine($"echo 'Updated Inspector to '\"$version\"' ({channel}).'");
         return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Same as release packaging (<c>RELEASE_VERSION%%-*</c>): drop prerelease so
+    ///     <c>8.0.5-beta</c> becomes <c>8.0.5</c> for Info.plist.
+    /// </summary>
+    internal static string StripPrereleaseSuffix(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+            return version;
+        var dash = version.IndexOf('-');
+        return dash > 0 ? version[..dash] : version;
     }
 
     private static string EscapePs(string value) => value.Replace("'", "''", StringComparison.Ordinal);

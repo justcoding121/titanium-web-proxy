@@ -380,6 +380,22 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         return stale;
     }
 
+    public ProxyProtocolType GetOrphanedLocalProxyProtocols(Func<string, int, bool> isListening)
+    {
+        ArgumentNullException.ThrowIfNull(isListening);
+        var orphaned = ProxyProtocolType.None;
+
+        if (HasGnome())
+            orphaned |= GetGnomeOrphanedLocalProxyProtocols(isListening);
+
+        orphaned |= GetEnvOrphanedLocalProxyProtocols(
+            isListening, ["http_proxy", "HTTP_PROXY"], ProxyProtocolType.Http);
+        orphaned |= GetEnvOrphanedLocalProxyProtocols(
+            isListening, ["https_proxy", "HTTPS_PROXY"], ProxyProtocolType.Https);
+
+        return orphaned;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -785,6 +801,26 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         return stale;
     }
 
+    private ProxyProtocolType GetGnomeOrphanedLocalProxyProtocols(Func<string, int, bool> isListening)
+    {
+        var orphaned = ProxyProtocolType.None;
+        var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
+        if (!mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
+            return orphaned;
+
+        var httpHost = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? "";
+        var httpPort = ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port"));
+        if (httpPort > 0 && UnixProxyBypassMapper.IsLocalHost(httpHost) && !isListening(httpHost, httpPort))
+            orphaned |= ProxyProtocolType.Http;
+
+        var httpsHost = GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? "";
+        var httpsPort = ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port"));
+        if (httpsPort > 0 && UnixProxyBypassMapper.IsLocalHost(httpsHost) && !isListening(httpsHost, httpsPort))
+            orphaned |= ProxyProtocolType.Https;
+
+        return orphaned;
+    }
+
     private static ProxyProtocolType GetEnvStaleLocalProxyProtocols(
         IReadOnlyCollection<int> ownedPorts, string[] keys, ProxyProtocolType protocol)
     {
@@ -797,6 +833,22 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         }
 
         return stale;
+    }
+
+    private static ProxyProtocolType GetEnvOrphanedLocalProxyProtocols(
+        Func<string, int, bool> isListening, string[] keys, ProxyProtocolType protocol)
+    {
+        var orphaned = ProxyProtocolType.None;
+        foreach (var key in keys)
+        {
+            if (TryParseProxyUri(Environment.GetEnvironmentVariable(key), out var host, out var port) &&
+                port > 0 &&
+                UnixProxyBypassMapper.IsLocalHost(host) &&
+                !isListening(host, port))
+                orphaned |= protocol;
+        }
+
+        return orphaned;
     }
 
     private static bool TryParseProxyUri(string? value, out string host, out int port)

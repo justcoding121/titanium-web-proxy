@@ -100,12 +100,18 @@ public class UpdateServiceTests
             "/tmp/a.zip",
             "/Applications/Titanium Inspector.app/Contents/MacOS",
             "/Applications/Titanium Inspector.app",
-            "7.1.0",
+            "7.1.0-beta",
             "Stable");
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "ditto");
         StringAssert.Contains(script, "Contents/MacOS");
         StringAssert.Contains(script, "open");
+        StringAssert.Contains(script, "PlistBuddy");
+        StringAssert.Contains(script, "CFBundleShortVersionString");
+        StringAssert.Contains(script, "CFBundleVersion");
+        // Packaging strips the prerelease suffix for Info.plist.
+        StringAssert.Contains(script, "plist_version='7.1.0'");
+        Assert.AreEqual("7.1.0", UpdateApplyHelper.StripPrereleaseSuffix("7.1.0-beta"));
     }
 
     [TestMethod]

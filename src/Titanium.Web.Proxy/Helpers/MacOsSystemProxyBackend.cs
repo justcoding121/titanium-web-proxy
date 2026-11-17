@@ -202,6 +202,26 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         return stale;
     }
 
+    public ProxyProtocolType GetOrphanedLocalProxyProtocols(Func<string, int, bool> isListening)
+    {
+        ArgumentNullException.ThrowIfNull(isListening);
+        var orphaned = ProxyProtocolType.None;
+        foreach (var service in ListNetworkServices())
+        {
+            var http = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getwebproxy \"{Escape(service)}\""));
+            if (http.Enabled && http.Port > 0 && UnixProxyBypassMapper.IsLocalHost(http.Host)
+                && !isListening(http.Host, http.Port))
+                orphaned |= ProxyProtocolType.Http;
+
+            var https = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getsecurewebproxy \"{Escape(service)}\""));
+            if (https.Enabled && https.Port > 0 && UnixProxyBypassMapper.IsLocalHost(https.Host)
+                && !isListening(https.Host, https.Port))
+                orphaned |= ProxyProtocolType.Https;
+        }
+
+        return orphaned;
+    }
+
     public void Dispose()
     {
         if (_disposed) return;

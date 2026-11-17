@@ -801,6 +801,21 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         // Prefer the disk snapshot from LoadFromSettings for this first-start decision.
         RestoreLaunchPreferencesIfClobbered();
 
+        // Hard kill / power loss leave localhost system proxy pointing at a dead port.
+        // Clear those before capture so browsing works even when auto-start is off.
+        try
+        {
+            var orphan = _interception.ClearOrphanedLocalSystemProxy();
+            if (orphan.Succeeded)
+                InspectorUxTrace.Event("Proxy.OrphanClear", orphan.Message ?? "ok");
+            else
+                InspectorUxTrace.Event("Proxy.OrphanClearFailed", orphan.Message ?? "failed");
+        }
+        catch (Exception ex)
+        {
+            InspectorUxTrace.Event("Proxy.OrphanClearFailed", Truncate(ex.Message, 120));
+        }
+
         if (_settings.Current.PendingPostUpdateTrustCheck)
         {
             _settings.Current.PendingPostUpdateTrustCheck = false;
