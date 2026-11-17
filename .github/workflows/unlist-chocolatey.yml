@@ -1,0 +1,33 @@
+name: unlist-chocolatey
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unlist:
+    runs-on: windows-latest
+    steps:
+      - name: Unlist unapproved 8.0.3 packages
+        env:
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:CHOCOLATEY_API_KEY)) {
+            throw 'CHOCOLATEY_API_KEY repository secret is not set.'
+          }
+          foreach ($id in @('titanium-cli', 'titanium-inspector')) {
+            $uri = "https://push.chocolatey.org/api/v2/package/$id/8.0.3"
+            try {
+              Invoke-WebRequest -Method Delete -Uri $uri -Headers @{ 'X-NuGet-ApiKey' = $env:CHOCOLATEY_API_KEY } -UseBasicParsing | Out-Null
+              Write-Host "Unlisted $id 8.0.3"
+            } catch {
+              $code = 0
+              if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+              Write-Host "Unlist $id 8.0.3 failed with status $code"
+              exit 1
+            }
+          }
