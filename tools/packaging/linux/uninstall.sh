@@ -10,6 +10,9 @@ HICOLOR_ROOT="${PREFIX}/share/icons/hicolor"
 ICON_ID="titanium-inspector"
 
 echo "Removing Titanium Inspector from ${PREFIX} ..."
+if [[ -x "${APP_DIR}/TitaniumInspector" ]]; then
+  "${APP_DIR}/TitaniumInspector" --clear-system-proxy || true
+fi
 rm -f "${BIN_DIR}/titanium-inspector"
 rm -f "${APPS_DIR}/TitaniumInspector.desktop"
 for size in 16 32 48 128 256 512; do

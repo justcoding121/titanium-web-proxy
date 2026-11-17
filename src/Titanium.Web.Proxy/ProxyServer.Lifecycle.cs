@@ -61,7 +61,16 @@ public partial class ProxyServer : IDisposable
         {
             try
             {
-                var ownedPorts = ProxyEndPoints.Select(x => x.Port).ToHashSet();
+                // The fail-open helper holds the port after a crash so old browser hooks
+                // still connect. It is not a live Inspector. Stop it before deciding
+                // whether the port is taken, then clear hooks only when nothing real
+                // is listening.
+                foreach (var port in ProxyEndPoints.Select(x => x.Port))
+                    LinuxProxyFailOpen.StopIfCoveringPort(port);
+
+                // A port that still accepts connections belongs to a live Inspector. Clearing
+                // it here is what a second launch did before its own bind failed.
+                var ownedPorts = PortsEligibleForStaleProxyClear(ProxyEndPoints.Select(x => x.Port));
                 var protocolToRemove = SystemProxySettingsManager.GetStaleLocalProxyProtocols(ownedPorts);
                 if (protocolToRemove != ProxyProtocolType.None)
                     SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);

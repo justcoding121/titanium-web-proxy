@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Titanium Inspector proxy cleanup
+Comment=Drop leftover loopback proxy settings when Inspector is not running
+Exec=/usr/lib/titanium-inspector/clear-proxy-if-stopped.sh
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Initialization

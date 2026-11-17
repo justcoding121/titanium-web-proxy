@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http3;
 
 namespace Titanium.Inspector;
@@ -11,6 +13,12 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args.Any(static a => string.Equals(a, "--clear-system-proxy", StringComparison.Ordinal)))
+        {
+            InstalledProxyCleanup.ForceClear();
+            return;
+        }
+
         // Framework-dependent macOS Debug: System.Net.Quic does not search BaseDirectory for
         // libmsquic; relaunch with DYLD_FALLBACK when natives were copied beside the apphost.
         Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);

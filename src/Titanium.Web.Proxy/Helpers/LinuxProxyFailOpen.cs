@@ -14,6 +14,37 @@ internal static class LinuxProxyFailOpen
     private const string PidFileName = "fail-open-proxy.pid";
     private const string ScriptFileName = "fail-open-proxy.py";
 
+    /// <summary>
+    ///     Stop the helper only when it is the process listening for this Inspector port.
+    ///     A real Inspector on that port is left alone.
+    /// </summary>
+    internal static void StopIfCoveringPort(int port)
+    {
+        if (port <= 0)
+            return;
+        try
+        {
+            var pidPath = PidPath();
+            if (pidPath is null || !File.Exists(pidPath))
+                return;
+            if (!int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) || pid <= 1)
+                return;
+            var cmdPath = "/proc/" + pid + "/cmdline";
+            if (!File.Exists(cmdPath))
+                return;
+            var cmd = File.ReadAllText(cmdPath).Replace('\0', ' ');
+            if (!cmd.Contains("fail-open-proxy.py", StringComparison.Ordinal))
+                return;
+            if (!cmd.Contains(port.ToString(), StringComparison.Ordinal))
+                return;
+            Stop();
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     internal static void Stop()
     {
         try

@@ -60,7 +60,10 @@ internal static class MacAppRelocation
     /// </summary>
     [SupportedOSPlatform("macos")]
     public static bool ShouldOfferMove(InspectorSettings settings) =>
-        ShouldOfferMove(settings, OperatingSystem.IsMacOS(), IsRunningFromDmgVolume());
+        ShouldOfferMove(
+            settings,
+            OperatingSystem.IsMacOS(),
+            IsRunningFromDmgVolume());
 
     /// <summary>Same decision with the OS and DMG result supplied by the caller (tests).</summary>
     internal static bool ShouldOfferMove(InspectorSettings settings, bool isMacOs, bool runningFromDmg)

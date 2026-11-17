@@ -459,6 +459,10 @@ public class FirefoxCertificateTrustTests
             """;
         var path = FirefoxCertificateTrust.ParseDefaultProfilePath(ini);
         Assert.AreEqual("Profiles/abcd.default-release", path);
+        var all = FirefoxCertificateTrust.ParseProfileEntries(ini);
+        Assert.AreEqual(2, all.Count);
+        Assert.AreEqual("Profiles/abcd.default-release", all[0].Path);
+        Assert.AreEqual("Profiles/old.default", all[1].Path);
     }
 
     [TestMethod]

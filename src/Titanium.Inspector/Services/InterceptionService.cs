@@ -1184,13 +1184,25 @@ public sealed class InterceptionService : IDisposable
         InspectorUxTrace.Event(
             "TrustFirefox.EnterpriseRootsUserPref",
             $"ok={pref.Succeeded} kind={pref.Kind} step={FirefoxCertificateTrust.LastEnterpriseRootsStep}");
+
+        // Linux/macOS Firefox keeps its own NSS database. Enterprise-roots does not
+        // make that profile trust ~/.pki/nssdb, so import the CA into every profile.
+        var nss = FirefoxCertificateTrust.TrustInstalledProfiles(cert, RootCertificateName);
+        InspectorUxTrace.Event(
+            "TrustFirefox.InstalledProfiles",
+            $"ok={nss.Succeeded} kind={nss.Kind} msg={TruncateTrustMsg(nss.Message)}");
+        if (nss.Succeeded)
+        {
+            LogTrustFirefoxOutcome(nss);
+            return nss;
+        }
+
         if (pref.Succeeded)
         {
             LogTrustFirefoxOutcome(pref);
             return pref;
         }
 
-        var nss = FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
         LogTrustFirefoxOutcome(nss);
         return nss;
     }

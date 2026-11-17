@@ -127,6 +127,10 @@ jobs:
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\upgrade.log`""
           & $driver upgrade-verify --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
           if ($LASTEXITCODE -ne 0) { throw "upgrade-verify failed $LASTEXITCODE" }
+          # An older MSI must not replace the newer install (same as a Mac disk image).
+          $down = Start-Process msiexec -ArgumentList "/i `"$prev`" /qn /norestart /l*v `"$log\downgrade.log`"" -PassThru
+          if (-not $down.WaitForExit(480000)) { throw "msiexec downgrade timed out" }
+          if ($down.ExitCode -eq 0 -or $down.ExitCode -eq 3010) { throw "older MSI replaced the newer install" }
           Invoke-Msi "/x `"$cand`" /qn /norestart /l*v `"$log\uninstall.log`""
           & $driver wipe --out $log
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\fresh-install.log`""
@@ -166,7 +170,7 @@ jobs:
           set -euo pipefail
           sudo rm -rf /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
           sudo apt-get update
-          sudo apt-get install -y xvfb xdotool libnss3-tools curl ca-certificates wget gnupg rsync imagemagick libnuma1 dbus libgtk-3-bin
+          sudo apt-get install -y xvfb xdotool libnss3-tools curl ca-certificates wget gnupg rsync imagemagick libnuma1 dbus libgtk-3-bin zenity
           sudo install -d -m 0755 /etc/apt/keyrings
           wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | sudo tee /etc/apt/keyrings/packages.mozilla.org.asc >/dev/null
           echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | sudo tee /etc/apt/sources.list.d/mozilla.list >/dev/null
@@ -219,10 +223,14 @@ jobs:
           cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titanium-inspector-*.png "$out/"
           chmod +x tools/packaging/linux/build-deb-rpm.sh
           ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-x64
+          cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
+          prev_ver=$(dpkg-deb -f artifacts/prev/TitaniumInspector-linux-x64.deb Version)
+          cand_ver=$(dpkg-deb -f "$cand" Version)
+          echo "previous ${prev_ver} candidate ${cand_ver}"
+          dpkg --compare-versions "$cand_ver" gt "$prev_ver"
           dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
           driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
           chmod +x "$driver"
-          cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
           sudo dpkg -i artifacts/prev/TitaniumInspector-linux-x64.deb || sudo apt-get install -y -f
           test -x /opt/titanium-inspector/TitaniumInspector
           log="${RUNNER_TEMP}/install-smoke"
@@ -236,9 +244,64 @@ jobs:
             return "${code}"
           }
           run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log"
-          sudo dpkg -i "$cand" || sudo apt-get install -y -f
+          mkdir -p "$log/bin"
+          printf '%s\n' '#!/bin/bash' 'exit 0' > "$log/bin/zenity"
+          chmod +x "$log/bin/zenity"
+          PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh "$cand"
+          test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
           run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
+          PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh artifacts/prev/TitaniumInspector-linux-x64.deb
+          test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
+          sudo dpkg -i "$cand" || sudo apt-get install -y -f
           sudo dpkg -r titanium-inspector
+          for policy in \
+            /etc/opt/chrome/policies/managed/titanium-inspector-proxy.json \
+            /etc/chromium/policies/managed/titanium-inspector-proxy.json \
+            /etc/opt/edge/policies/managed/titanium-inspector-proxy.json \
+            /etc/brave/policies/managed/titanium-inspector-proxy.json \
+            /etc/opera/policies/managed/titanium-inspector-proxy.json
+          do
+            if [[ -f "${policy}" ]]; then
+              echo "proxy policy left behind: ${policy}" >&2
+              exit 1
+            fi
+          done
+          if command -v gsettings >/dev/null; then
+            mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
+            mode="${mode//\'/}"
+            if [[ -n "${mode}" && "${mode}" != "none" ]]; then
+              echo "proxy mode still ${mode} after uninstall" >&2
+              exit 1
+            fi
+          fi
+          python3 -c 'import os,signal;exec("def exe(p):\n try:\n  return open(\"/proc/%s/cmdline\"%p,\"rb\").read().split(b\"\\0\",1)[0]\n except OSError:\n  return b\"\"\nfor p in os.listdir(\"/proc\"):\n if p.isdigit() and exe(p)==b\"/opt/titanium-inspector/TitaniumInspector\":\n  os.kill(int(p), signal.SIGTERM)\n")'
+          clear_home="${RUNNER_TEMP}/clear-home"
+          rm -rf "$clear_home"
+          mkdir -p "$clear_home/.config/environment.d" \
+            "$clear_home/.mozilla/firefox/test.default" \
+            "$clear_home/.config/google-chrome/policies/managed" \
+            "$clear_home/.config/TitaniumInspector"
+          printf '%s\n' 'http_proxy=http://127.0.0.1:8866' > "$clear_home/.config/environment.d/90-titanium-inspector-proxy.conf"
+          printf '%s\n' 'user_pref("titanium.inspector.proxy.managed", true);' 'user_pref("network.proxy.type", 1);' \
+            > "$clear_home/.mozilla/firefox/test.default/prefs.js"
+          echo '{}' > "$clear_home/.config/google-chrome/policies/managed/titanium-inspector-proxy.json"
+          sleep 120 &
+          keep=$!
+          echo "$keep" > "$clear_home/.config/TitaniumInspector/fail-open-proxy.pid"
+          env http_proxy=http://127.0.0.1:8866 sleep 120 &
+          holder=$!
+          HOME="$clear_home" tools/packaging/linux/clear-proxy-if-stopped.sh
+          kill -0 "$keep"
+          test ! -f "$clear_home/.config/environment.d/90-titanium-inspector-proxy.conf"
+          test ! -f "$clear_home/.config/google-chrome/policies/managed/titanium-inspector-proxy.json"
+          grep -q 'network.proxy.type", 5' "$clear_home/.mozilla/firefox/test.default/prefs.js"
+          kill "$holder" || true
+          wait "$holder" || true
+          HOME="$clear_home" tools/packaging/linux/clear-proxy-if-stopped.sh
+          if kill -0 "$keep" 2>/dev/null; then
+            echo "login script left the helper up after nothing still used the proxy" >&2
+            exit 1
+          fi
           run_driver wipe --out "$log"
           sudo dpkg -i "$cand" || sudo apt-get install -y -f
           run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"

@@ -5,14 +5,16 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Text.Json;
+using System.Threading;
 using Titanium.Web.Proxy.Models;
 
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Linux system proxy: GNOME gsettings + KDE kwriteconfig + process/session http(s)_proxy
-///     + Chromium launch hooks. Ubuntu 24.04 libproxy often ignores gsettings and returns DIRECT
-///     unless http_proxy is set; Chrome also needs a full quit/relaunch to pick up hooks.
+///     Linux system proxy: GNOME gsettings + KDE kwriteconfig + this process's http(s)_proxy
+///     + browser launch hooks. Session-wide environment.d and systemd --user proxy variables
+///     are not written; they survive logout and point the next boot at a dead port.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
@@ -26,6 +28,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private const string DbusSessionBusAddress = "DBUS_SESSION_BUS_ADDRESS";
     private const string SessionEnvDropInFileName = "90-titanium-inspector-proxy.conf";
     private const string ConfigDirName = ".config";
+    private const string InspectorConfigDirName = "TitaniumInspector";
+    private const string ProxySnapshotFileName = "proxy-snapshot.json";
 
     private static readonly string[] EnvKeys =
     [
@@ -40,7 +44,10 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private bool _hasSnapshot;
     private bool _disposed;
     private bool _dbusSanitized;
-    private bool _sessionEnvApplied;
+    private Timer? _externalWatch;
+    private string? _watchHost;
+    private int _watchPort;
+    private int _watchBusy;
     private readonly EventHandler _processExitHandler;
     private readonly UnhandledExceptionEventHandler _unhandledExceptionHandler;
     private readonly List<PosixSignalRegistration> _posixSignals = new();
@@ -94,10 +101,13 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (!gnome && !kde && !hooksApplied && !sessionEnvApplied)
         {
             throw new InvalidOperationException(
-                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, writable " +
-                "Chrome/Chromium desktop/policy files, or a user session environment; only this " +
-                "process's http(s)_proxy environment was updated.");
+                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, or writable " +
+                "Chrome/Chromium desktop/policy files; only this process's http(s)_proxy " +
+                "environment was updated.");
         }
+
+        if (gnome || kde || hooksApplied)
+            StartExternalProxyWatch(hostname, port);
     }
 
     private void TryPrepareBrowserLaunchHooks(string hostname, int port, string? proxyOverride)
@@ -166,15 +176,23 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private bool TryApplySessionEnvironment(
         string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
-        // libproxy 0.5 on Ubuntu often ignores gsettings; publish http_proxy to the user session too.
+        // Do not publish http_proxy into the user session. environment.d is loaded at
+        // the next login, before Inspector starts, and systemd --user keeps the same
+        // variables for every new process. GNOME/KDE plus browser hooks are the proxy.
+        _ = hostname;
+        _ = port;
+        _ = protocolType;
+        _ = proxyOverride;
         try
         {
-            return ApplyUserSessionProxyEnvironment(hostname, port, protocolType, proxyOverride);
+            ClearUserSessionProxyEnvironment();
         }
         catch
         {
-            return false;
+            // best-effort removal of a file written by an older build
         }
+
+        return false;
     }
 
     private bool TryCommitBrowserLaunchHooks(string hostname, int port, string? proxyOverride)
@@ -195,6 +213,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
     public void RemoveProxy(ProxyProtocolType protocolType, bool saveOriginalConfig = true)
     {
+        StopExternalProxyWatch();
         try
         {
             if (saveOriginalConfig) EnsureSnapshot();
@@ -268,8 +287,116 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         RemoveProxy(ProxyProtocolType.AllHttp, saveOriginalConfig: false);
     }
 
+    /// <summary>
+    ///     Drop GNOME/KDE/session proxy and browser launch hooks without a snapshot.
+    ///     Package removal calls this after the Inspector process is already gone, so
+    ///     <see cref="RestoreOriginalSettings"/> cannot run.
+    /// </summary>
+    public void ForceClearInstalledProxy()
+    {
+        StopExternalProxyWatch();
+        // A crash leaves the pre-proxy values on disk. Put those back when the desktop
+        // is still aimed at this machine; otherwise only the extra browser hooks go.
+        var restored = false;
+        try
+        {
+            if (TryLoadDiskSnapshot() && GnomeOrKdePointsAtLoopback())
+            {
+                ApplyLoadedSnapshot();
+                restored = true;
+            }
+        }
+        catch
+        {
+            // fall through to the loopback-only clear
+        }
+
+        _hasSnapshot = false;
+        _gnome = null;
+        _kde = null;
+        DeleteDiskSnapshot();
+
+        // Only flip GNOME/KDE off when they still point at this machine. A power loss
+        // leaves that loopback entry behind; a proxy the user set to some other host
+        // must stay.
+        try
+        {
+            if (!restored && HasGnome())
+            {
+                var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
+                var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
+                if (mode.Equals("manual", StringComparison.OrdinalIgnoreCase) && IsLoopbackHost(host))
+                {
+                    GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
+                    GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, "false");
+                }
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        try
+        {
+            if (!restored && HasKde())
+            {
+                var httpProxy = KdeRead("httpProxy") ?? string.Empty;
+                if (httpProxy.Contains("127.0.0.1", StringComparison.Ordinal) ||
+                    httpProxy.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+                {
+                    KdeWrite(KdeProxyTypeKey, "0");
+                    KdeReload();
+                }
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        try
+        {
+            ClearProcessProxyEnv();
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (_applyBrowserLaunchHooks)
+        {
+            try
+            {
+                LinuxBrowserLaunchProxy.Clear();
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+
+        try
+        {
+            // Blank, do not unset. Unset reveals the login-time value an older
+            // build stored as http://127.0.0.1:8866.
+            ClearUserSessionProxyEnvironment();
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static bool IsLoopbackHost(string host) =>
+        host is "127.0.0.1" or "localhost" or "::1" or "";
+
     public void RestoreOriginalSettings() // NOSONAR S3776 -- Snapshot restore must apply gsettings/env together.
     {
+        StopExternalProxyWatch();
+        // Disk snapshot is for a later clear after this process is gone. Loading it
+        // here would let a second window, which never turned the proxy on, put the
+        // desktop back and delete the file out from under the instance that is listening.
         if (!_hasSnapshot) return;
 
         try
@@ -349,6 +476,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         _gnome = null;
         _kde = null;
         _originalEnv.Clear();
+        DeleteDiskSnapshot();
     }
 
     public string? GetCurrentProxyOverride()
@@ -399,6 +527,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     public void Dispose()
     {
         if (_disposed) return;
+        StopExternalProxyWatch();
         AppDomain.CurrentDomain.ProcessExit -= _processExitHandler;
         AppDomain.CurrentDomain.UnhandledException -= _unhandledExceptionHandler;
         foreach (var reg in _posixSignals)
@@ -438,7 +567,24 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 KdeRead("NoProxyFor") ?? string.Empty);
         }
 
+        // A leftover 127.0.0.1 entry is this proxy, not the user's previous setting.
+        // Persisting it would put the dead port back after a crash.
+        if (_gnome is not null &&
+            _gnome.Mode.Equals("manual", StringComparison.OrdinalIgnoreCase) &&
+            IsLoopbackHost(_gnome.HttpHost))
+        {
+            _gnome = _gnome with { Mode = "none", HttpEnabled = false };
+        }
+
+        if (_kde is not null &&
+            (_kde.HttpProxy.Contains("127.0.0.1", StringComparison.Ordinal) ||
+             _kde.HttpProxy.Contains("localhost", StringComparison.OrdinalIgnoreCase)))
+        {
+            _kde = _kde with { ProxyType = "0" };
+        }
+
         _hasSnapshot = true;
+        PersistSnapshot();
     }
 
     private void ApplyGnome(string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
@@ -578,84 +724,15 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         Environment.SetEnvironmentVariable("NO_PROXY", noProxy);
     }
 
-    /// <summary>
-    ///     Publish http(s)_proxy to systemd --user and environment.d so libproxy-based apps
-    ///     (and newly started session tools) see the Inspector. Does not restart browsers.
-    /// </summary>
-    private bool ApplyUserSessionProxyEnvironment(string hostname, int port, ProxyProtocolType protocolType,
-        string? proxyOverride)
-    {
-        var url = $"http://{hostname}:{port}"; // NOSONAR S5332
-        var noProxy = UnixProxyBypassMapper.ToNoProxyEnv(proxyOverride);
-        var assignments = new List<string>();
-        if ((protocolType & ProxyProtocolType.Http) != 0)
-        {
-            assignments.Add($"http_proxy={url}");
-            assignments.Add($"HTTP_PROXY={url}");
-        }
-
-        if ((protocolType & ProxyProtocolType.Https) != 0)
-        {
-            assignments.Add($"https_proxy={url}");
-            assignments.Add($"HTTPS_PROXY={url}");
-        }
-
-        assignments.Add($"no_proxy={noProxy}");
-        assignments.Add($"NO_PROXY={noProxy}");
-
-        var any = false;
-        var joined = string.Join(' ', assignments.Select(QuoteShell));
-        var systemctl = _runner.Run("systemctl", $"--user set-environment {joined}");
-        if (systemctl is { Succeeded: true })
-            any = true;
-
-        var names = string.Join(' ',
-            assignments.Select(a => a.Split('=', 2)[0]));
-        var dbusUpdate = _runner.Run("dbus-update-activation-environment", $"--systemd {names}");
-        if (dbusUpdate is { Succeeded: true })
-            any = true;
-
-        if (TryWriteSessionEnvDropIn(assignments))
-            any = true;
-
-        _sessionEnvApplied = any;
-        return any;
-    }
-
     private void ClearUserSessionProxyEnvironment()
     {
-        if (_sessionEnvApplied)
-        {
-            _runner.Run("systemctl",
-                "--user unset-environment http_proxy https_proxy HTTP_PROXY HTTPS_PROXY no_proxy NO_PROXY");
-            _sessionEnvApplied = false;
-        }
-
+        // An older build published these into the user manager's base environment.
+        // unset-environment removes only an override and puts http://127.0.0.1:8866
+        // back. An empty override hides that value until the next login, and
+        // deleting environment.d keeps that login from loading it again.
+        _runner.Run("systemctl",
+            "--user set-environment http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= no_proxy= NO_PROXY=");
         TryDeleteSessionEnvDropIn();
-    }
-
-    private static bool TryWriteSessionEnvDropIn(IReadOnlyList<string> assignments)
-    {
-        try
-        {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrWhiteSpace(home))
-                return false;
-
-            var dir = Path.Combine(home, ConfigDirName, "environment.d");
-            Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, SessionEnvDropInFileName);
-            var sb = new StringBuilder();
-            sb.AppendLine("# Managed by Titanium Inspector — removed when system proxy is restored");
-            foreach (var line in assignments)
-                sb.AppendLine(line);
-            File.WriteAllText(path, sb.ToString());
-            return File.Exists(path);
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     private static void TryDeleteSessionEnvDropIn()
@@ -860,6 +937,241 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         host = uri.Host;
         port = uri.Port;
         return port > 0;
+    }
+
+    private void StartExternalProxyWatch(string hostname, int port)
+    {
+        // Unit tests inject a fake runner. A timer there would touch the real desktop.
+        if (_runner is not ProcessRunner)
+            return;
+
+        _watchHost = hostname;
+        _watchPort = port;
+        _externalWatch?.Dispose();
+        _externalWatch = new Timer(
+            _ => OnExternalProxyWatch(),
+            null,
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromSeconds(2));
+    }
+
+    private void StopExternalProxyWatch()
+    {
+        var timer = _externalWatch;
+        _externalWatch = null;
+        if (timer is null)
+            return;
+        try
+        {
+            timer.Change(Timeout.Infinite, Timeout.Infinite);
+        }
+        catch
+        {
+            // already disposed
+        }
+
+        try
+        {
+            timer.Dispose();
+        }
+        catch
+        {
+            // already disposed
+        }
+    }
+
+    private void OnExternalProxyWatch()
+    {
+        if (Interlocked.Exchange(ref _watchBusy, 1) == 1)
+            return;
+        try
+        {
+            if (_disposed || _externalWatch is null)
+                return;
+            if (DesktopStillPointsAtInspector())
+                return;
+
+            StopExternalProxyWatch();
+            ClearHooksAfterExternalDisable();
+        }
+        catch
+        {
+            // a failed gsettings read must not drop the hooks
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _watchBusy, 0);
+        }
+    }
+
+    private bool DesktopStillPointsAtInspector()
+    {
+        if (string.IsNullOrWhiteSpace(_watchHost) || _watchPort <= 0)
+            return true;
+
+        if (HasGnome())
+        {
+            var modeRaw = GsettingsGet(GnomeSystemProxySchema, "mode");
+            if (string.IsNullOrWhiteSpace(modeRaw))
+                return true;
+            var mode = modeRaw.Trim('\'', '"');
+            var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
+            var port = ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port"));
+            return mode.Equals("manual", StringComparison.OrdinalIgnoreCase)
+                   && host.Equals(_watchHost, StringComparison.OrdinalIgnoreCase)
+                   && port == _watchPort;
+        }
+
+        if (HasKde())
+        {
+            var type = KdeRead(KdeProxyTypeKey)?.Trim();
+            if (type is null)
+                return true;
+            var http = KdeRead("httpProxy") ?? string.Empty;
+            return type == "1"
+                   && http.Contains(_watchHost, StringComparison.OrdinalIgnoreCase)
+                   && http.Contains(_watchPort.ToString(), StringComparison.Ordinal);
+        }
+
+        return true;
+    }
+
+    private void ClearHooksAfterExternalDisable()
+    {
+        try
+        {
+            ClearUserSessionProxyEnvironment();
+        }
+        catch
+        {
+            // best-effort
+        }
+
+        if (!_applyBrowserLaunchHooks)
+            return;
+
+        try
+        {
+            LinuxBrowserLaunchProxy.Clear();
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private void PersistSnapshot()
+    {
+        if (_runner is not ProcessRunner)
+            return;
+        try
+        {
+            var path = ProxySnapshotPath();
+            if (path is null)
+                return;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var dto = new DiskSnapshotFile { Gnome = _gnome, Kde = _kde };
+            File.WriteAllText(path, JsonSerializer.Serialize(dto));
+        }
+        catch
+        {
+            // snapshot is best-effort; in-memory restore still runs on a clean exit
+        }
+    }
+
+    private bool TryLoadDiskSnapshot()
+    {
+        if (_hasSnapshot)
+            return true;
+        try
+        {
+            var path = ProxySnapshotPath();
+            if (path is null || !File.Exists(path))
+                return false;
+            var dto = JsonSerializer.Deserialize<DiskSnapshotFile>(File.ReadAllText(path));
+            if (dto is null || (dto.Gnome is null && dto.Kde is null))
+                return false;
+            _gnome = dto.Gnome;
+            _kde = dto.Kde;
+            _hasSnapshot = true;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ApplyLoadedSnapshot()
+    {
+        if (_gnome is not null && HasGnome())
+        {
+            GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
+            GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
+            GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
+            GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, _gnome.HttpEnabled ? "true" : "false");
+            GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
+            GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
+            GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
+        }
+
+        if (_kde is not null && HasKde())
+        {
+            KdeWrite(KdeProxyTypeKey, _kde.ProxyType);
+            KdeWrite("httpProxy", _kde.HttpProxy);
+            KdeWrite("httpsProxy", _kde.HttpsProxy);
+            KdeWrite("NoProxyFor", _kde.NoProxyFor);
+            KdeReload();
+        }
+    }
+
+    private bool GnomeOrKdePointsAtLoopback()
+    {
+        if (HasGnome())
+        {
+            var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
+            var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
+            if (mode.Equals("manual", StringComparison.OrdinalIgnoreCase) && IsLoopbackHost(host))
+                return true;
+        }
+
+        if (HasKde())
+        {
+            var httpProxy = KdeRead("httpProxy") ?? string.Empty;
+            if (httpProxy.Contains("127.0.0.1", StringComparison.Ordinal) ||
+                httpProxy.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static void DeleteDiskSnapshot()
+    {
+        try
+        {
+            var path = ProxySnapshotPath();
+            if (path is not null)
+                File.Delete(path);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static string? ProxySnapshotPath()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(home))
+            return null;
+        return Path.Combine(home, ConfigDirName, InspectorConfigDirName, ProxySnapshotFileName);
+    }
+
+    private sealed class DiskSnapshotFile
+    {
+        public GnomeSnapshot? Gnome { get; set; }
+        public KdeSnapshot? Kde { get; set; }
     }
 
     private sealed record GnomeSnapshot(

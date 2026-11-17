@@ -475,6 +475,8 @@ jobs:
           set -euo pipefail
           rid="${{ matrix.rid }}"
           ver="${RELEASE_VERSION%%-*}"
+          # Keep the prerelease suffix so 8.0.4-beta sorts below 8.0.4 in apt/rpm.
+          pkg_ver="$RELEASE_VERSION"
           arch=x86_64
           [[ "$rid" == *arm64* ]] && arch=aarch64
           sudo apt-get update -qq
@@ -484,7 +486,7 @@ jobs:
           # AppImage is required for glibc RIDs (fail hard — no soft-fail).
           ./tools/packaging/linux/build-appimage.sh cli "artifacts/cli/$rid" \
             "Titanium.Cli-$rid.AppImage" "$ver" "$arch"
-          ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "$ver" "$rid" || echo "deb/rpm soft-failed"
+          ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "$pkg_ver" "$rid" || echo "deb/rpm soft-failed"
       - name: Stage CLI artifacts
         shell: bash
         run: |
@@ -699,6 +701,8 @@ jobs:
           set -euo pipefail
           rid="${{ matrix.rid }}"
           ver="${RELEASE_VERSION%%-*}"
+          # Keep the prerelease suffix so 8.0.4-beta sorts below 8.0.4 in apt/rpm.
+          pkg_ver="$RELEASE_VERSION"
           arch=x86_64
           [[ "$rid" == *arm64* ]] && arch=aarch64
           sudo apt-get update -qq
@@ -708,7 +712,7 @@ jobs:
           # AppImage is required for glibc RIDs (fail hard — no soft-fail).
           ./tools/packaging/linux/build-appimage.sh inspector "artifacts/inspector/$rid" \
             "TitaniumInspector-$rid.AppImage" "$ver" "$arch"
-          ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$ver" "$rid" \
+          ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$pkg_ver" "$rid" \
             || echo "deb/rpm soft-failed"
       - name: Stage Inspector artifacts
         shell: bash

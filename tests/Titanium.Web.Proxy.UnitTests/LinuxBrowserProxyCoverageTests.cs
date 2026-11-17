@@ -18,6 +18,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public async Task ChromeProfile_ApplyClearAndWatcherReassert_OnAnyOs()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var chromeRoot = Path.Combine(home, ".config", "google-chrome");
         var createdRoot = !Directory.Exists(chromeRoot);
@@ -64,6 +65,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void BrowserLaunch_ApplyClearWritePoliciesAndDesktopHelpers()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var policyDir = Path.Combine(home, ".config", "google-chrome", "policies", "managed");
         var desktopDir = Path.Combine(home, ".local", "share", "applications");
@@ -110,6 +112,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void FirefoxPrefsMergeRemoveBypassAndBackupHooks()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         var existing = """
             user_pref("network.proxy.type", 5);
             user_pref("browser.startup.page", 1);
@@ -142,6 +145,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void ChromiumRelaunch_ClassifiesFamiliesAndBuildsScript()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         Assert.AreEqual("Chrome", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/google/chrome/chrome"));
         Assert.AreEqual("Chromium", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/lib/chromium/chromium"));
         Assert.AreEqual("Brave", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/bin/brave"));

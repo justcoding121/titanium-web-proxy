@@ -77,7 +77,7 @@ internal static class LinuxChromiumRelaunch
         if (launchLines.Count == 0)
             return false;
 
-        var args = "--restore-last-session --disable-quic";
+        var args = "--restore-last-session";
         if (enableProxy && !string.IsNullOrWhiteSpace(hostname) && port > 0)
             args = LinuxBrowserLaunchProxy.ChromeProxyFlags(hostname, port, proxyLoopback) + " " + args;
 
@@ -133,6 +133,8 @@ internal static class LinuxChromiumRelaunch
         return $$"""
                 #!/bin/bash
                 set +e
+                exec 9>/tmp/titanium-chromium-relaunch.lock
+                flock -w 30 9 || exit 0
                 ARGS={{ShellQuote(args)}}
                 DISPLAY_VAL={{ShellQuote(display)}}
                 DBUS_VAL={{ShellQuote(dbus)}}
@@ -152,7 +154,7 @@ internal static class LinuxChromiumRelaunch
                 find_mains() {
                   for d in /proc/[0-9]*; do
                     pid=${d##*/}
-                    raw=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null)
+                    raw=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null || true)
                     [ -z "$raw" ] && continue
                     case "$raw" in
                       *--type=*|*crashpad*|*nacl_helper*|*devtools-mcp*|*chrome-devtools-mcp*|*/cursor/*) continue ;;
@@ -170,14 +172,10 @@ internal static class LinuxChromiumRelaunch
                 for p in $(find_mains); do kill -KILL "$p" 2>/dev/null || true; done
                 sleep 0.5
                 {{startCmds}}
-                if [ "$ENABLE" = "0" ]; then
-                  pidf="$HOME/.config/TitaniumInspector/fail-open-proxy.pid"
-                  if [ -f "$pidf" ]; then
-                    kill "$(cat "$pidf")" 2>/dev/null || true
-                    rm -f "$pidf"
-                  fi
-                  pkill -f 'fail-open-proxy.py' 2>/dev/null || true
-                fi
+                # Leave the fail-open helper running. File → Exit stops Inspector, but
+                # programs that already inherited http://127.0.0.1:8866 still dial that
+                # port. Killing the helper here is what drops the network. The login
+                # script removes it only after those programs are gone.
                 rm -f -- {{ShellQuote(scriptPath)}}
                 """;
     }

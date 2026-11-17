@@ -2488,6 +2488,44 @@ public partial class ProxyServer : IDisposable
         return false;
     }
 
+    /// <summary>
+    ///     Ports whose system-proxy entry may be cleared on startup. A port that already accepts
+    ///     connections is left alone so a second Inspector cannot drop the first one's proxy.
+    /// </summary>
+    internal static HashSet<int> PortsEligibleForStaleProxyClear(IEnumerable<int> ports)
+    {
+        var eligible = new HashSet<int>();
+        foreach (var port in ports)
+        {
+            if (!IsLoopbackPortAccepting(port))
+                eligible.Add(port);
+        }
+
+        return eligible;
+    }
+
+    /// <summary>
+    ///     True when something on this machine is already accepting TCP on <paramref name="port"/>.
+    /// </summary>
+    internal static bool IsLoopbackPortAccepting(int port)
+    {
+        if (port is <= 0 or > 65535)
+            return false;
+
+        try
+        {
+            using var client = new TcpClient();
+            var connect = client.ConnectAsync(IPAddress.Loopback, port);
+            if (!connect.Wait(TimeSpan.FromMilliseconds(250)))
+                return false;
+            return client.Connected;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
 
     /// <summary>
     ///     Connection retry policy that respects the per-session

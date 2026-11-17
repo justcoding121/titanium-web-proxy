@@ -1,0 +1,11 @@
+[Unit]
+Description=Clear Titanium Inspector proxy when the app is not running
+Before=graphical-session.target
+PartOf=graphical-session-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/titanium-inspector/clear-proxy-if-stopped.sh
+
+[Install]
+WantedBy=graphical-session-pre.target

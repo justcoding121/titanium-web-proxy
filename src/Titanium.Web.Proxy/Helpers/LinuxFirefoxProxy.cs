@@ -25,6 +25,7 @@ internal static partial class LinuxFirefoxProxy
     private const string NetworkProxySslPortKey = "network.proxy.ssl_port";
     private const string NetworkProxyShareKey = "network.proxy.share_proxy_settings";
     private const string NetworkProxyBypassKey = "network.proxy.no_proxies_on";
+    private const string Http3EnabledKey = "network.http.http3.enabled";
 
     [GeneratedRegex(
         @"^\s*user_pref\(\s*""(?<key>[^""]+)""\s*,\s*(?<value>.+?)\s*\)\s*;\s*$",
@@ -41,6 +42,7 @@ internal static partial class LinuxFirefoxProxy
         NetworkProxySslPortKey,
         NetworkProxyShareKey,
         NetworkProxyBypassKey,
+        Http3EnabledKey,
         MarkerPref,
     ];
 
@@ -53,6 +55,7 @@ internal static partial class LinuxFirefoxProxy
         NetworkProxySslPortKey,
         NetworkProxyShareKey,
         NetworkProxyBypassKey,
+        Http3EnabledKey,
     ];
 
     private static readonly string[] FirefoxProcessNames = ["firefox", "firefox-bin"];
@@ -64,7 +67,11 @@ internal static partial class LinuxFirefoxProxy
     ];
 
     /// <summary>Applies manual proxy prefs; returns true when prefs were written.</summary>
-    internal static bool Apply(string hostname, int port, string? winInetProxyOverride = null)
+    /// <param name="relaunch">
+    ///     Quit and start Firefox once when it is already running. Callers that write prefs twice
+    ///     pass false on the first write so Firefox is started only once.
+    /// </param>
+    internal static bool Apply(string hostname, int port, string? winInetProxyOverride = null, bool relaunch = true)
     {
         if (!OperatingSystem.IsLinux())
             return false;
@@ -90,11 +97,13 @@ internal static partial class LinuxFirefoxProxy
                 [NetworkProxySslPortKey] = port.ToString(),
                 [NetworkProxyShareKey] = "true",
                 [NetworkProxyBypassKey] = JsonSerializer.Serialize(bypass),
+                [Http3EnabledKey] = "false",
                 [MarkerPref] = "true",
             };
 
             File.WriteAllText(prefsPath, MergePrefs(existing, managed));
-            TryRelaunchFirefox(enableProxy: true);
+            if (relaunch)
+                TryRelaunchFirefox(enableProxy: true);
             return true;
         }
         catch
@@ -138,7 +147,7 @@ internal static partial class LinuxFirefoxProxy
             else
             {
                 // No backup: fall back to system proxy settings.
-                restored = MergePrefs(RemoveKeys(existing, [MarkerPref]), new Dictionary<string, string>
+                restored = MergePrefs(RemoveKeys(existing, [MarkerPref, Http3EnabledKey]), new Dictionary<string, string>
                 {
                     [NetworkProxyTypeKey] = "5",
                 });
@@ -374,7 +383,9 @@ internal static partial class LinuxFirefoxProxy
             [ -n {ShellQuote(display)} ] && export DISPLAY={ShellQuote(display)}
             [ -n {ShellQuote(dbus)} ] && export DBUS_SESSION_BUS_ADDRESS={ShellQuote(dbus)}
             [ -n {ShellQuote(xauth)} ] && export XAUTHORITY={ShellQuote(xauth)}
-            {ShellQuote(launch)} --new-instance >/dev/null 2>&1 &
+            exec 9>/tmp/titanium-firefox-relaunch.lock
+            flock -w 20 9 || exit 0
+            {ShellQuote(launch)} >/dev/null 2>&1 &
             rm -f -- {ShellQuote(scriptPath)}
             """;
         File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));

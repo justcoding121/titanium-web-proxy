@@ -92,7 +92,7 @@ internal static class LinuxBrowserLaunchProxy
         var xfceOk = WriteXfceWebBrowserHelper(hostname, port, loopback);
         var profileCount = LinuxChromeProfileProxy.Apply(hostname, port, loopback);
         var profileOk = profileCount > 0;
-        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride);
+        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride, relaunch);
         if (desktopOk)
             TryUpdateDesktopDatabase();
         var ok = policyOk || desktopOk || xfceOk || profileOk || firefoxOk;

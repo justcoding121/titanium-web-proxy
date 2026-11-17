@@ -183,7 +183,8 @@ public class BootstrapAndFirefoxHelperCoverageTests
             [Path.Combine(Path.GetTempPath(), "nope.sh")]);
         _ = LinuxGraphicalSession.EnumerateCandidateSessionPids().Take(1).ToList();
         _ = LinuxGraphicalSession.TryReadFromSessionProcess("DISPLAY");
-        LinuxProxyFailOpen.Stop();
+        if (!LiveProxySessionGuard.DesktopDependsOnInspectorProxy())
+            LinuxProxyFailOpen.Stop();
     }
 
     [TestMethod]
