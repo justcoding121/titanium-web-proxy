@@ -12579,6 +12579,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
   nameWithType: ProxyServer.TracingHeaderAllowList
+- uid: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func{System.String,System.Int32,System.Boolean})
+  name: TryClearOrphanedLocalSystemProxy(Func<string, int, bool>?)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryClearOrphanedLocalSystemProxy_System_Func_System_String_System_Int32_System_Boolean__
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func{System.String,System.Int32,System.Boolean})
+  name.vb: TryClearOrphanedLocalSystemProxy(Func(Of String, Integer, Boolean))
+  fullName: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func<string, int, bool>?)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func(Of String, Integer, Boolean))
+  nameWithType: ProxyServer.TryClearOrphanedLocalSystemProxy(Func<string, int, bool>?)
+  nameWithType.vb: ProxyServer.TryClearOrphanedLocalSystemProxy(Func(Of String, Integer, Boolean))
+- uid: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy*
+  name: TryClearOrphanedLocalSystemProxy
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryClearOrphanedLocalSystemProxy_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy
+  nameWithType: ProxyServer.TryClearOrphanedLocalSystemProxy
 - uid: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
   name: TryDisableAllSystemProxies()
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableAllSystemProxies
