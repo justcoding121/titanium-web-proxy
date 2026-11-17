@@ -988,11 +988,12 @@ internal static class SmokeApp
     {
         var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.cer");
         File.WriteAllBytes(cer, ExportCer(pfx));
-        // System trust is what Chromium reads. Safari also evaluates the login
-        // keychain, and an SSL policy makes trustd apply the new root to :443
-        // before the next WebKit.Networking process starts.
-        Run("sudo", $"security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
-        Run("security", $"add-trusted-cert -r trustRoot -p ssl \"{cer}\"", 20000);
+        // Unrestricted trustRoot. An ssl-only policy left the thumb out of the
+        // admin trust dump and Chrome opened CONNECT tunnels with no decrypted GET.
+        // The login keychain is what a fresh Safari process evaluates in addition
+        // to the system keychain.
+        Run("sudo", $"security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
+        Run("security", $"add-trusted-cert -r trustRoot \"{cer}\"", 20000);
         var dump = Capture("security", "dump-trust-settings -d");
         var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
         if (!compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
