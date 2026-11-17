@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.Versioning;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
@@ -8,6 +9,7 @@ using Titanium.Inspector.ViewModels;
 namespace Titanium.Inspector.Tests;
 
 [TestClass]
+[SupportedOSPlatform("macos")]
 public class MacAppRelocationTests
 {
     [TestMethod]
@@ -20,7 +22,7 @@ public class MacAppRelocationTests
     }
 
     [TestMethod]
-    public void ShouldOfferMove_WhenDismissed_ReturnsFalse()
+    public void ShouldOfferMove_WhenDismissedAndNotOnDmg_ReturnsFalse()
     {
         if (!OperatingSystem.IsMacOS())
         {
@@ -29,6 +31,7 @@ public class MacAppRelocationTests
         }
 
         var settings = new InspectorSettings { MacDmgMovePromptDismissed = true };
+        // Not on a DMG in the test host → false even before version compare.
         Assert.IsFalse(MacAppRelocation.ShouldOfferMove(settings));
     }
 
@@ -48,7 +51,9 @@ public class MacAppRelocationTests
             Assert.IsTrue(MacAppRelocation.IsRunningFromDmgVolume(isMacOs: true, "/Volumes/Img/Titanium Inspector.app"));
 
             var dismissed = new InspectorSettings { MacDmgMovePromptDismissed = true };
-            Assert.IsFalse(MacAppRelocation.ShouldOfferMove(dismissed, isMacOs: true, runningFromDmg: true));
+            // Dismissed + DMG still re-offers when DecideRelocateAction says Install/Replace
+            // (no Applications copy in this host → Install).
+            Assert.IsTrue(MacAppRelocation.ShouldOfferMove(dismissed, isMacOs: true, runningFromDmg: true));
             Assert.IsFalse(MacAppRelocation.ShouldOfferMove(new InspectorSettings(), isMacOs: false, runningFromDmg: true));
             Assert.IsFalse(MacAppRelocation.ShouldOfferMove(new InspectorSettings(), isMacOs: true, runningFromDmg: false));
             Assert.IsTrue(MacAppRelocation.ShouldOfferMove(new InspectorSettings(), isMacOs: true, runningFromDmg: true));
@@ -109,6 +114,76 @@ public class MacAppRelocationTests
             {
                 // best-effort temp cleanup
             }
+        }
+    }
+
+    [TestMethod]
+    public void DecideRelocateAction_MissingInstall_IsInstall()
+    {
+        var action = MacAppRelocation.DecideRelocateAction(
+            runningVersion: new Version(7, 2, 0),
+            installedVersion: null,
+            installedPath: Path.Combine(Path.GetTempPath(), "ti-missing-" + Guid.NewGuid().ToString("N") + ".app"));
+        Assert.AreEqual(MacRelocateAction.Install, action);
+    }
+
+    [TestMethod]
+    public void DecideRelocateAction_OlderInstalled_IsReplace()
+    {
+        var action = MacAppRelocation.DecideRelocateAction(
+            runningVersion: new Version(7, 2, 0),
+            installedVersion: new Version(7, 1, 0),
+            installedPath: "/Applications/Titanium Inspector.app");
+        Assert.AreEqual(MacRelocateAction.Replace, action);
+    }
+
+    [TestMethod]
+    public void DecideRelocateAction_SameOrNewerInstalled_IsOpenExisting()
+    {
+        Assert.AreEqual(
+            MacRelocateAction.OpenExisting,
+            MacAppRelocation.DecideRelocateAction(
+                runningVersion: new Version(7, 1, 0),
+                installedVersion: new Version(7, 1, 0),
+                installedPath: "/Applications/Titanium Inspector.app"));
+        Assert.AreEqual(
+            MacRelocateAction.OpenExisting,
+            MacAppRelocation.DecideRelocateAction(
+                runningVersion: new Version(7, 0, 9),
+                installedVersion: new Version(7, 1, 0),
+                installedPath: "/Applications/Titanium Inspector.app"));
+    }
+
+    [TestMethod]
+    public void ReadBundleVersion_ParsesShortVersionFromPlist()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ti-mac-reloc-" + Guid.NewGuid().ToString("N"));
+        var contents = Path.Combine(root, "Contents");
+        Directory.CreateDirectory(contents);
+        File.WriteAllText(
+            Path.Combine(contents, "Info.plist"),
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <plist version="1.0">
+            <dict>
+              <key>CFBundleShortVersionString</key>
+              <string>7.3.1</string>
+              <key>CFBundleVersion</key>
+              <string>7.3.1.0</string>
+            </dict>
+            </plist>
+            """);
+        try
+        {
+            var ver = MacAppRelocation.ReadBundleVersion(root);
+            Assert.IsNotNull(ver);
+            Assert.AreEqual(7, ver!.Major);
+            Assert.AreEqual(3, ver.Minor);
+            Assert.AreEqual(1, ver.Build);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
         }
     }
 

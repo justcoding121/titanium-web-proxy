@@ -31,6 +31,17 @@ public sealed partial class MainWindowViewModel
     /// <summary>Startup or Help → Check for updates. When <paramref name="promptIfAvailable"/>, offer install dialog.</summary>
     public async Task CheckUpdatesAsync(bool promptIfAvailable = true)
     {
+        var refuse = UpdateService.RefuseApplyReason();
+        if (refuse is not null && promptIfAvailable)
+        {
+            SetOutcomeStatus(refuse, StatusSeverity.Warning, toastImportant: true);
+            if (OperatingSystem.IsMacOS())
+                _ = await TryOfferMacDmgMoveAsync().ConfigureAwait(true);
+            else if (OperatingSystem.IsLinux())
+                _ = await TryOfferLinuxAppImageInstallAsync().ConfigureAwait(true);
+            return;
+        }
+
         var channel = _updates.ChannelDisplayName;
         SetStatus($"Checking for updates ({channel})…", StatusSeverity.Busy);
         var result = await _updates.CheckAsync(_statusRevertCts?.Token ?? CancellationToken.None);

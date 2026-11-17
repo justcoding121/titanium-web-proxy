@@ -351,6 +351,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
         _proxy.EnableDecryptFailureBypass = EnableDecryptFailureBypass;
+        // Faster opaque recovery for pinned / untrusted clients (Safari hang window).
+        _proxy.ClientHandshakeRejectThreshold = 2;
         _proxy.DecryptFailureBypassChanged += OnDecryptFailureBypassChanged;
         ApplyViaHeaderOption();
         // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on

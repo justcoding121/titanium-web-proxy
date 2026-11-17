@@ -366,11 +366,30 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>
     /// CryptUI/Keychain on UI; store verify + My prune off UI after Yes (avoids Not Responding).
+    /// macOS: one elevated System.keychain batch (skip .NET store + multi Keychain prompts).
     /// </summary>
     private async Task<bool> InstallRootInteractiveAsync()
     {
         using var scope = InspectorUxTrace.Scope("InstallRootInteractive");
         await Task.Yield();
+
+        if (OperatingSystem.IsMacOS())
+        {
+            bool adminOk;
+            using (InspectorUxTrace.Scope("InstallRootCertificateAsAdmin.MacSystem"))
+                adminOk = _interception.InstallRootCertificateAsAdmin(machineStore: true);
+            InspectorUxTrace.Event(
+                "InstallRootCertificateAsAdmin.Result",
+                $"ok={adminOk} kind={_interception.LastOsTrustResult?.Kind}");
+
+            using (InspectorUxTrace.Scope("FinalizeTrustAfterAdminInstall"))
+            {
+                return await RunOffUiAsync(
+                    () => _interception.FinalizeTrustAfterAdminInstall(machineStore: true),
+                    StatusCancelToken);
+            }
+        }
+
         bool added;
         using (InspectorUxTrace.Scope("InstallRootStoresOnly.CryptUI"))
             added = _interception.InstallRootStoresOnly(machineStore: false);
@@ -954,7 +973,26 @@ public sealed partial class MainWindowViewModel
                 return;
 
             SetDecryptHttpsCore(true);
+            SetStatus("Verifying HTTPS decrypt…", StatusSeverity.Busy);
+            var probe = await DecryptHttpsProbe.VerifyAsync(
+                _interception,
+                TimeSpan.FromSeconds(12),
+                CancellationToken.None).ConfigureAwait(true);
+            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+                return;
+
+            if (!probe.Ok)
+            {
+                await ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
+                SetOutcomeStatus(
+                    "Decrypt HTTPS off — verify failed: " + Truncate(probe.Message, 140),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+                return;
+            }
+
             SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
+            MaybeToastSafariRelaunchAfterDecrypt();
         }
         catch (OperationCanceledException)
         {
@@ -1282,6 +1320,58 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
         NotifyDecryptTrustHealth();
         SyncToggleVisual?.Invoke(nameof(DecryptHttps), enabled);
+    }
+
+    private bool _safariRelaunchToastShown;
+
+    /// <summary>
+    ///     Safari may cache failed TLS from the pre-trust window; one toast after first decrypt-on.
+    /// </summary>
+    private void MaybeToastSafariRelaunchAfterDecrypt()
+    {
+        if (!OperatingSystem.IsMacOS() || _safariRelaunchToastShown)
+            return;
+
+        _safariRelaunchToastShown = true;
+        SetTransientStatus(
+            "If Safari pages still spin, quit and reopen Safari so it picks up the new CA trust.",
+            StatusSeverity.Neutral,
+            toastImportant: true,
+            revertMs: 8000,
+            toastSeverity: StatusSeverity.Neutral);
+    }
+
+    /// <summary>
+    ///     Fast-path decrypt-on: confirm MITM works without blocking the checkbox flip.
+    /// </summary>
+    private async Task VerifyDecryptProbeInBackgroundAsync()
+    {
+        try
+        {
+            var probe = await DecryptHttpsProbe.VerifyAsync(
+                _interception,
+                TimeSpan.FromSeconds(12),
+                CancellationToken.None).ConfigureAwait(false);
+            if (probe.Ok || !_decryptHttps)
+                return;
+
+            await MarshalToUiAsync(async () =>
+            {
+                await ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
+                SetOutcomeStatus(
+                    "Decrypt HTTPS off — verify failed: " + Truncate(probe.Message, 140),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+            }, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // shutdown
+        }
+        catch (Exception ex)
+        {
+            InspectorUxTrace.Event("Decrypt.ProbeBackgroundFailed", Truncate(ex.Message, 120));
+        }
     }
 
     private void NotifyDecryptTrustHealth()

@@ -180,6 +180,14 @@ public sealed class InspectorSettings
     /// </summary>
     public bool MacDmgMovePromptDismissed { get; set; }
 
+    /// <summary>User dismissed AppImage "Install locally" (cleared when a newer AppImage is launched).</summary>
+    public bool LinuxAppImageInstallPromptDismissed { get; set; }
+
+    /// <summary>
+    ///     Set when an in-app update apply starts; cleared after the next-launch trust reverify.
+    /// </summary>
+    public bool PendingPostUpdateTrustCheck { get; set; }
+
     /// <summary>Optional FileDescriptorSet path for protobuf decode on inspect.</summary>
     public string? ProtobufDescriptorSetPath { get; set; }
 

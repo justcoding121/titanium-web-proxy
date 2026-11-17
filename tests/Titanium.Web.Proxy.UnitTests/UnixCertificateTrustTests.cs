@@ -388,6 +388,55 @@ public class UnixCertificateTrustTests
             new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(true, false, 0, true));
         return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
     }
+
+    [TestMethod]
+    public void TrustMachineSslDetailed_OnMac_ElevatesBatchWithAddTrustedCert()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var stale = "AABBCCDDEEFF00112233445566778899AABBCCDD";
+        var runner = new FakeProcessRunner();
+        runner.When("security", "find-certificate",
+            $"SHA-1 hash: {stale}\nSHA-1 hash: {sha1}\n");
+        runner.When("security", "dump-trust-settings",
+            $"Cert 0: Titanium\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
+        runner.When("security", "trust-settings-export", "ok\n");
+        var elevation = new FakeElevationPrompt();
+
+        var result = UnixCertificateTrust.TrustMachineSslDetailed(
+            cert, "Titanium Root Certificate Authority", runner, elevation);
+
+        Assert.IsTrue(result.Succeeded, result.Message);
+        Assert.IsTrue(elevation.Calls.Count >= 1);
+        Assert.IsTrue(elevation.Calls.Exists(c =>
+            c.Arguments.Contains("add-trusted-cert", StringComparison.Ordinal)
+            && c.Arguments.Contains("System.keychain", StringComparison.Ordinal)));
+        Assert.IsTrue(elevation.Calls.Exists(c =>
+            c.Arguments.Contains("delete-certificate -Z " + stale, StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void TrustMachineSslDetailed_OnMac_CancelElevation_ReturnsCancelled()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        var elevation = new FakeElevationPrompt { Cancel = true };
+        var result = UnixCertificateTrust.TrustMachineSslDetailed(
+            cert, "Titanium Root Certificate Authority", runner, elevation);
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, result.Kind);
+    }
 }
 
 [TestClass]

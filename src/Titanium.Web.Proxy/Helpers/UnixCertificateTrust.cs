@@ -123,7 +123,19 @@ internal static partial class UnixCertificateTrust
     ///     Trusts the certificate machine-wide with an admin prompt (System keychain / update-ca-certificates).
     /// </summary>
     public static bool TrustMachineSsl(X509Certificate2 certificate, string friendlyName,
-        IProcessRunner? runner = null, IElevationPrompt? elevation = null)
+        IProcessRunner? runner = null, IElevationPrompt? elevation = null) =>
+        TrustMachineSslDetailed(certificate, friendlyName, runner, elevation).Succeeded;
+
+    /// <summary>
+    ///     Machine-wide SSL trust with outcome kind. On macOS this is one elevated shell that
+    ///     prunes stale same-CN roots then <c>add-trusted-cert -d</c> into System.keychain;
+    ///     success requires explicit SSL trust policies (not a Keychain stub).
+    /// </summary>
+    public static CertificateOsTrustResult TrustMachineSslDetailed(
+        X509Certificate2 certificate,
+        string friendlyName,
+        IProcessRunner? runner = null,
+        IElevationPrompt? elevation = null)
     {
         runner ??= new ProcessRunner();
         elevation ??= new OsElevationPrompt(runner);
@@ -131,16 +143,27 @@ internal static partial class UnixCertificateTrust
         try
         {
             if (RunTime.IsMac)
-                return TrustMacSystem(elevation, cerPath);
+                return TrustMacSystemDetailed(runner, elevation, cerPath, certificate);
 
             if (RunTime.IsLinux)
-                return TrustLinuxSystem(elevation, cerPath, friendlyName);
+            {
+                var ok = TrustLinuxSystem(elevation, cerPath, friendlyName);
+                return ok
+                    ? CertificateOsTrustResult.Ok("Root CA trusted machine-wide")
+                    : CertificateOsTrustResult.Fail(
+                        CertificateOsTrustKind.Failed,
+                        "Machine-wide CA trust failed");
+            }
 
-            return false;
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Unsupported,
+                "OS SSL trust helpers are only available on macOS and Linux");
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "Machine-wide CA trust failed: " + ex.Message);
         }
         finally
         {
@@ -675,7 +698,11 @@ internal static partial class UnixCertificateTrust
         part.Contains("kSecTrustSettingsResultTrustAsRoot", StringComparison.Ordinal) ||
         part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
         part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
-        part.Contains("Trust As Root", StringComparison.OrdinalIgnoreCase);
+        part.Contains("Trust As Root", StringComparison.OrdinalIgnoreCase) ||
+        // Recent macOS `add-trusted-cert -d -r trustRoot -p ssl` may dump Policy OID SSL
+        // without echoing kSecTrustSettingsResultTrustRoot.
+        (part.Contains("Policy OID", StringComparison.OrdinalIgnoreCase) &&
+         part.Contains("SSL", StringComparison.OrdinalIgnoreCase));
 
     private static bool BlockMentionsOtherSha1(string part, string sha1)
     {
@@ -846,7 +873,13 @@ internal static partial class UnixCertificateTrust
                window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
                HasFoldedTrustResult(window, "=1") ||
                HasFoldedTrustResult(window, "=2") ||
-               window.Contains("TrustAsRoot", StringComparison.OrdinalIgnoreCase);
+               window.Contains("TrustAsRoot", StringComparison.OrdinalIgnoreCase) ||
+               window.Contains("TrustRoot", StringComparison.OrdinalIgnoreCase) ||
+               // Policy-only SSL trust (no explicit Result enum) still allows MITM.
+               window.Contains("sslServer", StringComparison.OrdinalIgnoreCase) ||
+               window.Contains("kSecTrustSettingsPolicy", StringComparison.Ordinal) ||
+               (window.Contains("PolicyOID", StringComparison.OrdinalIgnoreCase) &&
+                window.Contains("SSL", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasFoldedTrustResult(string window, string resultToken)
@@ -1026,8 +1059,76 @@ internal static partial class UnixCertificateTrust
     private static bool TrustMacSystem(IElevationPrompt elevation, string cerPath)
     {
         var result = elevation.RunElevated("/usr/bin/security",
-            $"add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cerPath}\"");
+            $"add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cerPath}\"");
         return result is { Succeeded: true };
+    }
+
+    /// <summary>
+    ///     One admin password: delete stale same-CN hashes (login + System), then add current
+    ///     root to System.keychain with trustRoot. Verifies SecTrustSettings policies before Ok.
+    /// </summary>
+    private static CertificateOsTrustResult TrustMacSystemDetailed(
+        IProcessRunner runner,
+        IElevationPrompt elevation,
+        string cerPath,
+        X509Certificate2 certificate)
+    {
+        var keepSha1 = certificate.GetCertHashString() ?? "";
+        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cn in MacRootCommonNames(
+                     certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "",
+                     certificate))
+        {
+            CollectMacCertificateHashes(runner, cn, hashes);
+        }
+
+        var loginDb = UserLoginKeychainDbPath();
+        var loginLegacy = UserLoginKeychainPath();
+        var parts = new List<string>();
+        foreach (var hash in hashes)
+        {
+            if (string.Equals(hash, keepSha1, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            parts.Add($"/usr/bin/security delete-certificate -Z {hash} -t || true");
+            if (File.Exists(loginDb))
+                parts.Add($"/usr/bin/security delete-certificate -Z {hash} -t \"{loginDb}\" || true");
+            if (File.Exists(loginLegacy))
+                parts.Add($"/usr/bin/security delete-certificate -Z {hash} -t \"{loginLegacy}\" || true");
+            parts.Add(
+                $"/usr/bin/security delete-certificate -Z {hash} -t /Library/Keychains/System.keychain || true");
+        }
+
+        // -p ssl persists an SSL policy row (required for Chrome/Safari MITM on recent macOS).
+        parts.Add(
+            $"/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cerPath}\"");
+
+        var script = string.Join("; ", parts);
+        var elevated = elevation.RunElevated("/bin/sh", $"-c \"{EscapeShell(script)}\"");
+        if (elevated is null)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Administrator authorization was cancelled");
+        }
+
+        if (!elevated.Succeeded)
+        {
+            // Fall back to legacy single-command System add (older tests / partial scripts).
+            if (!TrustMacSystem(elevation, cerPath))
+            {
+                return CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.MacKeychainFailed,
+                    "Failed to add the root CA to the System keychain");
+            }
+        }
+
+        if (VerifyMacSslTrust(runner, certificate))
+            return CertificateOsTrustResult.Ok("Root CA trusted in System keychain");
+
+        return CertificateOsTrustResult.Fail(
+            CertificateOsTrustKind.MacNeedsManualTrustConfirm,
+            "Root CA was added to the System keychain but SSL policies may need Always Trust confirmation in Keychain Access.");
     }
 
     private static CertificateOsTrustResult TrustLinuxNssDetailed(

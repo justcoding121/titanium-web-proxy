@@ -1823,6 +1823,15 @@ public sealed class CertificateManager : IDisposable
             return false;
         }
 
+        // macOS: .NET AppleTrustStore Root/My writes often Access Denied and spawn extra Keychain
+        // prompts without creating SecTrustSettings SSL policies. Keychain helpers own trust.
+        if (RunTime.IsMac)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Ok(
+                "Root CA store install skipped on macOS (Keychain SSL trust applies separately)");
+            return false;
+        }
+
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 
@@ -1884,21 +1893,43 @@ public sealed class CertificateManager : IDisposable
             return;
         }
 
+        if (RunTime.IsMac && machineTrusted)
+        {
+            // Primary macOS path: one elevated System.keychain batch (policies + stale prune).
+            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+                RootCertificate, RootCertificateName);
+            if (LastOsTrustResult.Succeeded
+                || LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                return;
+
+            if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
+            {
+                // Elevation cancelled — fall back to login keychain (may need Always Trust UX).
+                LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
+                    RootCertificate, RootCertificateName);
+            }
+
+            return;
+        }
+
         LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
         if (!machineTrusted)
             return;
 
-        var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(RootCertificate, RootCertificateName);
-        if (!machineOk)
+        var machineResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+            RootCertificate, RootCertificateName);
+        if (!machineResult.Succeeded
+            && machineResult.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
         {
             LastOsTrustResult = CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Machine-wide CA trust failed (user trust may already be applied)");
         }
-        else if (LastOsTrustResult.Succeeded ||
-                 LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        else
         {
-            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
+            LastOsTrustResult = machineResult.Succeeded
+                ? CertificateOsTrustResult.Ok("Root CA trusted machine-wide")
+                : machineResult;
         }
     }
 
@@ -2082,6 +2113,7 @@ public sealed class CertificateManager : IDisposable
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         // Do not prune orphans here — full-store sweeps after CryptUI freeze Avalonia; Inspector
         // finalizes My-store prune off the UI via FinalizeTrustAfterAdminInstall.
+        // macOS skips X509 store writes inside InstallRootIntoCertificateStores.
         _ = InstallRootIntoCertificateStores(machineTrusted: false);
 
         // UAC / Keychain auth / polkit — never in unit/CI (hangs unattended runs).
@@ -2095,14 +2127,36 @@ public sealed class CertificateManager : IDisposable
 
         if (!RunTime.IsWindows)
         {
+            if (RunTime.IsMac)
+            {
+                // One admin dialog: System.keychain batch. Login Always Trust is fallback only.
+                LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+                    certificate, RootCertificateName);
+                if (LastOsTrustResult.Succeeded
+                    || LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                    return true;
+
+                if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
+                {
+                    LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
+                        certificate, RootCertificateName);
+                    return LastOsTrustResult.Succeeded ||
+                           LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+                }
+
+                return false;
+            }
+
             LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
             // Explicit true when only user-store trust was requested (no machine step).
             if (!machineTrusted)
                 return LastOsTrustResult.Succeeded ||
                        LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
 
-            var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName);
-            if (!machineOk)
+            var machineResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+                certificate, RootCertificateName);
+            if (!machineResult.Succeeded
+                && machineResult.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
             {
                 // User trust may already be applied; surface machine failure clearly.
                 LastOsTrustResult = CertificateOsTrustResult.Fail(
@@ -2111,11 +2165,9 @@ public sealed class CertificateManager : IDisposable
                 return false;
             }
 
-            if (LastOsTrustResult.Succeeded ||
-                LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-            {
-                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
-            }
+            LastOsTrustResult = machineResult.Succeeded
+                ? CertificateOsTrustResult.Ok("Root CA trusted machine-wide")
+                : machineResult;
 
             return true;
         }

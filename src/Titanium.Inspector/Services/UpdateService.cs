@@ -402,6 +402,27 @@ public sealed class UpdateService
     }
 
     /// <summary>Download package, verify SHA256, spawn apply helper, return true if helper started.</summary>
+    /// <summary>
+    ///     When non-null, in-app zip/MSI apply must not run from this location
+    ///     (DMG volume or AppImage mount). Caller should offer relocate first.
+    /// </summary>
+    public static string? RefuseApplyReason()
+    {
+        if (OperatingSystem.IsMacOS() && MacAppRelocation.IsRunningFromDmgVolume())
+        {
+            return "Move Titanium Inspector to Applications before installing updates. " +
+                   "Updates cannot be applied while running from a disk image.";
+        }
+
+        if (OperatingSystem.IsLinux() && LinuxAppRelocation.IsRunningFromAppImage())
+        {
+            return "Install Titanium Inspector locally (~/.local) before installing updates. " +
+                   "Updates cannot be applied while running from an AppImage.";
+        }
+
+        return null;
+    }
+
     public async Task<(bool Ok, string Message)> DownloadAndStartApplyAsync(
         UpdateCheckResult check,
         CancellationToken cancellationToken = default)
@@ -410,6 +431,10 @@ public sealed class UpdateService
         {
             return (false, "No update package to install.");
         }
+
+        var refuse = RefuseApplyReason();
+        if (refuse is not null)
+            return (false, refuse);
 
         var workDir = Path.Combine(Path.GetTempPath(), "TitaniumInspector-update");
         Directory.CreateDirectory(workDir);
@@ -440,7 +465,19 @@ public sealed class UpdateService
             var relaunchPath = Path.Combine(installDir, exeName);
             if (OperatingSystem.IsMacOS() && TryFindMacAppBundle(installDir, out var appBundle))
             {
+                // Zip payload is publish output → Contents/MacOS; relaunch the .app.
                 relaunchPath = appBundle;
+                installDir = Path.Combine(appBundle, "Contents", "MacOS");
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                var localShare = LinuxAppRelocation.DefaultInstallDir();
+                if (Directory.Exists(localShare)
+                    && installDir.StartsWith(localShare, StringComparison.Ordinal))
+                {
+                    installDir = localShare;
+                    relaunchPath = Path.Combine(localShare, LinuxAppRelocation.ExeName);
+                }
             }
 
             UpdateApplyHelper.StartDetached(
@@ -456,6 +493,7 @@ public sealed class UpdateService
             // If MSI UAC is cancelled later, tag may ahead of assembly — ShouldOffer re-offers when they differ.
             _settings.Current.InstalledReleaseTag = check.RemoteVersion;
             _settings.Current.InstalledReleaseChannel = check.ChannelDisplay;
+            _settings.Current.PendingPostUpdateTrustCheck = true;
             _settings.Save();
 
             return (true, $"Installing {check.RemoteVersion} ({check.ChannelDisplay})…");
@@ -834,13 +872,26 @@ public static class UpdateApplyHelper
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
-        sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
-        sb.AppendLine("rm -rf \"$tmp\"");
-        sb.AppendLine("chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");
+        sb.AppendLine("mkdir -p \"$install_dir\"");
+        // macOS .app: zip is publish output → replace Contents/MacOS, then open the bundle.
         sb.AppendLine("if [[ \"$relaunch\" == *.app ]]; then");
+        sb.AppendLine("  macos_dir=\"$relaunch/Contents/MacOS\"");
+        sb.AppendLine("  mkdir -p \"$macos_dir\"");
+        sb.AppendLine("  if command -v ditto >/dev/null 2>&1; then");
+        sb.AppendLine("    ditto \"$tmp\" \"$macos_dir\"");
+        sb.AppendLine("  else");
+        sb.AppendLine("    cp -a \"$tmp\"/. \"$macos_dir\"/");
+        sb.AppendLine("  fi");
+        sb.AppendLine("  chmod +x \"$macos_dir/TitaniumInspector\" 2>/dev/null || true");
+        sb.AppendLine("  rm -rf \"$tmp\"");
         sb.AppendLine("  open \"$relaunch\" || true");
-        sb.AppendLine("elif [[ -x \"$relaunch\" ]]; then");
-        sb.AppendLine("  (cd \"$install_dir\" && nohup \"$relaunch\" >/dev/null 2>&1 &)");
+        sb.AppendLine("else");
+        sb.AppendLine("  cp -a \"$tmp\"/. \"$install_dir\"/");
+        sb.AppendLine("  rm -rf \"$tmp\"");
+        sb.AppendLine("  chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");
+        sb.AppendLine("  if [[ -x \"$relaunch\" ]]; then");
+        sb.AppendLine("    (cd \"$install_dir\" && nohup \"$relaunch\" >/dev/null 2>&1 &)");
+        sb.AppendLine("  fi");
         sb.AppendLine("fi");
         sb.AppendLine($"echo 'Updated Inspector to {version} ({channel}).'");
         return sb.ToString();

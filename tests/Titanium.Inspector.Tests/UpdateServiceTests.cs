@@ -87,6 +87,32 @@ public class UpdateServiceTests
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "99");
         StringAssert.Contains(script, "Beta");
+        StringAssert.Contains(script, "cp -a");
+        // Non-.app relaunch uses nohup; .app path is the other branch in the same script.
+        StringAssert.Contains(script, "nohup");
+    }
+
+    [TestMethod]
+    public void BuildUnixScript_MacApp_UsesDittoIntoContentsMacOS()
+    {
+        var script = UpdateApplyHelper.BuildUnixScript(
+            42,
+            "/tmp/a.zip",
+            "/Applications/Titanium Inspector.app/Contents/MacOS",
+            "/Applications/Titanium Inspector.app",
+            "7.1.0",
+            "Stable");
+        StringAssert.Contains(script, "unzip");
+        StringAssert.Contains(script, "ditto");
+        StringAssert.Contains(script, "Contents/MacOS");
+        StringAssert.Contains(script, "open");
+    }
+
+    [TestMethod]
+    public void RefuseApplyReason_WhenNotOnDmgOrAppImage_IsNull()
+    {
+        // Unit-test host is not a DMG/AppImage mount.
+        Assert.IsNull(UpdateService.RefuseApplyReason());
     }
 
     [TestMethod]

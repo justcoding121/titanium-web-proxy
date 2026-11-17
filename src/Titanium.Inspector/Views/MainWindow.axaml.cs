@@ -332,10 +332,19 @@ public partial class MainWindow : Window
                     Close();
                 return;
             }
+
+            if (await vm.TryOfferLinuxAppImageInstallAsync())
+            {
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    desktop.Shutdown();
+                else
+                    Close();
+                return;
+            }
         }
         catch
         {
-            // never block startup on DMG relocate failure
+            // never block startup on DMG / AppImage relocate failure
         }
 
         try

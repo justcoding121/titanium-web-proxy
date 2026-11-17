@@ -1,7 +1,25 @@
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
+using Titanium.Web.Proxy.Abstractions.Updates;
 
 namespace Titanium.Inspector.Services;
+
+/// <summary>
+///     Outcome when a DMG-hosted Inspector meets an Applications install.
+/// </summary>
+internal enum MacRelocateAction
+{
+    /// <summary>No Applications copy — install this DMG build.</summary>
+    Install,
+
+    /// <summary>Applications copy is older — replace with this DMG build.</summary>
+    Replace,
+
+    /// <summary>Applications copy is same or newer — open it; do not overwrite.</summary>
+    OpenExisting,
+}
 
 /// <summary>
 ///     Detects Inspector launched from a DMG (/Volumes/…) and copies the .app into
@@ -10,6 +28,14 @@ namespace Titanium.Inspector.Services;
 internal static class MacAppRelocation
 {
     private const string BundleDisplayName = "Titanium Inspector.app";
+
+    private static readonly Regex PlistShortVersionRegex = new(
+        @"<key>\s*CFBundleShortVersionString\s*</key>\s*<string>([^<]+)</string>",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex PlistBundleVersionRegex = new(
+        @"<key>\s*CFBundleVersion\s*</key>\s*<string>([^<]+)</string>",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>True when this process is running from a mounted disk image volume.</summary>
     [SupportedOSPlatform("macos")]
@@ -29,7 +55,8 @@ internal static class MacAppRelocation
     }
 
     /// <summary>
-    ///     True when we should offer Move to Applications (DMG launch, not yet dismissed).
+    ///     True when we should offer Move / Update / Open Applications (DMG launch).
+    ///     Re-offers after Not Now when this DMG is newer than the installed copy.
     /// </summary>
     [SupportedOSPlatform("macos")]
     public static bool ShouldOfferMove(InspectorSettings settings) =>
@@ -38,10 +65,70 @@ internal static class MacAppRelocation
     /// <summary>Same decision with the OS and DMG result supplied by the caller (tests).</summary>
     internal static bool ShouldOfferMove(InspectorSettings settings, bool isMacOs, bool runningFromDmg)
     {
-        if (!isMacOs || settings.MacDmgMovePromptDismissed)
+        if (!isMacOs || !runningFromDmg)
             return false;
 
-        return runningFromDmg;
+        if (!settings.MacDmgMovePromptDismissed)
+            return true;
+
+        // Dismissed earlier — only come back when this package is newer than Applications
+        // (or there is no Applications copy yet).
+        var decision = DecideRelocateAction();
+        return decision is MacRelocateAction.Install or MacRelocateAction.Replace;
+    }
+
+    /// <summary>
+    ///     Compare running DMG build to any Applications / ~/Applications install.
+    /// </summary>
+    public static MacRelocateAction DecideRelocateAction(
+        Version? runningVersion = null,
+        Version? installedVersion = null,
+        string? installedPath = null)
+    {
+        runningVersion ??= ReadRunningVersion();
+
+        // Explicit versions (tests / callers) — do not require the path to exist.
+        if (installedVersion is not null)
+        {
+            return ReleaseVersion.Compare(runningVersion, installedVersion) > 0
+                ? MacRelocateAction.Replace
+                : MacRelocateAction.OpenExisting;
+        }
+
+        if (installedPath is null)
+        {
+            if (!OperatingSystem.IsMacOS())
+                return MacRelocateAction.Install;
+            installedPath = TryFindInstalledAppPath();
+        }
+
+        if (installedPath is null || !Directory.Exists(installedPath))
+            return MacRelocateAction.Install;
+
+        var fromBundle = ReadBundleVersion(installedPath);
+        if (fromBundle is null)
+            return MacRelocateAction.Replace;
+
+        return ReleaseVersion.Compare(runningVersion, fromBundle) > 0
+            ? MacRelocateAction.Replace
+            : MacRelocateAction.OpenExisting;
+    }
+
+    /// <summary>
+    ///     Preferred installed path if present (/Applications then ~/Applications).
+    /// </summary>
+    [SupportedOSPlatform("macos")]
+    public static string? TryFindInstalledAppPath()
+    {
+        var systemApps = Path.Combine("/Applications", BundleDisplayName);
+        if (Directory.Exists(systemApps))
+            return systemApps;
+
+        var userApps = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Applications",
+            BundleDisplayName);
+        return Directory.Exists(userApps) ? userApps : null;
     }
 
     /// <summary>
@@ -123,6 +210,41 @@ internal static class MacAppRelocation
             ArgumentList = { installedAppPath },
             UseShellExecute = false,
         });
+    }
+
+    /// <summary>Assembly version of the running process (DMG or installed).</summary>
+    internal static Version ReadRunningVersion()
+    {
+        var asm = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+        return ReleaseVersion.ToComparable(asm.GetName().Version);
+    }
+
+    /// <summary>Parse CFBundleShortVersionString / CFBundleVersion from a .app Info.plist.</summary>
+    internal static Version? ReadBundleVersion(string appBundlePath)
+    {
+        try
+        {
+            var plist = Path.Combine(appBundlePath, "Contents", "Info.plist");
+            if (!File.Exists(plist))
+                return null;
+
+            var text = File.ReadAllText(plist);
+            var shortMatch = PlistShortVersionRegex.Match(text);
+            if (shortMatch.Success
+                && Version.TryParse(ReleaseVersion.StripPrerelease(shortMatch.Groups[1].Value.Trim()), out var shortVer))
+                return ReleaseVersion.ToComparable(shortVer);
+
+            var bundleMatch = PlistBundleVersionRegex.Match(text);
+            if (bundleMatch.Success
+                && Version.TryParse(ReleaseVersion.StripPrerelease(bundleMatch.Groups[1].Value.Trim()), out var bundleVer))
+                return ReleaseVersion.ToComparable(bundleVer);
+        }
+        catch
+        {
+            // ignore
+        }
+
+        return null;
     }
 
     /// <summary>Walks up from MacOS/ to the enclosing .app bundle.</summary>
