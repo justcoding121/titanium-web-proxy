@@ -32,13 +32,16 @@ internal class BcCertificateMaker : ICertificateMaker
     private static bool _doNotSetFriendlyName;
     private readonly int certificateValidDays;
     private readonly int certificateGraceDays;
+    private readonly int rootCertificateValidDays;
     private readonly CertificateKeyAlgorithm leafKeyAlgorithm;
 
     internal BcCertificateMaker(int certificateValidDays, int certificateGraceDays,
-        CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048)
+        CertificateKeyAlgorithm leafKeyAlgorithm = CertificateKeyAlgorithm.Rsa2048,
+        int rootCertificateValidDays = 3650)
     {
         this.certificateValidDays = certificateValidDays;
         this.certificateGraceDays = certificateGraceDays;
+        this.rootCertificateValidDays = rootCertificateValidDays;
         this.leafKeyAlgorithm = leafKeyAlgorithm;
     }
 
@@ -270,8 +273,11 @@ internal class BcCertificateMaker : ICertificateMaker
         X509Certificate2? signingCert = null)
     {
         var host = CertificateHostName.Normalize(subject);
-        return MakeCertificateInternal(host, $"CN={host}",
-            DateTime.UtcNow.AddDays(-certificateGraceDays), DateTime.UtcNow.AddDays(certificateValidDays),
-            signingCert);
+        var nowUtc = DateTime.UtcNow;
+        var validFrom = nowUtc.AddDays(-certificateGraceDays);
+        var validTo = signingCert == null
+            ? nowUtc.AddDays(rootCertificateValidDays)
+            : BcCertificateMakerFast.ClampLeafNotAfter(nowUtc.AddDays(certificateValidDays), signingCert);
+        return MakeCertificateInternal(host, $"CN={host}", validFrom, validTo, signingCert);
     }
 }

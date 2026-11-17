@@ -293,7 +293,16 @@ public class ExampleScriptsTests
                         break;
                 }
 
-                context.Response.Close();
+                try
+                {
+                    context.Response.Close();
+                }
+                catch (Exception ex) when (ex is ObjectDisposedException or HttpListenerException or InvalidOperationException)
+                {
+                    // Stop() disposes the request queue while Close() is still sending headers.
+                    // The callout already has the status line; keep accepting instead of faulting the task.
+                    continue;
+                }
             }
         });
 

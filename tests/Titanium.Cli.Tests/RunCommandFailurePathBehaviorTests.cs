@@ -2,6 +2,8 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Cli.Certificates;
 using Titanium.Cli.Config;
@@ -90,6 +92,10 @@ public class RunCommandFailurePathBehaviorTests
     {
         var proxyPort = FreePort();
         using var dir = new TempDir();
+        // Isolate ACME PEM paths so a leftover acme-cert.pem next to the test host
+        // (ResolveAcmePaths default under AppContext.BaseDirectory) cannot skip IssueOverride.
+        var missingCert = Path.Combine(dir.Path, "missing-acme-cert.pem");
+        var missingKey = Path.Combine(dir.Path, "missing-acme-key.pem");
         var path = dir.Write("twp.yaml", $"""
             schemaVersion: "7.1"
             listeners:
@@ -99,14 +105,18 @@ public class RunCommandFailurePathBehaviorTests
             server:
               drainTimeoutSeconds: 0
             certificates:
+              certificatePath: "{missingCert.Replace("\\", "/")}"
+              privateKeyPath: "{missingKey.Replace("\\", "/")}"
               acmeEmail: "ops@example.test"
               acmeDomain: "acme-failure.example.test"
               acmeDirectory: "http://127.0.0.1:1/directory"
             """);
 
         var previousOverride = CertificateBootstrap.IssueOverride;
+        var previousDelay = CertificateBootstrap.DelayAsync;
         CertificateBootstrap.IssueOverride = static (_, _, _) =>
             throw new InvalidOperationException("directory unreachable (test)");
+        CertificateBootstrap.DelayAsync = (_, ct) => Task.Delay(Timeout.Infinite, ct);
         var stdoutBuffer = new StringWriter();
         var stderrBuffer = new StringWriter();
         var stdout = TextWriter.Synchronized(stdoutBuffer);
@@ -125,7 +135,9 @@ public class RunCommandFailurePathBehaviorTests
                 async () =>
                 {
                     await AsyncConsole.FlushAsync();
-                    return stderrBuffer.ToString().Contains("ACME IssueOrRenew failed: directory unreachable (test)", StringComparison.Ordinal);
+                    var text = stderrBuffer.ToString();
+                    return text.Contains("directory unreachable (test)", StringComparison.Ordinal)
+                           && text.Contains("ACME renewal failed", StringComparison.Ordinal);
                 },
                 TimeSpan.FromSeconds(30),
                 () => stdoutBuffer + Environment.NewLine + stderrBuffer);
@@ -137,6 +149,7 @@ public class RunCommandFailurePathBehaviorTests
         finally
         {
             CertificateBootstrap.IssueOverride = previousOverride;
+            CertificateBootstrap.DelayAsync = previousDelay;
             if (!cts.IsCancellationRequested)
             {
                 await cts.CancelAsync();
@@ -434,6 +447,56 @@ public class RunCommandFailurePathBehaviorTests
         }
 
         Assert.Fail(detail());
+    }
+
+    [TestMethod]
+    public async Task WarnInspectionRootExpiry_ReportsExpiredAndSoonRoots()
+    {
+        using var proxy = new ProxyServer(userTrustRootCertificate: false);
+        var sink = new StringWriter();
+        var previousOut = Console.Out;
+        var previousError = Console.Error;
+        Console.SetOut(sink);
+        Console.SetError(sink);
+        try
+        {
+            using var expired = MakeRoot(DateTimeOffset.UtcNow.AddDays(-40), DateTimeOffset.UtcNow.AddDays(-1));
+            proxy.CertificateManager.RootCertificate = expired;
+            RunCommand.WarnInspectionRootExpiry(proxy);
+
+            typeof(Titanium.Web.Proxy.Network.CertificateManager)
+                .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
+                .SetValue(proxy.CertificateManager, true);
+            using var current = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(400));
+            proxy.CertificateManager.RootCertificate = current;
+            RunCommand.WarnInspectionRootExpiry(proxy);
+
+            typeof(Titanium.Web.Proxy.Network.CertificateManager)
+                .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
+                .SetValue(proxy.CertificateManager, false);
+            using var soon = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(10));
+            proxy.CertificateManager.RootCertificate = soon;
+            RunCommand.WarnInspectionRootExpiry(proxy);
+            await AsyncConsole.FlushAsync();
+        }
+        finally
+        {
+            Console.SetOut(previousOut);
+            Console.SetError(previousError);
+        }
+
+        var text = sink.ToString();
+        StringAssert.Contains(text, "Inspection root CA expired");
+        StringAssert.Contains(text, "expires in");
+    }
+
+    private static X509Certificate2 MakeRoot(DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=twp-inspection-root", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        return request.CreateSelfSigned(notBefore, notAfter);
     }
 
     private sealed class TempDir : IDisposable

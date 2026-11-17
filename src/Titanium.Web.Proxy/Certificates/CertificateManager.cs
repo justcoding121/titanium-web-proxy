@@ -396,16 +396,17 @@ public sealed class CertificateManager : IDisposable
                 {
                     case CertificateEngine.BouncyCastle:
                         certEngineValue = new BcCertificateMaker(CertificateValidDays, CertificateGraceDays,
-                            leafKeyAlgorithm);
+                            leafKeyAlgorithm, RootCertificateValidDays);
                         break;
                     case CertificateEngine.BouncyCastleFast:
                         certEngineValue = new BcCertificateMakerFast(CertificateValidDays, CertificateGraceDays,
-                            leafKeyAlgorithm);
+                            leafKeyAlgorithm, RootCertificateValidDays);
                         break;
                     default:
                         if (!RunTime.IsWindows)
                             throw new PlatformNotSupportedException("The Windows certificate engine requires Windows.");
-                        certEngineValue = new WinCertificateMaker(CertificateValidDays, CertificateGraceDays);
+                        certEngineValue = new WinCertificateMaker(CertificateValidDays, CertificateGraceDays,
+                            RootCertificateValidDays);
                         break;
                 }
 
@@ -541,6 +542,7 @@ public sealed class CertificateManager : IDisposable
     ///         Chrome 70+ and iOS 14+ reject certificates whose total validity window exceeds 398 days.
     ///         To stay within that limit, keep <c>CertificateValidDays + CertificateGraceDays &lt;= 398</c>.
     ///         The default value of 396, combined with the default grace of 2, equals exactly 398 days total.
+    ///         Leaf NotAfter is also clamped so it never outlives <see cref="RootCertificate" />.
     ///     </para>
     /// </summary>
     public int CertificateValidDays { get; set; } = 396;
@@ -555,6 +557,37 @@ public sealed class CertificateManager : IDisposable
     ///     </para>
     /// </summary>
     public int CertificateGraceDays { get; set; } = 2;
+
+    /// <summary>
+    ///     Number of days a newly minted self-signed root CA is valid for. Defaults to 3650 (about 10 years).
+    ///     The 398-day browser cap applies only to leaf certificates, not to local inspection roots.
+    ///     Existing roots keep their current expiry; this value applies only when a root is created.
+    /// </summary>
+    public int RootCertificateValidDays
+    {
+        get => rootCertificateValidDays;
+        set
+        {
+            if (value == rootCertificateValidDays) return;
+            certEngineValue = null;
+            rootCertificateValidDays = value;
+        }
+    }
+
+    private int rootCertificateValidDays = 3650;
+
+    /// <summary>
+    ///     A cached leaf is treated as expired this long before its <c>NotAfter</c>, so a fresh one is
+    ///     minted before clients see a nearly-expired certificate. Defaults to one day.
+    /// </summary>
+    public static readonly TimeSpan LeafRenewalMargin = TimeSpan.FromDays(1);
+
+    /// <summary>
+    ///     Returns true when the certificate is currently usable for TLS: after <c>NotBefore</c>, and
+    ///     with more than <see cref="LeafRenewalMargin" /> remaining before <c>NotAfter</c>.
+    /// </summary>
+    internal static bool IsUsableLeaf(X509Certificate2 certificate, DateTime now) =>
+        certificate.NotBefore <= now && certificate.NotAfter - now > LeafRenewalMargin;
 
     /// <summary>
     ///     Name of the root certificate issuer.
@@ -891,9 +924,9 @@ public sealed class CertificateManager : IDisposable
 
     private X509Certificate2 MakeCertificate(string certificateName, bool isRootCertificate)
     {
-        if (!isRootCertificate && RootCertificate == null)
+        if (!isRootCertificate)
         {
-            CreateRootCertificate();
+            EnsureUsableRootForLeafMint();
             if (RootCertificate == null)
                 throw new InvalidOperationException(
                     "A root certificate is required to create leaf certificates, but root creation failed.");
@@ -934,7 +967,7 @@ public sealed class CertificateManager : IDisposable
                 {
                     certificate = certificateCache.LoadCertificate(subjectName, StorageFlag);
 
-                    if (certificate != null && certificate.NotAfter <= DateTime.Now)
+                    if (certificate != null && !IsUsableLeaf(certificate, DateTime.Now))
                     {
                         OnException(new Exception($"Cached certificate for {subjectName} has expired."));
                         certificate.Dispose();
@@ -1050,9 +1083,8 @@ public sealed class CertificateManager : IDisposable
             return false;
         }
 
-        // do not serve an expired (or not-yet-valid) certificate from the cache
-        var now = DateTime.Now;
-        if (cached.Certificate.NotAfter <= now || cached.Certificate.NotBefore > now)
+        // Do not serve an expired, not-yet-valid, or nearly-expired certificate from the cache.
+        if (!IsUsableLeaf(cached.Certificate, DateTime.Now))
         {
             if (cachedCertificates.TryRemove(certificateName, out var removed))
             {
@@ -1234,7 +1266,7 @@ public sealed class CertificateManager : IDisposable
             var certificate = certificateCache.LoadCertificate(subjectName, StorageFlag);
             if (certificate == null) return null;
 
-            if (certificate.NotAfter <= DateTime.Now)
+            if (!IsUsableLeaf(certificate, DateTime.Now))
             {
                 OnException(new Exception($"Cached certificate for {subjectName} has expired."));
                 certificate.Dispose();
@@ -1247,6 +1279,41 @@ public sealed class CertificateManager : IDisposable
         {
             OnException(new Exception("Failed to load fake certificate.", e));
             return null;
+        }
+    }
+
+    /// <summary>
+    ///     Ensures a usable root exists before minting a leaf. An expired in-memory root is discarded and
+    ///     recreated when <see cref="OverwritePfxFile" /> is true; otherwise minting fails clearly.
+    /// </summary>
+    private void EnsureUsableRootForLeafMint()
+    {
+        var current = RootCertificate;
+        if (current != null && current.NotAfter > DateTime.Now)
+            return;
+
+        // Serialize rotation so concurrent handshakes mint exactly one replacement root.
+        lock (rootCertCreationLock)
+        {
+            current = RootCertificate;
+            if (current == null)
+            {
+                CreateRootCertificate();
+                return;
+            }
+
+            if (current.NotAfter > DateTime.Now)
+                return;
+
+            OnException(new Exception("Root certificate has expired."));
+            if (!OverwritePfxFile)
+                throw new InvalidOperationException(
+                    "Root certificate has expired and OverwritePfxFile is false; replace the root PFX or enable overwrite.");
+
+            RootCertificateWasReplacedDueToExpiry = true;
+            // Do not dispose: in-flight handshakes may still be signing with the old instance.
+            RootCertificate = null;
+            CreateRootCertificate();
         }
     }
 
@@ -1597,11 +1664,13 @@ public sealed class CertificateManager : IDisposable
                     {
                         OnException(new Exception("Loaded root certificate has expired."));
                         rootCert.Dispose();
+                        RootCertificateWasReplacedDueToExpiry = true;
                         return false;
                     }
 
                     if (rootCert != null)
                     {
+                        RootCertificateWasReplacedDueToExpiry = false;
                         RootCertificate = rootCert;
                         return true;
                     }
@@ -1660,8 +1729,12 @@ public sealed class CertificateManager : IDisposable
             {
                 OnException(new ArgumentException("Loaded root certificate has expired."));
                 rootCert.Dispose();
+                RootCertificateWasReplacedDueToExpiry = true;
                 return null;
             }
+
+            if (rootCert != null)
+                RootCertificateWasReplacedDueToExpiry = false;
 
             return rootCert;
         }
@@ -1700,6 +1773,13 @@ public sealed class CertificateManager : IDisposable
 
         return RootCertificate != null;
     }
+
+    /// <summary>
+    ///     True after an expired root was discarded from disk or memory so a replacement can be minted.
+    ///     Stays set across the replacement mint so UI can explain why trust was lost; cleared on the
+    ///     next successful load of a non-expired root from disk.
+    /// </summary>
+    public bool RootCertificateWasReplacedDueToExpiry { get; private set; }
 
     /// <summary>Last OS/browser trust outcome from <see cref="TrustRootCertificate"/> / related helpers.</summary>
     public CertificateOsTrustResult? LastOsTrustResult { get; private set; }

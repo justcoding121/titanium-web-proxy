@@ -547,7 +547,15 @@ internal static class ServerConfigApplier
         }
 
         var cm = proxy.CertificateManager;
+        ApplyCertificateManagerEnums(cm, certs);
+        ApplyCertificateManagerPaths(cm, certs);
+        ApplyCertificateManagerDurations(cm, certs);
+        ApplyCertificateManagerNames(cm, certs);
+        ApplyCertificateManagerFlags(cm, certs);
+    }
 
+    private static void ApplyCertificateManagerEnums(CertificateManager cm, CertificateManagerConfig certs)
+    {
         if (!string.IsNullOrWhiteSpace(certs.CertificateEngine) &&
             Enum.TryParse<CertificateEngine>(certs.CertificateEngine, ignoreCase: true, out var engine))
         {
@@ -559,7 +567,10 @@ internal static class ServerConfigApplier
         {
             cm.LeafCertificateKeyAlgorithm = algo;
         }
+    }
 
+    private static void ApplyCertificateManagerPaths(CertificateManager cm, CertificateManagerConfig certs)
+    {
         if (certs.PfxFilePath is not null)
         {
             cm.PfxFilePath = certs.PfxFilePath;
@@ -574,7 +585,10 @@ internal static class ServerConfigApplier
         {
             cm.OverwritePfxFile = overwrite;
         }
+    }
 
+    private static void ApplyCertificateManagerDurations(CertificateManager cm, CertificateManagerConfig certs)
+    {
         if (certs.CertificateValidDays is int validDays)
         {
             cm.CertificateValidDays = validDays;
@@ -585,11 +599,19 @@ internal static class ServerConfigApplier
             cm.CertificateGraceDays = graceDays;
         }
 
+        if (certs.RootCertificateValidDays is int rootValidDays)
+        {
+            cm.RootCertificateValidDays = rootValidDays;
+        }
+
         if (certs.CertificateCacheTimeOutMinutes is int cacheMinutes)
         {
             cm.CertificateCacheTimeOutMinutes = cacheMinutes;
         }
+    }
 
+    private static void ApplyCertificateManagerNames(CertificateManager cm, CertificateManagerConfig certs)
+    {
         if (!string.IsNullOrWhiteSpace(certs.RootCertificateName))
         {
             cm.RootCertificateName = certs.RootCertificateName;
@@ -599,7 +621,10 @@ internal static class ServerConfigApplier
         {
             cm.RootCertificateIssuerName = certs.RootCertificateIssuerName;
         }
+    }
 
+    private static void ApplyCertificateManagerFlags(CertificateManager cm, CertificateManagerConfig certs)
+    {
         if (certs.SaveFakeCertificates is bool saveFakes)
         {
             cm.SaveFakeCertificates = saveFakes;

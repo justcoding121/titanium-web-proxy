@@ -49,16 +49,19 @@ internal class WinCertificateMaker : ICertificateMaker
     // Validity Days for Root Certificates Generated.
     private readonly int certificateValidDays;
     private readonly int certificateGraceDays;
+    private readonly int rootCertificateValidDays;
 
     private object? sharedPrivateKey;
 
     /// <summary>
     ///     Constructor.
     /// </summary>
-    internal WinCertificateMaker(int certificateValidDays, int certificateGraceDays)
+    internal WinCertificateMaker(int certificateValidDays, int certificateGraceDays,
+        int rootCertificateValidDays = 3650)
     {
         this.certificateValidDays = certificateValidDays;
         this.certificateGraceDays = certificateGraceDays;
+        this.rootCertificateValidDays = rootCertificateValidDays;
 
         typeX500Dn = GetComType("X509Enrollment.CX500DistinguishedName");
         typeX509PrivateKey = GetComType("X509Enrollment.CX509PrivateKey");
@@ -124,8 +127,11 @@ internal class WinCertificateMaker : ICertificateMaker
 
         var now = DateTime.UtcNow;
         var graceTime = now.AddDays(-certificateGraceDays);
+        var validTo = signingCertificate == null
+            ? now.AddDays(rootCertificateValidDays)
+            : BcCertificateMakerFast.ClampLeafNotAfter(now.AddDays(certificateValidDays), signingCertificate);
         var certificate = MakeCertificate(host, fullSubject, keyLength, hashAlgo, graceTime,
-            now.AddDays(certificateValidDays), signingCertificate);
+            validTo, signingCertificate);
         return certificate;
     }
 

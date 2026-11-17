@@ -77,6 +77,47 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
 
         var gnome = HasGnome();
         var kde = HasKde();
+
+        // Write Chromium launch hooks before gsettings flips. Callers treat "proxy on"
+        // as the signal to start a browser, and a stale desktop file still has the
+        // bypass token that makes Chromium ignore --proxy-server.
+        TryPrepareBrowserLaunchHooks(hostname, port, proxyOverride);
+
+        var desktopError = ApplyDesktopProxies(gnome, kde, hostname, port, protocolType, proxyOverride);
+        TryApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
+        var sessionEnvApplied = TryApplySessionEnvironment(hostname, port, protocolType, proxyOverride);
+        var hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride);
+
+        if (desktopError is not null && !hooksApplied)
+            throw desktopError;
+
+        if (!gnome && !kde && !hooksApplied && !sessionEnvApplied)
+        {
+            throw new InvalidOperationException(
+                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, writable " +
+                "Chrome/Chromium desktop/policy files, or a user session environment; only this " +
+                "process's http(s)_proxy environment was updated.");
+        }
+    }
+
+    private void TryPrepareBrowserLaunchHooks(string hostname, int port, string? proxyOverride)
+    {
+        if (!_applyBrowserLaunchHooks)
+            return;
+
+        try
+        {
+            LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride, relaunch: false);
+        }
+        catch
+        {
+            // best-effort; the later call reports whether any hook stuck
+        }
+    }
+
+    private Exception? ApplyDesktopProxies(
+        bool gnome, bool kde, string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+    {
         Exception? desktopError = null;
 
         // Apply every desktop path that exists. GNOME verify must not skip XFCE/KDE/Chrome hooks.
@@ -105,6 +146,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             }
         }
 
+        return desktopError;
+    }
+
+    private static void TryApplyProcessEnvironment(
+        string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+    {
         // Process env alone does not affect Chrome/Firefox already running in the desktop session.
         try
         {
@@ -114,41 +161,35 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             // best-effort
         }
+    }
 
+    private bool TryApplySessionEnvironment(
+        string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
+    {
         // libproxy 0.5 on Ubuntu often ignores gsettings; publish http_proxy to the user session too.
-        var sessionEnvApplied = false;
         try
         {
-            sessionEnvApplied = ApplyUserSessionProxyEnvironment(hostname, port, protocolType, proxyOverride);
+            return ApplyUserSessionProxyEnvironment(hostname, port, protocolType, proxyOverride);
         }
         catch
         {
-            // best-effort
+            return false;
         }
+    }
 
+    private bool TryCommitBrowserLaunchHooks(string hostname, int port, string? proxyOverride)
+    {
         // XFCE/i3/WSLg/RDP dock Chrome ignores GNOME gsettings; pin Chromium-family via policy + .desktop Exec.
-        var hooksApplied = false;
-        if (_applyBrowserLaunchHooks)
+        if (!_applyBrowserLaunchHooks)
+            return false;
+
+        try
         {
-            try
-            {
-                hooksApplied = LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride);
-            }
-            catch
-            {
-                // best-effort
-            }
+            return LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride);
         }
-
-        if (desktopError is not null && !hooksApplied)
-            throw desktopError;
-
-        if (!gnome && !kde && !hooksApplied && !sessionEnvApplied)
+        catch
         {
-            throw new InvalidOperationException(
-                "Linux system proxy requires GNOME gsettings, KDE kwriteconfig, writable " +
-                "Chrome/Chromium desktop/policy files, or a user session environment; only this " +
-                "process's http(s)_proxy environment was updated.");
+            return false;
         }
     }
 

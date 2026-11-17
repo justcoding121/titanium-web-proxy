@@ -35,7 +35,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | YAML config | Schema 7.1 listeners, routes, clusters, transforms, static files |
 | Load balancing | RoundRobin, Random, LeastRequests, LeastTime; sticky cookie/header |
 | Upstream mTLS | Per-cluster client certificate, CA bundle, SNI override, and hostname policy (`clusters[].httpClient`) |
-| ACME | Optional Let's Encrypt certificates |
+| ACME | Optional Let's Encrypt certificates; renews within 30 days of expiry and hot-swaps without restart |
 | Protocols | HTTP/2 by default; HTTP/3 when QUIC is available; protocol bridging |
 | Listeners | Explicit, transparent, SOCKS, QUIC, UDP relay (sessions per client endpoint, cluster load balancing, caps, metrics) |
 | OS service | Windows SCM / systemd / launchd via `titanium service` |

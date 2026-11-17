@@ -12,7 +12,9 @@ Pull requests run unit, integration, configuration, Plus, Gateway, scripting, Ma
 
 `tests/coverage-floors.json` is the line-coverage ratchet. Editing it in a pull request is the visible waiver when a floor has to move. Sonar upload does not fail the build.
 
-`.github/required-checks.json` is the only list of merge checks. On `beta` and `stable` the ruleset requires `merge-gate` (the `.NET` build, Redis fleet, and three-OS UI and CLI jobs), the three-OS RPS spot check, secret scan, dependency review, tests-or-waiver, the path guard, and the CLA check. `develop` does not enforce that list. Setting `CONFORMANCE_ENFORCE` or `GATEWAY_CONFORMANCE_ENFORCE` after a green nightly, and applying the ruleset, is a maintainer step. CI does not change those repository settings.
+`.github/required-checks.json` is the only list of merge checks. On `beta` and `stable` the ruleset requires `merge-gate` (the `.NET` build, Redis fleet, and three-OS UI and CLI jobs), the three-OS RPS spot check, secret scan, dependency review, tests-or-waiver, the path guard, the CLA check, and `install-smoke` on Windows, Linux, and macOS. `develop` does not enforce that list. Setting `CONFORMANCE_ENFORCE` or `GATEWAY_CONFORMANCE_ENFORCE` after a green nightly, and applying the ruleset, is a maintainer step. CI does not change those repository settings.
+
+`inspector-install-smoke` installs the packaged Inspector and CLI and requires a decrypted GET from each browser that OS can install. Upgrade keeps Decrypt on. A fresh install leaves Decrypt off until it is turned on. There is no waiver label. The author of the release pull request fixes a red run.
 
 Live Inspector decrypt on a developer PC still needs a person if the OS asks to install a root. CI uses an ephemeral machine and `machine-trust`, not a developer trust store.
 

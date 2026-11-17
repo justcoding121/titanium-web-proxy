@@ -20,6 +20,8 @@ internal static class LinuxBrowserLaunchProxy
     internal const string PolicyFileName = "titanium-inspector-proxy.json";
     internal const string DesktopMarker = "X-Titanium-Inspector-Proxy=true";
     internal const string ProxyBypassList = "<-loopback>";
+    private const string DesktopExecPrefix = "Exec=";
+    private const string SudoBinary = "/usr/bin/sudo";
 
     /// <summary>
     ///     Chromium managed-policy floor we target: modern <c>ProxyMode</c> string enum plus
@@ -49,6 +51,7 @@ internal static class LinuxBrowserLaunchProxy
         "/usr/share/applications/brave-browser.desktop",
         "/usr/share/applications/microsoft-edge.desktop",
         "/usr/share/applications/microsoft-edge-stable.desktop",
+        "/usr/share/applications/opera.desktop",
     ];
 
     private static readonly string[] ChromeBinaries =
@@ -61,24 +64,40 @@ internal static class LinuxBrowserLaunchProxy
         "/usr/bin/brave-browser",
         "/usr/bin/microsoft-edge-stable",
         "/usr/bin/microsoft-edge",
+        "/usr/bin/opera",
+        "/usr/bin/opera-stable",
     ];
 
     /// <summary>Returns true when at least one browser-launch hook was written and re-validated.</summary>
-    internal static bool Apply(string hostname, int port, string? proxyOverride = null)
+    /// <summary>
+    ///     True when the WinINET-style bypass list asks for localhost to use the proxy
+    ///     (the Inspector "send localhost" option, <c>&lt;-loopback&gt;</c>).
+    /// </summary>
+    internal static bool WantsProxyLoopback(string? proxyOverride) =>
+        !string.IsNullOrWhiteSpace(proxyOverride) &&
+        proxyOverride.Split(';').Any(rule =>
+            rule.Trim().Equals(ProxyBypassList, StringComparison.OrdinalIgnoreCase));
+
+    /// <param name="relaunch">
+    ///     Restart running Chromium-family browsers so Preference edits apply. A caller that
+    ///     writes hooks twice passes false for the early write, so the user's windows restart once.
+    /// </param>
+    internal static bool Apply(string hostname, int port, string? proxyOverride = null, bool relaunch = true)
     {
-        var policyCount = WritePolicies(hostname, port);
+        var loopback = WantsProxyLoopback(proxyOverride);
+        var policyCount = WritePolicies(hostname, port, proxyLoopback: loopback);
         var policyOk = policyCount > 0;
-        var desktopCount = WriteBrowserDesktopOverrides(hostname, port);
+        var desktopCount = WriteBrowserDesktopOverrides(hostname, port, loopback);
         var desktopOk = desktopCount > 0;
-        var xfceOk = WriteXfceWebBrowserHelper(hostname, port);
-        var profileCount = LinuxChromeProfileProxy.Apply(hostname, port);
+        var xfceOk = WriteXfceWebBrowserHelper(hostname, port, loopback);
+        var profileCount = LinuxChromeProfileProxy.Apply(hostname, port, loopback);
         var profileOk = profileCount > 0;
         var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride);
         if (desktopOk)
             TryUpdateDesktopDatabase();
         var ok = policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
-        // Relaunch running Chromium-family browsers so Preference edits take effect.
-        LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true);
+        if (relaunch)
+            LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true, proxyLoopback: loopback);
         return ok;
     }
 
@@ -99,8 +118,12 @@ internal static class LinuxBrowserLaunchProxy
             }
         }
 
+        TrySyncMachinePolicies(null);
+
         foreach (var dest in UserDesktopOverridePaths())
             DeleteMarkedDesktopOverride(dest);
+
+        DeleteLauncherScripts();
 
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
@@ -144,12 +167,13 @@ internal static class LinuxBrowserLaunchProxy
         "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     /// <summary>Writes managed policy JSON; returns count of directories that validated after write.</summary>
-    internal static int WritePolicies(string hostname, int port, IEnumerable<string>? directories = null)
+    internal static int WritePolicies(
+        string hostname, int port, IEnumerable<string>? directories = null, bool proxyLoopback = false)
     {
         string json;
         try
         {
-            json = BuildPolicyJson(hostname, port);
+            json = BuildPolicyJson(hostname, port, proxyLoopback);
         }
         catch
         {
@@ -184,14 +208,152 @@ internal static class LinuxBrowserLaunchProxy
             }
         }
 
+        // Official Chrome reads only the machine policy directory. A non-interactive
+        // sudo installs it when the user is already an admin; a password prompt is never shown.
+        if (directories is null)
+            TrySyncMachinePolicies(json);
+
         return written;
     }
+
+    /// <summary>
+    ///     Install or remove managed policy under <c>/etc</c> without prompting.
+    ///     Pass null to remove the files this writer owns.
+    /// </summary>
+    private static void TrySyncMachinePolicies(string? json)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        SyncMachinePolicies(json, MachinePolicyVendors);
+    }
+
+    /// <summary>Runs the machine-policy sync against caller-supplied vendor roots (tests).</summary>
+    internal static void SyncMachinePoliciesForTests(
+        string? json, (string Root, string[] Binaries)[] vendors) =>
+        SyncMachinePolicies(json, vendors);
+
+    private static void SyncMachinePolicies(string? json, (string Root, string[] Binaries)[] vendors)
+    {
+        try
+        {
+            if (json is null)
+            {
+                // Only ask for sudo when a file we own is actually there to remove.
+                var owned = MachinePolicyFiles(installedOnly: false, vendors).Where(File.Exists).ToList();
+                if (owned.Count > 0)
+                    TrySudoNonInteractive(["rm", "-f", "--", .. owned], stdin: null);
+                return;
+            }
+
+            // One sudo call, only for installed browsers, and only when the file would change.
+            // The JSON travels on stdin: a predictable file under /tmp could be swapped for a
+            // link, and root would then install attacker-chosen policy for every user.
+            var targets = MachinePolicyFiles(installedOnly: true, vendors)
+                .Where(path => !MachinePolicyMatches(path, json))
+                .ToList();
+            if (targets.Count == 0)
+                return;
+
+            const string script =
+                "for f in \"$@\"; do mkdir -p -- \"$(dirname -- \"$f\")\" || exit 1; done; " +
+                "tee -- \"$@\" >/dev/null && chmod 644 -- \"$@\"";
+            TrySudoNonInteractive(["sh", "-c", script, "sh", .. targets], json);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static readonly (string Root, string[] Binaries)[] MachinePolicyVendors =
+    [
+        ("/etc/opt/chrome", ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
+        ("/etc/chromium", ["/usr/bin/chromium", "/usr/bin/chromium-browser"]),
+        ("/etc/opt/edge", ["/usr/bin/microsoft-edge-stable", "/usr/bin/microsoft-edge"]),
+        ("/etc/brave", ["/usr/bin/brave-browser"]),
+        ("/etc/opera", ["/usr/bin/opera", "/usr/bin/opera-stable"]),
+    ];
+
+    private static IEnumerable<string> MachinePolicyFiles(
+        bool installedOnly, (string Root, string[] Binaries)[] vendors)
+    {
+        foreach (var (root, binaries) in vendors)
+        {
+            if (installedOnly && !Directory.Exists(root) && !binaries.Any(File.Exists))
+                continue;
+            yield return Path.Combine(root, PoliciesManaged, ManagedDirName, PolicyFileName);
+        }
+    }
+
+    internal static List<string> MachinePolicyFilesForTests(
+        bool installedOnly, (string Root, string[] Binaries)[] vendors) =>
+        MachinePolicyFiles(installedOnly, vendors).ToList();
+
+    private static bool MachinePolicyMatches(string path, string json)
+    {
+        try
+        {
+            return File.Exists(path) && string.Equals(File.ReadAllText(path), json, StringComparison.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Runs <c>sudo -n</c>: never prompts, fails fast when sudo needs a password.</summary>
+    private static void TrySudoNonInteractive(IReadOnlyList<string> command, string? stdin) =>
+        TrySudoNonInteractive(command, stdin, SudoBinary, waitMilliseconds: 8000);
+
+    private static void TrySudoNonInteractive(
+        IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds)
+    {
+        try
+        {
+            var info = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = sudoExecutable,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardInput = stdin is not null,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            info.ArgumentList.Add("-n");
+            foreach (var part in command)
+                info.ArgumentList.Add(part);
+
+            using var process = System.Diagnostics.Process.Start(info);
+            if (process is null)
+                return;
+            if (stdin is not null)
+            {
+                process.StandardInput.Write(stdin);
+                process.StandardInput.Close();
+            }
+
+            if (!process.WaitForExit(waitMilliseconds))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { /* ignore */ }
+            }
+        }
+        catch
+        {
+            // sudo missing or not permitted
+        }
+    }
+
+    /// <summary>Same sudo launch with the executable and wait supplied by the caller (tests).</summary>
+    internal static void TrySudoNonInteractiveForTests(
+        IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds) =>
+        TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
 
     /// <summary>
     ///     Builds Chromium managed-policy JSON. Prefer modern <c>ProxyMode</c> string keys;
     ///     also emit deprecated <c>ProxyServerMode</c>=2 for older Chromium that still reads it.
     /// </summary>
-    internal static string BuildPolicyJson(string hostname, int port)
+    internal static string BuildPolicyJson(string hostname, int port, bool proxyLoopback = false)
     {
         if (string.IsNullOrWhiteSpace(hostname))
             throw new ArgumentException("hostname is required", nameof(hostname));
@@ -205,9 +367,10 @@ internal static class LinuxBrowserLaunchProxy
             // Deprecated int enum (2 = Use a fixed proxy server). Harmless on modern Chrome.
             ["ProxyServerMode"] = LegacyProxyServerModeFixedServers,
             ["ProxyServer"] = server,
-            ["ProxyBypassList"] = ProxyBypassList,
             ["QuicAllowed"] = false,
         };
+        if (proxyLoopback)
+            payload["ProxyBypassList"] = ProxyBypassList;
 
         return payload.ToJsonString(new JsonSerializerOptions
         {
@@ -282,13 +445,13 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
-    internal static string InjectChromeProxyArgs(string execLine, string hostname, int port)
+    internal static string InjectChromeProxyArgs(string execLine, string hostname, int port, bool proxyLoopback = false)
     {
-        var flags = ChromeProxyFlags(hostname, port);
+        var flags = ChromeProxyShellFlags(hostname, port, proxyLoopback);
         if (execLine.Contains("--proxy-server=", StringComparison.Ordinal))
             return execLine;
 
-        var prefix = execLine.StartsWith("Exec=", StringComparison.Ordinal) ? "Exec=" : "";
+        var prefix = execLine.StartsWith(DesktopExecPrefix, StringComparison.Ordinal) ? DesktopExecPrefix : "";
         var rest = prefix.Length > 0 ? execLine[prefix.Length..] : execLine;
 
         // Insert before desktop field codes so every Chromium-family Exec line picks up flags.
@@ -303,8 +466,150 @@ internal static class LinuxBrowserLaunchProxy
         return prefix + rest[..insertAt] + " " + flags + rest[insertAt..];
     }
 
-    internal static string ChromeProxyFlags(string hostname, int port) =>
-        $"--proxy-server=http://{hostname}:{port} --proxy-bypass-list={ProxyBypassList} --disable-quic"; // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
+    /// <summary>
+    ///     Plain argv text (a consumer that word-splits and never runs a shell parse).
+    ///     <paramref name="proxyLoopback"/> keeps localhost on the proxy, as the Inspector option asks.
+    /// </summary>
+    internal static string ChromeProxyFlags(string hostname, int port, bool proxyLoopback = false) =>
+        $"--proxy-server=http://{hostname}:{port} --disable-quic" + // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
+        (proxyLoopback ? $" --proxy-bypass-list={ProxyBypassList}" : string.Empty);
+
+    /// <summary>
+    ///     Same flags for a desktop Exec line or shell script, where an unquoted
+    ///     <c>&lt;</c> is a reserved character or a redirection.
+    /// </summary>
+    internal static string ChromeProxyShellFlags(string hostname, int port, bool proxyLoopback = false) =>
+        $"--proxy-server=http://{hostname}:{port} --disable-quic" + // NOSONAR S5332 -- Chromium --proxy-server flag requires an http CONNECT proxy URL.
+        (proxyLoopback ? $" \"--proxy-bypass-list={ProxyBypassList}\"" : string.Empty);
+
+    /// <summary>
+    ///     Rewrites a vendor desktop file so launches use <paramref name="scriptPath"/>
+    ///     and <c>DBusActivatable=false</c>. D-Bus activation ignores Exec, which is how
+    ///     Chromium was starting with no proxy flags.
+    /// </summary>
+    internal static (string Desktop, string Script)? BuildDesktopOverride(
+        string sourceText, string scriptPath, string hostname, int port, bool proxyLoopback = false)
+    {
+        string? binary = null;
+        var body = new StringBuilder();
+        var sawDbus = false;
+        foreach (var rawLine in sourceText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var line = RewriteDesktopLine(
+                rawLine, scriptPath, hostname, port, proxyLoopback, ref binary, ref sawDbus);
+            body.Append(line);
+            body.Append('\n');
+        }
+
+        if (string.IsNullOrEmpty(binary))
+            return null;
+
+        if (!sawDbus)
+            InsertAfterDesktopHeader(body, "DBusActivatable=false\n");
+
+        if (!body.ToString().Contains(DesktopMarker, StringComparison.Ordinal))
+            InsertAfterDesktopHeader(body, DesktopMarker + "\n");
+
+        return (body.ToString(), BuildDesktopLaunchScript(binary, hostname, port, proxyLoopback));
+    }
+
+    private static string RewriteDesktopLine(
+        string rawLine,
+        string scriptPath,
+        string hostname,
+        int port,
+        bool proxyLoopback,
+        ref string? binary,
+        ref bool sawDbus)
+    {
+        var line = rawLine;
+        if (line.StartsWith("DBusActivatable=", StringComparison.OrdinalIgnoreCase))
+        {
+            sawDbus = true;
+            return "DBusActivatable=false";
+        }
+
+        if (!line.StartsWith(DesktopExecPrefix, StringComparison.Ordinal))
+            return line;
+
+        var rest = line[DesktopExecPrefix.Length..];
+        var fieldAt = FieldCodeIndex(rest);
+        var command = (fieldAt >= 0 ? rest[..fieldAt] : rest).Trim();
+        var field = fieldAt >= 0 ? rest[fieldAt..] : string.Empty;
+        var token = FirstToken(command);
+        if (string.IsNullOrEmpty(token))
+            return line;
+
+        binary ??= token;
+        if (!string.Equals(token, binary, StringComparison.Ordinal))
+            return InjectChromeProxyArgs(line, hostname, port, proxyLoopback);
+
+        var extra = command.Length > token.Length ? command[token.Length..] : string.Empty;
+        return DesktopExecPrefix + QuoteDesktopPath(scriptPath) + extra + field;
+    }
+
+    private static void InsertAfterDesktopHeader(StringBuilder body, string line)
+    {
+        var text = body.ToString();
+        var header = text.IndexOf('\n');
+        if (header >= 0)
+            body.Insert(header + 1, line);
+    }
+
+    private static string BuildDesktopLaunchScript(
+        string binary, string hostname, int port, bool proxyLoopback)
+    {
+        // First launch on a new profile sits on the welcome flow and never requests the
+        // page, so the proxy sees no session. Skip that flow, and pass the proxy both as
+        // an environment variable and as a switch.
+        var proxyUrl = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium proxy URL is http.
+        // TITANIUM_SMOKE_BROWSER_FLAGS is empty for a normal launch. The install smoke sets it
+        // so the browser opens the page instead of spending the wait on component downloads.
+        return "#!/bin/sh\n" +
+               "# " + DesktopMarker + "\n" +
+               "export http_proxy=" + QuoteShellArg(proxyUrl) + "\n" +
+               "export https_proxy=\"$http_proxy\"\n" +
+               "export HTTP_PROXY=\"$http_proxy\"\n" +
+               "export HTTPS_PROXY=\"$http_proxy\"\n" +
+               "unset no_proxy NO_PROXY\n" +
+               "extra=\n" +
+               "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
+               "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
+               "fi\n" +
+               "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
+               " --no-first-run --no-default-browser-check$extra \"$@\"\n";
+    }
+
+    private static int FieldCodeIndex(string rest)
+    {
+        var insertAt = -1;
+        foreach (var code in DesktopFieldCodes)
+        {
+            var idx = rest.IndexOf(code, StringComparison.Ordinal);
+            if (idx >= 0 && (insertAt < 0 || idx < insertAt))
+                insertAt = idx;
+        }
+
+        return insertAt;
+    }
+
+    private static string FirstToken(string command)
+    {
+        var trimmed = command.Trim();
+        if (trimmed.Length == 0)
+            return string.Empty;
+        if (trimmed[0] == '"')
+        {
+            var end = trimmed.IndexOf('"', 1);
+            return end > 1 ? trimmed[1..end] : trimmed.Trim('"');
+        }
+
+        var space = trimmed.IndexOf(' ');
+        return space < 0 ? trimmed : trimmed[..space];
+    }
+
+    private static string QuoteDesktopPath(string path) =>
+        path.IndexOfAny([' ', '\t', '"', '\'', '<', '>']) >= 0 ? QuoteShellArg(path) : path;
 
     internal static IEnumerable<string> PolicyDirectories()
     {
@@ -315,6 +620,7 @@ internal static class LinuxBrowserLaunchProxy
         yield return Path.Combine(home, ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, MicrosoftEdgeDirName, PoliciesManaged, ManagedDirName);
+        yield return Path.Combine(home, ConfigDirName, "opera", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "common", ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", ChromiumDirName, "current", ConfigDirName, ChromiumDirName, PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, "snap", MicrosoftEdgeDirName, "common", MicrosoftEdgeDirName, PoliciesManaged, ManagedDirName);
@@ -329,24 +635,33 @@ internal static class LinuxBrowserLaunchProxy
         yield return "/etc/opt/chrome/policies/managed";
         yield return "/etc/chromium/policies/managed";
         yield return "/etc/opt/edge/policies/managed";
+        yield return "/etc/opera/policies/managed";
     }
 
-    private static int WriteBrowserDesktopOverrides(string hostname, int port)
+    private static int WriteBrowserDesktopOverrides(string hostname, int port, bool proxyLoopback) =>
+        WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, DesktopSources);
+
+    private static int WriteBrowserDesktopOverrides(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> sources)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         var written = 0;
-        foreach (var source in DesktopSources)
+        foreach (var source in sources)
         {
             if (!File.Exists(source))
                 continue;
             var dest = Path.Combine(destDir, Path.GetFileName(source));
-            if (WriteMarkedDesktopExec(source, dest, hostname, port))
+            if (WriteMarkedDesktopExec(source, dest, hostname, port, proxyLoopback))
                 written++;
         }
 
         return written;
     }
+
+    internal static int WriteBrowserDesktopOverridesForTests(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> sources) =>
+        WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, sources);
 
     private static IEnumerable<string> UserDesktopOverridePaths()
     {
@@ -356,40 +671,91 @@ internal static class LinuxBrowserLaunchProxy
             yield return Path.Combine(destDir, Path.GetFileName(source));
     }
 
-    private static bool WriteMarkedDesktopExec(string source, string dest, string hostname, int port)
+    private static bool WriteMarkedDesktopExec(string source, string dest, string hostname, int port, bool proxyLoopback)
     {
         try
         {
             var text = File.ReadAllText(source);
-            var rewritten = new StringBuilder();
-            foreach (var rawLine in text.Replace("\r\n", "\n").Split('\n'))
-            {
-                var line = rawLine;
-                if (line.StartsWith("Exec=", StringComparison.Ordinal))
-                    line = InjectChromeProxyArgs(line, hostname, port);
-                rewritten.Append(line);
-                rewritten.Append('\n');
-            }
+            var scriptPath = LauncherScriptPath(dest);
+            var built = BuildDesktopOverride(text, scriptPath, hostname, port, proxyLoopback);
+            if (built is null)
+                return false;
 
-            if (!rewritten.ToString().Contains(DesktopMarker, StringComparison.Ordinal))
-            {
-                var firstNl = rewritten.ToString().IndexOf('\n');
-                if (firstNl >= 0)
-                    rewritten.Insert(firstNl + 1, DesktopMarker + "\n");
-            }
-
+            Directory.CreateDirectory(Path.GetDirectoryName(scriptPath)!);
+            File.WriteAllText(scriptPath, built.Value.Script.Replace("\r\n", "\n", StringComparison.Ordinal));
+            TryMakeExecutable(scriptPath);
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-            File.WriteAllText(dest, rewritten.ToString());
+            File.WriteAllText(dest, built.Value.Desktop);
 
             var verify = File.ReadAllText(dest);
+            var script = File.ReadAllText(scriptPath);
             return verify.Contains(DesktopMarker, StringComparison.Ordinal) &&
-                   verify.Contains("--proxy-server=", StringComparison.Ordinal);
+                   verify.Contains("DBusActivatable=false", StringComparison.Ordinal) &&
+                   script.Contains("--proxy-server=", StringComparison.Ordinal);
         }
         catch
         {
             return false;
         }
     }
+
+    private static string LauncherScriptPath(string desktopDest)
+    {
+        var name = Path.GetFileNameWithoutExtension(desktopDest);
+        return Path.Combine(LauncherDirectory(), name + ".sh");
+    }
+
+    private static string LauncherDirectory()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(home, LocalDirName, ShareDirName, "titanium-inspector", "launchers");
+    }
+
+    private static void DeleteLauncherScripts()
+    {
+        try
+        {
+            var dir = LauncherDirectory();
+            if (!Directory.Exists(dir))
+                return;
+            foreach (var file in Directory.EnumerateFiles(dir, "*.sh"))
+            {
+                var text = File.ReadAllText(file);
+                if (text.Contains(DesktopMarker, StringComparison.Ordinal))
+                    File.Delete(file);
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static void TryMakeExecutable(string scriptPath) =>
+        TryMakeExecutable(scriptPath, OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+
+    private static void TryMakeExecutable(string scriptPath, bool applyUnixMode)
+    {
+        try
+        {
+            if (applyUnixMode)
+            {
+                // chmod u+x: add the owner execute bit and leave the mode WriteAllText created.
+                // Tests pass applyUnixMode on Windows; the call throws and the catch stays best-effort.
+#pragma warning disable CA1416
+                var mode = File.GetUnixFileMode(scriptPath);
+                File.SetUnixFileMode(scriptPath, mode | UnixFileMode.UserExecute);
+#pragma warning restore CA1416
+            }
+        }
+        catch
+        {
+            // best-effort; File.SetUnixFileMode is the same chmod u+x without spawning a process
+        }
+    }
+
+    internal static void TryMakeExecutableForTests(string scriptPath) =>
+        TryMakeExecutable(scriptPath, applyUnixMode: true);
 
     private static void DeleteMarkedDesktopOverride(string path)
     {
@@ -407,13 +773,17 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
-    private static bool WriteXfceWebBrowserHelper(string hostname, int port)
+    private static bool WriteXfceWebBrowserHelper(string hostname, int port, bool proxyLoopback) =>
+        WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, ChromeBinaries);
+
+    private static bool WriteXfceWebBrowserHelper(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries)
     {
-        var chrome = ChromeBinaries.FirstOrDefault(File.Exists);
+        var chrome = chromeBinaries.FirstOrDefault(File.Exists);
         if (chrome is null)
             return false;
 
-        var flags = ChromeProxyFlags(hostname, port);
+        var flags = ChromeProxyShellFlags(hostname, port, proxyLoopback);
         var helperPath = UserXfceChromeHelperPath();
         try
         {
@@ -441,6 +811,10 @@ internal static class LinuxBrowserLaunchProxy
             return false;
         }
     }
+
+    internal static bool WriteXfceWebBrowserHelperForTests(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries) =>
+        WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, chromeBinaries);
 
     private static bool WriteXfceHelpersRc()
     {

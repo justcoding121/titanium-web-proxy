@@ -82,6 +82,7 @@ jobs:
               "inspector-unattended.yml",
               "fuzz-nightly.yml",
               "dast.yml",
+              "inspector-install-smoke.yml",
           ]
           headers = {
               "Authorization": f"Bearer {token}",

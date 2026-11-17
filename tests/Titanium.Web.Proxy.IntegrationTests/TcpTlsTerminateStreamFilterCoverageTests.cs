@@ -295,6 +295,16 @@ public class TcpTlsTerminateStreamFilterCoverageTests
         await ssl.FlushAsync(cts.Token);
         var buffer = new byte[256];
         var read = await ssl.ReadAsync(buffer, cts.Token);
+        try
+        {
+            // Dispose without a TLS close_notify resets the socket, and the relay records that as error
+            // even after the payload was delivered.
+            await ssl.ShutdownAsync();
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or AuthenticationException)
+        {
+        }
+
         return Encoding.ASCII.GetString(buffer, 0, read);
     }
 

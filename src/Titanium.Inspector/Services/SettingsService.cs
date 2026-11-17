@@ -174,6 +174,12 @@ public sealed class InspectorSettings
     /// <summary>User acknowledged PAC replace warning when enabling System proxy.</summary>
     public bool WarnedAboutPacReplace { get; set; }
 
+    /// <summary>
+    /// When true, skip the macOS “Move to Applications” prompt after the user chose Not Now
+    /// while running from a DMG volume.
+    /// </summary>
+    public bool MacDmgMovePromptDismissed { get; set; }
+
     /// <summary>Optional FileDescriptorSet path for protobuf decode on inspect.</summary>
     public string? ProtobufDescriptorSetPath { get; set; }
 

@@ -55,6 +55,12 @@ public sealed class PlusCertificateInfo
 
     public DateTimeOffset? NotAfterUtc { get; init; }
 
+    /// <summary>Whole days until <see cref="NotAfterUtc"/>; negative when expired. Null when unknown.</summary>
+    public int? DaysToExpiry { get; init; }
+
+    /// <summary><c>ok</c>, <c>expiring</c>, <c>expired</c>, or <c>unknown</c>.</summary>
+    public string? ExpiryStatus { get; init; }
+
     /// <summary>Set when the file could not be read or parsed. Never contains key material.</summary>
     public string? Error { get; init; }
 }

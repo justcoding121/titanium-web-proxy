@@ -222,7 +222,7 @@ titanium reload -c twp.yaml
 
 **Reloads live:** routes (match + transforms), clusters (destinations, load-balance, affinity). Destinations left in draining or maintenance keep that state when their address, port, and TLS flag are unchanged. `server:` engine knobs reload too.
 
-**Needs a process restart:** listeners (bind/port), certificates / ACME, TLS material, enabling or disabling Plus plugins, static files root, access-log path.
+**Needs a process restart:** listeners (bind/port), enabling or disabling Plus plugins, static files root, access-log path. Certificate PEM/PFX files and ACME renewals hot-reload without a restart when paths stay the same.
 
 Unlike a typical YARP process recycle, Titanium keeps the process and in-flight sessions on the previous cluster snapshot until they finish.
 

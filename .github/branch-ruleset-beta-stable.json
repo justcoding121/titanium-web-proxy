@@ -35,7 +35,10 @@
           { "context": "dependency-review", "integration_id": 15368 },
           { "context": "tests-or-waiver", "integration_id": 15368 },
           { "context": "guard-nc-paths", "integration_id": 15368 },
-          { "context": "cla", "integration_id": 15368 }
+          { "context": "cla", "integration_id": 15368 },
+          { "context": "install-smoke (windows-latest)", "integration_id": 15368 },
+          { "context": "install-smoke (ubuntu-latest)", "integration_id": 15368 },
+          { "context": "install-smoke (macos-latest)", "integration_id": 15368 }
         ]
       }
     },

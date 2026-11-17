@@ -9,7 +9,7 @@
       <meta name="viewport" content="width=device-width">
       <meta name="title" content="Class SniCertificateSelector | Titanium Web Proxy ">
     
-    <meta name="description" content="Exact host, then the longest wildcard, otherwise null so the caller uses its default.">
+    <meta name="description" content="Exact host, then the longest wildcard. Among matching bindings prefer one that is still valid; if none is valid, fall back to the best match so behavior never gets worse than returning an expired certificate when that is all that is configured.">
       <link rel="shortcut icon" href="../favicon.ico">
       <link rel="stylesheet" href="../styles/docfx.vendor.min.css">
       <link rel="stylesheet" href="../styles/docfx.css">
@@ -81,7 +81,9 @@
 
 
   <h1 id="Titanium_Web_Proxy_Certificates_SniCertificateSelector" data-uid="Titanium.Web.Proxy.Certificates.SniCertificateSelector" class="text-break">Class SniCertificateSelector</h1>
-  <div class="markdown level0 summary"><p>Exact host, then the longest wildcard, otherwise null so the caller uses its default.</p>
+  <div class="markdown level0 summary"><p>Exact host, then the longest wildcard. Among matching bindings prefer one that is still
+valid; if none is valid, fall back to the best match so behavior never gets worse than
+returning an expired certificate when that is all that is configured.</p>
 </div>
   <div class="markdown level0 conceptual"></div>
   <div class="inheritance">
@@ -126,7 +128,7 @@
     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_System_String_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Models_SniCertificateBinding__.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(System.String%2CSystem.Collections.Generic.IReadOnlyList%7BTitanium.Web.Proxy.Models.SniCertificateBinding%7D)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
   </span>
   <span class="small pull-right mobile-hide">
-    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/SniCertificateSelector.cs/#L11">View Source</a>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/SniCertificateSelector.cs/#L15">View Source</a>
   </span>
   <a id="Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_" data-uid="Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select*"></a>
   <h4 id="Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_System_String_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Models_SniCertificateBinding__" data-uid="Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(System.String,System.Collections.Generic.IReadOnlyList{Titanium.Web.Proxy.Models.SniCertificateBinding})">Select(string?, IReadOnlyList&lt;SniCertificateBinding&gt;)</h4>
@@ -173,6 +175,64 @@
       </tr>
     </tbody>
   </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_System_String_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Models_SniCertificateBinding__System_DateTime_.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(System.String%2CSystem.Collections.Generic.IReadOnlyList%7BTitanium.Web.Proxy.Models.SniCertificateBinding%7D%2CSystem.DateTime)%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/SniCertificateSelector.cs/#L19">View Source</a>
+  </span>
+  <a id="Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_" data-uid="Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select*"></a>
+  <h4 id="Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_System_String_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Models_SniCertificateBinding__System_DateTime_" data-uid="Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(System.String,System.Collections.Generic.IReadOnlyList{Titanium.Web.Proxy.Models.SniCertificateBinding},System.DateTime)">Select(string?, IReadOnlyList&lt;SniCertificateBinding&gt;, DateTime)</h4>
+  <div class="markdown level1 summary"><p>Test seam with an injected clock.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public static X509Certificate2? Select(string? serverName, IReadOnlyList&lt;SniCertificateBinding&gt; bindings, DateTime utcNow)</code></pre>
+  </div>
+  <h5 class="parameters">Parameters</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.string">string</a></td>
+        <td><span class="parametername">serverName</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.collections.generic.ireadonlylist-1">IReadOnlyList</a>&lt;<a class="xref" href="Titanium.Web.Proxy.Models.SniCertificateBinding.html">SniCertificateBinding</a>&gt;</td>
+        <td><span class="parametername">bindings</span></td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.datetime">DateTime</a></td>
+        <td><span class="parametername">utcNow</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h5 class="returns">Returns</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate2">X509Certificate2</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
 
 </article>
           </div>
@@ -185,7 +245,7 @@
                     <a href="https://github.com/justcoding121/titanium-web-proxy/new/develop/apiSpec/new?filename=Titanium_Web_Proxy_Certificates_SniCertificateSelector.md&amp;value=---%0Auid%3A%20Titanium.Web.Proxy.Certificates.SniCertificateSelector%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
                   </li>
                   <li>
-                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/SniCertificateSelector.cs/#L9" class="contribution-link">View Source</a>
+                    <a href="https://github.com/justcoding121/titanium-web-proxy/blob/develop/src/Titanium.Web.Proxy/Certificates/SniCertificateSelector.cs/#L13" class="contribution-link">View Source</a>
                   </li>
                 </ul>
               </div>

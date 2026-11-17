@@ -86,7 +86,9 @@
 Classes
 </h3>
       <h4><a class="xref" href="Titanium.Web.Proxy.Certificates.SniCertificateSelector.html">SniCertificateSelector</a></h4>
-      <section><p>Exact host, then the longest wildcard, otherwise null so the caller uses its default.</p>
+      <section><p>Exact host, then the longest wildcard. Among matching bindings prefer one that is still
+valid; if none is valid, fall back to the best match so behavior never gets worse than
+returning an expired certificate when that is all that is configured.</p>
 </section>
 
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -10,7 +11,7 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     macOS Keychain / Linux NSS + optional elevated system CA trust helpers.
 /// </summary>
-internal static class UnixCertificateTrust
+internal static partial class UnixCertificateTrust
 {
     private const string SecurityBinary = "security";
     private const string NssDbDirName = "nssdb";
@@ -18,6 +19,12 @@ internal static class UnixCertificateTrust
     private const string KeychainsDirName = "Keychains";
     private const string LoginKeychainDbFile = "login.keychain-db";
     private const string LoginKeychainFile = "login.keychain";
+
+    [GeneratedRegex(
+        @"Number of trust settings\s*:\s*(\d+)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 250)]
+    private static partial Regex MacTrustSettingsCountRegex();
 
     private static readonly string[] WindowsCertutilCandidates =
     [
@@ -465,7 +472,7 @@ internal static class UnixCertificateTrust
     private static CertificateOsTrustResult TrustMacUserDetailed(
         IProcessRunner runner, string cerPath, X509Certificate2 certificate)
     {
-        var added = TrustMacUser(runner, cerPath);
+        var added = TrustMacUser(runner, cerPath, certificate);
         if (!added)
         {
             return CertificateOsTrustResult.Fail(
@@ -481,8 +488,14 @@ internal static class UnixCertificateTrust
             "Root CA was added to Keychain but may need Always Trust for SSL. Open Keychain Access, find the certificate, and set Trust → Always Trust.");
     }
 
-    private static bool TrustMacUser(IProcessRunner runner, string cerPath)
+    private static bool TrustMacUser(
+        IProcessRunner runner, string cerPath, X509Certificate2? certificate = null)
     {
+        // Drop same-CN Keychain copies that are not this generation so Chrome/Safari do not
+        // keep an untrusted/stale Titanium root while we add the current one.
+        if (certificate is not null)
+            TryRemoveStaleMacSameCommonNameRoots(runner, certificate);
+
         // User trust domain (no -d). Using -d writes admin-domain stubs and often leaves
         // System.keychain copies that Chrome keeps trusting after "Remove CA".
         // -r trustRoot: trust as root CA in the login keychain.
@@ -496,6 +509,35 @@ internal static class UnixCertificateTrust
         result = runner.Run(SecurityBinary,
             $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
         return result is { Succeeded: true };
+    }
+
+    /// <summary>
+    ///     Best-effort: delete login-keychain certificates that share the Titanium root CN
+    ///     but not the current SHA-1 (stale generations after rotate / reinstall).
+    /// </summary>
+    private static void TryRemoveStaleMacSameCommonNameRoots(
+        IProcessRunner runner, X509Certificate2 certificate)
+    {
+        var keepSha1 = certificate.GetCertHashString();
+        if (string.IsNullOrWhiteSpace(keepSha1))
+            return;
+
+        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cn in MacRootCommonNames(
+                     certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "",
+                     certificate))
+        {
+            CollectMacCertificateHashes(runner, cn, hashes);
+        }
+
+        foreach (var hash in hashes)
+        {
+            if (string.Equals(hash, keepSha1, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // -t also clears user trust-settings stubs for that hash.
+            runner.Run(SecurityBinary, $"delete-certificate -Z {hash} -t");
+        }
     }
 
     private static bool VerifyMacSslTrust(IProcessRunner runner, X509Certificate2 certificate)
@@ -514,16 +556,54 @@ internal static class UnixCertificateTrust
     internal static bool HasExplicitMacSslTrustSettings(IProcessRunner runner, X509Certificate2 certificate)
     {
         var sha1 = certificate.GetCertHashString();
-        var commonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "";
+        if (string.IsNullOrEmpty(sha1))
+            return false;
 
-        if (DumpTrustSettingsMentionsPolicies(runner, sha1, commonName))
+        // Match by SHA-1 only — same CN can be a stale Keychain generation.
+        if (DumpTrustSettingsHasPoliciesForSha1(runner, sha1))
             return true;
 
-        return TrustSettingsExportHasPolicies(runner, sha1);
+        if (TrustSettingsExportHasPolicies(runner, sha1))
+            return true;
+
+        // Admin-domain add-trusted-cert puts the anchor in the System keychain.
+        // dump-trust-settings often has no hash line, and a login-keychain copy with
+        // no policy must not count: require this hash in System.keychain and a
+        // successful basic verify.
+        return SystemKeychainPassesBasicVerify(runner, certificate, sha1);
     }
 
-    private static bool DumpTrustSettingsMentionsPolicies(
-        IProcessRunner runner, string sha1, string commonName)
+    private static bool SystemKeychainPassesBasicVerify(
+        IProcessRunner runner, X509Certificate2 certificate, string sha1)
+    {
+        var listed = runner.Run(SecurityBinary,
+            "find-certificate -a -Z /Library/Keychains/System.keychain");
+        if (listed is not { Succeeded: true })
+            return false;
+
+        var folded = NormalizeSha1(listed.StandardOutput + listed.StandardError);
+        if (!folded.Contains(NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var cerPath = WriteTempCer(certificate);
+        try
+        {
+            var verify = runner.Run(SecurityBinary, $"verify-cert -p basic -c \"{cerPath}\"");
+            return verify is { Succeeded: true };
+        }
+        finally
+        {
+            TryDelete(cerPath);
+        }
+    }
+
+    /// <summary>
+    ///     True when <c>security dump-trust-settings</c> lists this SHA-1 with a non-zero
+    ///     policy count and a TrustRoot/Proceed result. Stubs with
+    ///     <c>Number of trust settings : 0</c> (or CN-only rows for another generation) are
+    ///     not trusted.
+    /// </summary>
+    private static bool DumpTrustSettingsHasPoliciesForSha1(IProcessRunner runner, string sha1)
     {
         foreach (var args in MacDumpTrustSettingsArgs)
         {
@@ -535,22 +615,149 @@ internal static class UnixCertificateTrust
             if (text.Contains("No Trust Settings were found", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            var mentionsCert =
-                (!string.IsNullOrEmpty(sha1) &&
-                 text.Contains(sha1, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(commonName) &&
-                 text.Contains(commonName, StringComparison.OrdinalIgnoreCase));
-            if (!mentionsCert)
+            if (DumpTextHasSslTrustPoliciesForSha1(text, sha1))
+                return true;
+
+            // dump-trust-settings names the certificate and does not print its SHA-1.
+            // A TrustRoot block still counts when that name is this hash in the login
+            // or System keychain (admin-domain add-trusted-cert -d -r trustRoot).
+            if (DumpNamedTrustRootMatchesSha1(runner, text, sha1))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Match a TrustRoot policy block to <paramref name="sha1"/> by looking the
+    ///     displayed certificate name up in the keychains. Real
+    ///     <c>security dump-trust-settings</c> output has no hash line.
+    /// </summary>
+    private static bool DumpNamedTrustRootMatchesSha1(IProcessRunner runner, string text, string sha1)
+    {
+        var parts = text.Split(["Cert "], StringSplitOptions.None);
+        // Each name costs two `security` launches. Look a name up once per verify.
+        var looked = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var part in parts)
+        {
+            if (!BlockHasExplicitTrustRoot(part) || BlockMentionsOtherSha1(part, sha1))
                 continue;
 
-            // dump-trust-settings only lists certs that have policy rows when healthy.
-            if (text.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
-                text.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
-                text.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
-                text.Contains("Number of trust settings", StringComparison.OrdinalIgnoreCase))
-            {
+            var name = CertBlockDisplayName(part);
+            if (string.IsNullOrWhiteSpace(name) || !looked.Add(name))
+                continue;
+
+            // A name shared by an older generation is ambiguous: the policy block could belong to
+            // the stale copy. Leave that case to the System keychain basic-verify check.
+            var hashes = KeychainHashesForName(runner, name)
+                .Select(NormalizeSha1)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (hashes.Count == 1 &&
+                string.Equals(hashes[0], NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase))
                 return true;
+        }
+
+        return false;
+    }
+
+    private static bool BlockHasExplicitTrustRoot(string part)
+    {
+        var countMatch = MacTrustSettingsCountRegex().Match(part);
+        if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
+            return false;
+
+        return BlockHasTrustResult(part);
+    }
+
+    private static bool BlockHasTrustResult(string part) =>
+        part.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+        part.Contains("kSecTrustSettingsResultTrustAsRoot", StringComparison.Ordinal) ||
+        part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+        part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
+        part.Contains("Trust As Root", StringComparison.OrdinalIgnoreCase);
+
+    private static bool BlockMentionsOtherSha1(string part, string sha1)
+    {
+        const string marker = "SHA-1 hash:";
+        var idx = part.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (idx < 0)
+            return false;
+
+        var hash = part[(idx + marker.Length)..].Trim();
+        var end = hash.IndexOfAny(['\r', '\n', ' ']);
+        if (end > 0)
+            hash = hash[..end];
+        hash = NormalizeSha1(hash);
+        return hash.Length >= 40 &&
+               !string.Equals(hash, NormalizeSha1(sha1), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? CertBlockDisplayName(string part)
+    {
+        var line = part.Split(['\r', '\n'], 2, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(line))
+            return null;
+
+        var colon = line.IndexOf(':');
+        if (colon < 0 || colon > 6)
+            return null;
+
+        var name = line[(colon + 1)..].Trim();
+        return name.Length == 0 ? null : name;
+    }
+
+    private static IEnumerable<string> KeychainHashesForName(IProcessRunner runner, string commonName)
+    {
+        var searches = new[]
+        {
+            $"find-certificate -a -c \"{Escape(commonName)}\" -Z",
+            $"find-certificate -a -c \"{Escape(commonName)}\" -Z /Library/Keychains/System.keychain",
+        };
+
+        foreach (var args in searches)
+        {
+            var dump = runner.Run(SecurityBinary, args);
+            if (dump is null)
+                continue;
+
+            foreach (var line in (dump.StandardOutput + "\n" + dump.StandardError)
+                     .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                const string marker = "SHA-1 hash:";
+                var idx = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (idx < 0)
+                    continue;
+                var hash = NormalizeSha1(line[(idx + marker.Length)..]);
+                if (hash.Length >= 40)
+                    yield return hash;
             }
+        }
+    }
+
+    private static string NormalizeSha1(string value) =>
+        value.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal).Trim();
+
+    /// <summary>Parses one dump-trust-settings document for a SHA-1 cert block with real policies.</summary>
+    internal static bool DumpTextHasSslTrustPoliciesForSha1(string text, string sha1)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(sha1))
+            return false;
+
+        // Split into "Cert N: ..." blocks; require the SHA-1 inside the same block as policies.
+        var parts = text.Split(["Cert "], StringSplitOptions.None);
+        foreach (var part in parts)
+        {
+            if (!part.Contains(sha1, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            // "Number of trust settings : 0" must not count as trusted.
+            var countMatch = MacTrustSettingsCountRegex().Match(part);
+            if (!countMatch.Success || !int.TryParse(countMatch.Groups[1].Value, out var count) || count <= 0)
+                continue;
+
+            if (BlockHasTrustResult(part))
+                return true;
         }
 
         return false;
@@ -582,29 +789,8 @@ internal static class UnixCertificateTrust
                 if (printed is null)
                     continue;
 
-                var text = printed.StandardOutput;
-                // Look for our SHA-1 key block; require a nested trustSettings array nearby.
-                var keyIdx = text.IndexOf(sha1, StringComparison.OrdinalIgnoreCase);
-                if (keyIdx < 0)
-                    continue;
-
-                // Heuristic: within the next ~2KB after the hash key, require trustSettings.
-                var window = text.Substring(keyIdx, Math.Min(2048, text.Length - keyIdx));
-                if (!window.Contains("trustSettings", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                // Empty array / missing policies: reject.
-                if (window.Contains("trustSettings => [\n  ]", StringComparison.Ordinal) ||
-                    window.Contains("trustSettings => []", StringComparison.Ordinal))
-                    continue;
-
-                if (window.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
-                    window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
-                    window.Contains("TrustRoot", StringComparison.OrdinalIgnoreCase) ||
-                    window.Contains("result", StringComparison.OrdinalIgnoreCase))
-                {
+                if (TrustExportTextHasPoliciesForSha1(printed.StandardOutput, sha1))
                     return true;
-                }
             }
             finally
             {
@@ -612,7 +798,93 @@ internal static class UnixCertificateTrust
             }
         }
 
+        // trust-settings-export -d often fails without root. Admin.plist is the same
+        // record add-trusted-cert -d writes, and plutil can read it as the user.
+        foreach (var plist in MacTrustSettingsPlistCandidates())
+        {
+            if (!File.Exists(plist))
+                continue;
+            var printed = runner.Run("plutil", $"-p \"{plist}\"");
+            if (printed is null)
+                continue;
+            if (TrustExportTextHasPoliciesForSha1(printed.StandardOutput + "\n" + printed.StandardError, sha1))
+                return true;
+        }
+
         return false;
+    }
+
+    /// <summary>
+    ///     True when plutil text for a trust-settings plist has a non-empty trustSettings
+    ///     policy for <paramref name="sha1"/>. Keys are often spaced hex inside angle
+    ///     brackets (<c>&lt;5b92 7118 ...&gt;</c>), not a contiguous thumbprint.
+    /// </summary>
+    internal static bool TrustExportTextHasPoliciesForSha1(string text, string sha1)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(sha1))
+            return false;
+
+        var folded = FoldTrustExport(text);
+        var hash = NormalizeSha1(sha1);
+        if (hash.Length < 40)
+            return false;
+
+        var keyIdx = folded.IndexOf(hash, StringComparison.OrdinalIgnoreCase);
+        if (keyIdx < 0)
+            return false;
+
+        var window = folded.Substring(keyIdx, Math.Min(2500, folded.Length - keyIdx));
+        if (!window.Contains("trustSettings", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        // Folding removes '>' so "=> 1" and "=> []" become "=1" and "=[]".
+        if (window.Contains("trustSettings=[]", StringComparison.Ordinal))
+            return false;
+
+        return window.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.Ordinal) ||
+               window.Contains("kSecTrustSettingsResultTrustAsRoot", StringComparison.Ordinal) ||
+               window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
+               HasFoldedTrustResult(window, "=1") ||
+               HasFoldedTrustResult(window, "=2") ||
+               window.Contains("TrustAsRoot", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasFoldedTrustResult(string window, string resultToken)
+    {
+        var token = "kSecTrustSettingsResult" + resultToken;
+        var idx = 0;
+        while ((idx = window.IndexOf(token, idx, StringComparison.Ordinal)) >= 0)
+        {
+            var after = idx + token.Length;
+            if (after >= window.Length || !char.IsDigit(window[after]))
+                return true;
+            idx = after;
+        }
+
+        return false;
+    }
+
+    private static string FoldTrustExport(string text) =>
+        text.Replace(" ", "", StringComparison.Ordinal)
+            .Replace("\t", "", StringComparison.Ordinal)
+            .Replace("\r", "", StringComparison.Ordinal)
+            .Replace("\n", "", StringComparison.Ordinal)
+            .Replace(":", "", StringComparison.Ordinal)
+            .Replace("<", "", StringComparison.Ordinal)
+            .Replace(">", "", StringComparison.Ordinal)
+            .Replace("\"", "", StringComparison.Ordinal);
+
+    private static IEnumerable<string> MacTrustSettingsPlistCandidates()
+    {
+        yield return "/Library/Security/Trust Settings/Admin.plist";
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home))
+            yield break;
+        var dir = Path.Combine(home, "Library", "Security", "Trust Settings");
+        if (!Directory.Exists(dir))
+            yield break;
+        foreach (var file in Directory.EnumerateFiles(dir, "*.plist"))
+            yield return file;
     }
 
     /// <summary>

@@ -147,6 +147,44 @@ public sealed class InterceptionService : IDisposable
     public X509Certificate2? RootCertificate => _proxy?.CertificateManager.RootCertificate;
     public bool IsRootTrusted { get; private set; }
 
+    /// <summary>How soon the in-memory inspection root expires. Used for startup warnings only.</summary>
+    public static readonly TimeSpan RootExpiringSoonWindow = TimeSpan.FromDays(30);
+
+    /// <summary>
+    ///     Days remaining until the current root's <c>NotAfter</c> (negative when already expired).
+    ///     Null when no root is loaded.
+    /// </summary>
+    public double? RootCertificateDaysRemaining
+    {
+        get
+        {
+            var cert = RootCertificate;
+            if (cert is null) return null;
+            return (cert.NotAfter - DateTime.Now).TotalDays;
+        }
+    }
+
+    /// <summary>True when a root is loaded and its NotAfter is in the past.</summary>
+    public bool IsRootCertificateExpired =>
+        RootCertificate is { } cert && cert.NotAfter <= DateTime.Now;
+
+    /// <summary>
+    ///     True when startup (or a leaf mint) discarded an expired root and minted a replacement.
+    ///     The new root is not yet trusted in the OS store.
+    /// </summary>
+    public bool RootCertificateWasReplacedDueToExpiry =>
+        _proxy?.CertificateManager.RootCertificateWasReplacedDueToExpiry == true;
+
+    /// <summary>True when a root is still valid but within <see cref="RootExpiringSoonWindow"/>.</summary>
+    public bool IsRootCertificateExpiringSoon
+    {
+        get
+        {
+            var days = RootCertificateDaysRemaining;
+            return days is not null && days.Value >= 0 && days.Value <= RootExpiringSoonWindow.TotalDays;
+        }
+    }
+
     /// <summary>Last OS trust outcome from Install root CA (Keychain / NSS / package hints).</summary>
     public CertificateOsTrustResult? LastOsTrustResult { get; private set; }
 
@@ -838,9 +876,9 @@ public sealed class InterceptionService : IDisposable
             LastOsTrustResult = _proxy.CertificateManager.LastOsTrustResult;
             IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
-            return CompleteRootTrustInstall(
-                IsRootTrusted ||
-                LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+            // MacNeedsManualTrustConfirm: CA may be present but not SSL-trusted — do not
+            // report install success (caller may still open Keychain Always Trust UX).
+            return CompleteRootTrustInstall(IsRootTrusted);
         }
 
         // Full trust (stores + orphan prune + Unix) - non-UI callers only.
@@ -855,9 +893,7 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     /// <summary>CryptUI Root Add only - must run on a pumping UI thread.</summary>
@@ -966,9 +1002,7 @@ public sealed class InterceptionService : IDisposable
             IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                             _proxy.CertificateManager.VerifyOsUserSslTrust();
         }
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     private static bool CompleteRootTrustInstall(bool installed)
@@ -1005,9 +1039,7 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = ok && (EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                                _proxy.CertificateManager.VerifyOsUserSslTrust());
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     /// <summary>
@@ -1039,9 +1071,7 @@ public sealed class InterceptionService : IDisposable
 
         IsRootTrusted = EvaluateUnixTrustSuccess(LastOsTrustResult) ||
                         _proxy.CertificateManager.VerifyOsUserSslTrust();
-        return CompleteRootTrustInstall(
-            IsRootTrusted ||
-            LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm);
+        return CompleteRootTrustInstall(IsRootTrusted);
     }
 
     /// <summary>Installs certutil (package/brew) then retries user SSL trust.</summary>
@@ -1087,7 +1117,7 @@ public sealed class InterceptionService : IDisposable
         // Windows: Root store presence is trust. Unix: require real SSL trust verification -
         // Keychain/NSS can hold the CA without trusting it for SSL (Chrome MITM fails).
         var ok = OperatingSystem.IsWindows()
-            ? IsRootPresentInStore(false)
+            ? IsRootPresentInStore(false) || IsRootPresentInStore(true)
             : _proxy.CertificateManager.VerifyOsUserSslTrust();
         IsRootTrusted = ok;
         return ok;
@@ -1681,11 +1711,11 @@ public sealed class InterceptionService : IDisposable
             return IsRootTrusted;
         }
 
-        // Windows Root store presence == trust. On macOS/Linux, presence is not enough -
-        // VerifyOsUserSslTrust checks Keychain/NSS SSL trust (security verify-cert / certutil).
+        // Windows Root store presence is trust, in the user store or the machine store.
+        // A machine-wide root is already trusted for every user; do not require a second user copy.
         if (OperatingSystem.IsWindows())
         {
-            IsRootTrusted = IsRootPresentInStore(machineStore);
+            IsRootTrusted = IsRootPresentInStore(machineStore) || WindowsMachineRootCounts(machineStore);
             return IsRootTrusted;
         }
 
@@ -1698,6 +1728,10 @@ public sealed class InterceptionService : IDisposable
         IsRootTrusted = _proxy.CertificateManager.VerifyOsUserSslTrust();
         return IsRootTrusted;
     }
+
+    /// <summary>When the caller asked about the user store, a machine-wide copy also counts.</summary>
+    private bool WindowsMachineRootCounts(bool machineStore) =>
+        !machineStore && IsRootPresentInStore(true);
 
     public bool IsRootPresentInStore(bool machineStore)
     {
@@ -1718,7 +1752,18 @@ public sealed class InterceptionService : IDisposable
                 machineStore ? StoreLocation.LocalMachine : StoreLocation.CurrentUser);
             store.Open(OpenFlags.ReadOnly);
             var found = store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint, validOnly: false);
-            return found.Count > 0;
+            if (found.Count == 0)
+                return false;
+
+            // An expired copy with the same thumbprint must not count as trusted.
+            var now = DateTime.Now;
+            for (var i = 0; i < found.Count; i++)
+            {
+                if (found[i].NotAfter > now)
+                    return true;
+            }
+
+            return false;
         }
         catch
         {

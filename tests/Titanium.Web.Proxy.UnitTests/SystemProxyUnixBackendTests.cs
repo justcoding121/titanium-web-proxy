@@ -342,7 +342,7 @@ public class LinuxBrowserLaunchProxyTests
         var line = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
             "Exec=/usr/bin/google-chrome-stable %U", "127.0.0.1", 8866);
         StringAssert.Contains(line, "--proxy-server=http://127.0.0.1:8866");
-        StringAssert.Contains(line, "--proxy-bypass-list=<-loopback>");
+        Assert.IsFalse(line.Contains("<-loopback>", StringComparison.Ordinal), line);
         StringAssert.Contains(line, "--disable-quic");
         Assert.IsTrue(line.EndsWith(" %U", StringComparison.Ordinal), line);
     }
@@ -372,6 +372,79 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void BuildDesktopOverride_UsesWrapperAndDisablesDbusActivation()
+    {
+        var built = LinuxBrowserLaunchProxy.BuildDesktopOverride(
+            "[Desktop Entry]\nDBusActivatable=true\nExec=/usr/bin/google-chrome-stable %U\n",
+            "/home/runner/.local/share/titanium-inspector/launchers/google-chrome.sh",
+            "127.0.0.1",
+            8866);
+        Assert.IsNotNull(built);
+        StringAssert.Contains(built.Value.Desktop, "DBusActivatable=false");
+        StringAssert.Contains(built.Value.Desktop, "Exec=/home/runner/.local/share/titanium-inspector/launchers/google-chrome.sh %U");
+        Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
+        StringAssert.Contains(built.Value.Script, "exec \"/usr/bin/google-chrome-stable\"");
+        StringAssert.Contains(built.Value.Script, "export http_proxy=\"http://127.0.0.1:8866\"");
+        StringAssert.Contains(built.Value.Script, "--proxy-server=http://127.0.0.1:8866");
+        StringAssert.Contains(built.Value.Script, "--no-first-run");
+        StringAssert.Contains(built.Value.Script, "TITANIUM_SMOKE_BROWSER_FLAGS");
+        Assert.IsFalse(built.Value.Script.Contains("<-loopback>", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void BuildDesktopOverride_KeepsLocalhostOnTheProxyWhenAsked_AndQuotesTheRule()
+    {
+        var built = LinuxBrowserLaunchProxy.BuildDesktopOverride(
+            "[Desktop Entry]\nExec=/usr/bin/google-chrome-stable %U\nActions=new\n[Desktop Action new]\nExec=/usr/bin/google-chrome-stable --incognito\n",
+            "/home/u/.local/share/titanium-inspector/launchers/google-chrome.sh",
+            "127.0.0.1",
+            8866,
+            proxyLoopback: true);
+        Assert.IsNotNull(built);
+        // An unquoted < is a redirection in the wrapper and a reserved character in Exec.
+        StringAssert.Contains(built.Value.Script, "\"--proxy-bypass-list=<-loopback>\"");
+        // The desktop entry only points at the launcher, so the rule never reaches an Exec line.
+        Assert.IsFalse(built.Value.Desktop.Contains("<-loopback>", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void WantsProxyLoopback_FollowsTheBypassList()
+    {
+        Assert.IsTrue(LinuxBrowserLaunchProxy.WantsProxyLoopback("<-loopback>;*.corp"));
+        Assert.IsTrue(LinuxBrowserLaunchProxy.WantsProxyLoopback("localhost; <-LOOPBACK> "));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.WantsProxyLoopback("localhost;127.0.0.1;<local>"));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.WantsProxyLoopback(null));
+        Assert.IsFalse(LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 8866)
+            .Contains("bypass", StringComparison.Ordinal));
+        StringAssert.Contains(
+            LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 8866, proxyLoopback: true),
+            "--proxy-bypass-list=<-loopback>");
+        StringAssert.Contains(
+            LinuxBrowserLaunchProxy.BuildPolicyJson("127.0.0.1", 8866, proxyLoopback: true),
+            "\"ProxyBypassList\": \"<-loopback>\"");
+        Assert.IsFalse(LinuxBrowserLaunchProxy.BuildPolicyJson("127.0.0.1", 8866)
+            .Contains("ProxyBypassList", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void EnsureDefaultProfile_WritesFirstRunSentinel()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "twp-chrome-profile-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            LinuxChromeProfileProxy.EnsureDefaultProfile(root);
+            Assert.IsTrue(File.Exists(Path.Combine(root, "First Run")));
+            Assert.IsTrue(Directory.Exists(Path.Combine(root, "Default")));
+            Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(
+                Path.Combine(root, "Default", "Preferences"), "127.0.0.1", 8866));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void InjectChromeProxyArgs_IsIdempotent()
     {
         var once = LinuxBrowserLaunchProxy.InjectChromeProxyArgs(
@@ -392,7 +465,7 @@ public class LinuxBrowserLaunchProxyTests
             Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
             StringAssert.Contains(json, "fixed_servers");
             StringAssert.Contains(json, "http://127.0.0.1:8866");
-            StringAssert.Contains(json, "<-loopback>");
+            Assert.IsFalse(json.Contains("<-loopback>", StringComparison.Ordinal));
             StringAssert.Contains(json, "\"QuicAllowed\": false");
             // Legacy int enum for older Chromium builds that still read ProxyServerMode.
             StringAssert.Contains(json, "\"ProxyServerMode\": 2");
@@ -557,6 +630,14 @@ public class LinuxBrowserLaunchProxyTests
         Assert.AreNotEqual(Regex.InfiniteMatchTimeout, regex.MatchTimeout);
         Assert.IsTrue(regex.IsMatch("user_pref(\"network.proxy.type\", 1);"));
         Assert.IsFalse(regex.IsMatch("lockPref(\"network.proxy.type\", 1);"));
+    }
+
+    [TestMethod]
+    public void PolicyDirectories_IncludeOpera()
+    {
+        Assert.IsTrue(LinuxBrowserLaunchProxy.PolicyDirectories()
+            .Any(p => p.Contains($"{Path.DirectorySeparatorChar}opera{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                      || p.Contains("/opera/", StringComparison.OrdinalIgnoreCase)));
     }
 
     [TestMethod]

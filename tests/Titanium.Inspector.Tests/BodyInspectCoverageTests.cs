@@ -564,21 +564,31 @@ public class BodyInspectCoverageTests
             settings.Current.AutoStartCapture = false;
             settings.Save();
             var registry = new SessionRegistry();
+            // Primary retries Install CA so macOS decrypt recovery can re-trust after Untrust
+            // (default Cancel would leave TryCompleteMacSslTrustForDecryptAsync false).
+            var dialogs = new ScriptedInspectorDialogs
+            {
+                DecryptTrustFailedResult = TrustRecoveryChoice.Primary,
+                MacSslTrustWaitResult = MacSslTrustWaitResult.Trusted,
+            };
             var vm = new MainWindowViewModel(
                 new SessionStreamBuffer(registry),
                 registry,
                 new UpdateService(settings),
                 settings,
                 interception,
-                new ScriptedInspectorDialogs())
+                dialogs)
             {
                 BindPort = 0,
                 BindAddress = "127.0.0.1",
             };
 
             await ExecuteAsync(vm.StartCaptureCommand);
-            await Task.Delay(200);
+            for (var i = 0; i < 50 && !interception.IsRunning; i++)
+                await Task.Delay(50);
+            Assert.IsTrue(interception.IsRunning, "proxy should be running before Install CA");
             Assert.IsTrue(interception.InstallRootCertificate(false));
+            Assert.IsTrue(interception.IsRootTrusted);
             vm.DecryptHttps = true;
             Assert.IsTrue(vm.DecryptHttps);
 

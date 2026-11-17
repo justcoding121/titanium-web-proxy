@@ -12,6 +12,7 @@ jobs:
   redis-fleet: "redis-fleet job in dotnetcore.yml"
   build: ".NET build job (Windows)"
   release-smoke: ".github/workflows/release.yml smoke-http3 and smoke-scripting"
+  install-smoke: ".github/workflows/inspector-install-smoke.yml (packaged Inspector and CLI on Windows, Linux, and macOS)"
 
 entries:
   - id: cli-help-matrix
@@ -163,3 +164,9 @@ entries:
     status: covered
     test: .github/workflows/release.yml smoke-scripting
     job: release-smoke
+
+  - id: inspector-install-smoke
+    capability: Packaged Inspector and CLI decrypt after upgrade and fresh install
+    status: covered
+    test: .github/workflows/inspector-install-smoke.yml
+    job: install-smoke

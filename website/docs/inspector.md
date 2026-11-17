@@ -64,7 +64,9 @@ chmod +x install.sh uninstall.sh TitaniumInspector
 
 ### macOS
 
-Extract the zip, then run `./TitaniumInspector`, or:
+Prefer the notarized **DMG**: open it, drag **Titanium Inspector** into **Applications**, eject the volume, then launch from Applications. Opening the app from the DMG shows a one-time **Move to Applications** prompt.
+
+Zip fallback — extract, then run `./TitaniumInspector`, or:
 
 ```shell
 chmod +x install-app.sh uninstall-app.sh TitaniumInspector

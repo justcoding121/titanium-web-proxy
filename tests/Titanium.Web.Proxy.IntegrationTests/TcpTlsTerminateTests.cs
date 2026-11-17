@@ -135,8 +135,8 @@ public class TcpTlsTerminateTests
                 endPoint.GenericCertificate = fallback;
                 endPoint.SniCertificates =
                 [
-                    new SniCertificateBinding { Hosts = ["a.example.com"], Certificate = leafA },
-                    new SniCertificateBinding { Hosts = ["b.example.com"], Certificate = leafB },
+                    SniCertificateBinding.Create(["a.example.com"], leafA),
+                    SniCertificateBinding.Create(["b.example.com"], leafB),
                 ];
                 endPoint.PassthroughDefaultClusterId = "c";
             },

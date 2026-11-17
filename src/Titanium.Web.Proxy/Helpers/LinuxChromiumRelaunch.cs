@@ -19,6 +19,7 @@ internal static class LinuxChromiumRelaunch
         Chromium,
         Brave,
         Edge,
+        Opera,
     }
 
     private static readonly (BrowserFamily Family, string[] Binaries)[] FamilyLaunchers =
@@ -43,6 +44,11 @@ internal static class LinuxChromiumRelaunch
             "/usr/bin/microsoft-edge-stable",
             "/usr/bin/microsoft-edge",
         ]),
+        (BrowserFamily.Opera,
+        [
+            "/usr/bin/opera",
+            "/usr/bin/opera-stable",
+        ]),
     ];
 
     /// <summary>
@@ -51,7 +57,8 @@ internal static class LinuxChromiumRelaunch
     ///     Runs detached (<c>setsid</c>) so SIGTERM/app exit cannot abort mid-quit/relaunch.
     ///     Relaunches each running browser family with that family's own binary (not always Chrome).
     /// </summary>
-    internal static bool TryRelaunchForProxyChange(string? hostname, int port, bool enableProxy)
+    internal static bool TryRelaunchForProxyChange(
+        string? hostname, int port, bool enableProxy, bool proxyLoopback = false)
     {
         var mains = FindMainBrowsers().ToList();
         if (mains.Count == 0)
@@ -72,7 +79,7 @@ internal static class LinuxChromiumRelaunch
 
         var args = "--restore-last-session --disable-quic";
         if (enableProxy && !string.IsNullOrWhiteSpace(hostname) && port > 0)
-            args = LinuxBrowserLaunchProxy.ChromeProxyFlags(hostname, port) + " " + args;
+            args = LinuxBrowserLaunchProxy.ChromeProxyFlags(hostname, port, proxyLoopback) + " " + args;
 
         var display = LinuxGraphicalSession.TryGetDisplay()
                       ?? Environment.GetEnvironmentVariable("DISPLAY")
@@ -277,9 +284,16 @@ internal static class LinuxChromiumRelaunch
             return true;
         }
 
-        if (exe.Contains("brave", StringComparison.OrdinalIgnoreCase) || name is "brave")
+        if (exe.Contains("brave", StringComparison.OrdinalIgnoreCase) || name is "brave" or "brave-browser")
         {
             family = BrowserFamily.Brave;
+            return true;
+        }
+
+        if (exe.Contains("/opera", StringComparison.OrdinalIgnoreCase) ||
+            name is "opera" or "opera-stable")
+        {
+            family = BrowserFamily.Opera;
             return true;
         }
 

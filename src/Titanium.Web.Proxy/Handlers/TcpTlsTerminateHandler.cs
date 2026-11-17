@@ -419,8 +419,20 @@ public partial class ProxyServer
         long total = 0;
         while (true)
         {
-            var read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
-                .ConfigureAwait(false);
+            int read;
+            try
+            {
+                read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or SocketException)
+            {
+                // SslStream rejects a concurrent read and shutdown. The other direction's half-close,
+                // or a peer that drops the socket after its payload, throws here instead of returning 0.
+                await TryHalfCloseWriteAsync(sink).ConfigureAwait(false);
+                return total;
+            }
+
             if (read == 0)
             {
                 // Half-close the opposite write so an origin waiting for EOF can answer.
