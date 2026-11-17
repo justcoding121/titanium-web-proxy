@@ -71,12 +71,12 @@ public class MacAppRelocationTests
             MacAppRelocation.CopyBundleForTests(source, existing, tool);
 
             var denied = Path.Combine(root, "FAIL-dest.app");
-            var deniedEx = Assert.ThrowsException<IOException>(() =>
+            var deniedEx = Assert.ThrowsExactly<IOException>(() =>
                 MacAppRelocation.CopyBundleForTests(source, denied, tool));
             StringAssert.Contains(deniedEx.Message, "denied");
 
             var silent = Path.Combine(root, "FAILSILENT-dest.app");
-            var silentEx = Assert.ThrowsException<IOException>(() =>
+            var silentEx = Assert.ThrowsExactly<IOException>(() =>
                 MacAppRelocation.CopyBundleForTests(source, silent, tool));
             Assert.AreEqual("ditto failed", silentEx.Message);
 
@@ -94,8 +94,8 @@ public class MacAppRelocationTests
             StringAssert.EndsWith(withoutQuarantineTool, "Titanium Inspector.app");
 
             MacAppRelocation.RelaunchInstalledApp(installed, tool);
-            Assert.ThrowsException<Win32Exception>(() => MacAppRelocation.RelaunchInstalledApp(installed));
-            Assert.ThrowsException<InvalidOperationException>(MacAppRelocation.CopyBundleToApplications);
+            Assert.ThrowsExactly<Win32Exception>(() => MacAppRelocation.RelaunchInstalledApp(installed));
+            Assert.ThrowsExactly<InvalidOperationException>(MacAppRelocation.CopyBundleToApplications);
 #pragma warning restore CA1416
         }
         finally

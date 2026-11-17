@@ -450,26 +450,44 @@ public class RunCommandFailurePathBehaviorTests
     }
 
     [TestMethod]
-    public void WarnInspectionRootExpiry_ReportsExpiredAndSoonRoots()
+    public async Task WarnInspectionRootExpiry_ReportsExpiredAndSoonRoots()
     {
         using var proxy = new ProxyServer(userTrustRootCertificate: false);
-        using var expired = MakeRoot(DateTimeOffset.UtcNow.AddDays(-40), DateTimeOffset.UtcNow.AddDays(-1));
-        proxy.CertificateManager.RootCertificate = expired;
-        RunCommand.WarnInspectionRootExpiry(proxy);
+        var sink = new StringWriter();
+        var previousOut = Console.Out;
+        var previousError = Console.Error;
+        Console.SetOut(sink);
+        Console.SetError(sink);
+        try
+        {
+            using var expired = MakeRoot(DateTimeOffset.UtcNow.AddDays(-40), DateTimeOffset.UtcNow.AddDays(-1));
+            proxy.CertificateManager.RootCertificate = expired;
+            RunCommand.WarnInspectionRootExpiry(proxy);
 
-        typeof(Titanium.Web.Proxy.Network.CertificateManager)
-            .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
-            .SetValue(proxy.CertificateManager, true);
-        using var current = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(400));
-        proxy.CertificateManager.RootCertificate = current;
-        RunCommand.WarnInspectionRootExpiry(proxy);
+            typeof(Titanium.Web.Proxy.Network.CertificateManager)
+                .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
+                .SetValue(proxy.CertificateManager, true);
+            using var current = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(400));
+            proxy.CertificateManager.RootCertificate = current;
+            RunCommand.WarnInspectionRootExpiry(proxy);
 
-        typeof(Titanium.Web.Proxy.Network.CertificateManager)
-            .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
-            .SetValue(proxy.CertificateManager, false);
-        using var soon = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(10));
-        proxy.CertificateManager.RootCertificate = soon;
-        RunCommand.WarnInspectionRootExpiry(proxy);
+            typeof(Titanium.Web.Proxy.Network.CertificateManager)
+                .GetProperty(nameof(Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry))!
+                .SetValue(proxy.CertificateManager, false);
+            using var soon = MakeRoot(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(10));
+            proxy.CertificateManager.RootCertificate = soon;
+            RunCommand.WarnInspectionRootExpiry(proxy);
+            await AsyncConsole.FlushAsync();
+        }
+        finally
+        {
+            Console.SetOut(previousOut);
+            Console.SetError(previousError);
+        }
+
+        var text = sink.ToString();
+        StringAssert.Contains(text, "Inspection root CA expired");
+        StringAssert.Contains(text, "expires in");
     }
 
     private static X509Certificate2 MakeRoot(DateTimeOffset notBefore, DateTimeOffset notAfter)

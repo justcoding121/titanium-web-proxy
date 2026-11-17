@@ -275,13 +275,6 @@ internal static class LinuxBrowserLaunchProxy
         ("/etc/opera", ["/usr/bin/opera", "/usr/bin/opera-stable"]),
     ];
 
-    private static IEnumerable<string> MachinePolicyFiles(bool installedOnly) =>
-        MachinePolicyFiles(installedOnly, MachinePolicyVendors);
-
-    internal static List<string> MachinePolicyFilesForTests(
-        bool installedOnly, (string Root, string[] Binaries)[] vendors) =>
-        MachinePolicyFiles(installedOnly, vendors).ToList();
-
     private static IEnumerable<string> MachinePolicyFiles(
         bool installedOnly, (string Root, string[] Binaries)[] vendors)
     {
@@ -292,6 +285,10 @@ internal static class LinuxBrowserLaunchProxy
             yield return Path.Combine(root, PoliciesManaged, ManagedDirName, PolicyFileName);
         }
     }
+
+    internal static List<string> MachinePolicyFilesForTests(
+        bool installedOnly, (string Root, string[] Binaries)[] vendors) =>
+        MachinePolicyFiles(installedOnly, vendors).ToList();
 
     private static bool MachinePolicyMatches(string path, string json)
     {
@@ -308,11 +305,6 @@ internal static class LinuxBrowserLaunchProxy
     /// <summary>Runs <c>sudo -n</c>: never prompts, fails fast when sudo needs a password.</summary>
     private static void TrySudoNonInteractive(IReadOnlyList<string> command, string? stdin) =>
         TrySudoNonInteractive(command, stdin, SudoBinary, waitMilliseconds: 8000);
-
-    /// <summary>Same sudo launch with the executable and wait supplied by the caller (tests).</summary>
-    internal static void TrySudoNonInteractiveForTests(
-        IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds) =>
-        TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
 
     private static void TrySudoNonInteractive(
         IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds)
@@ -351,6 +343,11 @@ internal static class LinuxBrowserLaunchProxy
             // sudo missing or not permitted
         }
     }
+
+    /// <summary>Same sudo launch with the executable and wait supplied by the caller (tests).</summary>
+    internal static void TrySudoNonInteractiveForTests(
+        IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds) =>
+        TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
 
     /// <summary>
     ///     Builds Chromium managed-policy JSON. Prefer modern <c>ProxyMode</c> string keys;
@@ -644,10 +641,6 @@ internal static class LinuxBrowserLaunchProxy
     private static int WriteBrowserDesktopOverrides(string hostname, int port, bool proxyLoopback) =>
         WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, DesktopSources);
 
-    internal static int WriteBrowserDesktopOverridesForTests(
-        string hostname, int port, bool proxyLoopback, IEnumerable<string> sources) =>
-        WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, sources);
-
     private static int WriteBrowserDesktopOverrides(
         string hostname, int port, bool proxyLoopback, IEnumerable<string> sources)
     {
@@ -665,6 +658,10 @@ internal static class LinuxBrowserLaunchProxy
 
         return written;
     }
+
+    internal static int WriteBrowserDesktopOverridesForTests(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> sources) =>
+        WriteBrowserDesktopOverrides(hostname, port, proxyLoopback, sources);
 
     private static IEnumerable<string> UserDesktopOverridePaths()
     {
@@ -737,9 +734,6 @@ internal static class LinuxBrowserLaunchProxy
     private static void TryMakeExecutable(string scriptPath) =>
         TryMakeExecutable(scriptPath, OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
 
-    internal static void TryMakeExecutableForTests(string scriptPath) =>
-        TryMakeExecutable(scriptPath, applyUnixMode: true);
-
     private static void TryMakeExecutable(string scriptPath, bool applyUnixMode)
     {
         try
@@ -760,6 +754,9 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
+    internal static void TryMakeExecutableForTests(string scriptPath) =>
+        TryMakeExecutable(scriptPath, applyUnixMode: true);
+
     private static void DeleteMarkedDesktopOverride(string path)
     {
         try
@@ -778,10 +775,6 @@ internal static class LinuxBrowserLaunchProxy
 
     private static bool WriteXfceWebBrowserHelper(string hostname, int port, bool proxyLoopback) =>
         WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, ChromeBinaries);
-
-    internal static bool WriteXfceWebBrowserHelperForTests(
-        string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries) =>
-        WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, chromeBinaries);
 
     private static bool WriteXfceWebBrowserHelper(
         string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries)
@@ -818,6 +811,10 @@ internal static class LinuxBrowserLaunchProxy
             return false;
         }
     }
+
+    internal static bool WriteXfceWebBrowserHelperForTests(
+        string hostname, int port, bool proxyLoopback, IEnumerable<string> chromeBinaries) =>
+        WriteXfceWebBrowserHelper(hostname, port, proxyLoopback, chromeBinaries);
 
     private static bool WriteXfceHelpersRc()
     {
