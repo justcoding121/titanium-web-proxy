@@ -50,7 +50,7 @@ Scripts under [`osx/`](osx/):
 | Script | Role |
 | --- | --- |
 | `build-app-bundle.sh` | `.app` from Inspector publish folder |
-| `build-dmg.sh` | UDZO DMG with Applications symlink |
+| `build-dmg.sh` | UDZO DMG with Applications symlink + Finder icon layout (`Titanium Inspector.app`). Set `TITANIUM_DMG_SKIP_LAYOUT=1` to skip Finder scripting on headless agents. |
 | `sign-and-notarize.sh` | Developer ID codesign + `notarytool` + staple |
 | `TitaniumInspector.entitlements` / `TitaniumCli.entitlements` | Hardened runtime (JIT + network) |
 
@@ -91,7 +91,7 @@ Prebuilt icons live in [`icons/`](icons/) (hicolor PNG sizes + macOS `AppIcon.ic
 
 CLI does not install a Start menu, Dock, or application-menu launcher. It does ship a file icon: `src/Titanium.Cli/Assets/app.ico` is the Windows `ApplicationIcon` on `titanium.exe` and `twp.exe` (copied from the same publish, so both binaries match), and `icons/titanium-cli-*.png` is the Linux AppImage icon. `build-appimage.sh` reads those PNGs from this directory at release time; the CLI zip stays a single file on Windows.
 
-**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app` (prefer DMG when published).
+**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** prefer the notarized **DMG** — open it, drag **Titanium Inspector** onto **Applications**, eject the volume, then launch from Applications (or Spotlight). Zip fallback: extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app`. Running the app from the DMG volume works, but Inspector offers to move itself into Applications on first open.
 
 Winget package IDs:
 
@@ -165,6 +165,7 @@ See [`.github/workflows/release.yml`](../../.github/workflows/release.yml):
 - Matrix RID × matching runner (`windows-latest` for `win-x64`; `ubuntu-24.04-arm` for linux-arm64 / musl-arm64; `macos-15-intel` for `osx-x64`; `macos-latest` for `osx-arm64`; Alpine container for musl Lua).
 - Azure Artifact Signing on Windows; optional Apple notarize when secrets exist; optional GPG on checksums.
 - Smoke: `linux-x64` / `linux-musl-x64` HTTP/3; `linux-x64` + `win-x64` scripting (`titanium scripting-deps status` + native files).
+- Install smoke: [`inspector-install-smoke.yml`](../../.github/workflows/inspector-install-smoke.yml) installs the packaged Inspector (MSI, deb, DMG) and CLI on Windows, Linux, and macOS. An upgrade keeps Decrypt on. A fresh install starts with Decrypt off until it is turned on. Both must record a decrypted GET. The three OS checks are required on `beta` and `stable`. The release pull request author fixes a red run.
 - Helm: package three charts onto the Release and `helm push` to OCI (`setup-helm` v5).
 
 Native bundling for CLI scripting runs on **release** and hard-fails the cut when incomplete.

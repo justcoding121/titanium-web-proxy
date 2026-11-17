@@ -28,6 +28,15 @@ references:
   fullName.vb: Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(String, System.Collections.Generic.IReadOnlyList(Of Titanium.Web.Proxy.Models.SniCertificateBinding))
   nameWithType: SniCertificateSelector.Select(string?, IReadOnlyList<SniCertificateBinding>)
   nameWithType.vb: SniCertificateSelector.Select(String, IReadOnlyList(Of SniCertificateBinding))
+- uid: Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(System.String,System.Collections.Generic.IReadOnlyList{Titanium.Web.Proxy.Models.SniCertificateBinding},System.DateTime)
+  name: Select(string?, IReadOnlyList<SniCertificateBinding>, DateTime)
+  href: api/Titanium.Web.Proxy.Certificates.SniCertificateSelector.html#Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_System_String_System_Collections_Generic_IReadOnlyList_Titanium_Web_Proxy_Models_SniCertificateBinding__System_DateTime_
+  commentId: M:Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(System.String,System.Collections.Generic.IReadOnlyList{Titanium.Web.Proxy.Models.SniCertificateBinding},System.DateTime)
+  name.vb: Select(String, IReadOnlyList(Of SniCertificateBinding), Date)
+  fullName: Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(string?, System.Collections.Generic.IReadOnlyList<Titanium.Web.Proxy.Models.SniCertificateBinding>, System.DateTime)
+  fullName.vb: Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select(String, System.Collections.Generic.IReadOnlyList(Of Titanium.Web.Proxy.Models.SniCertificateBinding), Date)
+  nameWithType: SniCertificateSelector.Select(string?, IReadOnlyList<SniCertificateBinding>, DateTime)
+  nameWithType.vb: SniCertificateSelector.Select(String, IReadOnlyList(Of SniCertificateBinding), Date)
 - uid: Titanium.Web.Proxy.Certificates.SniCertificateSelector.Select*
   name: Select
   href: api/Titanium.Web.Proxy.Certificates.SniCertificateSelector.html#Titanium_Web_Proxy_Certificates_SniCertificateSelector_Select_
@@ -7309,6 +7318,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.Certificate
   nameWithType: SniCertificateBinding.Certificate
+- uid: Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList{System.String},System.Security.Cryptography.X509Certificates.X509Certificate2)
+  name: Create(IReadOnlyList<string>, X509Certificate2)
+  href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_Create_System_Collections_Generic_IReadOnlyList_System_String__System_Security_Cryptography_X509Certificates_X509Certificate2_
+  commentId: M:Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList{System.String},System.Security.Cryptography.X509Certificates.X509Certificate2)
+  name.vb: Create(IReadOnlyList(Of String), X509Certificate2)
+  fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList<string>, System.Security.Cryptography.X509Certificates.X509Certificate2)
+  fullName.vb: Titanium.Web.Proxy.Models.SniCertificateBinding.Create(System.Collections.Generic.IReadOnlyList(Of String), System.Security.Cryptography.X509Certificates.X509Certificate2)
+  nameWithType: SniCertificateBinding.Create(IReadOnlyList<string>, X509Certificate2)
+  nameWithType.vb: SniCertificateBinding.Create(IReadOnlyList(Of String), X509Certificate2)
+- uid: Titanium.Web.Proxy.Models.SniCertificateBinding.Create*
+  name: Create
+  href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_Create_
+  commentId: Overload:Titanium.Web.Proxy.Models.SniCertificateBinding.Create
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.Create
+  nameWithType: SniCertificateBinding.Create
 - uid: Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts
   name: Hosts
   href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_Hosts
@@ -7322,6 +7347,35 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.Hosts
   nameWithType: SniCertificateBinding.Hosts
+- uid: Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime)
+  name: IsValidAt(DateTime)
+  href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_IsValidAt_System_DateTime_
+  commentId: M:Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime)
+  name.vb: IsValidAt(Date)
+  fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(System.DateTime)
+  fullName.vb: Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt(Date)
+  nameWithType: SniCertificateBinding.IsValidAt(DateTime)
+  nameWithType.vb: SniCertificateBinding.IsValidAt(Date)
+- uid: Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt*
+  name: IsValidAt
+  href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_IsValidAt_
+  commentId: Overload:Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.IsValidAt
+  nameWithType: SniCertificateBinding.IsValidAt
+- uid: Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc
+  name: NotAfterUtc
+  href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_NotAfterUtc
+  commentId: P:Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc
+  fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc
+  nameWithType: SniCertificateBinding.NotAfterUtc
+- uid: Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc*
+  name: NotAfterUtc
+  href: api/Titanium.Web.Proxy.Models.SniCertificateBinding.html#Titanium_Web_Proxy_Models_SniCertificateBinding_NotAfterUtc_
+  commentId: Overload:Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Models.SniCertificateBinding.NotAfterUtc
+  nameWithType: SniCertificateBinding.NotAfterUtc
 - uid: Titanium.Web.Proxy.Models.SocksProxyEndPoint
   name: SocksProxyEndPoint
   href: api/Titanium.Web.Proxy.Models.SocksProxyEndPoint.html
@@ -8474,6 +8528,12 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.LeafCertificateKeyAlgorithm
   nameWithType: CertificateManager.LeafCertificateKeyAlgorithm
+- uid: Titanium.Web.Proxy.Network.CertificateManager.LeafRenewalMargin
+  name: LeafRenewalMargin
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LeafRenewalMargin
+  commentId: F:Titanium.Web.Proxy.Network.CertificateManager.LeafRenewalMargin
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.LeafRenewalMargin
+  nameWithType: CertificateManager.LeafRenewalMargin
 - uid: Titanium.Web.Proxy.Network.CertificateManager.LeafRsaKeyPairBufferSize
   name: LeafRsaKeyPairBufferSize
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_LeafRsaKeyPairBufferSize
@@ -8709,6 +8769,32 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateName
   nameWithType: CertificateManager.RootCertificateName
+- uid: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays
+  name: RootCertificateValidDays
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RootCertificateValidDays
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays
+  nameWithType: CertificateManager.RootCertificateValidDays
+- uid: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays*
+  name: RootCertificateValidDays
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RootCertificateValidDays_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateValidDays
+  nameWithType: CertificateManager.RootCertificateValidDays
+- uid: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry
+  name: RootCertificateWasReplacedDueToExpiry
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RootCertificateWasReplacedDueToExpiry
+  commentId: P:Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry
+  nameWithType: CertificateManager.RootCertificateWasReplacedDueToExpiry
+- uid: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry*
+  name: RootCertificateWasReplacedDueToExpiry
+  href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_RootCertificateWasReplacedDueToExpiry_
+  commentId: Overload:Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.CertificateManager.RootCertificateWasReplacedDueToExpiry
+  nameWithType: CertificateManager.RootCertificateWasReplacedDueToExpiry
 - uid: Titanium.Web.Proxy.Network.CertificateManager.SaveFakeCertificates
   name: SaveFakeCertificates
   href: api/Titanium.Web.Proxy.Network.CertificateManager.html#Titanium_Web_Proxy_Network_CertificateManager_SaveFakeCertificates

@@ -25,7 +25,8 @@ public static class SystemProxyBrowserCapture
         {
             FileName = browserPath,
             Arguments =
-                $"{headlessArg}{quic}--no-first-run --disable-extensions --disable-background-networking " +
+                $"{headlessArg}{quic}--no-first-run --disable-extensions --disable-component-update " +
+                "--disable-background-networking --disable-sync " +
                 $"--user-data-dir=\"{userDataDir}\" " +
                 $"\"{url}\"",
             UseShellExecute = false,
@@ -83,17 +84,24 @@ public static class SystemProxyBrowserCapture
     /// Launch Safari via Launch Services so it uses macOS system proxy (no CLI proxy flags).
     /// <c>open</c> exits immediately; call <see cref="KillSafariProcesses"/> to stop Safari.
     /// </summary>
-    public static Process StartSafari(string url)
+    public static Process StartSafari(string url) => StartSafari(url, fresh: false);
+
+    /// <summary>
+    /// <paramref name="fresh"/> passes <c>open -F</c> so Safari does not restore a tab
+    /// that already raced HTTP/3 past the proxy.
+    /// </summary>
+    public static Process StartSafari(string url, bool fresh)
     {
         if (!OperatingSystem.IsMacOS())
             throw new PlatformNotSupportedException("Safari probe is macOS-only");
 
         TryDisableSafariHttp3();
 
+        var arguments = fresh ? $"-F -a Safari \"{url}\"" : $"-a Safari \"{url}\"";
         return Process.Start(new ProcessStartInfo
         {
             FileName = "open",
-            Arguments = $"-a Safari \"{url}\"",
+            Arguments = arguments,
             UseShellExecute = false,
         }) ?? throw new InvalidOperationException("Failed to start Safari");
     }
@@ -121,34 +129,182 @@ public static class SystemProxyBrowserCapture
             // ignore
         }
 
-        foreach (var p in Process.GetProcessesByName("Safari"))
+        TryKillall(force: false);
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && SafariFamilyStillRunning())
+            Thread.Sleep(200);
+
+        // A networking process that survived the upgrade pass keeps the old root
+        // evaluation and any HTTP/3 alternative service. SIGTERM is not enough then.
+        if (SafariFamilyStillRunning())
         {
-            try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-            try { p.Dispose(); } catch { /* ignore */ }
+            TryKillall(force: true);
+            deadline = DateTime.UtcNow.AddSeconds(2);
+            while (DateTime.UtcNow < deadline && SafariFamilyStillRunning())
+                Thread.Sleep(200);
+        }
+
+        // HTTP/3 is on by default and ignores the old feature flag. A cached
+        // alternative service sends the GET around the proxy while CONNECT
+        // still shows up in the HAR. The store is only safe to delete once
+        // WebKit.Networking has exited.
+        ClearSafariAlternativeServices();
+    }
+
+    private static void TryKillall(bool force)
+    {
+        try
+        {
+            var start = new ProcessStartInfo
+            {
+                FileName = "killall",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+            if (force)
+                start.ArgumentList.Add("-9");
+            foreach (var name in new[]
+            {
+                "Safari",
+                "com.apple.WebKit.Networking",
+                "com.apple.WebKit.WebContent",
+                "com.apple.WebKit.GPU",
+            })
+            {
+                start.ArgumentList.Add(name);
+            }
+
+            using var kill = Process.Start(start);
+            kill?.WaitForExit(3000);
+        }
+        catch
+        {
+            // already gone
+        }
+    }
+
+    private static bool SafariFamilyStillRunning()
+    {
+        Process[] processes;
+        try
+        {
+            processes = Process.GetProcesses();
+        }
+        catch
+        {
+            return false;
+        }
+
+        try
+        {
+            foreach (var process in processes)
+            {
+                string name;
+                try
+                {
+                    name = process.ProcessName;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (name.Contains("Safari", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("WebKit.Networking", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("WebKit.WebContent", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("WebKit.GPU", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+        finally
+        {
+            foreach (var process in processes)
+            {
+                try { process.Dispose(); } catch { /* ignore */ }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Deletes WebKit's alternative-service database so the next Safari launch
+    /// cannot reuse an HTTP/3 route learned before this proxy's certificate existed.
+    /// </summary>
+    private static void ClearSafariAlternativeServices()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        foreach (var root in new[]
+        {
+            Path.Combine(home, "Library", "Containers", "com.apple.Safari", "Data"),
+            Path.Combine(home, "Library", "Containers", "com.apple.WebKit.Networking", "Data"),
+            Path.Combine(home, "Library", "Group Containers", "group.com.apple.Safari"),
+            Path.Combine(home, "Library", "Caches", "com.apple.Safari"),
+            Path.Combine(home, "Library", "Caches", "WebKit"),
+            Path.Combine(home, "Library", "HTTPStorages"),
+        })
+        {
+            DeleteAlternativeServiceFiles(root);
+        }
+    }
+
+    private static void DeleteAlternativeServiceFiles(string root)
+    {
+        if (!Directory.Exists(root))
+            return;
+
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(root, "AlternativeService.sqlite*", SearchOption.AllDirectories))
+            {
+                try { File.Delete(file); } catch { /* locked or already gone */ }
+            }
+
+            foreach (var dir in Directory.EnumerateDirectories(root, "AlternativeServices", SearchOption.AllDirectories))
+            {
+                try { Directory.Delete(dir, recursive: true); } catch { /* locked or already gone */ }
+            }
+        }
+        catch
+        {
+            // Cache layout differs across macOS versions; a miss is not fatal.
         }
     }
 
     /// <summary>
     /// HTTP/3 (QUIC) bypasses HTTP(S) proxies. Chromium gets --disable-quic; Safari has no flag.
+    /// A CONNECT that never becomes a GET is what that race looks like in the HAR.
     /// </summary>
     private static void TryDisableSafariHttp3()
     {
-        try
+        foreach (var domain in new[]
         {
-            using var p = Process.Start(new ProcessStartInfo
+            "com.apple.Safari",
+            "com.apple.Safari.SandboxBroker",
+            "com.apple.WebKit.Networking",
+        })
+        {
+            try
             {
-                FileName = "defaults",
-                Arguments = "write com.apple.Safari WebKitPreferences.http3Enabled -bool false",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-            });
-            p?.WaitForExit(3000);
-        }
-        catch
-        {
-            // ignore
+                using var p = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "defaults",
+                    Arguments = $"write {domain} WebKitPreferences.http3Enabled -bool false",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                });
+                p?.WaitForExit(3000);
+            }
+            catch
+            {
+                // ignore
+            }
         }
     }
 

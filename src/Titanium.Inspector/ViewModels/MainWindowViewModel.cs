@@ -629,6 +629,50 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
     /// <summary>
+    ///     macOS DMG: offer to copy into Applications. Returns true when this process
+    ///     should exit (relaunch of the installed copy was started).
+    /// </summary>
+    public async Task<bool> TryOfferMacDmgMoveAsync()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return false;
+
+        if (!MacAppRelocation.ShouldOfferMove(_settings.Current))
+            return false;
+
+        var owner = TryGetMainWindow();
+        var move = await SimpleConfirmDialog.ShowAsync(
+            owner,
+            "Install Titanium Inspector",
+            "Titanium Inspector is running from a disk image. Move it to Applications for a normal install (recommended), then eject the DMG.",
+            accept: "Move to Applications",
+            cancel: "Not Now",
+            height: 220).ConfigureAwait(true);
+
+        if (!move)
+        {
+            _settings.Current.MacDmgMovePromptDismissed = true;
+            _settings.Save();
+            return false;
+        }
+
+        try
+        {
+            var installed = MacAppRelocation.CopyBundleToApplications();
+            MacAppRelocation.RelaunchInstalledApp(installed);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SetOutcomeStatus(
+                "Could not copy to Applications: " + ex.Message,
+                StatusSeverity.Error,
+                toastImportant: true);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// After the main window is shown: optionally start capture and system proxy.
     /// Idempotent if already running.
     /// </summary>
@@ -3771,7 +3815,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             showedSystemProxyGuidance = SystemProxy;
         }
 
-        // Trust was refreshed during StartAsync — do not open the Root store again on the UI thread.
+        // Upgrade / persisted Decrypt-on: trust was refreshed during StartAsync. If the
+        // current root is not SSL-trusted (stale Keychain generation or stub), force Decrypt
+        // off and warn — same mental model as a clean install.
         if (_decryptHttps && !_interception.IsRootTrusted)
         {
             await ForceDecryptHttpsOffAsync();
@@ -3789,16 +3835,33 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         if (!showedSystemProxyGuidance &&
             (IsStatusBusy || StatusText.StartsWith("Starting proxy", StringComparison.Ordinal)))
         {
-            SetSteadyStatus(StatusReady);
+            if (_interception.IsRootCertificateExpiringSoon)
+            {
+                var days = Math.Max(0, (int)Math.Ceiling(_interception.RootCertificateDaysRemaining ?? 0));
+                SetStatus(
+                    $"Root CA expires in {days} day(s). Rotate and Install CA before then.",
+                    StatusSeverity.Warning);
+            }
+            else
+            {
+                SetSteadyStatus(StatusReady);
+            }
         }
     }
 
     private string UntrustedRootStatus()
     {
         var where = $"Proxy running on {FormatBindDisplay()}:{BindPort}";
+        if (_interception.IsRootCertificateExpired || _interception.RootCertificateWasReplacedDueToExpiry)
+        {
+            return SystemProxy
+                ? where + "; system proxy on — Decrypt HTTPS off (Root CA expired; created a new one, trust it to enable Decrypt)."
+                : where + " — Decrypt HTTPS off (Root CA expired; created a new one, trust it to enable Decrypt).";
+        }
+
         return SystemProxy
-            ? where + "; system proxy on — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS."
-            : where + " — Decrypt HTTPS off (root CA not trusted). Install CA or enable Decrypt HTTPS.";
+            ? where + "; system proxy on — Decrypt HTTPS off (CA not trusted for this root). Install CA…"
+            : where + " — Decrypt HTTPS off (CA not trusted for this root). Install CA…";
     }
 
     /// <summary>Parses bind address/port for start; shows error status and returns false on invalid input.</summary>

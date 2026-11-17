@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -80,11 +81,15 @@ public class LinuxBrowserProxyCoverageTests
 
             var dest = Path.Combine(desktopDir, "twp-cov.desktop");
             Invoke("WriteMarkedDesktopExec",
-                [typeof(string), typeof(string), typeof(string), typeof(int)],
-                fakeDesktop, dest, "127.0.0.1", 9050);
+                [typeof(string), typeof(string), typeof(string), typeof(int), typeof(bool)],
+                fakeDesktop, dest, "127.0.0.1", 9050, false);
             Assert.IsTrue(File.Exists(dest));
-            StringAssert.Contains(File.ReadAllText(dest), "--proxy-server=");
+            // The desktop entry now points at a launcher script that carries the proxy flags.
+            StringAssert.Contains(File.ReadAllText(dest), "DBusActivatable=false");
+            var script = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers", "twp-cov.sh");
+            StringAssert.Contains(File.ReadAllText(script), "--proxy-server=");
             Invoke("DeleteMarkedDesktopOverride", [typeof(string)], dest);
+            TryDelete(script);
 
             Invoke("TryUpdateDesktopDatabase", Type.EmptyTypes);
             _ = LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 9050);
@@ -141,6 +146,8 @@ public class LinuxBrowserProxyCoverageTests
         Assert.AreEqual("Chromium", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/lib/chromium/chromium"));
         Assert.AreEqual("Brave", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/bin/brave"));
         Assert.AreEqual("Edge", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/microsoft/msedge/msedge"));
+        Assert.AreEqual("Opera", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/bin/opera"));
+        Assert.AreEqual("Opera", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/bin/opera-stable"));
         Assert.IsNull(LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/bin/firefox"));
         _ = LinuxChromiumRelaunch.ResolveLaunchBinaryForExeForTests("/opt/google/chrome/chrome");
         Assert.IsFalse(LinuxChromiumRelaunch.TryRelaunchForProxyChange("127.0.0.1", 8866, enableProxy: true));
@@ -182,7 +189,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void XfceHelpers_AndPolicyRejects_AndChromeMarkerCorruptPrefs()
     {
-        Assert.IsFalse((bool)Invoke("WriteXfceWebBrowserHelper", [typeof(string), typeof(int)], "127.0.0.1", 8866)!);
+        Assert.IsFalse((bool)Invoke("WriteXfceWebBrowserHelper", [typeof(string), typeof(int), typeof(bool)], "127.0.0.1", 8866, false)!);
 
         var rcPath = (string)Invoke("UserXfceHelpersRcPath", Type.EmptyTypes)!;
         var helperPath = (string)Invoke("UserXfceChromeHelperPath", Type.EmptyTypes)!;
@@ -246,6 +253,156 @@ public class LinuxBrowserProxyCoverageTests
         InvokeOn(typeof(LinuxChromeProfileProxy), "DeleteMarker", Type.EmptyTypes);
     }
 
+    [TestMethod]
+    public void MachinePolicySudoDesktopAndProfiles_CoverLinuxOnlyBranches()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "twp-linux-cov-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var tool = FakeOsExecutable.Ensure("twp-sonar-fake-tool-proxy.exe");
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var rcPath = (string)Invoke("UserXfceHelpersRcPath", Type.EmptyTypes)!;
+        var helperPath = (string)Invoke("UserXfceChromeHelperPath", Type.EmptyTypes)!;
+        string? rcBackup = File.Exists(rcPath) ? File.ReadAllText(rcPath) : null;
+        var rcExisted = File.Exists(rcPath);
+        try
+        {
+            var vendorRoot = Path.Combine(root, "etc-chrome");
+            var binary = Path.Combine(root, "chrome-bin");
+            Directory.CreateDirectory(vendorRoot);
+            File.WriteAllText(binary, "");
+            (string Root, string[] Binaries)[] vendors = [(vendorRoot, [binary])];
+            (string Root, string[] Binaries)[] missing = [(Path.Combine(root, "absent-root"), [Path.Combine(root, "absent-bin")])];
+
+            Assert.AreEqual(0, LinuxBrowserLaunchProxy.MachinePolicyFilesForTests(installedOnly: true, missing).Count);
+            var files = LinuxBrowserLaunchProxy.MachinePolicyFilesForTests(installedOnly: false, vendors);
+            Assert.AreEqual(1, files.Count);
+            Assert.AreEqual(1, LinuxBrowserLaunchProxy.MachinePolicyFilesForTests(installedOnly: true, vendors).Count);
+
+            var policy = files[0];
+            Assert.IsFalse((bool)Invoke("MachinePolicyMatches", [typeof(string), typeof(string)], policy, "{}\n")!);
+            Directory.CreateDirectory(Path.GetDirectoryName(policy)!);
+            File.WriteAllText(policy, "{}\n");
+            Assert.IsTrue((bool)Invoke("MachinePolicyMatches", [typeof(string), typeof(string)], policy, "{}\n")!);
+            Assert.IsFalse((bool)Invoke("MachinePolicyMatches", [typeof(string), typeof(string)], vendorRoot, "{}\n")!);
+
+            LinuxBrowserLaunchProxy.SyncMachinePoliciesForTests(null, missing);
+            LinuxBrowserLaunchProxy.SyncMachinePoliciesForTests(null, vendors);
+            LinuxBrowserLaunchProxy.SyncMachinePoliciesForTests("{\"ProxyMode\":\"fixed_servers\"}\n", missing);
+            LinuxBrowserLaunchProxy.SyncMachinePoliciesForTests("{\"ProxyMode\":\"fixed_servers\"}\n", vendors);
+            LinuxBrowserLaunchProxy.SyncMachinePoliciesForTests(null, [("C:\\bad|path", [])]);
+
+            LinuxBrowserLaunchProxy.TrySudoNonInteractiveForTests(["echo"], "{\"a\":1}", tool, 2000);
+            LinuxBrowserLaunchProxy.TrySudoNonInteractiveForTests(["SLEEP"], null, tool, 300);
+            LinuxBrowserLaunchProxy.TrySudoNonInteractiveForTests(["rm"], null, Path.Combine(root, "missing-sudo.exe"), 200);
+
+            Assert.IsNull(LinuxBrowserLaunchProxy.BuildDesktopOverride(
+                "[Desktop Entry]\nName=Nope\n", Path.Combine(root, "launch.sh"), "127.0.0.1", 9));
+            Assert.IsNull(LinuxBrowserLaunchProxy.BuildDesktopOverride(
+                "[Desktop Entry]\nExec=\n", Path.Combine(root, "launch.sh"), "127.0.0.1", 9));
+            Assert.IsNotNull(LinuxBrowserLaunchProxy.BuildDesktopOverride(
+                "[Desktop Entry]\nExec=\"/opt/google/chrome/chrome\" %U\n",
+                Path.Combine(root, "launch.sh"), "127.0.0.1", 9));
+            Assert.IsNotNull(LinuxBrowserLaunchProxy.BuildDesktopOverride(
+                "[Desktop Entry]\nExec=/usr/bin/google-chrome %U\nExec=/usr/bin/chromium %U\n",
+                Path.Combine(root, "launch.sh"), "127.0.0.1", 9, proxyLoopback: true));
+
+            var blank = Path.Combine(root, "blank.desktop");
+            File.WriteAllText(blank, "[Desktop Entry]\nName=Nope\n");
+            Assert.IsFalse((bool)Invoke(
+                "WriteMarkedDesktopExec",
+                [typeof(string), typeof(string), typeof(string), typeof(int), typeof(bool)],
+                blank, Path.Combine(root, "out.desktop"), "127.0.0.1", 9, false)!);
+
+            var desktop = Path.Combine(root, "google-chrome.desktop");
+            File.WriteAllText(desktop, "[Desktop Entry]\nName=Chrome\nExec=/usr/bin/google-chrome-stable %U\n");
+            Assert.IsTrue(LinuxBrowserLaunchProxy.WriteBrowserDesktopOverridesForTests(
+                "127.0.0.1", 9050, proxyLoopback: true, [desktop]) >= 1);
+
+            var launcherDir = (string)Invoke("LauncherDirectory", Type.EmptyTypes)!;
+            Directory.CreateDirectory(launcherDir);
+            var marked = Path.Combine(launcherDir, "twp-cov-marked.sh");
+            var plain = Path.Combine(launcherDir, "twp-cov-plain.sh");
+            File.WriteAllText(marked, "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker + "\n");
+            File.WriteAllText(plain, "#!/bin/sh\necho keep\n");
+            Invoke("DeleteLauncherScripts", Type.EmptyTypes);
+            Assert.IsFalse(File.Exists(marked));
+            Assert.IsTrue(File.Exists(plain));
+
+            var locked = Path.Combine(launcherDir, "twp-cov-locked.sh");
+            using (new FileStream(locked, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            {
+                Invoke("DeleteLauncherScripts", Type.EmptyTypes);
+            }
+
+            TryDelete(plain);
+            TryDelete(locked);
+
+            var script = Path.Combine(root, "mode.sh");
+            File.WriteAllText(script, "#!/bin/sh\n");
+            LinuxBrowserLaunchProxy.TryMakeExecutableForTests(script);
+
+            var chrome = Path.Combine(root, "google-chrome-stable");
+            File.WriteAllText(chrome, "");
+            Assert.IsTrue(LinuxBrowserLaunchProxy.WriteXfceWebBrowserHelperForTests(
+                "127.0.0.1", 9050, proxyLoopback: true, [chrome]));
+
+            var profileHome = Path.Combine(root, "profile-home");
+            LinuxChromeProfileProxy.EnsureInstalledDefaultProfiles("");
+            LinuxChromeProfileProxy.EnsureInstalledDefaultProfiles("   ");
+            LinuxChromeProfileProxy.EnsureInstalledDefaultProfiles(profileHome);
+            var markerA = Path.Combine(root, "marker-a");
+            var markerB = Path.Combine(root, "marker-b");
+            File.WriteAllText(markerA, "");
+            File.WriteAllText(markerB, "");
+            LinuxChromeProfileProxy.EnsureInstalledProfilesForTests(profileHome,
+            [
+                (markerA, "google-chrome"),
+                (markerB, "google-chrome"),
+                (Path.Combine(root, "absent-marker"), "chromium"),
+            ]);
+            Assert.IsTrue(File.Exists(Path.Combine(profileHome, ".config", "google-chrome", "First Run")));
+
+            var loopback = typeof(LinuxChromeProfileProxy).GetField(
+                "_activeLoopback", BindingFlags.NonPublic | BindingFlags.Static)!;
+            var prefs = Path.Combine(root, "Preferences");
+            File.WriteAllText(prefs, "{}");
+            loopback.SetValue(null, true);
+            try
+            {
+                Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(prefs, "127.0.0.1", 9));
+                StringAssert.Contains(File.ReadAllText(prefs), "bypass_list");
+            }
+            finally
+            {
+                loopback.SetValue(null, false);
+            }
+        }
+        finally
+        {
+            if (rcBackup is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(rcPath)!);
+                File.WriteAllText(rcPath, rcBackup);
+            }
+            else if (!rcExisted && File.Exists(rcPath))
+            {
+                TryDelete(rcPath);
+            }
+
+            TryDelete(helperPath);
+            TryDelete(Path.Combine(home, ".local", "share", "applications", "google-chrome.desktop"));
+            try
+            {
+                if (Directory.Exists(root))
+                    Directory.Delete(root, true);
+            }
+            catch
+            {
+                // best-effort temp cleanup
+            }
+        }
+    }
+
     private static object? Invoke(string name, Type[] types, params object?[] args) =>
         InvokeOn(typeof(LinuxBrowserLaunchProxy), name, types, args);
 
@@ -272,5 +429,62 @@ public class LinuxBrowserProxyCoverageTests
     private static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+    }
+}
+
+internal static class FakeOsExecutable
+{
+    private static readonly object Gate = new();
+
+    public static string Ensure(string fileName)
+    {
+        var exe = Path.Combine(Path.GetTempPath(), fileName);
+        lock (Gate)
+        {
+            if (File.Exists(exe))
+                return exe;
+
+            var sourcePath = Path.Combine(Path.GetTempPath(), fileName + ".cs");
+            File.WriteAllText(sourcePath, """
+                using System;
+                public class Program {
+                  public static int Main(string[] args) {
+                    var joined = string.Join(" ", args);
+                    if (joined.IndexOf("SLEEP", StringComparison.Ordinal) >= 0) {
+                      System.Threading.Thread.Sleep(60000);
+                      return 0;
+                    }
+                    if (joined.IndexOf("FAILSILENT", StringComparison.Ordinal) >= 0)
+                      return 1;
+                    if (joined.IndexOf("FAIL", StringComparison.Ordinal) >= 0) {
+                      Console.Error.WriteLine("denied");
+                      return 1;
+                    }
+                    return 0;
+                  }
+                }
+                """);
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+            };
+            psi.ArgumentList.Add("-NoProfile");
+            psi.ArgumentList.Add("-NonInteractive");
+            psi.ArgumentList.Add("-Command");
+            psi.ArgumentList.Add(
+                $"Add-Type -OutputAssembly '{exe}' -OutputType ConsoleApplication -TypeDefinition (Get-Content -Raw -LiteralPath '{sourcePath}')");
+            using var process = Process.Start(psi)
+                ?? throw new InvalidOperationException("Could not start powershell to build the fake tool.");
+            if (!process.WaitForExit(30_000) || !File.Exists(exe))
+            {
+                throw new InvalidOperationException(
+                    "Fake tool was not compiled: " + process.StandardError.ReadToEnd());
+            }
+
+            return exe;
+        }
     }
 }

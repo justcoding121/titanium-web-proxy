@@ -91,7 +91,8 @@ Upgrading a 7.x install: [Migrating from 7.x to 8.0](/docs/migration-7-to-8).
 |------------|--------|------------|-------|------|
 | Minimum TLS version and OCSP stapling for listeners | supported | `server.tls.minVersion`, `server.tls.ocspStapling` | Applies to the handshake with clients; origin-facing handshakes are not changed. | [Listener TLS policy](/docs/configuration#listener-tls-policy-server-tls) |
 | Cipher suite list for listeners | partial | `server.tls.cipherSuites` | Linux and macOS only. On Windows .NET has no cipher suite policy, the list is ignored, and validation prints a warning. | [Listener TLS policy](/docs/configuration#listener-tls-policy-server-tls) |
-| Automatic certificates (ACME) | supported | `certificates.acmeDomain`, `certificates.acmeEmail`, `certificates.acmeDirectory` | Obtains certificates from Let's Encrypt or another ACME directory. | [Certificates and ACME](/docs/configuration#certificates-acme) |
+| Automatic certificates (ACME) | supported | `certificates.acmeDomain`, `certificates.acmeEmail`, `certificates.acmeDirectory` | Obtains certificates from Let's Encrypt or another ACME directory. Skips re-issue on restart when more than 30 days remain; renews in the background within 30 days of expiry and hot-swaps the leaf. | [Certificates and ACME](/docs/configuration#certificates-acme) |
+| Inspection root lifetime | supported | `server.certificateManager.rootCertificateValidDays`, `server.certificateManager.certificateValidDays` | New decrypt roots default to about 10 years; forged leaves stay within the 398-day browser cap and never outlive the root. | [Certificates and ACME](/docs/configuration#certificates-acme) |
 | 0-RTT (early data) | not supported | — | System.Net.Quic does not offer early data, so every QUIC connection starts with a full 1-RTT handshake. | [HTTP/3](/docs/http3) |
 
 ## Caching

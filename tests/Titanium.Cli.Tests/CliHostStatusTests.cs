@@ -108,6 +108,33 @@ public class CliHostStatusTests
         var f = certs.Single(c => c.Name.Contains("sni.pfx", StringComparison.Ordinal));
         Assert.AreEqual("CN=pfx-host", f.Subject);
         AssertWithinAMinute(notAfter.AddDays(10), f.NotAfterUtc);
+        Assert.AreEqual(44, p.DaysToExpiry);
+        Assert.AreEqual("ok", p.ExpiryStatus);
+        Assert.AreEqual("ok", f.ExpiryStatus);
+    }
+
+    [TestMethod]
+    public void Certificates_ReportExpiringAndExpiredStatus()
+    {
+        var expiring = WritePem("soon.pem", "CN=soon", DateTimeOffset.UtcNow.AddDays(10).AddHours(1));
+        var expired = WritePem("gone.pem", "CN=gone", DateTimeOffset.UtcNow.AddDays(-3));
+        var config = new TwpConfig
+        {
+            Certificates = new CertificatesConfig
+            {
+                CertificatePath = expiring,
+                Items = [new CertificateFileConfig { Path = expired }],
+            },
+        };
+
+        var certs = CliHostStatus.Collect(config, _ => null);
+
+        var soon = certs.Single(c => c.Subject == "CN=soon");
+        Assert.AreEqual("expiring", soon.ExpiryStatus);
+        Assert.AreEqual(10, soon.DaysToExpiry);
+        var gone = certs.Single(c => c.Subject == "CN=gone");
+        Assert.AreEqual("expired", gone.ExpiryStatus);
+        Assert.IsTrue(gone.DaysToExpiry < 0);
     }
 
     private static void AssertWithinAMinute(DateTimeOffset expected, DateTimeOffset? actual)
@@ -235,7 +262,9 @@ public class CliHostStatusTests
     private static X509Certificate2 Create(RSA rsa, string subject, DateTimeOffset notAfter)
     {
         var request = new CertificateRequest(subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), notAfter);
+        var notBefore = DateTimeOffset.UtcNow.AddDays(-1);
+        if (notAfter <= notBefore) notBefore = notAfter.AddDays(-10);
+        return request.CreateSelfSigned(notBefore, notAfter);
     }
 
     private sealed class ManualClock : TimeProvider

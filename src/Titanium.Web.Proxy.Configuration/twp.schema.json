@@ -1596,6 +1596,9 @@
             "rootCertificateName": {
               "type": "string"
             },
+            "rootCertificateValidDays": {
+              "type": "integer"
+            },
             "saveFakeCertificates": {
               "type": "boolean"
             }

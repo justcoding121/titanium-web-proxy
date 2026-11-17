@@ -62,8 +62,12 @@ public sealed partial class MainWindowViewModel
         string? terminalGuard = null;
         try
         {
-            // Already trusted: do not re-open the Root store or rewrite Firefox prefs.
-            if (_interception.IsRootTrusted)
+            // Re-verify before short-circuit — cached IsRootTrusted can be stale after rotate
+            // or a false-positive Keychain stub for a previous same-CN generation.
+            var alreadyTrusted = await RunOffUiAsync(
+                () => _interception.RefreshTrustState(false),
+                StatusCancelToken);
+            if (alreadyTrusted)
             {
                 showTrustedSuccess = true;
             }
@@ -347,8 +351,8 @@ public sealed partial class MainWindowViewModel
                 }
                 if (recovered == false)
                     return false;
-                ok = _interception.IsRootTrusted ||
-                     _interception.LastOsTrustResult?.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+                // Elevate/recovery may have added the CA without SSL Always Trust yet.
+                ok = _interception.IsRootTrusted;
                 continue;
             }
 
@@ -415,12 +419,18 @@ public sealed partial class MainWindowViewModel
     private async Task<bool> TryCompleteMacManualTrustAsync(Window? owner)
     {
         var wait = await WaitForMacSslTrustAsync(owner);
-        var trusted = wait == MacSslTrustWaitResult.Trusted ||
-                      await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken);
-        if (trusted)
+        var verified = await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken);
+        // Real Keychain Always Trust sets IsRootTrusted via VerifyOsUserSslTrust while the wait
+        // dialog polls. Scripted Trusted (and rare races) can return Trusted before the flag
+        // flips — re-install user trust so callers that re-verify do not see a false positive.
+        if (!verified && wait == MacSslTrustWaitResult.Trusted)
+            verified = _interception.InstallRootCertificate(machineStore: false)
+                       || await RunOffUiAsync(() => _interception.VerifyOsUserSslTrust(), StatusCancelToken);
+
+        if (verified || (wait == MacSslTrustWaitResult.Trusted && _interception.IsRootTrusted))
         {
             ScheduleFirefoxEnterpriseRootsBestEffort();
-            return true;
+            return _interception.IsRootTrusted;
         }
 
         _interception.SetLastOsTrustCancelled();

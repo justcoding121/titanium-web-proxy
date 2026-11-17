@@ -41,8 +41,11 @@ namespace Titanium.Web.Proxy.UnitTests
             {
                 CertificateEngine = engineType,
                 CertificateValidDays = validDays,
-                CertificateGraceDays = graceDays
+                CertificateGraceDays = graceDays,
+                // Fresh in-memory root so leaf clamp cannot shorten against a leftover shared PFX.
+                RootCertificateValidDays = 3650,
             };
+            Assert.IsTrue(mgr.CreateRootCertificate(persistToFile: false));
 
             var cert = mgr.CreateCertificate("lifetime-test.example", false);
             Assert.IsNotNull(cert);

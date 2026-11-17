@@ -35,6 +35,8 @@ Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.RootCertificate
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.RootCertificateIssuerName.set -> void
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.RootCertificateName.get -> string?
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.RootCertificateName.set -> void
+Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.RootCertificateValidDays.get -> int?
+Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.RootCertificateValidDays.set -> void
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.SaveFakeCertificates.get -> bool?
 Titanium.Web.Proxy.Configuration.Models.CertificateManagerConfig.SaveFakeCertificates.set -> void
 Titanium.Web.Proxy.Configuration.Models.CertificatesConfig

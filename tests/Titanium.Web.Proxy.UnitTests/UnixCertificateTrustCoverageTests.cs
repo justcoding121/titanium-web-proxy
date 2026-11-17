@@ -198,6 +198,27 @@ public class UnixCertificateTrustCoverageTests
     }
 
     [TestMethod]
+    public void MacDumpWithoutHashLine_OnlyCountsWhenTheNameBelongsToThisCertificate()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var cn = cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "TWP";
+        var dump = $"Cert 0: {cn}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n";
+
+        var sole = new FakeProcessRunner();
+        sole.When("security", "dump-trust-settings", dump);
+        sole.When("security", "find-certificate", $"SHA-1 hash: {sha1}\n");
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(sole, cert));
+
+        // An older generation shares the name, so the policy block may be for the stale copy.
+        var ambiguous = new FakeProcessRunner { DefaultSuccess = false };
+        ambiguous.When("security", "dump-trust-settings", dump);
+        ambiguous.When("security", "find-certificate",
+            $"SHA-1 hash: {sha1}\nSHA-1 hash: 0000000000000000000000000000000000000001\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(ambiguous, cert));
+    }
+
+    [TestMethod]
     public void MacTrustHelpers_CoverDumpExportUntrustAndSystem()
     {
         using var cert = CreateEphemeralRoot();
@@ -221,8 +242,9 @@ public class UnixCertificateTrustCoverageTests
 
             var addRunner = new FakeProcessRunner();
             addRunner.When("security", "add-trusted-cert", "ok");
+            addRunner.When("security", "find-certificate", $"SHA-1 hash: {sha1}\n");
             addRunner.When("security", "dump-trust-settings",
-                $"{cn}\nTrust Root\nNumber of trust settings: 1\n");
+                $"Cert 0: {cn}\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
             var detailed = (CertificateOsTrustResult)Invoke(
                 "TrustMacUserDetailed",
                 [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
@@ -355,8 +377,11 @@ public class UnixCertificateTrustCoverageTests
         runner.When("sh", "command -v certutil", planted.Path);
         runner.When("certutil", "-N --empty-password", "");
         runner.When("security", "add-trusted-cert", "ok");
+        runner.When("security", "find-certificate", $"SHA-1 hash: {cert.GetCertHashString()}\n");
         runner.When("security", "dump-trust-settings",
-            cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false) + "\nTrust Root\n");
+            $"Cert 0: {cert.GetNameInfo(X509NameType.SimpleName, forIssuer: false)}\n" +
+            $"SHA-1 hash: {cert.GetCertHashString()}\n" +
+            "Number of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
 
         var nssDir = (string?)Invoke("EnsureLinuxNssDb", [typeof(IProcessRunner)], runner);
         Assert.IsFalse(string.IsNullOrEmpty(nssDir));
@@ -385,7 +410,10 @@ public class UnixCertificateTrustCoverageTests
         var cerPath = UnixCertificateTrust.WriteTempCer(cert, forUserGuidance: true);
         try
         {
-            Assert.IsTrue((bool)Invoke("TrustMacUser", [typeof(IProcessRunner), typeof(string)], runner, cerPath)!);
+            Assert.IsTrue((bool)Invoke(
+                "TrustMacUser",
+                [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
+                runner, cerPath, cert)!);
             Assert.IsTrue((bool)Invoke("VerifyMacSslTrust", [typeof(IProcessRunner), typeof(X509Certificate2)], runner, cert)!);
         }
         finally
@@ -474,17 +502,20 @@ public class UnixCertificateTrustCoverageTests
         var dumpEmpty = new FakeProcessRunner();
         dumpEmpty.When("security", "dump-trust-settings", "No Trust Settings were found\n");
         Assert.IsFalse((bool)Invoke(
-            "DumpTrustSettingsMentionsPolicies",
-            [typeof(IProcessRunner), typeof(string), typeof(string)],
-            dumpEmpty, sha1, cn)!);
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            dumpEmpty, sha1)!);
 
         var dumpHit = new FakeProcessRunner();
         dumpHit.When("security", "dump-trust-settings",
-            $"SHA-1 hash: {sha1}\n{cn}\nkSecTrustSettingsResultTrustRoot\n");
+            $"Cert 0: {cn}\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
         Assert.IsTrue((bool)Invoke(
-            "DumpTrustSettingsMentionsPolicies",
-            [typeof(IProcessRunner), typeof(string), typeof(string)],
-            dumpHit, sha1, cn)!);
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            dumpHit, sha1)!);
+        Assert.IsTrue(UnixCertificateTrust.DumpTextHasSslTrustPoliciesForSha1(
+            $"Cert 0: {cn}\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n",
+            sha1));
 
         var export = new FakeProcessRunner { WriteFileOnMatch = "trust-settings-export" };
         export.When("security", "trust-settings-export", "");
@@ -546,6 +577,82 @@ public class UnixCertificateTrustCoverageTests
         Assert.IsTrue(dirs.Count >= 1);
     }
 
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_SystemKeychainBasicVerify()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var trusted = new FakeProcessRunner { DefaultSuccess = false };
+        trusted.When("security", "dump-trust-settings", "No Trust Settings were found\n");
+        trusted.When("security", "find-certificate", "SHA-1 hash: " + sha1 + "\n");
+        trusted.When("security", "verify-cert", "certificate verification successful.\n");
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(trusted, cert));
+
+        var other = new FakeProcessRunner { DefaultSuccess = false };
+        other.When("security", "dump-trust-settings", "No Trust Settings were found\n");
+        other.When("security", "find-certificate", "SHA-1 hash: 00112233445566778899AABBCCDDEEFF00112233\n");
+        other.When("security", "verify-cert", "certificate verification successful.\n");
+        Assert.IsFalse(UnixCertificateTrust.HasExplicitMacSslTrustSettings(other, cert));
+    }
+
+    [TestMethod]
+    public void TrustExportText_MatchesSpacedSha1AndRejectsDeny()
+    {
+        const string sha1 = "5B927118266541D27B0B625DC3D4E0CADA00ED04";
+        var spaced = """
+            {
+              "trustList" => {
+                <5b92 7118 2665 41d2 7b0b 625d c3d4 e0ca da00 ed04> => {
+                  "trustSettings" => [
+                    0 => {
+                      "kSecTrustSettingsResult" => 1
+                    }
+                  ]
+                }
+              }
+            }
+            """;
+        Assert.IsTrue(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(spaced, sha1));
+
+        var deny = spaced.Replace("=> 1", "=> 3", StringComparison.Ordinal);
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(deny, sha1));
+
+        var stub = """
+            { "trustList" => { "<5b92 7118 2665 41d2 7b0b 625d c3d4 e0ca da00 ed04>" => {
+              "issuerName" => {length = 48, bytes = 0xab} } } }
+            """;
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(stub, sha1));
+    }
+
+    [TestMethod]
+    public void DumpTrustSettings_MatchesTrustRootBlockByKeychainName()
+    {
+        using var cert = CreateEphemeralRoot("CN=Titanium Root Certificate Authority");
+        var sha1 = cert.GetCertHashString();
+        var dump = new FakeProcessRunner();
+        dump.When("security", "dump-trust-settings",
+            "Cert 0: Titanium Root Certificate Authority\n" +
+            "   Number of trust settings : 1\n" +
+            "   Trust Setting 0:\n" +
+            "      Result Type           : kSecTrustSettingsResultTrustRoot\n");
+        dump.When("security", "find-certificate", "SHA-1 hash: " + sha1 + "\n");
+        Assert.IsTrue((bool)Invoke(
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            dump, sha1)!);
+
+        var other = new FakeProcessRunner();
+        other.When("security", "dump-trust-settings",
+            "Cert 0: Titanium Root Certificate Authority\n" +
+            "   Number of trust settings : 1\n" +
+            "      Result Type           : kSecTrustSettingsResultTrustRoot\n");
+        other.When("security", "find-certificate", "SHA-1 hash: 00112233445566778899AABBCCDDEEFF00112233\n");
+        Assert.IsFalse((bool)Invoke(
+            "DumpTrustSettingsHasPoliciesForSha1",
+            [typeof(IProcessRunner), typeof(string)],
+            other, sha1)!);
+    }
+
     /// <summary>
     /// On macOS/Linux <c>FindCertutil</c> asks the runner for <c>command -v certutil</c>.
     /// Without this, a real Homebrew certutil (or a missing one) is used instead of the fake.
@@ -557,6 +664,108 @@ public class UnixCertificateTrustCoverageTests
                 file.Contains("sh", StringComparison.Ordinal) &&
                 args.Contains("certutil", StringComparison.Ordinal),
             new ProcessRunResult(0, fake + "\n", ""));
+    }
+
+    [TestMethod]
+    public void MacTrustExportAndStaleHashHelpers_CoverRemainingBranches()
+    {
+        using var cert = CreateEphemeralRoot();
+        var stale = new ScriptedProcessRunner
+        {
+            Default = new ProcessRunResult(0, "SHA-1 hash: " + new string('A', 40) + "\n", ""),
+        };
+        Invoke("TryRemoveStaleMacSameCommonNameRoots",
+            [typeof(IProcessRunner), typeof(X509Certificate2)], stale, cert);
+
+        Assert.IsNull(Invoke("CertBlockDisplayName", [typeof(string)], "   \n"));
+        Assert.IsNull(Invoke("CertBlockDisplayName", [typeof(string)], "not-a-short-label: name"));
+        Assert.AreEqual("Example", Invoke("CertBlockDisplayName", [typeof(string)], "Cert 1: Example"));
+
+        Assert.IsFalse(UnixCertificateTrust.DumpTextHasSslTrustPoliciesForSha1("", "abc"));
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1("", new string('b', 40)));
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1("text", "abcd"));
+        var sha = new string('b', 40);
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(
+            "trustSettings=[] " + sha, sha));
+        Assert.IsFalse(UnixCertificateTrust.TrustExportTextHasPoliciesForSha1(
+            sha + " trustSettings kSecTrustSettingsResult=12", sha));
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trustDir = Path.Combine(home, "Library", "Security", "Trust Settings");
+        var keychainDir = Path.Combine(home, "Library", "Keychains");
+        Directory.CreateDirectory(trustDir);
+        Directory.CreateDirectory(keychainDir);
+        var plist = Path.Combine(trustDir, "twp-cov-match.plist");
+        var login = Path.Combine(keychainDir, "login.keychain-db");
+        var createdPlist = !File.Exists(plist);
+        var createdLogin = !File.Exists(login);
+        File.WriteAllText(plist, "plist");
+        if (createdLogin)
+            File.WriteAllText(login, "");
+        try
+        {
+            var listed = ((IEnumerable<string>)Invoke("MacTrustSettingsPlistCandidates", Type.EmptyTypes)!).ToList();
+            Assert.IsTrue(listed.Any(path => path.EndsWith("twp-cov-match.plist", StringComparison.Ordinal)));
+
+            var runner = new TrustPlistRunner(sha);
+            Assert.IsTrue((bool)Invoke(
+                "TrustSettingsExportHasPolicies",
+                [typeof(IProcessRunner), typeof(string)],
+                runner, sha)!);
+
+            runner.ReturnNull = true;
+            Assert.IsFalse((bool)Invoke(
+                "TrustSettingsExportHasPolicies",
+                [typeof(IProcessRunner), typeof(string)],
+                runner, sha)!);
+
+            Invoke("CollectMacCertificateHashes",
+                [typeof(IProcessRunner), typeof(string), typeof(HashSet<string>)],
+                stale, "Titanium Root Certificate Authority", new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            if (createdPlist)
+                TryDeleteFile(plist);
+            if (createdLogin)
+                TryDeleteFile(login);
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private sealed class TrustPlistRunner : IProcessRunner
+    {
+        private readonly string _sha;
+
+        public TrustPlistRunner(string sha) => _sha = sha;
+
+        public bool ReturnNull { get; set; }
+
+        public ProcessRunResult? Run(
+            string fileName, string arguments, IDictionary<string, string?>? environment = null,
+            string? workingDirectory = null, TimeSpan? timeout = null)
+        {
+            if (!string.Equals(fileName, "plutil", StringComparison.Ordinal))
+                return new ProcessRunResult(1, "", "");
+            if (ReturnNull || !arguments.Contains("twp-cov-match.plist", StringComparison.Ordinal))
+                return null;
+            return new ProcessRunResult(
+                0,
+                _sha + " trustSettings kSecTrustSettingsResultTrustRoot",
+                "");
+        }
     }
 
     private static object? Invoke(string name, Type[] types, params object?[] args)
