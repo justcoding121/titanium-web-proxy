@@ -232,25 +232,64 @@ internal static class LinuxProxyFailOpen
                 psi.ArgumentList.Add(pidPath);
             }
 
-            using var launched = Process.Start(psi);
-            if (launched is null)
-                return;
-
-            // Own the helper before waiting so a same-process clear cannot stop it mid-spawn.
-            Volatile.Write(ref _ownedByThisProcess, 1);
-            launched.WaitForExit(3000);
-
-            // Record the scope name after ownership is set so Stop() can find it.
-            if (scopeName is not null)
+            if (!TryLaunchHelper(psi, scopeName, scopePath))
             {
-                try { File.WriteAllText(scopePath, scopeName); }
-                catch { /* best-effort */ }
+                // systemd-run can fail even when the binary and session bus exist
+                // (unit name clash, user manager not ready). Fall back to setsid.
+                if (scopeName is null)
+                    return;
+                var setsid = UnixProcessPath.Resolve("/usr/bin/setsid", "/bin/setsid");
+                if (setsid is null)
+                    return;
+                var fallback = new ProcessStartInfo
+                {
+                    FileName = setsid,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = dir,
+                };
+                fallback.ArgumentList.Add("-f");
+                fallback.ArgumentList.Add(python);
+                fallback.ArgumentList.Add(script);
+                fallback.ArgumentList.Add(hostname);
+                fallback.ArgumentList.Add(port.ToString());
+                fallback.ArgumentList.Add(pidPath);
+                TryLaunchHelper(fallback, scopeName: null, scopePath);
             }
         }
         catch
         {
             // best-effort — Preferences strip still runs for the next Chrome start
         }
+    }
+
+    /// <summary>
+    ///     Starts <paramref name="psi"/> and treats a still-running process, or a zero exit,
+    ///     as success. A quick non-zero exit means the launcher failed and the caller may
+    ///     try the other start path. Ownership is taken before the wait so a same-process
+    ///     clear cannot stop the helper mid-spawn, and cleared again when the launch fails.
+    /// </summary>
+    private static bool TryLaunchHelper(ProcessStartInfo psi, string? scopeName, string scopePath)
+    {
+        using var launched = Process.Start(psi);
+        if (launched is null)
+            return false;
+
+        Volatile.Write(ref _ownedByThisProcess, 1);
+        var exited = launched.WaitForExit(3000);
+        if (exited && launched.ExitCode != 0)
+        {
+            Volatile.Write(ref _ownedByThisProcess, 0);
+            return false;
+        }
+
+        if (scopeName is not null)
+        {
+            try { File.WriteAllText(scopePath, scopeName); }
+            catch { /* best-effort */ }
+        }
+
+        return true;
     }
 
     private static string? ConfigDir()

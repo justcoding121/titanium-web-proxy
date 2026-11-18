@@ -226,9 +226,11 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 if (!File.Exists(commPath))
                     continue;
                 var comm = File.ReadAllText(commPath).Trim();
-                // comm is truncated to 15 chars by the kernel.
-                if (!processName.StartsWith(comm, StringComparison.Ordinal) &&
-                    !comm.StartsWith(processName.Length > 15 ? processName[..15] : processName, StringComparison.Ordinal))
+                // comm is the kernel task name, truncated to 15 characters. All of the
+                // session daemons we look for fit in that limit, so require an exact match.
+                // A prefix match would also hit gnome-shell-calendar-server.
+                var expected = processName.Length > 15 ? processName[..15] : processName;
+                if (!comm.Equals(expected, StringComparison.Ordinal))
                     continue;
                 candidates++;
                 if (candidates > MaxCandidates)
@@ -268,7 +270,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             if (!line.StartsWith("Uid:", StringComparison.Ordinal))
                 continue;
-            var fields = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+            var fields = line.Split((char[])['\t', ' '], StringSplitOptions.RemoveEmptyEntries);
             if (fields.Length >= 2 && int.TryParse(fields[1], out var uid))
                 return uid;
         }
@@ -281,7 +283,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             if (!line.StartsWith("Uid:", StringComparison.Ordinal))
                 continue;
-            var fields = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+            var fields = line.Split((char[])['\t', ' '], StringSplitOptions.RemoveEmptyEntries);
             // Uid: real effective saved fs
             return fields.Length >= 2 && int.TryParse(fields[1], out var procUid) && procUid == uid;
         }
