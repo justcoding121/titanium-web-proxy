@@ -368,7 +368,20 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             try
             {
-                LinuxBrowserLaunchProxy.Clear();
+                // Strip hooks only. Do not relaunch browsers or start fail-open — this path
+                // runs after Inspector is already gone (login hook / package remove / clear binary).
+                LinuxBrowserLaunchProxy.ClearInstalledHooks();
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+        else
+        {
+            try
+            {
+                LinuxProxyFailOpen.Stop();
             }
             catch
             {

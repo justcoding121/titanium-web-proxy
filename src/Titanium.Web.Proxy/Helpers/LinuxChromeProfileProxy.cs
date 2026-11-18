@@ -60,7 +60,14 @@ internal static class LinuxChromeProfileProxy
         }
     }
 
-    internal static void Clear()
+    internal static void Clear() => Clear(startFailOpen: true);
+
+    /// <param name="startFailOpen">
+    ///     When true (graceful quit while browsers are still open), bind a short fail-open
+    ///     helper so Chromium is not left dialing a closed port. Dead-app ForceClear passes
+    ///     false and stops any leftover helper instead.
+    /// </param>
+    internal static void Clear(bool startFailOpen)
     {
         string? host;
         int port;
@@ -90,7 +97,16 @@ internal static class LinuxChromeProfileProxy
             }
 
             DeleteMarker();
-            ScheduleClearRetries_NoLock(host, port);
+            if (startFailOpen)
+                ScheduleClearRetries_NoLock(host, port);
+            else
+                CancelClearRetries_NoLock();
+        }
+
+        if (!startFailOpen)
+        {
+            LinuxProxyFailOpen.Stop();
+            return;
         }
 
         // Outside the lock. Launch now, detached. A delayed task dies with File → Exit

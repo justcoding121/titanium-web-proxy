@@ -101,10 +101,21 @@ internal static class LinuxBrowserLaunchProxy
         return ok;
     }
 
-    internal static void Clear()
+    internal static void Clear() => Clear(relaunchBrowsers: true, startFailOpen: true);
+
+    /// <summary>
+    ///     Dead-app / package-removal clear: strip hooks without relaunching browsers or
+    ///     starting the fail-open helper (Inspector is already gone).
+    /// </summary>
+    internal static void ClearInstalledHooks() => Clear(relaunchBrowsers: false, startFailOpen: false);
+
+    private static void Clear(bool relaunchBrowsers, bool startFailOpen)
     {
-        LinuxChromeProfileProxy.Clear();
-        LinuxFirefoxProxy.Clear();
+        LinuxChromeProfileProxy.Clear(startFailOpen);
+        if (relaunchBrowsers)
+            LinuxFirefoxProxy.Clear();
+        else
+            LinuxFirefoxProxy.ClearInstalledHooks();
 
         foreach (var dir in PolicyDirectories())
         {
@@ -132,8 +143,11 @@ internal static class LinuxBrowserLaunchProxy
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
 
-        // Relaunch without proxy flags so already-open Chromium browsers drop the dead endpoint immediately.
-        LinuxChromiumRelaunch.TryRelaunchForProxyChange(null, 0, enableProxy: false);
+        if (relaunchBrowsers)
+        {
+            // Relaunch without proxy flags so already-open Chromium browsers drop the dead endpoint immediately.
+            LinuxChromiumRelaunch.TryRelaunchForProxyChange(null, 0, enableProxy: false);
+        }
     }
 
     private static void TryUpdateDesktopDatabase()
