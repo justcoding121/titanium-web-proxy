@@ -14,6 +14,9 @@ internal static class LinuxProxyFailOpen
 {
     private const string PidFileName = "fail-open-proxy.pid";
     private const string ScriptFileName = "fail-open-proxy.py";
+    // Written alongside the pid file when the helper was started via systemd-run --scope.
+    // Stop() reads this file to stop the scope unit before falling back to kill -TERM.
+    private const string ScopeFileName = "fail-open-proxy.scope";
     private static int _ownedByThisProcess;
 
     /// <summary>True after <see cref="Start"/> in this process until an explicit <see cref="Stop"/>.</summary>
@@ -72,8 +75,34 @@ internal static class LinuxProxyFailOpen
         Volatile.Write(ref _ownedByThisProcess, 0);
         try
         {
-            var pidPath = PidPath();
-            if (pidPath is null || !File.Exists(pidPath))
+            var dir = ConfigDir();
+            if (dir is null)
+                return;
+
+            // If the helper was started in a systemd user scope, stop that scope first.
+            // This handles the case where the helper was placed outside Inspector's cgroup
+            // (so kill -TERM on the double-forked pid might not reach it after a scope stop).
+            var scopePath = Path.Combine(dir, ScopeFileName);
+            if (File.Exists(scopePath))
+            {
+                try
+                {
+                    var scopeName = File.ReadAllText(scopePath).Trim();
+                    if (!string.IsNullOrEmpty(scopeName))
+                        TryStopSystemdScope(scopeName);
+                }
+                catch
+                {
+                    // best-effort
+                }
+                finally
+                {
+                    try { File.Delete(scopePath); } catch { /* ignore */ }
+                }
+            }
+
+            var pidPath = Path.Combine(dir, PidFileName);
+            if (!File.Exists(pidPath))
                 return;
             if (int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) && pid > 1)
             {
@@ -105,6 +134,27 @@ internal static class LinuxProxyFailOpen
         }
     }
 
+    private static void TryStopSystemdScope(string scopeName)
+    {
+        var systemctl = UnixProcessPath.Resolve("/usr/bin/systemctl", "/bin/systemctl");
+        if (systemctl is null)
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = systemctl,
+                ArgumentList = { "--user", "stop", scopeName },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })?.WaitForExit(3000);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     internal static void Start(string hostname, int port)
     {
         Stop();
@@ -117,32 +167,85 @@ internal static class LinuxProxyFailOpen
             var script = Path.Combine(dir, ScriptFileName);
             File.WriteAllText(script, FailOpenScript);
             var pidPath = Path.Combine(dir, PidFileName);
+            var scopePath = Path.Combine(dir, ScopeFileName);
             var python = UnixProcessPath.Resolve("/usr/bin/python3", "/usr/local/bin/python3");
-            var setsid = UnixProcessPath.Resolve("/usr/bin/setsid", "/bin/setsid");
-            if (python is null || setsid is null)
+            if (python is null)
                 return;
 
-            // setsid -f puts the helper in its own session. A child of Inspector is
-            // killed when File → Exit tears the process down, before the bind retry runs.
-            var psi = new ProcessStartInfo
+            // Prefer systemd-run --user --scope so the helper lives outside Inspector's
+            // cgroup. When Inspector runs as a systemd user service, the service stops its
+            // entire cgroup on exit — a setsid-only helper is killed with it. A scope unit
+            // is independent and survives. Fall back to setsid when systemd-run is absent.
+            var systemdRun = UnixProcessPath.Resolve("/usr/bin/systemd-run", "/bin/systemd-run");
+            var xdgRuntime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            var dbus = Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS");
+            var canUseSystemd = systemdRun is not null &&
+                                !string.IsNullOrEmpty(xdgRuntime) &&
+                                !string.IsNullOrEmpty(dbus);
+
+            ProcessStartInfo psi;
+            string? scopeName = null;
+
+            if (canUseSystemd)
             {
-                FileName = setsid,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = dir,
-            };
-            psi.ArgumentList.Add("-f");
-            psi.ArgumentList.Add(python);
-            psi.ArgumentList.Add(script);
-            psi.ArgumentList.Add(hostname);
-            psi.ArgumentList.Add(port.ToString());
-            psi.ArgumentList.Add(pidPath);
+                // Unit name must be unique per port so concurrent Inspector instances do not clash.
+                scopeName = $"ti-fail-open-{port}.scope";
+                psi = new ProcessStartInfo
+                {
+                    FileName = systemdRun!,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = dir,
+                };
+                psi.EnvironmentVariables["XDG_RUNTIME_DIR"] = xdgRuntime!;
+                psi.EnvironmentVariables["DBUS_SESSION_BUS_ADDRESS"] = dbus!;
+                psi.ArgumentList.Add("--user");
+                psi.ArgumentList.Add("--scope");
+                psi.ArgumentList.Add("--collect");
+                psi.ArgumentList.Add($"--unit={scopeName}");
+                psi.ArgumentList.Add(python);
+                psi.ArgumentList.Add(script);
+                psi.ArgumentList.Add(hostname);
+                psi.ArgumentList.Add(port.ToString());
+                psi.ArgumentList.Add(pidPath);
+            }
+            else
+            {
+                var setsid = UnixProcessPath.Resolve("/usr/bin/setsid", "/bin/setsid");
+                if (setsid is null)
+                    return;
+
+                // setsid -f puts the helper in its own session so it is not killed when
+                // the parent Inspector process exits (for menu-launch path).
+                psi = new ProcessStartInfo
+                {
+                    FileName = setsid,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = dir,
+                };
+                psi.ArgumentList.Add("-f");
+                psi.ArgumentList.Add(python);
+                psi.ArgumentList.Add(script);
+                psi.ArgumentList.Add(hostname);
+                psi.ArgumentList.Add(port.ToString());
+                psi.ArgumentList.Add(pidPath);
+            }
+
             using var launched = Process.Start(psi);
             if (launched is null)
                 return;
+
             // Own the helper before waiting so a same-process clear cannot stop it mid-spawn.
             Volatile.Write(ref _ownedByThisProcess, 1);
             launched.WaitForExit(3000);
+
+            // Record the scope name after ownership is set so Stop() can find it.
+            if (scopeName is not null)
+            {
+                try { File.WriteAllText(scopePath, scopeName); }
+                catch { /* best-effort */ }
+            }
         }
         catch
         {
@@ -182,14 +285,17 @@ internal static class LinuxProxyFailOpen
 
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        for _ in range(80):
+        # Inspector keeps the port until shutdown finishes. Twelve seconds was
+        # not enough, so the helper exited and a pinned browser saw a closed port.
+        deadline = time.time() + 90
+        while True:
             try:
                 srv.bind((host, port))
                 break
             except OSError:
+                if time.time() >= deadline:
+                    sys.exit(1)
                 time.sleep(0.15)
-        else:
-            sys.exit(1)
         srv.listen(128)
 
         def pipe(a, b):

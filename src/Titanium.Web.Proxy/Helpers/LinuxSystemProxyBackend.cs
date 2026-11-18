@@ -85,10 +85,11 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         var gnome = HasGnome();
         var kde = HasKde();
 
-        // GNOME/KDE: Chromium follows the desktop proxy when policy and Preferences say
-        // mode=system. A --proxy-server launcher flag would pin the process past File → Exit.
-        // No-schema desktops still get that flag because they do not watch gsettings.
-        var pinProcess = ShouldPinBrowserProcess(_applyBrowserLaunchHooks, gnome, kde);
+        // A GNOME or KDE session follows the desktop proxy when policy and Preferences say
+        // mode=system. A --proxy-server launcher flag would pin that process past File → Exit.
+        // XFCE, i3, and RDP still need the flag: Chrome there ignores gsettings even when
+        // the org.gnome.system.proxy schema package is installed.
+        var pinProcess = ShouldPinBrowserProcess(_applyBrowserLaunchHooks, ReadSessionDesktop());
         TryPrepareBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess);
 
         var desktopError = ApplyDesktopProxies(gnome, kde, hostname, port, protocolType, proxyOverride);
@@ -112,12 +113,198 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     }
 
     /// <summary>
-    ///     Process pins (<c>--proxy-server</c>) are only for desktops that do not expose a
-    ///     GNOME or KDE proxy schema. The hook flag itself is what unit tests turn off so
+    ///     Process pins (<c>--proxy-server</c>) are for sessions that do not follow the
+    ///     desktop proxy live. Schema packages alone are not enough: XFCE often has
+    ///     <c>org.gnome.system.proxy</c> installed, and Chrome still ignores it there.
+    ///     The hook flag itself is what unit tests turn off so
     ///     <see cref="LinuxBrowserLaunchProxy.Apply"/> is never called.
     /// </summary>
-    internal static bool ShouldPinBrowserProcess(bool applyHooks, bool hasGnomeSchema, bool hasKdeSchema) =>
-        applyHooks && !hasGnomeSchema && !hasKdeSchema;
+    internal static bool ShouldPinBrowserProcess(bool applyHooks, string? sessionDesktop) =>
+        applyHooks && !SessionFollowsLiveProxy(sessionDesktop);
+
+    /// <summary>
+    ///     True when <paramref name="sessionDesktop"/> is a session whose desktop proxy
+    ///     Chrome follows live (gsettings-based or KDE kioslaverc).
+    ///     Matches Chromium's <c>proxy_config_service_linux.cc</c> switch:
+    ///     Cinnamon, Deepin, GNOME, Pantheon, UKUI, Unity, COSMIC → gsettings path;
+    ///     KDE variants → KDE kioslaverc path.
+    ///     XFCE, LXQt, MATE, DDE, tiling compositors → OTHER, not watched → need pin.
+    ///     <c>XDG_CURRENT_DESKTOP</c> may be a colon-separated list such as
+    ///     <c>ubuntu:GNOME</c> or <c>Budgie:GNOME</c>.
+    /// </summary>
+    internal static bool SessionFollowsLiveProxy(string? sessionDesktop)
+    {
+        if (string.IsNullOrWhiteSpace(sessionDesktop))
+            return false;
+
+        foreach (var part in sessionDesktop.Split(':', ';', ' '))
+        {
+            if (part.Length == 0)
+                continue;
+            // gsettings watchers: matches DESKTOP_ENVIRONMENT_GNOME, _UNITY, _CINNAMON,
+            // _DEEPIN, _PANTHEON, _UKUI, _COSMIC in Chromium xdg_util.h.
+            // X-Cinnamon is used on some Linux Mint versions alongside Cinnamon.
+            // "Deepin" only — DDE (older Deepin) falls through to OTHER in Chromium
+            // and Chrome does not follow gsettings for it, so DDE stays pinned.
+            if (part.Equals("GNOME", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("Unity", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("Cinnamon", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("X-Cinnamon", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("Deepin", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("Pantheon", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("UKUI", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("COSMIC", StringComparison.OrdinalIgnoreCase) ||
+                // KDE kioslaverc watchers: KDE3–6, plasma desktop name.
+                part.Equals("KDE", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("plasma", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? ReadSessionDesktop()
+    {
+        var parts = new[]
+        {
+            Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP"),
+            Environment.GetEnvironmentVariable("XDG_SESSION_DESKTOP"),
+            Environment.GetEnvironmentVariable("DESKTOP_SESSION"),
+        };
+        var combined = string.Join(':', parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
+        if (combined.Length > 0)
+            return combined;
+
+        // Inspector may be launched via a systemd user service or bare terminal that
+        // does not inherit the graphical session variables. Fall back to reading the
+        // environment of the session daemon process for the same user (best-effort).
+        return TryReadSessionDesktopFromGraphicalProcess();
+    }
+
+    /// <summary>
+    ///     Looks for a well-known graphical session daemon owned by the current user and
+    ///     reads its <c>XDG_CURRENT_DESKTOP</c> from <c>/proc/[pid]/environ</c>.
+    ///     Returns null on any failure — the caller keeps pin-by-default as the safe path.
+    /// </summary>
+    private static string? TryReadSessionDesktopFromGraphicalProcess()
+    {
+        if (!OperatingSystem.IsLinux())
+            return null;
+        try
+        {
+            var uid = GetCurrentUid();
+            // Ordered by prevalence. xfce4-session is last: its environ usually has no
+            // XDG_CURRENT_DESKTOP, so it returns nothing and the caller still pins.
+            string[] sessionDaemons = ["gnome-shell", "plasmashell", "cinnamon", "xfce4-session"];
+            foreach (var daemon in sessionDaemons)
+            {
+                var desktop = TryReadDesktopFromProcess(daemon, uid);
+                if (!string.IsNullOrWhiteSpace(desktop))
+                    return desktop;
+            }
+        }
+        catch
+        {
+            // best-effort — do not propagate
+        }
+        return null;
+    }
+
+    private static string? TryReadDesktopFromProcess(string processName, int uid)
+    {
+        const int MaxCandidates = 5;
+        var candidates = 0;
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories("/proc", "*"))
+            {
+                if (!int.TryParse(Path.GetFileName(dir), out _))
+                    continue;
+                var commPath = Path.Combine(dir, "comm");
+                if (!File.Exists(commPath))
+                    continue;
+                var comm = File.ReadAllText(commPath).Trim();
+                // comm is truncated to 15 chars by the kernel.
+                if (!processName.StartsWith(comm, StringComparison.Ordinal) &&
+                    !comm.StartsWith(processName.Length > 15 ? processName[..15] : processName, StringComparison.Ordinal))
+                    continue;
+                candidates++;
+                if (candidates > MaxCandidates)
+                    break;
+
+                // Verify the process belongs to the same user.
+                var statusPath = Path.Combine(dir, "status");
+                if (!File.Exists(statusPath))
+                    continue;
+                var status = File.ReadAllText(statusPath);
+                if (!StatusContainsUid(status, uid))
+                    continue;
+
+                var environPath = Path.Combine(dir, "environ");
+                if (!File.Exists(environPath))
+                    continue;
+
+                var raw = File.ReadAllBytes(environPath);
+                // environ is a sequence of NUL-separated KEY=VALUE entries.
+                var desktop = ParseDesktopFromEnviron(raw);
+                if (!string.IsNullOrWhiteSpace(desktop))
+                    return desktop;
+            }
+        }
+        catch
+        {
+            // best-effort
+        }
+        return null;
+    }
+
+    private static int GetCurrentUid()
+    {
+        // Read from /proc/self/status — works on all Linux versions.
+        var status = File.ReadAllText("/proc/self/status");
+        foreach (var line in status.Split('\n'))
+        {
+            if (!line.StartsWith("Uid:", StringComparison.Ordinal))
+                continue;
+            var fields = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length >= 2 && int.TryParse(fields[1], out var uid))
+                return uid;
+        }
+        return -1;
+    }
+
+    private static bool StatusContainsUid(string status, int uid)
+    {
+        foreach (var line in status.Split('\n'))
+        {
+            if (!line.StartsWith("Uid:", StringComparison.Ordinal))
+                continue;
+            var fields = line.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+            // Uid: real effective saved fs
+            return fields.Length >= 2 && int.TryParse(fields[1], out var procUid) && procUid == uid;
+        }
+        return false;
+    }
+
+    private static string? ParseDesktopFromEnviron(byte[] raw)
+    {
+        const string key = "XDG_CURRENT_DESKTOP=";
+        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key);
+        var span = raw.AsSpan();
+        var start = 0;
+        while (start < span.Length)
+        {
+            var nul = span[start..].IndexOf((byte)0);
+            var end = nul < 0 ? span.Length : start + nul;
+            var entry = span[start..end];
+            if (entry.Length > keyBytes.Length && entry[..keyBytes.Length].SequenceEqual(keyBytes))
+                return System.Text.Encoding.UTF8.GetString(entry[keyBytes.Length..]);
+            start = end + 1;
+        }
+        return null;
+    }
 
     private void TryPrepareBrowserLaunchHooks(string hostname, int port, string? proxyOverride, bool pinProcess)
     {

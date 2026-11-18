@@ -373,13 +373,56 @@ public class LinuxSystemProxyBackendTests
     }
 
     [TestMethod]
-    public void ShouldPinBrowserProcess_OnlyWhenNoGnomeOrKdeSchema()
+    public void ShouldPinBrowserProcess_OnlyOutsideGnomeAndKdeSessions()
     {
-        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, true, false));
-        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, false, false));
-        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, true, false));
-        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, false, true));
-        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, false, false));
+        // hooks=false → never pin regardless of desktop
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, "XFCE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, null));
+
+        // --- sessions that follow a live desktop proxy → no pin ---
+        // GNOME / Unity (already covered before this change)
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "ubuntu:GNOME"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "ubuntu:GNOME:ubuntu:ubuntu"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "GNOME"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "KDE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "plasma"));
+        // gsettings-watching desktops added in this change
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Cinnamon"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "X-Cinnamon"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Deepin"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Pantheon"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "UKUI"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "COSMIC"));
+        // Budgie ships as "Budgie:GNOME" on some distros — GNOME token makes it live
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Budgie:GNOME"));
+
+        // --- sessions that need a launcher pin ---
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "XFCE"));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, null));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, ""));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "LXQt"));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "MATE"));
+        // Budgie alone (no GNOME token) — Chrome does not watch gsettings for it
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Budgie"));
+        // DDE: older Deepin branding — Chromium maps "Deepin" only, DDE falls to OTHER
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "DDE"));
+        // tiling compositors
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "sway"));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "i3"));
+
+        // SessionFollowsLiveProxy direct checks
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("ubuntu:GNOME"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Cinnamon"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("X-Cinnamon"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Deepin"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Pantheon"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("UKUI"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("COSMIC"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("XFCE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("DDE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("MATE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Budgie"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy(null));
     }
 }
 
