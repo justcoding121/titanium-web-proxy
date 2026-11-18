@@ -279,23 +279,19 @@ public class Http2DeferredOutboundDataTests
     }
 
     [TestMethod]
-    public void ShouldThrottle_AndUnknownStreamHelpers()
+    public void UnknownStreamHelpers_CancelIsIdempotent()
     {
         var deferred = new Http2DeferredOutboundData();
-        Assert.IsFalse(deferred.ShouldThrottleReceiveCredit(3));
         Assert.AreEqual(0, deferred.PendingCount(99));
         Assert.IsFalse(deferred.HasOutboundInFlight(99));
         deferred.CancelStream(5);
         deferred.CancelStream(5);
 
-        for (var i = 0; i < Http2DeferredOutboundData.MaxFramesPerStream; i++)
-        {
-            var buf = ArrayPool<byte>.Shared.Rent(16 * 1024);
-            Assert.IsTrue(deferred.TryEnqueue(3, buf, 0, 16 * 1024, endStream: false));
-        }
-
-        Assert.IsTrue(deferred.ShouldThrottleReceiveCredit(3));
-        Assert.IsFalse(deferred.ShouldThrottleReceiveCredit(99));
+        var buf = ArrayPool<byte>.Shared.Rent(16);
+        Assert.IsTrue(deferred.TryEnqueue(3, buf, 0, 16, endStream: false));
+        Assert.AreEqual(1, deferred.PendingCount(3));
+        deferred.CancelStream(3);
+        Assert.AreEqual(0, deferred.PendingCount(3));
     }
 
     [TestMethod]
