@@ -16,3 +16,21 @@ if command -v systemctl >/dev/null 2>&1; then
   systemctl enable --global titanium-inspector-clear-proxy.service >/dev/null 2>&1 || true
   systemctl enable --global titanium-inspector-clear-proxy.timer >/dev/null 2>&1 || true
 fi
+# An upgrade's pre-remove belongs to the package being replaced, so it can
+# leave Chromium Preferences pointed at the old port. Run the new cleanup now
+# for the desktop user instead of waiting for the next login.
+user="${SUDO_USER:-}"
+if [ -z "$user" ] && [ -n "${PKEXEC_UID:-}" ]; then
+  user=$(id -nu "$PKEXEC_UID" 2>/dev/null || true)
+fi
+if [ -n "$user" ] && [ "$user" != root ]; then
+  uid=$(id -u "$user" 2>/dev/null || true)
+  home=$(getent passwd "$user" 2>/dev/null | cut -d: -f6)
+  script=/usr/lib/titanium-inspector/clear-proxy-if-stopped.sh
+  if [ -n "$uid" ] && [ -n "$home" ] && [ -x "$script" ]; then
+    sudo -u "$user" \
+      env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+      "$script" >/dev/null 2>&1 || true
+  fi
+fi

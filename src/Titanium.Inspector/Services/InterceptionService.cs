@@ -1266,9 +1266,52 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>
     ///     Queue Firefox enable work on the serial background lane (coalesces consecutive enables).
+    ///     On Linux and macOS, also import the root into each Firefox profile NSS database.
+    ///     Enterprise-roots reads the OS store, not <c>~/.pki/nssdb</c>, and a policies.json that
+    ///     only sets ImportEnterpriseRoots is ignored by current Firefox.
     /// </summary>
     public void ScheduleFirefoxEnterpriseRootsBestEffort() =>
-        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Enable, TryEnableFirefoxEnterpriseRootsBestEffort);
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Enable, EnableFirefoxTrustBestEffort);
+
+    private void EnableFirefoxTrustBestEffort()
+    {
+        TryEnableFirefoxEnterpriseRootsBestEffort();
+        TryImportRootIntoFirefoxProfiles();
+    }
+
+    /// <summary>
+    ///     Import the current root into Firefox profile databases. Skips a running Firefox
+    ///     because certutil against a locked cert9.db can hang the trust lane.
+    /// </summary>
+    private void TryImportRootIntoFirefoxProfiles()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows() || UseInMemoryTrustState || _proxy is null)
+                return;
+            if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
+                    StringComparison.Ordinal))
+                return;
+            if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+            {
+                InspectorUxTrace.Event("TrustFirefox.InstalledProfiles", "skipped firefox-running");
+                return;
+            }
+
+            var cert = _proxy.CertificateManager.RootCertificate;
+            if (cert is null)
+                return;
+
+            var result = FirefoxCertificateTrust.TrustInstalledProfiles(cert, RootCertificateName);
+            InspectorUxTrace.Event(
+                "TrustFirefox.InstalledProfiles",
+                $"ok={result.Succeeded} kind={result.Kind} msg={TruncateTrustMsg(result.Message)}");
+        }
+        catch
+        {
+            // install path must not fail because a Firefox profile DB was locked
+        }
+    }
 
     /// <summary>
     ///     Queue Firefox clear work on the serial background lane (coalesces consecutive clears).

@@ -8,7 +8,9 @@ set +e
 inspector_running() {
   local pid cmd
   for pid in /proc/[0-9]*; do
-    cmd="$(tr '\0' ' ' < "${pid}/cmdline" 2>/dev/null || true)"
+    # The shell opens the redirect itself. A process that exits mid-scan, or a
+    # /proc entry we cannot read, must not print on the login hook.
+    cmd="$( { tr '\0' ' ' < "${pid}/cmdline"; } 2>/dev/null || true )"
     case "${cmd}" in
       *--clear-system-proxy*) continue ;;
     esac
@@ -32,10 +34,9 @@ fi
 session_still_uses_proxy() {
   local pid
   for pid in /proc/[0-9]*; do
-    if [[ ! -r "${pid}/environ" ]]; then
-      continue
-    fi
-    if tr '\0' '\n' < "${pid}/environ" 2>/dev/null |
+    # Mode bits can say readable while the kernel still returns EACCES.
+    # The group redirect hides that open error from the login journal.
+    if { tr '\0' '\n' < "${pid}/environ"; } 2>/dev/null |
       grep -q -E '^(http_proxy|https_proxy|HTTP_PROXY|HTTPS_PROXY)=http://(127\.0\.0\.1|localhost)(:|/)'; then
       return 0
     fi
@@ -111,6 +112,63 @@ do
     needs=1
   fi
 done
+
+# Chromium Preferences outlive the marker file. A loopback fixed_servers entry
+# ignores the desktop proxy switch, so a kill or uninstall still breaks browsing
+# after GNOME/KDE proxy is off. Other fixed proxies are left alone.
+if python3 - "${home}" <<'PY'
+import json, os, sys
+home = sys.argv[1]
+roots = (
+    ".config/google-chrome",
+    ".config/google-chrome-beta",
+    ".config/google-chrome-unstable",
+    ".config/chromium",
+    ".config/microsoft-edge",
+    ".config/BraveSoftware/Brave-Browser",
+    ".config/opera",
+    "snap/chromium/common/chromium",
+    "snap/microsoft-edge/common/microsoft-edge",
+)
+changed = False
+for rel in roots:
+    root = os.path.join(home, rel)
+    if not os.path.isdir(root):
+        continue
+    names = ["Default"]
+    try:
+        names += [n for n in os.listdir(root) if n.startswith("Profile ")]
+    except OSError:
+        pass
+    for name in names:
+        path = os.path.join(root, name, "Preferences")
+        if not os.path.isfile(path):
+            continue
+        try:
+            doc = json.load(open(path, encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        proxy = doc.get("proxy")
+        if not isinstance(proxy, dict):
+            continue
+        if proxy.get("mode") != "fixed_servers":
+            continue
+        server = str(proxy.get("server") or "")
+        if not any(host in server for host in ("127.0.0.1", "localhost", "[::1]")):
+            continue
+        doc["proxy"] = {"mode": "system"}
+        tmp = path + ".tmp"
+        try:
+            json.dump(doc, open(tmp, "w", encoding="utf-8"), separators=(",", ":"))
+            os.replace(tmp, path)
+            changed = True
+        except OSError:
+            pass
+sys.exit(0 if changed else 1)
+PY
+then
+  needs=1
+fi
 
 if [[ "${needs}" -eq 0 ]]; then
   # Hooks are already gone. A leftover fail-open process would still occupy the

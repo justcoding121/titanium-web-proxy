@@ -17,12 +17,10 @@ APP_DIR="${PREFIX}/share/TitaniumInspector"
 BIN_DIR="${PREFIX}/bin"
 APPS_DIR="${PREFIX}/share/applications"
 MNT="$(mktemp -d "${TMPDIR:-/tmp}/ti-appimage-XXXXXX")"
+EXTRACT_DIR=""
 cleanup() {
-  if [[ -d "${MNT}" ]]; then
-    "${APPIMAGE}" --appimage-extract >/dev/null 2>&1 || true
-    # Prefer fuse unmount when the image was mounted; fall back to rm for extract dirs.
-    fusermount -u "${MNT}" 2>/dev/null || umount "${MNT}" 2>/dev/null || rm -rf "${MNT}"
-  fi
+  fusermount -u "${MNT}" 2>/dev/null || umount "${MNT}" 2>/dev/null || true
+  rm -rf "${MNT}" ${EXTRACT_DIR:+"${EXTRACT_DIR}"}
 }
 trap cleanup EXIT
 
@@ -79,7 +77,5 @@ Categories=Network;Development;
 EOF
 
 rm -rf "${EXTRACT_DIR}"
-trap - EXIT
-
 echo "Installed AppImage payload to ${APP_DIR}"
 echo "Launcher: ${BIN_DIR}/titanium-inspector"

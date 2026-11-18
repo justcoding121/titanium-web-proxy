@@ -553,6 +553,15 @@ public class LinuxBrowserLaunchProxyTests
             var text = File.ReadAllText(prefs);
             StringAssert.Contains(text, "\"mode\":\"system\"");
             Assert.IsFalse(text.Contains("8866", StringComparison.Ordinal));
+
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:8866"}}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            StringAssert.Contains(File.ReadAllText(prefs), "\"mode\":\"system\"");
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"fixed_servers","server":"http://10.1.2.3:8080"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            StringAssert.Contains(File.ReadAllText(prefs), "10.1.2.3:8080");
         }
         finally
         {

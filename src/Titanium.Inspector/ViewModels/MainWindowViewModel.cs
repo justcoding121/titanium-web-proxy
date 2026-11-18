@@ -3980,6 +3980,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         // StartAsync has read the store, or a trusted root stays labeled "CA not trusted".
         NotifyDecryptTrustHealth();
 
+        // A later launch with Decrypt already on must still put the CA in Firefox profiles.
+        // The enable click is not repeated, and Linux enterprise-roots does not see ~/.pki/nssdb.
+        if (_decryptHttps && _interception.IsRootTrusted)
+            _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
+
         // Keep the system-proxy restart guidance visible; do not replace it with Ready.
         // Also do not clobber a newer status if the user already acted during start
         // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).

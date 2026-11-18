@@ -79,7 +79,7 @@ internal static class LinuxAppRelocation
 
         var fromExe = ReadInstalledVersion(exe);
         if (fromExe is null)
-            return LinuxRelocateAction.Replace;
+            return LinuxRelocateAction.OpenExisting;
 
         return ReleaseVersion.Compare(runningVersion, fromExe) > 0
             ? LinuxRelocateAction.Replace
@@ -160,13 +160,28 @@ internal static class LinuxAppRelocation
     }
 
     /// <summary>
-    ///     Best-effort: read FileVersionInfo from installed binary.
+    ///     Best-effort: read FileVersionInfo from the installed binary.
+    ///     The Linux apphost often has no version resource; the sibling dll does.
     /// </summary>
     internal static Version? ReadInstalledVersion(string exePath)
     {
+        var fromFile = TryReadFileVersion(exePath);
+        if (fromFile is not null)
+            return fromFile;
+
+        var dll = Path.ChangeExtension(exePath, ".dll");
+        if (!string.Equals(dll, exePath, StringComparison.OrdinalIgnoreCase)
+            && File.Exists(dll))
+            return TryReadFileVersion(dll);
+
+        return null;
+    }
+
+    private static Version? TryReadFileVersion(string path)
+    {
         try
         {
-            var info = FileVersionInfo.GetVersionInfo(exePath);
+            var info = FileVersionInfo.GetVersionInfo(path);
             if (!string.IsNullOrWhiteSpace(info.ProductVersion)
                 && Version.TryParse(ReleaseVersion.StripPrerelease(info.ProductVersion.Split('+')[0]), out var product))
                 return ReleaseVersion.ToComparable(product);

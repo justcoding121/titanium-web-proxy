@@ -84,6 +84,9 @@ internal static class LinuxChromeProfileProxy
                 TryRestorePreferences(prefsPath);
                 if (!string.IsNullOrEmpty(host) && port > 0)
                     TryStripInspectorProxy(prefsPath, host, port);
+                // The marker file is gone after a kill. A loopback fixed_servers
+                // entry still ignores the desktop proxy switch, so drop it too.
+                TryStripLoopbackFixedServer(prefsPath);
             }
 
             DeleteMarker();
@@ -241,6 +244,9 @@ internal static class LinuxChromeProfileProxy
     internal static bool TryStripInspectorProxyForTests(string prefsPath, string hostname, int port) =>
         TryStripInspectorProxy(prefsPath, hostname, port);
 
+    internal static bool TryStripLoopbackFixedServerForTests(string prefsPath) =>
+        TryStripLoopbackFixedServer(prefsPath);
+
     private static bool TryWritePreferences(string prefsPath, string hostname, int port)
     {
         try
@@ -367,6 +373,53 @@ internal static class LinuxChromeProfileProxy
         }
     }
 
+    /// <summary>
+    ///     Drop <c>fixed_servers</c> when the server is loopback, even if the marker file
+    ///     was already deleted. A proxy the user set to any other host is left alone.
+    /// </summary>
+    private static bool TryStripLoopbackFixedServer(string prefsPath)
+    {
+        try
+        {
+            if (!File.Exists(prefsPath))
+                return false;
+
+            var text = File.ReadAllText(prefsPath);
+            var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject
+                       ?? new JsonObject();
+            var proxy = root[ProxyKey] as JsonObject;
+            if (proxy is null)
+                return false;
+
+            var mode = proxy["mode"]?.GetValue<string>() ?? string.Empty;
+            var server = proxy["server"]?.GetValue<string>() ?? string.Empty;
+            if (!mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) ||
+                !IsLoopbackProxyServer(server))
+                return false;
+
+            root[ProxyKey] = new JsonObject { ["mode"] = "system" };
+            AtomicWriteJson(prefsPath, root);
+            var backupPath = prefsPath + BackupSuffix;
+            if (File.Exists(backupPath))
+            {
+                try { File.Delete(backupPath); } catch { /* ignore */ }
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsLoopbackProxyServer(string server)
+    {
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var uri))
+            return false;
+        return uri.Host is "127.0.0.1" or "localhost" or "::1";
+    }
+
     private static JsonObject BuildFixedServersProxy(string hostname, int port)
     {
         var proxy = new JsonObject
@@ -389,8 +442,8 @@ internal static class LinuxChromeProfileProxy
     private static void ScheduleClearRetries_NoLock(string? host, int port)
     {
         CancelClearRetries_NoLock();
-        if (string.IsNullOrEmpty(host) || port <= 0)
-            return;
+        // Still retry when the marker is gone: Chrome can flush loopback fixed_servers
+        // after the first strip.
 
         var cts = new CancellationTokenSource();
         _clearRetryCts = cts;
@@ -414,7 +467,11 @@ internal static class LinuxChromeProfileProxy
                     if (token.IsCancellationRequested || _activeHost is not null)
                         return;
                     foreach (var prefsPath in EnumeratePreferencesPaths())
-                        TryStripInspectorProxy(prefsPath, host, port);
+                    {
+                        if (!string.IsNullOrEmpty(host) && port > 0)
+                            TryStripInspectorProxy(prefsPath, host, port);
+                        TryStripLoopbackFixedServer(prefsPath);
+                    }
                 }
             }
         }, token);
