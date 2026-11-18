@@ -10,10 +10,10 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Persist Chromium <c>Preferences</c> <c>proxy.mode=fixed_servers</c> so launches that bypass
-///     .desktop / XFCE helpers (plain <c>/usr/bin/google-chrome-stable</c>) still route through
-///     Inspector. User-level managed policy JSON is often ignored by Google Chrome on Linux;
-///     profile Preferences are read on browser start.
+///     Persist Chromium <c>Preferences</c> <c>proxy.mode=system</c> so launches that bypass
+///     .desktop / XFCE helpers (plain <c>/usr/bin/google-chrome-stable</c>) follow the desktop
+///     proxy. A <c>server</c> field is not written: Chromium ignores it only while mode stays
+///     <c>system</c>, and a later flush would leave a dead loopback URL on disk.
 /// </summary>
 internal static class LinuxChromeProfileProxy
 {
@@ -105,7 +105,9 @@ internal static class LinuxChromeProfileProxy
 
         if (!startFailOpen)
         {
-            LinuxProxyFailOpen.Stop();
+            // Same process: keep the helper a graceful clear just started. Package removal
+            // runs in another process, where the ownership flag is clear, and still stops it.
+            LinuxProxyFailOpen.StopUnlessOwnedByThisProcess();
             return;
         }
 
@@ -283,8 +285,13 @@ internal static class LinuxChromeProfileProxy
             AtomicWriteJson(prefsPath, root);
 
             var verify = File.ReadAllText(prefsPath);
-            return verify.Contains("\"system\"", StringComparison.Ordinal) &&
-                   verify.Contains($"{hostname}:{port}", StringComparison.Ordinal);
+            var written = JsonNode.Parse(verify) as JsonObject;
+            var writtenProxy = written?[ProxyKey] as JsonObject;
+            var writtenMode = writtenProxy?["mode"]?.GetValue<string>() ?? string.Empty;
+            if (!writtenMode.Equals("system", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var writtenServer = writtenProxy?["server"]?.GetValue<string>() ?? string.Empty;
+            return !writtenServer.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -377,8 +384,9 @@ internal static class LinuxChromeProfileProxy
     }
 
     /// <summary>
-    ///     Drop <c>fixed_servers</c> when the server is loopback, even if the marker file
-    ///     was already deleted. A proxy the user set to any other host is left alone.
+    ///     Drop a loopback <c>server</c> left next to <c>fixed_servers</c> or <c>system</c>,
+    ///     even if the marker file was already deleted. A proxy the user set to any other
+    ///     host is left alone. Older builds wrote <c>server</c> beside <c>mode=system</c>.
     /// </summary>
     private static bool TryStripLoopbackFixedServer(string prefsPath)
     {
@@ -396,8 +404,11 @@ internal static class LinuxChromeProfileProxy
 
             var mode = proxy["mode"]?.GetValue<string>() ?? string.Empty;
             var server = proxy["server"]?.GetValue<string>() ?? string.Empty;
-            if (!mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) ||
-                !IsLoopbackProxyServer(server))
+            var fixedLoopback = mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) &&
+                                IsLoopbackProxyServer(server);
+            var systemWithLoopback = mode.Equals("system", StringComparison.OrdinalIgnoreCase) &&
+                                     IsLoopbackProxyServer(server);
+            if (!fixedLoopback && !systemWithLoopback)
                 return false;
 
             root[ProxyKey] = new JsonObject { ["mode"] = "system" };
@@ -425,10 +436,13 @@ internal static class LinuxChromeProfileProxy
 
     private static JsonObject BuildFixedServersProxy(string hostname, int port)
     {
+        // hostname/port identify the live listener for the caller. mode=system must not
+        // store them: a leftover server URL pins Chromium after Inspector releases the port.
+        _ = hostname;
+        _ = port;
         var proxy = new JsonObject
         {
             ["mode"] = "system",
-            ["server"] = $"http://{hostname}:{port}", // NOSONAR S5332 -- Chromium proxy.mode fixed_servers requires an http proxy URL.
         };
         if (_activeLoopback)
             proxy["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList;
@@ -639,8 +653,12 @@ internal static class LinuxChromeProfileProxy
             if (!File.Exists(fullPath))
                 return;
             var text = File.ReadAllText(fullPath);
-            if (text.Contains("\"system\"", StringComparison.Ordinal) &&
-                text.Contains($"{host}:{port}", StringComparison.Ordinal))
+            var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject;
+            var proxy = root?[ProxyKey] as JsonObject;
+            var mode = proxy?["mode"]?.GetValue<string>() ?? string.Empty;
+            var server = proxy?["server"]?.GetValue<string>() ?? string.Empty;
+            if (mode.Equals("system", StringComparison.OrdinalIgnoreCase) &&
+                !server.Contains($"{host}:{port}", StringComparison.OrdinalIgnoreCase))
                 return;
 
             lock (Gate)

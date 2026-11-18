@@ -12,7 +12,8 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     GNOME gsettings is not enough on XFCE, LXDE, i3/sway, WSLg, or when Chrome is started
 ///     from a .desktop Exec that never reads org.gnome.system.proxy. Write Chromium-family
-///     managed policy plus user .desktop / XFCE helper Exec flags
+///     managed policy (<c>ProxyMode=system</c>) plus, only when the desktop has no GNOME/KDE
+///     proxy schema, user .desktop / XFCE helper Exec flags
 ///     (<c>--proxy-server</c>, <c>&lt;-loopback&gt;</c>, <c>--disable-quic</c>).
 /// </summary>
 internal static class LinuxBrowserLaunchProxy
@@ -24,11 +25,15 @@ internal static class LinuxBrowserLaunchProxy
     private const string SudoBinary = "/usr/bin/sudo";
 
     /// <summary>
-    ///     Chromium managed-policy floor we target: modern <c>ProxyMode</c> string enum plus
-    ///     legacy <c>ProxyServerMode</c> int (2 = fixed servers) for older builds that still
-    ///     read the deprecated key. Unknown keys are ignored by Chromium.
+    ///     Deprecated Chromium int enum (2 = fixed servers). New policy files do not emit it:
+    ///     an older build that reads this key before <c>ProxyMode</c> would pin the process.
+    ///     Validation still accepts files an older Inspector wrote.
     /// </summary>
     internal const int LegacyProxyServerModeFixedServers = 2;
+
+    internal static int ApplyCountForTests { get; private set; }
+
+    internal static void ResetApplyCountForTests() => ApplyCountForTests = 0;
 
     private const string LocalDirName = ".local";
     private const string ShareDirName = "share";
@@ -82,14 +87,22 @@ internal static class LinuxBrowserLaunchProxy
     ///     Restart running Chromium-family browsers so Preference edits apply. A caller that
     ///     writes hooks twice passes false for the early write, so the user's windows restart once.
     /// </param>
-    internal static bool Apply(string hostname, int port, string? proxyOverride = null, bool relaunch = true)
+    /// <param name="pinProcess">
+    ///     When false (GNOME or KDE proxy schema is present), write <c>ProxyMode=system</c> only.
+    ///     Do not pass <c>--proxy-server</c> on a launcher; that flag outlives File → Exit.
+    /// </param>
+    internal static bool Apply(
+        string hostname, int port, string? proxyOverride = null, bool relaunch = true, bool pinProcess = true)
     {
+        ApplyCountForTests++;
         var loopback = WantsProxyLoopback(proxyOverride);
+        if (!pinProcess)
+            RemoveProcessPins();
         var policyCount = WritePolicies(hostname, port, proxyLoopback: loopback);
         var policyOk = policyCount > 0;
-        var desktopCount = WriteBrowserDesktopOverrides(hostname, port, loopback);
+        var desktopCount = pinProcess ? WriteBrowserDesktopOverrides(hostname, port, loopback) : 0;
         var desktopOk = desktopCount > 0;
-        var xfceOk = WriteXfceWebBrowserHelper(hostname, port, loopback);
+        var xfceOk = pinProcess && WriteXfceWebBrowserHelper(hostname, port, loopback);
         var profileCount = LinuxChromeProfileProxy.Apply(hostname, port, loopback);
         var profileOk = profileCount > 0;
         // Live switch uses OS proxy (gsettings / KDE) plus Chromium mode=system and Firefox type=5.
@@ -134,6 +147,16 @@ internal static class LinuxBrowserLaunchProxy
         // Neutralize launcher scripts before removing .desktop overrides. GNOME Shell
         // caches Exec paths; if the script is gone while the dock still points at it,
         // Chrome fails with "Program '.../launchers/google-chrome.sh' not found".
+        RemoveProcessPins();
+        _ = relaunchBrowsers;
+    }
+
+    /// <summary>
+    ///     Drop <c>--proxy-server</c> launchers this writer owns. A dock that still Execs
+    ///     the helper gets a passthrough script instead of a missing file.
+    /// </summary>
+    private static void RemoveProcessPins()
+    {
         NeutralizeLauncherScripts();
 
         foreach (var dest in UserDesktopOverridePaths())
@@ -142,7 +165,6 @@ internal static class LinuxBrowserLaunchProxy
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
-        _ = relaunchBrowsers;
     }
 
     private static void TryUpdateDesktopDatabase()
@@ -362,8 +384,9 @@ internal static class LinuxBrowserLaunchProxy
         TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
 
     /// <summary>
-    ///     Builds Chromium managed-policy JSON. Prefer modern <c>ProxyMode</c> string keys;
-    ///     also emit deprecated <c>ProxyServerMode</c>=2 for older Chromium that still reads it.
+    ///     Builds Chromium managed-policy JSON. <c>ProxyMode=system</c> follows the desktop
+    ///     proxy. Do not emit <c>ProxyServerMode</c> or <c>ProxyServer</c>: the legacy int
+    ///     2 means fixed servers and pins an older Chromium for the process lifetime.
     /// </summary>
     internal static string BuildPolicyJson(string hostname, int port, bool proxyLoopback = false)
     {
@@ -372,13 +395,9 @@ internal static class LinuxBrowserLaunchProxy
         if (port is <= 0 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(port));
 
-        var server = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
         var payload = new JsonObject
         {
             ["ProxyMode"] = "system",
-            // Deprecated int enum (2 = Use a fixed proxy server). Harmless on modern Chrome.
-            ["ProxyServerMode"] = LegacyProxyServerModeFixedServers,
-            ["ProxyServer"] = server,
             ["QuicAllowed"] = false,
         };
         if (proxyLoopback)
@@ -393,9 +412,10 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     /// <summary>
-    ///     True when <paramref name="json"/> is valid Chromium managed-policy JSON containing
-    ///     either modern <c>ProxyMode=fixed_servers</c> or legacy <c>ProxyServerMode=2</c>,
-    ///     plus matching host/port. Extra/unknown properties are allowed (forward compatible).
+    ///     True when <paramref name="json"/> is valid Chromium managed-policy JSON.
+    ///     <c>ProxyMode=system</c> needs no <c>ProxyServer</c>. Older files that pin with
+    ///     <c>ProxyMode=fixed_servers</c> or <c>ProxyServerMode=2</c> must still name the endpoint.
+    ///     Extra/unknown properties are allowed (forward compatible).
     /// </summary>
     internal static bool TryValidatePolicyJson(string json, string hostname, int port, out string? error)
     {
@@ -410,13 +430,16 @@ internal static class LinuxBrowserLaunchProxy
             }
 
             var root = doc.RootElement;
-            var modeOk = false;
+            var systemMode = false;
+            var requiresServer = false;
             if (root.TryGetProperty("ProxyMode", out var mode) &&
-                mode.ValueKind == JsonValueKind.String &&
-                (mode.GetString()?.Equals("system", StringComparison.OrdinalIgnoreCase) == true ||
-                 mode.GetString()?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true))
+                mode.ValueKind == JsonValueKind.String)
             {
-                modeOk = true;
+                var modeText = mode.GetString();
+                if (modeText?.Equals("system", StringComparison.OrdinalIgnoreCase) == true)
+                    systemMode = true;
+                else if (modeText?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
+                    requiresServer = true;
             }
 
             if (root.TryGetProperty("ProxyServerMode", out var legacyMode) &&
@@ -424,14 +447,18 @@ internal static class LinuxBrowserLaunchProxy
                 legacyMode.TryGetInt32(out var legacyInt) &&
                 legacyInt == LegacyProxyServerModeFixedServers)
             {
-                modeOk = true;
+                requiresServer = true;
             }
 
-            if (!modeOk)
+            if (!systemMode && !requiresServer)
             {
-                error = "missing ProxyMode=fixed_servers (or ProxyServerMode=2)";
+                error = "missing ProxyMode=system (or fixed_servers / ProxyServerMode=2)";
                 return false;
             }
+
+            // ProxyMode=system is enough. A fixed-server enum next to it still has to match.
+            if (systemMode && !requiresServer)
+                return true;
 
             if (!root.TryGetProperty("ProxyServer", out var server) ||
                 server.ValueKind != JsonValueKind.String)

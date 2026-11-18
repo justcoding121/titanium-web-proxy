@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -13,6 +14,14 @@ internal static class LinuxProxyFailOpen
 {
     private const string PidFileName = "fail-open-proxy.pid";
     private const string ScriptFileName = "fail-open-proxy.py";
+    private static int _ownedByThisProcess;
+
+    /// <summary>True after <see cref="Start"/> in this process until an explicit <see cref="Stop"/>.</summary>
+    internal static bool OwnedByThisProcess => Volatile.Read(ref _ownedByThisProcess) != 0;
+
+    internal static void MarkOwnedByThisProcessForTests() => Volatile.Write(ref _ownedByThisProcess, 1);
+
+    internal static void ClearOwnedByThisProcessForTests() => Volatile.Write(ref _ownedByThisProcess, 0);
 
     /// <summary>
     ///     Stop the helper only when it is the process listening for this Inspector port.
@@ -45,8 +54,22 @@ internal static class LinuxProxyFailOpen
         }
     }
 
+    /// <summary>
+    ///     Stop a helper left by a dead Inspector. When this process just started the helper
+    ///     for a graceful exit, leave it running so a browser pinned with <c>--proxy-server</c>
+    ///     can still load. Returns false when the helper was kept.
+    /// </summary>
+    internal static bool StopUnlessOwnedByThisProcess()
+    {
+        if (Volatile.Read(ref _ownedByThisProcess) != 0)
+            return false;
+        Stop();
+        return true;
+    }
+
     internal static void Stop()
     {
+        Volatile.Write(ref _ownedByThisProcess, 0);
         try
         {
             var pidPath = PidPath();
@@ -115,7 +138,11 @@ internal static class LinuxProxyFailOpen
             psi.ArgumentList.Add(port.ToString());
             psi.ArgumentList.Add(pidPath);
             using var launched = Process.Start(psi);
-            launched?.WaitForExit(3000);
+            if (launched is null)
+                return;
+            // Own the helper before waiting so a same-process clear cannot stop it mid-spawn.
+            Volatile.Write(ref _ownedByThisProcess, 1);
+            launched.WaitForExit(3000);
         }
         catch
         {

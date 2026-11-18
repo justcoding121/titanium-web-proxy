@@ -316,8 +316,11 @@ public class LinuxSystemProxyBackendTests
         Environment.SetEnvironmentVariable("HTTP_PROXY", null);
         Environment.SetEnvironmentVariable("HTTPS_PROXY", null);
 
+        LinuxBrowserLaunchProxy.ResetApplyCountForTests();
         using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
         backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost");
+        // GNOME-style path with hooks off never writes policy, Preferences, or a launcher.
+        Assert.AreEqual(0, LinuxBrowserLaunchProxy.ApplyCountForTests);
 
         Assert.IsTrue(runner.Commands.Exists(c =>
             c.Contains("gsettings", StringComparison.Ordinal) &&
@@ -367,6 +370,16 @@ public class LinuxSystemProxyBackendTests
         var ex = Assert.ThrowsExactly<InvalidOperationException>(() =>
             backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost"));
         StringAssert.Contains(ex.Message, "Failed to apply GNOME system proxy");
+    }
+
+    [TestMethod]
+    public void ShouldPinBrowserProcess_OnlyWhenNoGnomeOrKdeSchema()
+    {
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, true, false));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, false, false));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, true, false));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, false, true));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, false, false));
     }
 }
 
@@ -501,12 +514,14 @@ public class LinuxBrowserLaunchProxyTests
             Assert.AreEqual(1, LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]));
             var json = File.ReadAllText(Path.Combine(dir, LinuxBrowserLaunchProxy.PolicyFileName));
             Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
-            StringAssert.Contains(json, "\"system\"");
-            StringAssert.Contains(json, "http://127.0.0.1:8866");
+            StringAssert.Contains(json, "\"ProxyMode\": \"system\"");
+            Assert.IsFalse(json.Contains("ProxyServer", StringComparison.Ordinal), json);
             Assert.IsFalse(json.Contains("<-loopback>", StringComparison.Ordinal));
             StringAssert.Contains(json, "\"QuicAllowed\": false");
-            // Legacy int enum for older Chromium builds that still read ProxyServerMode.
-            StringAssert.Contains(json, "\"ProxyServerMode\": 2");
+            // No-schema launchers still pin the next process. Policy must not.
+            StringAssert.Contains(
+                LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 8866),
+                "--proxy-server=http://127.0.0.1:8866");
         }
         finally
         {
@@ -525,8 +540,9 @@ public class LinuxBrowserLaunchProxyTests
             File.WriteAllText(prefs, """{"proxy":{"mode":"system"},"homepage":"x"}""");
             Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(prefs, "127.0.0.1", 8866));
             var after = File.ReadAllText(prefs);
-            StringAssert.Contains(after, "\"system\"");
-            StringAssert.Contains(after, "127.0.0.1:8866");
+            StringAssert.Contains(after, "\"mode\":\"system\"");
+            Assert.IsFalse(after.Contains("\"server\"", StringComparison.Ordinal), after);
+            Assert.IsFalse(after.Contains("127.0.0.1:8866", StringComparison.Ordinal), after);
             Assert.IsTrue(File.Exists(prefs + LinuxChromeProfileProxy.BackupSuffix));
             LinuxChromeProfileProxy.TryRestoreFileForTests(prefs);
             var restored = File.ReadAllText(prefs);
@@ -562,6 +578,18 @@ public class LinuxBrowserLaunchProxyTests
                 """{"proxy":{"mode":"fixed_servers","server":"http://10.1.2.3:8080"}}""");
             Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
             StringAssert.Contains(File.ReadAllText(prefs), "10.1.2.3:8080");
+
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"system","server":"http://127.0.0.1:8866"}}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            var systemStripped = File.ReadAllText(prefs);
+            StringAssert.Contains(systemStripped, "\"mode\":\"system\"");
+            Assert.IsFalse(systemStripped.Contains("server", StringComparison.Ordinal), systemStripped);
+
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"system","server":"http://10.1.2.3:8080"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            StringAssert.Contains(File.ReadAllText(prefs), "10.1.2.3:8080");
         }
         finally
         {
@@ -590,6 +618,28 @@ public class LinuxBrowserLaunchProxyTests
             }
             """;
         Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(legacy, "10.0.0.1", 8888, out var err), err);
+
+        const string systemOnly = """{"ProxyMode":"system","QuicAllowed":false}""";
+        Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(systemOnly, "127.0.0.1", 8866, out var systemErr), systemErr);
+    }
+
+    [TestMethod]
+    public void OwnedFailOpen_SurvivesSameProcessDeadAppStop()
+    {
+        // Does not kill a helper or rewrite browser files. The guard that skips live
+        // desktops must not hide this contract: ForceClear keeps a helper this process owns.
+        LinuxProxyFailOpen.MarkOwnedByThisProcessForTests();
+        try
+        {
+            // InstalledProxyCleanup.ForceClear → ClearInstalledHooks → Clear(startFailOpen: false)
+            // uses this path. A helper this process just started must stay up.
+            Assert.IsFalse(LinuxProxyFailOpen.StopUnlessOwnedByThisProcess());
+            Assert.IsTrue(LinuxProxyFailOpen.OwnedByThisProcess);
+        }
+        finally
+        {
+            LinuxProxyFailOpen.ClearOwnedByThisProcessForTests();
+        }
     }
 
     [TestMethod]

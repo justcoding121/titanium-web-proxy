@@ -577,9 +577,12 @@ public sealed class InterceptionService : IDisposable
             // system proxy after stop so browsers are not left pointed at a dead listener.
             // Windows ForceClear only disables WinINET when it still points at loopback, so a
             // successful restore to a non-loopback proxy is left alone.
+            // Linux graceful shutdown already started the fail-open helper. A second
+            // ForceClear stops that helper and leaves a --proxy-server browser on a closed port.
             try
             {
-                Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
+                if (!OperatingSystem.IsLinux())
+                    Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
             }
             catch
             {

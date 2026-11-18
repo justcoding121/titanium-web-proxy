@@ -85,15 +85,16 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         var gnome = HasGnome();
         var kde = HasKde();
 
-        // Write Chromium launch hooks before gsettings flips. Callers treat "proxy on"
-        // as the signal to start a browser, and a stale desktop file still has the
-        // bypass token that makes Chromium ignore --proxy-server.
-        TryPrepareBrowserLaunchHooks(hostname, port, proxyOverride);
+        // GNOME/KDE: Chromium follows the desktop proxy when policy and Preferences say
+        // mode=system. A --proxy-server launcher flag would pin the process past File → Exit.
+        // No-schema desktops still get that flag because they do not watch gsettings.
+        var pinProcess = ShouldPinBrowserProcess(_applyBrowserLaunchHooks, gnome, kde);
+        TryPrepareBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess);
 
         var desktopError = ApplyDesktopProxies(gnome, kde, hostname, port, protocolType, proxyOverride);
         TryApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
         var sessionEnvApplied = TryApplySessionEnvironment(hostname, port, protocolType, proxyOverride);
-        var hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride);
+        var hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess);
 
         if (desktopError is not null && !hooksApplied)
             throw desktopError;
@@ -110,14 +111,22 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             StartExternalProxyWatch(hostname, port);
     }
 
-    private void TryPrepareBrowserLaunchHooks(string hostname, int port, string? proxyOverride)
+    /// <summary>
+    ///     Process pins (<c>--proxy-server</c>) are only for desktops that do not expose a
+    ///     GNOME or KDE proxy schema. The hook flag itself is what unit tests turn off so
+    ///     <see cref="LinuxBrowserLaunchProxy.Apply"/> is never called.
+    /// </summary>
+    internal static bool ShouldPinBrowserProcess(bool applyHooks, bool hasGnomeSchema, bool hasKdeSchema) =>
+        applyHooks && !hasGnomeSchema && !hasKdeSchema;
+
+    private void TryPrepareBrowserLaunchHooks(string hostname, int port, string? proxyOverride, bool pinProcess)
     {
         if (!_applyBrowserLaunchHooks)
             return;
 
         try
         {
-            LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride, relaunch: false);
+            LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride, relaunch: false, pinProcess: pinProcess);
         }
         catch
         {
@@ -195,15 +204,16 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         return false;
     }
 
-    private bool TryCommitBrowserLaunchHooks(string hostname, int port, string? proxyOverride)
+    private bool TryCommitBrowserLaunchHooks(string hostname, int port, string? proxyOverride, bool pinProcess)
     {
         // XFCE/i3/WSLg/RDP dock Chrome ignores GNOME gsettings; pin Chromium-family via policy + .desktop Exec.
+        // GNOME/KDE pass pinProcess false: policy and Preferences stay mode=system, with no process flag.
         if (!_applyBrowserLaunchHooks)
             return false;
 
         try
         {
-            return LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride);
+            return LinuxBrowserLaunchProxy.Apply(hostname, port, proxyOverride, pinProcess: pinProcess);
         }
         catch
         {
