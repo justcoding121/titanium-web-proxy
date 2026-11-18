@@ -79,11 +79,19 @@ if [[ "${PRODUCT}" == "inspector" ]]; then
     echo "error: failed to install titanium-inspector hicolor icons" >&2
     exit 1
   fi
+  # Prefer publish-dir copy (CI/smoke stage it); fall back to packaging tree so
+  # local -p:Version builds still ship a launcher entry.
+  HERE_PKG="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   DESKTOP_IN="${PAYLOAD_DIR}/TitaniumInspector.desktop.in"
-  if [[ -f "${DESKTOP_IN}" ]]; then
-    sed -e "s|@EXEC@|/opt/${NAME}/${EXE}|g" -e "s|@ICON@|titanium-inspector|g" \
-      "${DESKTOP_IN}" > "${STAGE}/usr/share/applications/titanium-inspector.desktop"
+  if [[ ! -f "${DESKTOP_IN}" ]]; then
+    DESKTOP_IN="${HERE_PKG}/TitaniumInspector.desktop.in"
   fi
+  if [[ ! -f "${DESKTOP_IN}" ]]; then
+    echo "error: TitaniumInspector.desktop.in missing (payload and ${HERE_PKG})" >&2
+    exit 1
+  fi
+  sed -e "s|@EXEC@|/opt/${NAME}/${EXE}|g" -e "s|@ICON@|titanium-inspector|g" \
+    "${DESKTOP_IN}" > "${STAGE}/usr/share/applications/titanium-inspector.desktop"
   # Double-clicking a newer .deb opens App Center, which shows a disabled
   # "Installed" button even when the file version is higher. This handler asks
   # to update Titanium packages and forwards every other package to App Center.
