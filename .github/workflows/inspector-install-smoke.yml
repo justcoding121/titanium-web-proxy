@@ -219,6 +219,12 @@ jobs:
           gh release download "$tag" --pattern 'TitaniumInspector-linux-x64.deb' --dir artifacts/prev --clobber
           out=artifacts/inspector/linux-x64
           dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r linux-x64 --self-contained true -o "$out" -p:Version="$ver"
+          clear_out="${RUNNER_TEMP}/titanium-inspector-clear-linux-x64"
+          mkdir -p "$clear_out"
+          dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj \
+            -c Release -r linux-x64 --self-contained true -o "$clear_out" -p:Version="$ver"
+          cp -f "$clear_out/titanium-inspector-clear" "$out/titanium-inspector-clear"
+          chmod +x "$out/titanium-inspector-clear"
           cp -f src/Titanium.Inspector/Assets/app.ico tools/packaging/linux/TitaniumInspector.desktop.in tools/packaging/desktop-icons.sh "$out/"
           cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titanium-inspector-*.png "$out/"
           chmod +x tools/packaging/linux/build-deb-rpm.sh
@@ -226,6 +232,11 @@ jobs:
           cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
           # Local and CI packages must ship the launcher; missing .desktop was a silent skip.
           dpkg-deb -c "$cand" | grep -q 'usr/share/applications/titanium-inspector.desktop'
+          dpkg-deb -c "$cand" | grep -q 'titanium-inspector-clear'
+          if dpkg-deb -c "$cand" | grep -q 'clear-proxy-if-stopped\.sh'; then
+            echo "error: candidate .deb still ships clear-proxy-if-stopped.sh" >&2
+            exit 1
+          fi
           prev_ver=$(dpkg-deb -f artifacts/prev/TitaniumInspector-linux-x64.deb Version)
           cand_ver=$(dpkg-deb -f "$cand" Version)
           echo "previous ${prev_ver} candidate ${cand_ver}"
@@ -293,18 +304,25 @@ jobs:
           echo "$keep" > "$clear_home/.config/TitaniumInspector/fail-open-proxy.pid"
           env http_proxy=http://127.0.0.1:8866 sleep 120 &
           holder=$!
-          HOME="$clear_home" tools/packaging/linux/clear-proxy-if-stopped.sh
-          kill -0 "$keep"
+          # Prefer the packaged clear binary (same as postinst / autostart). Fall back to
+          # the publish-dir copy when the package is not installed yet in this step.
+          clear_bin=/usr/lib/titanium-inspector/titanium-inspector-clear
+          if [[ ! -x "$clear_bin" ]]; then
+            clear_bin="$out/titanium-inspector-clear"
+          fi
+          test -x "$clear_bin"
+          HOME="$clear_home" "$clear_bin"
           test ! -f "$clear_home/.config/environment.d/90-titanium-inspector-proxy.conf"
           test ! -f "$clear_home/.config/google-chrome/policies/managed/titanium-inspector-proxy.json"
           grep -q 'network.proxy.type", 5' "$clear_home/.mozilla/firefox/test.default/prefs.js"
-          kill "$holder" || true
-          wait "$holder" || true
-          HOME="$clear_home" tools/packaging/linux/clear-proxy-if-stopped.sh
+          # C# ForceClear stops the fail-open helper (pid file + process) after stripping hooks.
           if kill -0 "$keep" 2>/dev/null; then
-            echo "login script left the helper up after nothing still used the proxy" >&2
+            echo "clear binary left the fail-open helper running" >&2
             exit 1
           fi
+          kill "$holder" || true
+          wait "$holder" || true
+          HOME="$clear_home" "$clear_bin"
           run_driver wipe --out "$log"
           sudo dpkg -i "$cand" || sudo apt-get install -y -f
           run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
