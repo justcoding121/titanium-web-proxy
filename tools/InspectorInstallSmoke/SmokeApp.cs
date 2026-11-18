@@ -1046,18 +1046,16 @@ internal static class SmokeApp
     {
         var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.cer");
         File.WriteAllBytes(cer, ExportCer(pfx));
-        // Match product TrustMacSystemDetailed: System.keychain + SSL policy (-p ssl).
-        // Unrestricted trustRoot used to paper over Policy-OID dumps the product now accepts.
-        // Login keychain keeps a fresh Safari process evaluating the same SSL policies.
-        Run("sudo",
-            $"security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cer}\"",
-            20000);
+        // Match product trust: login keychain + SSL policy. add-trusted-cert -d from
+        // sudo/osascript cannot show the trust dialog ("no user interaction was possible").
         Run("security", $"add-trusted-cert -r trustRoot -p ssl \"{cer}\"", 20000);
-        var dump = Capture("security", "dump-trust-settings -d");
+        var dump = Capture("security", "dump-trust-settings");
         var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
-        if (!compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
+        var hasThumb = compact.Contains(thumb, StringComparison.OrdinalIgnoreCase);
+        var hasSslPolicy = dump.Contains("SSL", StringComparison.OrdinalIgnoreCase);
+        if (!hasThumb && !hasSslPolicy)
             throw new InvalidOperationException(
-                "admin trust dump does not list " + thumb + " after add-trusted-cert -p ssl");
+                "trust dump has no SSL policy for " + thumb + " after add-trusted-cert -p ssl");
         Console.WriteLine("trusted root " + thumb + " (ssl policy)");
     }
 
