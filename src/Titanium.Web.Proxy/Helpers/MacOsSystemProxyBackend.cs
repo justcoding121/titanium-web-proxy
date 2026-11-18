@@ -31,8 +31,32 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     {
         _runner = runner ?? new ProcessRunner();
         _elevation = elevation ?? new OsElevationPrompt(_runner);
-        _processExitHandler = (_, _) => RestoreOriginalSettings();
-        _unhandledExceptionHandler = (_, _) => RestoreOriginalSettings();
+        _processExitHandler = (_, _) =>
+        {
+            RestoreOriginalSettings();
+            // Restore can no-op or re-apply a polluted snapshot during AppleScript quit.
+            // Always drop leftover loopback proxies so browsing survives process exit.
+            try
+            {
+                InstalledProxyCleanup.ForceClear();
+            }
+            catch
+            {
+                // process-exit path must not throw
+            }
+        };
+        _unhandledExceptionHandler = (_, _) =>
+        {
+            RestoreOriginalSettings();
+            try
+            {
+                InstalledProxyCleanup.ForceClear();
+            }
+            catch
+            {
+                // process-exit path must not throw
+            }
+        };
         AppDomain.CurrentDomain.ProcessExit += _processExitHandler;
         AppDomain.CurrentDomain.UnhandledException += _unhandledExceptionHandler;
     }
