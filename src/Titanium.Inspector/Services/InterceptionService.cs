@@ -550,16 +550,15 @@ public sealed class InterceptionService : IDisposable
             // AppleScript quit / SIGTERM can skip Window.Closing or leave loopback proxy
             // on when RestoreOriginalSettings races ProcessExit. Force-clear localhost
             // system proxy after stop so browsers are not left pointed at a dead listener.
-            if (!OperatingSystem.IsWindows())
+            // Windows ForceClear only disables WinINET when it still points at loopback, so a
+            // successful restore to a non-loopback proxy is left alone.
+            try
             {
-                try
-                {
-                    Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
-                }
-                catch
-                {
-                    // best-effort
-                }
+                Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
+            }
+            catch
+            {
+                // best-effort
             }
 
             _shutdownCompleted.Set();

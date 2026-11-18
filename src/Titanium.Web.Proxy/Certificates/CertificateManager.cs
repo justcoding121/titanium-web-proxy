@@ -1832,6 +1832,12 @@ public sealed class CertificateManager : IDisposable
             return false;
         }
 
+        // Personal (My) same-CN orphans do not show CryptUI. Prune them before Root Add so a
+        // corrupt store with multiple Titanium roots still gets cleaned even when rootAdded
+        // is false (already present / cancel path would skip the post-install Root prune).
+        if (RunTime.IsWindows)
+            PruneOrphanedPersonalCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 

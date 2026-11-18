@@ -1,5 +1,9 @@
 using System;
 using System.Diagnostics;
+#if NET6_0_OR_GREATER
+using System.Runtime.Versioning;
+#endif
+using Microsoft.Win32;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -10,6 +14,10 @@ namespace Titanium.Web.Proxy.Helpers;
 /// </summary>
 public static class InstalledProxyCleanup
 {
+    private const string RegKeyInternetSettings = @"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
+    private const string RegProxyEnable = "ProxyEnable";
+    private const string RegProxyServer = "ProxyServer";
+
     public static void ForceClear()
     {
         if (OperatingSystem.IsLinux())
@@ -22,7 +30,62 @@ public static class InstalledProxyCleanup
         if (OperatingSystem.IsMacOS())
         {
             ClearMacLoopbackProxies();
+            return;
         }
+
+        if (OperatingSystem.IsWindows())
+            ClearWindowsLoopbackProxies();
+    }
+
+#if NET6_0_OR_GREATER
+    [SupportedOSPlatform("windows")]
+#endif
+    private static void ClearWindowsLoopbackProxies()
+    {
+        try
+        {
+            using var reg = Registry.CurrentUser.OpenSubKey(RegKeyInternetSettings, writable: true);
+            if (reg is null)
+                return;
+
+            var enabled = reg.GetValue(RegProxyEnable) is int pe && pe == 1;
+            var server = reg.GetValue(RegProxyServer) as string ?? string.Empty;
+            if (!enabled || !IsWindowsLoopbackProxyServer(server))
+                return;
+
+            reg.SetValue(RegProxyEnable, 0);
+            reg.SetValue(RegProxyServer, string.Empty);
+            NativeMethods.InternetSetOption(IntPtr.Zero, SystemProxyManager.InternetOptionSettingsChanged, IntPtr.Zero, 0);
+            NativeMethods.InternetSetOption(IntPtr.Zero, SystemProxyManager.InternetOptionRefresh, IntPtr.Zero, 0);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    private static bool IsWindowsLoopbackProxyServer(string proxyServer)
+    {
+        if (string.IsNullOrWhiteSpace(proxyServer))
+            return false;
+
+        // WinINET forms: "127.0.0.1:8866", "http=127.0.0.1:8866;https=127.0.0.1:8866", "localhost:8866"
+        foreach (var part in proxyServer.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var hostPort = part;
+            var eq = part.IndexOf('=', StringComparison.Ordinal);
+            if (eq >= 0)
+                hostPort = part[(eq + 1)..];
+            var host = hostPort;
+            var colon = hostPort.LastIndexOf(':');
+            if (colon > 0)
+                host = hostPort[..colon];
+            host = host.Trim().TrimStart('[').TrimEnd(']');
+            if (host is "127.0.0.1" or "localhost" or "::1")
+                return true;
+        }
+
+        return false;
     }
 
     private static void ClearMacLoopbackProxies()
