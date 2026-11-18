@@ -180,6 +180,9 @@ public class LinuxBrowserProxyCoverageTests
             ])!;
         StringAssert.Contains(script, "google-chrome-stable");
         StringAssert.Contains(script, "4242");
+        StringAssert.Contains(script, "exec(base64.b64decode(sys.argv[1]))");
+        Assert.IsFalse(script.Contains("{ShellQuote(", StringComparison.Ordinal),
+            "$$ raw string must interpolate ShellQuote for the loopback-strip arg");
         InvokeCr("TryMakeExecutable", [typeof(string)], scriptPath);
         InvokeCr("ShellQuote", [typeof(string)], "it's");
         _ = LinuxGraphicalSession.TryGetDisplay();
