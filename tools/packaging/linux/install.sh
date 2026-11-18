@@ -87,6 +87,26 @@ EXEC_LINE="${APP_DIR}/${EXE_NAME}"
 sed -e "s|@EXEC@|${EXEC_LINE}|g" -e "s|@ICON@|${ICON_LINE}|g" "${DESKTOP_SRC}" > "${DESKTOP_OUT}"
 chmod 644 "${DESKTOP_OUT}"
 
+# User XDG autostart for dead-app proxy cleanup (zip / AppImage / musl; no systemd required).
+AUTOSTART_DIR="${HOME}/.config/autostart"
+CLEAR_BIN="${APP_DIR}/titanium-inspector-clear"
+if [[ -x "${CLEAR_BIN}" || -f "${CLEAR_BIN}" ]]; then
+  chmod +x "${CLEAR_BIN}" 2>/dev/null || true
+  mkdir -p "${AUTOSTART_DIR}"
+  cat > "${AUTOSTART_DIR}/titanium-inspector-clear-proxy.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Titanium Inspector proxy cleanup
+Comment=Drop leftover loopback proxy settings when Inspector is not running
+Exec=${CLEAR_BIN}
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Initialization
+EOF
+  chmod 644 "${AUTOSTART_DIR}/titanium-inspector-clear-proxy.desktop"
+fi
+
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "${APPS_DIR}" >/dev/null 2>&1 || true
 fi

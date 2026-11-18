@@ -597,6 +597,17 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($ver)) { $ver = "0.0.0" }
           # Stamp InformationalVersion (e.g. 7.0.5-beta) while assembly Version stays numeric.
           dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out -p:Version=$ver
+          if ($rid -like 'linux*') {
+            # Same RID as Inspector so glibc/musl floors match. Dead-app proxy clear (no Avalonia).
+            $clearOut = Join-Path $env:RUNNER_TEMP "titanium-inspector-clear-$rid"
+            New-Item -ItemType Directory -Force -Path $clearOut | Out-Null
+            dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj `
+              -c Release -r $rid --self-contained true -o $clearOut -p:Version=$ver
+            $clearBin = Join-Path $clearOut "titanium-inspector-clear"
+            if (-not (Test-Path $clearBin)) { $clearBin = Join-Path $clearOut "titanium-inspector-clear.exe" }
+            if (-not (Test-Path $clearBin)) { throw "titanium-inspector-clear missing after publish ($rid)" }
+            Copy-Item -Force $clearBin (Join-Path $out "titanium-inspector-clear")
+          }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
           Copy-Item -Force tools/packaging/THIRD-PARTY-INSPECTOR.txt (Join-Path $out "THIRD-PARTY-INSPECTOR.txt")
           Copy-Item -Force src/Titanium.Inspector/Assets/app.ico (Join-Path $out "app.ico")
@@ -632,6 +643,10 @@ jobs:
         run: |
           $rid = "${{ matrix.rid }}"
           $out = "artifacts/inspector/$rid"
+          if ($rid -like 'linux*') {
+            $clear = Join-Path $out "titanium-inspector-clear"
+            if (-not (Test-Path $clear)) { throw "zip payload missing titanium-inspector-clear for $rid" }
+          }
           if ($IsWindows) {
             Compress-Archive -Path "$out/*" -DestinationPath "TitaniumInspector-$rid.zip"
           } else {
@@ -714,6 +729,16 @@ jobs:
             "TitaniumInspector-$rid.AppImage" "$ver" "$arch"
           ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$pkg_ver" "$rid" \
             || echo "deb/rpm soft-failed"
+          if [[ -f "TitaniumInspector-${rid}.deb" ]]; then
+            if dpkg-deb -c "TitaniumInspector-${rid}.deb" | grep -q 'clear-proxy-if-stopped\.sh'; then
+              echo "error: .deb still ships clear-proxy-if-stopped.sh" >&2
+              exit 1
+            fi
+            if ! dpkg-deb -c "TitaniumInspector-${rid}.deb" | grep -q 'titanium-inspector-clear'; then
+              echo "error: .deb missing titanium-inspector-clear" >&2
+              exit 1
+            fi
+          fi
       - name: Stage Inspector artifacts
         shell: bash
         run: |

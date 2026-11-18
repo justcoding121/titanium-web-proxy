@@ -60,6 +60,7 @@ else
 fi
 
 chmod +x "${APP_DIR}/TitaniumInspector" 2>/dev/null || true
+chmod +x "${APP_DIR}/titanium-inspector-clear" 2>/dev/null || true
 
 cat > "${BIN_DIR}/titanium-inspector" <<EOF
 #!/usr/bin/env bash
@@ -75,6 +76,24 @@ Exec="${APP_DIR}/TitaniumInspector"
 Terminal=false
 Categories=Network;Development;
 EOF
+
+AUTOSTART_DIR="${HOME}/.config/autostart"
+CLEAR_BIN="${APP_DIR}/titanium-inspector-clear"
+if [[ -x "${CLEAR_BIN}" || -f "${CLEAR_BIN}" ]]; then
+  mkdir -p "${AUTOSTART_DIR}"
+  cat > "${AUTOSTART_DIR}/titanium-inspector-clear-proxy.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Titanium Inspector proxy cleanup
+Comment=Drop leftover loopback proxy settings when Inspector is not running
+Exec=${CLEAR_BIN}
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Phase=Initialization
+EOF
+  chmod 644 "${AUTOSTART_DIR}/titanium-inspector-clear-proxy.desktop"
+fi
 
 rm -rf "${EXTRACT_DIR}"
 echo "Installed AppImage payload to ${APP_DIR}"

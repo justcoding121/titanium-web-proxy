@@ -16,6 +16,7 @@ fi
 rm -f "${BIN_DIR}/titanium-inspector"
 rm -f "${APPS_DIR}/TitaniumInspector.desktop"
 rm -f "${APPS_DIR}/titanium-inspector.desktop"
+rm -f "${HOME}/.config/autostart/titanium-inspector-clear-proxy.desktop"
 for size in 16 32 48 128 256 512; do
   rm -f "${HICOLOR_ROOT}/${size}x${size}/apps/${ICON_ID}.png"
 done

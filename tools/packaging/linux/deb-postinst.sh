@@ -26,11 +26,11 @@ fi
 if [ -n "$user" ] && [ "$user" != root ]; then
   uid=$(id -u "$user" 2>/dev/null || true)
   home=$(getent passwd "$user" 2>/dev/null | cut -d: -f6)
-  script=/usr/lib/titanium-inspector/clear-proxy-if-stopped.sh
-  if [ -n "$uid" ] && [ -n "$home" ] && [ -x "$script" ]; then
+  clear_bin=/usr/lib/titanium-inspector/titanium-inspector-clear
+  if [ -n "$uid" ] && [ -n "$home" ] && [ -x "$clear_bin" ]; then
     sudo -u "$user" \
       env HOME="$home" XDG_RUNTIME_DIR="/run/user/$uid" \
       DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-      "$script" >/dev/null 2>&1 || true
+      "$clear_bin" >/dev/null 2>&1 || true
   fi
 fi

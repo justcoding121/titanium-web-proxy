@@ -109,10 +109,16 @@ MimeType=application/vnd.debian.binary-package;application/x-rpm;
 NoDisplay=true
 Terminal=false
 EOF
-  # Login cleanup: power loss skips the in-process proxy restore.
+  # Login cleanup: power loss skips the in-process proxy restore. C# clear binary
+  # (no Avalonia) replaces the former clear-proxy-if-stopped.sh runtime copy.
   HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  cp "${HERE}/clear-proxy-if-stopped.sh" "${LIB_DIR}/clear-proxy-if-stopped.sh"
-  chmod 755 "${LIB_DIR}/clear-proxy-if-stopped.sh"
+  CLEAR_BIN="${PAYLOAD_DIR}/titanium-inspector-clear"
+  if [[ ! -f "${CLEAR_BIN}" ]]; then
+    echo "error: titanium-inspector-clear missing under ${PAYLOAD_DIR}" >&2
+    exit 1
+  fi
+  cp "${CLEAR_BIN}" "${LIB_DIR}/titanium-inspector-clear"
+  chmod 755 "${LIB_DIR}/titanium-inspector-clear"
   mkdir -p "${STAGE}/etc/xdg/autostart" "${STAGE}/usr/lib/systemd/user"
   sed "s|/usr/lib/titanium-inspector/|/usr/lib/${NAME}/|g" \
     "${HERE}/titanium-inspector-clear-proxy.desktop" \

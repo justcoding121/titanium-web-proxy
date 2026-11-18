@@ -5,7 +5,7 @@ PartOf=graphical-session-pre.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/lib/titanium-inspector/clear-proxy-if-stopped.sh
+ExecStart=/usr/lib/titanium-inspector/titanium-inspector-clear
 
 [Install]
 WantedBy=graphical-session-pre.target
