@@ -113,53 +113,117 @@ internal static partial class LinuxFirefoxProxy
     }
 
     /// <summary>Restores prior prefs (or clears managed manual proxy) and relaunches Firefox if needed.</summary>
-    internal static void Clear()
+    internal static void Clear() => Clear(relaunch: true);
+
+    /// <summary>
+    ///     Dead-app clear: strip managed prefs from every profile under the usual Firefox roots
+    ///     (Classic / Snap / Flatpak), without relaunching.
+    /// </summary>
+    internal static void ClearInstalledHooks() => Clear(relaunch: false);
+
+    private static void Clear(bool relaunch)
     {
         if (!OperatingSystem.IsLinux())
             return;
-        if (!FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out var profileDir, out _))
+
+        var cleared = false;
+        foreach (var prefsPath in EnumeratePrefsJsPaths())
         {
-            DeleteBackup();
-            return;
-        }
-
-        var prefsPath = Path.Combine(profileDir, "prefs.js");
-        try
-        {
-            if (!File.Exists(prefsPath))
+            try
             {
-                DeleteBackup();
-                return;
-            }
+                if (!File.Exists(prefsPath))
+                    continue;
 
-            var existing = File.ReadAllText(prefsPath);
-            if (!existing.Contains(MarkerPref, StringComparison.Ordinal) && !HasBackup())
-                return;
+                var existing = File.ReadAllText(prefsPath);
+                var hasMarker = existing.Contains(MarkerPref, StringComparison.Ordinal);
+                var hasLoopback = PrefsPointAtLoopback(existing);
+                if (!hasMarker && !hasLoopback)
+                    continue;
 
-            string restored;
-            if (TryReadBackup(out var backup) && backup.Count > 0)
-            {
-                // Remove managed keys then re-apply snapshotted values (missing key = delete).
-                var withoutManaged = RemoveKeys(existing, ManagedProxyKeys);
-                restored = MergePrefs(withoutManaged, backup);
-                restored = RemoveKeys(restored, [MarkerPref]);
-            }
-            else
-            {
-                // No backup: fall back to system proxy settings.
-                restored = MergePrefs(RemoveKeys(existing, [MarkerPref, Http3EnabledKey]), new Dictionary<string, string>
+                string restored;
+                if (hasMarker && TryReadBackup(out var backup) && backup.Count > 0)
                 {
-                    [NetworkProxyTypeKey] = "5",
-                });
+                    var withoutManaged = RemoveKeys(existing, ManagedProxyKeys);
+                    restored = MergePrefs(withoutManaged, backup);
+                    restored = RemoveKeys(restored, [MarkerPref]);
+                }
+                else
+                {
+                    // No backup: fall back to system proxy settings.
+                    restored = MergePrefs(
+                        RemoveKeys(existing, ManagedProxyKeys),
+                        new Dictionary<string, string>
+                        {
+                            [NetworkProxyTypeKey] = "5",
+                        });
+                }
+
+                File.WriteAllText(prefsPath, restored);
+                cleared = true;
+            }
+            catch
+            {
+                // best-effort per profile
+            }
+        }
+
+        DeleteBackup();
+        if (relaunch && cleared)
+            TryRelaunchFirefox(enableProxy: false);
+    }
+
+    private static bool PrefsPointAtLoopback(string prefsText)
+    {
+        foreach (var line in prefsText.Split('\n'))
+        {
+            if (!line.Contains("network.proxy.http", StringComparison.Ordinal) &&
+                !line.Contains("network.proxy.ssl", StringComparison.Ordinal))
+                continue;
+            if (line.Contains("127.0.0.1", StringComparison.Ordinal) ||
+                line.Contains("localhost", StringComparison.Ordinal) ||
+                line.Contains("[::1]", StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<string> EnumeratePrefsJsPaths()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrWhiteSpace(home))
+            yield break;
+
+        string[] roots =
+        [
+            Path.Combine(home, ".mozilla", "firefox"),
+            Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox"),
+            Path.Combine(home, ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
+            Path.Combine(home, ".var", "app", "org.mozilla.Firefox", ".mozilla", "firefox"),
+        ];
+
+        if (FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out var defaultProfile, out _) &&
+            !string.IsNullOrWhiteSpace(defaultProfile))
+        {
+            yield return Path.Combine(defaultProfile, "prefs.js");
+        }
+
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root))
+                continue;
+            IEnumerable<string> profiles;
+            try
+            {
+                profiles = Directory.EnumerateDirectories(root);
+            }
+            catch
+            {
+                continue;
             }
 
-            File.WriteAllText(prefsPath, restored);
-            DeleteBackup();
-            TryRelaunchFirefox(enableProxy: false);
-        }
-        catch
-        {
-            // best-effort
+            foreach (var profile in profiles)
+                yield return Path.Combine(profile, "prefs.js");
         }
     }
 
