@@ -2,7 +2,9 @@
 # Login hook. Inspector no longer writes environment.d or systemd --user proxy
 # variables. This still deletes leftovers from older builds, and if nothing is
 # listening it clears Firefox, Chromium, and desktop hooks that still point at
-# the Inspector port. When Inspector is running, leave those hooks alone.
+# the Inspector port. GNOME gsettings, KDE, XFCE helpers, and Flatpak or Snap
+# browser profiles each keep their own copy. When Inspector is running, leave
+# those hooks alone.
 set +e
 
 inspector_running() {
@@ -74,12 +76,8 @@ if [[ -f "${home}/.config/TitaniumInspector/chrome-profile-proxy.json" ]] ||
    [[ -f "${home}/.config/TitaniumInspector/proxy-snapshot.json" ]]; then
   needs=1
 fi
-if grep -q titanium.inspector.proxy.managed \
-    "${home}/.mozilla/firefox/"*/prefs.js \
-    "${home}/snap/firefox/common/.mozilla/firefox/"*/prefs.js \
-    2>/dev/null; then
-  needs=1
-fi
+# Firefox marker check is below, with Flatpak and loopback prefs. A glob that
+# matches nothing would make grep fail the whole script under set -e.
 if systemctl --user show-environment 2>/dev/null |
   grep -E '^(http_proxy|https_proxy|HTTP_PROXY|HTTPS_PROXY)=' |
   grep -q -E '127\.0\.0\.1|localhost'; then
@@ -112,6 +110,14 @@ do
     needs=1
   fi
 done
+# Flatpak and snap keep the same file under the home directory, not /etc.
+for root in "${home}/.var" "${home}/snap"; do
+  [[ -d "${root}" ]] || continue
+  while IFS= read -r policy; do
+    [[ -n "${policy}" ]] || continue
+    needs=1
+  done < <(find "${root}" -name titanium-inspector-proxy.json -type f 2>/dev/null)
+done
 
 # Chromium Preferences outlive the marker file. A loopback fixed_servers entry
 # ignores the desktop proxy switch, so a kill or uninstall still breaks browsing
@@ -129,6 +135,10 @@ roots = (
     ".config/opera",
     "snap/chromium/common/chromium",
     "snap/microsoft-edge/common/microsoft-edge",
+    ".var/app/com.google.Chrome/config/google-chrome",
+    ".var/app/org.chromium.Chromium/config/chromium",
+    ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser",
+    ".var/app/com.microsoft.Edge/config/microsoft-edge",
 )
 changed = False
 for rel in roots:
@@ -170,6 +180,131 @@ then
   needs=1
 fi
 
+# KDE stores its own proxy. gsettings "none" does not turn that off.
+kio="${home}/.config/kioslaverc"
+if [[ -f "${kio}" ]] && python3 - "${kio}" <<'PY'
+import sys
+path = sys.argv[1]
+lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
+in_proxy = False
+type_idx = None
+loopback = False
+for i, line in enumerate(lines):
+    stripped = line.strip()
+    if stripped.startswith("[") and stripped.endswith("]"):
+        in_proxy = stripped.lower() == "[proxy settings]"
+        continue
+    if not in_proxy or "=" not in line:
+        continue
+    key, val = line.split("=", 1)
+    key = key.strip()
+    if key == "ProxyType":
+        type_idx = i
+    if key in ("httpProxy", "httpsProxy", "ftpProxy", "socksProxy") and any(
+        host in val for host in ("127.0.0.1", "localhost", "[::1]")
+    ):
+        loopback = True
+if not loopback or type_idx is None or lines[type_idx].split("=", 1)[-1].strip() != "1":
+    sys.exit(1)
+lines[type_idx] = "ProxyType=0"
+open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+sys.exit(0)
+PY
+then
+  needs=1
+fi
+
+# XFCE and other desktops launch Chromium from a user .desktop or helper that
+# still carries --proxy-server after the desktop proxy is off.
+marker="X-Titanium-Inspector-Proxy=true"
+for desk in \
+  "${home}/.local/share/applications/google-chrome.desktop" \
+  "${home}/.local/share/applications/google-chrome-stable.desktop" \
+  "${home}/.local/share/applications/chromium.desktop" \
+  "${home}/.local/share/applications/chromium-browser.desktop" \
+  "${home}/.local/share/applications/brave-browser.desktop" \
+  "${home}/.local/share/applications/microsoft-edge.desktop" \
+  "${home}/.local/share/applications/microsoft-edge-stable.desktop" \
+  "${home}/.local/share/applications/opera.desktop" \
+  "${home}/.local/share/xfce4/helpers/google-chrome.desktop"
+do
+  if [[ -f "${desk}" ]] && grep -q "${marker}" "${desk}"; then
+    rm -f "${desk}"
+    needs=1
+  fi
+done
+xfce_rc="${home}/.config/xfce4/helpers.rc"
+if [[ -f "${xfce_rc}" ]] && grep -q "${marker}" "${xfce_rc}"; then
+  rm -f "${xfce_rc}"
+  needs=1
+fi
+launch_dir="${home}/.local/share/titanium-inspector/launchers"
+if [[ -d "${launch_dir}" ]]; then
+  for launcher in "${launch_dir}"/*.sh; do
+    [[ -f "${launcher}" ]] || continue
+    if grep -q -E -- '--proxy-server=http://(127\.0\.0\.1|localhost|\[::1\])' "${launcher}"; then
+      rm -f "${launcher}"
+      needs=1
+    fi
+  done
+fi
+
+# Classic, Snap, and Flatpak Firefox. A loopback manual proxy ignores the
+# desktop proxy switch even after the marker pref is gone.
+if python3 - "${home}" <<'PY'
+import glob, sys
+home = sys.argv[1]
+roots = (
+    home + "/.mozilla/firefox",
+    home + "/snap/firefox/common/.mozilla/firefox",
+    home + "/.var/app/org.mozilla.firefox/.mozilla/firefox",
+    home + "/.var/app/org.mozilla.Firefox/.mozilla/firefox",
+)
+marker = "titanium.inspector.proxy.managed"
+keys = (
+    "network.proxy.type",
+    "network.proxy.http",
+    "network.proxy.http_port",
+    "network.proxy.ssl",
+    "network.proxy.ssl_port",
+    "network.proxy.share_proxy_settings",
+    "network.proxy.no_proxies_on",
+    "network.http.http3.enabled",
+    marker,
+)
+changed = False
+for root in roots:
+    for path in glob.glob(root + "/*/prefs.js"):
+        try:
+            text = open(path, encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        loopback = False
+        for line in text.splitlines():
+            if "network.proxy.http\"" not in line and "network.proxy.ssl\"" not in line:
+                continue
+            if any(host in line for host in ("127.0.0.1", "localhost", "[::1]")):
+                loopback = True
+                break
+        if marker not in text and not loopback:
+            continue
+        kept = []
+        for line in text.splitlines():
+            if line.strip().startswith("user_pref(") and any(key in line for key in keys):
+                continue
+            kept.append(line)
+        kept.append('user_pref("network.proxy.type", 5);')
+        try:
+            open(path, "w", encoding="utf-8").write("\n".join(kept) + "\n")
+            changed = True
+        except OSError:
+            pass
+sys.exit(0 if changed else 1)
+PY
+then
+  needs=1
+fi
+
 if [[ "${needs}" -eq 0 ]]; then
   # Hooks are already gone. A leftover fail-open process would still occupy the
   # Inspector port and make the next launch look like a duplicate.
@@ -187,8 +322,14 @@ python3 - "${home}" <<'PY' || true
 import glob, sys
 home = sys.argv[1]
 marker = "titanium.inspector.proxy.managed"
-paths = glob.glob(home + "/.mozilla/firefox/*/prefs.js")
-paths += glob.glob(home + "/snap/firefox/common/.mozilla/firefox/*/prefs.js")
+paths = []
+for root in (
+    home + "/.mozilla/firefox",
+    home + "/snap/firefox/common/.mozilla/firefox",
+    home + "/.var/app/org.mozilla.firefox/.mozilla/firefox",
+    home + "/.var/app/org.mozilla.Firefox/.mozilla/firefox",
+):
+    paths += glob.glob(root + "/*/prefs.js")
 keys = (
     "network.proxy.type",
     "network.proxy.http",
@@ -242,6 +383,12 @@ rm -f \
   /etc/opt/edge/policies/managed/titanium-inspector-proxy.json \
   /etc/brave/policies/managed/titanium-inspector-proxy.json \
   /etc/opera/policies/managed/titanium-inspector-proxy.json
+for root in "${home}/.var" "${home}/snap"; do
+  [[ -d "${root}" ]] || continue
+  while IFS= read -r policy; do
+    rm -f "${policy}"
+  done < <(find "${root}" -name titanium-inspector-proxy.json -type f 2>/dev/null)
+done
 
 # Give a browser relaunch a moment, then drop the fail-open helper. Leaving it
 # on the Inspector port makes the next launch look like a duplicate.
