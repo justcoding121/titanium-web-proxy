@@ -1893,6 +1893,7 @@ namespace Titanium.Web.Proxy.Http2
                                 var bodyDeferred = isClient
                                     ? connectionState.ServerOutboundDeferred
                                     : connectionState.ClientOutboundDeferred;
+                                var pendingBefore = bodyDeferred.PendingCount(streamId);
                                 var queued = QueueSendData(connectionState, towardServer: isClient,
                                     outputWriteLock, streamId, outBytes, endStreamFlag, remoteSettings.MaxFrameSize,
                                     outboundFlow, bodyDeferred, output);
@@ -1910,6 +1911,16 @@ namespace Titanium.Web.Proxy.Http2
                                     await lockedOwnLegWrite(() => SendRstStreamAsync(new Http2FrameHeader(),
                                         new byte[9], streamId, Http2ErrorCode.EnhanceYourCalm, input));
                                     RemoveAndFinalizeStream(streamId);
+                                }
+
+                                // Withhold before redrain so a lost-wakeup drain can return the credit.
+                                if (!dataEndStream && length > 0 && queued != QueueSendDataResult.CapExceeded)
+                                {
+                                    var parked = pendingBefore > 0 || bodyDeferred.PendingCount(streamId) > 0;
+                                    if (parked)
+                                        bodyDeferred.WithholdStreamCredit(streamId, length);
+                                    else
+                                        await GrantStreamCreditAsync(sessionCreditStreamId, length);
                                 }
 
                                 if (queued != QueueSendDataResult.CapExceeded
@@ -1945,14 +1956,18 @@ namespace Titanium.Web.Proxy.Http2
                                                     st.RequestClosed = true;
                                                 else
                                                     st.ResponseClosed = true;
-                                            });
+                                            },
+                                            (sid, n) => EnqueueDeferredStreamCredit(bodyDeferred, sid, n));
                                     }
                                 }
                             }
 
-                            // Interim: full stream credit. The next commit withholds it when a slice is parked.
-                            if (!dataEndStream && length > 0)
+                            else if (!dataEndStream && length > 0)
+                            {
+                                // Hook kept this frame. Nothing was parked.
                                 await GrantStreamCreditAsync(sessionCreditStreamId, length);
+                            }
+
                             // we have emitted our own (possibly re-sized) DATA frame(s); suppress the default relay
                             sendPacket = false;
                         }
