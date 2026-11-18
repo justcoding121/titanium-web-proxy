@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -19,6 +20,14 @@ namespace Titanium.Web.Proxy.Helpers;
 internal static class LinuxBrowserLaunchProxy
 {
     internal const string PolicyFileName = "titanium-inspector-proxy.json";
+
+    /// <summary>
+    ///     Extra local CA for Chromium's certificate verifier. Edge (and Chrome when it
+    ///     no longer treats <c>~/.pki/nssdb</c> as a server trust anchor) ignores an NSS
+    ///     <c>C,,</c> root and rejects the proxy leaf. <c>CACertificates</c> is the
+    ///     supported way to add that root for server authentication.
+    /// </summary>
+    internal const string CaPolicyFileName = "titanium-inspector-ca.json";
     internal const string DesktopMarker = "X-Titanium-Inspector-Proxy=true";
     internal const string ProxyBypassList = "<-loopback>";
     private const string DesktopExecPrefix = "Exec=";
@@ -262,6 +271,54 @@ internal static class LinuxBrowserLaunchProxy
         SyncMachinePolicies(json, MachinePolicyVendors);
     }
 
+    /// <summary>
+    ///     Same non-interactive sudo install as the proxy policy, for a different file name.
+    ///     Pass null to remove the file from vendor directories where it exists.
+    /// </summary>
+    private static void SyncMachinePolicyFile(string fileName, string? json)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        try
+        {
+            var targets = new List<string>();
+            foreach (var (root, binaries) in MachinePolicyVendors)
+            {
+                var path = Path.Combine(root, PoliciesManaged, ManagedDirName, fileName);
+                if (json is null)
+                {
+                    if (File.Exists(path))
+                        targets.Add(path);
+                    continue;
+                }
+
+                if (!Directory.Exists(root) && !binaries.Any(File.Exists))
+                    continue;
+                if (!MachinePolicyMatches(path, json))
+                    targets.Add(path);
+            }
+
+            if (targets.Count == 0)
+                return;
+
+            if (json is null)
+            {
+                TrySudoNonInteractive(["rm", "-f", "--", .. targets], stdin: null);
+                return;
+            }
+
+            const string script =
+                "for f in \"$@\"; do mkdir -p -- \"$(dirname -- \"$f\")\" || exit 1; done; " +
+                "tee -- \"$@\" >/dev/null && chmod 644 -- \"$@\"";
+            TrySudoNonInteractive(["sh", "-c", script, "sh", .. targets], json);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     /// <summary>Runs the machine-policy sync against caller-supplied vendor roots (tests).</summary>
     internal static void SyncMachinePoliciesForTests(
         string? json, (string Root, string[] Binaries)[] vendors) =>
@@ -382,6 +439,91 @@ internal static class LinuxBrowserLaunchProxy
     internal static void TrySudoNonInteractiveForTests(
         IReadOnlyList<string> command, string? stdin, string sudoExecutable, int waitMilliseconds) =>
         TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
+
+    /// <summary>
+    ///     Public-only base64 DER of <paramref name="certificate"/> under <c>CACertificates</c>.
+    /// </summary>
+    internal static string BuildCaPolicyJson(X509Certificate2 certificate)
+    {
+        var der = certificate.Export(X509ContentType.Cert);
+        return JsonSerializer.Serialize(new Dictionary<string, string[]>
+        {
+            ["CACertificates"] = [Convert.ToBase64String(der)],
+        });
+    }
+
+    /// <summary>
+    ///     Writes <see cref="CaPolicyFileName"/> next to the proxy policy so Chromium-family
+    ///     browsers trust the proxy root. Kept separate from the proxy file so clearing the
+    ///     system proxy does not drop CA trust.
+    /// </summary>
+    /// <param name="machinePolicy">
+    ///     When true, also install the file under <c>/etc</c> for every account.
+    ///     User trust stays in the per-user policy directories.
+    /// </param>
+    internal static void ApplyCaCertificatesPolicy(X509Certificate2 certificate, bool machinePolicy = false)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        string json;
+        try
+        {
+            json = BuildCaPolicyJson(certificate);
+        }
+        catch
+        {
+            return;
+        }
+
+        foreach (var dir in PolicyDirectories())
+        {
+            if (!machinePolicy && dir.StartsWith("/etc/", StringComparison.Ordinal))
+                continue;
+
+            try
+            {
+                Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, CaPolicyFileName);
+                var temp = path + ".tmp";
+                File.WriteAllText(temp, json);
+                File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                // snap roots the user cannot create are skipped
+            }
+        }
+
+        if (machinePolicy)
+            SyncMachinePolicyFile(CaPolicyFileName, json);
+    }
+
+    /// <summary>Removes <see cref="CaPolicyFileName"/> from user and, when requested, machine policy directories.</summary>
+    /// <param name="machinePolicy">When true, also remove the <c>/etc</c> copy.</param>
+    internal static void RemoveCaCertificatesPolicy(bool machinePolicy = false)
+    {
+        if (!OperatingSystem.IsLinux())
+            return;
+
+        foreach (var dir in PolicyDirectories())
+        {
+            if (!machinePolicy && dir.StartsWith("/etc/", StringComparison.Ordinal))
+                continue;
+
+            try
+            {
+                File.Delete(Path.Combine(dir, CaPolicyFileName));
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+
+        if (machinePolicy)
+            SyncMachinePolicyFile(CaPolicyFileName, null);
+    }
 
     /// <summary>
     ///     Builds Chromium managed-policy JSON. <c>ProxyMode=system</c> follows the desktop

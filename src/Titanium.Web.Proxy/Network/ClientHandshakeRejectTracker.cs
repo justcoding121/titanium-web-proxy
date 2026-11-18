@@ -24,6 +24,7 @@ internal sealed class ClientHandshakeRejectTracker
 
     private TimeSpan window = TimeSpan.FromMinutes(2);
     private TimeSpan trustGrace = TimeSpan.FromMinutes(30);
+    private TimeSpan minBurstSpread = TimeSpan.FromSeconds(1);
     private int maxEntries = 256;
 
     /// <summary>
@@ -44,6 +45,17 @@ internal sealed class ClientHandshakeRejectTracker
     {
         get => window;
         set => window = value <= TimeSpan.Zero ? TimeSpan.FromMinutes(2) : value;
+    }
+
+    /// <summary>
+    ///     Same-instant handshake aborts (a browser opening two sockets while one origin probe is in
+    ///     flight) do not trip. The strikes must span at least this long. <see cref="TimeSpan.Zero"/>
+    ///     disables the guard. A threshold of 1 still trips on the first abort.
+    /// </summary>
+    internal TimeSpan MinBurstSpread
+    {
+        get => minBurstSpread;
+        set => minBurstSpread = value < TimeSpan.Zero ? TimeSpan.Zero : value;
     }
 
     internal int MaxEntries
@@ -98,7 +110,9 @@ internal sealed class ClientHandshakeRejectTracker
                 entry.Count++;
             }
 
-            tripped = entry.Count >= limit;
+            entry.LastUtc = utcNow;
+            tripped = entry.Count >= limit
+                && (limit <= 1 || utcNow - entry.FirstUtc >= minBurstSpread);
             if (tripped)
                 entry.Count = 0;
         }
@@ -160,5 +174,6 @@ internal sealed class ClientHandshakeRejectTracker
     {
         internal int Count;
         internal DateTime FirstUtc;
+        internal DateTime LastUtc;
     }
 }

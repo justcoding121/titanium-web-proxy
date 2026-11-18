@@ -1203,6 +1203,8 @@ internal static partial class UnixCertificateTrust
         if (NssListContainsNickname(runner, certutil, nssDir, friendlyName))
         {
             TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
+            if (TryReloadCertificateFromCer(cerPath) is { } trusted)
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(trusted);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
         }
 
@@ -1216,6 +1218,8 @@ internal static partial class UnixCertificateTrust
             NssListContainsNickname(runner, certutil, nssDir, friendlyName))
         {
             TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
+            if (TryReloadCertificateFromCer(cerPath) is { } trusted)
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(trusted);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
         }
 
@@ -1322,9 +1326,15 @@ internal static partial class UnixCertificateTrust
         }
 
         if (!anyDb)
+        {
+            LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
             return true;
+        }
 
-        return deleted || !VerifyLinuxNssTrust(runner, certificate);
+        var gone = deleted || !VerifyLinuxNssTrust(runner, certificate);
+        if (gone)
+            LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+        return gone;
     }
 
     private static bool UntrustLinuxNssDirectory(

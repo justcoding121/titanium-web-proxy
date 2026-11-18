@@ -2242,6 +2242,29 @@ public sealed class CertificateManager : IDisposable
         if (TrustRootAsAdministrator)
             TrustRootCertificateAsAdmin(MachineTrustRoot);
         else if (UserTrustRoot) TrustRootCertificate(MachineTrustRoot);
+
+        PublishLinuxCaPolicyIfAlreadyTrusted();
+    }
+
+    /// <summary>
+    ///     Edge's cert verifier does not treat an NSS <c>C,,</c> root as a server trust anchor.
+    ///     When this root is already trusted, refresh the Chromium <c>CACertificates</c> policy
+    ///     so a later browser start decrypts without another trust prompt.
+    /// </summary>
+    private void PublishLinuxCaPolicyIfAlreadyTrusted()
+    {
+        if (!RunTime.IsLinux || RootCertificate == null || ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        try
+        {
+            if (VerifyOsUserSslTrust())
+                Helpers.LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(RootCertificate);
+        }
+        catch
+        {
+            // NSS trust still covers browsers that read ~/.pki/nssdb.
+        }
     }
 
     /// <summary>
@@ -2302,7 +2325,11 @@ public sealed class CertificateManager : IDisposable
 
         if (!RunTime.IsWindows && RootCertificate != null &&
             !ShouldSuppressInteractiveRootStoreMutations)
-            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+        {
+            var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            if (RunTime.IsLinux && removed)
+                Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+        }
 
         // Firefox prefs / certutil must not run on the CryptUI UI thread — prefs.js locks and
         // certutil against a live profile hang Avalonia as "(Not Responding)". Callers schedule
@@ -2323,7 +2350,9 @@ public sealed class CertificateManager : IDisposable
             if (RootCertificate == null) return false;
             if (ShouldSuppressInteractiveRootStoreMutations)
                 return true;
-            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            if (RunTime.IsLinux && removed)
+                Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
             // Explicit true when only user-store untrust was requested (no machine step).
             return machineTrusted
                 ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)

@@ -521,6 +521,29 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void BuildCaPolicyJson_PublishesThePublicCertificateOnly()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=Titanium Test CA",
+            rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(
+            new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(
+                certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        var json = LinuxBrowserLaunchProxy.BuildCaPolicyJson(cert);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var encoded = doc.RootElement.GetProperty("CACertificates")[0].GetString();
+        var der = Convert.FromBase64String(encoded!);
+        CollectionAssert.AreEqual(
+            cert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Cert), der);
+        Assert.IsFalse(json.Contains("PRIVATE", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
     public void EnsureDefaultProfile_WritesFirstRunSentinel()
     {
         var root = Path.Combine(Path.GetTempPath(), "twp-chrome-profile-" + Guid.NewGuid().ToString("N"));
