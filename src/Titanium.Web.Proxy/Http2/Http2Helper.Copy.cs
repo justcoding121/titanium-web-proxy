@@ -211,21 +211,68 @@ namespace Titanium.Web.Proxy.Http2
             // SETTINGS-completion flush runs on a continuation thread; gate pending mutations.
             var receiveCreditGate = new object();
 
-            ValueTask GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush = false)
+            ValueTask GrantReceiveCreditAsync(int streamId, int bytes, bool forceFlush = false) =>
+                AccountReceiveCreditAsync(streamId, bytes, streamId == 0 ? 0 : bytes, forceFlush);
+
+            // Connection window only. Parked DATA still returns this on read so one slow stream
+            // does not pin every other stream on the connection.
+            ValueTask GrantConnectionCreditAsync(int bytes, bool forceFlush = false) =>
+                AccountReceiveCreditAsync(0, bytes, 0, forceFlush);
+
+            // Stream window only. Used for bytes that were actually forwarded (or consumed), not parked.
+            ValueTask GrantStreamCreditAsync(int streamId, int bytes) =>
+                AccountReceiveCreditAsync(streamId, 0, bytes, forceFlush: false);
+
+            // Stream WINDOW_UPDATE for parked bytes, sent on the source frame writer. Does not take
+            // the other direction's write lock: Http2FrameWriter.EnqueueWindowUpdate only queues.
+            void EnqueueDeferredStreamCredit(Http2DeferredOutboundData queue, int queueStreamId, int bytes)
             {
-                if (bytes <= 0 && !forceFlush) return default;
+                if (bytes <= 0 || queueStreamId <= 0)
+                    return;
+
+                Http2FrameWriter? creditWriter;
+                var creditStreamId = queueStreamId;
+                if (ReferenceEquals(queue, connectionState.ClientOutboundDeferred))
+                {
+                    // Response DATA parked toward the client. Credit the origin.
+                    creditWriter = connectionState.ServerFrameWriter;
+                }
+                else if (originReceiveLeg != null && ReferenceEquals(queue, originReceiveLeg.OutboundDeferred))
+                {
+                    // Request DATA parked on an extra origin leg. Credit the client stream.
+                    creditWriter = connectionState.ClientFrameWriter;
+                    if (!originReceiveLeg.OriginToClient.TryGetValue(queueStreamId, out creditStreamId))
+                        return;
+                }
+                else
+                {
+                    // Request DATA parked toward the origin. Queue key is the client stream id.
+                    creditWriter = connectionState.ClientFrameWriter;
+                }
+
+                if (creditWriter == null || creditStreamId <= 0
+                    || !connectionState.Streams.ContainsKey(creditStreamId))
+                    return;
+
+                Http2Helper.EnqueueWindowUpdate(creditWriter, creditStreamId, bytes);
+            }
+
+            ValueTask AccountReceiveCreditAsync(int streamId, int connectionCredit, int streamCredit, bool forceFlush)
+            {
+                if (connectionCredit <= 0 && streamCredit <= 0 && !forceFlush) return default;
 
                 int connectionBytes;
                 int streamBytes;
                 lock (receiveCreditGate)
                 {
-                    if (bytes > 0)
+                    if (connectionCredit > 0)
+                        pendingConnectionReceiveCredit += connectionCredit;
+                    if (streamCredit > 0 && streamId != 0)
                     {
-                        pendingConnectionReceiveCredit += bytes;
                         if (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamPending))
-                            pendingStreamReceiveCredit[streamId] = streamPending + bytes;
+                            pendingStreamReceiveCredit[streamId] = streamPending + streamCredit;
                         else
-                            pendingStreamReceiveCredit[streamId] = bytes;
+                            pendingStreamReceiveCredit[streamId] = streamCredit;
                     }
 
                     // Client→proxy DATA can try to flush WINDOW_UPDATE toward the client before the
@@ -240,9 +287,9 @@ namespace Titanium.Web.Proxy.Http2
                     }
 
                     var flushConnection = forceFlush || pendingConnectionReceiveCredit >= ReceiveCreditBatchThreshold;
-                    var flushStream = forceFlush
-                        || (pendingStreamReceiveCredit.TryGetValue(streamId, out var streamCredit)
-                            && streamCredit >= ReceiveCreditBatchThreshold);
+                    var flushStream = streamId != 0 && (forceFlush
+                        || (pendingStreamReceiveCredit.TryGetValue(streamId, out var pendingForStream)
+                            && pendingForStream >= ReceiveCreditBatchThreshold));
 
                     if (!flushConnection && !flushStream)
                         return default;
@@ -606,9 +653,9 @@ namespace Titanium.Web.Proxy.Http2
                         bool dataPadded = (flags & Http2FrameFlag.Padded) != 0;
                         var creditStreamId = originReceiveLeg != null ? peerStreamId : dataStreamId;
 
-                        // Always grant receive credit for bytes already read. Soft-throttle without a
-                        // withheld-credit reclaim would permanently shrink the peer's send window.
-                        // Hard queue cap + RST still bounds memory if the client is slow.
+                        // Connection credit returns on read so one parked stream does not pin the
+                        // connection window. Stream credit for non-terminal DATA waits until the bytes
+                        // are forwarded (or are not parked). END_STREAM still skips stream WINDOW_UPDATE.
                         if (dataEndStream)
                         {
                             // Tiny-GET hot path: END_STREAM closes the stream — skip stream WINDOW_UPDATE
@@ -630,9 +677,9 @@ namespace Titanium.Web.Proxy.Http2
                             if (connBytes > 0)
                                 await GrantReceiveCreditLockedAsync(0, connBytes, 0);
                         }
-                        else
+                        else if (length > 0)
                         {
-                            await GrantReceiveCreditAsync(creditStreamId, length, forceFlush: false);
+                            await GrantConnectionCreditAsync(length);
                         }
 
                         Http2FrameWriter? dedicatedWriter = null;
@@ -710,6 +757,8 @@ namespace Titanium.Web.Proxy.Http2
                         {
                             if (length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
+                            if (!dataEndStream && length > 0)
+                                await GrantStreamCreditAsync(creditStreamId, length);
                             // already RequestClosed; may now finalize if response half is done
                             if (dataEndStream && compressedDataState.IsClosed)
                             {
@@ -768,7 +817,26 @@ namespace Titanium.Web.Proxy.Http2
                                         st.RequestClosed = true;
                                     else
                                         st.ResponseClosed = true;
-                                });
+                                },
+                                (sid, bytes) => EnqueueDeferredStreamCredit(sendDeferred, sid, bytes));
+                        }
+
+                        // reservedNow is the payload slice written now. Parked bytes withhold stream credit
+                        // until TryDrain forwards them. Padding is not parked, so it is credited now.
+                        async ValueTask NoteCompressedStreamCreditAsync(int reservedNow, bool parked)
+                        {
+                            if (dataEndStream)
+                                return;
+
+                            var immediate = (length - forwardLength) + reservedNow;
+                            if (immediate > 0)
+                                await GrantStreamCreditAsync(creditStreamId, immediate);
+                            if (!parked)
+                                return;
+
+                            var withheld = forwardLength - reservedNow;
+                            if (withheld > 0)
+                                sendDeferred.WithholdStreamCredit(wireStreamId, withheld);
                         }
 
                         void EnqueueWireFrame(ReadOnlySpan<byte> payload, bool endStream)
@@ -805,6 +873,7 @@ namespace Titanium.Web.Proxy.Http2
                         // the body under a slow client (arch slow-consumer 256 KiB short-read at 65535).
                         if (sendDeferred.PendingCount(wireStreamId) > 0)
                         {
+                            var parked = false;
                             if (forwardLength == 0 && !dataEndStream)
                             {
                                 // nothing to forward
@@ -827,14 +896,17 @@ namespace Titanium.Web.Proxy.Http2
                                         Http2ErrorCode.EnhanceYourCalm, input));
                                     connectionState.RemoveStream(dataStreamId);
                                 }
-                                else if (ownedPayload)
+                                else
                                 {
-                                    payloadRented = Array.Empty<byte>(); // ownership transferred
+                                    parked = forwardLength > 0;
+                                    if (ownedPayload)
+                                        payloadRented = Array.Empty<byte>(); // ownership transferred
                                 }
                             }
 
                             if (length > 0 && payloadRented.Length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
+                            await NoteCompressedStreamCreditAsync(0, parked);
                             RedrainIfParked();
                             continue;
                         }
@@ -848,11 +920,13 @@ namespace Titanium.Web.Proxy.Http2
                             if (length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
                             MarkCompressedClosedIfFullySent();
+                            await NoteCompressedStreamCreditAsync(forwardLength, parked: false);
                         }
                         else if (reserved > 0)
                         {
                             EnqueueWireFrame(payloadRented.AsSpan(0, reserved), endStream: false);
                             var rem = forwardLength - reserved;
+                            var parked = false;
                             if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, reserved, rem, dataEndStream))
                             {
                                 ArrayPool<byte>.Shared.Return(payloadRented);
@@ -863,6 +937,12 @@ namespace Titanium.Web.Proxy.Http2
                                     Http2ErrorCode.EnhanceYourCalm, input));
                                 connectionState.RemoveStream(dataStreamId);
                             }
+                            else
+                            {
+                                parked = true;
+                            }
+
+                            await NoteCompressedStreamCreditAsync(reserved, parked);
                         }
                         else if (forwardLength == 0 && dataEndStream)
                         {
@@ -877,6 +957,7 @@ namespace Titanium.Web.Proxy.Http2
                             // Empty (or all-padding) non-END_STREAM DATA — nothing to forward.
                             if (length > 0)
                                 ArrayPool<byte>.Shared.Return(payloadRented);
+                            await NoteCompressedStreamCreditAsync(0, parked: false);
                         }
                         else if (!sendDeferred.TryEnqueue(wireStreamId, payloadRented, 0, forwardLength, dataEndStream))
                         {
@@ -887,6 +968,11 @@ namespace Titanium.Web.Proxy.Http2
                                 new byte[9], peerStreamId != 0 ? peerStreamId : dataStreamId,
                                 Http2ErrorCode.EnhanceYourCalm, input));
                             connectionState.RemoveStream(dataStreamId);
+                            await NoteCompressedStreamCreditAsync(0, parked: false);
+                        }
+                        else
+                        {
+                            await NoteCompressedStreamCreditAsync(0, parked: true);
                         }
 
                         RedrainIfParked();
@@ -1932,21 +2018,26 @@ namespace Titanium.Web.Proxy.Http2
                             if (originReceiveLeg != null)
                             {
                                 originReceiveLeg.OutboundDeferred.TryDrain(flow, originReceiveLeg.Writer,
-                                    OnDeferredEndStream, MarkDeferredHalfClosed);
+                                    OnDeferredEndStream, MarkDeferredHalfClosed,
+                                    (sid, n) => EnqueueDeferredStreamCredit(originReceiveLeg.OutboundDeferred, sid, n));
                             }
                             else if (isClient)
                             {
                                 var writer = connectionState.ClientFrameWriter;
                                 if (writer != null)
                                     connectionState.ClientOutboundDeferred.TryDrain(flow, writer,
-                                        OnDeferredEndStream, MarkDeferredHalfClosed);
+                                        OnDeferredEndStream, MarkDeferredHalfClosed,
+                                        (sid, n) => EnqueueDeferredStreamCredit(
+                                            connectionState.ClientOutboundDeferred, sid, n));
                             }
                             else
                             {
                                 var writer = connectionState.ServerFrameWriter;
                                 if (writer != null)
                                     connectionState.ServerOutboundDeferred.TryDrain(flow, writer,
-                                        OnDeferredEndStream, MarkDeferredHalfClosed);
+                                        OnDeferredEndStream, MarkDeferredHalfClosed,
+                                        (sid, n) => EnqueueDeferredStreamCredit(
+                                            connectionState.ServerOutboundDeferred, sid, n));
                             }
                         }
                     }
