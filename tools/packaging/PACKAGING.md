@@ -132,7 +132,7 @@ choco install titanium-inspector --pre
 ## HTTP/3 native lock file
 
 - **Lock:** [`http3-native.lock.json`](http3-native.lock.json) — pinned URLs + SHA256 per RID.
-- **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` (Linux) or `install_name_tool` `@loader_path` (macOS).
+- **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` (Linux, except the .NET OpenSSL shims, which must keep the host `libssl`) or `install_name_tool` `@loader_path` (macOS).
 - **Cache:** `tools/packaging/.cache/http3-natives/` (gitignored). CI caches this with `actions/cache` keyed on the lock file.
 - **License:** [`THIRD-PARTY-HTTP3.txt`](THIRD-PARTY-HTTP3.txt) is copied into every publish folder (MsQuic MIT + OpenSSL Apache-2.0). Inspector also ships [`THIRD-PARTY-INSPECTOR.txt`](THIRD-PARTY-INSPECTOR.txt) (Inter SIL OFL-1.1).
 
