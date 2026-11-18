@@ -48,13 +48,17 @@ internal static partial class UnixCertificateTrust
         "/usr/local/bin/brew",
     ];
 
+    // User domain only. `dump-trust-settings -d` and `trust-settings-export -d`
+    // read the admin trust domain and pop an administrator password dialog on
+    // every call. Decrypt checks run this path often. Admin-domain records are
+    // read from /Library/Security/Trust Settings/Admin.plist instead.
     private static readonly string[] MacDumpTrustSettingsArgs =
     [
-        "dump-trust-settings -d",
         "dump-trust-settings",
     ];
 
-    private static readonly bool[] MacTrustExportAdminDomain = [true, false];
+    private static readonly bool[] MacTrustExportAdminDomain = [false];
+
     /// <summary>
     ///     Trusts <paramref name="certificate"/> for SSL in the current-user store backends
     ///     (login keychain on macOS, NSS db on Linux).

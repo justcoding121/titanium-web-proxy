@@ -93,24 +93,11 @@ internal static class LinuxChromeProfileProxy
             ScheduleClearRetries_NoLock(host, port);
         }
 
-        // Outside the lock: ProxyServer may still hold the port for a moment during Stop().
+        // Outside the lock. Launch now, detached. A delayed task dies with File → Exit
+        // before it binds, and Edge is left dialing a closed port. The helper retries
+        // the bind until this process releases the listener.
         if (!string.IsNullOrEmpty(host) && port > 0)
-        {
-            var h = host;
-            var p = port;
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(400, _clearRetryCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
-                    LinuxProxyFailOpen.Start(h, p);
-                }
-                catch
-                {
-                    // ignore
-                }
-            }, _clearRetryCts?.Token ?? CancellationToken.None);
-        }
+            LinuxProxyFailOpen.Start(host, port);
     }
 
     /// <summary>
