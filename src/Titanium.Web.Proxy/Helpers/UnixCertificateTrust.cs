@@ -503,6 +503,13 @@ internal static partial class UnixCertificateTrust
         var added = TrustMacUser(runner, cerPath, certificate, out var error);
         if (!added)
         {
+            if (IsMacKeychainUserCancel(error))
+            {
+                return CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.Cancelled,
+                    "Root CA install cancelled");
+            }
+
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.MacKeychainFailed,
                 string.IsNullOrWhiteSpace(error)
@@ -580,6 +587,31 @@ internal static partial class UnixCertificateTrust
             return legacy;
         // Paths may be absent in unit tests that stub the runner; prefer db then legacy.
         return !string.IsNullOrWhiteSpace(db) ? db : legacy;
+    }
+
+    /// <summary>
+    ///     User dismissed Certificate Trust Settings (or the keychain unlock).
+    ///     Treat like Windows CryptUI No: quiet cancel, not a Keychain failure.
+    /// </summary>
+    internal static bool IsMacKeychainUserCancel(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+            return false;
+
+        if (error.Contains("errSecUserCanceled", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("user canceled", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("user cancelled", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("user canceled the operation", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // security(1) often prints "The operation was canceled by the user" or exit text "-128".
+        if (error.Contains("canceled by the user", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("cancelled by the user", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var trimmed = error.Trim();
+        return trimmed is "-128" or "errSecUserCanceled" ||
+               trimmed.Contains("-128", StringComparison.Ordinal);
     }
 
     private static string FirstLine(string? text)

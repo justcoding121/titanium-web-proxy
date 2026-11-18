@@ -296,6 +296,10 @@ public sealed partial class MainWindowViewModel
                 return true;
             }
 
+            // User cancelled Keychain / CryptUI — do not open recovery.
+            if (result?.Kind == CertificateOsTrustKind.Cancelled)
+                return false;
+
             if (!promptIfNeeded)
                 return ok;
         }

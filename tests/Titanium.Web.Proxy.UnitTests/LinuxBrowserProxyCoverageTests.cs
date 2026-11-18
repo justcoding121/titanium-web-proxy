@@ -31,13 +31,13 @@ public class LinuxBrowserProxyCoverageTests
             var written = LinuxChromeProfileProxy.Apply("127.0.0.1", 18866);
             Assert.IsTrue(written >= 1, "expected at least the disposable Chrome profile to be rewritten");
             var text = File.ReadAllText(prefs);
-            StringAssert.Contains(text, "fixed_servers");
+            StringAssert.Contains(text, "\"system\"");
             StringAssert.Contains(text, "127.0.0.1:18866");
 
-            File.WriteAllText(prefs, """{"proxy":{"mode":"system"}}""");
+            File.WriteAllText(prefs, """{"proxy":{"mode":"direct"}}""");
             await Task.Delay(500);
             var reasserted = File.ReadAllText(prefs);
-            StringAssert.Contains(reasserted, "fixed_servers");
+            StringAssert.Contains(reasserted, "\"system\"");
 
             LinuxChromeProfileProxy.Clear();
             LinuxProxyFailOpen.Stop();

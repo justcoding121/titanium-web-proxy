@@ -382,7 +382,48 @@ public partial class MainWindow : Window
         Dispatcher.UIThread.Post(ApplySessionColumnHeaderTips);
     }
 
+    private int _closePhase;
+
     private void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // 2 = shutdown already finished off the UI thread; allow the window to close.
+        if (Volatile.Read(ref _closePhase) == 2)
+        {
+            DetachForClose();
+            return;
+        }
+
+        // First close: keep the window alive so Stopping… can paint, then shut down off the UI thread.
+        e.Cancel = true;
+        if (Interlocked.CompareExchange(ref _closePhase, 1, 0) != 0)
+            return;
+
+        if (DataContext is MainWindowViewModel vm)
+        {
+            _ = FinishCloseAsync(vm);
+            return;
+        }
+
+        Volatile.Write(ref _closePhase, 2);
+        Close();
+    }
+
+    private async Task FinishCloseAsync(MainWindowViewModel vm)
+    {
+        try
+        {
+            await vm.PrepareCloseAsync();
+        }
+        catch
+        {
+            // still close
+        }
+
+        Volatile.Write(ref _closePhase, 2);
+        await Dispatcher.UIThread.InvokeAsync(Close);
+    }
+
+    private void DetachForClose()
     {
         SessionDisplayFormat.ClockChanged -= OnClockChanged;
         CaptureAndPersistSessionGridLayout();
@@ -400,11 +441,6 @@ public partial class MainWindow : Window
             _sessionsVScroll = null;
         }
 
-        if (DataContext is MainWindowViewModel vm)
-        {
-            // Off UI thread — WinINET restore from EnsureShutdown deadlocks the closing window.
-            vm.BeginBackgroundShutdown();
-        }
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)

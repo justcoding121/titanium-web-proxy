@@ -141,6 +141,31 @@ public sealed class InterceptionService : IDisposable
     /// <summary>Test seam: next <see cref="InstallRootCertificate"/> returns false once (forces elevate path).</summary>
     public bool FailNextUserTrustInstall { get; set; }
 
+    /// <summary>Test seam: next user-trust install returns <see cref="CertificateOsTrustKind.Cancelled"/> once.</summary>
+    public bool CancelNextUserTrustInstall { get; set; }
+
+    private bool ConsumeForcedTrustInstallResult(out bool succeeded)
+    {
+        succeeded = false;
+        if (CancelNextUserTrustInstall)
+        {
+            CancelNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled, "Root CA install cancelled");
+            return true;
+        }
+
+        if (FailNextUserTrustInstall)
+        {
+            FailNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
+            return true;
+        }
+
+        return false;
+    }
+
     private bool _inMemoryTrusted;
 
     public bool SystemProxyEnabled => _systemProxyEnabled;
@@ -566,47 +591,26 @@ public sealed class InterceptionService : IDisposable
     }
 
     /// <summary>
-    /// Persist-safe close path. On Windows, queue <see cref="EnsureShutdown"/> on the thread pool
-    /// so WinINET restore cannot deadlock the closing window. On Mac/Linux, restore synchronously —
-    /// AppleScript quit and process exit tear down the pool before a queued <c>networksetup</c> /
-    /// gsettings restore runs, which left the OS proxy pointing at a dead listener.
+    /// Queue <see cref="EnsureShutdown"/> off the caller so WinINET / networksetup / gsettings
+    /// cannot freeze the UI thread. <see cref="App"/> Exit still calls <see cref="EnsureShutdown"/>
+    /// which waits only while work is in flight (instant once <c>_shutdownCompleted</c> is set).
     /// </summary>
     public void BeginBackgroundShutdown()
     {
         if (Volatile.Read(ref _shutdownStarted) != 0)
+            return;
+
+        ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
-            if (!OperatingSystem.IsWindows())
+            try
             {
-                _shutdownCompleted.Wait(TimeSpan.FromSeconds(10), CancellationToken.None);
+                EnsureShutdown();
             }
-
-            return;
-        }
-
-        if (OperatingSystem.IsWindows())
-        {
-            ThreadPool.UnsafeQueueUserWorkItem(_ =>
+            catch
             {
-                try
-                {
-                    EnsureShutdown();
-                }
-                catch
-                {
-                    // never throw from teardown
-                }
-            }, null);
-            return;
-        }
-
-        try
-        {
-            EnsureShutdown();
-        }
-        catch
-        {
-            // never throw from teardown
-        }
+                // never throw from teardown
+            }
+        }, null);
     }
 
     private void ApplyLoggingOptions(InspectorSettings? settings)
@@ -887,13 +891,8 @@ public sealed class InterceptionService : IDisposable
             return false;
         }
 
-        if (FailNextUserTrustInstall)
-        {
-            FailNextUserTrustInstall = false;
-            LastOsTrustResult = CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
-            return false;
-        }
+        if (ConsumeForcedTrustInstallResult(out var forcedInstall))
+            return forcedInstall;
 
         if (UseInMemoryTrustState)
         {
@@ -950,13 +949,8 @@ public sealed class InterceptionService : IDisposable
         if (_proxy is null)
             return false;
 
-        if (FailNextUserTrustInstall)
-        {
-            FailNextUserTrustInstall = false;
-            LastOsTrustResult = CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
-            return false;
-        }
+        if (ConsumeForcedTrustInstallResult(out var forcedStores))
+            return forcedStores;
 
         if (UseInMemoryTrustState)
         {

@@ -896,6 +896,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     }
 
     /// <summary>
+    /// Title-bar / File → Exit: show Busy, then stop and restore the system proxy off the UI thread.
+    /// </summary>
+    public async Task PrepareCloseAsync()
+    {
+        SetStatus("Stopping…", StatusSeverity.Busy);
+        await Task.Yield();
+        await RunOffUiAsync(EnsureShutdown);
+    }
+
+    /// <summary>
     /// Title-bar close: save settings and stop the proxy off the UI thread so WinINET
     /// refresh cannot deadlock the closing window.
     /// </summary>
@@ -4200,6 +4210,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         if (OperatingSystem.IsMacOS())
             return "System proxy enabled. Restart Firefox if it was already open so it picks up the proxy.";
+
+        if (OperatingSystem.IsLinux())
+            return "System proxy enabled. New connections use the system proxy. Restart a browser only if it was already open and does not switch.";
 
         return "System proxy enabled";
     }

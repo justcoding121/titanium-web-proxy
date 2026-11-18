@@ -258,6 +258,18 @@ public class UnixCertificateTrustCoverageTests
                 failAdd, cerPath, cert)!;
             Assert.AreEqual(CertificateOsTrustKind.MacKeychainFailed, failed.Kind);
 
+            var cancelAdd = new FakeProcessRunner
+            {
+                DefaultSuccess = false,
+                FailMatching = "add-trusted-cert",
+                FailError = "The operation was canceled by the user. (-128)",
+            };
+            var cancelled = (CertificateOsTrustResult)Invoke(
+                "TrustMacUserDetailed",
+                [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
+                cancelAdd, cerPath, cert)!;
+            Assert.AreEqual(CertificateOsTrustKind.Cancelled, cancelled.Kind);
+
             var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var find = new FakeProcessRunner();
             find.When("security", "find-certificate", $"SHA-1 hash: {sha1}AABBCCDDEEFF00112233445566778899AABBCC\n");

@@ -320,6 +320,20 @@ public partial class ProxyServer : IDisposable
                 return SystemProxyChangeResult.Ok("No orphaned local system proxy");
 
             backend.RemoveProxy(protocols, saveOriginalConfig: false);
+            if (OperatingSystem.IsLinux())
+            {
+                // Dead loopback on the desktop proxy: also drop Inspector launch hooks
+                // (Preferences, Firefox prefs, environment.d) so browsing is direct again.
+                try
+                {
+                    LinuxBrowserLaunchProxy.ClearInstalledHooks();
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+
             return SystemProxyChangeResult.Ok("Cleared orphaned local system proxy");
         }
         catch (Exception ex)

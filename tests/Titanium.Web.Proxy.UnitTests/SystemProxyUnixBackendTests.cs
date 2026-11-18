@@ -501,7 +501,7 @@ public class LinuxBrowserLaunchProxyTests
             Assert.AreEqual(1, LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]));
             var json = File.ReadAllText(Path.Combine(dir, LinuxBrowserLaunchProxy.PolicyFileName));
             Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
-            StringAssert.Contains(json, "fixed_servers");
+            StringAssert.Contains(json, "\"system\"");
             StringAssert.Contains(json, "http://127.0.0.1:8866");
             Assert.IsFalse(json.Contains("<-loopback>", StringComparison.Ordinal));
             StringAssert.Contains(json, "\"QuicAllowed\": false");
@@ -525,7 +525,7 @@ public class LinuxBrowserLaunchProxyTests
             File.WriteAllText(prefs, """{"proxy":{"mode":"system"},"homepage":"x"}""");
             Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(prefs, "127.0.0.1", 8866));
             var after = File.ReadAllText(prefs);
-            StringAssert.Contains(after, "fixed_servers");
+            StringAssert.Contains(after, "\"system\"");
             StringAssert.Contains(after, "127.0.0.1:8866");
             Assert.IsTrue(File.Exists(prefs + LinuxChromeProfileProxy.BackupSuffix));
             LinuxChromeProfileProxy.TryRestoreFileForTests(prefs);
@@ -576,7 +576,7 @@ public class LinuxBrowserLaunchProxyTests
         Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "weird\"host", 8866, out var err), err);
         // Must be valid JSON even with quotes in the host fragment.
         using var doc = System.Text.Json.JsonDocument.Parse(json);
-        Assert.AreEqual("fixed_servers", doc.RootElement.GetProperty("ProxyMode").GetString());
+        Assert.AreEqual("system", doc.RootElement.GetProperty("ProxyMode").GetString());
     }
 
     [TestMethod]
@@ -633,13 +633,13 @@ public class LinuxBrowserLaunchProxyTests
             """;
         var managed = new Dictionary<string, string>
         {
-            ["network.proxy.type"] = "1",
+            ["network.proxy.type"] = "5",
             ["network.proxy.http"] = "\"127.0.0.1\"",
             ["network.proxy.http_port"] = "8866",
             ["titanium.inspector.proxy.managed"] = "true",
         };
         var merged = LinuxFirefoxProxy.MergePrefsForTests(existing, managed);
-        StringAssert.Contains(merged, "user_pref(\"network.proxy.type\", 1);");
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.type\", 5);");
         StringAssert.Contains(merged, "user_pref(\"network.proxy.http\", \"127.0.0.1\");");
         StringAssert.Contains(merged, "user_pref(\"network.proxy.http_port\", 8866);");
         StringAssert.Contains(merged, "titanium.inspector.proxy.managed");

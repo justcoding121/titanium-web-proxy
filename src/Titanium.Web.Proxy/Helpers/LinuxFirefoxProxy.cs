@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,8 +10,8 @@ using Titanium.Web.Proxy.Network;
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Firefox often ignores GNOME/KDE system proxy. Write manual <c>network.proxy.*</c> prefs into
-///     the default profile and quit/relaunch so enable/disable takes effect immediately.
+///     Write Firefox <c>network.proxy.type</c> 5 so new connections follow the system proxy.
+///     Prefs are not hot-reloaded in a running Firefox; Inspector does not quit or relaunch it.
 /// </summary>
 internal static partial class LinuxFirefoxProxy
 {
@@ -58,14 +57,6 @@ internal static partial class LinuxFirefoxProxy
         Http3EnabledKey,
     ];
 
-    private static readonly string[] FirefoxProcessNames = ["firefox", "firefox-bin"];
-    private static readonly string[] FirefoxLaunchCandidates =
-    [
-        "/usr/bin/firefox",
-        "/usr/bin/firefox-esr",
-        "/snap/bin/firefox",
-    ];
-
     /// <summary>Applies manual proxy prefs; returns true when prefs were written.</summary>
     /// <param name="relaunch">
     ///     Quit and start Firefox once when it is already running. Callers that write prefs twice
@@ -90,7 +81,7 @@ internal static partial class LinuxFirefoxProxy
             var bypass = BuildFirefoxBypassList(winInetProxyOverride);
             var managed = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [NetworkProxyTypeKey] = "1",
+                [NetworkProxyTypeKey] = "5",
                 [NetworkProxyHttpKey] = JsonSerializer.Serialize(hostname),
                 [NetworkProxyHttpPortKey] = port.ToString(),
                 [NetworkProxySslKey] = JsonSerializer.Serialize(hostname),
@@ -102,8 +93,7 @@ internal static partial class LinuxFirefoxProxy
             };
 
             File.WriteAllText(prefsPath, MergePrefs(existing, managed));
-            if (relaunch)
-                TryRelaunchFirefox(enableProxy: true);
+            _ = relaunch;
             return true;
         }
         catch
@@ -168,8 +158,8 @@ internal static partial class LinuxFirefoxProxy
         }
 
         DeleteBackup();
-        if (relaunch && cleared)
-            TryRelaunchFirefox(enableProxy: false);
+        _ = relaunch;
+        _ = cleared;
     }
 
     private static bool PrefsPointAtLoopback(string prefsText)
@@ -380,110 +370,5 @@ internal static partial class LinuxFirefoxProxy
             return null;
         return Path.Combine(home, ".config", "TitaniumInspector", BackupFileName);
     }
-
-    private static void TryRelaunchFirefox(bool enableProxy)
-    {
-        try
-        {
-            var wasRunning = FirefoxCertificateTrust.IsFirefoxProcessRunning();
-            if (!wasRunning)
-                return;
-
-            FirefoxCertificateTrust.TryRequestFirefoxQuit(TimeSpan.FromSeconds(8));
-
-            // Force remaining firefox processes if still up (proxy switch must not leave stale prefs in memory).
-            if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
-                ForceKillFirefoxProcesses();
-
-            var launch = ResolveFirefoxLaunch();
-            if (string.IsNullOrEmpty(launch))
-                return;
-
-            _ = enableProxy; // reserved for future proxy-specific launch flags
-            StartDetachedFirefox(launch);
-        }
-        catch
-        {
-            // best-effort
-        }
-    }
-
-    private static void ForceKillFirefoxProcesses()
-    {
-        foreach (var name in FirefoxProcessNames)
-        {
-            try
-            {
-                foreach (var p in Process.GetProcessesByName(name))
-                {
-                    try { p.Kill(entireProcessTree: true); } catch { /* ignore */ }
-                    finally { p.Dispose(); }
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-        }
-    }
-
-    private static void StartDetachedFirefox(string launch)
-    {
-        var display = LinuxGraphicalSession.TryGetDisplay()
-                      ?? Environment.GetEnvironmentVariable("DISPLAY")
-                      ?? string.Empty;
-        var dbus = LinuxGraphicalSession.TryGetDbusSessionAddress()
-                   ?? Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS")
-                   ?? string.Empty;
-        if (!LinuxGraphicalSession.IsUsableDbusAddress(dbus))
-            dbus = string.Empty;
-        var xauth = Environment.GetEnvironmentVariable("XAUTHORITY") ?? string.Empty;
-
-        var scriptPath = Path.Combine(Path.GetTempPath(),
-            $"titanium-firefox-relaunch-{Environment.ProcessId}-{Guid.NewGuid():N}.sh");
-        var script = $"""
-            #!/bin/bash
-            set +e
-            [ -n {ShellQuote(display)} ] && export DISPLAY={ShellQuote(display)}
-            [ -n {ShellQuote(dbus)} ] && export DBUS_SESSION_BUS_ADDRESS={ShellQuote(dbus)}
-            [ -n {ShellQuote(xauth)} ] && export XAUTHORITY={ShellQuote(xauth)}
-            exec 9>/tmp/titanium-firefox-relaunch.lock
-            flock -w 20 9 || exit 0
-            {ShellQuote(launch)} >/dev/null 2>&1 &
-            rm -f -- {ShellQuote(scriptPath)}
-            """;
-        File.WriteAllText(scriptPath, script.Replace("\r\n", "\n"));
-        TryMakeExecutable(scriptPath);
-
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = "/usr/bin/setsid",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            ArgumentList = { "-f", "/bin/bash", scriptPath },
-        })?.Dispose();
-    }
-
-    private static void TryMakeExecutable(string scriptPath)
-    {
-        if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
-            return;
-        try
-        {
-            File.SetUnixFileMode(scriptPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-        catch
-        {
-            // best-effort
-        }
-    }
-
-    private static string? ResolveFirefoxLaunch()
-    {
-        return FirefoxLaunchCandidates.FirstOrDefault(File.Exists);
-    }
-
-    private static string ShellQuote(string value) =>
-        "'" + (value ?? string.Empty).Replace("'", "'\\''", StringComparison.Ordinal) + "'";
 }
+

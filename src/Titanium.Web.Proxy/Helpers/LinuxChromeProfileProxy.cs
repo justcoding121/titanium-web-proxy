@@ -283,7 +283,7 @@ internal static class LinuxChromeProfileProxy
             AtomicWriteJson(prefsPath, root);
 
             var verify = File.ReadAllText(prefsPath);
-            return verify.Contains(FixedServersMode, StringComparison.Ordinal) &&
+            return verify.Contains("\"system\"", StringComparison.Ordinal) &&
                    verify.Contains($"{hostname}:{port}", StringComparison.Ordinal);
         }
         catch
@@ -427,7 +427,7 @@ internal static class LinuxChromeProfileProxy
     {
         var proxy = new JsonObject
         {
-            ["mode"] = FixedServersMode,
+            ["mode"] = "system",
             ["server"] = $"http://{hostname}:{port}", // NOSONAR S5332 -- Chromium proxy.mode fixed_servers requires an http proxy URL.
         };
         if (_activeLoopback)
@@ -639,7 +639,7 @@ internal static class LinuxChromeProfileProxy
             if (!File.Exists(fullPath))
                 return;
             var text = File.ReadAllText(fullPath);
-            if (text.Contains(FixedServersMode, StringComparison.Ordinal) &&
+            if (text.Contains("\"system\"", StringComparison.Ordinal) &&
                 text.Contains($"{host}:{port}", StringComparison.Ordinal))
                 return;
 

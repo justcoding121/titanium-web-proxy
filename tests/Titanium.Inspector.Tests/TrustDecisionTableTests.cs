@@ -165,6 +165,27 @@ public partial class TrustDecisionTableTests
 
     [TestMethod]
     [TestCategory("Inspector-Trust-Decision")]
+    public async Task Decrypt_OsTrustCancelled_StaysOffWithoutRecovery()
+    {
+        await using var harness = await TrustHarness.CreateAsync();
+        if (harness.Interception.IsRootTrusted)
+            harness.Interception.UntrustRootCertificate(false);
+        Assert.IsFalse(harness.Interception.IsRootTrusted);
+
+        harness.Dialogs.InstallRootCaResult = true;
+        harness.Interception.CancelNextUserTrustInstall = true;
+        harness.Vm.DecryptHttps = true;
+        await WaitUntil(() => harness.Dialogs.InstallRootCaCalls >= 1, 8000);
+        await WaitUntil(() => harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase), 8000);
+
+        Assert.IsFalse(harness.Vm.DecryptHttps);
+        Assert.AreEqual(0, harness.Dialogs.TrustRecoveryCalls);
+        Assert.AreEqual(0, harness.Dialogs.DecryptTrustFailedCalls);
+        StringAssert.Contains(harness.Vm.StatusText, "cancelled");
+    }
+
+    [TestMethod]
+    [TestCategory("Inspector-Trust-Decision")]
     public async Task Decrypt_WhileTrustBusy_RejectedWithSnap()
     {
         await using var harness = await TrustHarness.CreateAsync();

@@ -92,13 +92,13 @@ internal static class LinuxBrowserLaunchProxy
         var xfceOk = WriteXfceWebBrowserHelper(hostname, port, loopback);
         var profileCount = LinuxChromeProfileProxy.Apply(hostname, port, loopback);
         var profileOk = profileCount > 0;
-        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride, relaunch);
+        // Live switch uses OS proxy (gsettings / KDE) plus Chromium mode=system and Firefox type=5.
+        // Do not quit or relaunch browsers. relaunch is ignored.
+        _ = relaunch;
+        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride, relaunch: false);
         if (desktopOk)
             TryUpdateDesktopDatabase();
-        var ok = policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
-        if (relaunch)
-            LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true, proxyLoopback: loopback);
-        return ok;
+        return policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
     }
 
     internal static void Clear() => Clear(relaunchBrowsers: true, startFailOpen: true);
@@ -142,12 +142,7 @@ internal static class LinuxBrowserLaunchProxy
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
-
-        if (relaunchBrowsers)
-        {
-            // Relaunch without proxy flags so already-open Chromium browsers drop the dead endpoint immediately.
-            LinuxChromiumRelaunch.TryRelaunchForProxyChange(null, 0, enableProxy: false);
-        }
+        _ = relaunchBrowsers;
     }
 
     private static void TryUpdateDesktopDatabase()
@@ -380,7 +375,7 @@ internal static class LinuxBrowserLaunchProxy
         var server = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
         var payload = new JsonObject
         {
-            ["ProxyMode"] = "fixed_servers",
+            ["ProxyMode"] = "system",
             // Deprecated int enum (2 = Use a fixed proxy server). Harmless on modern Chrome.
             ["ProxyServerMode"] = LegacyProxyServerModeFixedServers,
             ["ProxyServer"] = server,
@@ -418,7 +413,8 @@ internal static class LinuxBrowserLaunchProxy
             var modeOk = false;
             if (root.TryGetProperty("ProxyMode", out var mode) &&
                 mode.ValueKind == JsonValueKind.String &&
-                mode.GetString()?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
+                (mode.GetString()?.Equals("system", StringComparison.OrdinalIgnoreCase) == true ||
+                 mode.GetString()?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true))
             {
                 modeOk = true;
             }
