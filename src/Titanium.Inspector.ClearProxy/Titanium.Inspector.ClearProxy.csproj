@@ -12,6 +12,10 @@
     <Description>Clears leftover Titanium Inspector loopback proxy hooks when the app is not running.</Description>
     <AssemblyName>titanium-inspector-clear</AssemblyName>
     <IsPackable>false</IsPackable>
+    <!-- Login/timer helper: one binary under /usr/lib, not a full runtime folder. -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Titanium.Web.Proxy\Titanium.Web.Proxy.csproj" />

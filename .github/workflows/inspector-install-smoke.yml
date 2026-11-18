@@ -222,9 +222,15 @@ jobs:
           clear_out="${RUNNER_TEMP}/titanium-inspector-clear-linux-x64"
           mkdir -p "$clear_out"
           dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj \
-            -c Release -r linux-x64 --self-contained true -o "$clear_out" -p:Version="$ver"
+            -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true \
+            -o "$clear_out" -p:Version="$ver"
           cp -f "$clear_out/titanium-inspector-clear" "$out/titanium-inspector-clear"
           chmod +x "$out/titanium-inspector-clear"
+          clear_bytes=$(wc -c < "$out/titanium-inspector-clear")
+          if [[ "$clear_bytes" -lt 1000000 ]]; then
+            echo "error: titanium-inspector-clear looks truncated ($clear_bytes bytes)" >&2
+            exit 1
+          fi
           cp -f src/Titanium.Inspector/Assets/app.ico tools/packaging/linux/TitaniumInspector.desktop.in tools/packaging/desktop-icons.sh "$out/"
           cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titanium-inspector-*.png "$out/"
           chmod +x tools/packaging/linux/build-deb-rpm.sh

@@ -602,10 +602,13 @@ jobs:
             $clearOut = Join-Path $env:RUNNER_TEMP "titanium-inspector-clear-$rid"
             New-Item -ItemType Directory -Force -Path $clearOut | Out-Null
             dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj `
-              -c Release -r $rid --self-contained true -o $clearOut -p:Version=$ver
+              -c Release -r $rid --self-contained true -p:PublishSingleFile=true `
+              -o $clearOut -p:Version=$ver
             $clearBin = Join-Path $clearOut "titanium-inspector-clear"
             if (-not (Test-Path $clearBin)) { $clearBin = Join-Path $clearOut "titanium-inspector-clear.exe" }
             if (-not (Test-Path $clearBin)) { throw "titanium-inspector-clear missing after publish ($rid)" }
+            $clearLen = (Get-Item $clearBin).Length
+            if ($clearLen -lt 1MB) { throw "titanium-inspector-clear looks truncated ($clearLen bytes); expected single-file publish" }
             Copy-Item -Force $clearBin (Join-Path $out "titanium-inspector-clear")
           }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
