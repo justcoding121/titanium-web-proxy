@@ -526,10 +526,27 @@ internal static partial class UnixCertificateTrust
         IProcessRunner runner, string cerPath, X509Certificate2? certificate, out string error)
     {
         error = "";
+        // One login keychain only. Trying both login.keychain-db and login.keychain in one
+        // decrypt can show three Keychain password dialogs (stale deletes + two adds).
+        var keychain = ResolveLoginKeychainPath();
+        if (string.IsNullOrWhiteSpace(keychain))
+        {
+            error = "Login keychain not found";
+            return false;
+        }
+
+        // Unlock once so stale deletes and the single add-trusted-cert share one auth dialog.
+        // An already-unlocked keychain returns success without prompting.
+        runner.Run(SecurityBinary, $"unlock-keychain \"{keychain}\"");
+
         // Drop same-CN Keychain copies that are not this generation so Chrome/Safari do not
         // keep an untrusted/stale Titanium root while we add the current one.
         if (certificate is not null)
+        {
             TryRemoveStaleMacSameCommonNameRoots(runner, certificate);
+            if (VerifyMacSslTrust(runner, certificate))
+                return true;
+        }
 
         // User trust domain, with an SSL policy. -p ssl is what Chrome and Safari honor.
         // Do not pass -d and do not wrap this in osascript. Admin-domain add-trusted-cert
@@ -538,22 +555,31 @@ internal static partial class UnixCertificateTrust
         // denied since no user interaction was possible." The fallback then prompts again.
         // This command shows one Certificate Trust Settings dialog and writes a policy
         // dump-trust-settings can read without the admin domain.
-        ProcessRunResult? last = null;
-        foreach (var keychain in new[] { UserLoginKeychainDbPath(), UserLoginKeychainPath() })
-        {
-            if (string.IsNullOrWhiteSpace(keychain))
-                continue;
-
-            last = runner.Run(SecurityBinary,
-                $"add-trusted-cert -r trustRoot -p ssl -k \"{keychain}\" \"{cerPath}\"");
-            if (last is { Succeeded: true })
-                return true;
-        }
+        var last = runner.Run(SecurityBinary,
+            $"add-trusted-cert -r trustRoot -p ssl -k \"{keychain}\" \"{cerPath}\"");
+        if (last is { Succeeded: true })
+            return true;
 
         error = FirstLine(last?.StandardError);
         if (string.IsNullOrWhiteSpace(error))
             error = FirstLine(last?.StandardOutput);
         return false;
+    }
+
+    /// <summary>
+    ///     Prefer <c>login.keychain-db</c> (current macOS). Fall back to legacy
+    ///     <c>login.keychain</c> when the db file is missing.
+    /// </summary>
+    private static string? ResolveLoginKeychainPath()
+    {
+        var db = UserLoginKeychainDbPath();
+        if (!string.IsNullOrWhiteSpace(db) && File.Exists(db))
+            return db;
+        var legacy = UserLoginKeychainPath();
+        if (!string.IsNullOrWhiteSpace(legacy) && File.Exists(legacy))
+            return legacy;
+        // Paths may be absent in unit tests that stub the runner; prefer db then legacy.
+        return !string.IsNullOrWhiteSpace(db) ? db : legacy;
     }
 
     private static string FirstLine(string? text)
