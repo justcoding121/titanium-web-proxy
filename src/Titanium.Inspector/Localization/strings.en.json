@@ -210,7 +210,7 @@
   "trust.macNotSaved": "Always Trust display is not enough — toggle Use System Defaults → Always Trust, close Get Info, enter your password, then try Install root CA / Decrypt HTTPS again",
   "trust.macConfirmSaved": "I’ve saved Always Trust",
   "trust.exportCa": "Export CA",
-  "trust.install.mac": "Decrypt HTTPS requires trusting the Titanium Inspector root CA (one macOS admin password to install into the System keychain). Install now?",
+  "trust.install.mac": "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your login keychain (one Certificate Trust Settings dialog). Install now?",
   "trust.install.linux": "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your user certificate store (NSS). Install now?",
   "trust.install.windows": "Decrypt HTTPS requires trusting the Titanium Inspector root CA in your current-user Trusted Root store. Install now?\n\nWindows may show a Trusted Root Yes/No security dialog (not UAC) — choose Yes to trust the CA.",
   "trust.install.other": "Decrypt HTTPS requires trusting the Titanium Inspector root CA on this computer. Install now?",
