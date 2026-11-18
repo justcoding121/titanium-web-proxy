@@ -436,17 +436,84 @@ jobs:
           run_driver fresh --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           detach
           trap - EXIT
-          # Killing the Inspector skips its proxy restore, so NuGet and the CLI would
-          # still be pointed at a dead listener.
-          while IFS= read -r service; do
-            service="${service#\*}"
-            service="${service#"${service%%[![:space:]]*}"}"
-            if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
-              continue
+          # File/Quit must clear networksetup; kill -9 leaves it for the operator.
+          mac_proxy_on() {
+            local service web
+            while IFS= read -r service; do
+              service="${service#\*}"
+              service="${service#"${service%%[![:space:]]*}"}"
+              if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
+                continue
+              fi
+              web="$(networksetup -getwebproxy "${service}" 2>/dev/null || true)"
+              if printf '%s\n' "${web}" | grep -qi 'Enabled: Yes'; then
+                return 0
+              fi
+            done < <(networksetup -listallnetworkservices)
+            return 1
+          }
+          mac_proxy_off_all() {
+            local service
+            while IFS= read -r service; do
+              service="${service#\*}"
+              service="${service#"${service%%[![:space:]]*}"}"
+              if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
+                continue
+              fi
+              networksetup -setwebproxystate "${service}" off || true
+              networksetup -setsecurewebproxystate "${service}" off || true
+            done < <(networksetup -listallnetworkservices)
+          }
+          open "/Applications/Titanium Inspector.app"
+          for i in $(seq 1 40); do
+            if lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -q TitaniumInspector; then
+              break
             fi
-            networksetup -setwebproxystate "${service}" off || true
-            networksetup -setsecurewebproxystate "${service}" off || true
-          done < <(networksetup -listallnetworkservices)
+            sleep 0.5
+          done
+          for i in $(seq 1 40); do
+            mac_proxy_on && break
+            sleep 0.5
+          done
+          if ! mac_proxy_on; then
+            echo "system proxy stayed off after launch" >&2
+            exit 1
+          fi
+          osascript -e 'tell application "Titanium Inspector" to quit' >/dev/null 2>&1 || true
+          sleep 3
+          if pgrep -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" >/dev/null; then
+            pkill -TERM -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" || true
+            sleep 2
+          fi
+          if mac_proxy_on; then
+            echo "system proxy still on after graceful quit" >&2
+            exit 1
+          fi
+          echo "pass mac graceful quit cleared system proxy" | tee -a "$log/driver.log"
+          open "/Applications/Titanium Inspector.app"
+          for i in $(seq 1 40); do
+            if lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -q TitaniumInspector; then
+              break
+            fi
+            sleep 0.5
+          done
+          for i in $(seq 1 40); do
+            mac_proxy_on && break
+            sleep 0.5
+          done
+          if ! mac_proxy_on; then
+            echo "system proxy stayed off before kill -9" >&2
+            exit 1
+          fi
+          pkill -9 -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" || true
+          sleep 2
+          if ! mac_proxy_on; then
+            echo "system proxy was cleared after kill -9; expected operator cleanup" >&2
+            exit 1
+          fi
+          echo "pass mac kill -9 left system proxy on" | tee -a "$log/driver.log"
+          # Dead listener would break NuGet and the CLI publish path below.
+          mac_proxy_off_all
           {
             echo "cli-layout begin"
             rm -rf "${RUNNER_TEMP}/cli-install"
