@@ -230,7 +230,7 @@ internal static class LinuxChromiumRelaunch
                 sleep 0.5
                 # Quit flushes the in-memory fixed_servers entry back over the file we
                 # cleared. Strip again after the process is gone, then start.
-                python3 -c "import base64,sys; exec(base64.b64decode(sys.argv[1]))" {ShellQuote(LoopbackStripScriptB64())} || true
+                python3 -c "import base64,sys; exec(base64.b64decode(sys.argv[1]))" {{ShellQuote(LoopbackStripScriptB64())}} || true
                 {{startCmds}}
                 # Leave the fail-open helper running. File → Exit stops Inspector, but
                 # programs that already inherited http://127.0.0.1:8866 still dial that
