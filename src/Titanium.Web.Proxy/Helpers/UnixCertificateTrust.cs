@@ -48,13 +48,17 @@ internal static partial class UnixCertificateTrust
         "/usr/local/bin/brew",
     ];
 
+    // User domain only. `dump-trust-settings -d` and `trust-settings-export -d`
+    // read the admin trust domain and pop an administrator password dialog on
+    // every call. Decrypt checks run this path often. Admin-domain records are
+    // read from /Library/Security/Trust Settings/Admin.plist instead.
     private static readonly string[] MacDumpTrustSettingsArgs =
     [
-        "dump-trust-settings -d",
         "dump-trust-settings",
     ];
 
-    private static readonly bool[] MacTrustExportAdminDomain = [true, false];
+    private static readonly bool[] MacTrustExportAdminDomain = [false];
+
     /// <summary>
     ///     Trusts <paramref name="certificate"/> for SSL in the current-user store backends
     ///     (login keychain on macOS, NSS db on Linux).
@@ -127,9 +131,10 @@ internal static partial class UnixCertificateTrust
         TrustMachineSslDetailed(certificate, friendlyName, runner, elevation).Succeeded;
 
     /// <summary>
-    ///     Machine-wide SSL trust with outcome kind. On macOS this is one elevated shell that
-    ///     prunes stale same-CN roots then <c>add-trusted-cert -d</c> into System.keychain;
-    ///     success requires explicit SSL trust policies (not a Keychain stub).
+    ///     Machine-wide SSL trust with outcome kind. On macOS this writes an SSL policy into
+    ///     the login keychain (one trust-settings dialog). Admin-domain
+    ///     <c>add-trusted-cert -d</c> from an elevated shell cannot show that dialog and
+    ///     fails with “no user interaction was possible.”
     /// </summary>
     public static CertificateOsTrustResult TrustMachineSslDetailed(
         X509Certificate2 certificate,
@@ -495,12 +500,14 @@ internal static partial class UnixCertificateTrust
     private static CertificateOsTrustResult TrustMacUserDetailed(
         IProcessRunner runner, string cerPath, X509Certificate2 certificate)
     {
-        var added = TrustMacUser(runner, cerPath, certificate);
+        var added = TrustMacUser(runner, cerPath, certificate, out var error);
         if (!added)
         {
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.MacKeychainFailed,
-                "Failed to add the root CA to the login keychain");
+                string.IsNullOrWhiteSpace(error)
+                    ? "Failed to add the root CA to the login keychain"
+                    : "Failed to add the root CA to the login keychain: " + error);
         }
 
         if (VerifyMacSslTrust(runner, certificate))
@@ -512,26 +519,49 @@ internal static partial class UnixCertificateTrust
     }
 
     private static bool TrustMacUser(
-        IProcessRunner runner, string cerPath, X509Certificate2? certificate = null)
+        IProcessRunner runner, string cerPath, X509Certificate2? certificate = null) =>
+        TrustMacUser(runner, cerPath, certificate, out _);
+
+    private static bool TrustMacUser(
+        IProcessRunner runner, string cerPath, X509Certificate2? certificate, out string error)
     {
+        error = "";
         // Drop same-CN Keychain copies that are not this generation so Chrome/Safari do not
         // keep an untrusted/stale Titanium root while we add the current one.
         if (certificate is not null)
             TryRemoveStaleMacSameCommonNameRoots(runner, certificate);
 
-        // User trust domain (no -d). Using -d writes admin-domain stubs and often leaves
-        // System.keychain copies that Chrome keeps trusting after "Remove CA".
-        // -r trustRoot: trust as root CA in the login keychain.
-        var keychain = UserLoginKeychainDbPath();
-        var result = runner.Run(SecurityBinary,
-            $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
-        if (result is { Succeeded: true }) return true;
+        // User trust domain, with an SSL policy. -p ssl is what Chrome and Safari honor.
+        // Do not pass -d and do not wrap this in osascript. Admin-domain add-trusted-cert
+        // from `do shell script ... with administrator privileges` runs as root with no
+        // GUI, and macOS returns "SecTrustSettingsSetTrustSettings: The authorization was
+        // denied since no user interaction was possible." The fallback then prompts again.
+        // This command shows one Certificate Trust Settings dialog and writes a policy
+        // dump-trust-settings can read without the admin domain.
+        ProcessRunResult? last = null;
+        foreach (var keychain in new[] { UserLoginKeychainDbPath(), UserLoginKeychainPath() })
+        {
+            if (string.IsNullOrWhiteSpace(keychain))
+                continue;
 
-        // Older macOS keychain name
-        keychain = UserLoginKeychainPath();
-        result = runner.Run(SecurityBinary,
-            $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
-        return result is { Succeeded: true };
+            last = runner.Run(SecurityBinary,
+                $"add-trusted-cert -r trustRoot -p ssl -k \"{keychain}\" \"{cerPath}\"");
+            if (last is { Succeeded: true })
+                return true;
+        }
+
+        error = FirstLine(last?.StandardError);
+        if (string.IsNullOrWhiteSpace(error))
+            error = FirstLine(last?.StandardOutput);
+        return false;
+    }
+
+    private static string FirstLine(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "";
+        var line = text.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        return line.Length == 0 ? "" : line[0].Trim();
     }
 
     /// <summary>
@@ -1064,8 +1094,9 @@ internal static partial class UnixCertificateTrust
     }
 
     /// <summary>
-    ///     One admin password: delete stale same-CN hashes (login + System), then add current
-    ///     root to System.keychain with trustRoot. Verifies SecTrustSettings policies before Ok.
+    ///     One trust-settings dialog: SSL policy in the login keychain. System.keychain
+    ///     <c>add-trusted-cert -d</c> is not used — from an elevated shell it cannot show
+    ///     the trust dialog and a second prompt does not succeed either.
     /// </summary>
     private static CertificateOsTrustResult TrustMacSystemDetailed(
         IProcessRunner runner,
@@ -1073,62 +1104,8 @@ internal static partial class UnixCertificateTrust
         string cerPath,
         X509Certificate2 certificate)
     {
-        var keepSha1 = certificate.GetCertHashString() ?? "";
-        var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var cn in MacRootCommonNames(
-                     certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false) ?? "",
-                     certificate))
-        {
-            CollectMacCertificateHashes(runner, cn, hashes);
-        }
-
-        var loginDb = UserLoginKeychainDbPath();
-        var loginLegacy = UserLoginKeychainPath();
-        var parts = new List<string>();
-        foreach (var hash in hashes)
-        {
-            if (string.Equals(hash, keepSha1, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            parts.Add($"/usr/bin/security delete-certificate -Z {hash} -t || true");
-            if (File.Exists(loginDb))
-                parts.Add($"/usr/bin/security delete-certificate -Z {hash} -t \"{loginDb}\" || true");
-            if (File.Exists(loginLegacy))
-                parts.Add($"/usr/bin/security delete-certificate -Z {hash} -t \"{loginLegacy}\" || true");
-            parts.Add(
-                $"/usr/bin/security delete-certificate -Z {hash} -t /Library/Keychains/System.keychain || true");
-        }
-
-        // -p ssl persists an SSL policy row (required for Chrome/Safari MITM on recent macOS).
-        parts.Add(
-            $"/usr/bin/security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cerPath}\"");
-
-        var script = string.Join("; ", parts);
-        var elevated = elevation.RunElevated("/bin/sh", $"-c \"{EscapeShell(script)}\"");
-        if (elevated is null)
-        {
-            return CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.Cancelled,
-                "Administrator authorization was cancelled");
-        }
-
-        if (!elevated.Succeeded)
-        {
-            // Fall back to legacy single-command System add (older tests / partial scripts).
-            if (!TrustMacSystem(elevation, cerPath))
-            {
-                return CertificateOsTrustResult.Fail(
-                    CertificateOsTrustKind.MacKeychainFailed,
-                    "Failed to add the root CA to the System keychain");
-            }
-        }
-
-        if (VerifyMacSslTrust(runner, certificate))
-            return CertificateOsTrustResult.Ok("Root CA trusted in System keychain");
-
-        return CertificateOsTrustResult.Fail(
-            CertificateOsTrustKind.MacNeedsManualTrustConfirm,
-            "Root CA was added to the System keychain but SSL policies may need Always Trust confirmation in Keychain Access.");
+        _ = elevation;
+        return TrustMacUserDetailed(runner, cerPath, certificate);
     }
 
     private static CertificateOsTrustResult TrustLinuxNssDetailed(

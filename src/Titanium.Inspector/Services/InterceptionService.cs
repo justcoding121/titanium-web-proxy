@@ -491,7 +491,9 @@ public sealed class InterceptionService : IDisposable
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
-            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3), CancellationToken.None);
+            // Restore plus the detached fail-open spawn must finish before the
+            // process is torn down. Three seconds was cutting that off on Linux.
+            _shutdownCompleted.Wait(TimeSpan.FromSeconds(10), CancellationToken.None);
             return;
         }
 

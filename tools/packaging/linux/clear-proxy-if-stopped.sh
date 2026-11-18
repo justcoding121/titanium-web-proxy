@@ -46,9 +46,145 @@ session_still_uses_proxy() {
   return 1
 }
 
+prefs_still_loopback() {
+  python3 - "$1" <<'PY'
+import json, os, sys
+home = sys.argv[1]
+roots = (
+    ".config/google-chrome",
+    ".config/chromium",
+    ".config/microsoft-edge",
+    ".config/BraveSoftware/Brave-Browser",
+    ".config/opera",
+    "snap/chromium/common/chromium",
+    "snap/microsoft-edge/common/microsoft-edge",
+    ".var/app/com.google.Chrome/config/google-chrome",
+    ".var/app/org.chromium.Chromium/config/chromium",
+    ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser",
+    ".var/app/com.microsoft.Edge/config/microsoft-edge",
+)
+for rel in roots:
+    root = os.path.join(home, rel)
+    if not os.path.isdir(root):
+        continue
+    names = ["Default"]
+    try:
+        names += [n for n in os.listdir(root) if n.startswith("Profile ")]
+    except OSError:
+        pass
+    for name in names:
+        path = os.path.join(root, name, "Preferences")
+        if not os.path.isfile(path):
+            continue
+        try:
+            proxy = json.load(open(path, encoding="utf-8")).get("proxy") or {}
+        except (OSError, ValueError):
+            continue
+        server = str(proxy.get("server") or "")
+        if proxy.get("mode") == "fixed_servers" and any(
+            host in server for host in ("127.0.0.1", "localhost", "[::1]")
+        ):
+            print(server)
+            sys.exit(0)
+sys.exit(1)
+PY
+}
+
+ensure_fail_open() {
+  local home="$1"
+  local server port
+  server="$(prefs_still_loopback "${home}" || true)"
+  [[ -n "${server}" ]] || return 0
+  port="${server##*:}"
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 0
+  if ss -ltn 2>/dev/null | grep -q ":${port} "; then
+    return 0
+  fi
+  local dir="${home}/.config/TitaniumInspector"
+  mkdir -p "${dir}"
+  local script="${dir}/fail-open-proxy.py"
+  local pidfile="${dir}/fail-open-proxy.pid"
+  if [[ ! -f "${script}" ]]; then
+    cat > "${script}" <<'PY'
+import os, socket, select, sys, time, threading
+host, port, pid_path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+if os.fork() > 0:
+    sys.exit(0)
+os.setsid()
+if os.fork() > 0:
+    sys.exit(0)
+open(pid_path, "w").write(str(os.getpid()))
+srv = socket.socket()
+srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+for _ in range(40):
+    try:
+        srv.bind((host, port))
+        break
+    except OSError:
+        time.sleep(0.2)
+else:
+    sys.exit(1)
+srv.listen(128)
+
+def pipe(a, b):
+    try:
+        while True:
+            ready, _, _ = select.select([a, b], [], [], 60)
+            if not ready:
+                break
+            for sock in ready:
+                data = sock.recv(65536)
+                if not data:
+                    return
+                (b if sock is a else a).sendall(data)
+    except Exception:
+        pass
+
+def handle(client):
+    try:
+        client.settimeout(20)
+        buf = b""
+        while b"\r\n\r\n" not in buf and len(buf) < 65536:
+            chunk = client.recv(4096)
+            if not chunk:
+                return
+            buf += chunk
+        line = buf.split(b"\r\n", 1)[0].decode("latin1", "replace")
+        parts = line.split(" ")
+        if len(parts) < 2 or parts[0].upper() != "CONNECT":
+            client.close()
+            return
+        target = parts[1]
+        if ":" in target:
+            remote, remote_port = target.rsplit(":", 1)
+            remote_port = int(remote_port)
+        else:
+            remote, remote_port = target, 443
+        upstream = socket.create_connection((remote, remote_port), 20)
+        client.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+        pipe(client, upstream)
+    except Exception:
+        pass
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+while True:
+    try:
+        client, _ = srv.accept()
+    except Exception:
+        break
+    threading.Thread(target=handle, args=(client,), daemon=True).start()
+PY
+  fi
+  setsid -f python3 "${script}" 127.0.0.1 "${port}" "${pidfile}" >/dev/null 2>&1 || true
+}
+
 stop_fail_open() {
   local home="$1"
-  if session_still_uses_proxy; then
+  if session_still_uses_proxy || prefs_still_loopback "${home}" >/dev/null; then
     return 0
   fi
   local pidfile="${home}/.config/TitaniumInspector/fail-open-proxy.pid"
@@ -307,8 +443,13 @@ fi
 
 if [[ "${needs}" -eq 0 ]]; then
   # Hooks are already gone. A leftover fail-open process would still occupy the
-  # Inspector port and make the next launch look like a duplicate.
-  stop_fail_open "${home}"
+  # Inspector port and make the next launch look like a duplicate. A profile
+  # that is still pinned at loopback needs that listener instead.
+  if prefs_still_loopback "${home}" >/dev/null; then
+    ensure_fail_open "${home}"
+  else
+    stop_fail_open "${home}"
+  fi
   exit 0
 fi
 
@@ -390,8 +531,13 @@ for root in "${home}/.var" "${home}/snap"; do
   done < <(find "${root}" -name titanium-inspector-proxy.json -type f 2>/dev/null)
 done
 
-# Give a browser relaunch a moment, then drop the fail-open helper. Leaving it
-# on the Inspector port makes the next launch look like a duplicate.
+# A running browser flushes fixed_servers back over the file edit above.
+# Stopping the only listener then is what drops the network after File → Exit.
+# Keep or start the helper until those profiles follow the desktop proxy.
 sleep 1
-stop_fail_open "${home}"
+if prefs_still_loopback "${home}" >/dev/null; then
+  ensure_fail_open "${home}"
+else
+  stop_fail_open "${home}"
+fi
 exit 0

@@ -366,7 +366,7 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>
     /// CryptUI/Keychain on UI; store verify + My prune off UI after Yes (avoids Not Responding).
-    /// macOS: one elevated System.keychain batch (skip .NET store + multi Keychain prompts).
+    /// macOS: login-keychain SSL trust (one Certificate Trust Settings dialog; no admin System.keychain).
     /// </summary>
     private async Task<bool> InstallRootInteractiveAsync()
     {
@@ -375,25 +375,32 @@ public sealed partial class MainWindowViewModel
 
         if (OperatingSystem.IsMacOS())
         {
-            bool adminOk;
-            using (InspectorUxTrace.Scope("InstallRootCertificateAsAdmin.MacSystem"))
-                adminOk = _interception.InstallRootCertificateAsAdmin(machineStore: true);
-            InspectorUxTrace.Event(
-                "InstallRootCertificateAsAdmin.Result",
-                $"ok={adminOk} kind={_interception.LastOsTrustResult?.Kind}");
+            // Prefer the user-domain path directly. TrustMacSystemDetailed already redirects to
+            // TrustMacUserDetailed, but calling AsAdmin(true) kept the old System-keychain UX
+            // wording and recovery elevate loop in play.
+            bool added;
+            using (InspectorUxTrace.Scope("InstallRootStoresOnly.MacLogin"))
+                added = _interception.InstallRootStoresOnly(machineStore: false);
+            InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={added}");
 
-            using (InspectorUxTrace.Scope("FinalizeTrustAfterAdminInstall"))
+            await Task.Yield();
+            using (InspectorUxTrace.Scope("ApplyUnixSslTrustOnUi.MacLogin"))
+                _interception.ApplyUnixSslTrustOnUi(machineStore: false);
+
+            using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation.MacLogin"))
             {
                 return await RunOffUiAsync(
-                    () => _interception.FinalizeTrustAfterAdminInstall(machineStore: true),
+                    () => _interception.FinalizeTrustAfterStoreMutation(
+                        machineStore: false,
+                        rootStoreAdded: added),
                     StatusCancelToken);
             }
         }
 
-        bool added;
+        bool winOrLinuxAdded;
         using (InspectorUxTrace.Scope("InstallRootStoresOnly.CryptUI"))
-            added = _interception.InstallRootStoresOnly(machineStore: false);
-        InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={added}");
+            winOrLinuxAdded = _interception.InstallRootStoresOnly(machineStore: false);
+        InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={winOrLinuxAdded}");
 
         if (!OperatingSystem.IsWindows())
         {
@@ -402,12 +409,12 @@ public sealed partial class MainWindowViewModel
                 _interception.ApplyUnixSslTrustOnUi(machineStore: false);
         }
 
-        using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation", $"added={added}"))
+        using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation", $"added={winOrLinuxAdded}"))
         {
             return await RunOffUiAsync(
                 () => _interception.FinalizeTrustAfterStoreMutation(
                     machineStore: false,
-                    rootStoreAdded: added),
+                    rootStoreAdded: winOrLinuxAdded),
                 StatusCancelToken);
         }
     }

@@ -95,21 +95,27 @@ internal static class LinuxProxyFailOpen
             File.WriteAllText(script, FailOpenScript);
             var pidPath = Path.Combine(dir, PidFileName);
             var python = UnixProcessPath.Resolve("/usr/bin/python3", "/usr/local/bin/python3");
-            if (python is null)
+            var setsid = UnixProcessPath.Resolve("/usr/bin/setsid", "/bin/setsid");
+            if (python is null || setsid is null)
                 return;
 
+            // setsid -f puts the helper in its own session. A child of Inspector is
+            // killed when File → Exit tears the process down, before the bind retry runs.
             var psi = new ProcessStartInfo
             {
-                FileName = python,
-                Arguments = Quote(script) + " " + Quote(hostname) + " " + port + " " + Quote(pidPath),
+                FileName = setsid,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
                 WorkingDirectory = dir,
             };
-            // Detach: do not wait; child double-forks in the script.
-            Process.Start(psi)?.Dispose();
+            psi.ArgumentList.Add("-f");
+            psi.ArgumentList.Add(python);
+            psi.ArgumentList.Add(script);
+            psi.ArgumentList.Add(hostname);
+            psi.ArgumentList.Add(port.ToString());
+            psi.ArgumentList.Add(pidPath);
+            using var launched = Process.Start(psi);
+            launched?.WaitForExit(3000);
         }
         catch
         {
@@ -130,9 +136,6 @@ internal static class LinuxProxyFailOpen
         var dir = ConfigDir();
         return dir is null ? null : Path.Combine(dir, PidFileName);
     }
-
-    private static string Quote(string value) =>
-        "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     // Minimal HTTP/HTTPS forwarder: CONNECT tunnels + absolute-form HTTP requests.
     private const string FailOpenScript =

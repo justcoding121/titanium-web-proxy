@@ -224,6 +224,8 @@ jobs:
           chmod +x tools/packaging/linux/build-deb-rpm.sh
           ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-x64
           cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
+          # Local and CI packages must ship the launcher; missing .desktop was a silent skip.
+          dpkg-deb -c "$cand" | grep -q 'usr/share/applications/titanium-inspector.desktop'
           prev_ver=$(dpkg-deb -f artifacts/prev/TitaniumInspector-linux-x64.deb Version)
           cand_ver=$(dpkg-deb -f "$cand" Version)
           echo "previous ${prev_ver} candidate ${cand_ver}"
@@ -233,6 +235,7 @@ jobs:
           chmod +x "$driver"
           sudo dpkg -i artifacts/prev/TitaniumInspector-linux-x64.deb || sudo apt-get install -y -f
           test -x /opt/titanium-inspector/TitaniumInspector
+          test -f /usr/share/applications/titanium-inspector.desktop
           log="${RUNNER_TEMP}/install-smoke"
           mkdir -p "$log"
           run_driver() {

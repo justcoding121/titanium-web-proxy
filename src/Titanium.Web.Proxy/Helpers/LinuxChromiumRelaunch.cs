@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -114,6 +115,62 @@ internal static class LinuxChromiumRelaunch
         }
     }
 
+    /// <summary>
+    ///     After a browser quits it writes the proxy it had in memory. This puts
+    ///     loopback <c>fixed_servers</c> profiles back on the desktop proxy.
+    /// </summary>
+    private static string LoopbackStripScriptB64() =>
+        Convert.ToBase64String(Encoding.UTF8.GetBytes(
+            """
+            import json, os
+            home = os.path.expanduser("~")
+            roots = (
+                ".config/google-chrome",
+                ".config/google-chrome-beta",
+                ".config/google-chrome-unstable",
+                ".config/chromium",
+                ".config/microsoft-edge",
+                ".config/BraveSoftware/Brave-Browser",
+                ".config/opera",
+                "snap/chromium/common/chromium",
+                "snap/microsoft-edge/common/microsoft-edge",
+                ".var/app/com.google.Chrome/config/google-chrome",
+                ".var/app/org.chromium.Chromium/config/chromium",
+                ".var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser",
+                ".var/app/com.microsoft.Edge/config/microsoft-edge",
+            )
+            for rel in roots:
+                root = os.path.join(home, rel)
+                if not os.path.isdir(root):
+                    continue
+                names = ["Default"]
+                try:
+                    names += [n for n in os.listdir(root) if n.startswith("Profile ")]
+                except OSError:
+                    pass
+                for name in names:
+                    path = os.path.join(root, name, "Preferences")
+                    if not os.path.isfile(path):
+                        continue
+                    try:
+                        doc = json.load(open(path, encoding="utf-8"))
+                    except (OSError, ValueError):
+                        continue
+                    proxy = doc.get("proxy")
+                    if not isinstance(proxy, dict) or proxy.get("mode") != "fixed_servers":
+                        continue
+                    server = str(proxy.get("server") or "")
+                    if not any(h in server for h in ("127.0.0.1", "localhost", "[::1]")):
+                        continue
+                    doc["proxy"] = {"mode": "system"}
+                    tmp = path + ".tmp"
+                    try:
+                        json.dump(doc, open(tmp, "w", encoding="utf-8"), separators=(",", ":"))
+                        os.replace(tmp, path)
+                    except OSError:
+                        pass
+            """));
+
     private static string BuildRelaunchScript( // NOSONAR S107 -- Script fields map 1:1 onto the generated shell.
         string scriptPath,
         List<(int Pid, BrowserFamily Family)> mains,
@@ -171,6 +228,9 @@ internal static class LinuxChromiumRelaunch
                 sleep 1
                 for p in $(find_mains); do kill -KILL "$p" 2>/dev/null || true; done
                 sleep 0.5
+                # Quit flushes the in-memory fixed_servers entry back over the file we
+                # cleared. Strip again after the process is gone, then start.
+                python3 -c "import base64,sys; exec(base64.b64decode(sys.argv[1]))" {ShellQuote(LoopbackStripScriptB64())} || true
                 {{startCmds}}
                 # Leave the fail-open helper running. File → Exit stops Inspector, but
                 # programs that already inherited http://127.0.0.1:8866 still dial that

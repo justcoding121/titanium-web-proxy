@@ -186,7 +186,7 @@ public class UnixCertificateTrustTests
                   Result Type           : kSecTrustSettingsResultTrustRoot
             """;
         var runner = new FakeProcessRunner();
-        runner.When("security", "dump-trust-settings -d", dump);
+        runner.When("security", "dump-trust-settings", dump);
         Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
     }
 
