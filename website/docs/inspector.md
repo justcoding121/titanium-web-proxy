@@ -71,6 +71,7 @@ Zip fallback — extract, then run `./TitaniumInspector`, or:
 ```shell
 chmod +x install-app.sh uninstall-app.sh TitaniumInspector
 ./install-app.sh      # ~/Applications/Titanium Inspector.app
+./uninstall-app.sh    # also removes /Applications/Titanium Inspector.app
 ```
 
 ## Updates
