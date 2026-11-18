@@ -327,20 +327,29 @@ public class LinuxBrowserProxyCoverageTests
 
             var launcherDir = (string)Invoke("LauncherDirectory", Type.EmptyTypes)!;
             Directory.CreateDirectory(launcherDir);
-            var marked = Path.Combine(launcherDir, "twp-cov-marked.sh");
+            var marked = Path.Combine(launcherDir, "google-chrome.sh");
             var plain = Path.Combine(launcherDir, "twp-cov-plain.sh");
-            File.WriteAllText(marked, "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker + "\n");
+            File.WriteAllText(marked,
+                "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker +
+                "\nexec \"/usr/bin/google-chrome-stable\" --proxy-server=http://127.0.0.1:9 \"$@\"\n");
             File.WriteAllText(plain, "#!/bin/sh\necho keep\n");
-            Invoke("DeleteLauncherScripts", Type.EmptyTypes);
-            Assert.IsFalse(File.Exists(marked));
+            Invoke("NeutralizeLauncherScripts", Type.EmptyTypes);
+            Assert.IsTrue(File.Exists(marked));
+            var neutralized = File.ReadAllText(marked);
+            StringAssert.Contains(neutralized, "exec \"/usr/bin/google-chrome-stable\"");
+            Assert.IsFalse(neutralized.Contains("--proxy-server=", StringComparison.Ordinal));
             Assert.IsTrue(File.Exists(plain));
 
             var locked = Path.Combine(launcherDir, "twp-cov-locked.sh");
-            using (new FileStream(locked, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            File.WriteAllText(locked,
+                "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker +
+                "\nexec \"/usr/bin/google-chrome-stable\" --proxy-server=http://127.0.0.1:9 \"$@\"\n");
+            using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
-                Invoke("DeleteLauncherScripts", Type.EmptyTypes);
+                Invoke("NeutralizeLauncherScripts", Type.EmptyTypes);
             }
 
+            TryDelete(marked);
             TryDelete(plain);
             TryDelete(locked);
 

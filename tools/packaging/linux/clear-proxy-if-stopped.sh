@@ -374,12 +374,31 @@ if [[ -f "${xfce_rc}" ]] && grep -q "${marker}" "${xfce_rc}"; then
   rm -f "${xfce_rc}"
   needs=1
 fi
+# Keep neutralized passthrough scripts: GNOME may still Exec the old path after
+# the .desktop override is removed. Deleting the file makes Chrome fail to launch.
 launch_dir="${home}/.local/share/titanium-inspector/launchers"
 if [[ -d "${launch_dir}" ]]; then
   for launcher in "${launch_dir}"/*.sh; do
     [[ -f "${launcher}" ]] || continue
     if grep -q -E -- '--proxy-server=http://(127\.0\.0\.1|localhost|\[::1\])' "${launcher}"; then
-      rm -f "${launcher}"
+      binary=$(sed -n 's/^exec "\([^"]*\)".*/\1/p; s/^exec \([^ ]*\).*/\1/p' "${launcher}" | head -n1)
+      if [[ -z "${binary}" ]]; then
+        case "$(basename "${launcher}" .sh)" in
+          google-chrome|google-chrome-stable) binary=/usr/bin/google-chrome-stable ;;
+          chromium|chromium-browser) binary=/usr/bin/chromium ;;
+          brave-browser) binary=/usr/bin/brave-browser ;;
+          microsoft-edge|microsoft-edge-stable) binary=/usr/bin/microsoft-edge-stable ;;
+          opera) binary=/usr/bin/opera ;;
+          *) continue ;;
+        esac
+      fi
+      cat > "${launcher}" <<EOF
+#!/bin/sh
+# ${marker}
+# neutralized: dock may still Exec this path after Clear removes the .desktop override
+exec "${binary}" "\$@"
+EOF
+      chmod u+x "${launcher}" 2>/dev/null || true
       needs=1
     fi
   done

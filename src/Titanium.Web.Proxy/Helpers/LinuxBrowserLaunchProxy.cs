@@ -120,10 +120,13 @@ internal static class LinuxBrowserLaunchProxy
 
         TrySyncMachinePolicies(null);
 
+        // Neutralize launcher scripts before removing .desktop overrides. GNOME Shell
+        // caches Exec paths; if the script is gone while the dock still points at it,
+        // Chrome fails with "Program '.../launchers/google-chrome.sh' not found".
+        NeutralizeLauncherScripts();
+
         foreach (var dest in UserDesktopOverridePaths())
             DeleteMarkedDesktopOverride(dest);
-
-        DeleteLauncherScripts();
 
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
@@ -711,7 +714,11 @@ internal static class LinuxBrowserLaunchProxy
         return Path.Combine(home, LocalDirName, ShareDirName, "titanium-inspector", "launchers");
     }
 
-    private static void DeleteLauncherScripts()
+    /// <summary>
+    ///     Rewrites marked launcher scripts to a proxy-free passthrough so a stale GNOME
+    ///     Exec cache still launches the browser after Clear removes the .desktop override.
+    /// </summary>
+    private static void NeutralizeLauncherScripts()
     {
         try
         {
@@ -720,15 +727,83 @@ internal static class LinuxBrowserLaunchProxy
                 return;
             foreach (var file in Directory.EnumerateFiles(dir, "*.sh"))
             {
-                var text = File.ReadAllText(file);
-                if (text.Contains(DesktopMarker, StringComparison.Ordinal))
-                    File.Delete(file);
+                try
+                {
+                    var text = File.ReadAllText(file);
+                    if (!text.Contains(DesktopMarker, StringComparison.Ordinal))
+                        continue;
+                    if (!TryExtractLaunchBinary(text, out var binary) || string.IsNullOrEmpty(binary))
+                        binary = GuessBinaryFromLauncherName(file);
+                    if (string.IsNullOrEmpty(binary))
+                        continue;
+                    File.WriteAllText(file, BuildPassthroughLaunchScript(binary).Replace("\r\n", "\n", StringComparison.Ordinal));
+                    TryMakeExecutable(file);
+                }
+                catch
+                {
+                    // best-effort per file
+                }
             }
         }
         catch
         {
             // best-effort
         }
+    }
+
+    private static string BuildPassthroughLaunchScript(string binary) =>
+        "#!/bin/sh\n" +
+        "# " + DesktopMarker + "\n" +
+        "# neutralized: dock may still Exec this path after Clear removes the .desktop override\n" +
+        "exec " + QuoteShellArg(binary) + " \"$@\"\n";
+
+    private static bool TryExtractLaunchBinary(string scriptText, out string binary)
+    {
+        binary = string.Empty;
+        foreach (var rawLine in scriptText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (!line.StartsWith("exec ", StringComparison.Ordinal))
+                continue;
+            var rest = line["exec ".Length..].TrimStart();
+            if (rest.Length == 0)
+                continue;
+            if (rest[0] == '"')
+            {
+                var end = rest.IndexOf('"', 1);
+                if (end > 1)
+                {
+                    binary = rest[1..end];
+                    return binary.Length > 0;
+                }
+            }
+
+            var space = rest.IndexOfAny([' ', '\t']);
+            binary = space < 0 ? rest : rest[..space];
+            return binary.Length > 0;
+        }
+
+        return false;
+    }
+
+    private static string? GuessBinaryFromLauncherName(string scriptPath)
+    {
+        var name = Path.GetFileNameWithoutExtension(scriptPath);
+        return name switch
+        {
+            "google-chrome" or "google-chrome-stable" => File.Exists("/usr/bin/google-chrome-stable")
+                ? "/usr/bin/google-chrome-stable"
+                : "/usr/bin/google-chrome",
+            "chromium" or "chromium-browser" => File.Exists("/usr/bin/chromium")
+                ? "/usr/bin/chromium"
+                : "/usr/bin/chromium-browser",
+            "brave-browser" => "/usr/bin/brave-browser",
+            "microsoft-edge" or "microsoft-edge-stable" => File.Exists("/usr/bin/microsoft-edge-stable")
+                ? "/usr/bin/microsoft-edge-stable"
+                : "/usr/bin/microsoft-edge",
+            "opera" => File.Exists("/usr/bin/opera") ? "/usr/bin/opera" : "/usr/bin/opera-stable",
+            _ => null,
+        };
     }
 
     private static void TryMakeExecutable(string scriptPath) =>
