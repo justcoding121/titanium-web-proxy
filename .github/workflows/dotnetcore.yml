@@ -64,7 +64,7 @@ jobs:
           while IFS= read -r f || [[ -n "$f" ]]; do
             [[ -z "$f" ]] && continue
             case "$f" in
-              website/*|wiki/*|docs/*|.github/dns/*|.github/workflows/deploy-website.yml) ;;
+              website/*|wiki/*|docs/*|.github/dns/*|.github/workflows/deploy-website.yml|.github/workflows/inspector-install-smoke.yml) ;;
               *.md)
                 case "$f" in
                   */*) code=true ;;

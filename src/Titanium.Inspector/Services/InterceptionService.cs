@@ -546,32 +546,68 @@ public sealed class InterceptionService : IDisposable
 
             _fileLog = null;
             DisposeShaper();
+
+            // AppleScript quit / SIGTERM can skip Window.Closing or leave loopback proxy
+            // on when RestoreOriginalSettings races ProcessExit. Force-clear localhost
+            // system proxy after stop so browsers are not left pointed at a dead listener.
+            if (!OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+
             _shutdownCompleted.Set();
         }
     }
 
     /// <summary>
-    /// Persist-safe close path: queue <see cref="EnsureShutdown"/> on the thread pool so the
-    /// window can disappear immediately.
+    /// Persist-safe close path. On Windows, queue <see cref="EnsureShutdown"/> on the thread pool
+    /// so WinINET restore cannot deadlock the closing window. On Mac/Linux, restore synchronously —
+    /// AppleScript quit and process exit tear down the pool before a queued <c>networksetup</c> /
+    /// gsettings restore runs, which left the OS proxy pointing at a dead listener.
     /// </summary>
     public void BeginBackgroundShutdown()
     {
         if (Volatile.Read(ref _shutdownStarted) != 0)
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                _shutdownCompleted.Wait(TimeSpan.FromSeconds(10), CancellationToken.None);
+            }
+
             return;
         }
 
-        ThreadPool.UnsafeQueueUserWorkItem(_ =>
+        if (OperatingSystem.IsWindows())
         {
-            try
+            ThreadPool.UnsafeQueueUserWorkItem(_ =>
             {
-                EnsureShutdown();
-            }
-            catch
-            {
-                // never throw from teardown
-            }
-        }, null);
+                try
+                {
+                    EnsureShutdown();
+                }
+                catch
+                {
+                    // never throw from teardown
+                }
+            }, null);
+            return;
+        }
+
+        try
+        {
+            EnsureShutdown();
+        }
+        catch
+        {
+            // never throw from teardown
+        }
     }
 
     private void ApplyLoggingOptions(InspectorSettings? settings)

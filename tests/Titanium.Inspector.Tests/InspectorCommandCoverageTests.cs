@@ -193,11 +193,16 @@ public class InspectorCommandCoverageTests
             vm.SetSelectedSessions([a]);
             await ExecuteAsync(vm.RemoveSelectedSessionsCommand);
             await ExecuteAsync(vm.StopCaptureCommand);
-            Assert.IsFalse(interception.IsRunning);
-            await ExecuteAsync(vm.ToggleInterceptCommand);
-            if (interception.IsRunning)
-                await ExecuteAsync(vm.StopCaptureCommand);
             await WaitForCaptureStopStatusAsync(vm);
+            Assert.IsFalse(interception.IsRunning, vm.StatusText);
+
+            // ToggleIntercept while stopped starts capture; while running it stops. Wait for the
+            // async start/stop to finish — ExecuteAsync's short settle alone races CI.
+            await ExecuteAsync(vm.ToggleInterceptCommand);
+            await WaitUntilAsync(() => interception.IsRunning, TimeSpan.FromSeconds(15));
+            await ExecuteAsync(vm.ToggleInterceptCommand);
+            await WaitForCaptureStopStatusAsync(vm);
+            Assert.IsFalse(interception.IsRunning, vm.StatusText);
 
             typeof(MainWindowViewModel).GetMethod("ApplyExclusionSettingsFromSettings",
                 BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(vm, null);
@@ -415,7 +420,7 @@ public class InspectorCommandCoverageTests
     /// <summary>Waits for an in-flight <see cref="MainWindowViewModel.StopCaptureCommand"/> async void to settle.</summary>
     private static async Task WaitForCaptureStopStatusAsync(MainWindowViewModel vm)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline)
         {
             if (vm.StatusText.Contains("Stopped", StringComparison.OrdinalIgnoreCase))
@@ -428,6 +433,19 @@ public class InspectorCommandCoverageTests
         }
 
         Assert.Fail("capture stop status not observed: " + vm.StatusText);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+                return;
+            await Task.Delay(25);
+        }
+
+        Assert.Fail("condition not met within " + timeout);
     }
 
     [TestMethod]
