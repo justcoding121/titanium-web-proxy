@@ -218,47 +218,33 @@ internal static class SmokeApp
         try
         {
             var listed = RunCapture(
-                "security", "find-certificate -a -Z /Library/Keychains/System.keychain", 15000);
+                "security",
+                "find-certificate -a -Z /Library/Keychains/System.keychain",
+                15000,
+                "");
             var hashes = ExtractSha1Hashes(FilterTitaniumCertRecords(listed.Output));
             Console.WriteLine("mac-wipe roots=" + hashes.Count);
+            RemoveMacAdminTrustForHashes(hashes);
+
             foreach (var hash in hashes)
             {
-                try
-                {
-                    var pem = RunCapture(
-                        "security",
-                        "find-certificate -Z " + hash + " -p /Library/Keychains/System.keychain",
-                        15000);
-                    var cer = ExtractPem(pem.Output);
-                    if (cer is not null)
-                    {
-                        var path = Path.Combine(Path.GetTempPath(), "titanium-wipe-" + hash + ".pem");
-                        try
-                        {
-                            File.WriteAllText(path, cer);
-                            var removed = RunCapture(
-                                "sudo", "security remove-trusted-cert -d \"" + path + "\"", 20000);
-                            Console.WriteLine(
-                                "mac-wipe remove-trusted-cert " + hash + " exit=" + removed.Code);
-                        }
-                        finally
-                        {
-                            TryDelete(path);
-                        }
-                    }
-
-                    var deleted = RunCapture(
-                        "sudo",
-                        "security delete-certificate -Z " + hash +
-                        " -t /Library/Keychains/System.keychain",
-                        20000);
-                    Console.WriteLine("mac-wipe delete-certificate " + hash + " exit=" + deleted.Code);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("mac-wipe " + hash + " " + ex.GetType().Name + ": " + ex.Message);
-                }
+                // -t updates the user trust domain and can wait on a dialog. sudo -n fails
+                // fast if a password is required instead of holding the smoke driver.
+                var deleted = RunMacSudo(
+                    "security delete-certificate -Z " + hash +
+                    " /Library/Keychains/System.keychain");
+                Console.WriteLine(
+                    "mac-wipe delete-certificate " + hash + " exit=" + deleted.Code +
+                    " " + TrimOneLine(deleted.Output));
             }
+
+            var left = RunCapture(
+                "security",
+                "find-certificate -a -Z /Library/Keychains/System.keychain",
+                15000,
+                "");
+            var remaining = ExtractSha1Hashes(FilterTitaniumCertRecords(left.Output));
+            Console.WriteLine("mac-wipe remaining=" + remaining.Count);
         }
         catch (Exception ex)
         {
@@ -266,17 +252,74 @@ internal static class SmokeApp
         }
     }
 
-    private static string? ExtractPem(string text)
+    private static void RemoveMacAdminTrustForHashes(List<string> hashes)
+    {
+        if (hashes.Count == 0)
+            return;
+
+        var wanted = new HashSet<string>(hashes, StringComparer.OrdinalIgnoreCase);
+        var dumped = RunCapture(
+            "security",
+            "find-certificate -a -p /Library/Keychains/System.keychain",
+            20000,
+            "");
+        var index = 0;
+        foreach (var pem in SplitPems(dumped.Output))
+        {
+            var path = Path.Combine(Path.GetTempPath(), "titanium-wipe-" + index + ".pem");
+            index++;
+            try
+            {
+                File.WriteAllText(path, pem);
+                string thumb;
+                try
+                {
+                    using var cert = X509CertificateLoader.LoadCertificateFromFile(path);
+                    thumb = cert.Thumbprint;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("mac-wipe pem " + ex.GetType().Name);
+                    continue;
+                }
+
+                if (!wanted.Contains(thumb))
+                    continue;
+
+                var removed = RunMacSudo("security remove-trusted-cert -d \"" + path + "\"");
+                Console.WriteLine(
+                    "mac-wipe remove-trusted-cert " + thumb + " exit=" + removed.Code +
+                    " " + TrimOneLine(removed.Output));
+            }
+            finally
+            {
+                TryDelete(path);
+            }
+        }
+    }
+
+    private static (int Code, string Output) RunMacSudo(string securityArgs) =>
+        RunCapture("sudo", "-n " + securityArgs, 20000, "");
+
+    private static List<string> SplitPems(string text)
     {
         const string begin = "-----BEGIN CERTIFICATE-----";
         const string end = "-----END CERTIFICATE-----";
-        var start = text.IndexOf(begin, StringComparison.Ordinal);
-        if (start < 0)
-            return null;
-        var stop = text.IndexOf(end, start, StringComparison.Ordinal);
-        if (stop < 0)
-            return null;
-        return text[start..(stop + end.Length)] + "\n";
+        var found = new List<string>();
+        var start = 0;
+        while (start < text.Length)
+        {
+            var at = text.IndexOf(begin, start, StringComparison.Ordinal);
+            if (at < 0)
+                break;
+            var stop = text.IndexOf(end, at, StringComparison.Ordinal);
+            if (stop < 0)
+                break;
+            found.Add(text[at..(stop + end.Length)] + "\n");
+            start = stop + end.Length;
+        }
+
+        return found;
     }
 
     private static async Task<string> MoveMacDmgAppIfNeededAsync(string exe)
