@@ -526,10 +526,6 @@ internal static partial class UnixCertificateTrust
     }
 
     private static bool TrustMacUser(
-        IProcessRunner runner, string cerPath, X509Certificate2? certificate = null) =>
-        TrustMacUser(runner, cerPath, certificate, out _);
-
-    private static bool TrustMacUser(
         IProcessRunner runner, string cerPath, X509Certificate2? certificate, out string error)
     {
         error = "";
@@ -1142,13 +1138,6 @@ internal static partial class UnixCertificateTrust
         var byHash = runner.Run(SecurityBinary, $"find-certificate -a -Z {sha1}");
         return byHash is { Succeeded: true } &&
                byHash.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TrustMacSystem(IElevationPrompt elevation, string cerPath)
-    {
-        var result = elevation.RunElevated("/usr/bin/security",
-            $"add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cerPath}\"");
-        return result is { Succeeded: true };
     }
 
     /// <summary>

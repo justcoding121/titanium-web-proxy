@@ -460,36 +460,7 @@ public sealed class UpdateService
 
             await File.WriteAllBytesAsync(packagePath, bytes, cancellationToken);
 
-            var installDir = AppContext.BaseDirectory.TrimEnd(
-                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var exeName = OperatingSystem.IsWindows() ? "TitaniumInspector.exe" : "TitaniumInspector";
-            var relaunchPath = Path.Combine(installDir, exeName);
-            if (OperatingSystem.IsMacOS() && TryFindMacAppBundle(installDir, out var appBundle))
-            {
-                // Zip payload is publish output → Contents/MacOS; relaunch the .app.
-                relaunchPath = appBundle;
-                installDir = Path.Combine(appBundle, "Contents", "MacOS");
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                var localShare = LinuxAppRelocation.DefaultInstallDir();
-                if (Directory.Exists(localShare)
-                    && installDir.StartsWith(localShare, StringComparison.Ordinal))
-                {
-                    installDir = localShare;
-                    relaunchPath = Path.Combine(localShare, LinuxAppRelocation.ExeName);
-                }
-            }
-
-            if (check.ApplyKind == UpdateApplyKind.AppImage)
-            {
-                var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
-                if (!string.IsNullOrWhiteSpace(appImage))
-                {
-                    relaunchPath = appImage;
-                    installDir = Path.GetDirectoryName(appImage) ?? installDir;
-                }
-            }
+            var (installDir, relaunchPath) = ResolveApplyInstallPaths(check.ApplyKind);
 
             UpdateApplyHelper.StartDetached(
                 Environment.ProcessId,
@@ -513,6 +484,60 @@ public sealed class UpdateService
         {
             return (false, $"Update failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    ///     Install directory and relaunch path for the apply helper. Mac bundles relaunch
+    ///     the .app; a local Linux share install relaunches that copy; an AppImage relaunches
+    ///     the image path.
+    /// </summary>
+    private static (string InstallDir, string RelaunchPath) ResolveApplyInstallPaths(UpdateApplyKind applyKind)
+    {
+        var installDir = AppContext.BaseDirectory.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var exeName = OperatingSystem.IsWindows() ? "TitaniumInspector.exe" : "TitaniumInspector";
+        var relaunchPath = Path.Combine(installDir, exeName);
+        if (OperatingSystem.IsMacOS() && TryFindMacAppBundle(installDir, out var appBundle))
+        {
+            // Zip payload is publish output → Contents/MacOS; relaunch the .app.
+            relaunchPath = appBundle;
+            installDir = Path.Combine(appBundle, "Contents", "MacOS");
+        }
+        else if (TryUseLinuxLocalShare(installDir, out var localShare, out var localExe))
+        {
+            installDir = localShare;
+            relaunchPath = localExe;
+        }
+
+        if (applyKind == UpdateApplyKind.AppImage)
+            (installDir, relaunchPath) = PreferAppImageRelaunch(installDir, relaunchPath);
+
+        return (installDir, relaunchPath);
+    }
+
+    private static bool TryUseLinuxLocalShare(string installDir, out string localShare, out string localExe)
+    {
+        localShare = "";
+        localExe = "";
+        if (!OperatingSystem.IsLinux())
+            return false;
+
+        localShare = LinuxAppRelocation.DefaultInstallDir();
+        if (!Directory.Exists(localShare) || !installDir.StartsWith(localShare, StringComparison.Ordinal))
+            return false;
+
+        localExe = Path.Combine(localShare, LinuxAppRelocation.ExeName);
+        return true;
+    }
+
+    private static (string InstallDir, string RelaunchPath) PreferAppImageRelaunch(
+        string installDir, string relaunchPath)
+    {
+        var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        if (string.IsNullOrWhiteSpace(appImage))
+            return (installDir, relaunchPath);
+
+        return (Path.GetDirectoryName(appImage) ?? installDir, appImage);
     }
 
     public static Version AssemblyVersion() =>

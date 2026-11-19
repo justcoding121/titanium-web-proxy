@@ -1880,6 +1880,25 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
+    ///     One elevated System.keychain batch. If elevation is cancelled, fall back to the
+    ///     login keychain (may still need Always Trust).
+    /// </summary>
+    private void ApplyMacMachineSslTrust()
+    {
+        LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+            RootCertificate!, RootCertificateName);
+        if (LastOsTrustResult.Succeeded
+            || LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+            return;
+
+        if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
+        {
+            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
+                RootCertificate!, RootCertificateName);
+        }
+    }
+
+    /// <summary>
     ///     macOS/Linux SSL trust (Keychain / NSS). May show auth UI — keep on a pumping thread.
     ///     No-op on Windows (Root store presence is trust).
     /// </summary>
@@ -1901,20 +1920,7 @@ public sealed class CertificateManager : IDisposable
 
         if (RunTime.IsMac && machineTrusted)
         {
-            // Primary macOS path: one elevated System.keychain batch (policies + stale prune).
-            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
-                RootCertificate, RootCertificateName);
-            if (LastOsTrustResult.Succeeded
-                || LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-                return;
-
-            if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
-            {
-                // Elevation cancelled — fall back to login keychain (may need Always Trust UX).
-                LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
-                    RootCertificate, RootCertificateName);
-            }
-
+            ApplyMacMachineSslTrust();
             return;
         }
 

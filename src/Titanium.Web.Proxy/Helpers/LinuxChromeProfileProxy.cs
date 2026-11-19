@@ -343,39 +343,17 @@ internal static class LinuxChromeProfileProxy
                 return false;
 
             var text = File.ReadAllText(prefsPath);
-            if (!text.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
-                !text.Contains(FixedServersMode, StringComparison.Ordinal))
+            if (InspectorProxyTextAlreadyClear(text, hostname, port))
                 return true;
 
-            var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject
-                       ?? new JsonObject();
-            var proxy = root[ProxyKey] as JsonObject;
-            if (proxy is null)
-                return true;
-
-            var server = proxy["server"]?.GetValue<string>() ?? string.Empty;
-            var mode = proxy["mode"]?.GetValue<string>() ?? string.Empty;
-            var pointsAtUs = server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase) ||
-                             (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) &&
-                              server.Contains(hostname, StringComparison.OrdinalIgnoreCase) &&
-                              server.Contains(port.ToString(), StringComparison.Ordinal));
-
-            if (!pointsAtUs && !mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
+            var root = ParsePrefsObject(text);
+            if (root[ProxyKey] is not JsonObject proxy || !ProxyModeShouldBecomeSystem(proxy, hostname, port))
                 return true;
 
             // Prefer OS/system proxy (gsettings already restored) over a dead fixed endpoint.
-            root[ProxyKey] = new JsonObject { ["mode"] = "system" };
-            AtomicWriteJson(prefsPath, root);
-
-            // Drop backup if strip replaced our endpoint — original restore already attempted.
-            var backupPath = prefsPath + BackupSuffix;
-            if (File.Exists(backupPath))
-            {
-                try { File.Delete(backupPath); } catch { /* ignore */ }
-            }
-
-            var verify = File.ReadAllText(prefsPath);
-            return !verify.Contains($"{hostname}:{port}", StringComparison.Ordinal);
+            WriteSystemProxyMode(root, prefsPath);
+            DeleteBackupQuietly(prefsPath);
+            return !File.ReadAllText(prefsPath).Contains($"{hostname}:{port}", StringComparison.Ordinal);
         }
         catch
         {
@@ -395,36 +373,66 @@ internal static class LinuxChromeProfileProxy
             if (!File.Exists(prefsPath))
                 return false;
 
-            var text = File.ReadAllText(prefsPath);
-            var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject
-                       ?? new JsonObject();
-            var proxy = root[ProxyKey] as JsonObject;
-            if (proxy is null)
+            var root = ParsePrefsObject(File.ReadAllText(prefsPath));
+            if (root[ProxyKey] is not JsonObject proxy || !IsLoopbackFixedOrSystemProxy(proxy))
                 return false;
 
-            var mode = proxy["mode"]?.GetValue<string>() ?? string.Empty;
-            var server = proxy["server"]?.GetValue<string>() ?? string.Empty;
-            var fixedLoopback = mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) &&
-                                IsLoopbackProxyServer(server);
-            var systemWithLoopback = mode.Equals("system", StringComparison.OrdinalIgnoreCase) &&
-                                     IsLoopbackProxyServer(server);
-            if (!fixedLoopback && !systemWithLoopback)
-                return false;
-
-            root[ProxyKey] = new JsonObject { ["mode"] = "system" };
-            AtomicWriteJson(prefsPath, root);
-            var backupPath = prefsPath + BackupSuffix;
-            if (File.Exists(backupPath))
-            {
-                try { File.Delete(backupPath); } catch { /* ignore */ }
-            }
-
+            WriteSystemProxyMode(root, prefsPath);
+            DeleteBackupQuietly(prefsPath);
             return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    private static bool InspectorProxyTextAlreadyClear(string text, string hostname, int port) =>
+        !text.Contains($"{hostname}:{port}", StringComparison.Ordinal)
+        && !text.Contains(FixedServersMode, StringComparison.Ordinal);
+
+    private static JsonObject ParsePrefsObject(string text) =>
+        JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject ?? new JsonObject();
+
+    /// <summary>
+    ///     True when the stored proxy is Inspector's fixed endpoint, or any fixed_servers mode
+    ///     that should fall back to the desktop proxy.
+    /// </summary>
+    private static bool ProxyModeShouldBecomeSystem(JsonObject proxy, string hostname, int port)
+    {
+        var mode = JsonString(proxy, "mode");
+        if (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var server = JsonString(proxy, "server");
+        return server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsLoopbackFixedOrSystemProxy(JsonObject proxy)
+    {
+        if (!IsLoopbackProxyServer(JsonString(proxy, "server")))
+            return false;
+
+        var mode = JsonString(proxy, "mode");
+        return mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase)
+               || mode.Equals("system", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string JsonString(JsonObject obj, string name) =>
+        obj[name]?.GetValue<string>() ?? string.Empty;
+
+    private static void WriteSystemProxyMode(JsonObject root, string prefsPath)
+    {
+        root[ProxyKey] = new JsonObject { ["mode"] = "system" };
+        AtomicWriteJson(prefsPath, root);
+    }
+
+    private static void DeleteBackupQuietly(string prefsPath)
+    {
+        var backupPath = prefsPath + BackupSuffix;
+        if (!File.Exists(backupPath))
+            return;
+        try { File.Delete(backupPath); } catch { /* ignore */ }
     }
 
     private static bool IsLoopbackProxyServer(string server)

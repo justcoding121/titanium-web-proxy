@@ -955,6 +955,16 @@ public sealed partial class MainWindowViewModel
             await ExportCaAsync();
         }
     }
+    /// <summary>
+    ///     Runs one decrypt-enable step, then reports whether this generation is still current.
+    /// </summary>
+    private async Task<bool> DecryptEnableStepStillCurrentAsync(int enableGeneration, Func<Task<bool>> step)
+    {
+        if (!await step())
+            return false;
+        return enableGeneration == Volatile.Read(ref _decryptEnableGeneration);
+    }
+
     private async Task EnableDecryptHttpsAsync(int enableGeneration)
     {
         if (!TryBeginTrustCommand())
@@ -970,17 +980,11 @@ public sealed partial class MainWindowViewModel
             // Stay on the Avalonia UI sync context after awaits. ConfigureAwait(false) here
             // resumes on a thread-pool thread, then ShowDialog / CryptUI hang forever with
             // status stuck on "Checking certificate trust…" (no message pump / wrong thread).
-            if (!await TryStartProxyForDecryptAsync())
+            if (!await DecryptEnableStepStillCurrentAsync(enableGeneration, TryStartProxyForDecryptAsync))
                 return;
-            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+            if (!await DecryptEnableStepStillCurrentAsync(enableGeneration, TryTrustRootForDecryptAsync))
                 return;
-            if (!await TryTrustRootForDecryptAsync())
-                return;
-            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
-                return;
-            if (!await TryCompleteMacSslTrustForDecryptAsync())
-                return;
-            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+            if (!await DecryptEnableStepStillCurrentAsync(enableGeneration, TryCompleteMacSslTrustForDecryptAsync))
                 return;
 
             SetDecryptHttpsCore(true);

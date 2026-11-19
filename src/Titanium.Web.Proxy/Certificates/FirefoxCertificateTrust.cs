@@ -32,6 +32,8 @@ public static class FirefoxCertificateTrust
     private const string LibraryDirName = "Library";
     private const string ApplicationSupportDirName = "Application Support";
     private const string FirefoxDirName = "Firefox";
+    private const string ProfilePathPrefix = "Path=";
+    private const string ProfileIsRelativePrefix = "IsRelative=";
 
     /// <summary>
     ///     Last step tag from <see cref="TryEnableWindowsEnterpriseRoots"/> /
@@ -1008,11 +1010,11 @@ public static class FirefoxCertificateTrust
                 continue;
             }
 
-            if (line.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
-                currentPath = line["Path=".Length..].Trim();
-            else if (line.StartsWith("IsRelative=", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith(ProfilePathPrefix, StringComparison.OrdinalIgnoreCase))
+                currentPath = line[ProfilePathPrefix.Length..].Trim();
+            else if (line.StartsWith(ProfileIsRelativePrefix, StringComparison.OrdinalIgnoreCase))
             {
-                var value = line["IsRelative=".Length..].Trim();
+                var value = line[ProfileIsRelativePrefix.Length..].Trim();
                 isRelative = value is not ("0" or "false");
             }
             else if (line.StartsWith("Default=1", StringComparison.OrdinalIgnoreCase))
@@ -1077,11 +1079,11 @@ public static class FirefoxCertificateTrust
                 continue;
             }
 
-            if (line.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
-                currentPath = line["Path=".Length..].Trim();
-            else if (line.StartsWith("IsRelative=", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith(ProfilePathPrefix, StringComparison.OrdinalIgnoreCase))
+                currentPath = line[ProfilePathPrefix.Length..].Trim();
+            else if (line.StartsWith(ProfileIsRelativePrefix, StringComparison.OrdinalIgnoreCase))
             {
-                var value = line["IsRelative=".Length..].Trim();
+                var value = line[ProfileIsRelativePrefix.Length..].Trim();
                 isRelative = value is not ("0" or "false");
             }
         }
