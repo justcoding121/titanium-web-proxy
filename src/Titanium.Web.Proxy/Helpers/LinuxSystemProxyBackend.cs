@@ -110,6 +110,13 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         TryApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
         var sessionEnvApplied = TryApplySessionEnvironment(hostname, port, protocolType, proxyOverride);
         var hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess);
+        if (desktopError is not null && !pinProcess && _applyBrowserLaunchHooks)
+        {
+            // Session desktop looked like GNOME/KDE but gsettings/kwrite failed (common under
+            // xvfb / dbus-run-session). Pin Chromium so ProxyMode=system is not left as DIRECT.
+            hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess: true)
+                           || hooksApplied;
+        }
 
         if (desktopError is not null && !hooksApplied)
             throw desktopError;
@@ -408,7 +415,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         }
     }
 
-    private bool TryApplySessionEnvironment(
+    private static bool TryApplySessionEnvironment(
         string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
         // Do not publish http_proxy into the user session. environment.d is loaded at

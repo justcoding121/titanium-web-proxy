@@ -1161,11 +1161,15 @@ internal static class SmokeApp
             return "";
         var mode = Capture("gsettings", "get org.gnome.system.proxy mode").Trim();
         var host = Capture("gsettings", "get org.gnome.system.proxy.http host").Trim();
-        var conf = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".config", "environment.d", "90-titanium-inspector-proxy.conf");
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var conf = Path.Combine(home, ".config", "environment.d", "90-titanium-inspector-proxy.conf");
         var confBit = File.Exists(conf) ? "envdrop=yes" : "envdrop=no";
-        return $"gsettings.mode={mode} http.host={host} port={port} {confBit}";
+        var chromePolicy = Path.Combine(home, ".config", "google-chrome", "policies", "managed",
+            "titanium-inspector-proxy.json");
+        var policyBit = File.Exists(chromePolicy) ? "policy=yes" : "policy=no";
+        var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
+        var launcherBit = Directory.Exists(launchers) ? "launchers=yes" : "launchers=no";
+        return $"gsettings.mode={mode} http.host={host} port={port} {confBit} {policyBit} {launcherBit}";
     }
 
     private static bool ProxyIsOn(int port)
@@ -1190,8 +1194,8 @@ internal static class SmokeApp
             var g = Capture("gsettings", "get org.gnome.system.proxy mode");
             if (g.Contains("manual", StringComparison.OrdinalIgnoreCase))
                 return true;
-            // Under xvfb/dbus-run-session gsettings may be empty while Chromium-family
-            // hooks still pin ProxyServer / managed policy at the Inspector port.
+            // Under xvfb/dbus-run-session gsettings may be empty while Inspector still
+            // wrote Chromium managed policy (ProxyMode=system, no ProxyServer port).
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string[] policyDirs =
             [
@@ -1204,9 +1208,23 @@ internal static class SmokeApp
             foreach (var dir in policyDirs)
             {
                 var policy = Path.Combine(dir, "titanium-inspector-proxy.json");
-                if (File.Exists(policy) &&
-                    File.ReadAllText(policy).Contains(port.ToString(), StringComparison.Ordinal))
+                if (!File.Exists(policy))
+                    continue;
+                var text = File.ReadAllText(policy);
+                if (text.Contains(port.ToString(), StringComparison.Ordinal)
+                    || text.Contains("\"ProxyMode\": \"system\"", StringComparison.Ordinal)
+                    || text.Contains("\"ProxyMode\":\"system\"", StringComparison.Ordinal))
                     return true;
+            }
+
+            var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
+            if (Directory.Exists(launchers))
+            {
+                foreach (var file in Directory.EnumerateFiles(launchers))
+                {
+                    if (File.ReadAllText(file).Contains(":" + port, StringComparison.Ordinal))
+                        return true;
+                }
             }
 
             return false;

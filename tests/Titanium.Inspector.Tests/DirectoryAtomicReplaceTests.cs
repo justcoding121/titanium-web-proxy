@@ -53,6 +53,9 @@ public class DirectoryAtomicReplaceTests
     [TestMethod]
     public void TryDelete_MissingPath_IsNoOp()
     {
-        DirectoryAtomicReplace.TryDelete(Path.Combine(Path.GetTempPath(), "ti-atomic-missing-" + Guid.NewGuid()));
+        var missing = Path.Combine(Path.GetTempPath(), "ti-atomic-missing-" + Guid.NewGuid());
+        Assert.IsFalse(Directory.Exists(missing));
+        DirectoryAtomicReplace.TryDelete(missing);
+        Assert.IsFalse(Directory.Exists(missing));
     }
 }
