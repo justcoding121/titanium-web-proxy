@@ -362,4 +362,279 @@ public class Http2RelayFlowControlAndPaddingTests
             _ => null
         };
     }
+
+    // Larger than the deferred cap, but the client respects stream flow control. The cap is above the
+    // advertised 768 KiB stream window, so a compliant sender never fills it.
+    private const int BackpressureCap = 900_000;
+    private const int BackpressureBodyBytes = 1_600_000;
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task SlowOrigin_LargeUpload_CompletesWithoutReset()
+    {
+        var body = Pattern(BackpressureBodyBytes, seed: 3);
+        var seen = await RoundTripUploadAsync(body, mutateRequest: false);
+        CollectionAssert.AreEqual(body, seen);
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task SessionRelay_LargeUpload_CompletesWithoutReset()
+    {
+        var body = Pattern(BackpressureBodyBytes, seed: 9);
+        var seen = await RoundTripUploadAsync(body, mutateRequest: true);
+        CollectionAssert.AreEqual(body, seen);
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task SlowClient_LargeResponse_CompletesWithoutReset()
+    {
+        var body = Pattern(BackpressureBodyBytes, seed: 5);
+        var clientDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        origin.HandleConnection(async conn =>
+        {
+            using var peer = new Http2FlowPeer(conn);
+            await peer.SendInitialSettingsAsync();
+            var req = await peer.ReadMessageAsync(autoCredit: true, Step);
+            await peer.SendHeadersAsync(req.StreamId, [(":status", "200")], [], endStream: false);
+            await peer.SendDataAsync(req.StreamId, body, endStream: true, Step);
+            // SendDataAsync returns once the proxy has accepted the body, which runs ahead of a
+            // slow client. Closing the origin socket here aborts the relay before that client drains.
+            try
+            {
+                await clientDrained.Task.WaitAsync(Step);
+            }
+            catch (TimeoutException)
+            {
+            }
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = proxy.ResourceLimits.WithMaxDeferredOutboundBytesPerStream(BackpressureCap);
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        using var client = new Http2FlowPeer(raw.Connection);
+
+        try
+        {
+            await client.SendHeadersAsync(1, RequestPseudo(uri, "GET", "/download"), [], endStream: true);
+            var received = new MemoryStream();
+            var sawEnd = false;
+            var deadline = DateTime.UtcNow + Step;
+            while (!sawEnd && DateTime.UtcNow < deadline)
+            {
+                var frame = await client.ReadFrameAsync(TimeSpan.FromSeconds(2));
+                if (frame is not { Type: Http2FrameType.Data } data || data.StreamId != 1)
+                    continue;
+                received.Write(data.Payload);
+                sawEnd = (data.Flags & Http2FrameFlag.EndStream) != 0;
+                if (data.Payload.Length > 0)
+                {
+                    await Task.Delay(2);
+                    await client.SendWindowUpdateAsync(0, data.Payload.Length);
+                    await client.SendWindowUpdateAsync(1, data.Payload.Length);
+                }
+            }
+
+            Assert.IsTrue(sawEnd, "A slow client must receive the full response without a stream reset.");
+            CollectionAssert.AreEqual(body, received.ToArray());
+        }
+        finally
+        {
+            clientDrained.TrySetResult();
+        }
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public async Task SlowOrigin_SecondStreamOnSameConnection_Completes()
+    {
+        var upload = Pattern(BackpressureBodyBytes, seed: 7);
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        var pingOk = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var uploadBody = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        origin.HandleConnection(async conn =>
+        {
+            using var peer = new Http2FlowPeer(conn);
+            await peer.SendInitialSettingsAsync();
+            var uploadId = -1;
+            var body = new MemoryStream();
+            var uploadEnded = false;
+            var pingAnswered = false;
+            var deadline = DateTime.UtcNow + Step;
+            while ((!pingAnswered || !uploadEnded) && DateTime.UtcNow < deadline)
+            {
+                var frame = await peer.ReadFrameAsync(TimeSpan.FromSeconds(2));
+                if (frame == null)
+                    continue;
+                if (frame.Value.Type == Http2FrameType.Headers && frame.Value.StreamId != 0)
+                {
+                    var headers = peer.Connection.DecodeHeaders(frame.Value.Payload);
+                    var path = headers.FirstOrDefault(h => h.Name == ":path").Value;
+                    if (path == "/ping")
+                    {
+                        await peer.SendHeadersAsync(frame.Value.StreamId, [(":status", "200")], [], endStream: true);
+                        pingAnswered = true;
+                        pingOk.TrySetResult();
+                        if (uploadId > 0)
+                        {
+                            await peer.SendWindowUpdateAsync(0, BackpressureBodyBytes);
+                            await peer.SendWindowUpdateAsync(uploadId, BackpressureBodyBytes);
+                        }
+                    }
+                    else
+                    {
+                        uploadId = frame.Value.StreamId;
+                    }
+                }
+
+                if (frame.Value.Type == Http2FrameType.Data && frame.Value.StreamId == uploadId)
+                {
+                    body.Write(frame.Value.Payload);
+                    uploadEnded = (frame.Value.Flags & Http2FrameFlag.EndStream) != 0;
+                }
+            }
+
+            uploadBody.TrySetResult(body.ToArray());
+            if (uploadId > 0)
+                await peer.SendHeadersAsync(uploadId, [(":status", "200")], [], endStream: true);
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = proxy.ResourceLimits.WithMaxDeferredOutboundBytesPerStream(BackpressureCap);
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        using var client = new Http2FlowPeer(raw.Connection);
+
+        await client.SendHeadersAsync(1, RequestPseudo(uri, "POST", "/up"),
+            [("content-length", upload.Length.ToString())], endStream: false);
+        var sending = client.SendDataAsync(1, upload, endStream: true, Step);
+        await client.SendHeadersAsync(3, RequestPseudo(uri, "GET", "/ping"), [], endStream: true);
+        var ping = await client.ReadMessageAsync(autoCredit: true, TimeSpan.FromSeconds(10));
+        Assert.AreEqual("200", Status(ping.Headers));
+        await pingOk.Task.WaitAsync(Step);
+        await sending;
+        var seen = await uploadBody.Task.WaitAsync(Step);
+        CollectionAssert.AreEqual(upload, seen);
+    }
+
+    [TestMethod]
+    [Timeout(90_000)]
+    public async Task SlowOrigin_FollowUpRequest_StreamWindowNotShrunk()
+    {
+        var first = Pattern(BackpressureBodyBytes, seed: 1);
+        var second = Pattern(BackpressureBodyBytes, seed: 2);
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        var uploads = new List<byte[]>();
+        origin.HandleConnection(async conn =>
+        {
+            using var peer = new Http2FlowPeer(conn);
+            await peer.SendInitialSettingsAsync();
+            for (var n = 0; n < 2; n++)
+            {
+                var (id, body) = await ReadOneUploadAsync(peer);
+                uploads.Add(body);
+                await peer.SendHeadersAsync(id, [(":status", "200")], [], endStream: true);
+            }
+
+            await Task.Delay(300);
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = proxy.ResourceLimits.WithMaxDeferredOutboundBytesPerStream(BackpressureCap);
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        using var client = new Http2FlowPeer(raw.Connection);
+
+        await SendUploadAsync(client, uri, 1, "/a", first);
+        var firstResponse = await client.ReadMessageAsync(autoCredit: true, Step);
+        Assert.AreEqual("200", Status(firstResponse.Headers));
+        await SendUploadAsync(client, uri, 3, "/b", second);
+        var secondResponse = await client.ReadMessageAsync(autoCredit: true, Step);
+        Assert.AreEqual("200", Status(secondResponse.Headers));
+        Assert.AreEqual(2, uploads.Count);
+        CollectionAssert.AreEqual(first, uploads[0]);
+        CollectionAssert.AreEqual(second, uploads[1]);
+    }
+
+    private async Task<byte[]> RoundTripUploadAsync(byte[] body, bool mutateRequest)
+    {
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        var seen = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        origin.HandleConnection(async conn =>
+        {
+            using var peer = new Http2FlowPeer(conn);
+            await peer.SendInitialSettingsAsync();
+            var (id, bytes) = await ReadOneUploadAsync(peer);
+            seen.TrySetResult(bytes);
+            await peer.SendHeadersAsync(id, [(":status", "200")], [], endStream: true);
+            await Task.Delay(300);
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = proxy.ResourceLimits.WithMaxDeferredOutboundBytesPerStream(BackpressureCap);
+        if (mutateRequest)
+        {
+            proxy.BeforeRequest += (_, e) =>
+            {
+                e.HttpClient.Request.Headers.AddHeader("x-session-relay", "1");
+                return Task.CompletedTask;
+            };
+        }
+
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        using var client = new Http2FlowPeer(raw.Connection);
+        await SendUploadAsync(client, uri, 1, "/up", body);
+        var response = await client.ReadMessageAsync(autoCredit: true, Step);
+        Assert.AreEqual("200", Status(response.Headers));
+        return await seen.Task.WaitAsync(Step);
+    }
+
+    private static async Task SendUploadAsync(Http2FlowPeer client, Uri uri, int streamId, string path, byte[] body)
+    {
+        await client.SendHeadersAsync(streamId, RequestPseudo(uri, "POST", path),
+            [("content-length", body.Length.ToString())], endStream: false);
+        await client.SendDataAsync(streamId, body, endStream: true, Step);
+    }
+
+    private static async Task<(int StreamId, byte[] Body)> ReadOneUploadAsync(Http2FlowPeer peer)
+    {
+        var body = new MemoryStream();
+        var streamId = -1;
+        var ended = false;
+        var deadline = DateTime.UtcNow + Step;
+        while (!ended && DateTime.UtcNow < deadline)
+        {
+            var frame = await peer.ReadFrameAsync(TimeSpan.FromSeconds(2));
+            if (frame == null)
+                continue;
+            if (frame.Value.Type == Http2FrameType.Headers && frame.Value.StreamId != 0 && streamId < 0)
+                streamId = frame.Value.StreamId;
+            if (frame.Value.Type != Http2FrameType.Data || frame.Value.StreamId != streamId)
+                continue;
+            body.Write(frame.Value.Payload);
+            ended = (frame.Value.Flags & Http2FrameFlag.EndStream) != 0;
+            if (frame.Value.Payload.Length > 0 && streamId > 0)
+            {
+                await Task.Delay(2);
+                await peer.SendWindowUpdateAsync(0, frame.Value.Payload.Length);
+                await peer.SendWindowUpdateAsync(streamId, frame.Value.Payload.Length);
+            }
+        }
+
+        if (!ended)
+            throw new TimeoutException($"upload did not complete (got {body.Length} of stream {streamId})");
+        return (streamId, body.ToArray());
+    }
 }
