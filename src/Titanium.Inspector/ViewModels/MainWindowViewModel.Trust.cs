@@ -996,6 +996,15 @@ public sealed partial class MainWindowViewModel
             if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
                 return;
 
+            if (probe.Inconclusive)
+            {
+                SetOutcomeStatus(
+                    Truncate(probe.Message, 140),
+                    StatusSeverity.Neutral,
+                    toastImportant: false);
+                return;
+            }
+
             if (!probe.Ok)
             {
                 await ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
@@ -1369,7 +1378,8 @@ public sealed partial class MainWindowViewModel
                 CancellationToken.None).ConfigureAwait(false);
             // Do not PersistSettings(false) after EnsureShutdown: a late probe failure must not
             // overwrite DecryptHttps=true that was already saved for the next launch.
-            if (probe.Ok || !_decryptHttps || !_interception.IsRunning)
+            // Inconclusive (network / paused capture / skip-listed host) keeps Decrypt on.
+            if (probe.Ok || probe.Inconclusive || !_decryptHttps || !_interception.IsRunning)
                 return;
 
             await MarshalToUiAsync(async () =>

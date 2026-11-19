@@ -3,20 +3,22 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Titanium.Inspector.Services;
 
 /// <summary>
 ///     Live MITM check: fetch HTTPS through the running explicit proxy and require a
-///     decrypted (non-tunnel) session to appear.
+///     decrypted (non-tunnel) session to appear — or any HTTP response whose leaf chains
+///     to the MITM root (that alone proves the proxy decrypted).
 /// </summary>
 internal static class DecryptHttpsProbe
 {
     public const string DefaultHost = "example.com";
     public static readonly Uri DefaultUri = new("https://example.com/");
 
-    public sealed record Result(bool Ok, string Message);
+    public sealed record Result(bool Ok, string Message, bool Inconclusive = false);
 
     /// <summary>
     ///     Turns on decrypt long enough to issue one HTTPS GET via the proxy.
@@ -38,6 +40,11 @@ internal static class DecryptHttpsProbe
         if (root is null)
             return new Result(false, "Root CA is not loaded");
 
+        var probeHostSkipped = MitmBypass.ShouldDisableSslDecrypt(
+            DefaultHost,
+            interception.DecryptSkipHosts,
+            interception.DecryptOnlyHosts);
+
         var captured = new ProbeCapture();
         void OnSession(object? _, SessionSnapshot snap) => captured.Remember(snap);
 
@@ -58,15 +65,20 @@ internal static class DecryptHttpsProbe
 
             var sw = Stopwatch.StartNew();
             Exception? requestError = null;
+            HttpResponseMessage? response = null;
             try
             {
-                _ = await client.GetAsync(DefaultUri, linked.Token).ConfigureAwait(false);
+                response = await client.GetAsync(DefaultUri, linked.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 requestError = ex;
             }
             catch (HttpRequestException ex)
+            {
+                requestError = ex;
+            }
+            catch (AuthenticationException ex)
             {
                 requestError = ex;
             }
@@ -77,10 +89,37 @@ internal static class DecryptHttpsProbe
             if (ReadCaptured(captured) is { } session)
                 return new Result(true, "Decrypted session captured (" + Truncate(session.Url, 80) + ")");
 
-            if (requestError is HttpRequestException httpEx)
-                return new Result(false, "Probe request failed: " + Truncate(httpEx.Message, 120));
+            // Any HTTP response proves the proxy presented a MITM leaf the callback accepted
+            // (including a proxy-generated 502). Missing SessionCaptured (paused capture) is OK.
+            if (response is not null)
+            {
+                response.Dispose();
+                return new Result(true, "Probe reached the proxy with a MITM leaf");
+            }
 
-            return new Result(false, "No decrypted HTTPS session within " + (int)timeout.TotalSeconds + "s");
+            if (IsTlsAuthFailure(requestError))
+            {
+                if (probeHostSkipped)
+                {
+                    return new Result(false,
+                        "Could not verify; example.com is on the decrypt-skip list",
+                        Inconclusive: true);
+                }
+
+                return new Result(false,
+                    "Probe request failed: " + Truncate(requestError!.Message, 120));
+            }
+
+            if (requestError is not null)
+            {
+                return new Result(false,
+                    "Could not verify; " + Truncate(DescribeTransportFailure(requestError), 120),
+                    Inconclusive: true);
+            }
+
+            return new Result(false,
+                "Could not verify; no decrypted HTTPS session within " + (int)timeout.TotalSeconds + "s",
+                Inconclusive: true);
         }
         finally
         {
@@ -110,6 +149,25 @@ internal static class DecryptHttpsProbe
             return true;
 
         return string.Equals(leaf.Thumbprint, mitmRoot.Thumbprint, StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static bool IsTlsAuthFailure(Exception? ex)
+    {
+        while (ex is not null)
+        {
+            if (ex is AuthenticationException)
+                return true;
+            ex = ex.InnerException;
+        }
+
+        return false;
+    }
+
+    private static string DescribeTransportFailure(Exception ex)
+    {
+        if (ex is OperationCanceledException)
+            return "example.com unreachable (timed out)";
+        return "example.com unreachable (" + ex.GetType().Name + ")";
     }
 
     // The callback writes the slot; read it here so the poll is not a local the flow analysis treats as stuck null.

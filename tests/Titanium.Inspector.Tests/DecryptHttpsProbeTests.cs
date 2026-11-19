@@ -1,3 +1,5 @@
+using System.Net.Http;
+using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -16,6 +18,7 @@ public class DecryptHttpsProbeTests
             interception,
             TimeSpan.FromSeconds(2));
         Assert.IsFalse(result.Ok);
+        Assert.IsFalse(result.Inconclusive);
         StringAssert.Contains(result.Message, "not listening");
     }
 
@@ -29,6 +32,7 @@ public class DecryptHttpsProbeTests
             interception,
             TimeSpan.FromSeconds(2));
         Assert.IsFalse(result.Ok);
+        Assert.IsFalse(result.Inconclusive);
     }
 
     [TestMethod]
@@ -51,6 +55,24 @@ public class DecryptHttpsProbeTests
         using var root = CreateSelfSigned("CN=Titanium Probe Root");
         using var other = CreateSelfSigned("CN=Other Root");
         Assert.IsFalse(DecryptHttpsProbe.LeafChainsToMitmRoot(other, root));
+    }
+
+    [TestMethod]
+    public void IsTlsAuthFailure_DetectsWrappedAuthenticationException()
+    {
+        var inner = new AuthenticationException("leaf not trusted");
+        var wrapped = new HttpRequestException("SSL failed", inner);
+        Assert.IsTrue(DecryptHttpsProbe.IsTlsAuthFailure(wrapped));
+        Assert.IsFalse(DecryptHttpsProbe.IsTlsAuthFailure(new HttpRequestException("connection refused")));
+        Assert.IsFalse(DecryptHttpsProbe.IsTlsAuthFailure(null));
+    }
+
+    [TestMethod]
+    public void Result_Inconclusive_KeepsOkFalse()
+    {
+        var inconclusive = new DecryptHttpsProbe.Result(false, "Could not verify; example.com unreachable", Inconclusive: true);
+        Assert.IsFalse(inconclusive.Ok);
+        Assert.IsTrue(inconclusive.Inconclusive);
     }
 
     private static X509Certificate2 CreateSelfSigned(string subject)
