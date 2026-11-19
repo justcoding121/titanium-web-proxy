@@ -44,10 +44,7 @@ internal static class LinuxProxyFailOpen
             var cmdPath = "/proc/" + pid + "/cmdline";
             if (!File.Exists(cmdPath))
                 return;
-            var cmd = File.ReadAllText(cmdPath).Replace('\0', ' ');
-            if (!cmd.Contains("fail-open-proxy.py", StringComparison.Ordinal))
-                return;
-            if (!cmd.Contains(port.ToString(), StringComparison.Ordinal))
+            if (!CmdlineCoversPort(File.ReadAllText(cmdPath), port))
                 return;
             Stop();
         }
@@ -55,6 +52,43 @@ internal static class LinuxProxyFailOpen
         {
             // best-effort
         }
+    }
+
+    /// <summary>
+    ///     True when a NUL-separated <c>/proc/.../cmdline</c> is the fail-open helper and one
+    ///     argument is exactly <paramref name="port"/> (or <c>host:port</c>). Substring match
+    ///     would treat port 80 as covering a helper on 8080.
+    /// </summary>
+    internal static bool CmdlineCoversPort(string cmdline, int port)
+    {
+        if (port <= 0 || string.IsNullOrEmpty(cmdline))
+            return false;
+
+        var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        var isHelper = false;
+        var portToken = port.ToString();
+        var portSuffix = ":" + portToken;
+        foreach (var part in parts)
+        {
+            if (part.Contains("fail-open-proxy.py", StringComparison.Ordinal))
+                isHelper = true;
+        }
+
+        if (!isHelper)
+            return false;
+
+        foreach (var part in parts)
+        {
+            if (string.Equals(part, portToken, StringComparison.Ordinal))
+                return true;
+            if (part.EndsWith(portSuffix, StringComparison.Ordinal))
+            {
+                // host:port — reject accidental suffixes like "x8080" by requiring a colon.
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
