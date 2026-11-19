@@ -37,6 +37,20 @@ public static class InstalledProxyCleanup
             ClearWindowsLoopbackProxies();
     }
 
+    /// <summary>
+    ///     Linux login/timer/postinst path: clear only when on-disk markers show Inspector owned
+    ///     the loopback proxy. Returns <c>false</c> when no evidence exists (caller should exit
+    ///     without touching the desktop). Non-Linux always clears and returns <c>true</c>.
+    /// </summary>
+    public static bool TryForceClearWhenOwned()
+    {
+        if (OperatingSystem.IsLinux() && !LinuxInspectorProxyOwnership.HasEvidence())
+            return false;
+
+        ForceClear();
+        return true;
+    }
+
 #if NET6_0_OR_GREATER
     [SupportedOSPlatform("windows")]
 #endif

@@ -597,3 +597,4 @@ Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
 static Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear() -> void
 Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
 static Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(string? procRoot = null) -> bool
+static Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned() -> bool
