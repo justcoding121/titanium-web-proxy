@@ -335,15 +335,13 @@ internal sealed class Http2DeferredOutboundData
         if (written <= 0 || !withheldStreamCredit.TryGetValue(streamId, out var owed) || owed <= 0)
             return;
 
-        var grant = written < owed ? written : owed;
+        // Both written and owed are positive here, so the forwarded grant is too.
+        var grant = Math.Min(written, owed);
         owed -= grant;
         if (owed <= 0)
             withheldStreamCredit.Remove(streamId);
         else
             withheldStreamCredit[streamId] = owed;
-
-        if (grant <= 0)
-            return;
 
         forwarded ??= new List<(int, int)>();
         forwarded.Add((streamId, grant));

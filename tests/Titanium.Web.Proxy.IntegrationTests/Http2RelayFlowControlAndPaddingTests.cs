@@ -565,7 +565,7 @@ public class Http2RelayFlowControlAndPaddingTests
         CollectionAssert.AreEqual(second, uploads[1]);
     }
 
-    private async Task<byte[]> RoundTripUploadAsync(byte[] body, bool mutateRequest)
+    private static async Task<byte[]> RoundTripUploadAsync(byte[] body, bool mutateRequest)
     {
         using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
         var seen = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);

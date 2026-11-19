@@ -31,7 +31,12 @@ internal static class LinuxBrowserLaunchProxy
     internal const string DesktopMarker = "X-Titanium-Inspector-Proxy=true";
     internal const string ProxyBypassList = "<-loopback>";
     private const string DesktopExecPrefix = "Exec=";
+    private const string ShellExecPrefix = "exec ";
     private const string SudoBinary = "/usr/bin/sudo";
+    private const string GoogleChromeStablePath = "/usr/bin/google-chrome-stable";
+    private const string ChromiumPath = "/usr/bin/chromium";
+    private const string MicrosoftEdgeStablePath = "/usr/bin/microsoft-edge-stable";
+    private const string OperaPath = "/usr/bin/opera";
 
     /// <summary>
     ///     Deprecated Chromium int enum (2 = fixed servers). New policy files do not emit it:
@@ -70,15 +75,15 @@ internal static class LinuxBrowserLaunchProxy
 
     private static readonly string[] ChromeBinaries =
     [
-        "/usr/bin/google-chrome-stable",
+        GoogleChromeStablePath,
         "/usr/bin/google-chrome",
         "/opt/google/chrome/chrome",
         "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
+        ChromiumPath,
         "/usr/bin/brave-browser",
-        "/usr/bin/microsoft-edge-stable",
+        MicrosoftEdgeStablePath,
         "/usr/bin/microsoft-edge",
-        "/usr/bin/opera",
+        OperaPath,
         "/usr/bin/opera-stable",
     ];
 
@@ -359,11 +364,11 @@ internal static class LinuxBrowserLaunchProxy
 
     private static readonly (string Root, string[] Binaries)[] MachinePolicyVendors =
     [
-        ("/etc/opt/chrome", ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
-        ("/etc/chromium", ["/usr/bin/chromium", "/usr/bin/chromium-browser"]),
-        ("/etc/opt/edge", ["/usr/bin/microsoft-edge-stable", "/usr/bin/microsoft-edge"]),
+        ("/etc/opt/chrome", [GoogleChromeStablePath, "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
+        ("/etc/chromium", [ChromiumPath, "/usr/bin/chromium-browser"]),
+        ("/etc/opt/edge", [MicrosoftEdgeStablePath, "/usr/bin/microsoft-edge"]),
         ("/etc/brave", ["/usr/bin/brave-browser"]),
-        ("/etc/opera", ["/usr/bin/opera", "/usr/bin/opera-stable"]),
+        ("/etc/opera", [OperaPath, "/usr/bin/opera-stable"]),
     ];
 
     private static IEnumerable<string> MachinePolicyFiles(
@@ -572,26 +577,7 @@ internal static class LinuxBrowserLaunchProxy
             }
 
             var root = doc.RootElement;
-            var systemMode = false;
-            var requiresServer = false;
-            if (root.TryGetProperty("ProxyMode", out var mode) &&
-                mode.ValueKind == JsonValueKind.String)
-            {
-                var modeText = mode.GetString();
-                if (modeText?.Equals("system", StringComparison.OrdinalIgnoreCase) == true)
-                    systemMode = true;
-                else if (modeText?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
-                    requiresServer = true;
-            }
-
-            if (root.TryGetProperty("ProxyServerMode", out var legacyMode) &&
-                legacyMode.ValueKind == JsonValueKind.Number &&
-                legacyMode.TryGetInt32(out var legacyInt) &&
-                legacyInt == LegacyProxyServerModeFixedServers)
-            {
-                requiresServer = true;
-            }
-
+            var (systemMode, requiresServer) = ReadProxyMode(root);
             if (!systemMode && !requiresServer)
             {
                 error = "missing ProxyMode=system (or fixed_servers / ProxyServerMode=2)";
@@ -602,29 +588,60 @@ internal static class LinuxBrowserLaunchProxy
             if (systemMode && !requiresServer)
                 return true;
 
-            if (!root.TryGetProperty("ProxyServer", out var server) ||
-                server.ValueKind != JsonValueKind.String)
-            {
-                error = "missing ProxyServer string";
-                return false;
-            }
-
-            var expected = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
-            var actual = server.GetString() ?? string.Empty;
-            if (!actual.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
-                !actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
-            {
-                error = "ProxyServer does not point at the Inspector endpoint";
-                return false;
-            }
-
-            return true;
+            return ProxyServerMatchesEndpoint(root, hostname, port, out error);
         }
         catch (Exception ex)
         {
             error = ex.Message;
             return false;
         }
+    }
+
+    private static (bool SystemMode, bool RequiresServer) ReadProxyMode(JsonElement root)
+    {
+        var systemMode = false;
+        var requiresServer = false;
+        if (root.TryGetProperty("ProxyMode", out var mode) &&
+            mode.ValueKind == JsonValueKind.String)
+        {
+            var modeText = mode.GetString();
+            if (modeText?.Equals("system", StringComparison.OrdinalIgnoreCase) == true)
+                systemMode = true;
+            else if (modeText?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
+                requiresServer = true;
+        }
+
+        if (root.TryGetProperty("ProxyServerMode", out var legacyMode) &&
+            legacyMode.ValueKind == JsonValueKind.Number &&
+            legacyMode.TryGetInt32(out var legacyInt) &&
+            legacyInt == LegacyProxyServerModeFixedServers)
+        {
+            requiresServer = true;
+        }
+
+        return (systemMode, requiresServer);
+    }
+
+    private static bool ProxyServerMatchesEndpoint(JsonElement root, string hostname, int port, out string? error)
+    {
+        if (!root.TryGetProperty("ProxyServer", out var server) ||
+            server.ValueKind != JsonValueKind.String)
+        {
+            error = "missing ProxyServer string";
+            return false;
+        }
+
+        var expected = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
+        var actual = server.GetString() ?? string.Empty;
+        if (!actual.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
+            !actual.Equals(expected, StringComparison.OrdinalIgnoreCase))
+        {
+            error = "ProxyServer does not point at the Inspector endpoint";
+            return false;
+        }
+
+        error = null;
+        return true;
     }
 
     internal static string InjectChromeProxyArgs(string execLine, string hostname, int port, bool proxyLoopback = false)
@@ -758,7 +775,7 @@ internal static class LinuxBrowserLaunchProxy
                "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
                "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
                "fi\n" +
-               "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
+               ShellExecPrefix + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
                " --no-first-run --no-default-browser-check$extra \"$@\"\n";
     }
 
@@ -934,7 +951,7 @@ internal static class LinuxBrowserLaunchProxy
         "#!/bin/sh\n" +
         "# " + DesktopMarker + "\n" +
         "# neutralized: dock may still Exec this path after Clear removes the .desktop override\n" +
-        "exec " + QuoteShellArg(binary) + " \"$@\"\n";
+        ShellExecPrefix + QuoteShellArg(binary) + " \"$@\"\n";
 
     private static bool TryExtractLaunchBinary(string scriptText, out string binary)
     {
@@ -942,9 +959,9 @@ internal static class LinuxBrowserLaunchProxy
         foreach (var rawLine in scriptText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
         {
             var line = rawLine.Trim();
-            if (!line.StartsWith("exec ", StringComparison.Ordinal))
+            if (!line.StartsWith(ShellExecPrefix, StringComparison.Ordinal))
                 continue;
-            var rest = line["exec ".Length..].TrimStart();
+            var rest = line[ShellExecPrefix.Length..].TrimStart();
             if (rest.Length == 0)
                 continue;
             if (rest[0] == '"')
@@ -970,17 +987,17 @@ internal static class LinuxBrowserLaunchProxy
         var name = Path.GetFileNameWithoutExtension(scriptPath);
         return name switch
         {
-            "google-chrome" or "google-chrome-stable" => File.Exists("/usr/bin/google-chrome-stable")
-                ? "/usr/bin/google-chrome-stable"
+            "google-chrome" or "google-chrome-stable" => File.Exists(GoogleChromeStablePath)
+                ? GoogleChromeStablePath
                 : "/usr/bin/google-chrome",
-            "chromium" or "chromium-browser" => File.Exists("/usr/bin/chromium")
-                ? "/usr/bin/chromium"
+            "chromium" or "chromium-browser" => File.Exists(ChromiumPath)
+                ? ChromiumPath
                 : "/usr/bin/chromium-browser",
             "brave-browser" => "/usr/bin/brave-browser",
-            "microsoft-edge" or "microsoft-edge-stable" => File.Exists("/usr/bin/microsoft-edge-stable")
-                ? "/usr/bin/microsoft-edge-stable"
+            "microsoft-edge" or "microsoft-edge-stable" => File.Exists(MicrosoftEdgeStablePath)
+                ? MicrosoftEdgeStablePath
                 : "/usr/bin/microsoft-edge",
-            "opera" => File.Exists("/usr/bin/opera") ? "/usr/bin/opera" : "/usr/bin/opera-stable",
+            "opera" => File.Exists(OperaPath) ? OperaPath : "/usr/bin/opera-stable",
             _ => null,
         };
     }

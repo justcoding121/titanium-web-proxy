@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -24,49 +25,51 @@ public static class LinuxInspectorProcess
 
         foreach (var dir in Directory.EnumerateDirectories(root))
         {
-            var name = Path.GetFileName(dir);
-            if (string.IsNullOrEmpty(name) || !IsAllDigits(name))
-                continue;
-
-            string cmdline;
-            try
-            {
-                cmdline = File.ReadAllText(Path.Combine(dir, "cmdline"));
-            }
-            catch
-            {
-                continue;
-            }
-
-            if (string.IsNullOrEmpty(cmdline))
-                continue;
-
-            var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0)
-                continue;
-
-            var joined = string.Join(' ', parts);
-            if (joined.Contains("--clear-system-proxy", StringComparison.Ordinal))
-                continue;
-
-            var exe = parts[0];
-            if (exe.EndsWith("/TitaniumInspector", StringComparison.Ordinal) ||
-                string.Equals(exe, "TitaniumInspector", StringComparison.Ordinal) ||
-                string.Equals(Path.GetFileName(exe), "TitaniumInspector", StringComparison.Ordinal))
+            if (IsLiveInspectorProcess(dir))
                 return true;
         }
 
         return false;
     }
 
-    private static bool IsAllDigits(string value)
+    private static bool IsLiveInspectorProcess(string dir)
     {
-        foreach (var c in value)
-        {
-            if (c is < '0' or > '9')
-                return false;
-        }
+        var name = Path.GetFileName(dir);
+        if (string.IsNullOrEmpty(name) || !IsAllDigits(name))
+            return false;
 
-        return value.Length > 0;
+        if (!TryReadCmdline(dir, out var cmdline))
+            return false;
+
+        var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            return false;
+
+        if (string.Join(' ', parts).Contains("--clear-system-proxy", StringComparison.Ordinal))
+            return false;
+
+        return IsInspectorExecutable(parts[0]);
     }
+
+    private static bool TryReadCmdline(string dir, out string cmdline)
+    {
+        try
+        {
+            cmdline = File.ReadAllText(Path.Combine(dir, "cmdline"));
+            return cmdline.Length > 0;
+        }
+        catch
+        {
+            cmdline = string.Empty;
+            return false;
+        }
+    }
+
+    private static bool IsInspectorExecutable(string exe) =>
+        exe.EndsWith("/TitaniumInspector", StringComparison.Ordinal) ||
+        string.Equals(exe, "TitaniumInspector", StringComparison.Ordinal) ||
+        string.Equals(Path.GetFileName(exe), "TitaniumInspector", StringComparison.Ordinal);
+
+    private static bool IsAllDigits(string value) =>
+        value.Length > 0 && !value.Any(static c => c is < '0' or > '9');
 }

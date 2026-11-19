@@ -2246,27 +2246,6 @@ public sealed class CertificateManager : IDisposable
     }
 
     /// <summary>
-    ///     Edge's cert verifier does not treat an NSS <c>C,,</c> root as a server trust anchor.
-    ///     When this root is already trusted, refresh the Chromium <c>CACertificates</c> policy
-    ///     so a later browser start decrypts without another trust prompt.
-    /// </summary>
-    private void PublishLinuxCaPolicyIfAlreadyTrusted()
-    {
-        if (!RunTime.IsLinux || RootCertificate == null || ShouldSuppressInteractiveRootStoreMutations)
-            return;
-
-        try
-        {
-            if (VerifyOsUserSslTrust())
-                Helpers.LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(RootCertificate);
-        }
-        catch
-        {
-            // NSS trust still covers browsers that read ~/.pki/nssdb.
-        }
-    }
-
-    /// <summary>
     ///     Ensure certificates are setup (creates root if required).
     ///     Also makes root certificate trusted based on provided parameters.
     /// </summary>
@@ -2288,6 +2267,27 @@ public sealed class CertificateManager : IDisposable
         TrustRootAsAdministrator = trustRootCertificateAsAdmin;
 
         EnsureRootCertificate();
+    }
+
+    /// <summary>
+    ///     Edge's cert verifier does not treat an NSS <c>C,,</c> root as a server trust anchor.
+    ///     When this root is already trusted, refresh the Chromium <c>CACertificates</c> policy
+    ///     so a later browser start decrypts without another trust prompt.
+    /// </summary>
+    private void PublishLinuxCaPolicyIfAlreadyTrusted()
+    {
+        if (!RunTime.IsLinux || RootCertificate == null || ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        try
+        {
+            if (VerifyOsUserSslTrust())
+                Helpers.LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(RootCertificate);
+        }
+        catch
+        {
+            // NSS trust still covers browsers that read ~/.pki/nssdb.
+        }
     }
 
     /// <summary>
@@ -2345,72 +2345,73 @@ public sealed class CertificateManager : IDisposable
         RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: false);
 
         if (!RunTime.IsWindows)
-        {
-            if (RootCertificate == null) return false;
-            if (ShouldSuppressInteractiveRootStoreMutations)
-                return true;
-            var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
-            if (RunTime.IsLinux && removed)
-                Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
-            // Explicit true when only user-store untrust was requested (no machine step).
-            return machineTrusted
-                ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
-                : true; // NOSONAR S1125
-        }
+            return UntrustRootCertificateOutsideWindows(machineTrusted);
 
         // Elevated certutil -delstore shows UAC; skip when Root UI is suppressed.
         if (ShouldSuppressInteractiveRootStoreMutations)
             return true;
 
-        var infos = new List<ProcessStartInfo>();
+        return RunElevatedCertutilDeletes(CertutilDeleteStartInfos(machineTrusted));
+    }
+
+    private bool UntrustRootCertificateOutsideWindows(bool machineTrusted)
+    {
+        if (RootCertificate == null)
+            return false;
+        if (ShouldSuppressInteractiveRootStoreMutations)
+            return true;
+
+        var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+        if (RunTime.IsLinux && removed)
+            Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+
+        // Explicit true when only user-store untrust was requested (no machine step).
+        return machineTrusted
+            ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
+            : true; // NOSONAR S1125
+    }
+
+    private List<ProcessStartInfo> CertutilDeleteStartInfos(bool machineTrusted)
+    {
         if (!machineTrusted)
-            infos.Add(new ProcessStartInfo
-            {
-                FileName = CertUtilExecutablePath,
-                Arguments = "-delstore -user Root \"" + RootCertificateName + "\"",
-                CreateNoWindow = true,
-                UseShellExecute = true,
-                Verb = RunAsAdministrator,
-                ErrorDialog = false,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
-        else
-            infos.AddRange(
-                new List<ProcessStartInfo>
-                {
-                    // localMachine\Personal
-                    new()
-                    {
-                        FileName = CertUtilExecutablePath,
-                        Arguments = "-delstore My \"" + RootCertificateName + "\"",
-                        CreateNoWindow = true,
-                        UseShellExecute = true,
-                        Verb = RunAsAdministrator,
-                        ErrorDialog = false,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    },
+        {
+            return
+            [
+                CertutilDeleteStore("-delstore -user Root \"" + RootCertificateName + "\"")
+            ];
+        }
 
-                    // localMachine\Root
-                    new()
-                    {
-                        FileName = CertUtilExecutablePath,
-                        Arguments = "-delstore Root \"" + RootCertificateName + "\"",
-                        CreateNoWindow = true,
-                        UseShellExecute = true,
-                        Verb = RunAsAdministrator,
-                        ErrorDialog = false,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    }
-                });
+        return
+        [
+            // localMachine\Personal
+            CertutilDeleteStore("-delstore My \"" + RootCertificateName + "\""),
+            // localMachine\Root
+            CertutilDeleteStore("-delstore Root \"" + RootCertificateName + "\"")
+        ];
+    }
 
+    private static ProcessStartInfo CertutilDeleteStore(string arguments) =>
+        new()
+        {
+            FileName = CertUtilExecutablePath,
+            Arguments = arguments,
+            CreateNoWindow = true,
+            UseShellExecute = true,
+            Verb = RunAsAdministrator,
+            ErrorDialog = false,
+            WindowStyle = ProcessWindowStyle.Hidden
+        };
+
+    private static bool RunElevatedCertutilDeletes(List<ProcessStartInfo> infos)
+    {
         var success = true;
         try
         {
             foreach (var info in infos)
             {
                 var process = Process.Start(info);
-
-                if (process == null) success = false;
+                if (process == null)
+                    success = false;
 
                 process?.WaitForExit();
             }

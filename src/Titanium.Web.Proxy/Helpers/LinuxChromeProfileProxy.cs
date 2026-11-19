@@ -21,6 +21,9 @@ internal static class LinuxChromeProfileProxy
     private const string MarkerFileName = "chrome-profile-proxy.json";
     private const string ConfigDirName = ".config";
     private const string ProxyKey = "proxy";
+    private const string ProxyModeKey = "mode";
+    private const string ProxyServerKey = "server";
+    private const string SystemProxyMode = "system";
     private const string FixedServersMode = "fixed_servers";
     private const string ChromiumDirName = "chromium";
     private const string GoogleChromeDirName = "google-chrome";
@@ -287,10 +290,10 @@ internal static class LinuxChromeProfileProxy
             var verify = File.ReadAllText(prefsPath);
             var written = JsonNode.Parse(verify) as JsonObject;
             var writtenProxy = written?[ProxyKey] as JsonObject;
-            var writtenMode = writtenProxy?["mode"]?.GetValue<string>() ?? string.Empty;
-            if (!writtenMode.Equals("system", StringComparison.OrdinalIgnoreCase))
+            var writtenMode = writtenProxy?[ProxyModeKey]?.GetValue<string>() ?? string.Empty;
+            if (!writtenMode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase))
                 return false;
-            var writtenServer = writtenProxy?["server"]?.GetValue<string>() ?? string.Empty;
+            var writtenServer = writtenProxy?[ProxyServerKey]?.GetValue<string>() ?? string.Empty;
             return !writtenServer.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -400,22 +403,22 @@ internal static class LinuxChromeProfileProxy
     /// </summary>
     private static bool ProxyModeShouldBecomeSystem(JsonObject proxy, string hostname, int port)
     {
-        var mode = JsonString(proxy, "mode");
+        var mode = JsonString(proxy, ProxyModeKey);
         if (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        var server = JsonString(proxy, "server");
+        var server = JsonString(proxy, ProxyServerKey);
         return server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsLoopbackFixedOrSystemProxy(JsonObject proxy)
     {
-        if (!IsLoopbackProxyServer(JsonString(proxy, "server")))
+        if (!IsLoopbackProxyServer(JsonString(proxy, ProxyServerKey)))
             return false;
 
-        var mode = JsonString(proxy, "mode");
+        var mode = JsonString(proxy, ProxyModeKey);
         return mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase)
-               || mode.Equals("system", StringComparison.OrdinalIgnoreCase);
+               || mode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string JsonString(JsonObject obj, string name) =>
@@ -423,7 +426,7 @@ internal static class LinuxChromeProfileProxy
 
     private static void WriteSystemProxyMode(JsonObject root, string prefsPath)
     {
-        root[ProxyKey] = new JsonObject { ["mode"] = "system" };
+        root[ProxyKey] = new JsonObject { [ProxyModeKey] = SystemProxyMode };
         AtomicWriteJson(prefsPath, root);
     }
 
@@ -450,7 +453,7 @@ internal static class LinuxChromeProfileProxy
         _ = port;
         var proxy = new JsonObject
         {
-            ["mode"] = "system",
+            [ProxyModeKey] = SystemProxyMode,
         };
         if (_activeLoopback)
             proxy["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList;
@@ -487,19 +490,31 @@ internal static class LinuxChromeProfileProxy
                     return;
                 }
 
-                lock (Gate)
-                {
-                    if (token.IsCancellationRequested || _activeHost is not null)
-                        return;
-                    foreach (var prefsPath in EnumeratePreferencesPaths())
-                    {
-                        if (!string.IsNullOrEmpty(host) && port > 0)
-                            TryStripInspectorProxy(prefsPath, host, port);
-                        TryStripLoopbackFixedServer(prefsPath);
-                    }
-                }
+                if (!StripClearedProfiles(host, port, token))
+                    return;
             }
         }, token);
+    }
+
+    /// <summary>Returns false when a newer Apply owns the profiles and retries should stop.</summary>
+    private static bool StripClearedProfiles(string? host, int port, CancellationToken token)
+    {
+        lock (Gate)
+        {
+            if (token.IsCancellationRequested || _activeHost is not null)
+                return false;
+
+            foreach (var prefsPath in EnumeratePreferencesPaths())
+                StripOneClearedProfile(prefsPath, host, port);
+            return true;
+        }
+    }
+
+    private static void StripOneClearedProfile(string prefsPath, string? host, int port)
+    {
+        if (!string.IsNullOrEmpty(host) && port > 0)
+            TryStripInspectorProxy(prefsPath, host, port);
+        TryStripLoopbackFixedServer(prefsPath);
     }
 
     private static void CancelClearRetries_NoLock()
@@ -663,9 +678,9 @@ internal static class LinuxChromeProfileProxy
             var text = File.ReadAllText(fullPath);
             var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject;
             var proxy = root?[ProxyKey] as JsonObject;
-            var mode = proxy?["mode"]?.GetValue<string>() ?? string.Empty;
-            var server = proxy?["server"]?.GetValue<string>() ?? string.Empty;
-            if (mode.Equals("system", StringComparison.OrdinalIgnoreCase) &&
+            var mode = proxy?[ProxyModeKey]?.GetValue<string>() ?? string.Empty;
+            var server = proxy?[ProxyServerKey]?.GetValue<string>() ?? string.Empty;
+            if (mode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase) &&
                 !server.Contains($"{host}:{port}", StringComparison.OrdinalIgnoreCase))
                 return;
 
