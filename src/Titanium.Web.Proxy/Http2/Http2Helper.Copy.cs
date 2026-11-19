@@ -230,6 +230,19 @@ namespace Titanium.Web.Proxy.Http2
                 if (bytes <= 0 || queueStreamId <= 0)
                     return;
 
+                // Sticky route wins: multi-origin response DATA parks on ClientOutboundDeferred but must
+                // credit the reading origin leg (ServerFrameWriter is null when the pool is on).
+                if (queue.TryGetCreditRoute(queueStreamId, out var routeWriter, out var routeCreditStreamId,
+                        out var routeGuardClientStreamId))
+                {
+                    var guardId = routeGuardClientStreamId > 0 ? routeGuardClientStreamId : routeCreditStreamId;
+                    if (routeCreditStreamId <= 0 || !connectionState.Streams.ContainsKey(guardId))
+                        return;
+
+                    Http2Helper.EnqueueWindowUpdate(routeWriter, routeCreditStreamId, bytes);
+                    return;
+                }
+
                 Http2FrameWriter? creditWriter;
                 var creditStreamId = queueStreamId;
                 if (ReferenceEquals(queue, connectionState.ClientOutboundDeferred))
@@ -688,6 +701,12 @@ namespace Titanium.Web.Proxy.Http2
                             ? connectionState.ClientOutboundDeferred
                             : connectionState.ServerOutboundDeferred;
                         var wireStreamId = dataStreamId;
+                        // Sticky credit route for parked DATA. Response bytes read on an origin leg must
+                        // credit that leg's writer (ServerFrameWriter is null when the pool is on).
+                        // Request bytes on a pool assignment credit the client stream.
+                        Http2FrameWriter? deferredCreditWriter = null;
+                        var deferredCreditStreamId = 0;
+                        var deferredCreditGuardId = 0;
                         if (isClient && connectionState.OriginRelayPool != null
                             && connectionState.OriginRelayPool.TryGetAssignment(dataStreamId, out var assignment))
                         {
@@ -700,10 +719,16 @@ namespace Titanium.Web.Proxy.Http2
                             frameHeaderBuffer[6] = (byte)((wireStreamId >> 16) & 0xff);
                             frameHeaderBuffer[7] = (byte)((wireStreamId >> 8) & 0xff);
                             frameHeaderBuffer[8] = (byte)(wireStreamId & 0xff);
+                            deferredCreditWriter = connectionState.ClientFrameWriter;
+                            deferredCreditStreamId = dataStreamId;
+                            deferredCreditGuardId = dataStreamId;
                         }
                         else if (!isClient && originReceiveLeg != null)
                         {
                             dedicatedWriter = connectionState.ClientFrameWriter;
+                            deferredCreditWriter = originReceiveLeg.Writer;
+                            deferredCreditStreamId = peerStreamId;
+                            deferredCreditGuardId = dataStreamId;
                         }
                         else
                         {
@@ -793,6 +818,9 @@ namespace Titanium.Web.Proxy.Http2
                         // Lost-wakeup guard: the peer's WINDOW_UPDATE is handled by the *other* frame loop and
                         // may drain this queue between TryReservePartial/PendingCount and TryEnqueue, parking
                         // the bytes with no further WINDOW_UPDATE ever coming. Re-drain once they are queued.
+                        // Known gap (pre-existing, opt-in pool): originReceiveLeg != null skips redrain. A
+                        // WINDOW_UPDATE that lands between enqueue and the next peer update can leave remapped
+                        // or overflow-leg DATA parked until another update arrives.
                         void RedrainIfParked()
                         {
                             if (originReceiveLeg != null || dedicatedWriter == null || wireStreamId != dataStreamId
@@ -835,8 +863,11 @@ namespace Titanium.Web.Proxy.Http2
                                 return;
 
                             var withheld = forwardLength - reservedNow;
-                            if (withheld > 0)
-                                sendDeferred.WithholdStreamCredit(wireStreamId, withheld);
+                            if (withheld <= 0)
+                                return;
+                            if (!sendDeferred.TryWithholdStreamCredit(wireStreamId, withheld,
+                                    deferredCreditWriter, deferredCreditStreamId, deferredCreditGuardId))
+                                await GrantStreamCreditAsync(creditStreamId, withheld);
                         }
 
                         void EnqueueWireFrame(ReadOnlySpan<byte> payload, bool endStream)
@@ -1918,7 +1949,31 @@ namespace Titanium.Web.Proxy.Http2
                                 {
                                     var parked = pendingBefore > 0 || bodyDeferred.PendingCount(streamId) > 0;
                                     if (parked)
-                                        bodyDeferred.WithholdStreamCredit(streamId, length);
+                                    {
+                                        // Hook path parks on the connection-level deferred queues. A sticky
+                                        // route is only needed for multi-origin response DATA (originReceiveLeg)
+                                        // or request DATA remapped onto a pool assignment.
+                                        Http2FrameWriter? hookCreditWriter = null;
+                                        var hookCreditStreamId = 0;
+                                        var hookCreditGuardId = 0;
+                                        if (!isClient && originReceiveLeg != null)
+                                        {
+                                            hookCreditWriter = originReceiveLeg.Writer;
+                                            hookCreditStreamId = peerStreamId;
+                                            hookCreditGuardId = streamId;
+                                        }
+                                        else if (isClient && connectionState.OriginRelayPool != null
+                                            && connectionState.OriginRelayPool.TryGetAssignment(streamId, out _))
+                                        {
+                                            hookCreditWriter = connectionState.ClientFrameWriter;
+                                            hookCreditStreamId = streamId;
+                                            hookCreditGuardId = streamId;
+                                        }
+
+                                        if (!bodyDeferred.TryWithholdStreamCredit(streamId, length,
+                                                hookCreditWriter, hookCreditStreamId, hookCreditGuardId))
+                                            await GrantStreamCreditAsync(sessionCreditStreamId, length);
+                                    }
                                     else
                                         await GrantStreamCreditAsync(sessionCreditStreamId, length);
                                 }
@@ -3031,6 +3086,9 @@ namespace Titanium.Web.Proxy.Http2
                         if (dataEndStream && isClient)
                             connectionState.MultipartObservers.TryRemove(streamId, out _);
 
+                        Http2FrameWriter? deferredCreditWriter = null;
+                        var deferredCreditStreamId = 0;
+                        var deferredCreditGuardId = 0;
                         if (isClient && connectionState.OriginRelayPool != null
                             && connectionState.OriginRelayPool.TryGetAssignment(streamId, out var assignment))
                         {
@@ -3039,10 +3097,16 @@ namespace Titanium.Web.Proxy.Http2
                             dedicatedWriter = assignment.Leg.Writer;
                             sendFlow = assignment.Leg.SendFlow;
                             sendDeferred = assignment.Leg.OutboundDeferred;
+                            deferredCreditWriter = connectionState.ClientFrameWriter;
+                            deferredCreditStreamId = streamId;
+                            deferredCreditGuardId = streamId;
                         }
                         else if (!isClient && originReceiveLeg != null)
                         {
                             dedicatedWriter = connectionState.ClientFrameWriter;
+                            deferredCreditWriter = originReceiveLeg.Writer;
+                            deferredCreditStreamId = peerStreamId;
+                            deferredCreditGuardId = streamId;
                         }
                         else
                         {
@@ -3118,12 +3182,16 @@ namespace Titanium.Web.Proxy.Http2
                                 return;
 
                             var withheld = frameLength - reservedNow;
-                            if (withheld > 0)
-                                sendDeferred.WithholdStreamCredit(wireStreamId, withheld);
+                            if (withheld <= 0)
+                                return;
+                            if (!sendDeferred.TryWithholdStreamCredit(wireStreamId, withheld,
+                                    deferredCreditWriter, deferredCreditStreamId, deferredCreditGuardId))
+                                await GrantStreamCreditAsync(inboundCreditStreamId, withheld);
                         }
 
                         // Lost-wakeup guard, same as compressed relay. Skipped when the wire id was
                         // remapped: the end-stream callbacks below key the client stream table.
+                        // Known gap (pre-existing, opt-in pool): originReceiveLeg != null skips redrain.
                         void RedrainSessionIfParked()
                         {
                             if (originReceiveLeg != null || dedicatedWriter == null || wireStreamId != streamId
