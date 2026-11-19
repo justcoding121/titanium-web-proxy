@@ -202,8 +202,81 @@ internal static class SmokeApp
         TryDeleteDir(local);
         if (!string.IsNullOrEmpty(opt.Thumb) && OperatingSystem.IsWindows())
             WindowsProfileGuard.RemoveUserRoot(opt.Thumb);
+        if (OperatingSystem.IsMacOS())
+            RemoveMacSystemTitaniumRoots();
         Console.WriteLine("wipe profile");
         return 0;
+    }
+
+    /// <summary>
+    ///     The fresh phase mints a new root. A previous admin-domain root with the same
+    ///     common name makes SSL trust verification ambiguous, and Inspector then persists
+    ///     decrypt off. Best effort: log failures and continue.
+    /// </summary>
+    private static void RemoveMacSystemTitaniumRoots()
+    {
+        try
+        {
+            var listed = RunCapture(
+                "security", "find-certificate -a -Z /Library/Keychains/System.keychain", 15000);
+            var hashes = ExtractSha1Hashes(FilterTitaniumCertRecords(listed.Output));
+            Console.WriteLine("mac-wipe roots=" + hashes.Count);
+            foreach (var hash in hashes)
+            {
+                try
+                {
+                    var pem = RunCapture(
+                        "security",
+                        "find-certificate -Z " + hash + " -p /Library/Keychains/System.keychain",
+                        15000);
+                    var cer = ExtractPem(pem.Output);
+                    if (cer is not null)
+                    {
+                        var path = Path.Combine(Path.GetTempPath(), "titanium-wipe-" + hash + ".pem");
+                        try
+                        {
+                            File.WriteAllText(path, cer);
+                            var removed = RunCapture(
+                                "sudo", "security remove-trusted-cert -d \"" + path + "\"", 20000);
+                            Console.WriteLine(
+                                "mac-wipe remove-trusted-cert " + hash + " exit=" + removed.Code);
+                        }
+                        finally
+                        {
+                            TryDelete(path);
+                        }
+                    }
+
+                    var deleted = RunCapture(
+                        "sudo",
+                        "security delete-certificate -Z " + hash +
+                        " -t /Library/Keychains/System.keychain",
+                        20000);
+                    Console.WriteLine("mac-wipe delete-certificate " + hash + " exit=" + deleted.Code);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("mac-wipe " + hash + " " + ex.GetType().Name + ": " + ex.Message);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("mac-wipe " + ex.GetType().Name + ": " + ex.Message);
+        }
+    }
+
+    private static string? ExtractPem(string text)
+    {
+        const string begin = "-----BEGIN CERTIFICATE-----";
+        const string end = "-----END CERTIFICATE-----";
+        var start = text.IndexOf(begin, StringComparison.Ordinal);
+        if (start < 0)
+            return null;
+        var stop = text.IndexOf(end, start, StringComparison.Ordinal);
+        if (stop < 0)
+            return null;
+        return text[start..(stop + end.Length)] + "\n";
     }
 
     private static async Task<string> MoveMacDmgAppIfNeededAsync(string exe)
