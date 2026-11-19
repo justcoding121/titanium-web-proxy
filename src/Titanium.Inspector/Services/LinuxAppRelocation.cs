@@ -108,35 +108,62 @@ internal static class LinuxAppRelocation
     public static string InstallToLocalShare()
     {
         var sourceDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-        var dest = DefaultInstallDir();
-        if (Directory.Exists(dest))
-            Directory.Delete(dest, recursive: true);
+        return InstallToLocalShare(sourceDir, DefaultInstallDir());
+    }
 
-        Directory.CreateDirectory(dest);
-        CopyDirectory(sourceDir, dest);
+    /// <summary>
+    ///     Atomic install: copy into a sibling temp directory, swap into place, restore the
+    ///     previous install if the swap fails. Test hook takes explicit paths.
+    /// </summary>
+    [SupportedOSPlatform("linux")]
+    internal static string InstallToLocalShare(string sourceDir, string dest)
+    {
+        sourceDir = sourceDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        dest = dest.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var parent = Path.GetDirectoryName(dest)
+            ?? throw new InvalidOperationException("Install destination has no parent directory");
+        Directory.CreateDirectory(parent);
 
-        var exe = Path.Combine(dest, ExeName);
-        if (File.Exists(exe))
+        var staging = Path.Combine(parent, AppDirName + ".tmp-" + Guid.NewGuid().ToString("N"));
+        try
         {
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "/bin/chmod",
-                    ArgumentList = { "+x", exe },
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                })?.WaitForExit(5_000);
-            }
-            catch
-            {
-                // best-effort
-            }
+            DirectoryAtomicReplace.TryDelete(staging);
+            Directory.CreateDirectory(staging);
+            CopyDirectory(sourceDir, staging);
+
+            var stagedExe = Path.Combine(staging, ExeName);
+            if (File.Exists(stagedExe))
+                TryChmodExecutable(stagedExe);
+
+            DirectoryAtomicReplace.Commit(staging, dest);
+        }
+        catch
+        {
+            DirectoryAtomicReplace.TryDelete(staging);
+            throw;
         }
 
         TryWriteWrapper(dest);
         TryWriteDesktopEntry(dest);
         return dest;
+    }
+
+    private static void TryChmodExecutable(string exe)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "/bin/chmod",
+                ArgumentList = { "+x", exe },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })?.WaitForExit(5_000);
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     [SupportedOSPlatform("linux")]

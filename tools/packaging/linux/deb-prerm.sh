@@ -33,25 +33,14 @@ if [[ -n "${USER_NAME}" && -x "${EXE}" ]]; then
   UID_NUM="$(id -u "${USER_NAME}" 2>/dev/null || true)"
   if [[ -n "${UID_NUM}" && "$(id -u)" -eq 0 && "${USER_NAME}" != "root" ]]; then
     RUNTIME="/run/user/${UID_NUM}"
+    # --clear-system-proxy already restores/clears loopback GNOME/KDE and blanks
+    # only loopback-valued session proxy env. Do not force mode 'none' or blank a
+    # corporate http_proxy the user configured themselves.
     sudo -u "${USER_NAME}" \
       env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus" \
       "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-    sudo -u "${USER_NAME}" \
-      env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus" \
-      gsettings set org.gnome.system.proxy mode 'none' >/dev/null 2>&1 || true
-    sudo -u "${USER_NAME}" \
-      env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus" \
-      gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
-    # After the binary. An older build calls unset-environment, which restores
-    # the login-time proxy. An empty override is what keeps new processes direct.
-    sudo -u "${USER_NAME}" \
-      env XDG_RUNTIME_DIR="${RUNTIME}" DBUS_SESSION_BUS_ADDRESS="unix:path=${RUNTIME}/bus" \
-      systemctl --user set-environment http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= no_proxy= NO_PROXY= >/dev/null 2>&1 || true
   else
     "${EXE}" --clear-system-proxy >/dev/null 2>&1 || true
-    gsettings set org.gnome.system.proxy mode 'none' >/dev/null 2>&1 || true
-    gsettings set org.gnome.system.proxy.http enabled false >/dev/null 2>&1 || true
-    systemctl --user set-environment http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= no_proxy= NO_PROXY= >/dev/null 2>&1 || true
   fi
 fi
 
@@ -63,6 +52,18 @@ rm -f \
   /etc/opt/edge/policies/managed/titanium-inspector-proxy.json \
   /etc/brave/policies/managed/titanium-inspector-proxy.json \
   /etc/opera/policies/managed/titanium-inspector-proxy.json
+
+# On remove/purge only (not upgrade): drop the MIME defaults postinst appended so
+# a leftover handler does not keep claiming .deb/.rpm after uninstall.
+action="${1:-}"
+if [[ "${action}" == "remove" || "${action}" == "purge" ]]; then
+  apps=/etc/xdg/mimeapps.list
+  if [[ -f "${apps}" ]]; then
+    tmp="$(mktemp)"
+    grep -v 'titanium-inspector-package.desktop' "${apps}" > "${tmp}" 2>/dev/null || true
+    mv "${tmp}" "${apps}" 2>/dev/null || rm -f "${tmp}"
+  fi
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
   systemctl disable --global titanium-inspector-clear-proxy.timer >/dev/null 2>&1 || true

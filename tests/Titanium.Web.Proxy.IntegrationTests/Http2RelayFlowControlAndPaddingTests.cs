@@ -9,6 +9,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Web.Proxy.Http2;
 using Titanium.Web.Proxy.IntegrationTests.Helpers;
 using Titanium.Web.Proxy.IntegrationTests.Setup;
+using Titanium.Web.Proxy.Options;
 
 namespace Titanium.Web.Proxy.IntegrationTests;
 
@@ -118,6 +119,80 @@ public class Http2RelayFlowControlAndPaddingTests
 
         originDone.TrySetResult();
         Assert.IsTrue(sawEnd, "The parked remainder and END_STREAM must be delivered once credit arrives.");
+        CollectionAssert.AreEqual(expected, received.ToArray(), "Body must arrive byte-for-byte intact.");
+    }
+
+    // Bug class: with MaxOriginHttp2ConnectionsPerAuthority > 1 the pool nulls ServerFrameWriter and
+    // reads every origin frame on a leg loop. Parked response DATA drained on the client loop must
+    // still return stream WINDOW_UPDATE to the reading origin leg; otherwise a multi-MiB body to a
+    // slow client stalls after the proxy's receive window fills.
+    [TestMethod]
+    [Timeout(90_000)]
+    public async Task MultiOrigin_Large_Response_To_Slow_Client_Delivers_Intact()
+    {
+        const int total = 3 * 1024 * 1024;
+        var expected = Pattern(total, seed: 11);
+        using var origin = new Http2RawOriginServer(TestCertificateAuthority.ServerCertificate);
+        var originDone = new TaskCompletionSource();
+        origin.HandleConnection(async conn =>
+        {
+            using var peer = new Http2FlowPeer(conn);
+            await peer.SendInitialSettingsAsync();
+            var req = await peer.ReadMessageAsync(autoCredit: true, Step);
+            await peer.SendHeadersAsync(req.StreamId, [(":status", "200")],
+                [("content-type", "application/octet-stream")], endStream: false);
+            await peer.SendDataAsync(req.StreamId, expected, endStream: true, TimeSpan.FromSeconds(60));
+            await originDone.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        });
+
+        using var suite = new TestSuite(sharedServer);
+        var proxy = suite.GetProxy();
+        proxy.EnableHttp2 = true;
+        proxy.ResourceLimits = ProxyResourceLimits.Default.WithMaxOriginHttp2ConnectionsPerAuthority(2);
+        var uri = new Uri(origin.Url);
+        using var raw = await Http2RawClient.ConnectAsync(proxy.ProxyEndPoints[0].Port, uri.Host, uri.Port);
+        using var client = new Http2FlowPeer(raw.Connection);
+
+        await client.SendHeadersAsync(1, RequestPseudo(uri, "GET"), [], endStream: true);
+
+        var received = new MemoryStream();
+        var sawEnd = false;
+        var quietSince = DateTime.UtcNow;
+        List<(string Name, string Value)>? responseHeaders = null;
+        while (DateTime.UtcNow - quietSince < TimeSpan.FromSeconds(3))
+        {
+            var frame = await client.ReadFrameAsync(TimeSpan.FromMilliseconds(500));
+            if (frame == null) continue;
+            if (frame.Value.Type == Http2FrameType.Headers && frame.Value.StreamId == 1)
+                responseHeaders = client.Connection.DecodeHeaders(frame.Value.Payload);
+            if (frame.Value.Type != Http2FrameType.Data) continue;
+            quietSince = DateTime.UtcNow;
+            received.Write(frame.Value.Payload);
+            sawEnd |= (frame.Value.Flags & Http2FrameFlag.EndStream) != 0;
+        }
+
+        Assert.IsNotNull(responseHeaders, "Response HEADERS must arrive before the body stalls.");
+        Assert.AreEqual("200", Status(responseHeaders));
+        Assert.IsTrue(received.Length > 0, "Some body must flow within the initial window.");
+        Assert.IsTrue(received.Length <= 65535,
+            $"The relay sent {received.Length} bytes but the client only granted 65535.");
+        Assert.IsFalse(sawEnd, "END_STREAM must not overtake the parked body bytes.");
+
+        await client.SendWindowUpdateAsync(0, 4_000_000);
+        await client.SendWindowUpdateAsync(1, 4_000_000);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+        while (!sawEnd && DateTime.UtcNow < deadline)
+        {
+            var frame = await client.ReadFrameAsync(TimeSpan.FromSeconds(1));
+            if (frame is not { Type: Http2FrameType.Data } data || data.StreamId != 1) continue;
+            received.Write(data.Payload);
+            sawEnd = (data.Flags & Http2FrameFlag.EndStream) != 0;
+        }
+
+        originDone.TrySetResult();
+        Assert.IsTrue(sawEnd,
+            $"Parked multi-origin response must finish once credit arrives (got {received.Length}/{total}).");
+        Assert.AreEqual(total, received.Length, "Full 3 MiB body must arrive.");
         CollectionAssert.AreEqual(expected, received.ToArray(), "Body must arrive byte-for-byte intact.");
     }
 

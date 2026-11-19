@@ -5,6 +5,13 @@ name: inspector-install-smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Runner leg to run (all runs the full matrix)'
+        required: false
+        default: all
+        type: choice
+        options: [all, windows-latest, ubuntu-latest, macos-latest]
   pull_request:
     branches: [beta, stable]
   push:
@@ -25,7 +32,9 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # pull_request and push leave inputs.os empty, so those events keep every leg.
+        # A non-empty dispatch value other than "all" runs that one runner only.
+        os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -237,9 +246,12 @@ jobs:
           ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-x64
           cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
           # Local and CI packages must ship the launcher; missing .desktop was a silent skip.
-          dpkg-deb -c "$cand" | grep -q 'usr/share/applications/titanium-inspector.desktop'
-          dpkg-deb -c "$cand" | grep -q 'titanium-inspector-clear'
-          if dpkg-deb -c "$cand" | grep -q 'clear-proxy-if-stopped\.sh'; then
+          # Buffer the listing first: with pipefail, `dpkg-deb -c | grep -q` can SIGPIPE
+          # tar when grep exits early and fail the step even though the member is present.
+          deb_contents=$(dpkg-deb -c "$cand")
+          grep -q 'usr/share/applications/titanium-inspector.desktop' <<<"$deb_contents"
+          grep -q 'titanium-inspector-clear' <<<"$deb_contents"
+          if grep -q 'clear-proxy-if-stopped\.sh' <<<"$deb_contents"; then
             echo "error: candidate .deb still ships clear-proxy-if-stopped.sh" >&2
             exit 1
           fi
@@ -269,6 +281,11 @@ jobs:
           chmod +x "$log/bin/zenity"
           PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh "$cand"
           test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
+          # open-downloaded-package gtk-launches Inspector outside xvfb; a headless
+          # instance can bind the port without enabling system proxy and then
+          # upgrade-verify's CaptureIsListening succeeds against that listener.
+          python3 -c 'import os,signal;exec("def exe(p):\n try:\n  return open(\"/proc/%s/cmdline\"%p,\"rb\").read().split(b\"\\0\",1)[0]\n except OSError:\n  return b\"\"\nfor p in os.listdir(\"/proc\"):\n if p.isdigit() and exe(p)==b\"/opt/titanium-inspector/TitaniumInspector\":\n  os.kill(int(p), signal.SIGTERM)\n")'
+          sleep 1
           run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
           PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh artifacts/prev/TitaniumInspector-linux-x64.deb
           test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"

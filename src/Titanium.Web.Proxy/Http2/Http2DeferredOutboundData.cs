@@ -47,7 +47,19 @@ internal sealed class Http2DeferredOutboundData
     // Inbound bytes read from the sender and parked here. Returned via onBytesForwarded as TryDrain
     // writes them. Cleared by CancelStream and by an END_STREAM frame (the sender is finished).
     private readonly Dictionary<int, int> withheldStreamCredit = new();
+    // Sticky credit target for parked bytes. Needed when the drain runs on a different frame loop
+    // than the reader that withheld (multi-origin response DATA: ServerFrameWriter is null and the
+    // origin leg writer must receive the WINDOW_UPDATE). Cleared by CancelStream / END_STREAM only
+    // so onBytesForwarded can still read it after TryDrain releases the lock.
+    private readonly Dictionary<int, CreditRoute> creditRoutes = new();
     private int roundRobinIndex;
+
+    private readonly struct CreditRoute(Http2FrameWriter writer, int creditStreamId, int guardClientStreamId)
+    {
+        public Http2FrameWriter Writer { get; } = writer;
+        public int CreditStreamId { get; } = creditStreamId;
+        public int GuardClientStreamId { get; } = guardClientStreamId;
+    }
 
     internal readonly struct PendingFrame
     {
@@ -95,6 +107,8 @@ internal sealed class Http2DeferredOutboundData
     /// <summary>
     ///     Records inbound bytes whose stream <c>WINDOW_UPDATE</c> must wait until
     ///     <see cref="TryDrain"/> forwards the matching parked payload.
+    ///     Prefer <see cref="TryWithholdStreamCredit"/> on production paths so a concurrent drain
+    ///     that already emptied the queue does not strand credit.
     /// </summary>
     public void WithholdStreamCredit(int streamId, int bytes)
     {
@@ -106,6 +120,80 @@ internal sealed class Http2DeferredOutboundData
             withheldStreamCredit.TryGetValue(streamId, out var current);
             withheldStreamCredit[streamId] = current + bytes;
         }
+    }
+
+    /// <summary>
+    ///     Atomically withholds stream credit only while <paramref name="streamId"/> still has queued
+    ///     frames. Returns <c>false</c> when the queue is empty (bytes already left; caller must grant
+    ///     stream credit now). Optionally records a sticky credit route for
+    ///     <see cref="TryGetCreditRoute"/>.
+    /// </summary>
+    public bool TryWithholdStreamCredit(int streamId, int bytes, Http2FrameWriter? creditWriter = null,
+        int creditStreamId = 0, int guardClientStreamId = 0)
+    {
+        if (bytes <= 0)
+            return true;
+
+        lock (gate)
+        {
+            if (!byStream.TryGetValue(streamId, out var q) || q.Count == 0)
+                return false;
+
+            withheldStreamCredit.TryGetValue(streamId, out var current);
+            withheldStreamCredit[streamId] = current + bytes;
+            if (creditWriter != null)
+            {
+                creditRoutes[streamId] = new CreditRoute(creditWriter, creditStreamId, guardClientStreamId);
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    ///     Sticky credit target recorded by <see cref="TryWithholdStreamCredit"/>. Remains readable
+    ///     after <see cref="TryDrain"/> so <c>onBytesForwarded</c> (which runs outside the lock) can
+    ///     enqueue the <c>WINDOW_UPDATE</c> on the correct writer.
+    /// </summary>
+    public bool TryGetCreditRoute(int streamId, out Http2FrameWriter writer, out int creditStreamId,
+        out int guardClientStreamId)
+    {
+        lock (gate)
+        {
+            if (creditRoutes.TryGetValue(streamId, out var route))
+            {
+                writer = route.Writer;
+                creditStreamId = route.CreditStreamId;
+                guardClientStreamId = route.GuardClientStreamId;
+                return true;
+            }
+        }
+
+        writer = null!;
+        creditStreamId = 0;
+        guardClientStreamId = 0;
+        return false;
+    }
+
+    /// <summary>
+    ///     When a sticky credit route exists, enqueue the stream <c>WINDOW_UPDATE</c> on that writer
+    ///     if the guard client stream is still alive. Returns <c>true</c> when the route handled the
+    ///     credit (including a dead-stream no-op); <c>false</c> when the caller should use its
+    ///     topology fallback.
+    /// </summary>
+    public bool TryEnqueueRoutedCredit(int streamId, int bytes, Func<int, bool> streamAlive,
+        Action<Http2FrameWriter, int, int> enqueueWindowUpdate)
+    {
+        if (bytes <= 0 || streamId <= 0
+            || !TryGetCreditRoute(streamId, out var writer, out var creditStreamId, out var guardClientStreamId))
+            return false;
+
+        var guardId = guardClientStreamId > 0 ? guardClientStreamId : creditStreamId;
+        if (creditStreamId <= 0 || !streamAlive(guardId))
+            return true;
+
+        enqueueWindowUpdate(writer, creditStreamId, bytes);
+        return true;
     }
 
     /// <summary>
@@ -163,6 +251,7 @@ internal sealed class Http2DeferredOutboundData
         {
             endStreamHandedOff.Remove(streamId);
             withheldStreamCredit.Remove(streamId);
+            creditRoutes.Remove(streamId);
             if (!byStream.Remove(streamId, out q))
                 return;
             roundRobinOrder.Remove(streamId);
@@ -238,6 +327,7 @@ internal sealed class Http2DeferredOutboundData
                     {
                         // Sender is finished. Do not refill its stream window.
                         withheldStreamCredit.Remove(streamId);
+                        creditRoutes.Remove(streamId);
                         NoteEndStream(streamId, onEndStreamQueued, ref endedStreams);
                     }
                     else if (q.Count == 0)
@@ -278,7 +368,10 @@ internal sealed class Http2DeferredOutboundData
                 EnqueueDataFrame(writer, streamId, pending.Rented.AsSpan(pending.Offset, reserved), endStreamNow);
                 wrote = true;
                 if (endStreamNow)
+                {
                     withheldStreamCredit.Remove(streamId);
+                    creditRoutes.Remove(streamId);
+                }
                 else
                     NoteForwarded(streamId, reserved, ref forwarded);
 

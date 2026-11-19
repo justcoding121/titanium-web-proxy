@@ -500,6 +500,64 @@ public class SettingsPersistenceTests
         TryDelete(path);
     }
 
+    [TestMethod]
+    public void MergeMissingFactoryTunnelOnlyHosts_AppendsNewHostsOnce()
+    {
+        var settings = new InspectorSettings
+        {
+            ExclusionsInitialized = true,
+            TunnelOnlyDefaultsVersion = 0,
+            DecryptSkipHosts = ["dropbox.com", "webex.com"],
+        };
+
+        Assert.IsTrue(SettingsService.MergeMissingFactoryTunnelOnlyHosts(settings));
+        CollectionAssert.Contains(settings.DecryptSkipHosts, "apple.com");
+        CollectionAssert.Contains(settings.DecryptSkipHosts, "icloud.com");
+        Assert.AreEqual(SettingsService.CurrentTunnelOnlyDefaultsVersion, settings.TunnelOnlyDefaultsVersion);
+        Assert.IsFalse(SettingsService.MergeMissingFactoryTunnelOnlyHosts(settings),
+            "A second merge at the current version must be a no-op.");
+    }
+
+    [TestMethod]
+    public void MergeMissingFactoryTunnelOnlyHosts_DoesNotReAddUserRemovedHost()
+    {
+        var settings = new InspectorSettings
+        {
+            ExclusionsInitialized = true,
+            TunnelOnlyDefaultsVersion = SettingsService.CurrentTunnelOnlyDefaultsVersion,
+            DecryptSkipHosts = ["dropbox.com"],
+        };
+
+        Assert.IsFalse(SettingsService.MergeMissingFactoryTunnelOnlyHosts(settings));
+        CollectionAssert.DoesNotContain(settings.DecryptSkipHosts, "apple.com");
+    }
+
+    [TestMethod]
+    public void Load_UpgradesTunnelOnlyHostsForExistingSettings()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var json =
+                """
+                {
+                  "ExclusionsInitialized": true,
+                  "TunnelOnlyDefaultsVersion": 0,
+                  "DecryptSkipHosts": [ "dropbox.com", "webex.com" ],
+                  "SystemProxyBypassHosts": []
+                }
+                """;
+            File.WriteAllText(path, json);
+            var loaded = new SettingsService(path).Current;
+            CollectionAssert.Contains(loaded.DecryptSkipHosts, "apple.com");
+            Assert.AreEqual(SettingsService.CurrentTunnelOnlyDefaultsVersion, loaded.TunnelOnlyDefaultsVersion);
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
     private static string TempSettingsPath() =>
         Path.Combine(Path.GetTempPath(), "twp-settings-persist-" + Guid.NewGuid().ToString("N") + ".json");
 

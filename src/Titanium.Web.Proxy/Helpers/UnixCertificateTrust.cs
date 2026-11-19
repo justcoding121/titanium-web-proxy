@@ -55,6 +55,8 @@ internal static partial class UnixCertificateTrust
     private static readonly string[] MacDumpTrustSettingsArgs =
     [
         "dump-trust-settings",
+        // Admin-domain System.keychain policies (sudo add-trusted-cert -d) only appear here.
+        "dump-trust-settings -d",
     ];
 
     private static readonly bool[] MacTrustExportAdminDomain = [false];

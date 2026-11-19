@@ -155,6 +155,53 @@ public class MacAppRelocationTests
     }
 
     [TestMethod]
+    public void DecideRelocateAction_UnreadableInstalledVersion_IsOpenExisting()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ti-mac-reloc-" + Guid.NewGuid().ToString("N"));
+        var app = Path.Combine(root, "Titanium Inspector.app");
+        Directory.CreateDirectory(Path.Combine(app, "Contents"));
+        try
+        {
+            Assert.AreEqual(
+                MacRelocateAction.OpenExisting,
+                MacAppRelocation.DecideRelocateAction(
+                    runningVersion: new Version(8, 0, 0),
+                    installedVersion: null,
+                    installedPath: app));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void CopyBundle_FailureLeavesExistingInstallIntact()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ti-mac-reloc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var tool = FakeOsExecutable.Ensure("twp-sonar-fake-tool-inspector.exe");
+        var source = Path.Combine(root, "source.app");
+        Directory.CreateDirectory(source);
+        var existing = Path.Combine(root, "FAIL-keep.app");
+        Directory.CreateDirectory(existing);
+        File.WriteAllText(Path.Combine(existing, "keep.txt"), "safe");
+        try
+        {
+#pragma warning disable CA1416
+            Assert.ThrowsExactly<IOException>(() =>
+                MacAppRelocation.CopyBundleForTests(source, existing, tool));
+#pragma warning restore CA1416
+            Assert.IsTrue(File.Exists(Path.Combine(existing, "keep.txt")),
+                "A failed copy must not delete the previous install.");
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public void ReadBundleVersion_ParsesShortVersionFromPlist()
     {
         var root = Path.Combine(Path.GetTempPath(), "ti-mac-reloc-" + Guid.NewGuid().ToString("N"));
@@ -241,6 +288,7 @@ internal static class FakeOsExecutable
             var sourcePath = Path.Combine(Path.GetTempPath(), fileName + ".cs");
             File.WriteAllText(sourcePath, """
                 using System;
+                using System.IO;
                 public class Program {
                   public static int Main(string[] args) {
                     var joined = string.Join(" ", args);
@@ -253,6 +301,10 @@ internal static class FakeOsExecutable
                     if (joined.IndexOf("FAIL", StringComparison.Ordinal) >= 0) {
                       Console.Error.WriteLine("denied");
                       return 1;
+                    }
+                    // Mimic ditto: create the destination directory on success.
+                    if (args.Length >= 2) {
+                      try { Directory.CreateDirectory(args[args.Length - 1]); } catch { }
                     }
                     return 0;
                   }

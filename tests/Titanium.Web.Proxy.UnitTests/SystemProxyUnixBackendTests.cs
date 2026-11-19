@@ -337,15 +337,61 @@ public class LinuxSystemProxyBackendTests
         Assert.IsFalse(runner.Commands.Exists(c =>
             c.Contains("set-environment", StringComparison.Ordinal) &&
             c.Contains("127.0.0.1", StringComparison.Ordinal)));
-        Assert.IsTrue(runner.Commands.Exists(c =>
+        // No leftover loopback session env → show-environment is empty → do not blank
+        // a corporate http_proxy the user may have set.
+        Assert.IsFalse(runner.Commands.Exists(c =>
             c.Contains("set-environment", StringComparison.Ordinal) &&
-            c.Contains("http_proxy=", StringComparison.Ordinal) &&
-            !c.Contains("http_proxy=http", StringComparison.Ordinal)));
+            c.Contains("http_proxy=", StringComparison.Ordinal)));
 
         backend.RestoreOriginalSettings();
         Assert.IsTrue(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("http_proxy")));
         Assert.IsFalse(runner.Commands.Exists(c =>
             c.Contains("unset-environment", StringComparison.Ordinal)));
+    }
+
+    private static readonly string[] LoopbackOnlySessionProxyKeys = ["http_proxy"];
+
+    [TestMethod]
+    public void CollectLoopbackSessionProxyKeys_FiltersCorporateValues()
+    {
+        var keys = LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys(
+            "http_proxy=http://127.0.0.1:8866\nHTTPS_PROXY=http://corp.example:8080\nFOO=bar\n");
+        CollectionAssert.AreEqual(LoopbackOnlySessionProxyKeys, keys.ToArray());
+        Assert.AreEqual(0, LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys(null).Count);
+        Assert.AreEqual(0, LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys("").Count);
+    }
+
+    [TestMethod]
+    public void ForceClear_BlanksOnlyLoopbackSessionProxyEnv()
+    {
+        var runner = new FakeProcessRunner { TrackGsettings = true };
+        runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
+        runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
+        runner.SeedGsettings("org.gnome.system.proxy", "mode", "'none'");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "enabled", "false");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy", "ignore-hosts", "[]");
+        runner.When("sh", "command -v kwriteconfig6", "\n");
+        runner.When("sh", "command -v kwriteconfig5", "\n");
+        runner.When("systemctl", "--user show-environment",
+            "http_proxy=http://127.0.0.1:8866\nHTTPS_PROXY=http://corp.example:8080\n");
+        runner.DefaultSuccess = true;
+
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
+        backend.ForceClearInstalledProxy();
+
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("set-environment", StringComparison.Ordinal) &&
+            c.Contains("http_proxy=", StringComparison.Ordinal) &&
+            !c.Contains("HTTPS_PROXY=", StringComparison.Ordinal)),
+            "Only the loopback-valued http_proxy key must be blanked.");
+        Assert.IsFalse(runner.Commands.Exists(c =>
+            c.Contains("set-environment", StringComparison.Ordinal) &&
+            c.Contains("HTTPS_PROXY=", StringComparison.Ordinal)),
+            "A corporate HTTPS_PROXY must stay.");
     }
 
     [TestMethod]

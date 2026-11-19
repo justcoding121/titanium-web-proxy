@@ -113,8 +113,9 @@ internal static partial class MacAppRelocation
             return MacRelocateAction.Install;
 
         var fromBundle = ReadBundleVersion(installedPath);
+        // Unreadable version → keep the existing install (Linux DecideRelocateAction does the same).
         if (fromBundle is null)
-            return MacRelocateAction.Replace;
+            return MacRelocateAction.OpenExisting;
 
         return ReleaseVersion.Compare(runningVersion, fromBundle) > 0
             ? MacRelocateAction.Replace
@@ -292,14 +293,30 @@ internal static partial class MacAppRelocation
 
     private static void CopyBundle(string source, string dest, string dittoExecutable)
     {
-        if (Directory.Exists(dest))
-            Directory.Delete(dest, recursive: true);
+        var parent = Path.GetDirectoryName(dest.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? throw new InvalidOperationException("Destination has no parent directory");
+        Directory.CreateDirectory(parent);
 
-        // ditto preserves resource forks / code signature better than recursive File.Copy.
+        var staging = Path.Combine(parent, Path.GetFileName(dest) + ".tmp-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            // ditto preserves resource forks / code signature better than recursive File.Copy.
+            RunDitto(source, staging, dittoExecutable);
+            DirectoryAtomicReplace.Commit(staging, dest);
+        }
+        catch
+        {
+            DirectoryAtomicReplace.TryDelete(staging);
+            throw;
+        }
+    }
+
+    private static void RunDitto(string source, string staging, string dittoExecutable)
+    {
         var psi = new ProcessStartInfo
         {
             FileName = dittoExecutable,
-            ArgumentList = { source, dest },
+            ArgumentList = { source, staging },
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardError = true,

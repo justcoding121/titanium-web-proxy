@@ -110,6 +110,13 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         TryApplyProcessEnvironment(hostname, port, protocolType, proxyOverride);
         var sessionEnvApplied = TryApplySessionEnvironment(hostname, port, protocolType, proxyOverride);
         var hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess);
+        if (desktopError is not null && !pinProcess && _applyBrowserLaunchHooks)
+        {
+            // Session desktop looked like GNOME/KDE but gsettings/kwrite failed (common under
+            // xvfb / dbus-run-session). Pin Chromium so ProxyMode=system is not left as DIRECT.
+            hooksApplied = TryCommitBrowserLaunchHooks(hostname, port, proxyOverride, pinProcess: true)
+                           || hooksApplied;
+        }
 
         if (desktopError is not null && !hooksApplied)
             throw desktopError;
@@ -408,19 +415,22 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         }
     }
 
-    private bool TryApplySessionEnvironment(
+    private static bool TryApplySessionEnvironment(
         string hostname, int port, ProxyProtocolType protocolType, string? proxyOverride)
     {
         // Do not publish http_proxy into the user session. environment.d is loaded at
         // the next login, before Inspector starts, and systemd --user keeps the same
         // variables for every new process. GNOME/KDE plus browser hooks are the proxy.
+        // Only delete a leftover drop-in from an older build — do not call
+        // ClearUserSessionProxyEnvironment here: that runs systemctl --user and can
+        // burn the ProcessRunner timeout before gsettings runs on SetProxy.
         _ = hostname;
         _ = port;
         _ = protocolType;
         _ = proxyOverride;
         try
         {
-            ClearUserSessionProxyEnvironment();
+            TryDeleteSessionEnvDropIn();
         }
         catch
         {
@@ -972,12 +982,48 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         // An older build published these into the user manager's base environment.
         // unset-environment removes only an override and puts http://127.0.0.1:8866
-        // back. An empty override hides that value until the next login, and
-        // deleting environment.d keeps that login from loading it again.
-        _runner.Run("systemctl",
-            "--user set-environment http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= no_proxy= NO_PROXY=");
+        // back. Blank only keys whose current value is loopback so a corporate
+        // http_proxy the user set themselves is left alone.
+        var toBlank = CollectLoopbackSessionProxyKeys(
+            _runner.Run("systemctl", "--user show-environment")?.StandardOutput);
+        if (toBlank.Count > 0)
+        {
+            toBlank.Add(NoProxyEnv);
+            toBlank.Add(NoProxyEnvUpper);
+            var args = "--user set-environment " + string.Join(' ',
+                toBlank.Distinct(StringComparer.Ordinal).Select(static k => k + "="));
+            _runner.Run("systemctl", args);
+        }
+
         TryDeleteSessionEnvDropIn();
     }
+
+    /// <summary>Parse <c>systemctl --user show-environment</c> output for loopback-valued proxy keys.</summary>
+    internal static List<string> CollectLoopbackSessionProxyKeys(string? showEnvironmentOutput)
+    {
+        var toBlank = new List<string>();
+        if (string.IsNullOrEmpty(showEnvironmentOutput))
+            return toBlank;
+
+        foreach (var raw in showEnvironmentOutput.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            var eq = line.IndexOf('=');
+            if (eq <= 0)
+                continue;
+            var key = line[..eq];
+            if (!IsSessionProxyEnvKey(key))
+                continue;
+            var value = line[(eq + 1)..];
+            if (TryParseProxyUri(value, out var host, out _) && IsLoopbackHost(host))
+                toBlank.Add(key);
+        }
+
+        return toBlank;
+    }
+
+    private static bool IsSessionProxyEnvKey(string key) =>
+        key is HttpProxyEnv or HttpsProxyEnv or HttpProxyEnvUpper or HttpsProxyEnvUpper;
 
     private static void TryDeleteSessionEnvDropIn()
     {
