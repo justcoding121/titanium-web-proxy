@@ -1188,7 +1188,28 @@ internal static class SmokeApp
             if (File.Exists(conf) && File.ReadAllText(conf).Contains(port.ToString(), StringComparison.Ordinal))
                 return true;
             var g = Capture("gsettings", "get org.gnome.system.proxy mode");
-            return g.Contains("manual", StringComparison.OrdinalIgnoreCase);
+            if (g.Contains("manual", StringComparison.OrdinalIgnoreCase))
+                return true;
+            // Under xvfb/dbus-run-session gsettings may be empty while Chromium-family
+            // hooks still pin ProxyServer / managed policy at the Inspector port.
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string[] policyDirs =
+            [
+                Path.Combine(home, ".config", "google-chrome", "policies", "managed"),
+                Path.Combine(home, ".config", "chromium", "policies", "managed"),
+                Path.Combine(home, ".config", "microsoft-edge", "policies", "managed"),
+                Path.Combine(home, ".config", "BraveSoftware", "Brave-Browser", "policies", "managed"),
+                Path.Combine(home, ".config", "opera", "policies", "managed"),
+            ];
+            foreach (var dir in policyDirs)
+            {
+                var policy = Path.Combine(dir, "titanium-inspector-proxy.json");
+                if (File.Exists(policy) &&
+                    File.ReadAllText(policy).Contains(port.ToString(), StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         var services = Capture("networksetup", "-listallnetworkservices");
