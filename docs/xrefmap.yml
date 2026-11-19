@@ -3778,6 +3778,19 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
   nameWithType: InstalledProxyCleanup.ForceClear
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  name: TryForceClearWhenOwned()
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_TryForceClearWhenOwned
+  commentId: M:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned()
+  nameWithType: InstalledProxyCleanup.TryForceClearWhenOwned()
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned*
+  name: TryForceClearWhenOwned
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_TryForceClearWhenOwned_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  nameWithType: InstalledProxyCleanup.TryForceClearWhenOwned
 - uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
   name: LinuxInspectorProcess
   href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html
