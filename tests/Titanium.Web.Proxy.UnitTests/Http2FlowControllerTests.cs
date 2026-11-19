@@ -288,6 +288,18 @@ public class Http2FlowControllerTests
     }
 
     [TestMethod]
+    public void TryReservePartial_TinyInitialWindow_SpendsSubFloorScrap()
+    {
+        var flow = new Http2FlowController();
+        Assert.IsFalse(flow.OnInitialWindowSizeChanged(1024));
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        Assert.AreEqual(1024, flow.TryReservePartial(1, 16384),
+            "A peer with initial window below PartialDataFrameFloor must still get a partial frame.");
+        Assert.AreEqual(0, flow.AvailableSendCredit(1));
+    }
+
+    [TestMethod]
     public void TryReserve_FalseWhenPartialWouldSucceed()
     {
         var flow = new Http2FlowController();

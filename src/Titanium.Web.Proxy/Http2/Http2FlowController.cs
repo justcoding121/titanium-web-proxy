@@ -249,8 +249,10 @@ internal sealed class Http2FlowController
             // A scrap of credit (the RFC 65535 window's 16383-byte tail is fine; a 1-byte tail is not)
             // must not go out as its own DATA frame. The peer echoes that size on WINDOW_UPDATE and the
             // stream never returns to full frames. Leave the scrap in the window until a later update
-            // covers the frame or reaches PartialDataFrameFloor.
-            if (available < bytes && available < PartialDataFrameFloor)
+            // covers the frame or reaches PartialDataFrameFloor. Peers that advertise an initial stream
+            // window below the floor are exempt: every frame would otherwise park forever.
+            if (available < bytes && available < PartialDataFrameFloor
+                && initialStreamWindow >= PartialDataFrameFloor)
                 return 0;
 
             connectionWindow -= available;
