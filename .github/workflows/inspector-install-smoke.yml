@@ -5,6 +5,13 @@ name: inspector-install-smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Runner leg to run (all runs the full matrix)'
+        required: false
+        default: all
+        type: choice
+        options: [all, windows-latest, ubuntu-latest, macos-latest]
   pull_request:
     branches: [beta, stable]
   push:
@@ -25,7 +32,9 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # pull_request and push leave inputs.os empty, so those events keep every leg.
+        # A non-empty dispatch value other than "all" runs that one runner only.
+        os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
