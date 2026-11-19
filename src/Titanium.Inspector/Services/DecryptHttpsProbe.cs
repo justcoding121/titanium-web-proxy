@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
@@ -91,7 +92,7 @@ internal static class DecryptHttpsProbe
     ///     Builds a custom chain with the Inspector MITM root so SslPolicyErrors.UntrustedRoot
     ///     from the OS store does not fail the probe.
     /// </summary>
-    private static bool LeafChainsToMitmRoot(X509Certificate2? leaf, X509Certificate2 mitmRoot)
+    internal static bool LeafChainsToMitmRoot(X509Certificate2? leaf, X509Certificate2 mitmRoot)
     {
         if (leaf is null)
             return false;
@@ -104,11 +105,9 @@ internal static class DecryptHttpsProbe
         if (!chain.Build(leaf))
             return false;
 
-        foreach (var element in chain.ChainElements)
-        {
-            if (string.Equals(element.Certificate.Thumbprint, mitmRoot.Thumbprint, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
+        if (chain.ChainElements.Cast<X509ChainElement>().Any(element =>
+                string.Equals(element.Certificate.Thumbprint, mitmRoot.Thumbprint, StringComparison.OrdinalIgnoreCase)))
+            return true;
 
         return string.Equals(leaf.Thumbprint, mitmRoot.Thumbprint, StringComparison.OrdinalIgnoreCase);
     }
