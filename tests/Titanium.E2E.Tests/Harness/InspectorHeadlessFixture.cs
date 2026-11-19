@@ -33,40 +33,54 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
         _ = visualSkia;
         _session = InspectorHeadlessSessionHost.Get();
 
-        await _session.Dispatch(() =>
+        // macOS CI: PinForTests + CreateMainWindow can race Headless dropping IFontManagerImpl.
+        const int maxAttempts = 8;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            var settings = new SettingsService(_settingsPath);
-            settings.Current.AutoStartCapture = false;
-            settings.Current.AutoSystemProxyOnStart = false;
-            settings.Current.CheckForUpdatesOnStartup = false;
-            settings.Save();
-            // Disable update feed network in headless (empty string short-circuits UpdateService).
-            Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "");
-
-            var registry = new SessionRegistry();
-            var buffer = new SessionStreamBuffer(registry);
-            var updates = new UpdateService(settings);
-            Interception = new InterceptionService(Proxy) { UseInMemoryTrustState = true };
-            IInspectorDialogs dialogs = useAvaloniaDialogs ? new AvaloniaInspectorDialogs() : Dialogs;
-            (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
-                new InspectorViewModelServices(
-                    buffer, registry, updates, settings, Interception, dialogs, PathPicker));
-            ViewModel.BindPort = 0;
-            ViewModel.BindAddress = "127.0.0.1";
-            ViewModel.AutoStartCapture = false;
-            ViewModel.AutoSystemProxyOnStart = false;
-
-            if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            try
             {
-                desktop.MainWindow = Window;
-            }
+                await _session.Dispatch(() =>
+                {
+                    var settings = new SettingsService(_settingsPath);
+                    settings.Current.AutoStartCapture = false;
+                    settings.Current.AutoSystemProxyOnStart = false;
+                    settings.Current.CheckForUpdatesOnStartup = false;
+                    settings.Save();
+                    // Disable update feed network in headless (empty string short-circuits UpdateService).
+                    Environment.SetEnvironmentVariable("TITANIUM_UPDATE_FEED", "");
 
-            Window.Width = 1280;
-            Window.Height = windowHeight;
-            Window.Show();
-            Robot = new InspectorUiRobot(Window);
-            Dispatcher.UIThread.RunJobs();
-        }, CancellationToken.None);
+                    var registry = new SessionRegistry();
+                    var buffer = new SessionStreamBuffer(registry);
+                    var updates = new UpdateService(settings);
+                    Interception = new InterceptionService(Proxy) { UseInMemoryTrustState = true };
+                    IInspectorDialogs dialogs = useAvaloniaDialogs ? new AvaloniaInspectorDialogs() : Dialogs;
+                    (ViewModel, Window) = InspectorAppFactory.CreateMainWindow(
+                        new InspectorViewModelServices(
+                            buffer, registry, updates, settings, Interception, dialogs, PathPicker));
+                    ViewModel.BindPort = 0;
+                    ViewModel.BindAddress = "127.0.0.1";
+                    ViewModel.AutoStartCapture = false;
+                    ViewModel.AutoSystemProxyOnStart = false;
+
+                    if (Avalonia.Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        desktop.MainWindow = Window;
+                    }
+
+                    Window.Width = 1280;
+                    Window.Height = windowHeight;
+                    Window.Show();
+                    Robot = new InspectorUiRobot(Window);
+                    Dispatcher.UIThread.RunJobs();
+                }, CancellationToken.None);
+                return;
+            }
+            catch (InvalidOperationException ex) when (
+                attempt < maxAttempts && IsTransientHeadlessFontRace(ex))
+            {
+                await Task.Delay(25 * attempt);
+            }
+        }
     }
 
     public async Task DispatchAsync(Action action)

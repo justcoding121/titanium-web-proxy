@@ -29,6 +29,8 @@ public class ClientRejectedCertificateBreakerTests
         var proxy = testSuite.GetProxy();
         proxy.EnableDecryptFailureBypass = true;
         proxy.ClientHandshakeRejectThreshold = 3;
+        // Controlled serial aborts: disable the same-instant burst guard so N strikes trip.
+        proxy.ClientHandshakeRejects.MinBurstSpread = TimeSpan.Zero;
 
         var learned = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         proxy.DecryptFailureBypassChanged += (_, e) => learned.TrySetResult(e.Host);
@@ -85,6 +87,7 @@ public class ClientRejectedCertificateBreakerTests
             EnableDecryptFailureBypass = true,
             ClientHandshakeRejectThreshold = 2
         };
+        proxy.ClientHandshakeRejects.MinBurstSpread = TimeSpan.Zero;
         proxy.CertificateManager.RootCertificateName = TestCertificateAuthority.RootCertificateName;
         proxy.CertificateManager.RootCertificate = TestCertificateAuthority.RootCertificate;
         proxy.CertificateManager.SaveFakeCertificates = false;
