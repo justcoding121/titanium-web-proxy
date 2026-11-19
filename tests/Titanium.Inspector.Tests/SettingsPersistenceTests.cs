@@ -292,13 +292,26 @@ public class SettingsPersistenceTests
 
                 vm.BindPort = 0;
                 vm.StartCaptureCommand.Execute(null);
-                await WaitUntil(() => interception.IsRunning);
+                await WaitUntil(() => interception.IsRunning && interception.BoundPort > 0);
 
                 Assert.IsTrue(interception.InstallRootCertificate(false));
                 vm.DecryptHttps = true;
                 await WaitUntil(() => vm.DecryptHttps);
 
                 Assert.IsTrue(vm.DecryptHttps);
+                // SetDecryptHttpsCore already PersistSettings(true). Assert that before
+                // EnsureShutdown cancels the background MITM probe (which must not rewrite false).
+                await WaitUntil(() =>
+                {
+                    try
+                    {
+                        return new SettingsService(path).Current.DecryptHttps;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
                 vm.EnsureShutdown();
             }
 
