@@ -358,9 +358,12 @@ internal static class SmokeApp
                 {
                     TryRelaunchSafari(url);
                 }
-                else if (OperatingSystem.IsMacOS()
-                         && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
-                    TryStartAgain(browserPath, url);
+                else if (OperatingSystem.IsMacOS())
+                {
+                    // Reuse the temp profile / user-data-dir. A bare binary relaunch drops
+                    // enterprise_roots / isolated Chromium prefs and often never hits the URL.
+                    RelaunchMacBrowser(name, browserPath, url, launched);
+                }
             }, safari ? TimeSpan.FromSeconds(8) : null);
             launched.Kill();
             if (!ok)
@@ -373,6 +376,33 @@ internal static class SmokeApp
         }
 
         return true;
+    }
+
+    private static void RelaunchMacBrowser(string name, string browserPath, string url, BrowserLaunch launched)
+    {
+        try
+        {
+            launched.KillProcessOnly();
+            Thread.Sleep(400);
+            if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && launched.DataDir is not null)
+            {
+                SystemProxyBrowserCapture.StartFirefox(browserPath, launched.DataDir, url);
+                return;
+            }
+
+            if (launched.DataDir is not null)
+            {
+                SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
+                    browserPath, launched.DataDir, url, disableQuic: true);
+                return;
+            }
+
+            TryStartAgain(browserPath, url);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("relaunch failed: " + ex.Message);
+        }
     }
 
     private static BrowserLaunch LaunchBrowser(string name, string path, string url)
@@ -388,9 +418,12 @@ internal static class SmokeApp
         {
             var profile = SystemProxyBrowserCapture.CreateTempFirefoxProfile("twp-smoke-ff-");
             File.AppendAllText(Path.Combine(profile, "user.js"),
-                "user_pref(\"security.enterprise_roots.enabled\", true);\n");
+                "user_pref(\"security.enterprise_roots.enabled\", true);\n" +
+                "user_pref(\"browser.aboutwelcome.enabled\", false);\n" +
+                "user_pref(\"browser.startup.page\", 0);\n" +
+                "user_pref(\"browser.startup.homepage\", \"about:blank\");\n");
             Console.WriteLine("firefox: seeded enterprise_roots");
-            if (OperatingSystem.IsLinux())
+            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
                 var port = ReadBindPort();
                 File.AppendAllText(Path.Combine(profile, "user.js"),
@@ -400,8 +433,11 @@ internal static class SmokeApp
                     "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
                     "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
                     "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
-                Console.WriteLine("firefox: manual proxy prefs for the Linux temp profile");
-                ImportRootIntoFirefoxProfile(profile);
+                Console.WriteLine("firefox: manual proxy prefs for the " +
+                                  (OperatingSystem.IsMacOS() ? "macOS" : "Linux") + " temp profile");
+                // Linux always has nss certutil in the smoke image; macOS may not.
+                if (OperatingSystem.IsLinux())
+                    ImportRootIntoFirefoxProfile(profile);
             }
             var proc = SystemProxyBrowserCapture.StartFirefox(path, profile, url);
             return new BrowserLaunch(proc, safari: false, profile);
@@ -1670,7 +1706,7 @@ internal sealed class InspectorProcess : IAsyncDisposable
 
 internal sealed class BrowserLaunch : IDisposable
 {
-    private readonly Process? _process;
+    private Process? _process;
     private readonly bool _safari;
     private readonly string? _dir;
     private readonly string? _killName;
@@ -1683,7 +1719,11 @@ internal sealed class BrowserLaunch : IDisposable
         _killName = killName;
     }
 
-    public void Kill()
+    /// <summary>Temp Firefox profile or Chromium user-data-dir for a same-prefs relaunch.</summary>
+    public string? DataDir => _dir;
+
+    /// <summary>Stop the browser but keep <see cref="DataDir"/> for a proof-URL relaunch.</summary>
+    public void KillProcessOnly()
     {
         try
         {
@@ -1704,8 +1744,27 @@ internal sealed class BrowserLaunch : IDisposable
                     })?.WaitForExit(3000);
                 }
             }
+
+            if (!_safari && OperatingSystem.IsMacOS()
+                && string.IsNullOrEmpty(_killName))
+            {
+                // Firefox smoke launches without MacKillName; still clear the profile lock.
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "killall",
+                    ArgumentList = { "firefox" },
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                })?.WaitForExit(3000);
+            }
         }
         catch { /* already gone */ }
+        _process = null;
+    }
+
+    public void Kill()
+    {
+        KillProcessOnly();
         if (_dir is not null)
         {
             try { Directory.Delete(_dir, true); } catch { /* in use */ }
