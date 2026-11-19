@@ -972,12 +972,43 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         // An older build published these into the user manager's base environment.
         // unset-environment removes only an override and puts http://127.0.0.1:8866
-        // back. An empty override hides that value until the next login, and
-        // deleting environment.d keeps that login from loading it again.
-        _runner.Run("systemctl",
-            "--user set-environment http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= no_proxy= NO_PROXY=");
+        // back. Blank only keys whose current value is loopback so a corporate
+        // http_proxy the user set themselves is left alone.
+        var toBlank = new List<string>();
+        var shown = _runner.Run("systemctl", "--user show-environment");
+        if (shown is { Succeeded: true })
+        {
+            foreach (var raw in shown.StandardOutput.Split('\n'))
+            {
+                var line = raw.TrimEnd('\r');
+                var eq = line.IndexOf('=');
+                if (eq <= 0)
+                    continue;
+                var key = line[..eq];
+                if (!IsSessionProxyEnvKey(key))
+                    continue;
+                var value = line[(eq + 1)..];
+                if (TryParseProxyUri(value, out var host, out _) && IsLoopbackHost(host))
+                    toBlank.Add(key);
+            }
+        }
+
+        if (toBlank.Count > 0)
+        {
+            if (!toBlank.Contains(NoProxyEnv, StringComparer.Ordinal))
+                toBlank.Add(NoProxyEnv);
+            if (!toBlank.Contains(NoProxyEnvUpper, StringComparer.Ordinal))
+                toBlank.Add(NoProxyEnvUpper);
+
+            var args = "--user set-environment " + string.Join(' ', toBlank.Select(static k => k + "="));
+            _runner.Run("systemctl", args);
+        }
+
         TryDeleteSessionEnvDropIn();
     }
+
+    private static bool IsSessionProxyEnvKey(string key) =>
+        key is HttpProxyEnv or HttpsProxyEnv or HttpProxyEnvUpper or HttpsProxyEnvUpper;
 
     private static void TryDeleteSessionEnvDropIn()
     {
