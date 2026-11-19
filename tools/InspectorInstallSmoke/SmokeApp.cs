@@ -1032,7 +1032,17 @@ internal static class SmokeApp
         await app.DisposeAsync();
         PatchDecrypt(true);
         Console.WriteLine("click: FALLBACK (settings seed)");
-        return await InspectorProcess.StartAsync(exe, port);
+        // Quit clears the system proxy. The seeded process has to be listening
+        // and have the proxy back on before a browser is opened.
+        var restarted = await InspectorProcess.StartAsync(exe, port);
+        if (!await restarted.CaptureIsListeningAsync())
+            throw new InvalidOperationException("seeded relaunch did not start capture");
+        if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
+            throw new InvalidOperationException(
+                "seeded relaunch did not enable the system proxy. " + ProxySnapshot());
+        if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(8), settle: TimeSpan.FromSeconds(2)))
+            throw new InvalidOperationException("seeded relaunch did not keep decryptHttps on");
+        return restarted;
     }
 
     /// <summary>
