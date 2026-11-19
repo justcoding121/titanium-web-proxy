@@ -3778,6 +3778,28 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
   nameWithType: InstalledProxyCleanup.ForceClear
+- uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+  name: LinuxInspectorProcess
+  href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html
+  commentId: T:Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+  fullName: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+  nameWithType: LinuxInspectorProcess
+- uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(System.String)
+  name: IsRunning(string?)
+  href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html#Titanium_Web_Proxy_Helpers_LinuxInspectorProcess_IsRunning_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(System.String)
+  name.vb: IsRunning(String)
+  fullName: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(String)
+  nameWithType: LinuxInspectorProcess.IsRunning(string?)
+  nameWithType.vb: LinuxInspectorProcess.IsRunning(String)
+- uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning*
+  name: IsRunning
+  href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html#Titanium_Web_Proxy_Helpers_LinuxInspectorProcess_IsRunning_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning
+  nameWithType: LinuxInspectorProcess.IsRunning
 - uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
   name: UnixProxyBypassMapper
   href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html
