@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 
 namespace Titanium.Web.Proxy.Helpers;
@@ -65,30 +66,14 @@ internal static class LinuxProxyFailOpen
             return false;
 
         var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-        var isHelper = false;
-        var portToken = port.ToString();
-        var portSuffix = ":" + portToken;
-        foreach (var part in parts)
-        {
-            if (part.Contains("fail-open-proxy.py", StringComparison.Ordinal))
-                isHelper = true;
-        }
-
-        if (!isHelper)
+        if (!parts.Any(part => part.Contains("fail-open-proxy.py", StringComparison.Ordinal)))
             return false;
 
-        foreach (var part in parts)
-        {
-            if (string.Equals(part, portToken, StringComparison.Ordinal))
-                return true;
-            if (part.EndsWith(portSuffix, StringComparison.Ordinal))
-            {
-                // host:port — reject accidental suffixes like "x8080" by requiring a colon.
-                return true;
-            }
-        }
-
-        return false;
+        var portToken = port.ToString();
+        var portSuffix = ":" + portToken;
+        return parts.Any(part =>
+            string.Equals(part, portToken, StringComparison.Ordinal)
+            || part.EndsWith(portSuffix, StringComparison.Ordinal));
     }
 
     /// <summary>

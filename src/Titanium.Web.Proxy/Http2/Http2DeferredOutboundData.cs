@@ -176,6 +176,27 @@ internal sealed class Http2DeferredOutboundData
     }
 
     /// <summary>
+    ///     When a sticky credit route exists, enqueue the stream <c>WINDOW_UPDATE</c> on that writer
+    ///     if the guard client stream is still alive. Returns <c>true</c> when the route handled the
+    ///     credit (including a dead-stream no-op); <c>false</c> when the caller should use its
+    ///     topology fallback.
+    /// </summary>
+    public bool TryEnqueueRoutedCredit(int streamId, int bytes, Func<int, bool> streamAlive,
+        Action<Http2FrameWriter, int, int> enqueueWindowUpdate)
+    {
+        if (bytes <= 0 || streamId <= 0
+            || !TryGetCreditRoute(streamId, out var writer, out var creditStreamId, out var guardClientStreamId))
+            return false;
+
+        var guardId = guardClientStreamId > 0 ? guardClientStreamId : creditStreamId;
+        if (creditStreamId <= 0 || !streamAlive(guardId))
+            return true;
+
+        enqueueWindowUpdate(writer, creditStreamId, bytes);
+        return true;
+    }
+
+    /// <summary>
     ///     Enqueues payload bytes that could not be reserved. Ownership of <paramref name="rented" />
     ///     transfers; returned <c>false</c> if the hard cap was hit (caller should RST and return the buffer).
     /// </summary>

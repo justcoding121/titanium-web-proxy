@@ -621,6 +621,29 @@ public class Http2DeferredOutboundDataTests
     }
 
     [TestMethod]
+    public async Task TryEnqueueRoutedCredit_UsesStickyRoute_AndSkipsDeadStream()
+    {
+        await using var ms = new MemoryStream();
+        await using var creditMs = new MemoryStream();
+        await using var creditWriter = new Http2FrameWriter(creditMs);
+        var deferred = new Http2DeferredOutboundData();
+        var buf = ArrayPool<byte>.Shared.Rent(16);
+        Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 16, endStream: false));
+        Assert.IsTrue(deferred.TryWithholdStreamCredit(1, 16, creditWriter, creditStreamId: 9, guardClientStreamId: 1));
+
+        var enqueued = 0;
+        Assert.IsTrue(deferred.TryEnqueueRoutedCredit(1, 16, _ => true,
+            (_, _, n) => enqueued += n));
+        Assert.AreEqual(16, enqueued);
+
+        Assert.IsTrue(deferred.TryEnqueueRoutedCredit(1, 8, _ => false,
+            (_, _, _) => throw new InvalidOperationException("dead stream must not enqueue")));
+        Assert.IsFalse(deferred.TryEnqueueRoutedCredit(2, 8, _ => true,
+            (_, _, _) => throw new InvalidOperationException("missing route must fall through")));
+        await creditWriter.DisposeAsync();
+    }
+
+    [TestMethod]
     public async Task TryGetCreditRoute_ClearsOnEndStreamDrain()
     {
         var flow = new Http2FlowController();

@@ -232,16 +232,10 @@ namespace Titanium.Web.Proxy.Http2
 
                 // Sticky route wins: multi-origin response DATA parks on ClientOutboundDeferred but must
                 // credit the reading origin leg (ServerFrameWriter is null when the pool is on).
-                if (queue.TryGetCreditRoute(queueStreamId, out var routeWriter, out var routeCreditStreamId,
-                        out var routeGuardClientStreamId))
-                {
-                    var guardId = routeGuardClientStreamId > 0 ? routeGuardClientStreamId : routeCreditStreamId;
-                    if (routeCreditStreamId <= 0 || !connectionState.Streams.ContainsKey(guardId))
-                        return;
-
-                    Http2Helper.EnqueueWindowUpdate(routeWriter, routeCreditStreamId, bytes);
+                if (queue.TryEnqueueRoutedCredit(queueStreamId, bytes,
+                        id => connectionState.Streams.ContainsKey(id),
+                        static (w, sid, n) => Http2Helper.EnqueueWindowUpdate(w, sid, n)))
                     return;
-                }
 
                 Http2FrameWriter? creditWriter;
                 var creditStreamId = queueStreamId;

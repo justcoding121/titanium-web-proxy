@@ -350,6 +350,16 @@ public class LinuxSystemProxyBackendTests
     }
 
     [TestMethod]
+    public void CollectLoopbackSessionProxyKeys_FiltersCorporateValues()
+    {
+        var keys = LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys(
+            "http_proxy=http://127.0.0.1:8866\nHTTPS_PROXY=http://corp.example:8080\nFOO=bar\n");
+        CollectionAssert.AreEqual(new[] { "http_proxy" }, keys.ToArray());
+        Assert.AreEqual(0, LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys(null).Count);
+        Assert.AreEqual(0, LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys("").Count);
+    }
+
+    [TestMethod]
     public void ForceClear_BlanksOnlyLoopbackSessionProxyEnv()
     {
         var runner = new FakeProcessRunner { TrackGsettings = true };

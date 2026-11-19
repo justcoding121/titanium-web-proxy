@@ -125,11 +125,9 @@ internal static class LinuxAppRelocation
         Directory.CreateDirectory(parent);
 
         var staging = Path.Combine(parent, AppDirName + ".tmp-" + Guid.NewGuid().ToString("N"));
-        var backup = Path.Combine(parent, AppDirName + ".old-" + Guid.NewGuid().ToString("N"));
         try
         {
-            if (Directory.Exists(staging))
-                Directory.Delete(staging, recursive: true);
+            DirectoryAtomicReplace.TryDelete(staging);
             Directory.CreateDirectory(staging);
             CopyDirectory(sourceDir, staging);
 
@@ -137,24 +135,11 @@ internal static class LinuxAppRelocation
             if (File.Exists(stagedExe))
                 TryChmodExecutable(stagedExe);
 
-            if (Directory.Exists(dest))
-                Directory.Move(dest, backup);
-            Directory.Move(staging, dest);
-            if (Directory.Exists(backup))
-                Directory.Delete(backup, recursive: true);
+            DirectoryAtomicReplace.Commit(staging, dest);
         }
         catch
         {
-            if (!Directory.Exists(dest) && Directory.Exists(backup))
-            {
-                try { Directory.Move(backup, dest); } catch { /* best-effort restore */ }
-            }
-
-            if (Directory.Exists(staging))
-            {
-                try { Directory.Delete(staging, recursive: true); } catch { /* ignore */ }
-            }
-
+            DirectoryAtomicReplace.TryDelete(staging);
             throw;
         }
 

@@ -65,6 +65,42 @@ public class LinuxInspectorProxyOwnershipTests
     }
 
     [TestMethod]
+    public void HasEvidence_MachinePolicyFile_IsTrue()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ti-own-machine-" + Path.GetRandomFileName());
+        var managed = Path.Combine(root, "policies", "managed");
+        Directory.CreateDirectory(managed);
+        File.WriteAllText(Path.Combine(managed, "titanium-inspector-proxy.json"), "{}");
+        var emptyHome = Path.Combine(Path.GetTempPath(), "ti-own-empty-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(emptyHome);
+        var previous = LinuxInspectorProxyOwnership.MachinePolicyRootsForTests;
+        try
+        {
+            LinuxInspectorProxyOwnership.MachinePolicyRootsForTests = [root];
+            Assert.IsTrue(LinuxInspectorProxyOwnership.HasEvidence(emptyHome));
+        }
+        finally
+        {
+            LinuxInspectorProxyOwnership.MachinePolicyRootsForTests = previous;
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+            try { Directory.Delete(emptyHome, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
+    public void TryForceClearWhenOwned_NonLinux_ReturnsTrue()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            Assert.Inconclusive("Exercises the non-Linux short path.");
+            return;
+        }
+
+        // Windows/macOS always clear; ForceClear is a no-op when no loopback proxy is enabled.
+        Assert.IsTrue(InstalledProxyCleanup.TryForceClearWhenOwned());
+    }
+
+    [TestMethod]
     public void TryForceClearWhenOwned_NoEvidence_ReturnsFalseOnLinux()
     {
         if (!OperatingSystem.IsLinux())

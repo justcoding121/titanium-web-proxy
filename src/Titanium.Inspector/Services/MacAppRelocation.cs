@@ -298,44 +298,34 @@ internal static partial class MacAppRelocation
         Directory.CreateDirectory(parent);
 
         var staging = Path.Combine(parent, Path.GetFileName(dest) + ".tmp-" + Guid.NewGuid().ToString("N"));
-        var backup = Path.Combine(parent, Path.GetFileName(dest) + ".old-" + Guid.NewGuid().ToString("N"));
         try
         {
             // ditto preserves resource forks / code signature better than recursive File.Copy.
-            var psi = new ProcessStartInfo
-            {
-                FileName = dittoExecutable,
-                ArgumentList = { source, staging },
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true,
-            };
-            using var proc = Process.Start(psi)
-                ?? throw new InvalidOperationException("Failed to start ditto");
-            var err = proc.StandardError.ReadToEnd();
-            proc.WaitForExit(120_000);
-            if (proc.ExitCode != 0)
-                throw new IOException(string.IsNullOrWhiteSpace(err) ? "ditto failed" : err.Trim());
-
-            if (Directory.Exists(dest))
-                Directory.Move(dest, backup);
-            Directory.Move(staging, dest);
-            if (Directory.Exists(backup))
-                Directory.Delete(backup, recursive: true);
+            RunDitto(source, staging, dittoExecutable);
+            DirectoryAtomicReplace.Commit(staging, dest);
         }
         catch
         {
-            if (!Directory.Exists(dest) && Directory.Exists(backup))
-            {
-                try { Directory.Move(backup, dest); } catch { /* best-effort restore */ }
-            }
-
-            if (Directory.Exists(staging))
-            {
-                try { Directory.Delete(staging, recursive: true); } catch { /* ignore */ }
-            }
-
+            DirectoryAtomicReplace.TryDelete(staging);
             throw;
         }
+    }
+
+    private static void RunDitto(string source, string staging, string dittoExecutable)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = dittoExecutable,
+            ArgumentList = { source, staging },
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+        };
+        using var proc = Process.Start(psi)
+            ?? throw new InvalidOperationException("Failed to start ditto");
+        var err = proc.StandardError.ReadToEnd();
+        proc.WaitForExit(120_000);
+        if (proc.ExitCode != 0)
+            throw new IOException(string.IsNullOrWhiteSpace(err) ? "ditto failed" : err.Trim());
     }
 }

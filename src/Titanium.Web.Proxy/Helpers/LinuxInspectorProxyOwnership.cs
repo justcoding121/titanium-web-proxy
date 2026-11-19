@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -18,6 +19,8 @@ internal static class LinuxInspectorProxyOwnership
     private const string FailOpenPidFileName = "fail-open-proxy.pid";
     private const string FirefoxBackupFileName = "firefox-proxy-backup.json";
     private const string PolicyFileName = "titanium-inspector-proxy.json";
+    private const string PoliciesDirName = "policies";
+    private const string ManagedDirName = "managed";
 
     /// <summary>
     ///     True when any on-disk marker proves Inspector configured the proxy for this user.
@@ -39,39 +42,44 @@ internal static class LinuxInspectorProxyOwnership
             || File.Exists(Path.Combine(inspectorDir, FirefoxBackupFileName)))
             return true;
 
-        foreach (var dir in UserPolicyDirectories(home))
-        {
-            if (File.Exists(Path.Combine(dir, PolicyFileName)))
-                return true;
-        }
+        if (UserPolicyDirectories(home).Any(dir => File.Exists(Path.Combine(dir, PolicyFileName))))
+            return true;
 
         // Machine policy under /etc is also ownership: an admin install wrote it.
-        foreach (var path in MachinePolicyPaths())
-        {
-            if (File.Exists(path))
-                return true;
-        }
-
-        return false;
+        // Tests inject roots via <see cref="MachinePolicyRootsForTests"/>.
+        return MachinePolicyPaths().Any(File.Exists);
     }
 
-    private static string[] UserPolicyDirectories(string home) =>
-    [
-        Path.Combine(home, ConfigDirName, "google-chrome", "policies", "managed"),
-        Path.Combine(home, ConfigDirName, "google-chrome-beta", "policies", "managed"),
-        Path.Combine(home, ConfigDirName, "google-chrome-unstable", "policies", "managed"),
-        Path.Combine(home, ConfigDirName, "chromium", "policies", "managed"),
-        Path.Combine(home, ConfigDirName, "BraveSoftware", "Brave-Browser", "policies", "managed"),
-        Path.Combine(home, ConfigDirName, "microsoft-edge", "policies", "managed"),
-        Path.Combine(home, ConfigDirName, "opera", "policies", "managed"),
-    ];
+    /// <summary>Test hook: when set, replaces the hard-coded /etc policy roots.</summary>
+    internal static string[]? MachinePolicyRootsForTests { get; set; }
 
-    private static string[] MachinePolicyPaths() =>
-    [
-        Path.Combine("/etc/opt/chrome", "policies", "managed", PolicyFileName),
-        Path.Combine("/etc/chromium", "policies", "managed", PolicyFileName),
-        Path.Combine("/etc/opt/edge", "policies", "managed", PolicyFileName),
-        Path.Combine("/etc/brave", "policies", "managed", PolicyFileName),
-        Path.Combine("/etc/opera", "policies", "managed", PolicyFileName),
-    ];
+    private static string[] UserPolicyDirectories(string home)
+    {
+        string Dir(params string[] parts) =>
+            Path.Combine([home, ConfigDirName, .. parts, PoliciesDirName, ManagedDirName]);
+
+        return
+        [
+            Dir("google-chrome"),
+            Dir("google-chrome-beta"),
+            Dir("google-chrome-unstable"),
+            Dir("chromium"),
+            Dir("BraveSoftware", "Brave-Browser"),
+            Dir("microsoft-edge"),
+            Dir("opera"),
+        ];
+    }
+
+    private static string[] MachinePolicyPaths()
+    {
+        var roots = MachinePolicyRootsForTests ??
+        [
+            "/etc/opt/chrome",
+            "/etc/chromium",
+            "/etc/opt/edge",
+            "/etc/brave",
+            "/etc/opera",
+        ];
+        return roots.Select(root => Path.Combine(root, PoliciesDirName, ManagedDirName, PolicyFileName)).ToArray();
+    }
 }
