@@ -2234,7 +2234,7 @@ public sealed class CertificateManager : IDisposable
     ///     Ensure certificates are setup (creates root if required).
     ///     Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
     /// </summary>
-    public void EnsureRootCertificate()
+    public void EnsureRootCertificate() // NOSONAR S4136 -- overload follows PublishLinuxCaPolicy helper below
     {
         if (!CertValidated) CreateRootCertificate();
 
@@ -2339,7 +2339,7 @@ public sealed class CertificateManager : IDisposable
     ///     Removes the trusted certificates from user store, optionally also from machine store
     /// </summary>
     /// <returns>Should also remove from machine store?</returns>
-    public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
+    public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false) // NOSONAR S3776 -- OS untrust and elevated certutil deletes share store-mutation order
     {
         // Current-user: remove all same-CN entries (current + orphans) without elevation.
         RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: false);

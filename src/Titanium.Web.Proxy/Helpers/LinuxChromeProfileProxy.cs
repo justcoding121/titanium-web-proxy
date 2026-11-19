@@ -21,6 +21,9 @@ internal static class LinuxChromeProfileProxy
     private const string MarkerFileName = "chrome-profile-proxy.json";
     private const string ConfigDirName = ".config";
     private const string ProxyKey = "proxy";
+    private const string ProxyModeKey = "mode";
+    private const string ProxyServerKey = "server";
+    private const string SystemProxyMode = "system";
     private const string FixedServersMode = "fixed_servers";
     private const string ChromiumDirName = "chromium";
     private const string GoogleChromeDirName = "google-chrome";
@@ -29,7 +32,7 @@ internal static class LinuxChromeProfileProxy
     private const string MicrosoftEdgeDirName = "microsoft-edge";
     private const string FlatpakConfigDirName = "config";
 
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly List<FileSystemWatcher> Watchers = new();
     private static readonly int[] ClearRetryDelaysMs = [300, 800, 1500, 3000];
     private static string? _activeHost;
@@ -287,10 +290,10 @@ internal static class LinuxChromeProfileProxy
             var verify = File.ReadAllText(prefsPath);
             var written = JsonNode.Parse(verify) as JsonObject;
             var writtenProxy = written?[ProxyKey] as JsonObject;
-            var writtenMode = writtenProxy?["mode"]?.GetValue<string>() ?? string.Empty;
-            if (!writtenMode.Equals("system", StringComparison.OrdinalIgnoreCase))
+            var writtenMode = writtenProxy?[ProxyModeKey]?.GetValue<string>() ?? string.Empty;
+            if (!writtenMode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase))
                 return false;
-            var writtenServer = writtenProxy?["server"]?.GetValue<string>() ?? string.Empty;
+            var writtenServer = writtenProxy?[ProxyServerKey]?.GetValue<string>() ?? string.Empty;
             return !writtenServer.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -400,7 +403,7 @@ internal static class LinuxChromeProfileProxy
     /// </summary>
     private static bool ProxyModeShouldBecomeSystem(JsonObject proxy, string hostname, int port)
     {
-        var mode = JsonString(proxy, "mode");
+        var mode = JsonString(proxy, ProxyModeKey);
         if (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
             return true;
 
@@ -410,12 +413,12 @@ internal static class LinuxChromeProfileProxy
 
     private static bool IsLoopbackFixedOrSystemProxy(JsonObject proxy)
     {
-        if (!IsLoopbackProxyServer(JsonString(proxy, "server")))
+        if (!IsLoopbackProxyServer(JsonString(proxy, ProxyServerKey)))
             return false;
 
-        var mode = JsonString(proxy, "mode");
+        var mode = JsonString(proxy, ProxyModeKey);
         return mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase)
-               || mode.Equals("system", StringComparison.OrdinalIgnoreCase);
+               || mode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string JsonString(JsonObject obj, string name) =>
@@ -423,7 +426,7 @@ internal static class LinuxChromeProfileProxy
 
     private static void WriteSystemProxyMode(JsonObject root, string prefsPath)
     {
-        root[ProxyKey] = new JsonObject { ["mode"] = "system" };
+        root[ProxyKey] = new JsonObject { [ProxyModeKey] = SystemProxyMode };
         AtomicWriteJson(prefsPath, root);
     }
 
@@ -450,7 +453,7 @@ internal static class LinuxChromeProfileProxy
         _ = port;
         var proxy = new JsonObject
         {
-            ["mode"] = "system",
+            [ProxyModeKey] = SystemProxyMode,
         };
         if (_activeLoopback)
             proxy["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList;
@@ -464,7 +467,7 @@ internal static class LinuxChromeProfileProxy
         File.Move(tmp, prefsPath, overwrite: true);
     }
 
-    private static void ScheduleClearRetries_NoLock(string? host, int port)
+    private static void ScheduleClearRetries_NoLock(string? host, int port) // NOSONAR S3776 -- delayed strip retries share cancellation with the active Apply gate
     {
         CancelClearRetries_NoLock();
         // Still retry when the marker is gone: Chrome can flush loopback fixed_servers

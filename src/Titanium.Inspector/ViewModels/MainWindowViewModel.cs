@@ -902,7 +902,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         SetStatus("Stopping…", StatusSeverity.Busy);
         await Task.Yield();
-        await RunOffUiAsync(EnsureShutdown);
+        await RunOffUiAsync(EnsureShutdown, StatusCancelToken);
     }
 
     /// <summary>

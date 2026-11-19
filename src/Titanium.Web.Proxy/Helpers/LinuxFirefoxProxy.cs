@@ -16,6 +16,8 @@ namespace Titanium.Web.Proxy.Helpers;
 internal static partial class LinuxFirefoxProxy
 {
     private const string BackupFileName = "firefox-proxy-backup.json";
+    private const string MozillaDirName = ".mozilla";
+    private const string FirefoxDirName = "firefox";
     private const string MarkerPref = "titanium.inspector.proxy.managed";
     private const string NetworkProxyTypeKey = "network.proxy.type";
     private const string NetworkProxyHttpKey = "network.proxy.http";
@@ -186,10 +188,10 @@ internal static partial class LinuxFirefoxProxy
 
         string[] roots =
         [
-            Path.Combine(home, ".mozilla", "firefox"),
-            Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox"),
-            Path.Combine(home, ".var", "app", "org.mozilla.firefox", ".mozilla", "firefox"),
-            Path.Combine(home, ".var", "app", "org.mozilla.Firefox", ".mozilla", "firefox"),
+            Path.Combine(home, MozillaDirName, FirefoxDirName),
+            Path.Combine(home, "snap", FirefoxDirName, "common", MozillaDirName, FirefoxDirName),
+            Path.Combine(home, ".var", "app", "org.mozilla.firefox", MozillaDirName, FirefoxDirName),
+            Path.Combine(home, ".var", "app", "org.mozilla.Firefox", MozillaDirName, FirefoxDirName),
         ];
 
         if (FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out var defaultProfile, out _) &&

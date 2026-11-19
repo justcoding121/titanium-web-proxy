@@ -70,7 +70,7 @@ internal static class LinuxProxyFailOpen
         return true;
     }
 
-    internal static void Stop()
+    internal static void Stop() // NOSONAR S3776 -- systemd scope stop, pidfile kill, and unit cleanup share fail-open teardown order
     {
         Volatile.Write(ref _ownedByThisProcess, 0);
         try

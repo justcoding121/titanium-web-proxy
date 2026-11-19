@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -13,7 +14,7 @@ public static class LinuxInspectorProcess
     ///     <c>--clear-system-proxy</c> invocation.
     /// </summary>
     /// <param name="procRoot">Override for tests (fake /proc tree).</param>
-    public static bool IsRunning(string? procRoot = null)
+    public static bool IsRunning(string? procRoot = null) // NOSONAR S3776 -- /proc scan shares digit/cmdline/exe checks on one pass
     {
         if (!OperatingSystem.IsLinux() && procRoot is null)
             return false;
@@ -22,51 +23,41 @@ public static class LinuxInspectorProcess
         if (!Directory.Exists(root))
             return false;
 
-        foreach (var dir in Directory.EnumerateDirectories(root))
-        {
-            var name = Path.GetFileName(dir);
-            if (string.IsNullOrEmpty(name) || !IsAllDigits(name))
-                continue;
-
-            string cmdline;
-            try
-            {
-                cmdline = File.ReadAllText(Path.Combine(dir, "cmdline"));
-            }
-            catch
-            {
-                continue;
-            }
-
-            if (string.IsNullOrEmpty(cmdline))
-                continue;
-
-            var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0)
-                continue;
-
-            var joined = string.Join(' ', parts);
-            if (joined.Contains("--clear-system-proxy", StringComparison.Ordinal))
-                continue;
-
-            var exe = parts[0];
-            if (exe.EndsWith("/TitaniumInspector", StringComparison.Ordinal) ||
-                string.Equals(exe, "TitaniumInspector", StringComparison.Ordinal) ||
-                string.Equals(Path.GetFileName(exe), "TitaniumInspector", StringComparison.Ordinal))
-                return true;
-        }
-
-        return false;
+        return Directory.EnumerateDirectories(root).Any(IsLiveInspectorProcess);
     }
 
-    private static bool IsAllDigits(string value)
+    private static bool IsLiveInspectorProcess(string dir)
     {
-        foreach (var c in value)
+        var name = Path.GetFileName(dir);
+        if (string.IsNullOrEmpty(name) || !IsAllDigits(name))
+            return false;
+
+        string cmdline;
+        try
         {
-            if (c is < '0' or > '9')
-                return false;
+            cmdline = File.ReadAllText(Path.Combine(dir, "cmdline"));
+        }
+        catch
+        {
+            return false;
         }
 
-        return value.Length > 0;
+        if (string.IsNullOrEmpty(cmdline))
+            return false;
+
+        var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            return false;
+
+        if (string.Join(' ', parts).Contains("--clear-system-proxy", StringComparison.Ordinal))
+            return false;
+
+        var exe = parts[0];
+        return exe.EndsWith("/TitaniumInspector", StringComparison.Ordinal) ||
+               string.Equals(exe, "TitaniumInspector", StringComparison.Ordinal) ||
+               string.Equals(Path.GetFileName(exe), "TitaniumInspector", StringComparison.Ordinal);
     }
+
+    private static bool IsAllDigits(string value) =>
+        value.Length > 0 && value.All(static c => c is >= '0' and <= '9');
 }

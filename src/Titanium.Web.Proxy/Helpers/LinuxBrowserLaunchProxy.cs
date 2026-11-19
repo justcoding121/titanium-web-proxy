@@ -52,6 +52,11 @@ internal static class LinuxBrowserLaunchProxy
     private const string PoliciesManaged = "policies";
     private const string ManagedDirName = "managed";
     private const string MicrosoftEdgeDirName = "microsoft-edge";
+    private const string GoogleChromeStableBin = "/usr/bin/google-chrome-stable";
+    private const string ChromiumBin = "/usr/bin/chromium";
+    private const string MicrosoftEdgeStableBin = "/usr/bin/microsoft-edge-stable";
+    private const string OperaBin = "/usr/bin/opera";
+    private const string ExecPrefix = "exec ";
     private const string FlatpakConfigDirName = "config";
 
     private static readonly string[] DesktopFieldCodes = [" %U", " %u", " %f", " %F", " %s", " \"%s\""];
@@ -70,15 +75,15 @@ internal static class LinuxBrowserLaunchProxy
 
     private static readonly string[] ChromeBinaries =
     [
-        "/usr/bin/google-chrome-stable",
+        GoogleChromeStableBin,
         "/usr/bin/google-chrome",
         "/opt/google/chrome/chrome",
         "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
+        ChromiumBin,
         "/usr/bin/brave-browser",
-        "/usr/bin/microsoft-edge-stable",
+        MicrosoftEdgeStableBin,
         "/usr/bin/microsoft-edge",
-        "/usr/bin/opera",
+        OperaBin,
         "/usr/bin/opera-stable",
     ];
 
@@ -359,11 +364,11 @@ internal static class LinuxBrowserLaunchProxy
 
     private static readonly (string Root, string[] Binaries)[] MachinePolicyVendors =
     [
-        ("/etc/opt/chrome", ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
-        ("/etc/chromium", ["/usr/bin/chromium", "/usr/bin/chromium-browser"]),
-        ("/etc/opt/edge", ["/usr/bin/microsoft-edge-stable", "/usr/bin/microsoft-edge"]),
+        ("/etc/opt/chrome", [GoogleChromeStableBin, "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
+        ("/etc/chromium", [ChromiumBin, "/usr/bin/chromium-browser"]),
+        ("/etc/opt/edge", [MicrosoftEdgeStableBin, "/usr/bin/microsoft-edge"]),
         ("/etc/brave", ["/usr/bin/brave-browser"]),
-        ("/etc/opera", ["/usr/bin/opera", "/usr/bin/opera-stable"]),
+        ("/etc/opera", [OperaBin, "/usr/bin/opera-stable"]),
     ];
 
     private static IEnumerable<string> MachinePolicyFiles(
@@ -559,7 +564,7 @@ internal static class LinuxBrowserLaunchProxy
     ///     <c>ProxyMode=fixed_servers</c> or <c>ProxyServerMode=2</c> must still name the endpoint.
     ///     Extra/unknown properties are allowed (forward compatible).
     /// </summary>
-    internal static bool TryValidatePolicyJson(string json, string hostname, int port, out string? error)
+    internal static bool TryValidatePolicyJson(string json, string hostname, int port, out string? error) // NOSONAR S3776 -- Chromium policy schema branches share one error string
     {
         error = null;
         try
@@ -758,7 +763,7 @@ internal static class LinuxBrowserLaunchProxy
                "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
                "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
                "fi\n" +
-               "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
+               ExecPrefix + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
                " --no-first-run --no-default-browser-check$extra \"$@\"\n";
     }
 
@@ -934,7 +939,7 @@ internal static class LinuxBrowserLaunchProxy
         "#!/bin/sh\n" +
         "# " + DesktopMarker + "\n" +
         "# neutralized: dock may still Exec this path after Clear removes the .desktop override\n" +
-        "exec " + QuoteShellArg(binary) + " \"$@\"\n";
+        ExecPrefix + QuoteShellArg(binary) + " \"$@\"\n";
 
     private static bool TryExtractLaunchBinary(string scriptText, out string binary)
     {
@@ -942,9 +947,9 @@ internal static class LinuxBrowserLaunchProxy
         foreach (var rawLine in scriptText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
         {
             var line = rawLine.Trim();
-            if (!line.StartsWith("exec ", StringComparison.Ordinal))
+            if (!line.StartsWith(ExecPrefix, StringComparison.Ordinal))
                 continue;
-            var rest = line["exec ".Length..].TrimStart();
+            var rest = line[ExecPrefix.Length..].TrimStart();
             if (rest.Length == 0)
                 continue;
             if (rest[0] == '"')

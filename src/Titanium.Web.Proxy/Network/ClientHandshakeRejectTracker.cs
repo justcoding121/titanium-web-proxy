@@ -110,7 +110,6 @@ internal sealed class ClientHandshakeRejectTracker
                 entry.Count++;
             }
 
-            entry.LastUtc = utcNow;
             tripped = entry.Count >= limit
                 && (limit <= 1 || utcNow - entry.FirstUtc >= minBurstSpread);
             if (tripped)
@@ -174,6 +173,5 @@ internal sealed class ClientHandshakeRejectTracker
     {
         internal int Count;
         internal DateTime FirstUtc;
-        internal DateTime LastUtc;
     }
 }
