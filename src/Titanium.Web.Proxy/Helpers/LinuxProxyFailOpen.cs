@@ -45,7 +45,8 @@ internal static class LinuxProxyFailOpen
             var cmdPath = "/proc/" + pid + "/cmdline";
             if (!File.Exists(cmdPath))
                 return;
-            if (!CmdlineCoversPort(File.ReadAllText(cmdPath), port))
+            // /proc cmdline is NUL-separated; read bytes so embedded NULs are preserved.
+            if (!CmdlineCoversPort(File.ReadAllBytes(cmdPath), port))
                 return;
             Stop();
         }
@@ -60,11 +61,21 @@ internal static class LinuxProxyFailOpen
     ///     argument is exactly <paramref name="port"/> (or <c>host:port</c>). Substring match
     ///     would treat port 80 as covering a helper on 8080.
     /// </summary>
-    internal static bool CmdlineCoversPort(string cmdline, int port)
+    internal static bool CmdlineCoversPort(string cmdline, int port) =>
+        CmdlineCoversPort(
+            string.IsNullOrEmpty(cmdline) ? null : System.Text.Encoding.UTF8.GetBytes(cmdline),
+            port);
+
+    /// <summary>
+    ///     Byte form for <c>/proc/.../cmdline</c> (NUL-separated). Prefer this over
+    ///     <see cref="File.ReadAllText(string)"/> so embedded NULs are not truncated.
+    /// </summary>
+    internal static bool CmdlineCoversPort(byte[]? cmdlineBytes, int port)
     {
-        if (port <= 0 || string.IsNullOrEmpty(cmdline))
+        if (port <= 0 || cmdlineBytes is null || cmdlineBytes.Length == 0)
             return false;
 
+        var cmdline = System.Text.Encoding.UTF8.GetString(cmdlineBytes);
         var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         if (!parts.Any(part => part.Contains("fail-open-proxy.py", StringComparison.Ordinal)))
             return false;

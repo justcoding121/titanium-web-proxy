@@ -146,7 +146,7 @@ internal static class SmokeApp
             if (!await app.CaptureIsListeningAsync())
                 return Fail(1, "capture is not listening after upgrade");
             if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
-                return Fail(1, "system proxy is off after upgrade. " + ProxySnapshot());
+                return Fail(1, "system proxy is off after upgrade. " + ProxySnapshot() + " " + LinuxProxyDiag(port));
             Console.WriteLine("upgrade-verify decrypt=true thumb=" + thumb + " proxy=on");
             return await ProveBrowsersAsync(app.StartedUtc, opt.Browsers ?? DefaultBrowsers());
         }
@@ -1153,6 +1153,19 @@ internal static class SmokeApp
             @"Software\Microsoft\Windows\CurrentVersion\Internet Settings");
         return "ProxyEnable=" + (key?.GetValue("ProxyEnable")?.ToString() ?? "null")
                + " ProxyServer=" + (key?.GetValue("ProxyServer") as string ?? "");
+    }
+
+    private static string LinuxProxyDiag(int port)
+    {
+        if (!OperatingSystem.IsLinux())
+            return "";
+        var mode = Capture("gsettings", "get org.gnome.system.proxy mode").Trim();
+        var host = Capture("gsettings", "get org.gnome.system.proxy.http host").Trim();
+        var conf = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".config", "environment.d", "90-titanium-inspector-proxy.conf");
+        var confBit = File.Exists(conf) ? "envdrop=yes" : "envdrop=no";
+        return $"gsettings.mode={mode} http.host={host} port={port} {confBit}";
     }
 
     private static bool ProxyIsOn(int port)

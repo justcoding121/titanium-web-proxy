@@ -414,13 +414,16 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         // Do not publish http_proxy into the user session. environment.d is loaded at
         // the next login, before Inspector starts, and systemd --user keeps the same
         // variables for every new process. GNOME/KDE plus browser hooks are the proxy.
+        // Only delete a leftover drop-in from an older build — do not call
+        // ClearUserSessionProxyEnvironment here: that runs systemctl --user and can
+        // burn the ProcessRunner timeout before gsettings runs on SetProxy.
         _ = hostname;
         _ = port;
         _ = protocolType;
         _ = proxyOverride;
         try
         {
-            ClearUserSessionProxyEnvironment();
+            TryDeleteSessionEnvDropIn();
         }
         catch
         {
