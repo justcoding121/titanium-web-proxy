@@ -900,10 +900,20 @@ internal static class SmokeApp
     private static async Task<InspectorProcess> StartAndDecryptAsync(string exe, int port, bool expectAlreadyOn)
     {
         var app = await InspectorProcess.StartAsync(exe, port);
-        await TrustRootAsync();
-        if (expectAlreadyOn)
-            return app;
-        return await DecryptAndMaybeRelaunchAsync(app, exe, port);
+        try
+        {
+            await TrustRootAsync();
+            if (expectAlreadyOn)
+                return app;
+            return await DecryptAndMaybeRelaunchAsync(app, exe, port);
+        }
+        catch
+        {
+            // Trust / decrypt failures must not leave Inspector holding the smoke driver's
+            // inherited stdout, or a piped `tee` waits until the job times out.
+            await app.DisposeAsync();
+            throw;
+        }
     }
 
     private static async Task<InspectorProcess> DecryptAndMaybeRelaunchAsync(InspectorProcess app, string exe, int port)
@@ -1046,17 +1056,74 @@ internal static class SmokeApp
     {
         var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.cer");
         File.WriteAllBytes(cer, ExportCer(pfx));
-        // Match product trust: login keychain + SSL policy. add-trusted-cert -d from
-        // sudo/osascript cannot show the trust dialog ("no user interaction was possible").
-        Run("security", $"add-trusted-cert -r trustRoot -p ssl \"{cer}\"", 20000);
-        var dump = Capture("security", "dump-trust-settings");
+        try
+        {
+            // Hosted CI cannot show the login-keychain Certificate Trust Settings dialog.
+            // Passwordless sudo can still write the admin-domain System.keychain policy that
+            // Chrome/Safari honor. Interactive local runs keep the product login-keychain path.
+            if (MacTrustNeedsHeadlessInstall())
+            {
+                Run("sudo",
+                    $"security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cer}\"",
+                    20000);
+                var adminDump = Capture("security", "dump-trust-settings -d");
+                if (!MacTrustDumpLooksTrusted(adminDump, thumb))
+                    throw new InvalidOperationException(
+                        "admin trust dump does not list " + thumb + " after add-trusted-cert -p ssl");
+                Console.WriteLine("trusted root " + thumb + " (system keychain ssl policy)");
+                return;
+            }
+
+            // Match product trust: login keychain + SSL policy. Do not pass -d; elevated
+            // add-trusted-cert cannot show the trust dialog ("no user interaction was possible").
+            var keychain = ResolveLoginKeychainForSmoke();
+            if (!string.IsNullOrEmpty(keychain))
+                Run("security", $"unlock-keychain \"{keychain}\"", 15000);
+            var args = string.IsNullOrEmpty(keychain)
+                ? $"add-trusted-cert -r trustRoot -p ssl \"{cer}\""
+                : $"add-trusted-cert -r trustRoot -p ssl -k \"{keychain}\" \"{cer}\"";
+            Run("security", args, 120000);
+            var dump = Capture("security", "dump-trust-settings");
+            if (!MacTrustDumpLooksTrusted(dump, thumb))
+                throw new InvalidOperationException(
+                    "trust dump has no SSL policy for " + thumb + " after add-trusted-cert -p ssl");
+            Console.WriteLine("trusted root " + thumb + " (ssl policy)");
+        }
+        finally
+        {
+            TryDelete(cer);
+        }
+    }
+
+    private static bool MacTrustNeedsHeadlessInstall() =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"))
+        || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
+
+    private static string? ResolveLoginKeychainForSmoke()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var db = Path.Combine(home, "Library", "Keychains", "login.keychain-db");
+        if (File.Exists(db))
+            return db;
+        var legacy = Path.Combine(home, "Library", "Keychains", "login.keychain");
+        return File.Exists(legacy) ? legacy : null;
+    }
+
+    private static bool MacTrustDumpLooksTrusted(string dump, string thumb)
+    {
+        if (string.IsNullOrWhiteSpace(dump)
+            || dump.Contains("No Trust Settings were found", StringComparison.OrdinalIgnoreCase))
+            return false;
+
         var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
-        var hasThumb = compact.Contains(thumb, StringComparison.OrdinalIgnoreCase);
-        var hasSslPolicy = dump.Contains("SSL", StringComparison.OrdinalIgnoreCase);
-        if (!hasThumb && !hasSslPolicy)
-            throw new InvalidOperationException(
-                "trust dump has no SSL policy for " + thumb + " after add-trusted-cert -p ssl");
-        Console.WriteLine("trusted root " + thumb + " (ssl policy)");
+        if (compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Recent macOS dumps often name the cert without a SHA-1 line.
+        return dump.Contains("SSL", StringComparison.OrdinalIgnoreCase)
+            && (dump.Contains("Trust Root", StringComparison.OrdinalIgnoreCase)
+                || dump.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.OrdinalIgnoreCase)
+                || dump.Contains("Policy OID", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void WriteFreshSettings(int port, bool decrypt)
@@ -1511,10 +1578,18 @@ internal sealed class InspectorProcess : IAsyncDisposable
             FileName = exe,
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(exe) ?? Environment.CurrentDirectory,
+            // Detach from the smoke driver's stdout/stderr. Otherwise a piped `tee` stays
+            // open after the driver exits while this Avalonia process is still alive.
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
         psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
         psi.Environment["TITANIUM_UPDATE_FEED"] = "";
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Inspector did not start: " + exe);
+        proc.OutputDataReceived += static (_, _) => { };
+        proc.ErrorDataReceived += static (_, _) => { };
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
         return Task.FromResult(new InspectorProcess(proc));
     }
 
