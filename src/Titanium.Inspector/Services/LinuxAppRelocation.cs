@@ -23,6 +23,7 @@ internal static class LinuxAppRelocation
 {
     internal const string AppDirName = "TitaniumInspector";
     internal const string ExeName = "TitaniumInspector";
+    private const string UserLocalDirName = ".local";
 
     /// <summary>True when APPIMAGE is set or BaseDirectory looks like a squashfs mount.</summary>
     [SupportedOSPlatform("linux")]
@@ -90,14 +91,14 @@ internal static class LinuxAppRelocation
     public static string DefaultInstallDir()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(home, ".local", "share", AppDirName);
+        return Path.Combine(home, UserLocalDirName, "share", AppDirName);
     }
 
     [SupportedOSPlatform("linux")]
     public static string DefaultWrapperPath()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(home, ".local", "bin", "titanium-inspector");
+        return Path.Combine(home, UserLocalDirName, "bin", "titanium-inspector");
     }
 
     /// <summary>
@@ -221,7 +222,7 @@ internal static class LinuxAppRelocation
         try
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var wrapper = Path.Combine(home, ".local", "bin", "titanium-inspector");
+            var wrapper = Path.Combine(home, UserLocalDirName, "bin", "titanium-inspector");
             Directory.CreateDirectory(Path.GetDirectoryName(wrapper)!);
             var exe = Path.Combine(installDir, ExeName);
             File.WriteAllText(wrapper, "#!/usr/bin/env bash\nexec \"" + exe.Replace("\"", "\\\"", StringComparison.Ordinal) + "\" \"$@\"\n");
@@ -244,7 +245,7 @@ internal static class LinuxAppRelocation
         try
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var apps = Path.Combine(home, ".local", "share", "applications");
+            var apps = Path.Combine(home, UserLocalDirName, "share", "applications");
             Directory.CreateDirectory(apps);
             var exe = Path.Combine(installDir, ExeName);
             var desktop = Path.Combine(apps, "titanium-inspector.desktop");

@@ -1883,7 +1883,7 @@ public sealed class CertificateManager : IDisposable
     ///     macOS/Linux SSL trust (Keychain / NSS). May show auth UI — keep on a pumping thread.
     ///     No-op on Windows (Root store presence is trust).
     /// </summary>
-    public void ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false)
+    public void ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false) // NOSONAR S3776 -- OS branches share LastOsTrustResult; splitting hid Mac cancel-fallback from coverage
     {
         if (RunTime.IsWindows || RootCertificate == null)
         {
@@ -1901,7 +1901,7 @@ public sealed class CertificateManager : IDisposable
 
         if (RunTime.IsMac && machineTrusted)
         {
-            // Primary macOS path: one elevated System.keychain batch (policies + stale prune).
+            // One elevated System.keychain batch. Cancel → login keychain (may need Always Trust).
             LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
                 RootCertificate, RootCertificateName);
             if (LastOsTrustResult.Succeeded
@@ -1910,7 +1910,6 @@ public sealed class CertificateManager : IDisposable
 
             if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
             {
-                // Elevation cancelled — fall back to login keychain (may need Always Trust UX).
                 LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
                     RootCertificate, RootCertificateName);
             }

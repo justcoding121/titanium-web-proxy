@@ -2492,17 +2492,8 @@ public partial class ProxyServer : IDisposable
     ///     Ports whose system-proxy entry may be cleared on startup. A port that already accepts
     ///     connections is left alone so a second Inspector cannot drop the first one's proxy.
     /// </summary>
-    internal static HashSet<int> PortsEligibleForStaleProxyClear(IEnumerable<int> ports)
-    {
-        var eligible = new HashSet<int>();
-        foreach (var port in ports)
-        {
-            if (!IsLoopbackPortAccepting(port))
-                eligible.Add(port);
-        }
-
-        return eligible;
-    }
+    internal static HashSet<int> PortsEligibleForStaleProxyClear(IEnumerable<int> ports) =>
+        ports.Where(static port => !IsLoopbackPortAccepting(port)).ToHashSet();
 
     /// <summary>
     ///     True when something on this machine is already accepting TCP on <paramref name="port"/>.

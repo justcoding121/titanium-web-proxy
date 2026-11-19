@@ -30,10 +30,24 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private const string ConfigDirName = ".config";
     private const string InspectorConfigDirName = "TitaniumInspector";
     private const string ProxySnapshotFileName = "proxy-snapshot.json";
+    private const string GsettingsDisabled = "false";
+    private const string ManualProxyMode = "manual";
+    private const string KdeHttpProxyKey = "httpProxy";
+    private const string KdeHttpsProxyKey = "httpsProxy";
+    private const string KdeNoProxyForKey = "NoProxyFor";
+    private const string GnomeIgnoreHostsKey = "ignore-hosts";
+    private const string LoopbackAddress = "127.0.0.1";
+    private const string LocalhostName = "localhost";
+    private const string HttpProxyEnv = "http_proxy";
+    private const string HttpsProxyEnv = "https_proxy";
+    private const string HttpProxyEnvUpper = "HTTP_PROXY";
+    private const string HttpsProxyEnvUpper = "HTTPS_PROXY";
+    private const string NoProxyEnv = "no_proxy";
+    private const string NoProxyEnvUpper = "NO_PROXY";
 
     private static readonly string[] EnvKeys =
     [
-        "http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"
+        HttpProxyEnv, HttpsProxyEnv, NoProxyEnv, HttpProxyEnvUpper, HttpsProxyEnvUpper, NoProxyEnvUpper
     ];
 
     private readonly IProcessRunner _runner;
@@ -146,24 +160,37 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             // X-Cinnamon is used on some Linux Mint versions alongside Cinnamon.
             // "Deepin" only — DDE (older Deepin) falls through to OTHER in Chromium
             // and Chrome does not follow gsettings for it, so DDE stays pinned.
-            if (part.Equals("GNOME", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("Unity", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("Cinnamon", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("X-Cinnamon", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("Deepin", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("Pantheon", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("UKUI", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("COSMIC", StringComparison.OrdinalIgnoreCase) ||
-                // KDE kioslaverc watchers: KDE3–6, plasma desktop name.
-                part.Equals("KDE", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("plasma", StringComparison.OrdinalIgnoreCase))
-            {
+            if (IsLiveProxyDesktop(part))
                 return true;
-            }
         }
 
         return false;
     }
+
+    /// <summary>
+    ///     Desktop names Chromium watches for a live system proxy (gsettings or KDE kioslaverc).
+    /// </summary>
+    private static bool IsLiveProxyDesktop(string part) =>
+        IsGnomeFamilyDesktop(part) || IsKdeFamilyDesktop(part);
+
+    /// <summary>
+    ///     gsettings watchers: GNOME, Unity, Cinnamon, X-Cinnamon, Deepin, Pantheon, UKUI, COSMIC.
+    ///     "Deepin" only — older DDE is not watched, so it stays pinned.
+    /// </summary>
+    private static bool IsGnomeFamilyDesktop(string part) =>
+        part.Equals("GNOME", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("Unity", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("Cinnamon", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("X-Cinnamon", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("Deepin", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("Pantheon", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("UKUI", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("COSMIC", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>KDE kioslaverc watchers: KDE3–6 and the plasma desktop name.</summary>
+    private static bool IsKdeFamilyDesktop(string part) =>
+        part.Equals("KDE", StringComparison.OrdinalIgnoreCase)
+        || part.Equals("plasma", StringComparison.OrdinalIgnoreCase);
 
     private static string? ReadSessionDesktop()
     {
@@ -220,37 +247,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             foreach (var dir in Directory.EnumerateDirectories("/proc", "*"))
             {
-                if (!int.TryParse(Path.GetFileName(dir), out _))
-                    continue;
-                var commPath = Path.Combine(dir, "comm");
-                if (!File.Exists(commPath))
-                    continue;
-                var comm = File.ReadAllText(commPath).Trim();
-                // comm is the kernel task name, truncated to 15 characters. All of the
-                // session daemons we look for fit in that limit, so require an exact match.
-                // A prefix match would also hit gnome-shell-calendar-server.
-                var expected = processName.Length > 15 ? processName[..15] : processName;
-                if (!comm.Equals(expected, StringComparison.Ordinal))
+                if (!IsSessionDaemonComm(dir, processName))
                     continue;
                 candidates++;
                 if (candidates > MaxCandidates)
                     break;
-
-                // Verify the process belongs to the same user.
-                var statusPath = Path.Combine(dir, "status");
-                if (!File.Exists(statusPath))
-                    continue;
-                var status = File.ReadAllText(statusPath);
-                if (!StatusContainsUid(status, uid))
-                    continue;
-
-                var environPath = Path.Combine(dir, "environ");
-                if (!File.Exists(environPath))
-                    continue;
-
-                var raw = File.ReadAllBytes(environPath);
-                // environ is a sequence of NUL-separated KEY=VALUE entries.
-                var desktop = ParseDesktopFromEnviron(raw);
+                var desktop = ReadDesktopIfOwnedBy(dir, uid);
                 if (!string.IsNullOrWhiteSpace(desktop))
                     return desktop;
             }
@@ -259,7 +261,42 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             // best-effort
         }
+
         return null;
+    }
+
+    /// <summary>
+    ///     True when <paramref name="dir"/> is a /proc pid whose comm matches
+    ///     <paramref name="processName"/>. comm is truncated to 15 characters;
+    ///     a prefix match would also hit gnome-shell-calendar-server.
+    /// </summary>
+    private static bool IsSessionDaemonComm(string dir, string processName)
+    {
+        if (!int.TryParse(Path.GetFileName(dir), out _))
+            return false;
+        var commPath = Path.Combine(dir, "comm");
+        if (!File.Exists(commPath))
+            return false;
+        var comm = File.ReadAllText(commPath).Trim();
+        var expected = processName.Length > 15 ? processName[..15] : processName;
+        return comm.Equals(expected, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     XDG_CURRENT_DESKTOP from this pid when it belongs to <paramref name="uid"/>.
+    /// </summary>
+    private static string? ReadDesktopIfOwnedBy(string dir, int uid)
+    {
+        var statusPath = Path.Combine(dir, "status");
+        if (!File.Exists(statusPath))
+            return null;
+        var status = File.ReadAllText(statusPath);
+        if (!StatusContainsUid(status, uid))
+            return null;
+        var environPath = Path.Combine(dir, "environ");
+        if (!File.Exists(environPath))
+            return null;
+        return ParseDesktopFromEnviron(File.ReadAllBytes(environPath));
     }
 
     private static int GetCurrentUid()
@@ -428,7 +465,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             if (HasGnome())
             {
                 GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
-                GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, "false");
+                GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, GsettingsDisabled);
             }
         }
         catch
@@ -496,20 +533,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         StopExternalProxyWatch();
         // A crash leaves the pre-proxy values on disk. Put those back when the desktop
         // is still aimed at this machine; otherwise only the extra browser hooks go.
-        var restored = false;
-        try
-        {
-            if (TryLoadDiskSnapshot() && GnomeOrKdePointsAtLoopback())
-            {
-                ApplyLoadedSnapshot();
-                restored = true;
-            }
-        }
-        catch
-        {
-            // fall through to the loopback-only clear
-        }
-
+        var restored = TryRestoreSnapshotWhenDesktopPointsAtLoopback();
         _hasSnapshot = false;
         _gnome = null;
         _kde = null;
@@ -518,81 +542,85 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         // Only flip GNOME/KDE off when they still point at this machine. A power loss
         // leaves that loopback entry behind; a proxy the user set to some other host
         // must stay.
+        if (!restored)
+            TryClearLoopbackDesktopProxy();
+
+        TryBestEffort(ClearProcessProxyEnv);
+        TryClearHooksOrFailOpen();
+        // Blank, do not unset. Unset reveals the login-time value an older
+        // build stored as http://127.0.0.1:8866.
+        TryBestEffort(ClearUserSessionProxyEnvironment);
+    }
+
+    private bool TryRestoreSnapshotWhenDesktopPointsAtLoopback()
+    {
         try
         {
-            if (!restored && HasGnome())
+            if (TryLoadDiskSnapshot() && GnomeOrKdePointsAtLoopback())
             {
-                var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
-                var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
-                if (mode.Equals("manual", StringComparison.OrdinalIgnoreCase) && IsLoopbackHost(host))
-                {
-                    GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
-                    GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, "false");
-                }
+                ApplyLoadedSnapshot();
+                return true;
             }
         }
         catch
         {
-            // best-effort
+            // fall through to the loopback-only clear
         }
 
-        try
-        {
-            if (!restored && HasKde())
-            {
-                var httpProxy = KdeRead("httpProxy") ?? string.Empty;
-                if (httpProxy.Contains("127.0.0.1", StringComparison.Ordinal) ||
-                    httpProxy.Contains("localhost", StringComparison.OrdinalIgnoreCase))
-                {
-                    KdeWrite(KdeProxyTypeKey, "0");
-                    KdeReload();
-                }
-            }
-        }
-        catch
-        {
-            // best-effort
-        }
+        return false;
+    }
 
-        try
-        {
-            ClearProcessProxyEnv();
-        }
-        catch
-        {
-            // best-effort
-        }
+    private void TryClearLoopbackDesktopProxy()
+    {
+        TryBestEffort(ClearGnomeLoopbackManualProxy);
+        TryBestEffort(ClearKdeLoopbackProxy);
+    }
 
+    private void ClearGnomeLoopbackManualProxy()
+    {
+        if (!HasGnome())
+            return;
+
+        var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
+        var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
+        if (!mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase) || !IsLoopbackHost(host))
+            return;
+
+        GsettingsSet(GnomeSystemProxySchema, "mode", "'none'");
+        GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, GsettingsDisabled);
+    }
+
+    private void ClearKdeLoopbackProxy()
+    {
+        if (!HasKde())
+            return;
+
+        var httpProxy = KdeRead(KdeHttpProxyKey) ?? string.Empty;
+        if (!KdeProxyPointsAtLoopback(httpProxy))
+            return;
+
+        KdeWrite(KdeProxyTypeKey, "0");
+        KdeReload();
+    }
+
+    private void TryClearHooksOrFailOpen()
+    {
         if (_applyBrowserLaunchHooks)
         {
-            try
-            {
-                // Strip hooks only. Do not relaunch browsers or start fail-open — this path
-                // runs after Inspector is already gone (login hook / package remove / clear binary).
-                LinuxBrowserLaunchProxy.ClearInstalledHooks();
-            }
-            catch
-            {
-                // best-effort
-            }
-        }
-        else
-        {
-            try
-            {
-                LinuxProxyFailOpen.Stop();
-            }
-            catch
-            {
-                // best-effort
-            }
+            // Strip hooks only. Do not relaunch browsers or start fail-open — this path
+            // runs after Inspector is already gone (login hook / package remove / clear binary).
+            TryBestEffort(LinuxBrowserLaunchProxy.ClearInstalledHooks);
+            return;
         }
 
+        TryBestEffort(LinuxProxyFailOpen.Stop);
+    }
+
+    private static void TryBestEffort(Action action)
+    {
         try
         {
-            // Blank, do not unset. Unset reveals the login-time value an older
-            // build stored as http://127.0.0.1:8866.
-            ClearUserSessionProxyEnvironment();
+            action();
         }
         catch
         {
@@ -600,8 +628,12 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         }
     }
 
+    private static bool KdeProxyPointsAtLoopback(string httpProxy) =>
+        httpProxy.Contains(LoopbackAddress, StringComparison.Ordinal)
+        || httpProxy.Contains(LocalhostName, StringComparison.OrdinalIgnoreCase);
+
     private static bool IsLoopbackHost(string host) =>
-        host is "127.0.0.1" or "localhost" or "::1" or "";
+        host is LoopbackAddress or LocalhostName or "::1" or "";
 
     public void RestoreOriginalSettings() // NOSONAR S3776 -- Snapshot restore must apply gsettings/env together.
     {
@@ -618,10 +650,10 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
                 GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
                 GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
-                GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, _gnome.HttpEnabled ? "true" : "false");
+                GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, _gnome.HttpEnabled ? "true" : GsettingsDisabled);
                 GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
                 GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
-                GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
+                GsettingsSet(GnomeSystemProxySchema, GnomeIgnoreHostsKey, _gnome.IgnoreHosts);
             }
         }
         catch
@@ -634,9 +666,9 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             if (_kde is not null && HasKde())
             {
                 KdeWrite(KdeProxyTypeKey, _kde.ProxyType);
-                KdeWrite("httpProxy", _kde.HttpProxy);
-                KdeWrite("httpsProxy", _kde.HttpsProxy);
-                KdeWrite("NoProxyFor", _kde.NoProxyFor);
+                KdeWrite(KdeHttpProxyKey, _kde.HttpProxy);
+                KdeWrite(KdeHttpsProxyKey, _kde.HttpsProxy);
+                KdeWrite(KdeNoProxyForKey, _kde.NoProxyFor);
                 KdeReload();
             }
         }
@@ -702,8 +734,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 return ParseGsettingsArray(result.StandardOutput);
         }
 
-        var noProxy = Environment.GetEnvironmentVariable("no_proxy")
-                      ?? Environment.GetEnvironmentVariable("NO_PROXY");
+        var noProxy = Environment.GetEnvironmentVariable(NoProxyEnv)
+                      ?? Environment.GetEnvironmentVariable(NoProxyEnvUpper);
         return string.IsNullOrWhiteSpace(noProxy) ? null : noProxy.Replace(',', ';');
     }
 
@@ -714,8 +746,8 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         if (HasGnome())
             stale |= GetGnomeStaleLocalProxyProtocols(ownedPorts);
 
-        stale |= GetEnvStaleLocalProxyProtocols(ownedPorts, ["http_proxy", "HTTP_PROXY"], ProxyProtocolType.Http);
-        stale |= GetEnvStaleLocalProxyProtocols(ownedPorts, ["https_proxy", "HTTPS_PROXY"], ProxyProtocolType.Https);
+        stale |= GetEnvStaleLocalProxyProtocols(ownedPorts, [HttpProxyEnv, HttpProxyEnvUpper], ProxyProtocolType.Http);
+        stale |= GetEnvStaleLocalProxyProtocols(ownedPorts, [HttpsProxyEnv, HttpsProxyEnvUpper], ProxyProtocolType.Https);
 
         return stale;
     }
@@ -729,9 +761,9 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             orphaned |= GetGnomeOrphanedLocalProxyProtocols(isListening);
 
         orphaned |= GetEnvOrphanedLocalProxyProtocols(
-            isListening, ["http_proxy", "HTTP_PROXY"], ProxyProtocolType.Http);
+            isListening, [HttpProxyEnv, HttpProxyEnvUpper], ProxyProtocolType.Http);
         orphaned |= GetEnvOrphanedLocalProxyProtocols(
-            isListening, ["https_proxy", "HTTPS_PROXY"], ProxyProtocolType.Https);
+            isListening, [HttpsProxyEnv, HttpsProxyEnvUpper], ProxyProtocolType.Https);
 
         return orphaned;
     }
@@ -767,30 +799,30 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
                 ParseGsettingsBool(GsettingsGet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey)),
                 GsettingsGet(GnomeSystemProxyHttpsSchema, "host")?.Trim('\'', '"') ?? string.Empty,
                 ParseInt(GsettingsGet(GnomeSystemProxyHttpsSchema, "port")),
-                GsettingsGet(GnomeSystemProxySchema, "ignore-hosts") ?? "[]");
+                GsettingsGet(GnomeSystemProxySchema, GnomeIgnoreHostsKey) ?? "[]");
         }
 
         if (HasKde())
         {
             _kde = new KdeSnapshot(
                 KdeRead(KdeProxyTypeKey) ?? "0",
-                KdeRead("httpProxy") ?? string.Empty,
-                KdeRead("httpsProxy") ?? string.Empty,
-                KdeRead("NoProxyFor") ?? string.Empty);
+                KdeRead(KdeHttpProxyKey) ?? string.Empty,
+                KdeRead(KdeHttpsProxyKey) ?? string.Empty,
+                KdeRead(KdeNoProxyForKey) ?? string.Empty);
         }
 
         // A leftover 127.0.0.1 entry is this proxy, not the user's previous setting.
         // Persisting it would put the dead port back after a crash.
         if (_gnome is not null &&
-            _gnome.Mode.Equals("manual", StringComparison.OrdinalIgnoreCase) &&
+            _gnome.Mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase) &&
             IsLoopbackHost(_gnome.HttpHost))
         {
             _gnome = _gnome with { Mode = "none", HttpEnabled = false };
         }
 
         if (_kde is not null &&
-            (_kde.HttpProxy.Contains("127.0.0.1", StringComparison.Ordinal) ||
-             _kde.HttpProxy.Contains("localhost", StringComparison.OrdinalIgnoreCase)))
+            (_kde.HttpProxy.Contains(LoopbackAddress, StringComparison.Ordinal) ||
+             _kde.HttpProxy.Contains(LocalhostName, StringComparison.OrdinalIgnoreCase)))
         {
             _kde = _kde with { ProxyType = "0" };
         }
@@ -819,7 +851,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         }
 
         if (proxyOverride != null)
-            GsettingsSet(GnomeSystemProxySchema, "ignore-hosts",
+            GsettingsSet(GnomeSystemProxySchema, GnomeIgnoreHostsKey,
                 UnixProxyBypassMapper.ToGsettingsArray(proxyOverride));
 
         // gsettings often exits 0 even when dconf cannot commit (e.g. DBUS_SESSION_BUS_ADDRESS=disabled:).
@@ -830,7 +862,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     private void VerifyGnomeApplied(string hostname, int port, ProxyProtocolType protocolType)
     {
         var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? string.Empty;
-        if (!mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
+        if (!mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 "Failed to apply GNOME system proxy (gsettings mode is still " +
@@ -906,11 +938,11 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         // Local forward proxies are plain HTTP endpoints; https:// is not valid for these settings.
         var url = $"http://{hostname}:{port}"; // NOSONAR S5332
         if ((protocolType & ProxyProtocolType.Http) != 0)
-            KdeWrite("httpProxy", url);
+            KdeWrite(KdeHttpProxyKey, url);
         if ((protocolType & ProxyProtocolType.Https) != 0)
-            KdeWrite("httpsProxy", url);
+            KdeWrite(KdeHttpsProxyKey, url);
         if (proxyOverride != null)
-            KdeWrite("NoProxyFor", UnixProxyBypassMapper.ToCommaSeparated(proxyOverride));
+            KdeWrite(KdeNoProxyForKey, UnixProxyBypassMapper.ToCommaSeparated(proxyOverride));
         KdeReload();
     }
 
@@ -921,19 +953,19 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         var url = $"http://{hostname}:{port}"; // NOSONAR S5332
         if ((protocolType & ProxyProtocolType.Http) != 0)
         {
-            Environment.SetEnvironmentVariable("http_proxy", url);
-            Environment.SetEnvironmentVariable("HTTP_PROXY", url);
+            Environment.SetEnvironmentVariable(HttpProxyEnv, url);
+            Environment.SetEnvironmentVariable(HttpProxyEnvUpper, url);
         }
 
         if ((protocolType & ProxyProtocolType.Https) != 0)
         {
-            Environment.SetEnvironmentVariable("https_proxy", url);
-            Environment.SetEnvironmentVariable("HTTPS_PROXY", url);
+            Environment.SetEnvironmentVariable(HttpsProxyEnv, url);
+            Environment.SetEnvironmentVariable(HttpsProxyEnvUpper, url);
         }
 
         var noProxy = UnixProxyBypassMapper.ToNoProxyEnv(proxyOverride);
-        Environment.SetEnvironmentVariable("no_proxy", noProxy);
-        Environment.SetEnvironmentVariable("NO_PROXY", noProxy);
+        Environment.SetEnvironmentVariable(NoProxyEnv, noProxy);
+        Environment.SetEnvironmentVariable(NoProxyEnvUpper, noProxy);
     }
 
     private void ClearUserSessionProxyEnvironment()
@@ -1074,7 +1106,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         var stale = ProxyProtocolType.None;
         var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
-        if (!mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
+        if (!mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase))
             return stale;
 
         var httpHost = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? "";
@@ -1094,7 +1126,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
     {
         var orphaned = ProxyProtocolType.None;
         var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
-        if (!mode.Equals("manual", StringComparison.OrdinalIgnoreCase))
+        if (!mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase))
             return orphaned;
 
         var httpHost = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? "";
@@ -1229,7 +1261,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             var mode = modeRaw.Trim('\'', '"');
             var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
             var port = ParseInt(GsettingsGet(GnomeSystemProxyHttpSchema, "port"));
-            return mode.Equals("manual", StringComparison.OrdinalIgnoreCase)
+            return mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase)
                    && host.Equals(_watchHost, StringComparison.OrdinalIgnoreCase)
                    && port == _watchPort;
         }
@@ -1239,7 +1271,7 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             var type = KdeRead(KdeProxyTypeKey)?.Trim();
             if (type is null)
                 return true;
-            var http = KdeRead("httpProxy") ?? string.Empty;
+            var http = KdeRead(KdeHttpProxyKey) ?? string.Empty;
             return type == "1"
                    && http.Contains(_watchHost, StringComparison.OrdinalIgnoreCase)
                    && http.Contains(_watchPort.ToString(), StringComparison.Ordinal);
@@ -1321,18 +1353,18 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
             GsettingsSet(GnomeSystemProxySchema, "mode", QuoteGsettings(_gnome.Mode));
             GsettingsSet(GnomeSystemProxyHttpSchema, "host", QuoteGsettings(_gnome.HttpHost));
             GsettingsSet(GnomeSystemProxyHttpSchema, "port", _gnome.HttpPort.ToString());
-            GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, _gnome.HttpEnabled ? "true" : "false");
+            GsettingsSet(GnomeSystemProxyHttpSchema, GsettingsEnabledKey, _gnome.HttpEnabled ? "true" : GsettingsDisabled);
             GsettingsSet(GnomeSystemProxyHttpsSchema, "host", QuoteGsettings(_gnome.HttpsHost));
             GsettingsSet(GnomeSystemProxyHttpsSchema, "port", _gnome.HttpsPort.ToString());
-            GsettingsSet(GnomeSystemProxySchema, "ignore-hosts", _gnome.IgnoreHosts);
+            GsettingsSet(GnomeSystemProxySchema, GnomeIgnoreHostsKey, _gnome.IgnoreHosts);
         }
 
         if (_kde is not null && HasKde())
         {
             KdeWrite(KdeProxyTypeKey, _kde.ProxyType);
-            KdeWrite("httpProxy", _kde.HttpProxy);
-            KdeWrite("httpsProxy", _kde.HttpsProxy);
-            KdeWrite("NoProxyFor", _kde.NoProxyFor);
+            KdeWrite(KdeHttpProxyKey, _kde.HttpProxy);
+            KdeWrite(KdeHttpsProxyKey, _kde.HttpsProxy);
+            KdeWrite(KdeNoProxyForKey, _kde.NoProxyFor);
             KdeReload();
         }
     }
@@ -1343,15 +1375,15 @@ internal sealed class LinuxSystemProxyBackend : ISystemProxyBackend
         {
             var mode = GsettingsGet(GnomeSystemProxySchema, "mode")?.Trim('\'', '"') ?? "none";
             var host = GsettingsGet(GnomeSystemProxyHttpSchema, "host")?.Trim('\'', '"') ?? string.Empty;
-            if (mode.Equals("manual", StringComparison.OrdinalIgnoreCase) && IsLoopbackHost(host))
+            if (mode.Equals(ManualProxyMode, StringComparison.OrdinalIgnoreCase) && IsLoopbackHost(host))
                 return true;
         }
 
         if (HasKde())
         {
-            var httpProxy = KdeRead("httpProxy") ?? string.Empty;
-            if (httpProxy.Contains("127.0.0.1", StringComparison.Ordinal) ||
-                httpProxy.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+            var httpProxy = KdeRead(KdeHttpProxyKey) ?? string.Empty;
+            if (httpProxy.Contains(LoopbackAddress, StringComparison.Ordinal) ||
+                httpProxy.Contains(LocalhostName, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 

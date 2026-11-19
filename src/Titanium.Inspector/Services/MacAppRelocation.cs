@@ -25,17 +25,21 @@ internal enum MacRelocateAction
 ///     Detects Inspector launched from a DMG (/Volumes/…) and copies the .app into
 ///     Applications so updates and Gatekeeper behave like a normal Mac install.
 /// </summary>
-internal static class MacAppRelocation
+internal static partial class MacAppRelocation
 {
     private const string BundleDisplayName = "Titanium Inspector.app";
 
-    private static readonly Regex PlistShortVersionRegex = new(
+    [GeneratedRegex(
         @"<key>\s*CFBundleShortVersionString\s*</key>\s*<string>([^<]+)</string>",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PlistShortVersionRegex();
 
-    private static readonly Regex PlistBundleVersionRegex = new(
+    [GeneratedRegex(
         @"<key>\s*CFBundleVersion\s*</key>\s*<string>([^<]+)</string>",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 1000)]
+    private static partial Regex PlistBundleVersionRegex();
 
     /// <summary>True when this process is running from a mounted disk image volume.</summary>
     [SupportedOSPlatform("macos")]
@@ -232,12 +236,12 @@ internal static class MacAppRelocation
                 return null;
 
             var text = File.ReadAllText(plist);
-            var shortMatch = PlistShortVersionRegex.Match(text);
+            var shortMatch = PlistShortVersionRegex().Match(text);
             if (shortMatch.Success
                 && Version.TryParse(ReleaseVersion.StripPrerelease(shortMatch.Groups[1].Value.Trim()), out var shortVer))
                 return ReleaseVersion.ToComparable(shortVer);
 
-            var bundleMatch = PlistBundleVersionRegex.Match(text);
+            var bundleMatch = PlistBundleVersionRegex().Match(text);
             if (bundleMatch.Success
                 && Version.TryParse(ReleaseVersion.StripPrerelease(bundleMatch.Groups[1].Value.Trim()), out var bundleVer))
                 return ReleaseVersion.ToComparable(bundleVer);
