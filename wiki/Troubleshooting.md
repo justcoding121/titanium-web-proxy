@@ -16,7 +16,7 @@ Show logs with `titanium run -c twp.yaml -v`, or set `logging.minimumLevel`. Enf
 | Symptom | Key |
 |---------|-----|
 | HTTP/2 header GOAWAY or stream failure | `server.limits.maxHttp2CompressedHeaderBlockBytes`, `server.limits.maxDecodedHeaderListBytes` |
-| `RST_STREAM` / `ENHANCE_YOUR_CALM` | `server.limits.maxDeferredOutboundBytesPerStream` |
+| `RST_STREAM` / `ENHANCE_YOUR_CALM`. A peer sent DATA past the stream window that the proxy withheld. This cap is a backstop for non-compliant senders; a compliant peer is paced by stream flow control and never reaches it | `server.limits.maxDeferredOutboundBytesPerStream` |
 | HTTP/2 flow-control wait | `server.limits.http2WindowUpdateTimeoutSeconds` |
 | HTTP/3 `ExcessiveLoad` | `server.limits.maxHttp3FramePayloadBytes` |
 | WebSocket 1009 | `server.limits.maxWebSocketFramePayloadBytes` |

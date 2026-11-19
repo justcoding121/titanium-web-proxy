@@ -22,7 +22,7 @@ Show logs with `titanium run -c twp.yaml -v`, or set `logging.minimumLevel` belo
 | Symptom | Meaning | Key |
 |---------|---------|-----|
 | Connection reset while headers are large | HTTP/2 compressed header block or decoded list | `server.limits.maxHttp2CompressedHeaderBlockBytes`, `server.limits.maxDecodedHeaderListBytes` |
-| `RST_STREAM` / `ENHANCE_YOUR_CALM` | Parked HTTP/2 DATA exceeded the per-stream queue | `server.limits.maxDeferredOutboundBytesPerStream` |
+| `RST_STREAM` / `ENHANCE_YOUR_CALM` | A peer sent DATA past the stream window that the proxy withheld. This cap is a backstop for non-compliant senders; a compliant peer is paced by stream flow control and never reaches it | `server.limits.maxDeferredOutboundBytesPerStream` |
 | HTTP/2 stream wait, then reset | Flow-control window was not updated in time | `server.limits.http2WindowUpdateTimeoutSeconds` |
 | HTTP/3 `ExcessiveLoad` | A frame declared more than `maxHttp3FramePayloadBytes` | Raise that key (ceiling 64 MiB). DATA with no body hook streams past the cap; headers and hooks still need the whole frame. |
 | HTTP/3 `FrameError` | The frame ended before the declared payload | The peer closed early. Not a limit. |
