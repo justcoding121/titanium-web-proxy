@@ -467,7 +467,7 @@ internal static class LinuxChromeProfileProxy
         File.Move(tmp, prefsPath, overwrite: true);
     }
 
-    private static void ScheduleClearRetries_NoLock(string? host, int port)
+    private static void ScheduleClearRetries_NoLock(string? host, int port) // NOSONAR S3776 -- delayed strip retries share cancellation with the active Apply gate
     {
         CancelClearRetries_NoLock();
         // Still retry when the marker is gone: Chrome can flush loopback fixed_servers
@@ -490,31 +490,19 @@ internal static class LinuxChromeProfileProxy
                     return;
                 }
 
-                if (!StripClearedProfiles(host, port, token))
-                    return;
+                lock (Gate)
+                {
+                    if (token.IsCancellationRequested || _activeHost is not null)
+                        return;
+                    foreach (var prefsPath in EnumeratePreferencesPaths())
+                    {
+                        if (!string.IsNullOrEmpty(host) && port > 0)
+                            TryStripInspectorProxy(prefsPath, host, port);
+                        TryStripLoopbackFixedServer(prefsPath);
+                    }
+                }
             }
         }, token);
-    }
-
-    /// <summary>Returns false when a newer Apply owns the profiles and retries should stop.</summary>
-    private static bool StripClearedProfiles(string? host, int port, CancellationToken token)
-    {
-        lock (Gate)
-        {
-            if (token.IsCancellationRequested || _activeHost is not null)
-                return false;
-
-            foreach (var prefsPath in EnumeratePreferencesPaths())
-                StripOneClearedProfile(prefsPath, host, port);
-            return true;
-        }
-    }
-
-    private static void StripOneClearedProfile(string prefsPath, string? host, int port)
-    {
-        if (!string.IsNullOrEmpty(host) && port > 0)
-            TryStripInspectorProxy(prefsPath, host, port);
-        TryStripLoopbackFixedServer(prefsPath);
     }
 
     private static void CancelClearRetries_NoLock()

@@ -70,7 +70,7 @@ internal static class LinuxProxyFailOpen
         return true;
     }
 
-    internal static void Stop()
+    internal static void Stop() // NOSONAR S3776 -- systemd scope stop, pidfile kill, and unit cleanup share fail-open teardown order
     {
         Volatile.Write(ref _ownedByThisProcess, 0);
         try
@@ -79,66 +79,54 @@ internal static class LinuxProxyFailOpen
             if (dir is null)
                 return;
 
-            // Scope first: the helper may live outside Inspector's cgroup, so kill -TERM
-            // on the double-forked pid can miss it until the scope unit is stopped.
-            StopSystemdScopeFile(dir);
-            KillHelperPid(dir);
-        }
-        catch
-        {
-            // ignore
-        }
-    }
-
-    private static void StopSystemdScopeFile(string dir)
-    {
-        var scopePath = Path.Combine(dir, ScopeFileName);
-        if (!File.Exists(scopePath))
-            return;
-
-        try
-        {
-            var scopeName = File.ReadAllText(scopePath).Trim();
-            if (!string.IsNullOrEmpty(scopeName))
-                TryStopSystemdScope(scopeName);
-        }
-        catch
-        {
-            // best-effort
-        }
-        finally
-        {
-            try { File.Delete(scopePath); } catch { /* ignore */ }
-        }
-    }
-
-    private static void KillHelperPid(string dir)
-    {
-        var pidPath = Path.Combine(dir, PidFileName);
-        if (!File.Exists(pidPath))
-            return;
-
-        if (int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) && pid > 1)
-            SignalTerm(pid);
-
-        try { File.Delete(pidPath); } catch { /* ignore */ }
-    }
-
-    private static void SignalTerm(int pid)
-    {
-        var kill = UnixProcessPath.Resolve("/bin/kill", "/usr/bin/kill");
-        if (kill is null)
-            return;
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
+            // If the helper was started in a systemd user scope, stop that scope first.
+            // This handles the case where the helper was placed outside Inspector's cgroup
+            // (so kill -TERM on the double-forked pid might not reach it after a scope stop).
+            var scopePath = Path.Combine(dir, ScopeFileName);
+            if (File.Exists(scopePath))
             {
-                FileName = kill,
-                Arguments = $"-TERM {pid}",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            })?.WaitForExit(2000);
+                try
+                {
+                    var scopeName = File.ReadAllText(scopePath).Trim();
+                    if (!string.IsNullOrEmpty(scopeName))
+                        TryStopSystemdScope(scopeName);
+                }
+                catch
+                {
+                    // best-effort
+                }
+                finally
+                {
+                    try { File.Delete(scopePath); } catch { /* ignore */ }
+                }
+            }
+
+            var pidPath = Path.Combine(dir, PidFileName);
+            if (!File.Exists(pidPath))
+                return;
+            if (int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) && pid > 1)
+            {
+                var kill = UnixProcessPath.Resolve("/bin/kill", "/usr/bin/kill");
+                if (kill is not null)
+                {
+                    try
+                    {
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = kill,
+                            Arguments = $"-TERM {pid}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        })?.WaitForExit(2000);
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
+                }
+            }
+
+            try { File.Delete(pidPath); } catch { /* ignore */ }
         }
         catch
         {

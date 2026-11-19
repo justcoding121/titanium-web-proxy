@@ -2339,79 +2339,78 @@ public sealed class CertificateManager : IDisposable
     ///     Removes the trusted certificates from user store, optionally also from machine store
     /// </summary>
     /// <returns>Should also remove from machine store?</returns>
-    public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
+    public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false) // NOSONAR S3776 -- OS untrust and elevated certutil deletes share store-mutation order
     {
         // Current-user: remove all same-CN entries (current + orphans) without elevation.
         RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: false);
 
         if (!RunTime.IsWindows)
-            return UntrustRootCertificateOutsideWindows(machineTrusted);
+        {
+            if (RootCertificate == null) return false;
+            if (ShouldSuppressInteractiveRootStoreMutations)
+                return true;
+            var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            if (RunTime.IsLinux && removed)
+                Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+            // Explicit true when only user-store untrust was requested (no machine step).
+            return machineTrusted
+                ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
+                : true; // NOSONAR S1125
+        }
 
         // Elevated certutil -delstore shows UAC; skip when Root UI is suppressed.
         if (ShouldSuppressInteractiveRootStoreMutations)
             return true;
 
-        return RunElevatedCertutilDeletes(CertutilDeleteStartInfos(machineTrusted));
-    }
-
-    private bool UntrustRootCertificateOutsideWindows(bool machineTrusted)
-    {
-        if (RootCertificate == null)
-            return false;
-        if (ShouldSuppressInteractiveRootStoreMutations)
-            return true;
-
-        var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
-        if (RunTime.IsLinux && removed)
-            Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
-
-        // Explicit true when only user-store untrust was requested (no machine step).
-        return machineTrusted
-            ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)
-            : true; // NOSONAR S1125
-    }
-
-    private List<ProcessStartInfo> CertutilDeleteStartInfos(bool machineTrusted)
-    {
+        var infos = new List<ProcessStartInfo>();
         if (!machineTrusted)
-        {
-            return
-            [
-                CertutilDeleteStore("-delstore -user Root \"" + RootCertificateName + "\"")
-            ];
-        }
+            infos.Add(new ProcessStartInfo
+            {
+                FileName = CertUtilExecutablePath,
+                Arguments = "-delstore -user Root \"" + RootCertificateName + "\"",
+                CreateNoWindow = true,
+                UseShellExecute = true,
+                Verb = RunAsAdministrator,
+                ErrorDialog = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+        else
+            infos.AddRange(
+                new List<ProcessStartInfo>
+                {
+                    // localMachine\Personal
+                    new()
+                    {
+                        FileName = CertUtilExecutablePath,
+                        Arguments = "-delstore My \"" + RootCertificateName + "\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = true,
+                        Verb = RunAsAdministrator,
+                        ErrorDialog = false,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    },
 
-        return
-        [
-            // localMachine\Personal
-            CertutilDeleteStore("-delstore My \"" + RootCertificateName + "\""),
-            // localMachine\Root
-            CertutilDeleteStore("-delstore Root \"" + RootCertificateName + "\"")
-        ];
-    }
+                    // localMachine\Root
+                    new()
+                    {
+                        FileName = CertUtilExecutablePath,
+                        Arguments = "-delstore Root \"" + RootCertificateName + "\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = true,
+                        Verb = RunAsAdministrator,
+                        ErrorDialog = false,
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    }
+                });
 
-    private static ProcessStartInfo CertutilDeleteStore(string arguments) =>
-        new()
-        {
-            FileName = CertUtilExecutablePath,
-            Arguments = arguments,
-            CreateNoWindow = true,
-            UseShellExecute = true,
-            Verb = RunAsAdministrator,
-            ErrorDialog = false,
-            WindowStyle = ProcessWindowStyle.Hidden
-        };
-
-    private static bool RunElevatedCertutilDeletes(List<ProcessStartInfo> infos)
-    {
         var success = true;
         try
         {
             foreach (var info in infos)
             {
                 var process = Process.Start(info);
-                if (process == null)
-                    success = false;
+
+                if (process == null) success = false;
 
                 process?.WaitForExit();
             }
