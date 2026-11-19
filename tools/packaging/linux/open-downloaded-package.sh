@@ -10,15 +10,20 @@ if [[ -z "${file}" || ! -f "${file}" ]]; then
 fi
 
 forward_to_app_center() {
+  # Guard against xdg-open re-entering this script when it is the MIME default
+  # for .deb/.rpm and neither Snap Store nor GNOME Software is installed.
+  if [[ -n "${TITANIUM_PACKAGE_FORWARD:-}" ]]; then
+    exit 1
+  fi
+  export TITANIUM_PACKAGE_FORWARD=1
+
   if [[ -x /snap/bin/snap-store ]]; then
     exec /snap/bin/snap-store "$file"
   fi
   if [[ -x /usr/bin/gnome-software ]]; then
     exec /usr/bin/gnome-software --local-filename="$file"
   fi
-  if command -v xdg-open >/dev/null 2>&1; then
-    exec xdg-open "$file"
-  fi
+  # Do not xdg-open the same MIME: that loops back into this handler.
   exit 1
 }
 

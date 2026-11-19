@@ -53,6 +53,18 @@ rm -f \
   /etc/brave/policies/managed/titanium-inspector-proxy.json \
   /etc/opera/policies/managed/titanium-inspector-proxy.json
 
+# On remove/purge only (not upgrade): drop the MIME defaults postinst appended so
+# a leftover handler does not keep claiming .deb/.rpm after uninstall.
+action="${1:-}"
+if [[ "${action}" == "remove" || "${action}" == "purge" ]]; then
+  apps=/etc/xdg/mimeapps.list
+  if [[ -f "${apps}" ]]; then
+    tmp="$(mktemp)"
+    grep -v 'titanium-inspector-package.desktop' "${apps}" > "${tmp}" 2>/dev/null || true
+    mv "${tmp}" "${apps}" 2>/dev/null || rm -f "${tmp}"
+  fi
+fi
+
 if command -v systemctl >/dev/null 2>&1; then
   systemctl disable --global titanium-inspector-clear-proxy.timer >/dev/null 2>&1 || true
   systemctl disable --global titanium-inspector-clear-proxy.service >/dev/null 2>&1 || true
