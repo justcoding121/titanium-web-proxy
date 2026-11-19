@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace Titanium.TestKit;
 
@@ -47,16 +48,31 @@ public sealed class FakeDnsServer : IAsyncDisposable
 
     /// <summary>
     /// Binds a UDP socket to loopback:0 for an ephemeral port, then starts a TCP listener on
-    /// the same port. Retries up to 20 times if the TCP port is taken between the two binds.
+    /// the same port. Retries when the TCP port is taken between the two binds (common under
+    /// parallel test load on shared CI runners).
     /// </summary>
     public static FakeDnsServer Start()
     {
-        for (var attempt = 0; attempt < 20; attempt++)
+        const int maxAttempts = 80;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             var udp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            udp.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            try
+            {
+                udp.ExclusiveAddressUse = true;
+                udp.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            }
+            catch (SocketException)
+            {
+                udp.Dispose();
+                continue;
+            }
+
             var port = ((IPEndPoint)udp.LocalEndPoint!).Port;
-            var tcp = new TcpListener(IPAddress.Loopback, port);
+            var tcp = new TcpListener(IPAddress.Loopback, port)
+            {
+                ExclusiveAddressUse = true
+            };
             try
             {
                 tcp.Start();
@@ -65,10 +81,14 @@ public sealed class FakeDnsServer : IAsyncDisposable
             catch (SocketException)
             {
                 udp.Dispose();
+                try { tcp.Stop(); } catch { /* unused listener */ }
+                if (attempt % 10 == 9)
+                    Thread.Sleep(5);
             }
         }
 
-        throw new InvalidOperationException("FakeDnsServer: could not bind UDP and TCP to the same loopback port after 20 attempts.");
+        throw new InvalidOperationException(
+            $"FakeDnsServer: could not bind UDP and TCP to the same loopback port after {maxAttempts} attempts.");
     }
 
     /// <summary>Port the server is listening on (both UDP and TCP).</summary>

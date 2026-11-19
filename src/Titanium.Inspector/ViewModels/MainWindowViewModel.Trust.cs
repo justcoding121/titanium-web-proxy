@@ -1363,11 +1363,15 @@ public sealed partial class MainWindowViewModel
                 _interception,
                 TimeSpan.FromSeconds(12),
                 CancellationToken.None).ConfigureAwait(false);
-            if (probe.Ok || !_decryptHttps)
+            // Do not PersistSettings(false) after EnsureShutdown: a late probe failure must not
+            // overwrite DecryptHttps=true that was already saved for the next launch.
+            if (probe.Ok || !_decryptHttps || !_interception.IsRunning)
                 return;
 
             await MarshalToUiAsync(async () =>
             {
+                if (!_decryptHttps || !_interception.IsRunning)
+                    return;
                 await ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
                 SetOutcomeStatus(
                     "Decrypt HTTPS off — verify failed: " + Truncate(probe.Message, 140),

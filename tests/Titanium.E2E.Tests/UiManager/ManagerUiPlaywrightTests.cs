@@ -45,7 +45,9 @@ public class ManagerUiPlaywrightTests : PageTest
 
         await Page.GetByTestId("fleet-name").FillAsync("pw-fleet");
         await Page.GetByTestId("btn-create-fleet").ClickAsync();
-        await Expect(Page.GetByTestId("fleet-detail")).ToBeVisibleAsync();
+        // Create posts then navigates; slow CI runners need more than the default 5s visibility wait.
+        await Page.WaitForURLAsync("**/fleets/*", new() { Timeout = 15_000 });
+        await Expect(Page.GetByTestId("fleet-detail")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         await Page.GetByTestId("link-editor").ClickAsync();
         await Expect(Page.GetByTestId("editor")).ToBeVisibleAsync();

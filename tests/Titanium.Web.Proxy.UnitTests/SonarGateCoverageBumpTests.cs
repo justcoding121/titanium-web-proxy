@@ -335,9 +335,9 @@ public class SonarGateCoverageBumpTests
     }
 
     [TestMethod]
-    public void LinuxFirefoxProxy_ShellQuote_EscapesSingleQuotes()
+    public void LinuxChromiumRelaunch_ShellQuote_EscapesSingleQuotes()
     {
-        var quote = typeof(LinuxFirefoxProxy).GetMethod("ShellQuote", PrivateStatic)!;
+        var quote = typeof(LinuxChromiumRelaunch).GetMethod("ShellQuote", PrivateStatic)!;
         Assert.AreEqual("''", (string)quote.Invoke(null, [null])!);
         Assert.AreEqual("'plain'", (string)quote.Invoke(null, ["plain"])!);
         Assert.AreEqual("'it'\\''s'", (string)quote.Invoke(null, ["it's"])!);
