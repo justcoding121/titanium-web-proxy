@@ -224,8 +224,6 @@ internal static class SmokeApp
                 "");
             var hashes = ExtractSha1Hashes(FilterTitaniumCertRecords(listed.Output));
             Console.WriteLine("mac-wipe roots=" + hashes.Count);
-            RemoveMacAdminTrustForHashes(hashes);
-
             foreach (var hash in hashes)
             {
                 // -t updates the user trust domain and can wait on a dialog. sudo -n fails
@@ -252,75 +250,8 @@ internal static class SmokeApp
         }
     }
 
-    private static void RemoveMacAdminTrustForHashes(List<string> hashes)
-    {
-        if (hashes.Count == 0)
-            return;
-
-        var wanted = new HashSet<string>(hashes, StringComparer.OrdinalIgnoreCase);
-        var dumped = RunCapture(
-            "security",
-            "find-certificate -a -p /Library/Keychains/System.keychain",
-            20000,
-            "");
-        var index = 0;
-        foreach (var pem in SplitPems(dumped.Output))
-        {
-            var path = Path.Combine(Path.GetTempPath(), "titanium-wipe-" + index + ".pem");
-            index++;
-            try
-            {
-                File.WriteAllText(path, pem);
-                string thumb;
-                try
-                {
-                    using var cert = X509CertificateLoader.LoadCertificateFromFile(path);
-                    thumb = cert.Thumbprint;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine("mac-wipe pem " + ex.GetType().Name);
-                    continue;
-                }
-
-                if (!wanted.Contains(thumb))
-                    continue;
-
-                var removed = RunMacSudo("security remove-trusted-cert -d \"" + path + "\"");
-                Console.WriteLine(
-                    "mac-wipe remove-trusted-cert " + thumb + " exit=" + removed.Code +
-                    " " + TrimOneLine(removed.Output));
-            }
-            finally
-            {
-                TryDelete(path);
-            }
-        }
-    }
-
     private static (int Code, string Output) RunMacSudo(string securityArgs) =>
         RunCapture("sudo", "-n " + securityArgs, 20000, "");
-
-    private static List<string> SplitPems(string text)
-    {
-        const string begin = "-----BEGIN CERTIFICATE-----";
-        const string end = "-----END CERTIFICATE-----";
-        var found = new List<string>();
-        var start = 0;
-        while (start < text.Length)
-        {
-            var at = text.IndexOf(begin, start, StringComparison.Ordinal);
-            if (at < 0)
-                break;
-            var stop = text.IndexOf(end, at, StringComparison.Ordinal);
-            if (stop < 0)
-                break;
-            found.Add(text[at..(stop + end.Length)] + "\n");
-            start = stop + end.Length;
-        }
-
-        return found;
-    }
 
     private static async Task<string> MoveMacDmgAppIfNeededAsync(string exe)
     {
@@ -1229,15 +1160,27 @@ internal static class SmokeApp
             // Chrome/Safari honor. Interactive local runs keep the product login-keychain path.
             if (MacTrustNeedsHeadlessInstall())
             {
-                Run("sudo",
-                    $"security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"{cer}\"",
-                    20000);
-                var adminDump = Capture("security", "dump-trust-settings -d");
-                if (!MacTrustDumpLooksTrusted(adminDump, thumb))
-                    throw new InvalidOperationException(
-                        "admin trust dump does not list " + thumb + " after add-trusted-cert -p ssl");
-                Console.WriteLine("trusted root " + thumb + " (system keychain ssl policy)");
-                return;
+                for (var attempt = 1; attempt <= 2; attempt++)
+                {
+                    var added = RunMacSudo(
+                        "security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"" +
+                        cer + "\"");
+                    Console.WriteLine(
+                        "mac-trust add-trusted-cert attempt=" + attempt + " exit=" + added.Code +
+                        " " + TrimOneLine(added.Output));
+                    var adminDump = Capture("security", "dump-trust-settings -d");
+                    if (MacTrustDumpLooksTrusted(adminDump, thumb))
+                    {
+                        Console.WriteLine("trusted root " + thumb + " (system keychain ssl policy)");
+                        return;
+                    }
+
+                    if (attempt == 1)
+                        Thread.Sleep(2000);
+                }
+
+                throw new InvalidOperationException(
+                    "admin trust dump does not list " + thumb + " after add-trusted-cert -p ssl");
             }
 
             // Match product trust: login keychain + SSL policy. Do not pass -d; elevated
