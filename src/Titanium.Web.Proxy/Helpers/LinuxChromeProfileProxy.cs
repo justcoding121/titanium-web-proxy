@@ -32,7 +32,7 @@ internal static class LinuxChromeProfileProxy
     private const string MicrosoftEdgeDirName = "microsoft-edge";
     private const string FlatpakConfigDirName = "config";
 
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly List<FileSystemWatcher> Watchers = new();
     private static readonly int[] ClearRetryDelaysMs = [300, 800, 1500, 3000];
     private static string? _activeHost;

@@ -23,13 +23,7 @@ public static class LinuxInspectorProcess
         if (!Directory.Exists(root))
             return false;
 
-        foreach (var dir in Directory.EnumerateDirectories(root))
-        {
-            if (IsLiveInspectorProcess(dir))
-                return true;
-        }
-
-        return false;
+        return Directory.EnumerateDirectories(root).Any(IsLiveInspectorProcess);
     }
 
     private static bool IsLiveInspectorProcess(string dir)
