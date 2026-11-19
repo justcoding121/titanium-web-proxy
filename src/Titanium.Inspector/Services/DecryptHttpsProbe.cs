@@ -33,6 +33,10 @@ internal static class DecryptHttpsProbe
         if (!interception.DecryptHttps)
             return new Result(false, "Decrypt HTTPS is off");
 
+        var root = interception.RootCertificate;
+        if (root is null)
+            return new Result(false, "Root CA is not loaded");
+
         var captured = new ProbeCapture();
         void OnSession(object? _, SessionSnapshot snap) => captured.Remember(snap);
 
@@ -43,8 +47,9 @@ internal static class DecryptHttpsProbe
             {
                 Proxy = new WebProxy($"http://127.0.0.1:{interception.BoundPort}"),
                 UseProxy = true,
-                // Probe only: we assert Inspector decrypted the session, not OS trust of the leaf.
-                ServerCertificateCustomValidationCallback = AcceptMitmProbeLeaf,
+                // Validate the forged leaf against this process's MITM root (not the OS store).
+                ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+                    LeafChainsToMitmRoot(certificate, root),
             };
             using var client = new HttpClient(handler) { Timeout = timeout };
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -83,20 +88,29 @@ internal static class DecryptHttpsProbe
     }
 
     /// <summary>
-    ///     Accepts the probe leaf on purpose. Success is a decrypted session in Inspector,
-    ///     not operating-system trust of the generated certificate.
+    ///     Builds a custom chain with the Inspector MITM root so SslPolicyErrors.UntrustedRoot
+    ///     from the OS store does not fail the probe.
     /// </summary>
-    private static bool AcceptMitmProbeLeaf(
-        HttpRequestMessage request,
-        X509Certificate2? certificate,
-        X509Chain? chain,
-        SslPolicyErrors sslPolicyErrors)
+    private static bool LeafChainsToMitmRoot(X509Certificate2? leaf, X509Certificate2 mitmRoot)
     {
-        _ = request;
-        _ = certificate;
-        _ = chain;
-        _ = sslPolicyErrors;
-        return true; // NOSONAR S4830
+        if (leaf is null)
+            return false;
+
+        using var chain = new X509Chain();
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.VerificationFlags =
+            X509VerificationFlags.AllowUnknownCertificateAuthority;
+        chain.ChainPolicy.ExtraStore.Add(mitmRoot);
+        if (!chain.Build(leaf))
+            return false;
+
+        foreach (var element in chain.ChainElements)
+        {
+            if (string.Equals(element.Certificate.Thumbprint, mitmRoot.Thumbprint, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return string.Equals(leaf.Thumbprint, mitmRoot.Thumbprint, StringComparison.OrdinalIgnoreCase);
     }
 
     // The callback writes the slot; read it here so the poll is not a local the flow analysis treats as stuck null.
