@@ -32,7 +32,9 @@ public class LinuxBrowserProxyCoverageTests
             Assert.IsTrue(written >= 1, "expected at least the disposable Chrome profile to be rewritten");
             var text = File.ReadAllText(prefs);
             StringAssert.Contains(text, "\"system\"");
-            StringAssert.Contains(text, "127.0.0.1:18866");
+            // mode=system must not pin a dead fixed endpoint after Inspector releases the port.
+            Assert.IsFalse(text.Contains("127.0.0.1:18866", StringComparison.Ordinal),
+                "Preferences must not store the live listener URL beside mode=system");
 
             File.WriteAllText(prefs, """{"proxy":{"mode":"direct"}}""");
             await Task.Delay(500);
