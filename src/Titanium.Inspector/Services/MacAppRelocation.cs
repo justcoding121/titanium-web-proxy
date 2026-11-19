@@ -113,8 +113,9 @@ internal static partial class MacAppRelocation
             return MacRelocateAction.Install;
 
         var fromBundle = ReadBundleVersion(installedPath);
+        // Unreadable version → keep the existing install (Linux DecideRelocateAction does the same).
         if (fromBundle is null)
-            return MacRelocateAction.Replace;
+            return MacRelocateAction.OpenExisting;
 
         return ReleaseVersion.Compare(runningVersion, fromBundle) > 0
             ? MacRelocateAction.Replace
@@ -292,23 +293,49 @@ internal static partial class MacAppRelocation
 
     private static void CopyBundle(string source, string dest, string dittoExecutable)
     {
-        if (Directory.Exists(dest))
-            Directory.Delete(dest, recursive: true);
+        var parent = Path.GetDirectoryName(dest.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            ?? throw new InvalidOperationException("Destination has no parent directory");
+        Directory.CreateDirectory(parent);
 
-        // ditto preserves resource forks / code signature better than recursive File.Copy.
-        var psi = new ProcessStartInfo
+        var staging = Path.Combine(parent, Path.GetFileName(dest) + ".tmp-" + Guid.NewGuid().ToString("N"));
+        var backup = Path.Combine(parent, Path.GetFileName(dest) + ".old-" + Guid.NewGuid().ToString("N"));
+        try
         {
-            FileName = dittoExecutable,
-            ArgumentList = { source, dest },
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardError = true,
-        };
-        using var proc = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start ditto");
-        var err = proc.StandardError.ReadToEnd();
-        proc.WaitForExit(120_000);
-        if (proc.ExitCode != 0)
-            throw new IOException(string.IsNullOrWhiteSpace(err) ? "ditto failed" : err.Trim());
+            // ditto preserves resource forks / code signature better than recursive File.Copy.
+            var psi = new ProcessStartInfo
+            {
+                FileName = dittoExecutable,
+                ArgumentList = { source, staging },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+            };
+            using var proc = Process.Start(psi)
+                ?? throw new InvalidOperationException("Failed to start ditto");
+            var err = proc.StandardError.ReadToEnd();
+            proc.WaitForExit(120_000);
+            if (proc.ExitCode != 0)
+                throw new IOException(string.IsNullOrWhiteSpace(err) ? "ditto failed" : err.Trim());
+
+            if (Directory.Exists(dest))
+                Directory.Move(dest, backup);
+            Directory.Move(staging, dest);
+            if (Directory.Exists(backup))
+                Directory.Delete(backup, recursive: true);
+        }
+        catch
+        {
+            if (!Directory.Exists(dest) && Directory.Exists(backup))
+            {
+                try { Directory.Move(backup, dest); } catch { /* best-effort restore */ }
+            }
+
+            if (Directory.Exists(staging))
+            {
+                try { Directory.Delete(staging, recursive: true); } catch { /* ignore */ }
+            }
+
+            throw;
+        }
     }
 }
