@@ -478,6 +478,65 @@ public class Http2DeferredOutboundDataTests
         await writer.DisposeAsync();
     }
 
+    [TestMethod]
+    public async Task WithholdStreamCredit_NonPositive_IsNoOp()
+    {
+        var deferred = new Http2DeferredOutboundData();
+        deferred.WithholdStreamCredit(1, 0);
+        deferred.WithholdStreamCredit(1, -5);
+        // No frames queued; a drain with credit withheld only would still be empty.
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        Assert.IsFalse(deferred.TryDrain(flow, writer));
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_EmptyNonEndFrame_ReleasesLeftoverCredit()
+    {
+        // Hook output can shrink: inbound credit was withheld, then an empty non-END_STREAM
+        // slice drains and must return the leftover so the sender is not stuck.
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var granted = 0;
+        deferred.WithholdStreamCredit(1, 40);
+        var empty = ArrayPool<byte>.Shared.Rent(1);
+        Assert.IsTrue(deferred.TryEnqueue(1, empty, 0, 0, endStream: false));
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(40, granted);
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_PartialThenEmptyRemainder_ReleasesLeftover()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        Assert.AreEqual(65535, flow.TryReservePartial(1, 65535));
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var granted = 0;
+        // Withhold more than will be written (hook shrunk the body).
+        deferred.WithholdStreamCredit(1, 10_000);
+        var body = ArrayPool<byte>.Shared.Rent(5000);
+        Assert.IsTrue(deferred.TryEnqueue(1, body, 0, 5000, endStream: false));
+        flow.OnWindowUpdate(1, 5000);
+        // Full forward of the parked body also ReleaseRemainingCredit's leftover withheld bytes.
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(10_000, granted);
+        Assert.AreEqual(0, deferred.PendingCount(1));
+        await writer.DisposeAsync();
+    }
+
     private static int ReadStreamId(byte[] buf, int offset) =>
         ((buf[offset] & 0x7f) << 24) | (buf[offset + 1] << 16) | (buf[offset + 2] << 8) | buf[offset + 3];
 }
