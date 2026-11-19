@@ -2614,14 +2614,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             // macOS: require live SSL policy verify — IsRootTrusted alone can lag Keychain.
             if (_interception.IsRunning && _interception.IsRootTrusted)
             {
-                // Install-smoke sets TITANIUM_SKIP_ROOT_STORE_UI=1 and pre-trusts via sudo
-                // System.keychain. Do not block on login-keychain UI or let the MITM probe
-                // flip decrypt off before scripted browsers open.
-                var smokeSkipOsTrustUi = string.Equals(
-                    Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"),
-                    "1",
-                    StringComparison.Ordinal);
-                if (OperatingSystem.IsMacOS() && !_interception.VerifyOsUserSslTrust() && !smokeSkipOsTrustUi)
+                if (OperatingSystem.IsMacOS() && !_interception.VerifyOsUserSslTrust())
                 {
                     _ = SnapDecryptHttpsUiAsync();
                     var enableGenerationMac = Interlocked.Increment(ref _decryptEnableGeneration);
@@ -2633,8 +2626,7 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
                 SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
                 MaybeToastSafariRelaunchAfterDecrypt();
                 _ = ReverifyDecryptTrustInBackgroundAsync();
-                if (!smokeSkipOsTrustUi)
-                    _ = VerifyDecryptProbeInBackgroundAsync();
+                _ = VerifyDecryptProbeInBackgroundAsync();
                 return;
             }
 

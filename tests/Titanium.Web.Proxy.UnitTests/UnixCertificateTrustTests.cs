@@ -191,6 +191,31 @@ public class UnixCertificateTrustTests
     }
 
     [TestMethod]
+    public void HasExplicitMacSslTrustSettings_AdminDomainDump_ReturnsTrue()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var dump = $"""
+            Number of trusted certs = 1
+            Cert 0: Titanium Inspector Root Certificate
+               SHA-1 hash: {sha1}
+               Number of trust settings : 1
+               Trust Setting 0:
+                  Policy OID            : 1.2.840.113635.100.1.3
+                  Result Type           : kSecTrustSettingsResultTrustRoot
+            """;
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        // Register the admin-domain argv first. A contains-match on "dump-trust-settings"
+        // would otherwise swallow "dump-trust-settings -d".
+        runner.When("security", "dump-trust-settings -d", dump);
+        runner.When("security", "dump-trust-settings",
+            "SecTrustSettingsCopyCertificates: No Trust Settings were found.\n");
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+        Assert.IsTrue(runner.Commands.Any(c =>
+            c.Contains("dump-trust-settings -d", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
     public void HasExplicitMacSslTrustSettings_ZeroTrustSettingsCount_ReturnsFalse()
     {
         using var cert = CreateEphemeralRoot();
