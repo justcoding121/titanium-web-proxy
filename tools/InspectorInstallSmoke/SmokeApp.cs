@@ -147,6 +147,9 @@ internal static class SmokeApp
                 return Fail(1, "capture is not listening after upgrade");
             if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
                 return Fail(1, "system proxy is off after upgrade. " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+            // Seeded decryptHttps=true still runs the in-app MITM probe on start; a hard
+            // failure persists decrypt off (DecryptOff CONNECT) before browsers open.
+            app = await EnsureDecryptStaysOnAsync(app, exe, port);
             Console.WriteLine("upgrade-verify decrypt=true thumb=" + thumb + " proxy=on");
             return await ProveBrowsersAsync(app.StartedUtc, opt.Browsers ?? DefaultBrowsers());
         }
@@ -154,6 +157,17 @@ internal static class SmokeApp
         {
             await app.DisposeAsync();
         }
+    }
+
+    private static async Task<InspectorProcess> EnsureDecryptStaysOnAsync(
+        InspectorProcess app, string exe, int port)
+    {
+        if (await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(14)))
+            return app;
+
+        Console.WriteLine("decrypt flipped off after start; re-enabling");
+        await TrustRootAsync();
+        return await DecryptAndMaybeRelaunchAsync(app, exe, port);
     }
 
     private static async Task<int> FreshAsync(Options opt)
