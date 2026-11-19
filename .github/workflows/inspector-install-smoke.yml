@@ -237,9 +237,12 @@ jobs:
           ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-x64
           cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
           # Local and CI packages must ship the launcher; missing .desktop was a silent skip.
-          dpkg-deb -c "$cand" | grep -q 'usr/share/applications/titanium-inspector.desktop'
-          dpkg-deb -c "$cand" | grep -q 'titanium-inspector-clear'
-          if dpkg-deb -c "$cand" | grep -q 'clear-proxy-if-stopped\.sh'; then
+          # Buffer the listing first: with pipefail, `dpkg-deb -c | grep -q` can SIGPIPE
+          # tar when grep exits early and fail the step even though the member is present.
+          deb_contents=$(dpkg-deb -c "$cand")
+          grep -q 'usr/share/applications/titanium-inspector.desktop' <<<"$deb_contents"
+          grep -q 'titanium-inspector-clear' <<<"$deb_contents"
+          if grep -q 'clear-proxy-if-stopped\.sh' <<<"$deb_contents"; then
             echo "error: candidate .deb still ships clear-proxy-if-stopped.sh" >&2
             exit 1
           fi
