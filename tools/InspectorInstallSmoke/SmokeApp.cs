@@ -1491,17 +1491,158 @@ internal static class SmokeApp
         }
 
         var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
-        if (!File.Exists(ux))
-            return;
-        var lines = File.ReadAllLines(ux);
-        var tail = string.Join(Environment.NewLine, lines.TakeLast(40));
-        Console.WriteLine("--- ux-trace ---");
-        Console.WriteLine(tail);
-        if (!string.IsNullOrEmpty(outDir))
+        if (File.Exists(ux))
         {
-            Directory.CreateDirectory(outDir);
-            File.WriteAllText(Path.Combine(outDir, "ux-trace-tail.log"), tail);
+            var lines = File.ReadAllLines(ux);
+            var tail = string.Join(Environment.NewLine, lines.TakeLast(40));
+            Console.WriteLine("--- ux-trace ---");
+            Console.WriteLine(tail);
+            if (!string.IsNullOrEmpty(outDir))
+            {
+                Directory.CreateDirectory(outDir);
+                File.WriteAllText(Path.Combine(outDir, "ux-trace-tail.log"), tail);
+            }
         }
+        else
+        {
+            Console.WriteLine("--- ux-trace ---");
+            Console.WriteLine("(missing)");
+        }
+
+        if (OperatingSystem.IsMacOS())
+            DumpMacTrustDiagnostics();
+    }
+
+    /// <summary>
+    ///     Best-effort macOS trust and settings dump. Prefixed so a failed smoke log
+    ///     shows whether decrypt was forced off and which roots the keychains hold.
+    /// </summary>
+    private static void DumpMacTrustDiagnostics()
+    {
+        string settings;
+        try
+        {
+            var settingsPath = Path.Combine(ProfileDir(), "settings.json");
+            settings = File.Exists(settingsPath) ? ReadSharedText(settingsPath) : "(missing settings.json)";
+        }
+        catch (Exception ex)
+        {
+            settings = ex.GetType().Name + ": " + ex.Message;
+        }
+
+        WriteMacDiag("settings.json", settings);
+        var decrypt = "missing";
+        if (settings.Contains("\"decryptHttps\": true", StringComparison.OrdinalIgnoreCase))
+            decrypt = "true";
+        else if (settings.Contains("\"decryptHttps\": false", StringComparison.OrdinalIgnoreCase))
+            decrypt = "false";
+        Console.WriteLine("mac-diag: decryptHttps=" + decrypt);
+
+        WriteMacDiag("dump-trust-settings", RunMacSecurity("dump-trust-settings"));
+        WriteMacDiag("dump-trust-settings -d", RunMacSecurity("dump-trust-settings -d"));
+
+        var system = FilterTitaniumCertRecords(
+            RunMacSecurity("find-certificate -a -Z /Library/Keychains/System.keychain"));
+        WriteMacDiag("system-keychain", system);
+
+        var login = ResolveLoginKeychainForSmoke();
+        var loginText = string.IsNullOrEmpty(login)
+            ? "(login keychain missing)"
+            : FilterTitaniumCertRecords(RunMacSecurity("find-certificate -a -Z \"" + login + "\""));
+        WriteMacDiag("login-keychain", loginText);
+
+        var thumb = "";
+        try
+        {
+            var pfx = Path.Combine(ProfileDir(), "rootCert.pfx");
+            if (!File.Exists(pfx))
+            {
+                WriteMacDiag("verify-cert", "rootCert.pfx missing");
+            }
+            else
+            {
+                thumb = ThumbFromPfx();
+                var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-diag.cer");
+                File.WriteAllBytes(cer, ExportCer(pfx));
+                try
+                {
+                    var verify = RunCapture("security", "verify-cert -p basic -c \"" + cer + "\"", 15000);
+                    WriteMacDiag("verify-cert", "exit=" + verify.Code + Environment.NewLine + verify.Output);
+                }
+                finally
+                {
+                    TryDelete(cer);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteMacDiag("verify-cert", ex.GetType().Name + ": " + ex.Message);
+        }
+
+        var roots = ExtractSha1Hashes(system + "\n" + loginText);
+        Console.WriteLine(
+            "mac-diag: roots=[" + string.Join(",", roots) + "] current=" + thumb);
+    }
+
+    private static void WriteMacDiag(string label, string text)
+    {
+        Console.WriteLine("mac-diag: " + label);
+        Console.WriteLine(TruncateDiag(text));
+    }
+
+    private static string TruncateDiag(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "(empty)";
+        return text.Length <= 4000 ? text : text[..4000] + "\n...(truncated)";
+    }
+
+    private static string RunMacSecurity(string args)
+    {
+        try
+        {
+            var result = RunCapture("security", args, 15000);
+            return "exit=" + result.Code + Environment.NewLine + result.Output;
+        }
+        catch (Exception ex)
+        {
+            return ex.GetType().Name + ": " + ex.Message;
+        }
+    }
+
+    private static string FilterTitaniumCertRecords(string text)
+    {
+        var parts = text.Split("SHA-1 hash:", StringSplitOptions.None);
+        var sb = new StringBuilder();
+        for (var i = 1; i < parts.Length; i++)
+        {
+            if (parts[i].Contains("Titanium", StringComparison.OrdinalIgnoreCase))
+                sb.Append("SHA-1 hash:").Append(parts[i]);
+        }
+
+        return sb.Length == 0 ? "(no Titanium certificates)" : sb.ToString();
+    }
+
+    private static List<string> ExtractSha1Hashes(string text)
+    {
+        var found = new List<string>();
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            const string prefix = "SHA-1 hash:";
+            var idx = line.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                continue;
+            var hex = line[(idx + prefix.Length)..].Trim();
+            if (hex.Length < 40)
+                continue;
+            var hash = hex[..40].ToUpperInvariant();
+            if (hash.All(Uri.IsHexDigit) && !found.Contains(hash, StringComparer.OrdinalIgnoreCase))
+                found.Add(hash);
+        }
+
+        return found;
     }
 
     private static async Task QuitPidAsync(int pid)
