@@ -2234,7 +2234,7 @@ public sealed class CertificateManager : IDisposable
     ///     Ensure certificates are setup (creates root if required).
     ///     Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
     /// </summary>
-    public void EnsureRootCertificate()
+    public void EnsureRootCertificate() // NOSONAR S4136 -- overload follows PublishLinuxCaPolicy helper below
     {
         if (!CertValidated) CreateRootCertificate();
 
@@ -2243,6 +2243,27 @@ public sealed class CertificateManager : IDisposable
         else if (UserTrustRoot) TrustRootCertificate(MachineTrustRoot);
 
         PublishLinuxCaPolicyIfAlreadyTrusted();
+    }
+
+    /// <summary>
+    ///     Edge's cert verifier does not treat an NSS <c>C,,</c> root as a server trust anchor.
+    ///     When this root is already trusted, refresh the Chromium <c>CACertificates</c> policy
+    ///     so a later browser start decrypts without another trust prompt.
+    /// </summary>
+    private void PublishLinuxCaPolicyIfAlreadyTrusted()
+    {
+        if (!RunTime.IsLinux || RootCertificate == null || ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        try
+        {
+            if (VerifyOsUserSslTrust())
+                Helpers.LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(RootCertificate);
+        }
+        catch
+        {
+            // NSS trust still covers browsers that read ~/.pki/nssdb.
+        }
     }
 
     /// <summary>
@@ -2267,27 +2288,6 @@ public sealed class CertificateManager : IDisposable
         TrustRootAsAdministrator = trustRootCertificateAsAdmin;
 
         EnsureRootCertificate();
-    }
-
-    /// <summary>
-    ///     Edge's cert verifier does not treat an NSS <c>C,,</c> root as a server trust anchor.
-    ///     When this root is already trusted, refresh the Chromium <c>CACertificates</c> policy
-    ///     so a later browser start decrypts without another trust prompt.
-    /// </summary>
-    private void PublishLinuxCaPolicyIfAlreadyTrusted()
-    {
-        if (!RunTime.IsLinux || RootCertificate == null || ShouldSuppressInteractiveRootStoreMutations)
-            return;
-
-        try
-        {
-            if (VerifyOsUserSslTrust())
-                Helpers.LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(RootCertificate);
-        }
-        catch
-        {
-            // NSS trust still covers browsers that read ~/.pki/nssdb.
-        }
     }
 
     /// <summary>

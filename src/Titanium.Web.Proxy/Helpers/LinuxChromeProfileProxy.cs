@@ -407,7 +407,7 @@ internal static class LinuxChromeProfileProxy
         if (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
             return true;
 
-        var server = JsonString(proxy, ProxyServerKey);
+        var server = JsonString(proxy, "server");
         return server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -666,9 +666,9 @@ internal static class LinuxChromeProfileProxy
             var text = File.ReadAllText(fullPath);
             var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject;
             var proxy = root?[ProxyKey] as JsonObject;
-            var mode = proxy?[ProxyModeKey]?.GetValue<string>() ?? string.Empty;
-            var server = proxy?[ProxyServerKey]?.GetValue<string>() ?? string.Empty;
-            if (mode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase) &&
+            var mode = proxy?["mode"]?.GetValue<string>() ?? string.Empty;
+            var server = proxy?["server"]?.GetValue<string>() ?? string.Empty;
+            if (mode.Equals("system", StringComparison.OrdinalIgnoreCase) &&
                 !server.Contains($"{host}:{port}", StringComparison.OrdinalIgnoreCase))
                 return;
 

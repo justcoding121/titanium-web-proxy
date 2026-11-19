@@ -42,4 +42,24 @@ public class LinuxInspectorProcessTests
             try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
         }
     }
+
+    [TestMethod]
+    public void IsRunning_SkipsNonDigitDirs_MissingCmdline_AndEmptyCmdline()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ti-proc-" + Path.GetRandomFileName());
+        Directory.CreateDirectory(Path.Combine(root, "self")); // non-digit → early false
+        Directory.CreateDirectory(Path.Combine(root, "7")); // digit, no cmdline file → catch false
+        Directory.CreateDirectory(Path.Combine(root, "8"));
+        File.WriteAllText(Path.Combine(root, "8", "cmdline"), ""); // empty → false
+        Directory.CreateDirectory(Path.Combine(root, "9"));
+        File.WriteAllText(Path.Combine(root, "9", "cmdline"), "\0\0"); // empty parts → false
+        try
+        {
+            Assert.IsFalse(LinuxInspectorProcess.IsRunning(root));
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+        }
+    }
 }

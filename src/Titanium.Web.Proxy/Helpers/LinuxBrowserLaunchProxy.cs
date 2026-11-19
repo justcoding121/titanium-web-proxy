@@ -975,17 +975,17 @@ internal static class LinuxBrowserLaunchProxy
         var name = Path.GetFileNameWithoutExtension(scriptPath);
         return name switch
         {
-            "google-chrome" or "google-chrome-stable" => File.Exists(GoogleChromeStableBin)
-                ? GoogleChromeStableBin
+            "google-chrome" or "google-chrome-stable" => File.Exists("/usr/bin/google-chrome-stable")
+                ? "/usr/bin/google-chrome-stable"
                 : "/usr/bin/google-chrome",
-            "chromium" or "chromium-browser" => File.Exists(ChromiumBin)
-                ? ChromiumBin
+            "chromium" or "chromium-browser" => File.Exists("/usr/bin/chromium")
+                ? "/usr/bin/chromium"
                 : "/usr/bin/chromium-browser",
             "brave-browser" => "/usr/bin/brave-browser",
-            "microsoft-edge" or "microsoft-edge-stable" => File.Exists(MicrosoftEdgeStableBin)
-                ? MicrosoftEdgeStableBin
+            "microsoft-edge" or "microsoft-edge-stable" => File.Exists("/usr/bin/microsoft-edge-stable")
+                ? "/usr/bin/microsoft-edge-stable"
                 : "/usr/bin/microsoft-edge",
-            "opera" => File.Exists(OperaBin) ? OperaBin : "/usr/bin/opera-stable",
+            "opera" => File.Exists("/usr/bin/opera") ? "/usr/bin/opera" : "/usr/bin/opera-stable",
             _ => null,
         };
     }
