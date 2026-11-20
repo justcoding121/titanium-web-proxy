@@ -9,6 +9,16 @@ public partial class DocsStructureTests
 {
     private static readonly string[] HomeTiles =
     [
+        "Embeddable .NET proxy",
+        "CLI and Kubernetes edge proxy",
+        "Automatic tunnel",
+        "Visual MITM debugger",
+        "Benchmarked speed at scale",
+        "Control-plane add-ons",
+    ];
+
+    private static readonly string[] PreservedCapabilityTitles =
+    [
         "Debug HTTPS traffic",
         "Rewrite and replay",
         "Automatic tunnel",
@@ -62,7 +72,7 @@ public partial class DocsStructureTests
     }
 
     [TestMethod]
-    public void HomePage_ListsTheTwelveTilesInOrder_EachLinkingToARealDocsPage()
+    public void HomePage_ListsTheSixPillarsInOrder_EachLinkingToARealDocsPage()
     {
         var path = Path.Combine(DocsRepository.Root, "website", "index.md");
         var text = File.ReadAllText(path);
@@ -97,6 +107,21 @@ public partial class DocsStructureTests
         }
 
         Assert.AreEqual(0, failures.Count, string.Join("\n", failures));
+    }
+
+    [TestMethod]
+    public void HomePage_KeepsTheTwelveCapabilityTitlesInTheBody()
+    {
+        var path = Path.Combine(DocsRepository.Root, "website", "index.md");
+        var text = File.ReadAllText(path);
+        _ = FrontMatter(text);
+
+        var lines = text.Split('\n');
+        var end = Array.FindIndex(lines, 1, l => l.TrimEnd('\r') == "---");
+        var body = string.Join('\n', lines[(end + 1)..]);
+
+        var missing = PreservedCapabilityTitles.Where(title => !body.Contains(title, StringComparison.Ordinal)).ToList();
+        Assert.AreEqual(0, missing.Count, "Missing capability titles: " + string.Join(", ", missing));
     }
 
     [TestMethod]

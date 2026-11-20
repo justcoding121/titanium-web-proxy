@@ -3,8 +3,8 @@ layout: home
 title: Titanium Web Proxy
 hero:
   name: Titanium Web Proxy
-  text: High-performance HTTP(S) proxy
-  tagline: Inspect HTTPS traffic, put a reverse proxy in front of your apps, or embed the same engine in .NET — on Windows, Linux, and macOS.
+  text: Library, edge proxy, and MITM debugger
+  tagline: Embed the same high-performance HTTP(S) engine in .NET, run it as a standalone reverse proxy, or inspect traffic in a desktop debugger — on Windows, Linux, and macOS.
   image:
     src: /logo.svg
     alt: Titanium Web Proxy
@@ -13,63 +13,114 @@ hero:
       text: Get started
       link: /docs/getting-started
     - theme: alt
-      text: Download
-      link: /download
+      text: Download Inspector & CLI
+      link: /download/
     - theme: alt
       text: GitHub
       link: https://github.com/justcoding121/titanium-web-proxy
 features:
-  - title: Debug HTTPS traffic
-    details: Native desktop Inspector on Windows, macOS, and Linux — decrypt HTTPS, turn on system proxy, and inspect sessions, headers, and bodies. Only on machines you control.
-    link: /docs/inspector
-    linkText: Inspector guide
-  - title: Rewrite and replay
-    details: AutoResponder, Map Local, Map Remote, breakpoints, and Composer. Export or import HAR; copy sessions as curl or fetch.
-    link: /docs/inspector#right-pane-inspect-and-tools
-    linkText: Rewrite tools
-  - title: Automatic tunnel
-    details: When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic.
-    link: /docs/features#inspector
-    linkText: Inspector features
-  - title: HTTP/1 · HTTP/2 · HTTP/3
-    details: HTTP/2 is on by default. HTTP/3 is on when QUIC is available. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.
-    link: /docs/protocol-support
-    linkText: Protocol support
-  - title: Reverse proxy from the CLI
-    details: Download the CLI, write a short YAML file, and run `titanium`. Routes, TLS, and optional automatic certificates (ACME).
-    link: /docs/cli
-    linkText: CLI guide
-  - title: Zero-downtime reload
-    details: Change routes and backends with `titanium reload` while current connections stay up. SIGHUP does the same on Linux and macOS, and `--watch` follows Kubernetes ConfigMap updates.
-    link: /docs/cli#reload-without-restart
-    linkText: Reload without restart
-  - title: Balance and fail over
-    details: Round-robin, random, least requests, and least time. Health checks eject a failing backend, retries move a request to another one within a budget, and a cookie or header can pin a client to one.
-    link: /docs/configuration#routes-clusters
-    linkText: Routes and clusters
-  - title: Secure at the edge
-    details: Set a TLS floor, get ACME certificates, rate-limit by client or header, ask an external service to authorize each request, and add OpenID Connect login and WAF screening with Plus.
-    link: /docs/capabilities#auth-methods
-    linkText: Auth methods
-  - title: Kubernetes native
-    details: A hardened container image, a Helm chart with probes and a graceful drain, and a Gateway API and Ingress controller.
-    link: /docs/kubernetes
-    linkText: Kubernetes guide
-  - title: Observe everything
-    details: Prometheus metrics, OTLP traces and metrics with W3C trace context, a JSON access log, and a Plus dashboard.
-    link: /docs/configuration#observability
-    linkText: Observability
-  - title: Chain and authenticate
-    details: Forward through an upstream HTTP, HTTPS, or SOCKS proxy. Proxy auth, mTLS, Kerberos, and NTLM are included.
+  - title: Embeddable .NET proxy
+    details: NuGet package Titanium.Web.Proxy for HTTP(S) and MITM inside your .NET 10 app.
     link: /docs/library
-    linkText: Library guide
-  - title: Cache, compress, protect
-    details: A shared response cache that skips `Set-Cookie` and private responses (Plus), gzip and brotli response compression, and caps on request bodies, headers, and decompression ratio.
-    link: /docs/capabilities#compression
-    linkText: Compression and caching
+    linkText: Learn more
+  - title: CLI and Kubernetes edge proxy
+    details: Standalone titanium / twp reverse proxy from YAML, Docker, or Helm.
+    link: /docs/cli
+    linkText: Learn more
+  - title: Automatic tunnel
+    details: When a server blocks the proxy, we detect it and automatically tunnel that traffic.
+    link: /docs/features#inspector
+    linkText: Learn more
+  - title: Visual MITM debugger
+    details: Native Titanium Inspector with session grid, rewrite tools, and HAR export.
+    link: /docs/inspector
+    linkText: Learn more
+  - title: Benchmarked speed at scale
+    details: Practical reverse throughput charts against peers on the same harness.
+    link: /docs/performance
+    linkText: Learn more
+  - title: Control-plane add-ons
+    details: Optional Plus for xDS, GeoIP, caching, rate limiting, health probes, and a dashboard.
+    link: /docs/plus
+    linkText: Learn more
 ---
 
-## What do you want to do?
+## Performance
+
+Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners. The Linux tiny-GET chart is below. Charts for the other operating systems, and all other results, are on the [performance](/docs/performance) page.
+
+<div class="rps-preview">
+
+![Practical reverse proxy throughput on Linux (tiny requests)](../wiki/images/rps-practical-linux.png)
+
+</div>
+
+## More capabilities
+
+<div class="edition-grid">
+  <div class="edition-card">
+    <h3>Debug HTTPS traffic</h3>
+    <p>Native desktop Inspector on Windows, macOS, and Linux — decrypt HTTPS, turn on system proxy, and inspect sessions, headers, and bodies. Only on machines you control.</p>
+    <p class="license"><a href="/docs/inspector">Inspector guide →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Rewrite and replay</h3>
+    <p>AutoResponder, Map Local, Map Remote, breakpoints, and Composer. Export or import HAR; copy sessions as curl or fetch.</p>
+    <p class="license"><a href="/docs/inspector#right-pane-inspect-and-tools">Rewrite tools →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Automatic tunnel</h3>
+    <p>When a server blocks the proxy (TLS fingerprinting or other reasons), we detect it and automatically tunnel that traffic.</p>
+    <p class="license"><a href="/docs/features#inspector">Inspector features →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>HTTP/1 · HTTP/2 · HTTP/3</h3>
+    <p>HTTP/2 is on by default. HTTP/3 is on when QUIC is available. Bridge when client and backend differ. Inspect WebSocket, gRPC, SSE, and GraphQL in the same grid.</p>
+    <p class="license"><a href="/docs/protocol-support">Protocol support →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Reverse proxy from the CLI</h3>
+    <p>Download the CLI, write a short YAML file, and run `titanium`. Routes, TLS, and optional automatic certificates (ACME).</p>
+    <p class="license"><a href="/docs/cli">CLI guide →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Zero-downtime reload</h3>
+    <p>Change routes and backends with `titanium reload` while current connections stay up. SIGHUP does the same on Linux and macOS, and `--watch` follows Kubernetes ConfigMap updates.</p>
+    <p class="license"><a href="/docs/cli#reload-without-restart">Reload without restart →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Balance and fail over</h3>
+    <p>Round-robin, random, least requests, and least time. Health checks eject a failing backend, retries move a request to another one within a budget, and a cookie or header can pin a client to one.</p>
+    <p class="license"><a href="/docs/configuration#routes-clusters">Routes and clusters →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Secure at the edge</h3>
+    <p>Set a TLS floor, get ACME certificates, rate-limit by client or header, ask an external service to authorize each request, and add OpenID Connect login and WAF screening with Plus.</p>
+    <p class="license"><a href="/docs/capabilities#auth-methods">Auth methods →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Kubernetes native</h3>
+    <p>A hardened container image, a Helm chart with probes and a graceful drain, and a Gateway API and Ingress controller.</p>
+    <p class="license"><a href="/docs/kubernetes">Kubernetes guide →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Observe everything</h3>
+    <p>Prometheus metrics, OTLP traces and metrics with W3C trace context, a JSON access log, and a Plus dashboard.</p>
+    <p class="license"><a href="/docs/configuration#observability">Observability →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Chain and authenticate</h3>
+    <p>Forward through an upstream HTTP, HTTPS, or SOCKS proxy. Proxy auth, mTLS, Kerberos, and NTLM are included.</p>
+    <p class="license"><a href="/docs/library">Library guide →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Cache, compress, protect</h3>
+    <p>A shared response cache that skips `Set-Cookie` and private responses (Plus), gzip and brotli response compression, and caps on request bodies, headers, and decompression ratio.</p>
+    <p class="license"><a href="/docs/capabilities#compression">Compression and caching →</a></p>
+  </div>
+</div>
+
+## Choose a path
 
 <div class="edition-grid">
   <div class="edition-card">
@@ -94,57 +145,20 @@ features:
   </div>
 </div>
 
-## Performance
+## Licensing
 
-Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners. The Linux tiny-GET chart is below. Charts for the other operating systems, and all other results, are on the [performance](/docs/performance) page.
-
-<div class="rps-preview">
-
-![Practical reverse proxy throughput on Linux (tiny requests)](../wiki/images/rps-practical-linux.png)
-
+<div class="edition-grid">
+  <div class="edition-card">
+    <h3>Open source (MIT)</h3>
+    <p class="license">Library · CLI · Gateway · this site</p>
+    <p><code>Titanium.Web.Proxy</code>, <code>Titanium.Cli</code>, Manager, Gateway, docs, and the website are MIT-licensed for commercial and non-commercial use.</p>
+  </div>
+  <div class="edition-card">
+    <h3>Inspector &amp; Plus (noncommercial)</h3>
+    <p class="license">PolyForm Noncommercial</p>
+    <p>Titanium Inspector, Titanium.Plus, and the xDS / GeoIP satellites are free for personal and education use. Commercial use needs a separate arrangement. Full terms: <a href="/docs/editions">Editions &amp; licenses</a>.</p>
+  </div>
 </div>
-
-## Quick start
-
-::: code-group
-
-```shell [CLI]
-# Download a CLI zip from /download, then:
-titanium test -c twp.yaml
-titanium run -c twp.yaml
-```
-
-```yaml [twp.yaml]
-schemaVersion: "7.1"
-listeners:
-  - host: "127.0.0.1"
-    port: 8000
-    # false = plain reverse proxy (no HTTPS decrypt)
-    decryptSsl: false
-    forwardHost: "127.0.0.1"
-    forwardPort: 8080
-```
-
-```csharp [Library (.NET)]
-using System.Net;
-using Titanium.Web.Proxy;
-using Titanium.Web.Proxy.Models;
-
-using var proxyServer = new ProxyServer();
-proxyServer.BeforeRequest += async (s, e) =>
-{
-    Console.WriteLine(e.HttpClient.Request.Url);
-};
-
-var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, decryptSsl: true);
-proxyServer.AddEndPoint(endPoint);
-proxyServer.CertificateManager.EnsureRootCertificate(
-    userTrustRootCertificate: true,
-    machineTrustRootCertificate: false);
-proxyServer.Start();
-```
-
-:::
 
 ## Next steps
 
