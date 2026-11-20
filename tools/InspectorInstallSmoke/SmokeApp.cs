@@ -485,22 +485,21 @@ internal static class SmokeApp
                 "user_pref(\"browser.startup.page\", 0);\n" +
                 "user_pref(\"browser.startup.homepage\", \"about:blank\");\n");
             Console.WriteLine("firefox: seeded enterprise_roots");
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                var port = ReadBindPort();
-                File.AppendAllText(Path.Combine(profile, "user.js"),
-                    "user_pref(\"network.proxy.type\", 1);\n" +
-                    "user_pref(\"network.proxy.http\", \"127.0.0.1\");\n" +
-                    "user_pref(\"network.proxy.http_port\", " + port + ");\n" +
-                    "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
-                    "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
-                    "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
-                Console.WriteLine("firefox: manual proxy prefs for the " +
-                                  (OperatingSystem.IsMacOS() ? "macOS" : "Linux") + " temp profile");
-                // Linux always has nss certutil in the smoke image; macOS may not.
-                if (OperatingSystem.IsLinux())
-                    ImportRootIntoFirefoxProfile(profile);
-            }
+            // Manual loopback prefs on every OS. A fresh profile's system-proxy
+            // mode (type 5) missed the proof URL on Windows while WinINET was
+            // still settling, and the only HAR row was the NCSI probe.
+            var port = ReadBindPort();
+            File.AppendAllText(Path.Combine(profile, "user.js"),
+                "user_pref(\"network.proxy.type\", 1);\n" +
+                "user_pref(\"network.proxy.http\", \"127.0.0.1\");\n" +
+                "user_pref(\"network.proxy.http_port\", " + port + ");\n" +
+                "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
+                "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
+                "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
+            Console.WriteLine("firefox: manual proxy prefs for the temp profile");
+            // Linux always has nss certutil in the smoke image; macOS may not.
+            if (OperatingSystem.IsLinux())
+                ImportRootIntoFirefoxProfile(profile);
             var proc = SystemProxyBrowserCapture.StartFirefox(path, profile, url);
             return new BrowserLaunch(proc, safari: false, profile);
         }
@@ -1244,7 +1243,11 @@ internal static class SmokeApp
             return true;
 
         // Recent macOS dumps often name the cert without a SHA-1 line.
-        return dump.Contains("SSL", StringComparison.OrdinalIgnoreCase)
+        // basic is accepted beside SSL: verify-cert -p basic is what the
+        // previous build uses once the admin dump has no hash line.
+        var policy = dump.Contains("SSL", StringComparison.OrdinalIgnoreCase)
+                     || dump.Contains("basic", StringComparison.OrdinalIgnoreCase);
+        return policy
             && (dump.Contains("Trust Root", StringComparison.OrdinalIgnoreCase)
                 || dump.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.OrdinalIgnoreCase)
                 || dump.Contains("Policy OID", StringComparison.OrdinalIgnoreCase));
