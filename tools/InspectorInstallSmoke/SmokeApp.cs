@@ -511,9 +511,11 @@ internal static class SmokeApp
         var dir = launched.DataDir ?? throw new InvalidOperationException(name + " has no user-data-dir");
         Console.WriteLine("restart " + name + "; no decrypted page from the current window");
         launched.KillProcessOnly();
-        KillWindowsProcessesForDataDir(dir);
         if (!WaitUntilDataDirUnused(dir))
-            Console.WriteLine("profile still in use for " + name);
+        {
+            Console.WriteLine("profile still in use for " + name + "; not starting another window");
+            return;
+        }
 
         var again = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
             browserPath, dir, url, disableQuic: true);
@@ -521,9 +523,9 @@ internal static class SmokeApp
         launched.AdoptIfStartExited(again);
     }
 
-    private static void KillWindowsProcessesForDataDir(string dataDir)
+    private static void KillWindowsProcessesForDataDir(IReadOnlyList<int> pids)
     {
-        foreach (var pid in WindowsPidsForDataDir(dataDir))
+        foreach (var pid in pids)
         {
             Console.WriteLine("taskkill profile pid=" + pid);
             Process.Start(new ProcessStartInfo
@@ -538,24 +540,37 @@ internal static class SmokeApp
 
     private static bool WaitUntilDataDirUnused(string dataDir)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline)
+        // Each process query takes longer than a few seconds. A short deadline
+        // expired inside the first query and reported the profile busy.
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        List<int> left;
+        do
         {
-            if (WindowsPidsForDataDir(dataDir).Count == 0)
+            left = WindowsPidsForDataDir(dataDir);
+            if (left.Count == 0)
                 return true;
+            KillWindowsProcessesForDataDir(left);
             Thread.Sleep(400);
         }
+        while (DateTime.UtcNow < deadline);
 
-        return WindowsPidsForDataDir(dataDir).Count == 0;
+        left = WindowsPidsForDataDir(dataDir);
+        if (left.Count > 0)
+            Console.WriteLine("profile still in use pids=" + string.Join(",", left));
+        return left.Count == 0;
     }
 
     private static List<int> WindowsPidsForDataDir(string dataDir)
     {
         var pids = new List<int>();
         var marker = dataDir.Replace("'", "''", StringComparison.Ordinal);
+        // $PID is this query. Its command line contains the profile path, so an
+        // unfiltered search taskkilled the shell and left Chrome running.
         var script =
             "$m = '" + marker + "'; " +
-            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($m) } | " +
+            "Get-CimInstance Win32_Process | Where-Object { " +
+            "$_.ProcessId -ne $PID -and $_.Name -ne 'powershell.exe' -and $_.Name -ne 'pwsh.exe' -and " +
+            "$_.CommandLine -and $_.CommandLine.Contains($m) } | " +
             "ForEach-Object { $_.ProcessId }";
         using var proc = Process.Start(new ProcessStartInfo
         {
@@ -618,6 +633,8 @@ internal static class SmokeApp
 
         var dir = Path.Combine(Path.GetTempPath(), "twp-smoke-" + name + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        // Chromium treats this empty file as "first run already happened" and loads the URL.
+        File.WriteAllText(Path.Combine(dir, "First Run"), string.Empty);
         if (OperatingSystem.IsLinux())
         {
             var desktop = LinuxDesktopId(name);
