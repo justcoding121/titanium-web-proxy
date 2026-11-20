@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -96,6 +97,80 @@ public class DecryptHttpsProbeTests
     }
 
     [TestMethod]
+    public async Task VerifyAsync_BlackholeUpstream_TimesOut()
+    {
+        var held = new List<TcpClient>();
+        var hold = new TcpListener(IPAddress.Loopback, 0);
+        hold.Start();
+        var upstreamPort = ((IPEndPoint)hold.LocalEndpoint!).Port;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (true)
+                {
+                    var client = await hold.AcceptTcpClientAsync();
+                    lock (held)
+                        held.Add(client);
+                }
+            }
+            catch
+            {
+                // listener stopped
+            }
+        });
+
+        object? enable = null;
+        object? server = null;
+        Microsoft.Win32.RegistryKey? reg = null;
+        if (OperatingSystem.IsWindows())
+        {
+            reg = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", writable: true);
+            if (reg is not null)
+            {
+                enable = reg.GetValue("ProxyEnable");
+                server = reg.GetValue("ProxyServer");
+            }
+        }
+
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            var proxy = (Titanium.Web.Proxy.ProxyServer)typeof(InterceptionService)
+                .GetField("_proxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(interception)!;
+            proxy.UpStreamHttpsProxy = new Titanium.Web.Proxy.Models.ExternalProxy("127.0.0.1", upstreamPort);
+            interception.DecryptHttps = true;
+            var timedOut = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromMilliseconds(400));
+            Assert.IsFalse(timedOut.Ok);
+            StringAssert.Contains(timedOut.Message, "timed out");
+            interception.Stop();
+        }
+        finally
+        {
+            try { hold.Stop(); } catch { /* already stopped */ }
+            List<TcpClient> clients;
+            lock (held)
+                clients = [.. held];
+            foreach (var client in clients)
+                client.Dispose();
+            if (OperatingSystem.IsWindows() && reg is not null)
+            {
+                if (enable is null) reg.DeleteValue("ProxyEnable", throwOnMissingValue: false);
+                else reg.SetValue("ProxyEnable", enable);
+                if (server is null) reg.DeleteValue("ProxyServer", throwOnMissingValue: false);
+                else reg.SetValue("ProxyServer", server);
+                reg.Dispose();
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task VerifyAsync_ListeningProxy_CoversDecryptOffAndAShortProbe()
     {
         object? enable = null;
@@ -127,11 +202,6 @@ public class DecryptHttpsProbeTests
             interception.DecryptHttps = true;
             var probed = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromSeconds(3));
             Assert.IsFalse(string.IsNullOrWhiteSpace(probed.Message));
-
-            // Shorter than the proxy's upstream failure, so the client cancels first.
-            var timedOut = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromMilliseconds(1));
-            Assert.IsFalse(timedOut.Ok);
-            StringAssert.Contains(timedOut.Message, "timed out");
 
             var proxy = (Titanium.Web.Proxy.ProxyServer)typeof(InterceptionService)
                 .GetField("_proxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
