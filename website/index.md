@@ -13,7 +13,7 @@ hero:
       text: Get started
       link: /docs/getting-started#embed-in-net-library
     - theme: alt
-      text: Download Inspector & CLI
+      text: Download Inspector or CLI
       link: /download/
     - theme: alt
       text: GitHub
@@ -176,7 +176,7 @@ hero:
 
 ## Next steps
 
-- [Download CLI & Inspector](/download)
+- [Download Inspector or CLI](/download)
 - [Getting started](/docs/getting-started)
 - [Features](/docs/features)
 - [Performance](/docs/performance)
