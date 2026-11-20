@@ -31,7 +31,7 @@ export default defineConfig({
     siteTitle: 'Titanium Web Proxy',
     nav: [
       { text: 'Docs', link: '/docs/getting-started' },
-      { text: 'Licensing', link: '/docs/editions' },
+      { text: 'Licensing', link: '/#licensing' },
       // Trailing slash: with only dir/index.html, GitHub Pages 301s `/download` →
       // github.io when the Pages custom-domain CNAME is not active on the edge.
       { text: 'Download', link: '/download/' },
@@ -92,7 +92,7 @@ export default defineConfig({
     },
     footer: {
       message:
-        'Core, CLI, and website: MIT · <a href="/docs/editions">Licensing</a>',
+        'Core, CLI, and website: MIT · <a href="/#licensing">Licensing</a>',
       copyright: 'Copyright © 2015–present Jehonathan Thomas',
     },
   },

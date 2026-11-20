@@ -2,13 +2,20 @@
 
 Embeddable .NET 10 HTTP(S) and MITM library, standalone CLI and Kubernetes reverse proxy, and desktop MITM debugger — on Windows, Linux, and macOS.
 
-**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Quick Start](#run-it-in-30-seconds) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
-
-Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
-
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop&event=push)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml?query=branch%3Adevelop+event%3Apush)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
+
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Quick Start](#run-it-in-30-seconds) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
+
+| Product | Best for |
+|---------|----------|
+| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
+| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#stable-cli) | Standalone reverse / edge proxy from the command line |
+| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#stable-inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export |
+| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional extra features for CLI such as control plane, dashboard, observability |
+
+Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
 ## Major features
 

@@ -124,24 +124,24 @@ Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envo
 
 <div class="edition-grid">
   <div class="edition-card">
-    <h3>Inspect traffic</h3>
-    <p class="license"><a href="/download#stable-inspector">Inspector</a> · Windows / macOS / Linux</p>
-    <p>Desktop debugger for HTTP and HTTPS. Non-commercial use only (<a href="/docs/editions">PolyForm Noncommercial</a>). <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
+    <h3>Embed in .NET</h3>
+    <p class="license"><a href="https://www.nuget.org/packages/Titanium.Web.Proxy">Titanium.Web.Proxy</a> · NuGet</p>
+    <p>Same engine inside your app. <a href="/docs/library">Library guide</a> · <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">NuGet</a>.</p>
   </div>
   <div class="edition-card">
     <h3>Run a reverse proxy</h3>
-    <p class="license"><a href="/download#stable-cli">CLI</a> · MIT</p>
+    <p class="license"><a href="/download#stable-cli">Titanium.Cli</a> · <code>titanium</code> / <code>twp</code></p>
     <p>Standalone proxy for any backend stack. <a href="/download#stable-cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
   </div>
   <div class="edition-card">
-    <h3>Ops add-on</h3>
-    <p class="license"><a href="/docs/plus">Plus</a> · optional</p>
-    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. Non-commercial use only. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
+    <h3>Inspect traffic</h3>
+    <p class="license"><a href="/download#stable-inspector">Titanium Inspector</a> · Windows / macOS / Linux</p>
+    <p>Desktop debugger for HTTP and HTTPS. <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
   </div>
   <div class="edition-card">
-    <h3>Embed in .NET</h3>
-    <p class="license"><a href="https://www.nuget.org/packages/Titanium.Web.Proxy">Library</a> · NuGet · MIT</p>
-    <p>Same engine inside your app. <a href="/docs/library">Library guide</a> · <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">NuGet</a>.</p>
+    <h3>Ops add-on</h3>
+    <p class="license"><a href="/docs/plus">Titanium.Plus</a> · optional</p>
+    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
   </div>
 </div>
 

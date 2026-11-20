@@ -234,3 +234,29 @@
   margin-top: 0.25rem;
   font-weight: 600;
 }
+
+@media (max-width: 640px) {
+  .copy-package {
+    display: flex;
+    flex-wrap: wrap;
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .copy-package__cmd {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .home-quick-start {
+    padding: 0 16px;
+  }
+
+  .home-quick-start__pre {
+    font-size: 0.78rem;
+  }
+
+  .inspector-preview {
+    max-width: 100%;
+  }
+}
