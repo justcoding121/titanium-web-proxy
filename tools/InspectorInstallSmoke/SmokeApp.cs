@@ -404,6 +404,7 @@ internal static class SmokeApp
 
     private static async Task<bool> ProveAsync(DateTime startedUtc, string browserPath, string name, string[] urls)
     {
+        var firstUrl = true;
         foreach (var url in urls)
         {
             var before = DateTime.UtcNow;
@@ -412,29 +413,44 @@ internal static class SmokeApp
             // Windows Chrome's first window is often still starting at 12s. Killing
             // it then leaves the profile lock held, and the replacement process
             // never requests the proof URL. Give that window longer, then reopen it.
+            // The second origin is launched with the URL already on the command line.
+            // Killing Linux Edge at 12s, or Safari every 8s, dropped that navigation
+            // and the replacement never requested the page.
             var windowsChromium = OperatingSystem.IsWindows()
                 && !safari
                 && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase);
-            var ok = await WaitForHarAsync(before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), () =>
-            {
-                Console.WriteLine("relaunch " + name + " " + url);
-                if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
+            Action? nudge = firstUrl
+                ? () =>
                 {
-                    KillLinuxFamily(name);
-                    TryGtkLaunch(name, url);
+                    Console.WriteLine("relaunch " + name + " " + url);
+                    if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
+                    {
+                        KillLinuxFamily(name);
+                        TryGtkLaunch(name, url);
+                    }
+                    else if (safari)
+                    {
+                        TryRelaunchSafari(url);
+                    }
+                    else
+                    {
+                        // Reuse the temp profile / user-data-dir. A log line with no process
+                        // restart left Windows Firefox on its first launch, which never
+                        // requested the proof URL.
+                        RelaunchMacBrowser(name, browserPath, url, launched);
+                    }
                 }
-                else if (safari)
-                {
-                    TryRelaunchSafari(url);
-                }
-                else
-                {
-                    // Reuse the temp profile / user-data-dir. A log line with no process
-                    // restart left Windows Firefox on its first launch, which never
-                    // requested the proof URL.
-                    RelaunchMacBrowser(name, browserPath, url, launched);
-                }
-            }, safari ? TimeSpan.FromSeconds(8) : windowsChromium ? TimeSpan.FromSeconds(20) : null);
+                : null;
+            TimeSpan? nudgeEvery = !firstUrl
+                ? null
+                : safari
+                    ? TimeSpan.FromSeconds(8)
+                    : windowsChromium
+                        ? TimeSpan.FromSeconds(20)
+                        : null;
+            firstUrl = false;
+            var ok = await WaitForHarAsync(
+                before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), nudge, nudgeEvery);
             launched.Kill();
             if (!ok)
             {
