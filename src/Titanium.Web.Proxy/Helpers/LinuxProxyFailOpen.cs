@@ -324,7 +324,7 @@ internal static class LinuxProxyFailOpen
 
     private static string? ConfigDir()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             return null;
         return Path.Combine(home, ".config", "TitaniumInspector");

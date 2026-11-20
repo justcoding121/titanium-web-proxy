@@ -115,7 +115,7 @@ internal static partial class LinuxFirefoxProxy
 
     private static void Clear(bool relaunch)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
 
         var cleared = false;
@@ -182,7 +182,7 @@ internal static partial class LinuxFirefoxProxy
 
     private static IEnumerable<string> EnumeratePrefsJsPaths()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             yield break;
 
@@ -195,7 +195,9 @@ internal static partial class LinuxFirefoxProxy
         ];
 
         if (FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out var defaultProfile, out _) &&
-            !string.IsNullOrWhiteSpace(defaultProfile))
+            !string.IsNullOrWhiteSpace(defaultProfile) &&
+            (CoverageOs.HomeForTests is null ||
+             defaultProfile.StartsWith(CoverageOs.HomeForTests, StringComparison.OrdinalIgnoreCase)))
         {
             yield return Path.Combine(defaultProfile, "prefs.js");
         }
@@ -367,7 +369,7 @@ internal static partial class LinuxFirefoxProxy
 
     private static string? BackupPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             return null;
         return Path.Combine(home, ".config", "TitaniumInspector", BackupFileName);

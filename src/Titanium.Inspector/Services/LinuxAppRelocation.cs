@@ -25,11 +25,22 @@ internal static class LinuxAppRelocation
     internal const string ExeName = "TitaniumInspector";
     private const string UserLocalDirName = ".local";
 
+    /// <summary>Unit tests set this so the AppImage decision runs on the Windows coverage host.</summary>
+    internal static bool TreatAsLinuxForTests { get; set; }
+
+    /// <summary>When set, install paths stay under this directory instead of the user profile.</summary>
+    internal static string? HomeForTests { get; set; }
+
+    private static string Home =>
+        string.IsNullOrWhiteSpace(HomeForTests)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : HomeForTests;
+
     /// <summary>True when APPIMAGE is set or BaseDirectory looks like a squashfs mount.</summary>
     [SupportedOSPlatform("linux")]
     public static bool IsRunningFromAppImage()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!OperatingSystem.IsLinux() && !TreatAsLinuxForTests)
             return false;
 
         var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
@@ -48,7 +59,7 @@ internal static class LinuxAppRelocation
     [SupportedOSPlatform("linux")]
     public static bool ShouldOfferInstall(InspectorSettings settings)
     {
-        if (!OperatingSystem.IsLinux() || !IsRunningFromAppImage())
+        if ((!OperatingSystem.IsLinux() && !TreatAsLinuxForTests) || !IsRunningFromAppImage())
             return false;
 
         if (!settings.LinuxAppImageInstallPromptDismissed)
@@ -90,14 +101,14 @@ internal static class LinuxAppRelocation
     [SupportedOSPlatform("linux")]
     public static string DefaultInstallDir()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = Home;
         return Path.Combine(home, UserLocalDirName, "share", AppDirName);
     }
 
     [SupportedOSPlatform("linux")]
     public static string DefaultWrapperPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = Home;
         return Path.Combine(home, UserLocalDirName, "bin", "titanium-inspector");
     }
 
@@ -248,7 +259,7 @@ internal static class LinuxAppRelocation
     {
         try
         {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var home = Home;
             var wrapper = Path.Combine(home, UserLocalDirName, "bin", "titanium-inspector");
             Directory.CreateDirectory(Path.GetDirectoryName(wrapper)!);
             var exe = Path.Combine(installDir, ExeName);
@@ -271,7 +282,7 @@ internal static class LinuxAppRelocation
     {
         try
         {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var home = Home;
             var apps = Path.Combine(home, UserLocalDirName, "share", "applications");
             Directory.CreateDirectory(apps);
             var exe = Path.Combine(installDir, ExeName);

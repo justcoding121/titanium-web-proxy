@@ -22,12 +22,19 @@ public static class InstalledProxyCleanup
     {
         if (OperatingSystem.IsLinux())
         {
-            using var backend = new LinuxSystemProxyBackend();
-            backend.ForceClearInstalledProxy();
+            ClearLinuxInstalledProxy();
             return;
         }
 
-        if (OperatingSystem.IsMacOS())
+        if (CoverageOs.TreatAsLinuxForTests)
+        {
+#pragma warning disable CA1416 // coverage host is Windows; the helper no-ops when the desktop tools are absent
+            ClearLinuxInstalledProxy();
+#pragma warning restore CA1416
+            return;
+        }
+
+        if (CoverageOs.IsMac)
         {
             ClearMacLoopbackProxies();
             return;
@@ -42,9 +49,16 @@ public static class InstalledProxyCleanup
     ///     the loopback proxy. Returns <c>false</c> when no evidence exists (caller should exit
     ///     without touching the desktop). Non-Linux always clears and returns <c>true</c>.
     /// </summary>
+    [SupportedOSPlatform("linux")]
+    private static void ClearLinuxInstalledProxy()
+    {
+        using var backend = new LinuxSystemProxyBackend();
+        backend.ForceClearInstalledProxy();
+    }
+
     public static bool TryForceClearWhenOwned()
     {
-        if (OperatingSystem.IsLinux() && !LinuxInspectorProxyOwnership.HasEvidence())
+        if (CoverageOs.IsLinux && !LinuxInspectorProxyOwnership.HasEvidence())
             return false;
 
         ForceClear();
@@ -160,8 +174,13 @@ public static class InstalledProxyCleanup
 
     private static string Quote(string value) => "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
+    internal static Func<string, string, string>? RunOverrideForTests { get; set; }
+
     private static string Run(string fileName, string arguments)
     {
+        if (RunOverrideForTests is not null)
+            return RunOverrideForTests(fileName, arguments);
+
         try
         {
             using var process = Process.Start(new ProcessStartInfo

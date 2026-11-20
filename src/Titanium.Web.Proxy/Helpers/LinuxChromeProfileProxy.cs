@@ -129,9 +129,9 @@ internal static class LinuxChromeProfileProxy
     /// </summary>
     private static void EnsureInstalledDefaultProfiles()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
-        EnsureInstalledDefaultProfiles(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        EnsureInstalledDefaultProfiles(CoverageOs.Home);
     }
 
     /// <summary>Creates default profiles for the usual browser install markers under <paramref name="home"/>.</summary>
@@ -196,7 +196,7 @@ internal static class LinuxChromeProfileProxy
 
     internal static IEnumerable<string> EnumeratePreferencesPaths()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             yield break;
 
@@ -522,7 +522,7 @@ internal static class LinuxChromeProfileProxy
 
     private static string? MarkerPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             return null;
         return Path.Combine(home, ConfigDirName, "TitaniumInspector", MarkerFileName);

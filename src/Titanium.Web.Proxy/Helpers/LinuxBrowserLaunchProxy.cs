@@ -185,7 +185,7 @@ internal static class LinuxBrowserLaunchProxy
     {
         try
         {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var home = CoverageOs.Home;
             var apps = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
             if (!Directory.Exists(apps))
                 return;
@@ -270,7 +270,7 @@ internal static class LinuxBrowserLaunchProxy
     /// </summary>
     private static void TrySyncMachinePolicies(string? json)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
 
         SyncMachinePolicies(json, MachinePolicyVendors);
@@ -282,7 +282,7 @@ internal static class LinuxBrowserLaunchProxy
     /// </summary>
     private static void SyncMachinePolicyFile(string fileName, string? json)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
 
         try
@@ -468,7 +468,7 @@ internal static class LinuxBrowserLaunchProxy
     /// </param>
     internal static void ApplyCaCertificatesPolicy(X509Certificate2 certificate, bool machinePolicy = false)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
 
         string json;
@@ -508,7 +508,7 @@ internal static class LinuxBrowserLaunchProxy
     /// <param name="machinePolicy">When true, also remove the <c>/etc</c> copy.</param>
     internal static void RemoveCaCertificatesPolicy(bool machinePolicy = false)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
 
         foreach (var dir in PolicyDirectories())
@@ -800,7 +800,7 @@ internal static class LinuxBrowserLaunchProxy
 
     internal static IEnumerable<string> PolicyDirectories()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         yield return Path.Combine(home, ConfigDirName, "google-chrome", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "google-chrome-beta", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable", PoliciesManaged, ManagedDirName);
@@ -831,7 +831,7 @@ internal static class LinuxBrowserLaunchProxy
     private static int WriteBrowserDesktopOverrides(
         string hostname, int port, bool proxyLoopback, IEnumerable<string> sources)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         var written = 0;
         foreach (var source in sources)
@@ -852,7 +852,7 @@ internal static class LinuxBrowserLaunchProxy
 
     private static IEnumerable<string> UserDesktopOverridePaths()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         foreach (var source in DesktopSources)
             yield return Path.Combine(destDir, Path.GetFileName(source));
@@ -894,7 +894,7 @@ internal static class LinuxBrowserLaunchProxy
 
     private static string LauncherDirectory()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         return Path.Combine(home, LocalDirName, ShareDirName, "titanium-inspector", "launchers");
     }
 
@@ -991,7 +991,7 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     private static void TryMakeExecutable(string scriptPath) =>
-        TryMakeExecutable(scriptPath, OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+        TryMakeExecutable(scriptPath, CoverageOs.IsLinux || CoverageOs.IsMac);
 
     private static void TryMakeExecutable(string scriptPath, bool applyUnixMode)
     {
@@ -1135,13 +1135,13 @@ internal static class LinuxBrowserLaunchProxy
 
     private static string UserXfceChromeHelperPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         return Path.Combine(home, LocalDirName, ShareDirName, "xfce4", "helpers", "google-chrome.desktop");
     }
 
     private static string UserXfceHelpersRcPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         return Path.Combine(home, ConfigDirName, "xfce4", "helpers.rc");
     }
 }
