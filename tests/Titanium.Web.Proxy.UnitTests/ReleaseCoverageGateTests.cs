@@ -249,4 +249,79 @@ public class ReleaseCoverageGateTests
             else reg.SetValue("ProxyServer", server);
         }
     }
+
+    [TestMethod]
+    public void LoopbackProxyServer_ParsesWinInetForms()
+    {
+        Assert.IsFalse(InstalledProxyCleanup.IsWindowsLoopbackProxyServer(""));
+        Assert.IsFalse(InstalledProxyCleanup.IsWindowsLoopbackProxyServer("   "));
+        Assert.IsTrue(InstalledProxyCleanup.IsWindowsLoopbackProxyServer("127.0.0.1:8080"));
+        Assert.IsTrue(InstalledProxyCleanup.IsWindowsLoopbackProxyServer("localhost:8080"));
+        Assert.IsTrue(InstalledProxyCleanup.IsWindowsLoopbackProxyServer("[::1]:8080"));
+        Assert.IsTrue(InstalledProxyCleanup.IsWindowsLoopbackProxyServer(
+            "http=127.0.0.1:8080;https=example.test:443"));
+        Assert.IsFalse(InstalledProxyCleanup.IsWindowsLoopbackProxyServer("example.test:443"));
+    }
+
+    [TestMethod]
+    public void CleanupRun_ReadsStdoutFromAShortCommand()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var run = typeof(InstalledProxyCleanup).GetMethod(
+            "Run",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+        Assert.IsNotNull(run);
+        var text = (string)run!.Invoke(null, ["cmd.exe", "/c echo twp-cov"])!;
+        StringAssert.Contains(text, "twp-cov");
+        var previousResolve = UnixProcessPath.ResolveOverrideForTests;
+        try
+        {
+            UnixProcessPath.ResolveOverrideForTests = null;
+            var found = UnixProcessPath.Resolve(
+                Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+                Path.Combine(Path.GetTempPath(), "twp-missing-cov.exe"));
+            Assert.IsFalse(string.IsNullOrEmpty(found));
+            var tracker = new Titanium.Web.Proxy.Network.ClientHandshakeRejectTracker();
+            _ = tracker.MinBurstSpread;
+        }
+        finally
+        {
+            UnixProcessPath.ResolveOverrideForTests = previousResolve;
+        }
+    }
+
+    [TestMethod]
+    public void OrphanedLocalProxy_ClearsOnlyTheLoopbackEntryItJustWrote()
+    {
+        Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("localhost", 0));
+        Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("localhost", 1));
+        Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("::1", 1));
+
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        using var reg = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", writable: true);
+        Assert.IsNotNull(reg);
+        var enable = reg!.GetValue("ProxyEnable");
+        var server = reg.GetValue("ProxyServer");
+        try
+        {
+            reg.SetValue("ProxyEnable", 1, Microsoft.Win32.RegistryValueKind.DWord);
+            reg.SetValue("ProxyServer", "127.0.0.1:9");
+            CoverageOs.TreatAsLinuxForTests = true;
+            var cleared = ProxyServer.TryClearOrphanedLocalSystemProxy((_, _) => false);
+            Assert.IsTrue(cleared.Succeeded);
+        }
+        finally
+        {
+            CoverageOs.TreatAsLinuxForTests = false;
+            if (enable is null) reg.DeleteValue("ProxyEnable", throwOnMissingValue: false);
+            else reg.SetValue("ProxyEnable", enable);
+            if (server is null) reg.DeleteValue("ProxyServer", throwOnMissingValue: false);
+            else reg.SetValue("ProxyServer", server);
+        }
+    }
 }

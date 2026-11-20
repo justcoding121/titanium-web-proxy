@@ -72,4 +72,75 @@ public class LinuxAppRelocationCoverageTests
             try { Directory.Delete(home, recursive: true); } catch { /* best-effort */ }
         }
     }
+
+    [TestMethod]
+    public void RelocateDecision_CoversMissingInstall_UnversionedBinary_AndNewerDll()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "twp-reloc-dec-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        var previous = Environment.GetEnvironmentVariable("APPIMAGE");
+        try
+        {
+            LinuxAppRelocation.HomeForTests = home;
+            Assert.IsFalse(LinuxAppRelocation.IsRunningFromAppImage());
+            LinuxAppRelocation.TreatAsLinuxForTests = true;
+            Environment.SetEnvironmentVariable("APPIMAGE", null);
+            Assert.IsFalse(LinuxAppRelocation.IsRunningFromAppImage());
+            Assert.IsFalse(LinuxAppRelocation.ShouldOfferInstall(new InspectorSettings()));
+
+            var image = Path.Combine(home, "twp-cov-appimage");
+            File.WriteAllText(image, "image");
+            Environment.SetEnvironmentVariable("APPIMAGE", image);
+            Assert.IsTrue(LinuxAppRelocation.IsRunningFromAppImage());
+            var dismissed = new InspectorSettings { LinuxAppImageInstallPromptDismissed = true };
+            Assert.IsTrue(LinuxAppRelocation.ShouldOfferInstall(dismissed));
+
+            Environment.SetEnvironmentVariable("APPIMAGE", null);
+            var missingImage = Path.Combine(home, "missing-twp-cov-appimage");
+            Environment.SetEnvironmentVariable("APPIMAGE", missingImage);
+            Assert.IsFalse(LinuxAppRelocation.IsRunningFromAppImage());
+
+            Assert.AreEqual(
+                LinuxRelocateAction.Install,
+                LinuxAppRelocation.DecideRelocateAction(runningVersion: new Version(8, 0, 5)));
+
+            var installDir = Path.Combine(home, "install");
+            Directory.CreateDirectory(installDir);
+            var exe = Path.Combine(installDir, LinuxAppRelocation.ExeName);
+            File.WriteAllText(exe, "not-a-binary");
+            Assert.AreEqual(
+                LinuxRelocateAction.OpenExisting,
+                LinuxAppRelocation.DecideRelocateAction(
+                    runningVersion: new Version(8, 0, 5), installDir: installDir));
+            Assert.IsNull(LinuxAppRelocation.ReadInstalledVersion(exe));
+
+            var dll = Path.ChangeExtension(exe, ".dll");
+            File.Copy(typeof(LinuxAppRelocationCoverageTests).Assembly.Location, dll, overwrite: true);
+            var fromDll = LinuxAppRelocation.ReadInstalledVersion(exe);
+            Assert.IsNotNull(fromDll);
+            Assert.AreEqual(
+                LinuxRelocateAction.Replace,
+                LinuxAppRelocation.DecideRelocateAction(runningVersion: new Version(99, 0), installDir: installDir));
+            _ = LinuxAppRelocation.DecideRelocateAction();
+            var copied = LinuxAppRelocation.InstallToLocalShare();
+            Assert.IsTrue(Directory.Exists(copied));
+
+            var nested = Path.Combine(home, "payload", "sub");
+            Directory.CreateDirectory(nested);
+            File.WriteAllText(Path.Combine(nested, "note.txt"), "x");
+            File.WriteAllText(Path.Combine(home, "payload", LinuxAppRelocation.ExeName), "payload");
+            var dest = LinuxAppRelocation.InstallToLocalShare(Path.Combine(home, "payload"), Path.Combine(home, "out"));
+            Assert.IsTrue(File.Exists(Path.Combine(dest, "sub", "note.txt")));
+
+            Assert.ThrowsException<FileNotFoundException>(
+                () => LinuxAppRelocation.RelaunchInstalled(Path.Combine(home, "absent")));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPIMAGE", previous);
+            LinuxAppRelocation.TreatAsLinuxForTests = false;
+            LinuxAppRelocation.HomeForTests = null;
+            try { Directory.Delete(home, recursive: true); } catch { /* best-effort */ }
+        }
+    }
 }

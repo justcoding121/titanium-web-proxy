@@ -446,7 +446,115 @@ public class LinuxBrowserProxyCoverageTests
 
     private static void TryDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+            try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+    }
+
+    [TestMethod]
+    public void MachinePolicyFile_AndLauncherNeutralize_StayInsideTheTempHome()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "twp-policy-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(home, "vendor");
+        Directory.CreateDirectory(Path.Combine(root, "policies", "managed"));
+        var owned = Path.Combine(root, "policies", "managed", "titanium-inspector-ca.json");
+        File.WriteAllText(owned, "{}");
+        var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
+        Directory.CreateDirectory(launchers);
+        File.WriteAllText(
+            Path.Combine(launchers, "google-chrome.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "chromium.sh"),
+            "# X-Titanium-Inspector-Proxy=true\nexec \"/usr/bin/chromium\" --flag\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "brave-browser.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "microsoft-edge.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "opera.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "chromium-browser.sh"),
+            "# X-Titanium-Inspector-Proxy=true\nexec /usr/bin/chromium --flag\n");
+        var chromeDefault = Path.Combine(home, ".config", "google-chrome", "Default");
+        Directory.CreateDirectory(chromeDefault);
+        var chromePrefs = Path.Combine(chromeDefault, "Preferences");
+        File.WriteAllText(chromePrefs, """{"proxy":{"mode":"fixed_servers","server":"127.0.0.1:8080"}}""");
+        File.WriteAllText(chromePrefs + ".titanium-inspector-proxy.bak", "null");
+        var firefoxProfile = Path.Combine(home, ".mozilla", "firefox", "profile.default");
+        Directory.CreateDirectory(firefoxProfile);
+        File.WriteAllText(
+            Path.Combine(firefoxProfile, "prefs.js"),
+            "user_pref(\"titanium.inspector.proxy.managed\", true);\nuser_pref(\"network.proxy.http\", \"127.0.0.1\");\n");
+        var firefoxSnap = Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox", "other");
+        Directory.CreateDirectory(firefoxSnap);
+        File.WriteAllText(
+            Path.Combine(firefoxSnap, "prefs.js"),
+            "user_pref(\"network.proxy.ssl\", \"localhost\");\n");
+        Directory.CreateDirectory(Path.Combine(home, ".config", "TitaniumInspector"));
+        File.WriteAllText(
+            Path.Combine(home, ".config", "TitaniumInspector", "firefox-proxy-backup.json"),
+            """{"network.proxy.type":"0"}""");
+        var apps = Path.Combine(home, ".local", "share", "applications");
+        Directory.CreateDirectory(apps);
+        File.WriteAllText(
+            Path.Combine(apps, "google-chrome.desktop"),
+            "[Desktop Entry]\nX-Titanium-Inspector-Proxy=true\n");
+        var absentRoot = Path.Combine(home, "absent-vendor");
+        const string policyJson = """{"CACertificates":[]}""";
+        var previousHome = CoverageOs.HomeForTests;
+        var previousLinux = CoverageOs.TreatAsLinuxForTests;
+        var previousResolve = UnixProcessPath.ResolveOverrideForTests;
+        try
+        {
+            CoverageOs.HomeForTests = home;
+            CoverageOs.TreatAsLinuxForTests = true;
+            UnixProcessPath.ResolveOverrideForTests = _ => null;
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                policyJson,
+                [(root, new[] { Path.Combine(root, "missing-bin") })]);
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                policyJson,
+                [(absentRoot, Array.Empty<string>())]);
+            File.WriteAllText(owned, policyJson);
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                policyJson,
+                [(root, Array.Empty<string>())]);
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                null,
+                [(root, Array.Empty<string>())]);
+            using (var rsa = System.Security.Cryptography.RSA.Create(2048))
+            {
+                var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                    "CN=twp-cov",
+                    rsa,
+                    System.Security.Cryptography.HashAlgorithmName.SHA256,
+                    System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+                using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(cert);
+                LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+            }
+
+            Assert.IsFalse(LinuxInspectorProcess.IsRunning());
+            Assert.IsFalse(LinuxInspectorProcess.IsRunning(Path.Combine(home, "missing-proc")));
+            LinuxFirefoxProxy.Clear();
+            LinuxBrowserLaunchProxy.ClearInstalledHooks();
+            var rewritten = File.ReadAllText(Path.Combine(launchers, "google-chrome.sh"));
+            StringAssert.Contains(rewritten, "exec ");
+            Assert.IsFalse(File.Exists(Path.Combine(apps, "google-chrome.desktop")));
+        }
+        finally
+        {
+            CoverageOs.HomeForTests = previousHome;
+            CoverageOs.TreatAsLinuxForTests = previousLinux;
+            UnixProcessPath.ResolveOverrideForTests = previousResolve;
+            try { Directory.Delete(home, true); } catch { /* best-effort */ }
+        }
     }
 }
 

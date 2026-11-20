@@ -92,7 +92,7 @@ public static class InstalledProxyCleanup
         }
     }
 
-    private static bool IsWindowsLoopbackProxyServer(string proxyServer)
+    internal static bool IsWindowsLoopbackProxyServer(string proxyServer)
     {
         if (string.IsNullOrWhiteSpace(proxyServer))
             return false;

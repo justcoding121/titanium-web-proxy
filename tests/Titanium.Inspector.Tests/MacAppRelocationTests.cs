@@ -235,6 +235,31 @@ public class MacAppRelocationTests
     }
 
     [TestMethod]
+    public void DecideWithoutAPath_AndUnreadablePlist_StayOffTheDialog()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ti-mac-plist-" + Guid.NewGuid().ToString("N"));
+        var app = Path.Combine(root, "Titanium Inspector.app");
+        var plist = Path.Combine(app, "Contents", "Info.plist");
+        Directory.CreateDirectory(Path.GetDirectoryName(plist)!);
+        File.WriteAllText(plist, "<plist><dict></dict></plist>");
+        try
+        {
+            MacAppRelocation.TreatAsMacForTests = true;
+            Assert.AreEqual(
+                MacRelocateAction.Install,
+                MacAppRelocation.DecideRelocateAction(runningVersion: new Version(8, 0, 5)));
+            Assert.IsNull(MacAppRelocation.ReadBundleVersion(app));
+            using var locked = new FileStream(plist, FileMode.Open, FileAccess.Read, FileShare.None);
+            Assert.IsNull(MacAppRelocation.ReadBundleVersion(app));
+        }
+        finally
+        {
+            MacAppRelocation.TreatAsMacForTests = false;
+            try { Directory.Delete(root, recursive: true); } catch { /* ignore */ }
+        }
+    }
+
+    [TestMethod]
     public async Task TryOfferMacDmgMove_OnThisHost_ReturnsFalseBeforeAnyDialog()
     {
         var dir = Path.Combine(Path.GetTempPath(), "ti-mac-move-" + Guid.NewGuid().ToString("N"));

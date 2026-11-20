@@ -280,7 +280,16 @@ internal static class LinuxBrowserLaunchProxy
     ///     Same non-interactive sudo install as the proxy policy, for a different file name.
     ///     Pass null to remove the file from vendor directories where it exists.
     /// </summary>
-    private static void SyncMachinePolicyFile(string fileName, string? json)
+    private static void SyncMachinePolicyFile(string fileName, string? json) =>
+        SyncMachinePolicyFile(fileName, json, MachinePolicyVendors);
+
+    /// <summary>Runs the machine-policy file sync against caller-supplied vendor roots (tests).</summary>
+    internal static void SyncMachinePolicyFileForTests(
+        string fileName, string? json, (string Root, string[] Binaries)[] vendors) =>
+        SyncMachinePolicyFile(fileName, json, vendors);
+
+    private static void SyncMachinePolicyFile(
+        string fileName, string? json, (string Root, string[] Binaries)[] vendors)
     {
         if (!CoverageOs.IsLinux)
             return;
@@ -288,7 +297,7 @@ internal static class LinuxBrowserLaunchProxy
         try
         {
             var targets = new List<string>();
-            foreach (var (root, binaries) in MachinePolicyVendors)
+            foreach (var (root, binaries) in vendors)
             {
                 var path = Path.Combine(root, PoliciesManaged, ManagedDirName, fileName);
                 if (json is null)
