@@ -135,11 +135,9 @@ titanium update
 
 **Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
 
-The image entrypoint is `titanium run --config /etc/titanium/twp.yaml`. Mount a directory that already contains `twp.yaml` (the listener must be `0.0.0.0:8080` so the published port reaches it):
+The image entrypoint is `titanium run --config /etc/titanium/twp.yaml`. Save this as `conf/twp.yaml`. The listener is `0.0.0.0:8080` so the published port reaches it.
 
-```shell
-mkdir conf
-cat > conf/twp.yaml <<'EOF'
+```yaml
 schemaVersion: "7.1"
 listeners:
   - host: "0.0.0.0"
@@ -147,8 +145,13 @@ listeners:
     decryptSsl: false
     forwardHost: "127.0.0.1"
     forwardPort: 8080
-EOF
-docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest
+```
+
+```shell
+mkdir conf
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp \
+  -v "$PWD/conf:/etc/titanium:ro" \
+  ghcr.io/justcoding121/titanium-web-proxy:latest
 ```
 
 From a clone of this repo:

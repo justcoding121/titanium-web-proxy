@@ -47,18 +47,18 @@ listeners:
     decryptSsl: false
     forwardHost: "127.0.0.1"
     forwardPort: 8080</code></pre>
-      <pre class="home-quick-start__pre"><code># Image entrypoint: titanium run --config /etc/titanium/twp.yaml
-mkdir conf
-cat &gt; conf/twp.yaml &lt;&lt;'EOF'
+      <pre class="home-quick-start__pre"><code># conf/twp.yaml — listener is 0.0.0.0:8080 so the published port reaches it
 schemaVersion: "7.1"
 listeners:
   - host: "0.0.0.0"
     port: 8080
     decryptSsl: false
     forwardHost: "127.0.0.1"
-    forwardPort: 8080
-EOF
-docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest</code></pre>
+    forwardPort: 8080</code></pre>
+      <pre class="home-quick-start__pre"><code>mkdir conf
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp \
+  -v "$PWD/conf:/etc/titanium:ro" \
+  ghcr.io/justcoding121/titanium-web-proxy:latest</code></pre>
       <pre class="home-quick-start__pre"><code># From a clone of this repo:
 helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml</code></pre>
       <p class="home-quick-start__links">

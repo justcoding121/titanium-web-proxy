@@ -164,6 +164,9 @@ public partial class DocsStructureTests
         Assert.IsFalse(vue.Contains("ExplicitProxyEndPoint", StringComparison.Ordinal));
         StringAssert.Contains(vue, "mkdir conf");
         StringAssert.Contains(vue, "ghcr.io/justcoding121/titanium-web-proxy:latest");
+        Assert.IsFalse(vue.Contains("EOF", StringComparison.Ordinal));
+        var readme = File.ReadAllText(Path.Combine(DocsRepository.Root, "README.md"));
+        Assert.IsFalse(readme.Contains("EOF", StringComparison.Ordinal));
     }
 
     [TestMethod]
