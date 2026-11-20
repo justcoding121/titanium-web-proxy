@@ -136,6 +136,17 @@ public class ProxyCertUdpHttp3GapCoverageTests
     }
 
     [TestMethod]
+    public void NextEphemeralDualListenPort_StepsForwardInsteadOfReissuingZero()
+    {
+        // bind(0) after a close returns the port just released, so a retry that
+        // resets to 0 hits the same busy UDP address for every attempt.
+        Assert.AreEqual(59991, ProxyServer.NextEphemeralDualListenPort(59990));
+        Assert.AreEqual(49153, ProxyServer.NextEphemeralDualListenPort(49152));
+        Assert.AreEqual(49152, ProxyServer.NextEphemeralDualListenPort(0));
+        Assert.AreEqual(49152, ProxyServer.NextEphemeralDualListenPort(65535));
+    }
+
+    [TestMethod]
     [Timeout(10_000)]
     public void CloseAcceptedSocketWithoutResponse_DrainsAndDisposes()
     {
