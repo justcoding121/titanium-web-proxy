@@ -414,8 +414,8 @@ internal static class SmokeApp
             // After 20s with no decrypted GET, stop every process on the profile and
             // start one window.
             // The second origin is launched with the URL already on the command line.
-            // Killing Linux Edge at 12s, or Safari every 8s, dropped that navigation
-            // and the replacement never requested the page.
+            // Killing Linux Edge at 12s dropped that navigation. Safari gets one
+            // relaunch after 40s so the first visit can finish a decrypted GET.
             var windowsChromium = OperatingSystem.IsWindows()
                 && !safari
                 && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase);
@@ -444,7 +444,7 @@ internal static class SmokeApp
             TimeSpan? nudgeEvery = !firstUrl
                 ? null
                 : safari
-                    ? TimeSpan.FromSeconds(8)
+                    ? TimeSpan.FromSeconds(40)
                     : windowsChromium
                         ? TimeSpan.FromSeconds(20)
                         : null;
@@ -1001,7 +1001,13 @@ internal static class SmokeApp
             + baseRules);
         var loaded = RunCapture("sudo", "pfctl -f \"" + conf + "\"", 15000);
         Console.WriteLine("pfctl load exit=" + loaded.Code + " " + TrimOneLine(loaded.Output));
-        if (loaded.Code != 0)
+        // pfctl prints a flush warning and exits 1 even when the ruleset loaded.
+        // Treating that as failure skipped pfctl -E, so the fresh Safari visit
+        // kept UDP/443 and the HAR only showed a CONNECT.
+        var warningOnly = loaded.Code != 0
+            && loaded.Output.Contains("could result in flushing", StringComparison.OrdinalIgnoreCase)
+            && !loaded.Output.Contains("syntax error", StringComparison.OrdinalIgnoreCase);
+        if (loaded.Code != 0 && !warningOnly)
             return;
 
         var enabled = RunCapture("sudo", "pfctl -E", 10000);
