@@ -59,6 +59,16 @@ public class DecryptHttpsProbeTests
     }
 
     [TestMethod]
+    public void LeafChainsToMitmRoot_ExpiredLeaf_IsFalse()
+    {
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=Expired Leaf", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var expired = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(-1));
+        using var root = CreateSelfSigned("CN=Titanium Probe Root");
+        Assert.IsFalse(DecryptHttpsProbe.LeafChainsToMitmRoot(expired, root));
+    }
+
+    [TestMethod]
     public void IsTlsAuthFailure_DetectsWrappedAuthenticationException()
     {
         var inner = new AuthenticationException("leaf not trusted");
@@ -117,6 +127,20 @@ public class DecryptHttpsProbeTests
             interception.DecryptHttps = true;
             var probed = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromSeconds(3));
             Assert.IsFalse(string.IsNullOrWhiteSpace(probed.Message));
+
+            // Shorter than the proxy's upstream failure, so the client cancels first.
+            var timedOut = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromMilliseconds(1));
+            Assert.IsFalse(timedOut.Ok);
+            StringAssert.Contains(timedOut.Message, "timed out");
+
+            var proxy = (Titanium.Web.Proxy.ProxyServer)typeof(InterceptionService)
+                .GetField("_proxy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(interception)!;
+            proxy.CertificateManager.ClearRootCertificate();
+            var missingRoot = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromMilliseconds(50));
+            Assert.IsFalse(missingRoot.Ok);
+            StringAssert.Contains(missingRoot.Message, "Root CA is not loaded");
+
             typeof(InterceptionService).GetMethod(
                 "TryImportRootIntoFirefoxProfiles",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!

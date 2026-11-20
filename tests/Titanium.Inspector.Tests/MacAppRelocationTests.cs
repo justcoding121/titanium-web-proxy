@@ -277,6 +277,8 @@ public class MacAppRelocationTests
 
             if (!OperatingSystem.IsMacOS())
                 Assert.IsFalse(await vm.TryOfferMacDmgMoveAsync());
+            if (!OperatingSystem.IsLinux())
+                Assert.IsFalse(await vm.TryOfferLinuxAppImageInstallAsync());
 
             var status = (string)typeof(MainWindowViewModel)
                 .GetMethod("UntrustedRootStatus", BindingFlags.Instance | BindingFlags.NonPublic)!

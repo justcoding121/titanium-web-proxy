@@ -134,6 +134,23 @@ public class LinuxAppRelocationCoverageTests
 
             Assert.ThrowsException<FileNotFoundException>(
                 () => LinuxAppRelocation.RelaunchInstalled(Path.Combine(home, "absent")));
+
+            var versioned = Path.Combine(home, "versioned.exe");
+            File.Copy(typeof(LinuxAppRelocation).Assembly.Location, versioned, overwrite: true);
+            Assert.IsNotNull(LinuxAppRelocation.ReadInstalledVersion(versioned));
+
+            var versionDir = Path.Combine(home, "version-dir");
+            Directory.CreateDirectory(versionDir);
+            Assert.IsNull(LinuxAppRelocation.ReadInstalledVersion(versionDir));
+
+            var apps = Path.Combine(home, ".local", "share", "applications");
+            if (Directory.Exists(apps))
+                Directory.Delete(apps, recursive: true);
+            File.WriteAllText(apps, "not-a-directory");
+            var blocked = LinuxAppRelocation.InstallToLocalShare(
+                Path.Combine(home, "payload"),
+                Path.Combine(home, "blocked-install"));
+            Assert.IsTrue(Directory.Exists(blocked));
         }
         finally
         {
