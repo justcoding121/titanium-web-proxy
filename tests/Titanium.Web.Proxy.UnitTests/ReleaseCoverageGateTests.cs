@@ -217,12 +217,10 @@ public class ReleaseCoverageGateTests
             CertificateManager.AllowUnixTrustDespiteSuppressForTests = true;
             RunTime.SetIsWindowsForTests(false);
             RunTime.SetIsMacForTests(true);
+            // Mac trust stops at "login keychain not found" and does not elevate.
+            // The Linux machine path runs pkexec, which waits on a dialog on the
+            // hosted runner, so it stays out of this test.
             Assert.IsFalse(mgr.InstallRootIntoCertificateStores());
-            mgr.ApplyUnixSslTrustAfterStoreInstall(machineTrusted: true);
-            Assert.IsFalse(mgr.TrustRootCertificateAsAdmin(machineTrusted: true));
-
-            RunTime.SetIsMacForTests(false);
-            RunTime.SetIsLinuxForTests(true);
             mgr.ApplyUnixSslTrustAfterStoreInstall(machineTrusted: true);
             Assert.IsFalse(mgr.TrustRootCertificateAsAdmin(machineTrusted: true));
         }
