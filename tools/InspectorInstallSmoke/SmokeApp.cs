@@ -419,10 +419,11 @@ internal static class SmokeApp
                 {
                     TryRelaunchSafari(url);
                 }
-                else if (OperatingSystem.IsMacOS())
+                else
                 {
-                    // Reuse the temp profile / user-data-dir. A bare binary relaunch drops
-                    // enterprise_roots / isolated Chromium prefs and often never hits the URL.
+                    // Reuse the temp profile / user-data-dir. A log line with no process
+                    // restart left Windows Firefox on its first launch, which never
+                    // requested the proof URL.
                     RelaunchMacBrowser(name, browserPath, url, launched);
                 }
             }, safari ? TimeSpan.FromSeconds(8) : null);
@@ -1172,8 +1173,12 @@ internal static class SmokeApp
             {
                 for (var attempt = 1; attempt <= 2; attempt++)
                 {
+                    // -p basic as well as ssl. The decrypt probe and System keychain
+                    // check use `verify-cert -p basic`, which stays NOT_TRUSTED when
+                    // the admin policy is SSL only, and the previous build then
+                    // turns decrypt back off.
                     var added = RunMacSudo(
-                        "security add-trusted-cert -d -r trustRoot -p ssl -k /Library/Keychains/System.keychain \"" +
+                        "security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain \"" +
                         cer + "\"");
                     Console.WriteLine(
                         "mac-trust add-trusted-cert attempt=" + attempt + " exit=" + added.Code +
