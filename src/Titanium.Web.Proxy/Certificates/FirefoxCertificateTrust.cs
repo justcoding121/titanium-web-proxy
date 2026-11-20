@@ -656,7 +656,7 @@ public static class FirefoxCertificateTrust
         var cerPath = UnixCertificateTrust.WriteTempCer(certificate);
         try
         {
-            var trusted = 0;
+            var importedProfileCount = 0;
             string? lastError = null;
             foreach (var profileDir in profiles)
             {
@@ -672,7 +672,7 @@ public static class FirefoxCertificateTrust
                     list is { Succeeded: true } &&
                     list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
                 {
-                    trusted++;
+                    importedProfileCount++;
                     continue;
                 }
 
@@ -681,10 +681,10 @@ public static class FirefoxCertificateTrust
                     : add.StandardError.Trim();
             }
 
-            if (trusted > 0)
+            if (importedProfileCount > 0)
             {
                 return CertificateOsTrustResult.Ok(
-                    "Firefox will use the Titanium root CA in " + trusted +
+                    "Firefox will use the Titanium root CA in " + importedProfileCount +
                     " profile(s) after you restart Firefox");
             }
 
