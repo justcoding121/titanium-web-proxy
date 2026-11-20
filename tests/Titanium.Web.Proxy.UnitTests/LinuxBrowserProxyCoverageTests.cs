@@ -480,7 +480,7 @@ public class LinuxBrowserProxyCoverageTests
         var chromeDefault = Path.Combine(home, ".config", "google-chrome", "Default");
         Directory.CreateDirectory(chromeDefault);
         var chromePrefs = Path.Combine(chromeDefault, "Preferences");
-        File.WriteAllText(chromePrefs, """{"proxy":{"mode":"fixed_servers","server":"127.0.0.1:8080"}}""");
+        File.WriteAllText(chromePrefs, """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:8080"}}""");
         File.WriteAllText(chromePrefs + ".titanium-inspector-proxy.bak", "null");
         var firefoxProfile = Path.Combine(home, ".mozilla", "firefox", "profile.default");
         Directory.CreateDirectory(firefoxProfile);
@@ -542,6 +542,20 @@ public class LinuxBrowserProxyCoverageTests
 
             Assert.IsFalse(LinuxInspectorProcess.IsRunning());
             Assert.IsFalse(LinuxInspectorProcess.IsRunning(Path.Combine(home, "missing-proc")));
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(
+                Path.Combine(home, "missing-prefs")));
+            var badPrefs = Path.Combine(home, "bad-prefs");
+            File.WriteAllText(badPrefs, "not-json");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(badPrefs));
+            var loopbackPrefs = Path.Combine(home, "loopback-prefs");
+            File.WriteAllText(loopbackPrefs, """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:9"}}""");
+            File.WriteAllText(loopbackPrefs + ".titanium-inspector-proxy.bak", "null");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(loopbackPrefs));
+            var foreignPrefs = Path.Combine(home, "foreign-prefs");
+            File.WriteAllText(foreignPrefs, """{"proxy":{"mode":"fixed_servers","server":"http://example.test:80"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(foreignPrefs));
+            LinuxBrowserLaunchProxy.Clear();
+            LinuxChromeProfileProxy.Clear(startFailOpen: false);
             LinuxFirefoxProxy.Clear();
             LinuxBrowserLaunchProxy.ClearInstalledHooks();
             var rewritten = File.ReadAllText(Path.Combine(launchers, "google-chrome.sh"));

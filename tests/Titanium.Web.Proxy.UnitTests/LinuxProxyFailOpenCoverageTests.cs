@@ -109,4 +109,55 @@ public class LinuxProxyFailOpenCoverageTests
             try { Directory.Delete(home, true); } catch { /* best-effort */ }
         }
     }
+
+    [TestMethod]
+    public void Start_RecordsScopeWhenTheLauncherExits_AndStopRunsSystemctl()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "twp-fo-ok-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(home);
+        var exe = FakeOsExecutable.Ensure("twp-cov-exit0.exe");
+        var scope = Path.Combine(home, ".config", "TitaniumInspector", "fail-open-proxy.scope");
+        var previous = UnixProcessPath.ResolveOverrideForTests;
+        var previousHome = CoverageOs.HomeForTests;
+        var previousXdg = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+        var previousDbus = Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS");
+        try
+        {
+            CoverageOs.HomeForTests = home;
+            Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", home);
+            Environment.SetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS", "unix:path=" + Path.Combine(home, "bus"));
+            UnixProcessPath.ResolveOverrideForTests = candidates =>
+            {
+                var joined = string.Join(" ", candidates);
+                return joined.Contains("python", StringComparison.Ordinal) ||
+                       joined.Contains("systemd-run", StringComparison.Ordinal)
+                    ? exe
+                    : null;
+            };
+            LinuxProxyFailOpen.Start("127.0.0.1", 9);
+            Assert.IsTrue(File.Exists(scope));
+
+            File.WriteAllText(scope, "ti-fail-open-9.scope");
+            UnixProcessPath.ResolveOverrideForTests = candidates =>
+                string.Join(" ", candidates).Contains("systemctl", StringComparison.Ordinal)
+                    ? Path.Combine(home, "missing-systemctl.exe")
+                    : null;
+            LinuxProxyFailOpen.Stop();
+
+            File.WriteAllText(scope, "ti-fail-open-9.scope");
+            UnixProcessPath.ResolveOverrideForTests = candidates =>
+                string.Join(" ", candidates).Contains("systemctl", StringComparison.Ordinal) ? exe : null;
+            LinuxProxyFailOpen.Stop();
+            Assert.IsFalse(File.Exists(scope));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", previousXdg);
+            Environment.SetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS", previousDbus);
+            UnixProcessPath.ResolveOverrideForTests = previous;
+            CoverageOs.HomeForTests = previousHome;
+            LinuxProxyFailOpen.ClearOwnedByThisProcessForTests();
+            try { Directory.Delete(home, true); } catch { /* best-effort */ }
+        }
+    }
 }

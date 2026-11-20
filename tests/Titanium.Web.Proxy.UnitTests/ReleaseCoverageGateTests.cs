@@ -285,9 +285,12 @@ public class ReleaseCoverageGateTests
             Assert.IsFalse(string.IsNullOrEmpty(found));
             var tracker = new Titanium.Web.Proxy.Network.ClientHandshakeRejectTracker();
             _ = tracker.MinBurstSpread;
+            CoverageOs.TreatAsLinuxForTests = true;
+            InstalledProxyCleanup.ForceClear();
         }
         finally
         {
+            CoverageOs.TreatAsLinuxForTests = false;
             UnixProcessPath.ResolveOverrideForTests = previousResolve;
         }
     }

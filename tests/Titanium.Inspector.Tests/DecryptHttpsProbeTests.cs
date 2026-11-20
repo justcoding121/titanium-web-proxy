@@ -75,6 +75,15 @@ public class DecryptHttpsProbeTests
         Assert.IsTrue(inconclusive.Inconclusive);
     }
 
+    [TestMethod]
+    public void OrphanClear_TreatsAListeningPortAsStillInUse()
+    {
+        var direct = new ProxyServerSystemProxyController().ClearOrphanedLocalSystemProxy((_, _) => true);
+        var alias = new WinInetSystemProxyController().ClearOrphanedLocalSystemProxy((_, _) => true);
+        Assert.IsTrue(direct.Succeeded);
+        Assert.IsTrue(alias.Succeeded);
+    }
+
     private static X509Certificate2 CreateSelfSigned(string subject)
     {
         using var rsa = RSA.Create(2048);
