@@ -80,7 +80,6 @@ public class ReleaseCoverageGateTests
         CoverageOs.TreatAsMacForTests = false;
         UnixProcessPath.ResolveOverrideForTests = null;
         InstalledProxyCleanup.RunOverrideForTests = null;
-        CertificateManager.AllowUnixTrustDespiteSuppressForTests = false;
         RunTime.SetIsWindowsForTests(null);
         RunTime.SetIsLinuxForTests(null);
         RunTime.SetIsMacForTests(null);
@@ -205,32 +204,20 @@ public class ReleaseCoverageGateTests
     }
 
     [TestMethod]
-    public void UnixTrustBranches_RunOnTheCoverageHostWithoutTouchingTheWindowsStore()
+    public void UnixTrustBranches_StaySuppressedAndDoNotOpenTheWindowsStore()
     {
         using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
         {
             CertificateEngine = CertificateEngine.BouncyCastle,
         };
         Assert.IsTrue(mgr.CreateRootCertificate(false));
-        try
-        {
-            CertificateManager.AllowUnixTrustDespiteSuppressForTests = true;
-            RunTime.SetIsWindowsForTests(false);
-            RunTime.SetIsMacForTests(true);
-            // Mac trust stops at "login keychain not found" and does not elevate.
-            // The Linux machine path runs pkexec, which waits on a dialog on the
-            // hosted runner, so it stays out of this test.
-            Assert.IsFalse(mgr.InstallRootIntoCertificateStores());
-            mgr.ApplyUnixSslTrustAfterStoreInstall(machineTrusted: true);
-            Assert.IsFalse(mgr.TrustRootCertificateAsAdmin(machineTrusted: true));
-        }
-        finally
-        {
-            CertificateManager.AllowUnixTrustDespiteSuppressForTests = false;
-            RunTime.SetIsWindowsForTests(null);
-            RunTime.SetIsLinuxForTests(null);
-            RunTime.SetIsMacForTests(null);
-        }
+        // Test hosts suppress CryptUI, Keychain, and pkexec. These calls must
+        // return before any store write or OS prompt.
+        Assert.IsFalse(mgr.InstallRootIntoCertificateStores());
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, mgr.LastOsTrustResult!.Kind);
+        mgr.ApplyUnixSslTrustAfterStoreInstall(machineTrusted: true);
+        Assert.IsFalse(mgr.TrustRootCertificateAsAdmin(machineTrusted: true));
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, mgr.LastOsTrustResult!.Kind);
     }
 
     [TestMethod]

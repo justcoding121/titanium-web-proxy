@@ -108,20 +108,13 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     True when Root-store Add/Remove should be skipped to avoid modal CryptUI prompts.
     /// </summary>
-    /// <summary>
-    ///     Unit tests set this to exercise the macOS and Linux trust branches on a host
-    ///     where CI suppression would return first. Leave it false in production.
-    /// </summary>
-    internal static bool AllowUnixTrustDespiteSuppressForTests { get; set; }
-
     internal static bool ShouldSuppressInteractiveRootStoreMutations =>
-        !AllowUnixTrustDespiteSuppressForTests
-        && (SuppressInteractiveRootStoreMutations
+        SuppressInteractiveRootStoreMutations
         || IsTruthyEnv("CI")
         || IsTruthyEnv("GITHUB_ACTIONS")
         || IsTruthyEnv("TF_BUILD")
         || string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
-            StringComparison.Ordinal));
+            StringComparison.Ordinal);
 
     /// <summary>
     ///     Cache dictionary
@@ -1836,6 +1829,17 @@ public sealed class CertificateManager : IDisposable
         {
             LastOsTrustResult = CertificateOsTrustResult.Ok(
                 "Root CA store install skipped on macOS (Keychain SSL trust applies separately)");
+            return false;
+        }
+
+        // A unit test can force IsWindows false while this process is still Windows.
+        // X509Store would then open the real Root store and show CryptUI. Unix trust
+        // does not go through this store.
+        if (OperatingSystem.IsWindows() && !RunTime.IsWindows)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Root CA install skipped (Windows store is not the active trust path)");
             return false;
         }
 
