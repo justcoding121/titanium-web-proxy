@@ -408,9 +408,11 @@ internal static class SmokeApp
             var before = DateTime.UtcNow;
             using var launched = LaunchBrowser(name, browserPath, url);
             var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
-            // Windows Chrome's first window is often still starting at 12s. Killing
-            // it then leaves the profile lock held, and the replacement process
-            // never requests the proof URL. Give that window longer, then reopen it.
+            // Windows Chrome's first window is often still starting at 12s. A second
+            // process beside that window does not deliver the proof URL: this run
+            // kept the start pid and both reopens alive and never requested the page.
+            // After 20s with no decrypted GET, stop every process on the profile and
+            // start one window.
             // The second origin is launched with the URL already on the command line.
             // Killing Linux Edge at 12s, or Safari every 8s, dropped that navigation
             // and the replacement never requested the page.
@@ -498,24 +500,20 @@ internal static class SmokeApp
     }
 
     /// <summary>
-    /// Ask the running Chromium window to open the proof URL. Killing the
-    /// start process is a no-op once that broker has exited, and killing a
-    /// window that is still starting drops the navigation.
+    /// Replace the Chromium window. The start pid can stay alive while the
+    /// window never loads the proof URL, and a second process on the same
+    /// profile then stays alive without navigating. Stop every process whose
+    /// command line has this user-data-dir, wait until the lock is gone, then
+    /// start one window.
     /// </summary>
     private static void ReopenWindowsChromium(string name, string browserPath, string url, BrowserLaunch launched)
     {
         var dir = launched.DataDir ?? throw new InvalidOperationException(name + " has no user-data-dir");
-        if (launched.IsAlive)
-        {
-            Console.WriteLine("reopen " + name + " in the running window");
-        }
-        else
-        {
-            Console.WriteLine("restart " + name + "; the start process had already exited");
-            KillWindowsProcessesForDataDir(dir);
-            if (!WaitUntilDataDirUnused(dir))
-                Console.WriteLine("profile still in use for " + name);
-        }
+        Console.WriteLine("restart " + name + "; no decrypted page from the current window");
+        launched.KillProcessOnly();
+        KillWindowsProcessesForDataDir(dir);
+        if (!WaitUntilDataDirUnused(dir))
+            Console.WriteLine("profile still in use for " + name);
 
         var again = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
             browserPath, dir, url, disableQuic: true);
