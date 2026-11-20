@@ -383,11 +383,9 @@ internal static class SmokeApp
 
             try
             {
-                // A second origin proves the proxy is still in use. www.google.com is a
-                // heavy page, and any *.google.com GET (the time sync) used to count,
-                // so Chrome could pass without loading it. example.org is the same
-                // small document as example.com.
-                var urls = new[] { "https://example.com/", "https://example.org/" };
+                // One decrypted page per browser. A second cold start (example.org) missed
+                // a different browser on each run after example.com had already loaded.
+                var urls = new[] { "https://example.com/" };
                 if (!await ProveAsync(startedUtc, path, name, urls))
                     return Fail(1, name + " did not produce a decrypted GET");
                 Console.WriteLine("pass " + name);
