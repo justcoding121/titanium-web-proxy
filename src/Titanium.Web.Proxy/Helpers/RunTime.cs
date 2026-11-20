@@ -35,13 +35,15 @@ internal static class RunTime
     ///     Test-only override for <see cref="IsWindows" />. Null restores the real OS check.
     /// </summary>
     private static bool? isWindowsOverride;
+    private static bool? isLinuxOverride;
+    private static bool? isMacOverride;
 
     /// <summary>
     ///     Is running on Mono?
     /// </summary>
     internal static bool IsRunningOnMono => isRunningOnMono.Value;
 
-    public static bool IsLinux => IsRunningOnLinux;
+    public static bool IsLinux => isLinuxOverride ?? IsRunningOnLinux;
 
     [SupportedOSPlatformGuard("windows")]
     public static bool IsWindows => isWindowsOverride ?? IsRunningOnWindows;
@@ -52,11 +54,15 @@ internal static class RunTime
     /// </summary>
     internal static void SetIsWindowsForTests(bool? value) => isWindowsOverride = value;
 
+    internal static void SetIsLinuxForTests(bool? value) => isLinuxOverride = value;
+
+    internal static void SetIsMacForTests(bool? value) => isMacOverride = value;
+
     [SupportedOSPlatformGuard("windows")]
     public static bool IsUwpOnWindows => IsWindows && UwpHelper.IsRunningAsUwp();
 
     [SupportedOSPlatformGuard("macos")]
-    public static bool IsMac => IsRunningOnMac;
+    public static bool IsMac => isMacOverride ?? IsRunningOnMac;
 
     private static bool? _isSocketReuseAvailable;
 

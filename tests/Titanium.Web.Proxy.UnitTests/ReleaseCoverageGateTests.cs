@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.Win32;
+using Titanium.Web.Proxy.Network;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Models;
 
@@ -78,6 +80,10 @@ public class ReleaseCoverageGateTests
         CoverageOs.TreatAsMacForTests = false;
         UnixProcessPath.ResolveOverrideForTests = null;
         InstalledProxyCleanup.RunOverrideForTests = null;
+        CertificateManager.AllowUnixTrustDespiteSuppressForTests = false;
+        RunTime.SetIsWindowsForTests(null);
+        RunTime.SetIsLinuxForTests(null);
+        RunTime.SetIsMacForTests(null);
         try { Directory.Delete(_home, recursive: true); } catch { /* best-effort */ }
     }
 
@@ -196,6 +202,37 @@ public class ReleaseCoverageGateTests
         CoverageOs.TreatAsLinuxForTests = true;
         Assert.IsFalse(InstalledProxyCleanup.TryForceClearWhenOwned());
         InstalledProxyCleanup.ForceClear();
+    }
+
+    [TestMethod]
+    public void UnixTrustBranches_RunOnTheCoverageHostWithoutTouchingTheWindowsStore()
+    {
+        using var mgr = new CertificateManager(IsolatedTestCa.NewRootName(), IsolatedTestCa.Issuer, false, false, false, NullLogger.Instance)
+        {
+            CertificateEngine = CertificateEngine.BouncyCastle,
+        };
+        Assert.IsTrue(mgr.CreateRootCertificate(false));
+        try
+        {
+            CertificateManager.AllowUnixTrustDespiteSuppressForTests = true;
+            RunTime.SetIsWindowsForTests(false);
+            RunTime.SetIsMacForTests(true);
+            Assert.IsFalse(mgr.InstallRootIntoCertificateStores());
+            mgr.ApplyUnixSslTrustAfterStoreInstall(machineTrusted: true);
+            Assert.IsFalse(mgr.TrustRootCertificateAsAdmin(machineTrusted: true));
+
+            RunTime.SetIsMacForTests(false);
+            RunTime.SetIsLinuxForTests(true);
+            mgr.ApplyUnixSslTrustAfterStoreInstall(machineTrusted: true);
+            Assert.IsFalse(mgr.TrustRootCertificateAsAdmin(machineTrusted: true));
+        }
+        finally
+        {
+            CertificateManager.AllowUnixTrustDespiteSuppressForTests = false;
+            RunTime.SetIsWindowsForTests(null);
+            RunTime.SetIsLinuxForTests(null);
+            RunTime.SetIsMacForTests(null);
+        }
     }
 
     [TestMethod]

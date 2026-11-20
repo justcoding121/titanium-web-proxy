@@ -108,13 +108,20 @@ public sealed class CertificateManager : IDisposable
     /// <summary>
     ///     True when Root-store Add/Remove should be skipped to avoid modal CryptUI prompts.
     /// </summary>
+    /// <summary>
+    ///     Unit tests set this to exercise the macOS and Linux trust branches on a host
+    ///     where CI suppression would return first. Leave it false in production.
+    /// </summary>
+    internal static bool AllowUnixTrustDespiteSuppressForTests { get; set; }
+
     internal static bool ShouldSuppressInteractiveRootStoreMutations =>
-        SuppressInteractiveRootStoreMutations
+        !AllowUnixTrustDespiteSuppressForTests
+        && (SuppressInteractiveRootStoreMutations
         || IsTruthyEnv("CI")
         || IsTruthyEnv("GITHUB_ACTIONS")
         || IsTruthyEnv("TF_BUILD")
         || string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
-            StringComparison.Ordinal);
+            StringComparison.Ordinal));
 
     /// <summary>
     ///     Cache dictionary

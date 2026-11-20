@@ -29,6 +29,9 @@ internal static partial class MacAppRelocation
 {
     private const string BundleDisplayName = "Titanium Inspector.app";
 
+    /// <summary>Unit tests set this so the Applications lookup runs on the Windows coverage host.</summary>
+    internal static bool TreatAsMacForTests { get; set; }
+
     [GeneratedRegex(
         @"<key>\s*CFBundleShortVersionString\s*</key>\s*<string>([^<]+)</string>",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
@@ -104,9 +107,16 @@ internal static partial class MacAppRelocation
 
         if (installedPath is null)
         {
-            if (!OperatingSystem.IsMacOS())
+            if (OperatingSystem.IsMacOS())
+                installedPath = TryFindInstalledAppPath();
+            else if (TreatAsMacForTests)
+            {
+#pragma warning disable CA1416 // coverage host is Windows; the lookup only checks whether a directory exists
+                installedPath = TryFindInstalledAppPath();
+#pragma warning restore CA1416
+            }
+            else
                 return MacRelocateAction.Install;
-            installedPath = TryFindInstalledAppPath();
         }
 
         if (installedPath is null || !Directory.Exists(installedPath))

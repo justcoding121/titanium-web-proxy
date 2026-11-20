@@ -13,6 +13,7 @@ public class LinuxAppRelocationCoverageTests
     {
         LinuxAppRelocation.TreatAsLinuxForTests = false;
         LinuxAppRelocation.HomeForTests = null;
+        MacAppRelocation.TreatAsMacForTests = false;
         var previous = Environment.GetEnvironmentVariable("APPIMAGE");
         if (previous is not null && previous.Contains("twp-cov-appimage", StringComparison.Ordinal))
             Environment.SetEnvironmentVariable("APPIMAGE", null);
@@ -47,6 +48,21 @@ public class LinuxAppRelocationCoverageTests
                 runningVersion: new Version(8, 0, 5),
                 installedVersion: new Version(8, 0, 4));
             Assert.AreEqual(LinuxRelocateAction.Replace, decision);
+
+            var bundle = Path.Combine(home, "Titanium Inspector.app");
+            Directory.CreateDirectory(Path.Combine(bundle, "Contents"));
+            File.WriteAllText(Path.Combine(bundle, "Contents", "Info.plist"),
+                "<plist><key>CFBundleVersion</key><string>8.0.4</string></plist>");
+            MacAppRelocation.TreatAsMacForTests = true;
+            _ = MacAppRelocation.DecideRelocateAction();
+            Assert.AreEqual(
+                MacRelocateAction.Replace,
+                MacAppRelocation.DecideRelocateAction(
+                    runningVersion: new Version(9, 0, 0), installedPath: bundle));
+            Assert.AreEqual(
+                MacRelocateAction.OpenExisting,
+                MacAppRelocation.DecideRelocateAction(
+                    runningVersion: new Version(1, 0, 0), installedPath: bundle));
         }
         finally
         {
