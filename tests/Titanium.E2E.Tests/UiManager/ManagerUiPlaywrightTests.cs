@@ -47,10 +47,9 @@ public class ManagerUiPlaywrightTests : PageTest
         // Arm the listener before the click. A fast runner finishes the redirect
         // before a wait that starts after ClickAsync returns, and that wait then
         // sits until timeout looking for a navigation that already happened.
-        await Page.RunAndWaitForURLAsync(
-            async () => await Page.GetByTestId("btn-create-fleet").ClickAsync(),
-            "**/fleets/*",
-            new() { Timeout = 15_000 });
+        var navigation = Page.WaitForURLAsync("**/fleets/*", new() { Timeout = 15_000 });
+        await Page.GetByTestId("btn-create-fleet").ClickAsync();
+        await navigation;
         await Expect(Page.GetByTestId("fleet-detail")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         await Page.GetByTestId("link-editor").ClickAsync();
