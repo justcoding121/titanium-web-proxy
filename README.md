@@ -160,10 +160,6 @@ From a clone of this repo:
 helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
 ```
 
-## Upgrading from 7.x
-
-Moving from 7.x to 8.0: [migration guide](docs/migration-7-to-8.md) · [website](https://titaniumproxy.com/docs/migration-7-to-8).
-
 ## Trust and native scripting
 
 Trusting a generated root certificate changes the current user's certificate store — only do this on a machine you control.
