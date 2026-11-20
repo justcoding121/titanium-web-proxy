@@ -106,22 +106,40 @@ public class SessionStoreStressTests
         {
             while (!originCts.IsCancellationRequested && origin.IsListening)
             {
+                HttpListenerContext ctx;
                 try
                 {
-                    var ctx = await origin.GetContextAsync().WaitAsync(originCts.Token);
-                    ctx.Response.StatusCode = 200;
-                    ctx.Response.ContentLength64 = payloadBytes.Length;
-                    await ctx.Response.OutputStream.WriteAsync(payloadBytes, originCts.Token);
-                    ctx.Response.Close();
+                    ctx = await origin.GetContextAsync().WaitAsync(originCts.Token);
                 }
                 catch (OperationCanceledException)
                 {
                     return;
                 }
-                catch
+                catch (HttpListenerException)
                 {
                     return;
                 }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
+
+                // One failed write used to leave the accept loop, and the rest of the
+                // burst then reached the proxy as 502.
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        ctx.Response.StatusCode = 200;
+                        ctx.Response.ContentLength64 = payloadBytes.Length;
+                        await ctx.Response.OutputStream.WriteAsync(payloadBytes, originCts.Token);
+                        ctx.Response.Close();
+                    }
+                    catch
+                    {
+                        try { ctx.Response.Abort(); } catch { /* client already gone */ }
+                    }
+                }, originCts.Token);
             }
         }, originCts.Token);
 
