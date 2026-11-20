@@ -6,7 +6,7 @@ Embeddable .NET 10 HTTP(S) and MITM library, standalone CLI and Kubernetes rever
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
-**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Library](#run-the-library) · [CLI](#run-the-cli) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Library](#run-the-library) · [CLI](#run-the-cli) · [Inspector](#run-inspector) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
 
 ## Run the library
 
@@ -62,10 +62,6 @@ Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run
 - **[Titanium.Cli](https://titaniumproxy.com/download#stable-cli)** (`titanium` / `twp`) — Standalone reverse / edge proxy from the command line
 - **[Titanium Inspector](https://titaniumproxy.com/download#stable-inspector)** — Desktop MITM debugger: session grid, inspectors, AutoResponder, breakpoints, HAR export
 
-<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector session grid" width="900" />
-
-- **Titanium.Plus** — After the CLI, `titanium update --plus`. Control plane, dashboard, and observability
-
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
 ## Major features
@@ -99,6 +95,14 @@ titanium test -c twp.yaml
 titanium run -c twp.yaml
 ```
 
+**Plus** is optional and is not a separate download. After the CLI is installed, run `titanium update --plus`, then set `plus.enabled: true`. It adds a control plane, dashboard, and observability. [Plus](https://titaniumproxy.com/docs/plus).
+
+## Run Inspector
+
+Desktop debugger for HTTP and HTTPS. [Download](https://titaniumproxy.com/download#stable-inspector) for Windows, macOS, or Linux, then launch Titanium Inspector. Capturing and the system proxy are on by default on the local machine. Turn on **Decrypt HTTPS** when you need to see inside HTTPS. The first run installs a root certificate for the current user — only on a machine you control. [Inspector guide](https://titaniumproxy.com/docs/inspector).
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector session grid" width="900" />
+
 ## Go deeper
 
 Full catalog: [Features](https://titaniumproxy.com/docs/features). What is supported, partial, and not supported: [capability coverage](https://titaniumproxy.com/docs/capabilities). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
@@ -129,8 +133,6 @@ titanium update
 ```
 
 `titanium run` is foreground (Ctrl+C to stop). Boot persistence: `titanium service install -c twp.yaml` — [CLI — service](https://titaniumproxy.com/docs/cli#service). Each CLI zip also includes a `twp` alias.
-
-**Optional Plus:** `titanium update --plus`, then `plus.enabled: true` — [Plus](https://titaniumproxy.com/docs/plus).
 
 **Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, 64-bit and ARM Linux) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
 
