@@ -3,8 +3,8 @@ layout: home
 title: Titanium Web Proxy
 hero:
   name: Titanium Web Proxy
-  text: Library, edge proxy, and MITM debugger
-  tagline: Embed the same high-performance HTTP(S) engine in .NET, run it as a standalone reverse proxy, or inspect traffic in a desktop debugger — on Windows, Linux, and macOS.
+  text: Intercept and inspect HTTP(S) from .NET in a few lines
+  tagline: Decrypt HTTPS and log each request from a .NET 10 app on Windows, Linux, and macOS.
   image:
     src: /logo.svg
     alt: Titanium Web Proxy
@@ -18,36 +18,75 @@ hero:
     - theme: alt
       text: GitHub
       link: https://github.com/justcoding121/titanium-web-proxy
-features:
-  - title: Embeddable .NET proxy
-    details: NuGet package Titanium.Web.Proxy for HTTP(S) and MITM inside your .NET 10 app.
-    link: /docs/library
-    linkText: Learn more
-  - title: CLI and Kubernetes edge proxy
-    details: Standalone titanium / twp reverse proxy from YAML, Docker, or Helm.
-    link: /docs/cli
-    linkText: Learn more
-  - title: Automatic tunnel
-    details: When a server blocks the proxy, we detect it and automatically tunnel that traffic.
-    link: /docs/features#inspector
-    linkText: Learn more
-  - title: Visual MITM debugger
-    details: Native Titanium Inspector with session grid, rewrite tools, and HAR export.
-    link: /docs/inspector
-    linkText: Learn more
-  - title: Benchmarked speed at scale
-    details: Practical reverse throughput charts against peers on the same harness.
-    link: /docs/performance
-    linkText: Learn more
-  - title: Control-plane add-ons
-    details: Optional Plus for xDS, GeoIP, caching, rate limiting, health probes, and a dashboard.
-    link: /docs/plus
-    linkText: Learn more
 ---
+
+## Choose a path
+
+<div class="edition-grid">
+  <div class="edition-card">
+    <h3>Embed in .NET</h3>
+    <p class="license"><a href="https://www.nuget.org/packages/Titanium.Web.Proxy">Titanium.Web.Proxy</a> · NuGet</p>
+    <p>Same engine inside your app. <a href="/docs/library">Library guide</a> · <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">NuGet</a>.</p>
+  </div>
+  <div class="edition-card">
+    <h3>Run a reverse proxy</h3>
+    <p class="license"><a href="/download#stable-cli">Titanium.Cli</a> · <code>titanium</code> / <code>twp</code></p>
+    <p>Standalone proxy for any backend stack. <a href="/download#stable-cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
+  </div>
+  <div class="edition-card">
+    <h3>Inspect traffic</h3>
+    <p class="license"><a href="/download#stable-inspector">Titanium Inspector</a> · Windows / macOS / Linux</p>
+    <p>Desktop debugger for HTTP and HTTPS. <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
+  </div>
+  <div class="edition-card">
+    <h3>Ops add-on</h3>
+    <p class="license"><a href="/docs/plus">Titanium.Plus</a> · optional</p>
+    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
+  </div>
+</div>
+
+## Major features
+
+<div class="edition-grid">
+  <div class="edition-card">
+    <h3>Embeddable .NET proxy</h3>
+    <p>NuGet package Titanium.Web.Proxy for HTTP(S) and MITM inside your .NET 10 app.</p>
+    <p class="license"><a href="/docs/library">Learn more →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>CLI and Kubernetes edge proxy</h3>
+    <p>Standalone titanium / twp reverse proxy from YAML, Docker, or Helm.</p>
+    <p class="license"><a href="/docs/cli">Learn more →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Automatic tunnel</h3>
+    <p>When a server blocks the proxy, we detect it and automatically tunnel that traffic.</p>
+    <p class="license"><a href="/docs/features#inspector">Learn more →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Visual MITM debugger</h3>
+    <p>Native Titanium Inspector with session grid, rewrite tools, and HAR export.</p>
+    <p class="license"><a href="/docs/inspector">Learn more →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Benchmarked speed at scale</h3>
+    <p>Practical reverse throughput charts against peers on the same harness.</p>
+    <p class="license"><a href="/docs/performance">Learn more →</a></p>
+  </div>
+  <div class="edition-card">
+    <h3>Control-plane add-ons</h3>
+    <p>Optional Plus for xDS, GeoIP, caching, rate limiting, health probes, and a dashboard.</p>
+    <p class="license"><a href="/docs/plus">Learn more →</a></p>
+  </div>
+</div>
+
+## Run it in 30 seconds
+
+<HomeQuickStart />
 
 ## Performance
 
-Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envoy** on GitHub Actions runners. The Linux tiny-GET chart is below. Charts for the other operating systems, and all other results, are on the [performance](/docs/performance) page.
+**26,023** requests per second: a tiny keep-alive GET (~56 B), HTTP/1 with TLS in and plain HTTP/1 out, on Linux (GitHub-hosted runner, 4 vCPU / 16 GiB, median of 3, sustain at concurrency 64). Same harness versus peer proxies. The Linux tiny-GET chart is below. Charts for the other operating systems, and the named comparison, are on the [performance](/docs/performance) page and the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 <div class="rps-preview">
 
@@ -120,31 +159,6 @@ Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envo
   </div>
 </div>
 
-## Choose a path
-
-<div class="edition-grid">
-  <div class="edition-card">
-    <h3>Embed in .NET</h3>
-    <p class="license"><a href="https://www.nuget.org/packages/Titanium.Web.Proxy">Titanium.Web.Proxy</a> · NuGet</p>
-    <p>Same engine inside your app. <a href="/docs/library">Library guide</a> · <a href="https://www.nuget.org/packages/Titanium.Web.Proxy">NuGet</a>.</p>
-  </div>
-  <div class="edition-card">
-    <h3>Run a reverse proxy</h3>
-    <p class="license"><a href="/download#stable-cli">Titanium.Cli</a> · <code>titanium</code> / <code>twp</code></p>
-    <p>Standalone proxy for any backend stack. <a href="/download#stable-cli">Download CLI</a> → <a href="/docs/cli">CLI guide</a>.</p>
-  </div>
-  <div class="edition-card">
-    <h3>Inspect traffic</h3>
-    <p class="license"><a href="/download#stable-inspector">Titanium Inspector</a> · Windows / macOS / Linux</p>
-    <p>Desktop debugger for HTTP and HTTPS. <a href="/download#stable-inspector">Download</a> → <a href="/docs/inspector">Inspector guide</a>.</p>
-  </div>
-  <div class="edition-card">
-    <h3>Ops add-on</h3>
-    <p class="license"><a href="/docs/plus">Titanium.Plus</a> · optional</p>
-    <p>Dashboard, metrics, auth helpers, and WAF request screening with a detect mode. After the CLI: <code>titanium update --plus</code>. <a href="/docs/plus">Plus</a>.</p>
-  </div>
-</div>
-
 ## Licensing
 
 <div class="edition-grid">
@@ -156,7 +170,7 @@ Throughput (requests per second) vs **YARP**, **nginx**, **HAProxy**, and **Envo
   <div class="edition-card">
     <h3>Inspector &amp; Plus (noncommercial)</h3>
     <p class="license">PolyForm Noncommercial</p>
-    <p>Titanium Inspector, Titanium.Plus, and the xDS / GeoIP satellites are free for personal and education use. Commercial use needs a separate arrangement. Full terms: <a href="/docs/editions">Editions &amp; licenses</a>.</p>
+    <p>Titanium Inspector, Titanium.Plus, and the xDS / GeoIP satellites are for non-commercial use only (PolyForm Noncommercial 1.0.0). Full terms: <a href="/docs/editions">Editions &amp; licenses</a>.</p>
   </div>
 </div>
 

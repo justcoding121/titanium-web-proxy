@@ -13,7 +13,6 @@ const active = ref('library')
 
 <template>
   <section class="home-quick-start">
-    <h2 class="home-quick-start__title">Run it in 30 seconds</h2>
     <div class="home-quick-start__tabs" role="tablist" aria-label="Quick start">
       <button
         v-for="tab in tabs"
@@ -31,24 +30,8 @@ const active = ref('library')
 
     <div v-show="active === 'library'" class="home-quick-start__panel" role="tabpanel">
       <pre class="home-quick-start__pre"><code>dotnet add package Titanium.Web.Proxy</code></pre>
-      <pre class="home-quick-start__pre"><code>using System.Net;
-using Titanium.Web.Proxy;
-using Titanium.Web.Proxy.Models;
-
-using var proxyServer = new ProxyServer();
-proxyServer.BeforeRequest += async (s, e) =>
-{
-    Console.WriteLine(e.HttpClient.Request.Url);
-};
-
-var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, decryptSsl: true);
-proxyServer.AddEndPoint(endPoint);
-proxyServer.CertificateManager.EnsureRootCertificate(
-    userTrustRootCertificate: true,
-    machineTrustRootCertificate: false);
-proxyServer.Start();</code></pre>
       <p class="home-quick-start__links">
-        <a href="/docs/library">Library guide →</a>
+        <a href="/docs/getting-started">Getting started →</a>
       </p>
     </div>
 
@@ -64,7 +47,19 @@ listeners:
     decryptSsl: false
     forwardHost: "127.0.0.1"
     forwardPort: 8080</code></pre>
-      <pre class="home-quick-start__pre"><code>docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest
+      <pre class="home-quick-start__pre"><code># Image entrypoint: titanium run --config /etc/titanium/twp.yaml
+mkdir conf
+cat &gt; conf/twp.yaml &lt;&lt;'EOF'
+schemaVersion: "7.1"
+listeners:
+  - host: "0.0.0.0"
+    port: 8080
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 8080
+EOF
+docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest</code></pre>
+      <pre class="home-quick-start__pre"><code># From a clone of this repo:
 helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml</code></pre>
       <p class="home-quick-start__links">
         <a href="/docs/cli">CLI guide →</a>

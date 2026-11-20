@@ -39,7 +39,7 @@ Standalone reverse / edge proxy. MIT. [CLI guide](/docs/cli) · [Configuration](
 | Protocols | HTTP/2 by default; HTTP/3 when QUIC is available; protocol bridging |
 | Listeners | Explicit, transparent, SOCKS, QUIC, UDP relay (sessions per client endpoint, cluster load balancing, caps, metrics) |
 | OS service | Windows SCM / systemd / launchd via `titanium service` |
-| Config dialects | `.yaml` / `.json`, compact `.twp`, nginx-like `.conf` |
+| Config dialects | `.yaml` / `.json`, compact `.twp`, server-block `.conf` |
 | Live reload | `titanium reload` / SIGHUP / `run --watch` — routes and clusters without dropping listeners |
 | Self-update | `titanium update` with SHA256 verification |
 | Access logs | Opt-in NDJSON (`server.accessLog`) |

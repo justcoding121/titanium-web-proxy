@@ -165,6 +165,22 @@
   color: var(--vp-c-brand-2);
 }
 
+.home-hero-demo {
+  max-width: 1152px;
+  margin: 0 auto 2rem;
+  padding: 0 24px;
+}
+
+.home-hero-demo .inspector-preview {
+  margin-top: 1rem;
+}
+
+.home-hero-demo__note {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+}
+
 .home-quick-start {
   max-width: 1152px;
   margin: 0 auto 2.5rem;
@@ -248,6 +264,7 @@
     overflow-wrap: anywhere;
   }
 
+  .home-hero-demo,
   .home-quick-start {
     padding: 0 16px;
   }

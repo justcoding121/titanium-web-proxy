@@ -6,31 +6,9 @@ Embeddable .NET 10 HTTP(S) and MITM library, standalone CLI and Kubernetes rever
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
-**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Quick Start](#run-it-in-30-seconds) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Library](#run-the-library) · [CLI](#run-the-cli) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
 
-| Product | Best for |
-|---------|----------|
-| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
-| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#stable-cli) | Standalone reverse / edge proxy from the command line |
-| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#stable-inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export |
-| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional extra features for CLI such as control plane, dashboard, observability |
-
-Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
-
-## Major features
-
-| Pillar | What you get | Start here |
-|--------|--------------|------------|
-| **Embeddable .NET HTTP(S) & MITM** (`Titanium.Web.Proxy`) | Same engine inside your app — inspect, modify, or reverse-proxy traffic | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) · [Library](https://titaniumproxy.com/docs/library) |
-| **Standalone CLI & Kubernetes edge** (`titanium` / `twp`) | Reverse / edge proxy from YAML, Docker, or Helm | [Download CLI](https://titaniumproxy.com/download#stable-cli) · [CLI](https://titaniumproxy.com/docs/cli) · [Kubernetes](https://titaniumproxy.com/docs/kubernetes) |
-| **Automatic block & TLS-fingerprint tunneling** | When a server blocks the proxy, we detect it and tunnel that traffic | [Features](https://titaniumproxy.com/docs/features#inspector) |
-| **Visual MITM traffic debugger** (Titanium Inspector) | Session grid, inspectors, AutoResponder, breakpoints, HAR export | [Download Inspector](https://titaniumproxy.com/download#stable-inspector) · [Inspector](https://titaniumproxy.com/docs/inspector) |
-| **Benchmarked speed at scale** | Practical reverse RPS vs peers on the same harness | [Performance](#performance) · [Site charts](https://titaniumproxy.com/docs/performance) |
-| **Optional control-plane add-ons** (`Titanium.Plus`) | xDS, GeoIP, caching, rate limiting, health probes, dashboard | `titanium update --plus` · [Plus](https://titaniumproxy.com/docs/plus) |
-
-## Run it in 30 seconds
-
-### Library (.NET)
+## Run the library
 
 ```shell
 dotnet add package Titanium.Web.Proxy
@@ -57,7 +35,7 @@ proxyServer.BeforeRequest += OnRequest;
 var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, decryptSsl: true);
 proxyServer.AddEndPoint(endPoint);
 
-// Create and trust the root certificate used to decrypt HTTPS traffic.
+// The first run installs a root certificate in the current user's trust store.
 proxyServer.CertificateManager.EnsureRootCertificate(
     userTrustRootCertificate: true,
     machineTrustRootCertificate: false);
@@ -74,7 +52,31 @@ Task OnRequest(object sender, SessionEventArgs e)
 }
 ```
 
-Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy.
+Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run installs a root certificate for the current user — only on a machine you control. [Trust](#trust-and-native-scripting).
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+
+| Product | Best for |
+|---------|----------|
+| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
+| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#stable-cli) | Standalone reverse / edge proxy from the command line |
+| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#stable-inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export |
+| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional extra features for CLI such as control plane, dashboard, observability |
+
+Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
+
+## Major features
+
+| Pillar | What you get | Start here |
+|--------|--------------|------------|
+| **Embeddable .NET HTTP(S) & MITM** (`Titanium.Web.Proxy`) | Same engine inside your app — inspect, modify, or reverse-proxy traffic | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) · [Library](https://titaniumproxy.com/docs/library) |
+| **Standalone CLI & Kubernetes edge** (`titanium` / `twp`) | Reverse / edge proxy from YAML, Docker, or Helm | [Download CLI](https://titaniumproxy.com/download#stable-cli) · [CLI](https://titaniumproxy.com/docs/cli) · [Kubernetes](https://titaniumproxy.com/docs/kubernetes) |
+| **Automatic block & TLS-fingerprint tunneling** | When a server blocks the proxy, we detect it and tunnel that traffic | [Features](https://titaniumproxy.com/docs/features#inspector) |
+| **Visual MITM traffic debugger** (Titanium Inspector) | Session grid, inspectors, AutoResponder, breakpoints, HAR export | [Download Inspector](https://titaniumproxy.com/download#stable-inspector) · [Inspector](https://titaniumproxy.com/docs/inspector) |
+| **Benchmarked speed at scale** | Practical reverse RPS vs peers on the same harness | [Performance](#performance) · [Site charts](https://titaniumproxy.com/docs/performance) |
+| **Optional control-plane add-ons** (`Titanium.Plus`) | xDS, GeoIP, caching, rate limiting, health probes, dashboard | `titanium update --plus` · [Plus](https://titaniumproxy.com/docs/plus) |
+
+## Run the CLI
 
 ### CLI (reverse / edge proxy)
 
@@ -96,8 +98,6 @@ titanium test -c twp.yaml
 titanium run -c twp.yaml
 ```
 
-<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
-
 <img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
 
 ## Go deeper
@@ -114,7 +114,7 @@ Heavier reverse load (64 KB GET/POST on typical wires):
 
 ![Practical reverse proxy throughput on Linux (64 KB)](wiki/images/rps-practical-heavier-linux.png)
 
-**RPS** is requests per second (gRPC bars are **RPC/s**). Compared on the same harness vs **YARP**, **nginx**, **HAProxy**, and **Envoy**. See [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+**RPS** is requests per second (gRPC bars are **RPC/s**). **26,023** requests per second on Linux for a tiny keep-alive GET (~56 B), HTTP/1 with TLS in and plain HTTP/1 out (4 vCPU / 16 GiB, median of 3, sustain at concurrency 64), on the same harness as peer proxies. Named comparison: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Installation
 
@@ -135,8 +135,25 @@ titanium update
 
 **Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
 
+The image entrypoint is `titanium run --config /etc/titanium/twp.yaml`. Mount a directory that already contains `twp.yaml` (the listener must be `0.0.0.0:8080` so the published port reaches it):
+
 ```shell
+mkdir conf
+cat > conf/twp.yaml <<'EOF'
+schemaVersion: "7.1"
+listeners:
+  - host: "0.0.0.0"
+    port: 8080
+    decryptSsl: false
+    forwardHost: "127.0.0.1"
+    forwardPort: 8080
+EOF
 docker run --rm -p 8080:8080 --read-only --tmpfs /tmp -v "$PWD/conf:/etc/titanium:ro" ghcr.io/justcoding121/titanium-web-proxy:latest
+```
+
+From a clone of this repo:
+
+```shell
 helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
 ```
 
