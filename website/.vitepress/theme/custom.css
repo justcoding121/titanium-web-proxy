@@ -187,6 +187,14 @@
   padding: 0 24px;
 }
 
+.vp-doc .home-quick-start {
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+  padding-right: 0;
+  padding-left: 0;
+}
+
 .home-quick-start__title {
   margin: 0 0 1rem;
   font-size: 1.35rem;
@@ -252,10 +260,53 @@
 }
 
 @media (max-width: 640px) {
+  .VPHero .image {
+    width: 148px;
+    height: 148px;
+    margin: 0 auto 4px;
+  }
+
+  .VPHero .image-container {
+    width: 148px;
+    height: 148px;
+  }
+
+  .VPHero .name {
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .VPHero .text {
+    font-size: 26px;
+    line-height: 1.25;
+  }
+
+  .VPHero .tagline {
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .VPHero .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .VPHero .action,
+  .VPHero .action .VPButton {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
+  }
+
   .copy-package {
     display: flex;
     flex-wrap: wrap;
+    justify-content: space-between;
+    width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
     border-radius: 12px;
   }
 
@@ -264,13 +315,33 @@
     overflow-wrap: anywhere;
   }
 
-  .home-hero-demo,
-  .home-quick-start {
-    padding: 0 16px;
+  .home-hero-demo {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 24px;
+  }
+
+  .vp-doc .home-quick-start {
+    padding: 0;
+  }
+
+  .home-hero-demo__note {
+    line-height: 1.5;
+    text-align: center;
   }
 
   .home-quick-start__pre {
+    max-width: 100%;
     font-size: 0.78rem;
+  }
+
+  .home-quick-start__pre code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .edition-grid {
+    grid-template-columns: 1fr;
   }
 
   .inspector-preview {

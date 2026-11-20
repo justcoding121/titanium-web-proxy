@@ -14,7 +14,8 @@ proxyServer.BeforeRequest += async (s, e) =>
     Console.WriteLine(e.HttpClient.Request.Url);
 };
 
-var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, decryptSsl: true);
+var endPoint = new ExplicitProxyEndPoint(
+    IPAddress.Loopback, 8000, decryptSsl: true);
 proxyServer.AddEndPoint(endPoint);
 // The first run installs a root certificate in the current user's trust store.
 proxyServer.CertificateManager.EnsureRootCertificate(

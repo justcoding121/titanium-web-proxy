@@ -6,7 +6,8 @@ Embeddable .NET 10 HTTP(S) and MITM library, standalone CLI and Kubernetes rever
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 [![NuGet downloads](https://img.shields.io/nuget/dt/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
 
-**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Library](#run-the-library) · [CLI](#run-the-cli) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
+**[Website](https://titaniumproxy.com)** · [Download](https://titaniumproxy.com/download) · [Library](#run-the-library)<br>
+[CLI](#run-the-cli) · [Benchmarks](#performance) · [Docs](https://titaniumproxy.com/docs/getting-started) · [License](#license)
 
 ## Run the library
 
@@ -32,7 +33,8 @@ using var proxyServer = new ProxyServer();
 proxyServer.Logging.MinimumLevel = LogLevel.Information;
 proxyServer.BeforeRequest += OnRequest;
 
-var endPoint = new ExplicitProxyEndPoint(IPAddress.Loopback, 8000, decryptSsl: true);
+var endPoint = new ExplicitProxyEndPoint(
+    IPAddress.Loopback, 8000, decryptSsl: true);
 proxyServer.AddEndPoint(endPoint);
 
 // The first run installs a root certificate in the current user's trust store.
@@ -41,7 +43,8 @@ proxyServer.CertificateManager.EnsureRootCertificate(
     machineTrustRootCertificate: false);
 
 proxyServer.Start();
-proxyServer.Logger.LogInformation("Proxy listening on 127.0.0.1:8000. Press Enter to stop.");
+proxyServer.Logger.LogInformation(
+    "Listening on 127.0.0.1:8000. Press Enter to stop.");
 await Console.In.ReadLineAsync();
 proxyServer.Stop();
 
@@ -56,25 +59,21 @@ Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run
 
 <img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
 
-| Product | Best for |
-|---------|----------|
-| **Titanium.Web.Proxy**<br>[NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) | Embed a proxy (MITM and/or reverse) in a .NET app |
-| **Titanium.Cli** (`titanium` / `twp`)<br>[Download](https://titaniumproxy.com/download#stable-cli) | Standalone reverse / edge proxy from the command line |
-| **Titanium Inspector**<br>[Download](https://titaniumproxy.com/download#stable-inspector) | Desktop MITM debugger — session grid, inspectors, AutoResponder, breakpoints, HAR export |
-| **Titanium.Plus**<br>`titanium update --plus` (after installing CLI) | Optional extra features for CLI such as control plane, dashboard, observability |
+- **[Titanium.Web.Proxy](https://www.nuget.org/packages/Titanium.Web.Proxy)** — Embed a proxy (MITM and/or reverse) in a .NET app
+- **[Titanium.Cli](https://titaniumproxy.com/download#stable-cli)** (`titanium` / `twp`) — Standalone reverse / edge proxy from the command line
+- **[Titanium Inspector](https://titaniumproxy.com/download#stable-inspector)** — Desktop MITM debugger: session grid, inspectors, AutoResponder, breakpoints, HAR export
+- **Titanium.Plus** — After the CLI, `titanium update --plus`. Control plane, dashboard, and observability
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
 
 ## Major features
 
-| Pillar | What you get | Start here |
-|--------|--------------|------------|
-| **Embeddable .NET HTTP(S) & MITM** (`Titanium.Web.Proxy`) | Same engine inside your app — inspect, modify, or reverse-proxy traffic | [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) · [Library](https://titaniumproxy.com/docs/library) |
-| **Standalone CLI & Kubernetes edge** (`titanium` / `twp`) | Reverse / edge proxy from YAML, Docker, or Helm | [Download CLI](https://titaniumproxy.com/download#stable-cli) · [CLI](https://titaniumproxy.com/docs/cli) · [Kubernetes](https://titaniumproxy.com/docs/kubernetes) |
-| **Automatic block & TLS-fingerprint tunneling** | When a server blocks the proxy, we detect it and tunnel that traffic | [Features](https://titaniumproxy.com/docs/features#inspector) |
-| **Visual MITM traffic debugger** (Titanium Inspector) | Session grid, inspectors, AutoResponder, breakpoints, HAR export | [Download Inspector](https://titaniumproxy.com/download#stable-inspector) · [Inspector](https://titaniumproxy.com/docs/inspector) |
-| **Benchmarked speed at scale** | Practical reverse RPS vs peers on the same harness | [Performance](#performance) · [Site charts](https://titaniumproxy.com/docs/performance) |
-| **Optional control-plane add-ons** (`Titanium.Plus`) | xDS, GeoIP, caching, rate limiting, health probes, dashboard | `titanium update --plus` · [Plus](https://titaniumproxy.com/docs/plus) |
+- **Embeddable .NET HTTP(S) and MITM** (`Titanium.Web.Proxy`) — Same engine inside your app. [NuGet](https://www.nuget.org/packages/Titanium.Web.Proxy) · [Library](https://titaniumproxy.com/docs/library)
+- **Standalone CLI and Kubernetes edge** (`titanium` / `twp`) — Reverse / edge proxy from YAML, Docker, or Helm. [Download CLI](https://titaniumproxy.com/download#stable-cli) · [CLI](https://titaniumproxy.com/docs/cli) · [Kubernetes](https://titaniumproxy.com/docs/kubernetes)
+- **Automatic block and TLS-fingerprint tunneling** — When a server blocks the proxy, we detect it and tunnel that traffic. [Features](https://titaniumproxy.com/docs/features#inspector)
+- **Visual MITM traffic debugger** (Titanium Inspector) — Session grid, inspectors, AutoResponder, breakpoints, HAR export. [Download Inspector](https://titaniumproxy.com/download#stable-inspector) · [Inspector](https://titaniumproxy.com/docs/inspector)
+- **Benchmarked speed at scale** — Practical reverse RPS versus peers on the same harness. [Performance](#performance) · [Site charts](https://titaniumproxy.com/docs/performance)
+- **Optional control-plane add-ons** (`Titanium.Plus`) — xDS, GeoIP, caching, rate limiting, health probes, dashboard. `titanium update --plus` · [Plus](https://titaniumproxy.com/docs/plus)
 
 ## Run the CLI
 
@@ -157,7 +156,9 @@ docker run --rm -p 8080:8080 --read-only --tmpfs /tmp \
 From a clone of this repo:
 
 ```shell
-helm install titanium deploy/helm/titanium -n proxy --create-namespace -f my-values.yaml
+helm install titanium deploy/helm/titanium \
+  -n proxy --create-namespace \
+  -f my-values.yaml
 ```
 
 ## Trust and native scripting
@@ -214,7 +215,5 @@ Actively maintained by [justcoding121](https://github.com/justcoding121). Past c
 
 Vendored xDS protos keep their Apache-2.0 text in `src/Titanium.Xds/LICENSE.Apache-2.0.txt` and `src/Titanium.Xds/NOTICE`. Third-party notices for the MIT library are in `src/Titanium.Web.Proxy/NOTICE`.
 
-| Folder | License |
-|--------|---------|
-| `src/Titanium.Web.Proxy`, `src/Titanium.Web.Proxy.Abstractions`, `src/Titanium.Web.Proxy.Configuration`, `src/Titanium.Web.Proxy.Scripting`, `src/Titanium.Cli`, `src/Titanium.Manager`, `src/Titanium.Gateway`, examples, website, docs, wiki, tools, deploy, and tests other than the four PolyForm test projects | MIT |
-| `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp`, `tests/Titanium.Plus.Tests`, `tests/Titanium.Inspector.Tests`, `tests/Titanium.Xds.Tests`, `tests/Titanium.Cli.GeoIp.Tests` | PolyForm Noncommercial 1.0.0 |
+- **MIT** — `src/Titanium.Web.Proxy`, `src/Titanium.Web.Proxy.Abstractions`, `src/Titanium.Web.Proxy.Configuration`, `src/Titanium.Web.Proxy.Scripting`, `src/Titanium.Cli`, `src/Titanium.Manager`, `src/Titanium.Gateway`, examples, website, docs, wiki, tools, deploy, and tests other than the four PolyForm test projects
+- **PolyForm Noncommercial 1.0.0** — `src/Titanium.Plus`, `src/Titanium.Inspector`, `src/Titanium.Xds`, `src/Titanium.Cli.GeoIp`, `tests/Titanium.Plus.Tests`, `tests/Titanium.Inspector.Tests`, `tests/Titanium.Xds.Tests`, `tests/Titanium.Cli.GeoIp.Tests`
