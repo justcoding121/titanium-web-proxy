@@ -12,7 +12,7 @@ The only list of check contexts is [`.github/required-checks.json`](required-che
 | Block force pushes | yes |
 | Require a pull request before merging | **yes** (1 approval, stale reviews dismissed, threads resolved) |
 | Require status checks to pass | **yes**, strict |
-| Required checks | `merge-gate`, `rps (ubuntu-latest)`, `rps (windows-latest)`, `rps (macos-15)`, `gitleaks`, `dependency-review`, `tests-or-waiver`, `guard-nc-paths`, `cla`, `install-smoke (windows-latest)`, `install-smoke (ubuntu-latest)`, `install-smoke (macos-latest)` |
+| Required checks | `merge-gate`, `rps (ubuntu-26.04)`, `rps (windows-latest)`, `rps (macos-15)`, `gitleaks`, `dependency-review`, `tests-or-waiver`, `guard-nc-paths`, `cla`, `install-smoke (windows-latest)`, `install-smoke (ubuntu-latest)`, `install-smoke (macos-latest)` |
 | Code scanning | CodeQL, high-or-higher security alerts, error alerts |
 | Admin bypass | repository admin role, **pull request only** (no direct push) |
 
