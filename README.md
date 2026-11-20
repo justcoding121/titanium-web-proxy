@@ -55,13 +55,16 @@ Task OnRequest(object sender, SessionEventArgs e)
 }
 ```
 
-Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run installs a root certificate for the current user — only on a machine you control. [Trust](#trust-and-native-scripting).
+<img src="wiki/images/basic-screenshot.jpg" alt="Console log of each requested URL" width="900" />
 
-<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector screenshot" width="900" />
+Point your client at `127.0.0.1:8000` as its HTTP and HTTPS proxy. The first run installs a root certificate for the current user — only on a machine you control. [Trust](#trust-and-native-scripting).
 
 - **[Titanium.Web.Proxy](https://www.nuget.org/packages/Titanium.Web.Proxy)** — Embed a proxy (MITM and/or reverse) in a .NET app
 - **[Titanium.Cli](https://titaniumproxy.com/download#stable-cli)** (`titanium` / `twp`) — Standalone reverse / edge proxy from the command line
 - **[Titanium Inspector](https://titaniumproxy.com/download#stable-inspector)** — Desktop MITM debugger: session grid, inspectors, AutoResponder, breakpoints, HAR export
+
+<img src="wiki/images/inspector-screenshot.jpg" alt="Titanium Inspector session grid" width="900" />
+
 - **Titanium.Plus** — After the CLI, `titanium update --plus`. Control plane, dashboard, and observability
 
 Requires .NET 10 or later for the library. CLI and Inspector downloads are self-contained (no SDK needed to run them).
@@ -97,8 +100,6 @@ titanium test -c twp.yaml
 titanium run -c twp.yaml
 ```
 
-<img src="wiki/images/basic-screenshot.jpg" alt="Basic console proxy screenshot" width="900" />
-
 ## Go deeper
 
 Full catalog: [Features](https://titaniumproxy.com/docs/features). What is supported, partial, and not supported: [capability coverage](https://titaniumproxy.com/docs/capabilities). Protocol coverage: [protocol support matrix](https://github.com/justcoding121/titanium-web-proxy/wiki/Protocol-Support). HTTP/3 packaging: [HTTP/3 wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/HTTP-3).
@@ -132,7 +133,7 @@ titanium update
 
 **Optional Plus:** `titanium update --plus`, then `plus.enabled: true` — [Plus](https://titaniumproxy.com/docs/plus).
 
-**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, linux/amd64 and linux/arm64) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
+**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, 64-bit and ARM Linux) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
 
 The image entrypoint is `titanium run --config /etc/titanium/twp.yaml`. Save this as `conf/twp.yaml`. The listener is `0.0.0.0:8080` so the published port reaches it.
 

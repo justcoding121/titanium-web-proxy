@@ -31,7 +31,7 @@ const active = ref('library')
     <div v-show="active === 'library'" class="home-quick-start__panel" role="tabpanel">
       <pre class="home-quick-start__pre"><code>dotnet add package Titanium.Web.Proxy</code></pre>
       <p class="home-quick-start__links">
-        <a href="/docs/getting-started">Getting started →</a>
+        <a href="/docs/getting-started#embed-in-net-library">Getting started →</a>
       </p>
     </div>
 

@@ -1,5 +1,5 @@
 <script setup>
-import inspectorScreenshot from '../../../../wiki/images/inspector-screenshot.jpg'
+import consoleScreenshot from '../../../../wiki/images/basic-screenshot.jpg'
 </script>
 
 <template>
@@ -30,15 +30,15 @@ proxyServer.Start();</code></pre>
     </p>
     <figure class="inspector-preview">
       <img
-        :src="inspectorScreenshot"
-        alt="Titanium Inspector session grid with HTTPS decrypt and headers pane"
+        :src="consoleScreenshot"
+        alt="Console log of each requested URL"
         width="1400"
         height="888"
       />
-      <figcaption>Session grid, HTTPS decrypt, and inspectors.</figcaption>
+      <figcaption>Each requested URL logged in the console.</figcaption>
     </figure>
     <p class="home-quick-start__links">
-      <a class="home-quick-start__cta" href="/download/#stable-inspector">Download Inspector →</a>
+      <a class="home-quick-start__cta" href="/docs/getting-started#embed-in-net-library">Getting started →</a>
     </p>
   </section>
 </template>

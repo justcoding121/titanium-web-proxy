@@ -347,4 +347,22 @@
   .inspector-preview {
     max-width: 100%;
   }
+
+  .download-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .download-row a,
+  .download-row strong,
+  .quick-picks li {
+    overflow-wrap: anywhere;
+  }
+
+  .vp-doc div[class*='language-'] pre,
+  .vp-doc div[class*='language-'] code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 }

@@ -202,7 +202,7 @@ Enable in config (`plus.enabled: true` + control-plane shared secret); disable w
 
 ### Alpine / containers
 
-Download the `linux-musl-*` zip (not `linux-x64`) for Alpine or musl-based Kubernetes images. See [HTTP/3](/docs/http3).
+For Alpine, download the Alpine zip (`linux-musl-*`), not the regular 64-bit Linux zip (`linux-x64`). See [HTTP/3](/docs/http3).
 
 ### Reload without restart
 

@@ -11,7 +11,7 @@ hero:
   actions:
     - theme: brand
       text: Get started
-      link: /docs/getting-started
+      link: /docs/getting-started#embed-in-net-library
     - theme: alt
       text: Download Inspector & CLI
       link: /download/
