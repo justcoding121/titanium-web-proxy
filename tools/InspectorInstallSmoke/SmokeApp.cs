@@ -383,9 +383,11 @@ internal static class SmokeApp
 
             try
             {
-                var urls = name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && browsers.Length == 1 && false
-                    ? new[] { "https://example.com/" }
-                    : new[] { "https://example.com/", "https://www.google.com/" };
+                // A second origin proves the proxy is still in use. www.google.com is a
+                // heavy page, and any *.google.com GET (the time sync) used to count,
+                // so Chrome could pass without loading it. example.org is the same
+                // small document as example.com.
+                var urls = new[] { "https://example.com/", "https://example.org/" };
                 if (!await ProveAsync(startedUtc, path, name, urls))
                     return Fail(1, name + " did not produce a decrypted GET");
                 Console.WriteLine("pass " + name);
@@ -407,6 +409,12 @@ internal static class SmokeApp
             var before = DateTime.UtcNow;
             using var launched = LaunchBrowser(name, browserPath, url);
             var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
+            // Windows Chrome's first window is often still starting at 12s. Killing
+            // it then leaves the profile lock held, and the replacement process
+            // never requests the proof URL. Give that window longer, then reopen it.
+            var windowsChromium = OperatingSystem.IsWindows()
+                && !safari
+                && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase);
             var ok = await WaitForHarAsync(before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), () =>
             {
                 Console.WriteLine("relaunch " + name + " " + url);
@@ -426,7 +434,7 @@ internal static class SmokeApp
                     // requested the proof URL.
                     RelaunchMacBrowser(name, browserPath, url, launched);
                 }
-            }, safari ? TimeSpan.FromSeconds(8) : null);
+            }, safari ? TimeSpan.FromSeconds(8) : windowsChromium ? TimeSpan.FromSeconds(20) : null);
             launched.Kill();
             if (!ok)
             {
@@ -444,6 +452,14 @@ internal static class SmokeApp
     {
         try
         {
+            if (OperatingSystem.IsWindows()
+                && launched.DataDir is not null
+                && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
+            {
+                ReopenWindowsChromium(name, browserPath, url, launched);
+                return;
+            }
+
             launched.KillProcessOnly();
             Thread.Sleep(400);
             if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && launched.DataDir is not null)
@@ -465,6 +481,90 @@ internal static class SmokeApp
         {
             Console.WriteLine("relaunch failed: " + ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Ask the running Chromium window to open the proof URL. Killing the
+    /// start process is a no-op once that broker has exited, and killing a
+    /// window that is still starting drops the navigation.
+    /// </summary>
+    private static void ReopenWindowsChromium(string name, string browserPath, string url, BrowserLaunch launched)
+    {
+        var dir = launched.DataDir ?? throw new InvalidOperationException(name + " has no user-data-dir");
+        if (launched.IsAlive)
+        {
+            Console.WriteLine("reopen " + name + " in the running window");
+        }
+        else
+        {
+            Console.WriteLine("restart " + name + "; the start process had already exited");
+            KillWindowsProcessesForDataDir(dir);
+            if (!WaitUntilDataDirUnused(dir))
+                Console.WriteLine("profile still in use for " + name);
+        }
+
+        var again = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
+            browserPath, dir, url, disableQuic: true);
+        Console.WriteLine("reopen " + name + " pid=" + again.Id + " exited=" + again.HasExited);
+        launched.AdoptIfStartExited(again);
+    }
+
+    private static void KillWindowsProcessesForDataDir(string dataDir)
+    {
+        foreach (var pid in WindowsPidsForDataDir(dataDir))
+        {
+            Console.WriteLine("taskkill profile pid=" + pid);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "taskkill",
+                ArgumentList = { "/F", "/T", "/PID", pid.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })?.WaitForExit(8000);
+        }
+    }
+
+    private static bool WaitUntilDataDirUnused(string dataDir)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (WindowsPidsForDataDir(dataDir).Count == 0)
+                return true;
+            Thread.Sleep(400);
+        }
+
+        return WindowsPidsForDataDir(dataDir).Count == 0;
+    }
+
+    private static List<int> WindowsPidsForDataDir(string dataDir)
+    {
+        var pids = new List<int>();
+        var marker = dataDir.Replace("'", "''", StringComparison.Ordinal);
+        var script =
+            "$m = '" + marker + "'; " +
+            "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($m) } | " +
+            "ForEach-Object { $_.ProcessId }";
+        using var proc = Process.Start(new ProcessStartInfo
+        {
+            FileName = "powershell",
+            ArgumentList = { "-NoProfile", "-Command", script },
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        if (proc is null)
+            return pids;
+        var output = proc.StandardOutput.ReadToEnd();
+        proc.WaitForExit(15000);
+        foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (int.TryParse(line.Trim(), out var pid))
+                pids.Add(pid);
+        }
+
+        return pids;
     }
 
     private static BrowserLaunch LaunchBrowser(string name, string path, string url)
@@ -533,6 +633,7 @@ internal static class SmokeApp
 
         var killName = OperatingSystem.IsMacOS() ? MacKillName(name) : null;
         var chromium = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
+        Console.WriteLine("launch " + name + " pid=" + chromium.Id + " exited=" + chromium.HasExited);
         return new BrowserLaunch(chromium, safari: false, dir, killName);
     }
 
@@ -986,11 +1087,10 @@ internal static class SmokeApp
     {
         if (!Uri.TryCreate(entryUrl, UriKind.Absolute, out var uri))
             return entryUrl.Contains(host, StringComparison.OrdinalIgnoreCase);
-        if (host.Equals("example.com", StringComparison.OrdinalIgnoreCase))
-            return uri.Host.Equals("example.com", StringComparison.OrdinalIgnoreCase)
-                   || uri.Host.Equals("www.example.com", StringComparison.OrdinalIgnoreCase);
-        if (host.Equals("www.google.com", StringComparison.OrdinalIgnoreCase))
-            return uri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase);
+        if (host.Equals("example.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("example.org", StringComparison.OrdinalIgnoreCase))
+            return uri.Host.Equals(host, StringComparison.OrdinalIgnoreCase)
+                   || uri.Host.Equals("www." + host, StringComparison.OrdinalIgnoreCase);
         return uri.Host.Equals(host, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1953,6 +2053,29 @@ internal sealed class BrowserLaunch : IDisposable
 
     /// <summary>Temp Firefox profile or Chromium user-data-dir for a same-prefs relaunch.</summary>
     public string? DataDir => _dir;
+
+    /// <summary>The start process is still running. Chromium's broker often is not.</summary>
+    public bool IsAlive
+    {
+        get
+        {
+            try
+            {
+                return _process is { HasExited: false };
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>Keep the replacement process so the proof can stop it on the way out.</summary>
+    public void AdoptIfStartExited(Process process)
+    {
+        if (!IsAlive)
+            _process = process;
+    }
 
     /// <summary>Stop the browser but keep <see cref="DataDir"/> for a proof-URL relaunch.</summary>
     public void KillProcessOnly()
