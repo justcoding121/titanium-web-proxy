@@ -863,7 +863,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
+          dotnet-version: |
+            10.0.x
+            11.0.x
       - name: Ensure MsQuic
         uses: ./.github/actions/ensure-msquic
       - name: compare-product-smoke (Linux)
