@@ -86,7 +86,7 @@ hero:
 
 ## Performance
 
-**26,023** requests per second: a tiny keep-alive GET (~56 B), HTTP/1 with TLS in and plain HTTP/1 out, on Linux (GitHub-hosted runner, 4 vCPU / 16 GiB, median of 3, sustain at concurrency 64). Same harness versus peer proxies. The Linux tiny-GET chart is below. Charts for the other operating systems, and the named comparison, are on the [performance](/docs/performance) page and the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+**45,499** requests per second: a tiny keep-alive GET (~56 B), HTTP/1 with TLS in and plain HTTP/1 out, on Linux (GitHub-hosted runner, 4 vCPU / 16 GiB, median of 3, sustain at concurrency 64). Same harness versus peer proxies. The Linux tiny-GET chart is below. Charts for the other operating systems, and the named comparison, are on the [performance](/docs/performance) page and the [Performance wiki](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 <div class="rps-preview">
 

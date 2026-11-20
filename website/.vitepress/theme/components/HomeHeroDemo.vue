@@ -24,7 +24,7 @@ proxyServer.Start();</code></pre>
     <p class="home-hero-demo__note">
       The first run installs a root certificate for the current user.
       <a href="/docs/security">Trust</a>.
-      <strong>26,023</strong> requests/second on Linux for a tiny TLS GET.
+      <strong>45,499</strong> requests/second on Linux for a tiny TLS GET.
       <a href="#performance">Chart</a>.
     </p>
     <figure class="inspector-preview">

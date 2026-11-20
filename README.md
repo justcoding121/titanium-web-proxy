@@ -114,7 +114,7 @@ Heavier reverse load (64 KB GET/POST on typical wires):
 
 ![Practical reverse proxy throughput on Linux (64 KB)](wiki/images/rps-practical-heavier-linux.png)
 
-**RPS** is requests per second (gRPC bars are **RPC/s**). **26,023** requests per second on Linux for a tiny keep-alive GET (~56 B), HTTP/1 with TLS in and plain HTTP/1 out (4 vCPU / 16 GiB, median of 3, sustain at concurrency 64), on the same harness as peer proxies. Named comparison: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
+**RPS** is requests per second (gRPC bars are **RPC/s**). **45,499** requests per second on Linux for a tiny keep-alive GET (~56 B), HTTP/1 with TLS in and plain HTTP/1 out (4 vCPU / 16 GiB, median of 3, sustain at concurrency 64), on the same harness as peer proxies. Named comparison: [Performance](https://github.com/justcoding121/titanium-web-proxy/wiki/Performance).
 
 ## Installation
 

@@ -144,7 +144,7 @@ public partial class DocsStructureTests
         StringAssert.Contains(text, "The Linux tiny-GET chart is below");
         StringAssert.Contains(text, "<HomeQuickStart />");
         StringAssert.Contains(text, "Intercept and inspect HTTP(S) from .NET in a few lines");
-        StringAssert.Contains(text, "26,023");
+        StringAssert.Contains(text, "45,499");
         StringAssert.Contains(text, "non-commercial use only");
         Assert.IsFalse(text.Contains("Commercial use needs a separate arrangement", StringComparison.Ordinal));
     }
@@ -178,7 +178,7 @@ public partial class DocsStructureTests
             "HomeHeroDemo.vue"));
         StringAssert.Contains(vue, "The first run installs a root certificate");
         StringAssert.Contains(vue, "/docs/security");
-        StringAssert.Contains(vue, "26,023");
+        StringAssert.Contains(vue, "45,499");
     }
 
     [TestMethod]
