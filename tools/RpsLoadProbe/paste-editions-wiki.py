@@ -126,7 +126,7 @@ def main() -> None:
     ]
     updated = 0
     for label, num, den in ROWS:
-        lin_num, lin_den = pair_from_csv(ph, args.run, "ubuntu-latest", num, den)
+        lin_num, lin_den = pair_from_csv(ph, args.run, "ubuntu-26.04", num, den)
         have_lin = bool(lin_num and lin_den)
         existing = existing_rows.get(label)
         if have_lin:
@@ -147,7 +147,7 @@ def main() -> None:
     else:
         coverage = "Rows this run does not cover keep their prior Linux cells."
     header = (
-        f"Median of **3** repeats on `ubuntu-latest`. Linux rows in this paste were re-measured @ `{args.head_sha}` "
+        f"Median of **3** repeats on `ubuntu-26.04`. Linux rows in this paste were re-measured @ `{args.head_sha}` "
         f"(Actions [{args.run}](https://github.com/justcoding121/titanium-web-proxy/actions/runs/{args.run})). "
         f"{coverage} "
         f"Warmup 2s / measure 8s; concurrency 8–64; sustain = median peak RPS among SLO-pass steps @ **c=64**. "

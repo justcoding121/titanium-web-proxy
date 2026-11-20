@@ -221,8 +221,23 @@ if ($ArmTimeoutMin -gt 0) {
     $probeArgs += @('--arm-timeout-min', $ArmTimeoutMin)
 }
 
-& $probeCmd @probeArgs
-if ($LASTEXITCODE -ne 0) { throw "RpsLoadProbe exited with code $LASTEXITCODE" }
+# Roll the framework-dependent net10.0 probe onto the newest installed major runtime
+# (.NET 11 when present). Do not set this for the SDK build above — that would roll the
+# .NET 10 SDK host onto the 11 runtime and can break `dotnet build`.
+$prevRollForward = $env:DOTNET_ROLL_FORWARD
+$env:DOTNET_ROLL_FORWARD = 'LatestMajor'
+try {
+    & $probeCmd @probeArgs
+    if ($LASTEXITCODE -ne 0) { throw "RpsLoadProbe exited with code $LASTEXITCODE" }
+}
+finally {
+    if ($null -eq $prevRollForward) {
+        Remove-Item Env:\DOTNET_ROLL_FORWARD -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:DOTNET_ROLL_FORWARD = $prevRollForward
+    }
+}
 
 if ($BombardierCheck) {
     $bombardier = Get-Command bombardier -ErrorAction SilentlyContinue

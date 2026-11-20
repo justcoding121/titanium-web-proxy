@@ -1043,8 +1043,10 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
+        # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
         dotnet-version: |
           10.0.x
+          11.0.x
     - name: compare-editions (publish gate)
       shell: pwsh
       run: |
@@ -1076,8 +1078,10 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v6
       with:
+        # Same host as rps-saturation: net10.0 IL on the .NET 11 shared framework.
         dotnet-version: |
           10.0.x
+          11.0.x
     - name: Ensure MsQuic
       uses: ./.github/actions/ensure-msquic
     - name: compare-spot (Core and reference peer)

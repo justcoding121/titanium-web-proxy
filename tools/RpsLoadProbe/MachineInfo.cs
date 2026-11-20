@@ -8,11 +8,12 @@ internal static class MachineInfo
 {
     public static string FormatReport(string? nginxVersion, string? haproxyVersion = null, string? envoyVersion = null)
     {
+        var framework = RuntimeInformation.FrameworkDescription;
         var sb = new StringBuilder();
         sb.AppendLine("=== Machine info ===");
         sb.AppendLine($"OS: {RuntimeInformation.OSDescription}");
         sb.AppendLine($"Arch: {RuntimeInformation.OSArchitecture}");
-        sb.AppendLine($"Framework: {RuntimeInformation.FrameworkDescription}");
+        sb.AppendLine($"Framework: {framework}");
         sb.AppendLine($"Processors (logical): {Environment.ProcessorCount}");
         sb.AppendLine($"CPU: {TryGetCpuName()}");
         sb.AppendLine($"RAM: {TryGetRam()}");
@@ -30,6 +31,32 @@ internal static class MachineInfo
         else
             sb.AppendLine("envoy: (not detected)");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// When the probe was launched with <c>DOTNET_ROLL_FORWARD=LatestMajor</c> (wiki RPS host),
+    /// require a stable .NET 11.0 shared framework. A silent fallback to 10 must not produce a pass.
+    /// </summary>
+    public static void EnsureWikiHostFramework()
+    {
+        var roll = Environment.GetEnvironmentVariable("DOTNET_ROLL_FORWARD");
+        if (!string.Equals(roll, "LatestMajor", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var framework = RuntimeInformation.FrameworkDescription;
+        if (framework.Contains("Preview", StringComparison.OrdinalIgnoreCase)
+            || framework.Contains("RC", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"RPS wiki host must be a stable .NET 11.0 runtime; got '{framework}'.");
+        }
+
+        // FrameworkDescription is typically ".NET 11.0.0" (or a later 11.0 patch).
+        if (!framework.Contains(".NET 11.0", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"RPS wiki host must run on .NET 11.0 (net10.0 IL + LatestMajor); got '{framework}'.");
+        }
     }
 
     private static string TryGetCpuName()

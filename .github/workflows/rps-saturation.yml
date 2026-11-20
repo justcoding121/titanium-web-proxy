@@ -5,10 +5,11 @@
 # Prefer --repeats >= 3 for publishable numbers (runner noise). Linux nginx
 # is the authoritative nginx baseline; nginx/Windows is same-OS only.
 #
-# Matrix uses public-repo GitHub-hosted runners: ubuntu-latest / windows-latest
+# Matrix uses public-repo GitHub-hosted runners: ubuntu-26.04 / windows-latest
 # (4 vCPU / 16 GiB) and macos-15 (Apple Silicon M1, 3-core / 7 GiB). macOS is Apple
 # Silicon because that is what Mac users run today; we compare products within an OS,
-# not OS against OS. Pin macos-15 (not macos-latest) so the image does not change under us.
+# not OS against OS. Pin macos-15 (not macos-latest) and ubuntu-26.04 (not
+# ubuntu-latest) so a mid-migration of -latest labels cannot mix OS versions across shards.
 # Do not mix larger or slim runners unless every OS gets the same size class.
 
 name: RPS saturation
@@ -237,7 +238,7 @@ on:
         type: choice
         options:
           - all
-          - ubuntu-latest
+          - ubuntu-26.04
           - windows-latest
           - macos-15
       arm_shard:
@@ -274,7 +275,8 @@ jobs:
       fail-fast: false
       matrix:
         # workflow_dispatch runner_os filters to one OS; otherwise Win+Linux+Mac Apple Silicon.
-        os: ${{ fromJSON(inputs.runner_os == 'macos-15' && '["macos-15"]' || inputs.runner_os == 'ubuntu-latest' && '["ubuntu-latest"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-latest","windows-latest","macos-15"]') }}
+        # Pin ubuntu-26.04 (not ubuntu-latest) while -latest migrates off 24.04.
+        os: ${{ fromJSON(inputs.runner_os == 'macos-15' && '["macos-15"]' || inputs.runner_os == 'ubuntu-26.04' && '["ubuntu-26.04"]' || inputs.runner_os == 'windows-latest' && '["windows-latest"]' || '["ubuntu-26.04","windows-latest","macos-15"]') }}
     runs-on: ${{ matrix.os }}
     # Intentionally no jobs.*.container — saturation RPS on a container network measures the wrong thing.
     # GitHub-hosted runners hard-cap at 360 minutes — do not set timeout above that.
@@ -287,8 +289,18 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
+          # 10.0.x builds net10.0 (global.json). 11.0.x is the shared framework the probe
+          # rolls onto via DOTNET_ROLL_FORWARD=LatestMajor in run-rps.ps1.
           dotnet-version: |
             10.0.x
+            11.0.x
+
+      - name: Log .NET SDK and runtimes
+        shell: pwsh
+        run: |
+          dotnet --version
+          dotnet --list-sdks
+          dotnet --list-runtimes
 
       # compare-editions script arms need Lua (gcc build) + Wasmtime beside the CLI.
       # run-rps.ps1 calls bundle-scripting-native.ps1; cache the download/build tree like E2E.

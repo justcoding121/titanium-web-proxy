@@ -508,6 +508,7 @@ internal static class RampOrchestrator
             envoyVersion = ProbeEnvoyVersion(envoyExe);
 
         ProbeLog.Info(MachineInfo.FormatReport(nginxVersion, haproxyVersion, envoyVersion));
+        MachineInfo.EnsureWikiHostFramework();
         ProbeLog.Info("Close browsers and other heavy apps before a publishable run.");
         if (options.Mode is ProbeMode.CompareSaturation or ProbeMode.OriginDirect)
         {
