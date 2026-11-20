@@ -44,9 +44,13 @@ public class ManagerUiPlaywrightTests : PageTest
         Assert.AreEqual(SameSiteAttribute.Strict, cookie.SameSite);
 
         await Page.GetByTestId("fleet-name").FillAsync("pw-fleet");
-        await Page.GetByTestId("btn-create-fleet").ClickAsync();
-        // Create posts then navigates; slow CI runners need more than the default 5s visibility wait.
-        await Page.WaitForURLAsync("**/fleets/*", new() { Timeout = 15_000 });
+        // Arm the listener before the click. A fast runner finishes the redirect
+        // before a wait that starts after ClickAsync returns, and that wait then
+        // sits until timeout looking for a navigation that already happened.
+        await Page.RunAndWaitForURLAsync(
+            async () => await Page.GetByTestId("btn-create-fleet").ClickAsync(),
+            "**/fleets/*",
+            new() { Timeout = 15_000 });
         await Expect(Page.GetByTestId("fleet-detail")).ToBeVisibleAsync(new() { Timeout = 15_000 });
 
         await Page.GetByTestId("link-editor").ClickAsync();
