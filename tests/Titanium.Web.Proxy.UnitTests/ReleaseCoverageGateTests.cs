@@ -301,6 +301,7 @@ public class ReleaseCoverageGateTests
         Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("localhost", 0));
         Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("localhost", 1));
         Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("::1", 1));
+        Assert.IsFalse(ProxyServer.IsLocalProxyPortListening("not a host", 1));
 
         if (!OperatingSystem.IsWindows())
             return;
@@ -312,6 +313,9 @@ public class ReleaseCoverageGateTests
         var server = reg.GetValue("ProxyServer");
         try
         {
+            reg.SetValue("ProxyEnable", 1, Microsoft.Win32.RegistryValueKind.DWord);
+            reg.SetValue("ProxyServer", "127.0.0.1:9");
+            InstalledProxyCleanup.ForceClear();
             reg.SetValue("ProxyEnable", 1, Microsoft.Win32.RegistryValueKind.DWord);
             reg.SetValue("ProxyServer", "127.0.0.1:9");
             CoverageOs.TreatAsLinuxForTests = true;

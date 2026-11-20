@@ -472,7 +472,7 @@ public class LinuxBrowserProxyCoverageTests
             Path.Combine(launchers, "microsoft-edge.sh"),
             "# X-Titanium-Inspector-Proxy=true\n");
         File.WriteAllText(
-            Path.Combine(launchers, "opera.sh"),
+            Path.Combine(launchers, "unknown-browser.sh"),
             "# X-Titanium-Inspector-Proxy=true\n");
         File.WriteAllText(
             Path.Combine(launchers, "chromium-browser.sh"),
@@ -537,7 +537,9 @@ public class LinuxBrowserProxyCoverageTests
                     System.Security.Cryptography.RSASignaturePadding.Pkcs1);
                 using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
                 LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(cert);
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(cert, machinePolicy: true);
                 LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+                LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy(machinePolicy: true);
             }
 
             Assert.IsFalse(LinuxInspectorProcess.IsRunning());
@@ -554,13 +556,29 @@ public class LinuxBrowserProxyCoverageTests
             var foreignPrefs = Path.Combine(home, "foreign-prefs");
             File.WriteAllText(foreignPrefs, """{"proxy":{"mode":"fixed_servers","server":"http://example.test:80"}}""");
             Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(foreignPrefs));
-            LinuxBrowserLaunchProxy.Clear();
+            var plainServer = Path.Combine(home, "plain-server-prefs");
+            File.WriteAllText(plainServer, """{"proxy":{"mode":"fixed_servers","server":"not-a-uri"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(plainServer));
+            var systemServer = Path.Combine(home, "system-server-prefs");
+            File.WriteAllText(systemServer, """{"proxy":{"mode":"system","server":"127.0.0.1:9"}}""");
+            LinuxChromeProfileProxy.TryStripInspectorProxyForTests(systemServer, "127.0.0.1", 9);
+            Directory.CreateDirectory(Path.Combine(home, ".mozilla", "firefox", "empty-profile"));
+            LinuxChromeProfileProxy.Clear();
             LinuxChromeProfileProxy.Clear(startFailOpen: false);
             LinuxFirefoxProxy.Clear();
             LinuxBrowserLaunchProxy.ClearInstalledHooks();
             var rewritten = File.ReadAllText(Path.Combine(launchers, "google-chrome.sh"));
             StringAssert.Contains(rewritten, "exec ");
             Assert.IsFalse(File.Exists(Path.Combine(apps, "google-chrome.desktop")));
+            var savedHome = CoverageOs.HomeForTests;
+            CoverageOs.TreatAsLinuxForTests = false;
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json", "{}", [(root, Array.Empty<string>())]);
+            CoverageOs.TreatAsLinuxForTests = true;
+            CoverageOs.HomeForTests = " ";
+            LinuxFirefoxProxy.Clear();
+            LinuxProxyFailOpen.Stop();
+            CoverageOs.HomeForTests = savedHome;
         }
         finally
         {

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http;
 using System.Security.Authentication;
 using System.Security.Cryptography;
@@ -82,6 +83,57 @@ public class DecryptHttpsProbeTests
         var alias = new WinInetSystemProxyController().ClearOrphanedLocalSystemProxy((_, _) => true);
         Assert.IsTrue(direct.Succeeded);
         Assert.IsTrue(alias.Succeeded);
+    }
+
+    [TestMethod]
+    public async Task VerifyAsync_ListeningProxy_CoversDecryptOffAndAShortProbe()
+    {
+        object? enable = null;
+        object? server = null;
+        Microsoft.Win32.RegistryKey? reg = null;
+        if (OperatingSystem.IsWindows())
+        {
+            reg = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Internet Settings", writable: true);
+            if (reg is not null)
+            {
+                enable = reg.GetValue("ProxyEnable");
+                server = reg.GetValue("ProxyServer");
+            }
+        }
+
+        try
+        {
+            using var interception = new InterceptionService(new RecordingSystemProxyController())
+            {
+                UseInMemoryTrustState = true,
+            };
+            await interception.StartAsync(IPAddress.Loopback, 0);
+            interception.DecryptHttps = false;
+            var off = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromSeconds(2));
+            Assert.IsFalse(off.Ok);
+            StringAssert.Contains(off.Message, "Decrypt HTTPS is off");
+
+            interception.DecryptHttps = true;
+            var probed = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromSeconds(3));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(probed.Message));
+            typeof(InterceptionService).GetMethod(
+                "TryImportRootIntoFirefoxProfiles",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(interception, null);
+            interception.Stop();
+        }
+        finally
+        {
+            if (OperatingSystem.IsWindows() && reg is not null)
+            {
+                if (enable is null) reg.DeleteValue("ProxyEnable", throwOnMissingValue: false);
+                else reg.SetValue("ProxyEnable", enable);
+                if (server is null) reg.DeleteValue("ProxyServer", throwOnMissingValue: false);
+                else reg.SetValue("ProxyServer", server);
+                reg.Dispose();
+            }
+        }
     }
 
     private static X509Certificate2 CreateSelfSigned(string subject)
