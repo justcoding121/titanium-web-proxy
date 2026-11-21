@@ -1,0 +1,128 @@
+name: package-lab
+
+# Lab installers only. No git tag, GitHub Release, or catalog publish.
+on:
+  push:
+    branches:
+      - lab/inspector-packages
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspector-linux-x64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish Inspector linux-x64
+        shell: pwsh
+        run: |
+          $rid = "linux-x64"
+          $out = "artifacts/inspector/$rid"
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out -p:Version=8.0.5
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+          $clearOut = Join-Path $env:RUNNER_TEMP "titanium-inspector-clear-$rid"
+          New-Item -ItemType Directory -Force -Path $clearOut | Out-Null
+          dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj `
+            -c Release -r $rid --self-contained true -p:PublishSingleFile=true `
+            -o $clearOut -p:Version=8.0.5
+          if ($LASTEXITCODE -ne 0) { throw "clear-proxy publish failed ($LASTEXITCODE)" }
+          Copy-Item -Force (Join-Path $clearOut "titanium-inspector-clear") (Join-Path $out "titanium-inspector-clear")
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          Copy-Item -Force src/Titanium.Inspector/Assets/app.ico (Join-Path $out "app.ico")
+          Copy-Item -Force tools/packaging/linux/install.sh, tools/packaging/linux/uninstall.sh, tools/packaging/linux/TitaniumInspector.desktop.in $out
+          Copy-Item -Force tools/packaging/icons/titanium-inspector.png $out
+      - name: Verify host OpenSSL loads with bundled MsQuic
+        run: |
+          set -euo pipefail
+          chmod +x tools/packaging/linux/verify-native-load.sh
+          for image in debian:trixie ubuntu:22.04 ubuntu:26.04; do
+            ./tools/packaging/linux/verify-native-load.sh artifacts/inspector/linux-x64 "$image" apt
+          done
+      - name: Build deb and AppImage
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
+          sudo gem install --no-document fpm || true
+          chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          ./tools/packaging/linux/build-appimage.sh inspector artifacts/inspector/linux-x64 \
+            TitaniumInspector-linux-x64.AppImage 8.0.5 x86_64
+          ./tools/packaging/linux/build-deb-rpm.sh inspector artifacts/inspector/linux-x64 . 8.0.5 linux-x64
+          deb=$(ls TitaniumInspector-linux-x64.deb titanium-inspector_*_amd64.deb 2>/dev/null | head -n 1)
+          if [[ -z "${deb}" ]]; then
+            echo "error: deb was not produced" >&2
+            ls -la
+            exit 1
+          fi
+          if [[ "${deb}" != TitaniumInspector-linux-x64.deb ]]; then
+            cp -f "${deb}" TitaniumInspector-linux-x64.deb
+          fi
+          if dpkg-deb -c TitaniumInspector-linux-x64.deb | grep -E 'libssl\.so|libcrypto\.so'; then
+            echo "error: deb still ships OpenSSL" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inspector-linux-x64-lab
+          if-no-files-found: error
+          path: |
+            TitaniumInspector-linux-x64.deb
+            TitaniumInspector-linux-x64.AppImage
+
+  inspector-osx-arm64:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish Inspector osx-arm64
+        shell: pwsh
+        run: |
+          $rid = "osx-arm64"
+          $out = "artifacts/inspector/$rid"
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out -p:Version=8.0.5
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          Copy-Item -Force src/Titanium.Inspector/Assets/app.ico (Join-Path $out "app.ico")
+          Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
+          Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
+      - name: Assert dylib CPU and build ad-hoc signed DMG
+        run: |
+          set -euo pipefail
+          rid=osx-arm64
+          out="artifacts/inspector/$rid"
+          shopt -s nullglob
+          dylibs=("$out"/*.dylib)
+          if [[ ${#dylibs[@]} -eq 0 ]]; then
+            echo "error: no dylibs in $out" >&2
+            exit 1
+          fi
+          for f in "${dylibs[@]}"; do
+            archs=$(lipo -archs "$f")
+            if [[ "$archs" != "arm64" ]]; then
+              echo "error: $f is '$archs', expected arm64" >&2
+              exit 1
+            fi
+          done
+          chmod +x tools/packaging/osx/build-app-bundle.sh tools/packaging/osx/build-dmg.sh
+          ./tools/packaging/osx/build-app-bundle.sh "$out" "TitaniumInspector.app" 8.0.5
+          # install_name_tool rewrites invalidate signatures. Ad-hoc sign so Apple silicon will launch.
+          codesign --force --deep --sign - \
+            --entitlements tools/packaging/osx/TitaniumInspector.entitlements \
+            TitaniumInspector.app
+          codesign --verify --verbose=2 TitaniumInspector.app
+          ./tools/packaging/osx/build-dmg.sh \
+            "Titanium Inspector.app" "TitaniumInspector-osx-arm64.dmg" "Titanium Inspector"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inspector-osx-arm64-lab
+          if-no-files-found: error
+          path: TitaniumInspector-osx-arm64.dmg

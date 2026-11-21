@@ -214,10 +214,11 @@ function Expand-Apk([string] $apkPath, [string] $outDir) {
     }
 }
 
-function Copy-SharedLibs([string] $extractRoot, [string] $dest) {
-    # MIT-clean zip: MsQuic + OpenSSL only. Never ship LGPL/GPL natives
-    # (libnuma, liblttng-ust*, libmsquic.lttng) — those stay host packages via http3-deps.
-    $patterns = @("libmsquic*.so*", "libssl.so*", "libcrypto.so*")
+function Copy-SharedLibs([string] $extractRoot, [string] $dest, [string[]] $patterns) {
+    # Linux publishes ship MsQuic only. OpenSSL stays a host package: a bundled
+    # libcrypto loaded via RUNPATH=$ORIGIN then clashes with a newer host libssl
+    # ("No usable version of libssl was found"). Never ship LGPL/GPL natives
+    # (libnuma, liblttng-ust*, libmsquic.lttng).
     $copied = @()
     foreach ($pat in $patterns) {
         Get-ChildItem -Path $extractRoot -Recurse -File -Filter $pat -ErrorAction SilentlyContinue | ForEach-Object {
@@ -265,10 +266,9 @@ function Set-LinuxRpath([string] $dir) {
     foreach ($soFile in $soFiles) {
         # Skip pure symlinks
         if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
-        # These shims dlopen("libssl.so.3"). $ORIGIN makes them load the bundled
-        # Ubuntu 22.04 OpenSSL, which then aborts the process on a newer host
-        # ("No usable version of libssl was found"). libmsquic keeps $ORIGIN so
-        # its own libssl/libcrypto still resolve beside the binary.
+        # .NET OpenSSL shims dlopen("libssl.so.3") and must use the host library.
+        # libmsquic keeps $ORIGIN for its own soname links; with no bundled
+        # libcrypto beside the app, that resolves to the host as well.
         if ($soFile.Name -match 'System\.Security\.Cryptography\.Native|System\.Net\.Security\.Native') {
             continue
         }
@@ -290,6 +290,16 @@ function Assert-RequiredFiles([string[]] $globs) {
         $hits = @(Get-ChildItem -Path $PublishDir -File -Filter $g -ErrorAction SilentlyContinue)
         if ($hits.Count -eq 0) {
             throw "Required native file missing in publish dir after bundle: $g (RID=$Rid)"
+        }
+    }
+}
+
+function Assert-AbsentFiles([string[]] $globs) {
+    foreach ($g in $globs) {
+        $hits = @(Get-ChildItem -Path $PublishDir -File -Filter $g -ErrorAction SilentlyContinue)
+        if ($hits.Count -gt 0) {
+            $names = ($hits | ForEach-Object { $_.Name }) -join ", "
+            throw "OpenSSL must not be bundled beside the app (RID=$Rid): $names"
         }
     }
 }
@@ -348,11 +358,12 @@ function Bundle-Deb {
         Expand-Deb $dest $pkgExtract
     }
 
-    $copied = Copy-SharedLibs $extractRoot $PublishDir
+    $copied = Copy-SharedLibs $extractRoot $PublishDir @("libmsquic*.so*")
     Write-Info "copied: $($copied -join ', ')"
     Ensure-SonameLinks $PublishDir
     Set-LinuxRpath $PublishDir
-    Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
+    Assert-RequiredFiles @("libmsquic.so*")
+    Assert-AbsentFiles @("libssl.so*", "libcrypto.so*")
 }
 
 function Bundle-Apk {
@@ -372,11 +383,12 @@ function Bundle-Apk {
             Expand-Apk $dest $pkgExtract
         }
 
-        $copied = Copy-SharedLibs $extractRoot $PublishDir
+        $copied = Copy-SharedLibs $extractRoot $PublishDir @("libmsquic*.so*")
         Write-Info "copied: $($copied -join ', ')"
         Ensure-SonameLinks $PublishDir
         Set-LinuxRpath $PublishDir
-        Assert-RequiredFiles @("libmsquic.so*", "libssl.so.3", "libcrypto.so.3")
+        Assert-RequiredFiles @("libmsquic.so*")
+        Assert-AbsentFiles @("libssl.so*", "libcrypto.so*")
     }
     finally {
         if (Test-Path $extractRoot) {

@@ -357,6 +357,23 @@ jobs:
             Copy-Item "$out/titanium" "$out/twp"
           }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+      - name: Verify host OpenSSL loads with bundled MsQuic (Cli)
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-musl-x64'
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          out="artifacts/cli/$rid"
+          chmod +x tools/packaging/linux/verify-native-load.sh
+          if [[ "$rid" == linux-x64 ]]; then
+            images=(debian:trixie ubuntu:22.04 ubuntu:26.04)
+            kind=apt
+          else
+            images=(alpine:3.24 alpine:edge)
+            kind=apk
+          fi
+          for image in "${images[@]}"; do
+            ./tools/packaging/linux/verify-native-load.sh "$out" "$image" "$kind"
+          done
       # Scripting natives (Lua + shim, Wasmtime). Hard-fail for every shipping RID: release zips must
       # ship both files so `titanium scripting-deps status` reports loaded. Lua needs a matching host
       # (see matrix OS), an Alpine container for linux-musl-x64, or musl-gcc for linux-musl-arm64.
@@ -625,6 +642,23 @@ jobs:
             Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
             Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
           }
+      - name: Verify host OpenSSL loads with bundled MsQuic (Inspector)
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-musl-x64'
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          out="artifacts/inspector/$rid"
+          chmod +x tools/packaging/linux/verify-native-load.sh
+          if [[ "$rid" == linux-x64 ]]; then
+            images=(debian:trixie ubuntu:22.04 ubuntu:26.04)
+            kind=apt
+          else
+            images=(alpine:3.24 alpine:edge)
+            kind=apk
+          fi
+          for image in "${images[@]}"; do
+            ./tools/packaging/linux/verify-native-load.sh "$out" "$image" "$kind"
+          done
       # Inspector does not register Lua/WASM engines; do not ship scripting natives in Inspector zips.
       - name: Azure login (OIDC)
         if: matrix.rid == 'win-x64'

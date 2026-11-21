@@ -42,3 +42,9 @@ A configured port that is already taken fails the start. The process exits 1 and
 If the message also names a process id, that process was started with the same config file. Use `titanium reload -c <file>` or `titanium restart -c <file>` for that copy. Linux hot restart is the only time two processes share a port on purpose.
 
 On Windows, "access denied" on bind usually means the port is privileged or inside a reserved or excluded range.
+
+## Linux: No usable version of libssl was found
+
+Inspector and CLI packages before the host-OpenSSL change ship Ubuntu 22.04 `libssl.so.3` and `libcrypto.so.3` beside the binary. On a host whose OpenSSL is 3.3 or newer (Ubuntu 26.04, Debian 13, current Fedora), startup aborts with `No usable version of libssl was found` before the window opens. The published 8.0.5 zip, deb, and AppImage do this. The next release does not bundle those two files.
+
+Until that release, delete `libssl.so.3` and `libcrypto.so.3` from the install directory (`/opt/titanium-inspector` for the deb) and start again. Leave `libmsquic` in place. The host OpenSSL is already installed on those distributions.
