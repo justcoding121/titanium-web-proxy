@@ -65,11 +65,20 @@ public class ReleaseCoverageFollowUpTests
         {
             CoverageOs.TreatAsLinuxForTests = false;
             CoverageOs.TreatAsMacForTests = true;
+            var calls = 0;
+            var turnedOff = 0;
             InstalledProxyCleanup.RunOverrideForTests = (_, args) =>
-                args.Contains("-listall", StringComparison.Ordinal)
+            {
+                calls++;
+                if (args.Contains("proxystate", StringComparison.Ordinal))
+                    turnedOff++;
+                return args.Contains("-listall", StringComparison.Ordinal)
                     ? "Ethernet\n"
                     : "Enabled: No\r\nServer: 8.8.8.8\r\n";
+            };
             InstalledProxyCleanup.ForceClear();
+            Assert.IsTrue(calls >= 2);
+            Assert.AreEqual(0, turnedOff);
         }
         finally
         {
@@ -113,6 +122,8 @@ public class ReleaseCoverageFollowUpTests
                 File.Delete(caDir);
             Directory.CreateDirectory(caDir);
             LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+            Assert.AreEqual("not-a-directory", File.ReadAllText(managed));
+            Assert.IsTrue(Directory.Exists(caDir));
         }
         finally
         {
@@ -226,7 +237,10 @@ public class ReleaseCoverageFollowUpTests
                     : null;
             };
             LinuxProxyFailOpen.Start("127.0.0.1", 9);
+            Assert.IsTrue(Directory.Exists(scope));
+            Assert.IsTrue(LinuxProxyFailOpen.OwnedByThisProcess);
             LinuxProxyFailOpen.Stop();
+            Assert.IsFalse(LinuxProxyFailOpen.OwnedByThisProcess);
         }
         finally
         {

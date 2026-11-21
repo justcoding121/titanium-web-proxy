@@ -132,7 +132,7 @@ public class LinuxAppRelocationCoverageTests
             var dest = LinuxAppRelocation.InstallToLocalShare(Path.Combine(home, "payload"), Path.Combine(home, "out"));
             Assert.IsTrue(File.Exists(Path.Combine(dest, "sub", "note.txt")));
 
-            Assert.ThrowsException<FileNotFoundException>(
+            Assert.ThrowsExactly<FileNotFoundException>(
                 () => LinuxAppRelocation.RelaunchInstalled(Path.Combine(home, "absent")));
 
             var versioned = Path.Combine(home, "versioned.exe");

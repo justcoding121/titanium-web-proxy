@@ -119,10 +119,12 @@ public class ReleaseCoverageGateTests
             Environment.SetEnvironmentVariable("XDG_RUNTIME_DIR", null);
             Environment.SetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS", null);
             LinuxProxyFailOpen.Start("127.0.0.1", 8877);
+            Assert.IsTrue(LinuxProxyFailOpen.OwnedByThisProcess);
             var dir = Path.Combine(_home, ".config", "TitaniumInspector");
             File.WriteAllText(Path.Combine(dir, "fail-open-proxy.pid"), "999999");
             LinuxProxyFailOpen.StopIfCoveringPort(8877);
             LinuxProxyFailOpen.Stop();
+            Assert.IsFalse(LinuxProxyFailOpen.OwnedByThisProcess);
         }
         finally
         {
@@ -183,13 +185,19 @@ public class ReleaseCoverageGateTests
     public void MacCleanup_ParsesAnEnabledLoopbackService_AndTheLaunchPathStillRuns()
     {
         CoverageOs.TreatAsMacForTests = true;
+        var turnedOff = 0;
         InstalledProxyCleanup.RunOverrideForTests = (_, args) =>
-            args.Contains("-listallnetworkservices", StringComparison.Ordinal)
+        {
+            if (args.Contains("proxystate", StringComparison.Ordinal))
+                turnedOff++;
+            return args.Contains("-listallnetworkservices", StringComparison.Ordinal)
                 ? "An asterisk (*) denotes that a network service is disabled.\nWi-Fi\n"
                 : args.Contains("-get", StringComparison.Ordinal)
                     ? "Enabled: Yes\nServer: 127.0.0.1\nPort: 8080\nAuthenticated Proxy Enabled: 0\n"
                     : "";
+        };
         InstalledProxyCleanup.ForceClear();
+        Assert.IsTrue(turnedOff >= 1);
 
         InstalledProxyCleanup.RunOverrideForTests = null;
         InstalledProxyCleanup.ForceClear();
