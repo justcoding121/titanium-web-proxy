@@ -253,12 +253,16 @@ public partial class TrustDecisionTableTests
         Assert.IsFalse(harness.Interception.IsRootTrusted);
         harness.Interception.FailNextUserTrustInstall = true;
         harness.Dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
-        await ExecuteUntilAsync(
-            harness.Vm.InstallCaCommand,
-            () => harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
-                  || harness.Vm.StatusText.Contains("forced", StringComparison.OrdinalIgnoreCase)
-                  || harness.Vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
-                  || !harness.Vm.IsStatusBusy,
+        // The previous success still says "trusted" and the command is not busy until it
+        // starts. Treating that as done let the install consume the next failure flag.
+        var statusBeforeForcedFail = harness.Vm.StatusText;
+        harness.Vm.InstallCaCommand.Execute(null);
+        await WaitUntil(
+            () => harness.Vm.StatusText != statusBeforeForcedFail
+                  && TrustGateIdle(harness.Vm)
+                  && (harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
+                      || harness.Vm.StatusText.Contains("forced", StringComparison.OrdinalIgnoreCase)
+                      || harness.Vm.StatusText.Contains("fail", StringComparison.OrdinalIgnoreCase)),
             25000);
         Assert.IsFalse(string.IsNullOrWhiteSpace(harness.Vm.StatusText));
 
