@@ -146,6 +146,8 @@ public class DecryptHttpsProbeTests
                 .GetValue(interception)!;
             proxy.UpStreamHttpsProxy = new Titanium.Web.Proxy.Models.ExternalProxy("127.0.0.1", upstreamPort);
             interception.DecryptHttps = true;
+            // A captured CONNECT would count as success and hide the timeout.
+            interception.Capturing = false;
             var timedOut = await DecryptHttpsProbe.VerifyAsync(interception, TimeSpan.FromMilliseconds(400));
             Assert.IsFalse(timedOut.Ok);
             StringAssert.Contains(timedOut.Message, "timed out");
