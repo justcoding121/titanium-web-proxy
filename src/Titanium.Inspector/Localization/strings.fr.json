@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 vers les serveurs",
   "network.http3Help": "Vers les serveurs seulement. Couper HTTP/2 ne coupe pas ceci.",
   "network.http3Unavailable": "HTTP/3 exige QUIC, absent sur cet ordinateur.",
+  "network.http3WrongArch": "La bibliothèque QUIC de cette version a la mauvaise architecture Mac.",
+  "network.http3WrongArchAppleSilicon": "La bibliothèque QUIC de cette version a la mauvaise architecture Mac. Utilisez le DMG pour Apple silicon.",
   "network.newConnections": "Les changements valent pour les nouvelles connexions.",
   "network.protocols": "Protocoles",
   "network.reuse": "Réutiliser les connexions serveur",

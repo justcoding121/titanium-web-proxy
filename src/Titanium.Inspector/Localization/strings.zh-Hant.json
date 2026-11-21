@@ -362,6 +362,8 @@
   "network.http3": "到伺服器的 HTTP/3",
   "network.http3Help": "僅用於伺服器。關閉 HTTP/2 不會關閉此項。",
   "network.http3Unavailable": "HTTP/3 需要 QUIC，而這部電腦沒有。",
+  "network.http3WrongArch": "此組建的 QUIC 程式庫與 Mac 架構不符。",
+  "network.http3WrongArchAppleSilicon": "此組建的 QUIC 程式庫與 Mac 架構不符。請使用 Apple silicon 的 DMG。",
   "network.newConnections": "變更套用到新連線。",
   "network.protocols": "通訊協定",
   "network.reuse": "重複使用伺服器連線",

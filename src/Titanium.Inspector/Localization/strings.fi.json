@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 palvelimille",
   "network.http3Help": "Vain palvelimille. HTTP/2:n sammuttaminen ei sammuta tätä.",
   "network.http3Unavailable": "HTTP/3 tarvitsee QUIC:in, jota tässä tietokoneessa ei ole.",
+  "network.http3WrongArch": "Tämän koontiversion QUIC-kirjasto on väärälle Mac-arkkitehtuurille.",
+  "network.http3WrongArchAppleSilicon": "Tämän koontiversion QUIC-kirjasto on väärälle Mac-arkkitehtuurille. Käytä Apple silicon -DMG:tä.",
   "network.newConnections": "Muutokset koskevat uusia yhteyksiä.",
   "network.protocols": "Protokollat",
   "network.reuse": "Käytä palvelinyhteyksiä uudelleen",
