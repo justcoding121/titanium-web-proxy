@@ -10,7 +10,7 @@ Override the image tag after a release:
 
 ```bash
 helm upgrade --install manager deploy/helm/titanium-manager -n titanium-manager \
-  --set image.tag=8.0.5
+  --set image.tag=8.0.6
 ```
 
 ## Admin token

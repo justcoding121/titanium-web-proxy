@@ -18,7 +18,7 @@ titanium-manager --listen http://127.0.0.1:7700/ --db ./manager.db --admin-token
 
 `GET /v1/healthz` is unauthenticated (container HEALTHCHECK). Admin REST (`/v1/fleets`, revisions, tokens, audit, rollouts) and agent endpoints require a bearer token. Docker and Helm packaging live under `tools/packaging/docker/Dockerfile.manager` and `deploy/helm/titanium-manager`.
 
-The chart (OCI `oci://ghcr.io/justcoding121/charts/titanium-manager`, also `titanium-manager-1.0.5.tgz` on the GitHub Release) runs one replica and stores SQLite on a PVC. It creates Secret `<release>-titanium-manager-admin` key `admin-token` when `admin.token.existingSecret` is empty. `image.tag` defaults to the chart `appVersion` (`8.0.5` on chart `1.0.5`).
+The chart (OCI `oci://ghcr.io/justcoding121/charts/titanium-manager`, also `titanium-manager-1.0.6.tgz` on the GitHub Release) runs one replica and stores SQLite on a PVC. It creates Secret `<release>-titanium-manager-admin` key `admin-token` when `admin.token.existingSecret` is empty. `image.tag` defaults to the chart `appVersion` (`8.0.6` on chart `1.0.6`).
 
 ## Single-instance SQLite
 
