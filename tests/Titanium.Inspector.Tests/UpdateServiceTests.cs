@@ -90,6 +90,10 @@ public class UpdateServiceTests
         StringAssert.Contains(script, "cp -a");
         // Non-.app relaunch uses nohup; .app path is the other branch in the same script.
         StringAssert.Contains(script, "nohup");
+        var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
+        var copy = script.IndexOf("cp -a \"$tmp\"/. \"$install_dir\"/", StringComparison.Ordinal);
+        Assert.IsTrue(remove >= 0 && copy > remove, "Linux zip apply must drop bundled OpenSSL before the overlay.");
+        Assert.IsTrue(script.IndexOf("ditto", StringComparison.Ordinal) < script.IndexOf("else", StringComparison.Ordinal));
     }
 
     [TestMethod]
