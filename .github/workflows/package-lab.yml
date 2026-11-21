@@ -120,7 +120,7 @@ jobs:
             TitaniumInspector.app
           codesign --verify --verbose=2 TitaniumInspector.app
           ./tools/packaging/osx/build-dmg.sh \
-            "Titanium Inspector.app" "TitaniumInspector-osx-arm64.dmg" "Titanium Inspector"
+            "TitaniumInspector.app" "TitaniumInspector-osx-arm64.dmg" "Titanium Inspector"
       - uses: actions/upload-artifact@v7
         with:
           name: inspector-osx-arm64-lab
