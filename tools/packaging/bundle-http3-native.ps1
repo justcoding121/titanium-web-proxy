@@ -309,21 +309,27 @@ function Get-MachOCpuType([string] $path) {
     if ($bytes.Length -lt 8) {
         throw "Mach-O too short for CPU type: $path"
     }
+    # A hex literal above 0x7FFFFFFF is a signed int, so it never equals the
+    # UInt32 BitConverter returns. Compare the unsigned values.
     $magic = [BitConverter]::ToUInt32($bytes, 0)
-    $cpuLe = [BitConverter]::ToInt32($bytes, 4)
-    switch ($magic) {
-        0xFEEDFACF { return $cpuLe } # MH_MAGIC_64
-        0xFEEDFACE { return $cpuLe } # MH_MAGIC
-        0xCFFAEDFE { # MH_CIGAM_64
-            return [BitConverter]::ToInt32(@($bytes[7], $bytes[6], $bytes[5], $bytes[4]), 0)
-        }
-        0xCEFAEDFE { # MH_CIGAM
-            return [BitConverter]::ToInt32(@($bytes[7], $bytes[6], $bytes[5], $bytes[4]), 0)
-        }
-        0xCAFEBABE { throw "Fat Mach-O is not accepted for HTTP/3 bundling: $path" }
-        0xBEBAFECA { throw "Fat Mach-O is not accepted for HTTP/3 bundling: $path" }
-        default { throw "Unrecognized Mach-O magic 0x$($magic.ToString('X8')) in $path" }
+    $mhMagic64 = [uint32]4277009103 # 0xFEEDFACF
+    $mhMagic = [uint32]4277009102   # 0xFEEDFACE
+    $mhCigam64 = [uint32]3489328638 # 0xCFFAEDFE
+    $mhCigam = [uint32]3472551422   # 0xCEFAEDFE
+    $fatBe = [uint32]3405691582     # 0xCAFEBABE
+    $fatLe = [uint32]3199925962     # 0xBEBAFECA
+    if ($magic -eq $fatBe -or $magic -eq $fatLe) {
+        throw "Fat Mach-O is not accepted for HTTP/3 bundling: $path"
     }
+    $little = ($magic -eq $mhMagic64) -or ($magic -eq $mhMagic)
+    $big = ($magic -eq $mhCigam64) -or ($magic -eq $mhCigam)
+    if (-not $little -and -not $big) {
+        throw "Unrecognized Mach-O magic 0x$($magic.ToString('X8')) in $path"
+    }
+    if ($little) {
+        return [BitConverter]::ToInt32($bytes, 4)
+    }
+    return [BitConverter]::ToInt32(@($bytes[7], $bytes[6], $bytes[5], $bytes[4]), 0)
 }
 
 function Assert-MachOCpuMatchesRid([string[]] $names) {
