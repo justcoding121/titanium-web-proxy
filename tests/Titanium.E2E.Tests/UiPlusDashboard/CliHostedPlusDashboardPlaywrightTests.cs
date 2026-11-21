@@ -37,6 +37,7 @@ public class CliHostedPlusDashboardPlaywrightTests : PageTest
     [TestInitialize]
     public async Task StartCliDashboardAsync()
     {
+        Page.Dialog += async (_, dialog) => await dialog.AcceptAsync();
         _tempDir = Path.Combine(Path.GetTempPath(), "twp-pw-cli-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _origin = new EchoOrigin();
