@@ -187,18 +187,16 @@ public class ContentWatcherTests
         Assert.AreEqual(0, calls.Count, "the poll is every 30 seconds");
 
         clock.Advance(TimeSpan.FromSeconds(1));
-        // The poll callback schedules the debounce on a thread-pool turn; wait for it under CI load.
-        await WaitForTimersAsync(clock, 2, TimeSpan.FromSeconds(30));
+        // The poll callback registers the debounce before it returns.
+        await WaitForTimersAsync(clock, 2, TimeSpan.FromSeconds(5));
         clock.Advance(Debounce);
 
         await calls.WaitForAsync(1);
 
-        // The next tick sees the same content and stays quiet.
-        clock.Advance(ContentWatcher.DefaultPollInterval);
-        await WaitForTimersAsync(clock, 2);
-        clock.Advance(Debounce);
-        await Task.Delay(200);
-        Assert.AreEqual(1, calls.Count);
+        // The next tick sees the same content and stays quiet. One advance covers the
+        // poll and its debounce; a nested timer is already due before the advance returns.
+        clock.Advance(ContentWatcher.DefaultPollInterval + Debounce);
+        await calls.StaysAtAsync(1);
     }
 
     [TestMethod]
