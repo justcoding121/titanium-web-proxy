@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 tới máy chủ",
   "network.http3Help": "Chỉ tới máy chủ. Tắt HTTP/2 không tắt mục này.",
   "network.http3Unavailable": "HTTP/3 cần QUIC, máy này không có.",
+  "network.http3WrongArch": "Thư viện QUIC của bản dựng này sai kiến trúc Mac.",
+  "network.http3WrongArchAppleSilicon": "Thư viện QUIC của bản dựng này sai kiến trúc Mac. Hãy dùng DMG cho Apple silicon.",
   "network.newConnections": "Thay đổi áp dụng cho kết nối mới.",
   "network.protocols": "Giao thức",
   "network.reuse": "Dùng lại kết nối máy chủ",

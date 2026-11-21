@@ -362,6 +362,8 @@
   "network.http3": "到服务器的 HTTP/3",
   "network.http3Help": "仅用于服务器。关闭 HTTP/2 不会关闭此项。",
   "network.http3Unavailable": "HTTP/3 需要 QUIC，而这台计算机没有。",
+  "network.http3WrongArch": "此构建的 QUIC 库与 Mac 架构不匹配。",
+  "network.http3WrongArchAppleSilicon": "此构建的 QUIC 库与 Mac 架构不匹配。请使用 Apple silicon 的 DMG。",
   "network.newConnections": "更改适用于新连接。",
   "network.protocols": "协议",
   "network.reuse": "复用服务器连接",
