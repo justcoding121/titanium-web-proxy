@@ -139,7 +139,7 @@ jobs:
             exit 1
           fi
           docker run --rm -v "$PWD/artifacts/cli/linux-x64:/opt/titanium:ro" ubuntu:26.04 \
-            bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libssl3t64 libnuma1 >/dev/null && /opt/titanium/titanium version" \
+            bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libssl3t64 libnuma1 \$(apt-cache search --names-only '^libicu[0-9]+\$' | awk '{print \$1; exit}') >/dev/null && /opt/titanium/titanium version" \
             | tee cli-version.txt
           grep -q "8.0.6" cli-version.txt
       - uses: actions/upload-artifact@v7
