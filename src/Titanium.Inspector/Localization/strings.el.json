@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 προς διακομιστές",
   "network.http3Help": "Μόνο προς διακομιστές. Το κλείσιμο του HTTP/2 δεν το κλείνει.",
   "network.http3Unavailable": "Το HTTP/3 χρειάζεται QUIC, που αυτός ο υπολογιστής δεν έχει.",
+  "network.http3WrongArch": "Η βιβλιοθήκη QUIC αυτής της έκδοσης έχει λάθος αρχιτεκτονική Mac.",
+  "network.http3WrongArchAppleSilicon": "Η βιβλιοθήκη QUIC αυτής της έκδοσης έχει λάθος αρχιτεκτονική Mac. Χρησιμοποιήστε το DMG για Apple silicon.",
   "network.newConnections": "Οι αλλαγές ισχύουν για νέες συνδέσεις.",
   "network.protocols": "Πρωτόκολλα",
   "network.reuse": "Επαναχρησιμοποίηση συνδέσεων διακομιστή",

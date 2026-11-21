@@ -916,7 +916,13 @@ internal static class CliUpdateApplyHelper
         }
 
         var sh = Path.Combine(workDir, "apply-cli-update.sh");
-        File.WriteAllText(sh, BuildUnixScript(pid, zipPath, installDir, relaunchPath, version, channel), new UTF8Encoding(false));
+        // Linux zips through 8.0.5 shipped libssl/libcrypto beside libmsquic. Overlaying a
+        // newer zip would leave those files, and the host OpenSSL crash would survive the update.
+        // macOS still bundles libssl.3.dylib / libcrypto.3.dylib, so those stay.
+        File.WriteAllText(
+            sh,
+            BuildUnixScript(pid, zipPath, installDir, relaunchPath, version, channel, OperatingSystem.IsLinux()),
+            new UTF8Encoding(false));
         Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/bash",
@@ -969,7 +975,8 @@ internal static class CliUpdateApplyHelper
         string installDir,
         string relaunchPath,
         string version,
-        string channel)
+        string channel,
+        bool removeBundledOpenSsl = false)
     {
         var sb = new StringBuilder();
         sb.AppendLine("#!/usr/bin/env bash");
@@ -982,6 +989,11 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("sleep 1");
         sb.AppendLine("tmp=$(mktemp -d)");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
+        if (removeBundledOpenSsl)
+        {
+            sb.AppendLine("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
+        }
+
         sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
         sb.AppendLine("rm -rf \"$tmp\"");
         sb.AppendLine("chmod +x \"$install_dir/titanium\" \"$install_dir/twp\" 2>/dev/null || true");

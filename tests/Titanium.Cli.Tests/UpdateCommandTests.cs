@@ -149,6 +149,26 @@ public class UpdateCommandTests
             "beta");
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "beta");
+        Assert.IsFalse(script.Contains("libssl", StringComparison.Ordinal));
+        Assert.IsFalse(script.Contains("libcrypto", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void CliHelper_UnixScript_LinuxRemovesBundledOpenSslBeforeCopy()
+    {
+        var script = CliUpdateApplyHelper.BuildUnixScript(
+            3,
+            "/tmp/cli.zip",
+            "/opt/titanium",
+            "/opt/titanium/titanium",
+            "8.0.6",
+            "stable",
+            removeBundledOpenSsl: true);
+        var remove = script.IndexOf("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*", StringComparison.Ordinal);
+        var copy = script.IndexOf("cp -a \"$tmp\"/. \"$install_dir\"/", StringComparison.Ordinal);
+        Assert.IsTrue(remove >= 0, "Linux update must delete bundled OpenSSL before overlaying the zip.");
+        Assert.IsTrue(copy > remove, "OpenSSL files must be removed before the new zip is copied in.");
+        Assert.IsFalse(script.Contains("libssl.3.dylib", StringComparison.Ordinal));
     }
 
     [TestMethod]

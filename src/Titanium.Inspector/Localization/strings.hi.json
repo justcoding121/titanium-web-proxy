@@ -362,6 +362,8 @@
   "network.http3": "सर्वरों तक HTTP/3",
   "network.http3Help": "केवल सर्वरों तक। HTTP/2 बंद करने से यह बंद नहीं होता।",
   "network.http3Unavailable": "HTTP/3 को QUIC चाहिए, जो इस कंप्यूटर पर नहीं है।",
+  "network.http3WrongArch": "इस बिल्ड की QUIC लाइब्रेरी गलत Mac आर्किटेक्चर की है।",
+  "network.http3WrongArchAppleSilicon": "इस बिल्ड की QUIC लाइब्रेरी गलत Mac आर्किटेक्चर की है। Apple silicon वाला DMG इस्तेमाल करें।",
   "network.newConnections": "बदलाव नए कनेक्शन पर लागू होते हैं।",
   "network.protocols": "प्रोटोकॉल",
   "network.reuse": "सर्वर कनेक्शन फिर से इस्तेमाल करें",
