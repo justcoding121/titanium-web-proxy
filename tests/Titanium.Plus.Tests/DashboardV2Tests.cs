@@ -407,6 +407,10 @@ public partial class DashboardV2Tests
         StringAssert.Contains(js.Header("Content-Type")!, "javascript");
         StringAssert.Contains(js.Text, "/api/");
         StringAssert.Contains(js.Text, "2000");
+        StringAssert.Contains(js.Text, "Disconnected, retrying");
+        StringAssert.Contains(js.Text, "window.confirm('Drain ");
+        StringAssert.Contains(js.Text, "errorRatio > 0.05");
+        StringAssert.Contains(js.Text, "p99 > 3");
         Assert.IsFalse(js.Text.Contains("innerHTML", StringComparison.Ordinal), "values are written as text");
         Assert.IsFalse(js.Text.Contains("prompt(", StringComparison.Ordinal), "the prompt() flow is gone");
         Assert.IsFalse(js.Text.Contains("eval(", StringComparison.Ordinal));
