@@ -91,6 +91,7 @@ Pick **Stable** for production or **Beta** for the newest builds. Then choose In
       <a v-if="ch.data.inspector.dmg && ch.data.inspector.dmg['osx-x64']" :href="ch.data.inspector.dmg['osx-x64'].url">{{ ch.data.inspector.dmg['osx-x64'].name }}</a>
       <a v-else-if="ch.data.inspector['osx-x64']" :href="ch.data.inspector['osx-x64'].url">{{ ch.data.inspector['osx-x64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
+      <span class="vp-muted">Intel Macs only.</span>
     </div>
     <div class="download-row">
       <strong>Linux (64-bit) AppImage</strong>

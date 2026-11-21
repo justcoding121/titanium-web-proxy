@@ -358,6 +358,15 @@ public partial class MainWindow : Window
 
         try
         {
+            vm.NotifyHttp3NativeArchMismatchIfNeeded();
+        }
+        catch
+        {
+            // never block startup on HTTP/3 arch probe failure
+        }
+
+        try
+        {
             if (vm.CheckForUpdatesOnStartup
                 && Environment.GetEnvironmentVariable("TITANIUM_UPDATE_FEED") != string.Empty)
             {

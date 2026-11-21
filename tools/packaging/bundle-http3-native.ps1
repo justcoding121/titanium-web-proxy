@@ -294,6 +294,46 @@ function Assert-RequiredFiles([string[]] $globs) {
     }
 }
 
+function Get-MachOCpuType([string] $path) {
+    $bytes = [IO.File]::ReadAllBytes($path)
+    if ($bytes.Length -lt 8) {
+        throw "Mach-O too short for CPU type: $path"
+    }
+    $magic = [BitConverter]::ToUInt32($bytes, 0)
+    $cpuLe = [BitConverter]::ToInt32($bytes, 4)
+    switch ($magic) {
+        0xFEEDFACF { return $cpuLe } # MH_MAGIC_64
+        0xFEEDFACE { return $cpuLe } # MH_MAGIC
+        0xCFFAEDFE { # MH_CIGAM_64
+            return [BitConverter]::ToInt32(@($bytes[7], $bytes[6], $bytes[5], $bytes[4]), 0)
+        }
+        0xCEFAEDFE { # MH_CIGAM
+            return [BitConverter]::ToInt32(@($bytes[7], $bytes[6], $bytes[5], $bytes[4]), 0)
+        }
+        0xCAFEBABE { throw "Fat Mach-O is not accepted for HTTP/3 bundling: $path" }
+        0xBEBAFECA { throw "Fat Mach-O is not accepted for HTTP/3 bundling: $path" }
+        default { throw "Unrecognized Mach-O magic 0x$($magic.ToString('X8')) in $path" }
+    }
+}
+
+function Assert-MachOCpuMatchesRid([string[]] $names) {
+    $expected = switch ($Rid) {
+        'osx-x64' { 0x01000007 }   # CPU_TYPE_X86_64
+        'osx-arm64' { 0x0100000C } # CPU_TYPE_ARM64
+        default { return }
+    }
+    foreach ($name in $names) {
+        $path = Join-Path $PublishDir $name
+        if (-not (Test-Path $path)) {
+            throw "Required native file missing for CPU assert: $name (RID=$Rid)"
+        }
+        $cpu = Get-MachOCpuType $path
+        if ($cpu -ne $expected) {
+            throw ("HTTP/3 native $name CPU 0x{0:X8} does not match RID $Rid (expected 0x{1:X8})" -f $cpu, $expected)
+        }
+    }
+}
+
 function Bundle-Deb {
     $cache = Ensure-CacheDir $Rid
     $extractRoot = Join-Path $cache "extract"
@@ -431,6 +471,7 @@ function Bundle-Homebrew {
     }
 
     Assert-RequiredFiles @("libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib")
+    Assert-MachOCpuMatchesRid @("libmsquic.dylib", "libssl.3.dylib", "libcrypto.3.dylib")
 }
 
 function Bundle-WindowsOsComponent {

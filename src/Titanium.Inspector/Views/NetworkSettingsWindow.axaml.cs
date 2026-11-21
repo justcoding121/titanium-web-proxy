@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Titanium.Inspector.Localization;
 using Titanium.Inspector.Services;
+using Titanium.Web.Proxy.Http3;
 
 namespace Titanium.Inspector.Views;
 
@@ -52,7 +53,20 @@ public partial class NetworkSettingsWindow : Window
         WinAuthSection.IsVisible = OperatingSystem.IsWindows();
         var quic = InterceptionService.IsHttp3Supported;
         Http3Check.IsEnabled = quic;
-        Http3UnavailableText.IsVisible = !quic;
+        var mismatch = MacHttp3NativeArch.DetectMismatch();
+        if (mismatch != MacHttp3NativeMismatchKind.None)
+        {
+            Http3UnavailableText.Text = LanguageService.Get(
+                mismatch == MacHttp3NativeMismatchKind.WrongArchitectureUnderRosetta
+                    ? "network.http3WrongArchAppleSilicon"
+                    : "network.http3WrongArch");
+            Http3UnavailableText.IsVisible = true;
+        }
+        else
+        {
+            Http3UnavailableText.IsVisible = !quic;
+        }
+
         UpdateFieldsEnabled();
         UpdateSummary();
         UpdateTlsWarning();

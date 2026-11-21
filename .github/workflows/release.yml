@@ -562,7 +562,8 @@ jobs:
             os: ubuntu-latest
             msi: false
           - rid: osx-x64
-            os: macos-latest
+            # Same Intel runner as CLI osx-x64: Homebrew libmsquic must match the x86_64 apphost.
+            os: macos-15-intel
             msi: false
           - rid: osx-arm64
             os: macos-latest
