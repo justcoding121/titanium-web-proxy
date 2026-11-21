@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -12,23 +13,36 @@ namespace Titanium.Web.Proxy.Helpers;
 /// <summary>
 ///     GNOME gsettings is not enough on XFCE, LXDE, i3/sway, WSLg, or when Chrome is started
 ///     from a .desktop Exec that never reads org.gnome.system.proxy. Write Chromium-family
-///     managed policy plus user .desktop / XFCE helper Exec flags
+///     managed policy (<c>ProxyMode=system</c>) plus, only when the desktop has no GNOME/KDE
+///     proxy schema, user .desktop / XFCE helper Exec flags
 ///     (<c>--proxy-server</c>, <c>&lt;-loopback&gt;</c>, <c>--disable-quic</c>).
 /// </summary>
 internal static class LinuxBrowserLaunchProxy
 {
     internal const string PolicyFileName = "titanium-inspector-proxy.json";
+
+    /// <summary>
+    ///     Extra local CA for Chromium's certificate verifier. Edge (and Chrome when it
+    ///     no longer treats <c>~/.pki/nssdb</c> as a server trust anchor) ignores an NSS
+    ///     <c>C,,</c> root and rejects the proxy leaf. <c>CACertificates</c> is the
+    ///     supported way to add that root for server authentication.
+    /// </summary>
+    internal const string CaPolicyFileName = "titanium-inspector-ca.json";
     internal const string DesktopMarker = "X-Titanium-Inspector-Proxy=true";
     internal const string ProxyBypassList = "<-loopback>";
     private const string DesktopExecPrefix = "Exec=";
     private const string SudoBinary = "/usr/bin/sudo";
 
     /// <summary>
-    ///     Chromium managed-policy floor we target: modern <c>ProxyMode</c> string enum plus
-    ///     legacy <c>ProxyServerMode</c> int (2 = fixed servers) for older builds that still
-    ///     read the deprecated key. Unknown keys are ignored by Chromium.
+    ///     Deprecated Chromium int enum (2 = fixed servers). New policy files do not emit it:
+    ///     an older build that reads this key before <c>ProxyMode</c> would pin the process.
+    ///     Validation still accepts files an older Inspector wrote.
     /// </summary>
     internal const int LegacyProxyServerModeFixedServers = 2;
+
+    internal static int ApplyCountForTests { get; private set; }
+
+    internal static void ResetApplyCountForTests() => ApplyCountForTests = 0;
 
     private const string LocalDirName = ".local";
     private const string ShareDirName = "share";
@@ -38,6 +52,11 @@ internal static class LinuxBrowserLaunchProxy
     private const string PoliciesManaged = "policies";
     private const string ManagedDirName = "managed";
     private const string MicrosoftEdgeDirName = "microsoft-edge";
+    private const string GoogleChromeStableBin = "/usr/bin/google-chrome-stable";
+    private const string ChromiumBin = "/usr/bin/chromium";
+    private const string MicrosoftEdgeStableBin = "/usr/bin/microsoft-edge-stable";
+    private const string OperaBin = "/usr/bin/opera";
+    private const string ExecPrefix = "exec ";
     private const string FlatpakConfigDirName = "config";
 
     private static readonly string[] DesktopFieldCodes = [" %U", " %u", " %f", " %F", " %s", " \"%s\""];
@@ -56,15 +75,15 @@ internal static class LinuxBrowserLaunchProxy
 
     private static readonly string[] ChromeBinaries =
     [
-        "/usr/bin/google-chrome-stable",
+        GoogleChromeStableBin,
         "/usr/bin/google-chrome",
         "/opt/google/chrome/chrome",
         "/usr/bin/chromium-browser",
-        "/usr/bin/chromium",
+        ChromiumBin,
         "/usr/bin/brave-browser",
-        "/usr/bin/microsoft-edge-stable",
+        MicrosoftEdgeStableBin,
         "/usr/bin/microsoft-edge",
-        "/usr/bin/opera",
+        OperaBin,
         "/usr/bin/opera-stable",
     ];
 
@@ -82,29 +101,48 @@ internal static class LinuxBrowserLaunchProxy
     ///     Restart running Chromium-family browsers so Preference edits apply. A caller that
     ///     writes hooks twice passes false for the early write, so the user's windows restart once.
     /// </param>
-    internal static bool Apply(string hostname, int port, string? proxyOverride = null, bool relaunch = true)
+    /// <param name="pinProcess">
+    ///     When false (GNOME or KDE proxy schema is present), write <c>ProxyMode=system</c> only.
+    ///     Do not pass <c>--proxy-server</c> on a launcher; that flag outlives File → Exit.
+    /// </param>
+    internal static bool Apply(
+        string hostname, int port, string? proxyOverride = null, bool relaunch = true, bool pinProcess = true)
     {
+        ApplyCountForTests++;
         var loopback = WantsProxyLoopback(proxyOverride);
+        if (!pinProcess)
+            RemoveProcessPins();
         var policyCount = WritePolicies(hostname, port, proxyLoopback: loopback);
         var policyOk = policyCount > 0;
-        var desktopCount = WriteBrowserDesktopOverrides(hostname, port, loopback);
+        var desktopCount = pinProcess ? WriteBrowserDesktopOverrides(hostname, port, loopback) : 0;
         var desktopOk = desktopCount > 0;
-        var xfceOk = WriteXfceWebBrowserHelper(hostname, port, loopback);
+        var xfceOk = pinProcess && WriteXfceWebBrowserHelper(hostname, port, loopback);
         var profileCount = LinuxChromeProfileProxy.Apply(hostname, port, loopback);
         var profileOk = profileCount > 0;
-        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride);
+        // Live switch uses OS proxy (gsettings / KDE) plus Chromium mode=system and Firefox type=5.
+        // Do not quit or relaunch browsers. relaunch is ignored.
+        _ = relaunch;
+        var firefoxOk = LinuxFirefoxProxy.Apply(hostname, port, proxyOverride, relaunch: false);
         if (desktopOk)
             TryUpdateDesktopDatabase();
-        var ok = policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
-        if (relaunch)
-            LinuxChromiumRelaunch.TryRelaunchForProxyChange(hostname, port, enableProxy: true, proxyLoopback: loopback);
-        return ok;
+        return policyOk || desktopOk || xfceOk || profileOk || firefoxOk;
     }
 
-    internal static void Clear()
+    internal static void Clear() => Clear(relaunchBrowsers: true, startFailOpen: true);
+
+    /// <summary>
+    ///     Dead-app / package-removal clear: strip hooks without relaunching browsers or
+    ///     starting the fail-open helper (Inspector is already gone).
+    /// </summary>
+    internal static void ClearInstalledHooks() => Clear(relaunchBrowsers: false, startFailOpen: false);
+
+    private static void Clear(bool relaunchBrowsers, bool startFailOpen)
     {
-        LinuxChromeProfileProxy.Clear();
-        LinuxFirefoxProxy.Clear();
+        LinuxChromeProfileProxy.Clear(startFailOpen);
+        if (relaunchBrowsers)
+            LinuxFirefoxProxy.Clear();
+        else
+            LinuxFirefoxProxy.ClearInstalledHooks();
 
         foreach (var dir in PolicyDirectories())
         {
@@ -120,24 +158,34 @@ internal static class LinuxBrowserLaunchProxy
 
         TrySyncMachinePolicies(null);
 
+        // Neutralize launcher scripts before removing .desktop overrides. GNOME Shell
+        // caches Exec paths; if the script is gone while the dock still points at it,
+        // Chrome fails with "Program '.../launchers/google-chrome.sh' not found".
+        RemoveProcessPins();
+        _ = relaunchBrowsers;
+    }
+
+    /// <summary>
+    ///     Drop <c>--proxy-server</c> launchers this writer owns. A dock that still Execs
+    ///     the helper gets a passthrough script instead of a missing file.
+    /// </summary>
+    private static void RemoveProcessPins()
+    {
+        NeutralizeLauncherScripts();
+
         foreach (var dest in UserDesktopOverridePaths())
             DeleteMarkedDesktopOverride(dest);
-
-        DeleteLauncherScripts();
 
         DeleteMarkedDesktopOverride(UserXfceChromeHelperPath());
         RestoreXfceHelpersRc();
         TryUpdateDesktopDatabase();
-
-        // Relaunch without proxy flags so already-open Chromium browsers drop the dead endpoint immediately.
-        LinuxChromiumRelaunch.TryRelaunchForProxyChange(null, 0, enableProxy: false);
     }
 
     private static void TryUpdateDesktopDatabase()
     {
         try
         {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var home = CoverageOs.Home;
             var apps = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
             if (!Directory.Exists(apps))
                 return;
@@ -222,10 +270,67 @@ internal static class LinuxBrowserLaunchProxy
     /// </summary>
     private static void TrySyncMachinePolicies(string? json)
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
 
         SyncMachinePolicies(json, MachinePolicyVendors);
+    }
+
+    /// <summary>
+    ///     Same non-interactive sudo install as the proxy policy, for a different file name.
+    ///     Pass null to remove the file from vendor directories where it exists.
+    /// </summary>
+    private static void SyncMachinePolicyFile(string fileName, string? json) =>
+        SyncMachinePolicyFile(fileName, json, MachinePolicyVendors);
+
+    /// <summary>Runs the machine-policy file sync against caller-supplied vendor roots (tests).</summary>
+    internal static void SyncMachinePolicyFileForTests(
+        string fileName, string? json, (string Root, string[] Binaries)[] vendors) =>
+        SyncMachinePolicyFile(fileName, json, vendors);
+
+    private static void SyncMachinePolicyFile(
+        string fileName, string? json, (string Root, string[] Binaries)[] vendors)
+    {
+        if (!CoverageOs.IsLinux)
+            return;
+
+        try
+        {
+            var targets = new List<string>();
+            foreach (var (root, binaries) in vendors)
+            {
+                var path = Path.Combine(root, PoliciesManaged, ManagedDirName, fileName);
+                if (json is null)
+                {
+                    if (File.Exists(path))
+                        targets.Add(path);
+                    continue;
+                }
+
+                if (!Directory.Exists(root) && !binaries.Any(File.Exists))
+                    continue;
+                if (!MachinePolicyMatches(path, json))
+                    targets.Add(path);
+            }
+
+            if (targets.Count == 0)
+                return;
+
+            if (json is null)
+            {
+                TrySudoNonInteractive(["rm", "-f", "--", .. targets], stdin: null);
+                return;
+            }
+
+            const string script =
+                "for f in \"$@\"; do mkdir -p -- \"$(dirname -- \"$f\")\" || exit 1; done; " +
+                "tee -- \"$@\" >/dev/null && chmod 644 -- \"$@\"";
+            TrySudoNonInteractive(["sh", "-c", script, "sh", .. targets], json);
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     /// <summary>Runs the machine-policy sync against caller-supplied vendor roots (tests).</summary>
@@ -268,11 +373,11 @@ internal static class LinuxBrowserLaunchProxy
 
     private static readonly (string Root, string[] Binaries)[] MachinePolicyVendors =
     [
-        ("/etc/opt/chrome", ["/usr/bin/google-chrome-stable", "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
-        ("/etc/chromium", ["/usr/bin/chromium", "/usr/bin/chromium-browser"]),
-        ("/etc/opt/edge", ["/usr/bin/microsoft-edge-stable", "/usr/bin/microsoft-edge"]),
+        ("/etc/opt/chrome", [GoogleChromeStableBin, "/usr/bin/google-chrome", "/opt/google/chrome/chrome"]),
+        ("/etc/chromium", [ChromiumBin, "/usr/bin/chromium-browser"]),
+        ("/etc/opt/edge", [MicrosoftEdgeStableBin, "/usr/bin/microsoft-edge"]),
         ("/etc/brave", ["/usr/bin/brave-browser"]),
-        ("/etc/opera", ["/usr/bin/opera", "/usr/bin/opera-stable"]),
+        ("/etc/opera", [OperaBin, "/usr/bin/opera-stable"]),
     ];
 
     private static IEnumerable<string> MachinePolicyFiles(
@@ -350,8 +455,94 @@ internal static class LinuxBrowserLaunchProxy
         TrySudoNonInteractive(command, stdin, sudoExecutable, waitMilliseconds);
 
     /// <summary>
-    ///     Builds Chromium managed-policy JSON. Prefer modern <c>ProxyMode</c> string keys;
-    ///     also emit deprecated <c>ProxyServerMode</c>=2 for older Chromium that still reads it.
+    ///     Public-only base64 DER of <paramref name="certificate"/> under <c>CACertificates</c>.
+    /// </summary>
+    internal static string BuildCaPolicyJson(X509Certificate2 certificate)
+    {
+        var der = certificate.Export(X509ContentType.Cert);
+        return JsonSerializer.Serialize(new Dictionary<string, string[]>
+        {
+            ["CACertificates"] = [Convert.ToBase64String(der)],
+        });
+    }
+
+    /// <summary>
+    ///     Writes <see cref="CaPolicyFileName"/> next to the proxy policy so Chromium-family
+    ///     browsers trust the proxy root. Kept separate from the proxy file so clearing the
+    ///     system proxy does not drop CA trust.
+    /// </summary>
+    /// <param name="machinePolicy">
+    ///     When true, also install the file under <c>/etc</c> for every account.
+    ///     User trust stays in the per-user policy directories.
+    /// </param>
+    internal static void ApplyCaCertificatesPolicy(X509Certificate2 certificate, bool machinePolicy = false)
+    {
+        if (!CoverageOs.IsLinux)
+            return;
+
+        string json;
+        try
+        {
+            json = BuildCaPolicyJson(certificate);
+        }
+        catch
+        {
+            return;
+        }
+
+        foreach (var dir in PolicyDirectories())
+        {
+            if (!machinePolicy && dir.StartsWith("/etc/", StringComparison.Ordinal))
+                continue;
+
+            try
+            {
+                Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, CaPolicyFileName);
+                var temp = path + ".tmp";
+                File.WriteAllText(temp, json);
+                File.Move(temp, path, overwrite: true);
+            }
+            catch
+            {
+                // snap roots the user cannot create are skipped
+            }
+        }
+
+        if (machinePolicy)
+            SyncMachinePolicyFile(CaPolicyFileName, json);
+    }
+
+    /// <summary>Removes <see cref="CaPolicyFileName"/> from user and, when requested, machine policy directories.</summary>
+    /// <param name="machinePolicy">When true, also remove the <c>/etc</c> copy.</param>
+    internal static void RemoveCaCertificatesPolicy(bool machinePolicy = false)
+    {
+        if (!CoverageOs.IsLinux)
+            return;
+
+        foreach (var dir in PolicyDirectories())
+        {
+            if (!machinePolicy && dir.StartsWith("/etc/", StringComparison.Ordinal))
+                continue;
+
+            try
+            {
+                File.Delete(Path.Combine(dir, CaPolicyFileName));
+            }
+            catch
+            {
+                // best-effort
+            }
+        }
+
+        if (machinePolicy)
+            SyncMachinePolicyFile(CaPolicyFileName, null);
+    }
+
+    /// <summary>
+    ///     Builds Chromium managed-policy JSON. <c>ProxyMode=system</c> follows the desktop
+    ///     proxy. Do not emit <c>ProxyServerMode</c> or <c>ProxyServer</c>: the legacy int
+    ///     2 means fixed servers and pins an older Chromium for the process lifetime.
     /// </summary>
     internal static string BuildPolicyJson(string hostname, int port, bool proxyLoopback = false)
     {
@@ -360,13 +551,9 @@ internal static class LinuxBrowserLaunchProxy
         if (port is <= 0 or > 65535)
             throw new ArgumentOutOfRangeException(nameof(port));
 
-        var server = $"http://{hostname}:{port}"; // NOSONAR S5332 -- Chromium ProxyServer is an http CONNECT proxy URL.
         var payload = new JsonObject
         {
-            ["ProxyMode"] = "fixed_servers",
-            // Deprecated int enum (2 = Use a fixed proxy server). Harmless on modern Chrome.
-            ["ProxyServerMode"] = LegacyProxyServerModeFixedServers,
-            ["ProxyServer"] = server,
+            ["ProxyMode"] = "system",
             ["QuicAllowed"] = false,
         };
         if (proxyLoopback)
@@ -381,11 +568,12 @@ internal static class LinuxBrowserLaunchProxy
     }
 
     /// <summary>
-    ///     True when <paramref name="json"/> is valid Chromium managed-policy JSON containing
-    ///     either modern <c>ProxyMode=fixed_servers</c> or legacy <c>ProxyServerMode=2</c>,
-    ///     plus matching host/port. Extra/unknown properties are allowed (forward compatible).
+    ///     True when <paramref name="json"/> is valid Chromium managed-policy JSON.
+    ///     <c>ProxyMode=system</c> needs no <c>ProxyServer</c>. Older files that pin with
+    ///     <c>ProxyMode=fixed_servers</c> or <c>ProxyServerMode=2</c> must still name the endpoint.
+    ///     Extra/unknown properties are allowed (forward compatible).
     /// </summary>
-    internal static bool TryValidatePolicyJson(string json, string hostname, int port, out string? error)
+    internal static bool TryValidatePolicyJson(string json, string hostname, int port, out string? error) // NOSONAR S3776 -- Chromium policy schema branches share one error string
     {
         error = null;
         try
@@ -398,12 +586,16 @@ internal static class LinuxBrowserLaunchProxy
             }
 
             var root = doc.RootElement;
-            var modeOk = false;
+            var systemMode = false;
+            var requiresServer = false;
             if (root.TryGetProperty("ProxyMode", out var mode) &&
-                mode.ValueKind == JsonValueKind.String &&
-                mode.GetString()?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
+                mode.ValueKind == JsonValueKind.String)
             {
-                modeOk = true;
+                var modeText = mode.GetString();
+                if (modeText?.Equals("system", StringComparison.OrdinalIgnoreCase) == true)
+                    systemMode = true;
+                else if (modeText?.Equals("fixed_servers", StringComparison.OrdinalIgnoreCase) == true)
+                    requiresServer = true;
             }
 
             if (root.TryGetProperty("ProxyServerMode", out var legacyMode) &&
@@ -411,14 +603,18 @@ internal static class LinuxBrowserLaunchProxy
                 legacyMode.TryGetInt32(out var legacyInt) &&
                 legacyInt == LegacyProxyServerModeFixedServers)
             {
-                modeOk = true;
+                requiresServer = true;
             }
 
-            if (!modeOk)
+            if (!systemMode && !requiresServer)
             {
-                error = "missing ProxyMode=fixed_servers (or ProxyServerMode=2)";
+                error = "missing ProxyMode=system (or fixed_servers / ProxyServerMode=2)";
                 return false;
             }
+
+            // ProxyMode=system is enough. A fixed-server enum next to it still has to match.
+            if (systemMode && !requiresServer)
+                return true;
 
             if (!root.TryGetProperty("ProxyServer", out var server) ||
                 server.ValueKind != JsonValueKind.String)
@@ -576,7 +772,7 @@ internal static class LinuxBrowserLaunchProxy
                "if [ -n \"${TITANIUM_SMOKE_BROWSER_FLAGS:-}\" ]; then\n" +
                "  extra=\" $TITANIUM_SMOKE_BROWSER_FLAGS\"\n" +
                "fi\n" +
-               "exec " + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
+               ExecPrefix + QuoteShellArg(binary) + " " + ChromeProxyShellFlags(hostname, port, proxyLoopback) +
                " --no-first-run --no-default-browser-check$extra \"$@\"\n";
     }
 
@@ -613,7 +809,7 @@ internal static class LinuxBrowserLaunchProxy
 
     internal static IEnumerable<string> PolicyDirectories()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         yield return Path.Combine(home, ConfigDirName, "google-chrome", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "google-chrome-beta", PoliciesManaged, ManagedDirName);
         yield return Path.Combine(home, ConfigDirName, "google-chrome-unstable", PoliciesManaged, ManagedDirName);
@@ -644,7 +840,7 @@ internal static class LinuxBrowserLaunchProxy
     private static int WriteBrowserDesktopOverrides(
         string hostname, int port, bool proxyLoopback, IEnumerable<string> sources)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         var written = 0;
         foreach (var source in sources)
@@ -665,7 +861,7 @@ internal static class LinuxBrowserLaunchProxy
 
     private static IEnumerable<string> UserDesktopOverridePaths()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         var destDir = Path.Combine(home, LocalDirName, ShareDirName, ApplicationsDirName);
         foreach (var source in DesktopSources)
             yield return Path.Combine(destDir, Path.GetFileName(source));
@@ -707,11 +903,15 @@ internal static class LinuxBrowserLaunchProxy
 
     private static string LauncherDirectory()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         return Path.Combine(home, LocalDirName, ShareDirName, "titanium-inspector", "launchers");
     }
 
-    private static void DeleteLauncherScripts()
+    /// <summary>
+    ///     Rewrites marked launcher scripts to a proxy-free passthrough so a stale GNOME
+    ///     Exec cache still launches the browser after Clear removes the .desktop override.
+    /// </summary>
+    private static void NeutralizeLauncherScripts()
     {
         try
         {
@@ -720,9 +920,22 @@ internal static class LinuxBrowserLaunchProxy
                 return;
             foreach (var file in Directory.EnumerateFiles(dir, "*.sh"))
             {
-                var text = File.ReadAllText(file);
-                if (text.Contains(DesktopMarker, StringComparison.Ordinal))
-                    File.Delete(file);
+                try
+                {
+                    var text = File.ReadAllText(file);
+                    if (!text.Contains(DesktopMarker, StringComparison.Ordinal))
+                        continue;
+                    if (!TryExtractLaunchBinary(text, out var binary) || string.IsNullOrEmpty(binary))
+                        binary = GuessBinaryFromLauncherName(file);
+                    if (string.IsNullOrEmpty(binary))
+                        continue;
+                    File.WriteAllText(file, BuildPassthroughLaunchScript(binary).Replace("\r\n", "\n", StringComparison.Ordinal));
+                    TryMakeExecutable(file);
+                }
+                catch
+                {
+                    // best-effort per file
+                }
             }
         }
         catch
@@ -731,8 +944,63 @@ internal static class LinuxBrowserLaunchProxy
         }
     }
 
+    private static string BuildPassthroughLaunchScript(string binary) =>
+        "#!/bin/sh\n" +
+        "# " + DesktopMarker + "\n" +
+        "# neutralized: dock may still Exec this path after Clear removes the .desktop override\n" +
+        ExecPrefix + QuoteShellArg(binary) + " \"$@\"\n";
+
+    private static bool TryExtractLaunchBinary(string scriptText, out string binary)
+    {
+        binary = string.Empty;
+        foreach (var rawLine in scriptText.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (!line.StartsWith(ExecPrefix, StringComparison.Ordinal))
+                continue;
+            var rest = line[ExecPrefix.Length..].TrimStart();
+            if (rest.Length == 0)
+                continue;
+            if (rest[0] == '"')
+            {
+                var end = rest.IndexOf('"', 1);
+                if (end > 1)
+                {
+                    binary = rest[1..end];
+                    return binary.Length > 0;
+                }
+            }
+
+            var space = rest.IndexOfAny([' ', '\t']);
+            binary = space < 0 ? rest : rest[..space];
+            return binary.Length > 0;
+        }
+
+        return false;
+    }
+
+    private static string? GuessBinaryFromLauncherName(string scriptPath)
+    {
+        var name = Path.GetFileNameWithoutExtension(scriptPath);
+        return name switch
+        {
+            "google-chrome" or "google-chrome-stable" => File.Exists("/usr/bin/google-chrome-stable")
+                ? "/usr/bin/google-chrome-stable"
+                : "/usr/bin/google-chrome",
+            "chromium" or "chromium-browser" => File.Exists("/usr/bin/chromium")
+                ? "/usr/bin/chromium"
+                : "/usr/bin/chromium-browser",
+            "brave-browser" => "/usr/bin/brave-browser",
+            "microsoft-edge" or "microsoft-edge-stable" => File.Exists("/usr/bin/microsoft-edge-stable")
+                ? "/usr/bin/microsoft-edge-stable"
+                : "/usr/bin/microsoft-edge",
+            "opera" => File.Exists("/usr/bin/opera") ? "/usr/bin/opera" : "/usr/bin/opera-stable",
+            _ => null,
+        };
+    }
+
     private static void TryMakeExecutable(string scriptPath) =>
-        TryMakeExecutable(scriptPath, OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
+        TryMakeExecutable(scriptPath, CoverageOs.IsLinux || CoverageOs.IsMac);
 
     private static void TryMakeExecutable(string scriptPath, bool applyUnixMode)
     {
@@ -876,13 +1144,13 @@ internal static class LinuxBrowserLaunchProxy
 
     private static string UserXfceChromeHelperPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         return Path.Combine(home, LocalDirName, ShareDirName, "xfce4", "helpers", "google-chrome.desktop");
     }
 
     private static string UserXfceHelpersRcPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         return Path.Combine(home, ConfigDirName, "xfce4", "helpers.rc");
     }
 }

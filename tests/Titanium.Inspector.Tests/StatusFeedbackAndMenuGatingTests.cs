@@ -408,4 +408,7 @@ internal sealed class FailingSystemProxyController : ISystemProxyController
 
     public SystemProxyChangeResult RestoreOriginalProxySettings(Titanium.Web.Proxy.ProxyServer proxy) =>
         SystemProxyChangeResult.Fail("forced system proxy failure");
+
+    public SystemProxyChangeResult ClearOrphanedLocalSystemProxy(Func<string, int, bool>? isListening = null) =>
+        SystemProxyChangeResult.Ok("orphan clear skipped in failing controller");
 }

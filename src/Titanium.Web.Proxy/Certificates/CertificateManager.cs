@@ -1823,6 +1823,32 @@ public sealed class CertificateManager : IDisposable
             return false;
         }
 
+        // macOS: .NET AppleTrustStore Root/My writes often Access Denied and spawn extra Keychain
+        // prompts without creating SecTrustSettings SSL policies. Keychain helpers own trust.
+        if (RunTime.IsMac)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Ok(
+                "Root CA store install skipped on macOS (Keychain SSL trust applies separately)");
+            return false;
+        }
+
+        // A unit test can force IsWindows false while this process is still Windows.
+        // X509Store would then open the real Root store and show CryptUI. Unix trust
+        // does not go through this store.
+        if (OperatingSystem.IsWindows() && !RunTime.IsWindows)
+        {
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled,
+                "Root CA install skipped (Windows store is not the active trust path)");
+            return false;
+        }
+
+        // Personal (My) same-CN orphans do not show CryptUI. Prune them before Root Add so a
+        // corrupt store with multiple Titanium roots still gets cleaned even when rootAdded
+        // is false (already present / cancel path would skip the post-install Root prune).
+        if (RunTime.IsWindows)
+            PruneOrphanedPersonalCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: true);
+
         InstallCertificate(StoreName.My, StoreLocation.CurrentUser);
         var rootAdded = InstallCertificate(StoreName.Root, StoreLocation.CurrentUser);
 
@@ -1868,7 +1894,7 @@ public sealed class CertificateManager : IDisposable
     ///     macOS/Linux SSL trust (Keychain / NSS). May show auth UI — keep on a pumping thread.
     ///     No-op on Windows (Root store presence is trust).
     /// </summary>
-    public void ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false)
+    public void ApplyUnixSslTrustAfterStoreInstall(bool machineTrusted = false) // NOSONAR S3776 -- OS branches share LastOsTrustResult; splitting hid Mac cancel-fallback from coverage
     {
         if (RunTime.IsWindows || RootCertificate == null)
         {
@@ -1884,21 +1910,42 @@ public sealed class CertificateManager : IDisposable
             return;
         }
 
+        if (RunTime.IsMac && machineTrusted)
+        {
+            // One elevated System.keychain batch. Cancel → login keychain (may need Always Trust).
+            LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+                RootCertificate, RootCertificateName);
+            if (LastOsTrustResult.Succeeded
+                || LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                return;
+
+            if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
+            {
+                LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
+                    RootCertificate, RootCertificateName);
+            }
+
+            return;
+        }
+
         LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(RootCertificate, RootCertificateName);
         if (!machineTrusted)
             return;
 
-        var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(RootCertificate, RootCertificateName);
-        if (!machineOk)
+        var machineResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+            RootCertificate, RootCertificateName);
+        if (!machineResult.Succeeded
+            && machineResult.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
         {
             LastOsTrustResult = CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.Failed,
                 "Machine-wide CA trust failed (user trust may already be applied)");
         }
-        else if (LastOsTrustResult.Succeeded ||
-                 LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+        else
         {
-            LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
+            LastOsTrustResult = machineResult.Succeeded
+                ? CertificateOsTrustResult.Ok("Root CA trusted machine-wide")
+                : machineResult;
         }
     }
 
@@ -2082,6 +2129,7 @@ public sealed class CertificateManager : IDisposable
         // currentUser\Personal + currentUser\Root (machine elevation is only needed for LocalMachine).
         // Do not prune orphans here — full-store sweeps after CryptUI freeze Avalonia; Inspector
         // finalizes My-store prune off the UI via FinalizeTrustAfterAdminInstall.
+        // macOS skips X509 store writes inside InstallRootIntoCertificateStores.
         _ = InstallRootIntoCertificateStores(machineTrusted: false);
 
         // UAC / Keychain auth / polkit — never in unit/CI (hangs unattended runs).
@@ -2095,14 +2143,36 @@ public sealed class CertificateManager : IDisposable
 
         if (!RunTime.IsWindows)
         {
+            if (RunTime.IsMac)
+            {
+                // One admin dialog: System.keychain batch. Login Always Trust is fallback only.
+                LastOsTrustResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+                    certificate, RootCertificateName);
+                if (LastOsTrustResult.Succeeded
+                    || LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
+                    return true;
+
+                if (LastOsTrustResult.Kind == CertificateOsTrustKind.Cancelled)
+                {
+                    LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(
+                        certificate, RootCertificateName);
+                    return LastOsTrustResult.Succeeded ||
+                           LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
+                }
+
+                return false;
+            }
+
             LastOsTrustResult = Helpers.UnixCertificateTrust.TrustUserSsl(certificate, RootCertificateName);
             // Explicit true when only user-store trust was requested (no machine step).
             if (!machineTrusted)
                 return LastOsTrustResult.Succeeded ||
                        LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm;
 
-            var machineOk = Helpers.UnixCertificateTrust.TrustMachineSsl(certificate, RootCertificateName);
-            if (!machineOk)
+            var machineResult = Helpers.UnixCertificateTrust.TrustMachineSslDetailed(
+                certificate, RootCertificateName);
+            if (!machineResult.Succeeded
+                && machineResult.Kind != CertificateOsTrustKind.MacNeedsManualTrustConfirm)
             {
                 // User trust may already be applied; surface machine failure clearly.
                 LastOsTrustResult = CertificateOsTrustResult.Fail(
@@ -2111,11 +2181,9 @@ public sealed class CertificateManager : IDisposable
                 return false;
             }
 
-            if (LastOsTrustResult.Succeeded ||
-                LastOsTrustResult.Kind == CertificateOsTrustKind.MacNeedsManualTrustConfirm)
-            {
-                LastOsTrustResult = CertificateOsTrustResult.Ok("Root CA trusted machine-wide");
-            }
+            LastOsTrustResult = machineResult.Succeeded
+                ? CertificateOsTrustResult.Ok("Root CA trusted machine-wide")
+                : machineResult;
 
             return true;
         }
@@ -2177,13 +2245,36 @@ public sealed class CertificateManager : IDisposable
     ///     Ensure certificates are setup (creates root if required).
     ///     Also makes root certificate trusted based on initial setup from proxy constructor for user/machine trust.
     /// </summary>
-    public void EnsureRootCertificate()
+    public void EnsureRootCertificate() // NOSONAR S4136 -- overload follows PublishLinuxCaPolicy helper below
     {
         if (!CertValidated) CreateRootCertificate();
 
         if (TrustRootAsAdministrator)
             TrustRootCertificateAsAdmin(MachineTrustRoot);
         else if (UserTrustRoot) TrustRootCertificate(MachineTrustRoot);
+
+        PublishLinuxCaPolicyIfAlreadyTrusted();
+    }
+
+    /// <summary>
+    ///     Edge's cert verifier does not treat an NSS <c>C,,</c> root as a server trust anchor.
+    ///     When this root is already trusted, refresh the Chromium <c>CACertificates</c> policy
+    ///     so a later browser start decrypts without another trust prompt.
+    /// </summary>
+    private void PublishLinuxCaPolicyIfAlreadyTrusted()
+    {
+        if (!RunTime.IsLinux || RootCertificate == null || ShouldSuppressInteractiveRootStoreMutations)
+            return;
+
+        try
+        {
+            if (VerifyOsUserSslTrust())
+                Helpers.LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(RootCertificate);
+        }
+        catch
+        {
+            // NSS trust still covers browsers that read ~/.pki/nssdb.
+        }
     }
 
     /// <summary>
@@ -2244,7 +2335,11 @@ public sealed class CertificateManager : IDisposable
 
         if (!RunTime.IsWindows && RootCertificate != null &&
             !ShouldSuppressInteractiveRootStoreMutations)
-            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+        {
+            var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            if (RunTime.IsLinux && removed)
+                Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+        }
 
         // Firefox prefs / certutil must not run on the CryptUI UI thread — prefs.js locks and
         // certutil against a live profile hang Avalonia as "(Not Responding)". Callers schedule
@@ -2255,7 +2350,7 @@ public sealed class CertificateManager : IDisposable
     ///     Removes the trusted certificates from user store, optionally also from machine store
     /// </summary>
     /// <returns>Should also remove from machine store?</returns>
-    public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false)
+    public bool RemoveTrustedRootCertificateAsAdmin(bool machineTrusted = false) // NOSONAR S3776 -- OS untrust and elevated certutil deletes share store-mutation order
     {
         // Current-user: remove all same-CN entries (current + orphans) without elevation.
         RemoveOrphanedSameCommonNameCertificates(StoreLocation.CurrentUser, keepCurrentThumbprint: false);
@@ -2265,7 +2360,9 @@ public sealed class CertificateManager : IDisposable
             if (RootCertificate == null) return false;
             if (ShouldSuppressInteractiveRootStoreMutations)
                 return true;
-            Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            var removed = Helpers.UnixCertificateTrust.UntrustUserSsl(RootCertificate, RootCertificateName);
+            if (RunTime.IsLinux && removed)
+                Helpers.LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
             // Explicit true when only user-store untrust was requested (no machine step).
             return machineTrusted
                 ? Helpers.UnixCertificateTrust.UntrustMachineSsl(RootCertificate, RootCertificateName)

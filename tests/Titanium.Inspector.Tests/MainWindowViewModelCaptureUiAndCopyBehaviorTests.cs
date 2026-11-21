@@ -128,7 +128,7 @@ public class MainWindowViewModelCaptureUiAndCopyBehaviorTests
     }
 
     [TestMethod]
-    public void BeginBackgroundShutdown_AndEnsureShutdown_AreIdempotent()
+    public async Task BeginBackgroundShutdown_AndEnsureShutdown_AreIdempotent()
     {
         var path = Path.Combine(Path.GetTempPath(), "twp-vm-shut-" + Guid.NewGuid().ToString("N") + ".json");
         try
@@ -142,6 +142,20 @@ public class MainWindowViewModelCaptureUiAndCopyBehaviorTests
             vm.BeginBackgroundShutdown();
             vm.EnsureShutdown();
             vm.EnsureShutdown();
+
+            var path2 = Path.Combine(Path.GetTempPath(), "twp-vm-close-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                var closing = CreateVm(path2);
+                var prepare = closing.PrepareCloseAsync();
+                Assert.IsTrue(closing.IsStatusBusy || closing.StatusText.Contains("Stopping", StringComparison.Ordinal));
+                await prepare;
+                closing.EnsureShutdown();
+            }
+            finally
+            {
+                TryDelete(path2);
+            }
         }
         finally
         {

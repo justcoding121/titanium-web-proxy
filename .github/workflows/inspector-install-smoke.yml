@@ -5,6 +5,13 @@ name: inspector-install-smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Runner leg to run (all runs the full matrix)'
+        required: false
+        default: all
+        type: choice
+        options: [all, windows-latest, ubuntu-latest, macos-latest]
   pull_request:
     branches: [beta, stable]
   push:
@@ -25,7 +32,9 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # pull_request and push leave inputs.os empty, so those events keep every leg.
+        # A non-empty dispatch value other than "all" runs that one runner only.
+        os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -127,6 +136,10 @@ jobs:
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\upgrade.log`""
           & $driver upgrade-verify --exe $installed --browsers chrome,edge,brave,firefox,opera --out $log
           if ($LASTEXITCODE -ne 0) { throw "upgrade-verify failed $LASTEXITCODE" }
+          # An older MSI must not replace the newer install (same as a Mac disk image).
+          $down = Start-Process msiexec -ArgumentList "/i `"$prev`" /qn /norestart /l*v `"$log\downgrade.log`"" -PassThru
+          if (-not $down.WaitForExit(480000)) { throw "msiexec downgrade timed out" }
+          if ($down.ExitCode -eq 0 -or $down.ExitCode -eq 3010) { throw "older MSI replaced the newer install" }
           Invoke-Msi "/x `"$cand`" /qn /norestart /l*v `"$log\uninstall.log`""
           & $driver wipe --out $log
           Invoke-Msi "/i `"$cand`" /qn /norestart /l*v `"$log\fresh-install.log`""
@@ -166,7 +179,7 @@ jobs:
           set -euo pipefail
           sudo rm -rf /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift /usr/local/.ghcup || true
           sudo apt-get update
-          sudo apt-get install -y xvfb xdotool libnss3-tools curl ca-certificates wget gnupg rsync imagemagick libnuma1 dbus libgtk-3-bin
+          sudo apt-get install -y xvfb xdotool libnss3-tools curl ca-certificates wget gnupg rsync imagemagick libnuma1 dbus libgtk-3-bin zenity
           sudo install -d -m 0755 /etc/apt/keyrings
           wget -q https://packages.mozilla.org/apt/repo-signing-key.gpg -O- | sudo tee /etc/apt/keyrings/packages.mozilla.org.asc >/dev/null
           echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" | sudo tee /etc/apt/sources.list.d/mozilla.list >/dev/null
@@ -215,16 +228,43 @@ jobs:
           gh release download "$tag" --pattern 'TitaniumInspector-linux-x64.deb' --dir artifacts/prev --clobber
           out=artifacts/inspector/linux-x64
           dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r linux-x64 --self-contained true -o "$out" -p:Version="$ver"
+          clear_out="${RUNNER_TEMP}/titanium-inspector-clear-linux-x64"
+          mkdir -p "$clear_out"
+          dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj \
+            -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true \
+            -o "$clear_out" -p:Version="$ver"
+          cp -f "$clear_out/titanium-inspector-clear" "$out/titanium-inspector-clear"
+          chmod +x "$out/titanium-inspector-clear"
+          clear_bytes=$(wc -c < "$out/titanium-inspector-clear")
+          if [[ "$clear_bytes" -lt 1000000 ]]; then
+            echo "error: titanium-inspector-clear looks truncated ($clear_bytes bytes)" >&2
+            exit 1
+          fi
           cp -f src/Titanium.Inspector/Assets/app.ico tools/packaging/linux/TitaniumInspector.desktop.in tools/packaging/desktop-icons.sh "$out/"
           cp -f tools/packaging/icons/titanium-inspector.png tools/packaging/icons/titanium-inspector-*.png "$out/"
           chmod +x tools/packaging/linux/build-deb-rpm.sh
           ./tools/packaging/linux/build-deb-rpm.sh inspector "$out" artifacts/candidate "$ver" linux-x64
+          cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
+          # Local and CI packages must ship the launcher; missing .desktop was a silent skip.
+          # Buffer the listing first: with pipefail, `dpkg-deb -c | grep -q` can SIGPIPE
+          # tar when grep exits early and fail the step even though the member is present.
+          deb_contents=$(dpkg-deb -c "$cand")
+          grep -q 'usr/share/applications/titanium-inspector.desktop' <<<"$deb_contents"
+          grep -q 'titanium-inspector-clear' <<<"$deb_contents"
+          if grep -q 'clear-proxy-if-stopped\.sh' <<<"$deb_contents"; then
+            echo "error: candidate .deb still ships clear-proxy-if-stopped.sh" >&2
+            exit 1
+          fi
+          prev_ver=$(dpkg-deb -f artifacts/prev/TitaniumInspector-linux-x64.deb Version)
+          cand_ver=$(dpkg-deb -f "$cand" Version)
+          echo "previous ${prev_ver} candidate ${cand_ver}"
+          dpkg --compare-versions "$cand_ver" gt "$prev_ver"
           dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
           driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
           chmod +x "$driver"
-          cand=$(ls artifacts/candidate/TitaniumInspector-linux-x64.deb)
           sudo dpkg -i artifacts/prev/TitaniumInspector-linux-x64.deb || sudo apt-get install -y -f
           test -x /opt/titanium-inspector/TitaniumInspector
+          test -f /usr/share/applications/titanium-inspector.desktop
           log="${RUNNER_TEMP}/install-smoke"
           mkdir -p "$log"
           run_driver() {
@@ -236,9 +276,76 @@ jobs:
             return "${code}"
           }
           run_driver upgrade-seed --exe /opt/titanium-inspector/TitaniumInspector --browsers firefox --out "$log"
-          sudo dpkg -i "$cand" || sudo apt-get install -y -f
+          mkdir -p "$log/bin"
+          printf '%s\n' '#!/bin/bash' 'exit 0' > "$log/bin/zenity"
+          chmod +x "$log/bin/zenity"
+          PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh "$cand"
+          test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
+          # open-downloaded-package gtk-launches Inspector outside xvfb; a headless
+          # instance can bind the port without enabling system proxy and then
+          # upgrade-verify's CaptureIsListening succeeds against that listener.
+          python3 -c 'import os,signal;exec("def exe(p):\n try:\n  return open(\"/proc/%s/cmdline\"%p,\"rb\").read().split(b\"\\0\",1)[0]\n except OSError:\n  return b\"\"\nfor p in os.listdir(\"/proc\"):\n if p.isdigit() and exe(p)==b\"/opt/titanium-inspector/TitaniumInspector\":\n  os.kill(int(p), signal.SIGTERM)\n")'
+          sleep 1
           run_driver upgrade-verify --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
+          PATH="$log/bin:$PATH" tools/packaging/linux/open-downloaded-package.sh artifacts/prev/TitaniumInspector-linux-x64.deb
+          test "$(dpkg-query -W -f '${Version}' titanium-inspector)" = "$cand_ver"
+          sudo dpkg -i "$cand" || sudo apt-get install -y -f
           sudo dpkg -r titanium-inspector
+          for policy in \
+            /etc/opt/chrome/policies/managed/titanium-inspector-proxy.json \
+            /etc/chromium/policies/managed/titanium-inspector-proxy.json \
+            /etc/opt/edge/policies/managed/titanium-inspector-proxy.json \
+            /etc/brave/policies/managed/titanium-inspector-proxy.json \
+            /etc/opera/policies/managed/titanium-inspector-proxy.json
+          do
+            if [[ -f "${policy}" ]]; then
+              echo "proxy policy left behind: ${policy}" >&2
+              exit 1
+            fi
+          done
+          if command -v gsettings >/dev/null; then
+            mode="$(gsettings get org.gnome.system.proxy mode 2>/dev/null || true)"
+            mode="${mode//\'/}"
+            if [[ -n "${mode}" && "${mode}" != "none" ]]; then
+              echo "proxy mode still ${mode} after uninstall" >&2
+              exit 1
+            fi
+          fi
+          python3 -c 'import os,signal;exec("def exe(p):\n try:\n  return open(\"/proc/%s/cmdline\"%p,\"rb\").read().split(b\"\\0\",1)[0]\n except OSError:\n  return b\"\"\nfor p in os.listdir(\"/proc\"):\n if p.isdigit() and exe(p)==b\"/opt/titanium-inspector/TitaniumInspector\":\n  os.kill(int(p), signal.SIGTERM)\n")'
+          clear_home="${RUNNER_TEMP}/clear-home"
+          rm -rf "$clear_home"
+          mkdir -p "$clear_home/.config/environment.d" \
+            "$clear_home/.mozilla/firefox/test.default" \
+            "$clear_home/.config/google-chrome/policies/managed" \
+            "$clear_home/.config/TitaniumInspector"
+          printf '%s\n' 'http_proxy=http://127.0.0.1:8866' > "$clear_home/.config/environment.d/90-titanium-inspector-proxy.conf"
+          printf '%s\n' 'user_pref("titanium.inspector.proxy.managed", true);' 'user_pref("network.proxy.type", 1);' \
+            > "$clear_home/.mozilla/firefox/test.default/prefs.js"
+          echo '{}' > "$clear_home/.config/google-chrome/policies/managed/titanium-inspector-proxy.json"
+          sleep 120 &
+          keep=$!
+          echo "$keep" > "$clear_home/.config/TitaniumInspector/fail-open-proxy.pid"
+          env http_proxy=http://127.0.0.1:8866 sleep 120 &
+          holder=$!
+          # Prefer the packaged clear binary (same as postinst / autostart). Fall back to
+          # the publish-dir copy when the package is not installed yet in this step.
+          clear_bin=/usr/lib/titanium-inspector/titanium-inspector-clear
+          if [[ ! -x "$clear_bin" ]]; then
+            clear_bin="$out/titanium-inspector-clear"
+          fi
+          test -x "$clear_bin"
+          HOME="$clear_home" "$clear_bin"
+          test ! -f "$clear_home/.config/environment.d/90-titanium-inspector-proxy.conf"
+          test ! -f "$clear_home/.config/google-chrome/policies/managed/titanium-inspector-proxy.json"
+          grep -q 'network.proxy.type", 5' "$clear_home/.mozilla/firefox/test.default/prefs.js"
+          # C# ForceClear stops the fail-open helper (pid file + process) after stripping hooks.
+          if kill -0 "$keep" 2>/dev/null; then
+            echo "clear binary left the fail-open helper running" >&2
+            exit 1
+          fi
+          kill "$holder" || true
+          wait "$holder" || true
+          HOME="$clear_home" "$clear_bin"
           run_driver wipe --out "$log"
           sudo dpkg -i "$cand" || sudo apt-get install -y -f
           run_driver fresh --exe /opt/titanium-inspector/TitaniumInspector --browsers chrome,edge,brave,firefox,opera --out "$log"
@@ -363,22 +470,91 @@ jobs:
           run_driver upgrade-verify --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           rm -rf "/Applications/Titanium Inspector.app"
           run_driver wipe --out "$log"
-          vol="${cand_app}/Contents/MacOS/TitaniumInspector"
-          test -x "$vol"
-          run_driver fresh --exe "$vol" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
+          # Launch the copy outside the disk image. The fresh Safari proof only
+          # recorded CONNECT while the binary was still on the mounted image.
+          ditto "${cand_app}" "/Applications/Titanium Inspector.app"
+          test -x "$installed"
+          run_driver fresh --exe "$installed" --browsers chrome,edge,brave,firefox,opera,safari --out "$log"
           detach
           trap - EXIT
-          # Killing the Inspector skips its proxy restore, so NuGet and the CLI would
-          # still be pointed at a dead listener.
-          while IFS= read -r service; do
-            service="${service#\*}"
-            service="${service#"${service%%[![:space:]]*}"}"
-            if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
-              continue
+          # File/Quit must clear networksetup; kill -9 leaves it for the operator.
+          mac_proxy_on() {
+            local service web
+            while IFS= read -r service; do
+              service="${service#\*}"
+              service="${service#"${service%%[![:space:]]*}"}"
+              if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
+                continue
+              fi
+              web="$(networksetup -getwebproxy "${service}" 2>/dev/null || true)"
+              if printf '%s\n' "${web}" | grep -qi 'Enabled: Yes'; then
+                return 0
+              fi
+            done < <(networksetup -listallnetworkservices)
+            return 1
+          }
+          mac_proxy_off_all() {
+            local service
+            while IFS= read -r service; do
+              service="${service#\*}"
+              service="${service#"${service%%[![:space:]]*}"}"
+              if [[ -z "${service}" || "${service}" == "An asterisk"* ]]; then
+                continue
+              fi
+              networksetup -setwebproxystate "${service}" off || true
+              networksetup -setsecurewebproxystate "${service}" off || true
+            done < <(networksetup -listallnetworkservices)
+          }
+          open "/Applications/Titanium Inspector.app"
+          for i in $(seq 1 40); do
+            if lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -q TitaniumInspector; then
+              break
             fi
-            networksetup -setwebproxystate "${service}" off || true
-            networksetup -setsecurewebproxystate "${service}" off || true
-          done < <(networksetup -listallnetworkservices)
+            sleep 0.5
+          done
+          for i in $(seq 1 40); do
+            mac_proxy_on && break
+            sleep 0.5
+          done
+          if ! mac_proxy_on; then
+            echo "system proxy stayed off after launch" >&2
+            exit 1
+          fi
+          osascript -e 'tell application "Titanium Inspector" to quit' >/dev/null 2>&1 || true
+          sleep 3
+          if pgrep -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" >/dev/null; then
+            pkill -TERM -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" || true
+            sleep 2
+          fi
+          if mac_proxy_on; then
+            echo "system proxy still on after graceful quit" >&2
+            exit 1
+          fi
+          echo "pass mac graceful quit cleared system proxy" | tee -a "$log/driver.log"
+          open "/Applications/Titanium Inspector.app"
+          for i in $(seq 1 40); do
+            if lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -q TitaniumInspector; then
+              break
+            fi
+            sleep 0.5
+          done
+          for i in $(seq 1 40); do
+            mac_proxy_on && break
+            sleep 0.5
+          done
+          if ! mac_proxy_on; then
+            echo "system proxy stayed off before kill -9" >&2
+            exit 1
+          fi
+          pkill -9 -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" || true
+          sleep 2
+          if ! mac_proxy_on; then
+            echo "system proxy was cleared after kill -9; expected operator cleanup" >&2
+            exit 1
+          fi
+          echo "pass mac kill -9 left system proxy on" | tee -a "$log/driver.log"
+          # Dead listener would break NuGet and the CLI publish path below.
+          mac_proxy_off_all
           {
             echo "cli-layout begin"
             rm -rf "${RUNNER_TEMP}/cli-install"

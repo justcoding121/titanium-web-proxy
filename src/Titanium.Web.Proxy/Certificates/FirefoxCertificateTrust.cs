@@ -32,6 +32,8 @@ public static class FirefoxCertificateTrust
     private const string LibraryDirName = "Library";
     private const string ApplicationSupportDirName = "Application Support";
     private const string FirefoxDirName = "Firefox";
+    private const string ProfilePathPrefix = "Path=";
+    private const string ProfileIsRelativePrefix = "IsRelative=";
 
     /// <summary>
     ///     Last step tag from <see cref="TryEnableWindowsEnterpriseRoots"/> /
@@ -595,6 +597,15 @@ public static class FirefoxCertificateTrust
     }
 
     /// <summary>
+    ///     Imports the CA into every installed Firefox profile NSS DB (classic, Snap, Flatpak).
+    ///     Firefox does not use <c>~/.pki/nssdb</c>, so the decrypt checkbox has to trust each profile.
+    /// </summary>
+    public static CertificateOsTrustResult TrustInstalledProfiles(
+        X509Certificate2 certificate,
+        string friendlyName) =>
+        TrustInstalledProfiles(certificate, friendlyName, new ProcessRunner());
+
+    /// <summary>
     ///     Imports the CA into the default Firefox profile NSS DB via <c>certutil</c>.
     ///     Caller should ensure Firefox is not locking the DB.
     /// </summary>
@@ -626,6 +637,70 @@ public static class FirefoxCertificateTrust
         catch
         {
             // best-effort
+        }
+    }
+
+    internal static CertificateOsTrustResult TrustInstalledProfiles(
+        X509Certificate2 certificate,
+        string friendlyName,
+        IProcessRunner runner)
+    {
+        var profiles = ListInstalledProfileDirectories();
+        if (profiles.Count == 0)
+            return TrustDefaultProfile(certificate, friendlyName, runner);
+
+        var certutil = UnixCertificateTrust.FindCertutil(runner);
+        if (certutil is null)
+            return UnixCertificateTrust.ProbeCertutilInstall(runner);
+
+        var cerPath = UnixCertificateTrust.WriteTempCer(certificate);
+        try
+        {
+            var importedProfileCount = 0;
+            string? lastError = null;
+            foreach (var profileDir in profiles)
+            {
+                if (!File.Exists(Path.Combine(profileDir, "cert9.db")) &&
+                    !File.Exists(Path.Combine(profileDir, "cert8.db")))
+                    continue;
+
+                runner.Run(certutil, $"-d sql:\"{profileDir}\" -D -n \"{Escape(friendlyName)}\"");
+                var add = runner.Run(certutil,
+                    $"-d sql:\"{profileDir}\" -A -t \"C,,\" -n \"{Escape(friendlyName)}\" -i \"{cerPath}\"");
+                var list = runner.Run(certutil, $"-d sql:\"{profileDir}\" -L");
+                if (add is { Succeeded: true } &&
+                    list is { Succeeded: true } &&
+                    list.StandardOutput.Contains(friendlyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    importedProfileCount++;
+                    continue;
+                }
+
+                lastError = string.IsNullOrWhiteSpace(add?.StandardError)
+                    ? "certutil failed to import the CA into " + profileDir
+                    : add.StandardError.Trim();
+            }
+
+            if (importedProfileCount > 0)
+            {
+                return CertificateOsTrustResult.Ok(
+                    "Firefox will use the Titanium root CA in " + importedProfileCount +
+                    " profile(s) after you restart Firefox");
+            }
+
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.NssFailed,
+                lastError ?? "No Firefox profile database accepted the CA");
+        }
+        catch (Exception ex)
+        {
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.NssFailed,
+                "Firefox NSS import failed: " + ex.Message);
+        }
+        finally
+        {
+            try { File.Delete(cerPath); } catch { /* best effort */ }
         }
     }
 
@@ -935,11 +1010,11 @@ public static class FirefoxCertificateTrust
                 continue;
             }
 
-            if (line.StartsWith("Path=", StringComparison.OrdinalIgnoreCase))
-                currentPath = line["Path=".Length..].Trim();
-            else if (line.StartsWith("IsRelative=", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith(ProfilePathPrefix, StringComparison.OrdinalIgnoreCase))
+                currentPath = line[ProfilePathPrefix.Length..].Trim();
+            else if (line.StartsWith(ProfileIsRelativePrefix, StringComparison.OrdinalIgnoreCase))
             {
-                var value = line["IsRelative=".Length..].Trim();
+                var value = line[ProfileIsRelativePrefix.Length..].Trim();
                 isRelative = value is not ("0" or "false");
             }
             else if (line.StartsWith("Default=1", StringComparison.OrdinalIgnoreCase))
@@ -953,6 +1028,69 @@ public static class FirefoxCertificateTrust
         if (!string.IsNullOrWhiteSpace(currentPath))
             return (currentPath, isRelative);
         return null;
+    }
+
+    private static List<string> ListInstalledProfileDirectories()
+    {
+        var found = new List<string>();
+        foreach (var root in GetFirefoxRoots())
+        {
+            var iniPath = Path.Combine(root, "profiles.ini");
+            if (!File.Exists(iniPath))
+                continue;
+            string text;
+            try
+            {
+                text = File.ReadAllText(iniPath);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var entry in ParseProfileEntries(text))
+            {
+                var full = entry.IsRelative ? Path.GetFullPath(Path.Combine(root, entry.Path)) : entry.Path;
+                if (Directory.Exists(full))
+                    found.Add(full);
+            }
+        }
+
+        return found.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>Every Path= under a Profile section.</summary>
+    internal static List<(string Path, bool IsRelative)> ParseProfileEntries(string profilesIni)
+    {
+        var found = new List<(string Path, bool IsRelative)>();
+        string? currentPath = null;
+        var isRelative = true;
+        using var reader = new StringReader(profilesIni);
+        string? line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            line = line.Trim();
+            if (line.StartsWith('[') && line.EndsWith(']'))
+            {
+                if (!string.IsNullOrWhiteSpace(currentPath))
+                    found.Add((currentPath, isRelative));
+                currentPath = null;
+                isRelative = true;
+                continue;
+            }
+
+            if (line.StartsWith(ProfilePathPrefix, StringComparison.OrdinalIgnoreCase))
+                currentPath = line[ProfilePathPrefix.Length..].Trim();
+            else if (line.StartsWith(ProfileIsRelativePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var value = line[ProfileIsRelativePrefix.Length..].Trim();
+                isRelative = value is not ("0" or "false");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentPath))
+            found.Add((currentPath, isRelative));
+        return found;
     }
 
     private static bool TryGetProfilesIniPath(out string iniPath)

@@ -48,13 +48,19 @@ internal static partial class UnixCertificateTrust
         "/usr/local/bin/brew",
     ];
 
+    // User domain only. `dump-trust-settings -d` and `trust-settings-export -d`
+    // read the admin trust domain and pop an administrator password dialog on
+    // every call. Decrypt checks run this path often. Admin-domain records are
+    // read from /Library/Security/Trust Settings/Admin.plist instead.
     private static readonly string[] MacDumpTrustSettingsArgs =
     [
-        "dump-trust-settings -d",
         "dump-trust-settings",
+        // Admin-domain System.keychain policies (sudo add-trusted-cert -d) only appear here.
+        "dump-trust-settings -d",
     ];
 
-    private static readonly bool[] MacTrustExportAdminDomain = [true, false];
+    private static readonly bool[] MacTrustExportAdminDomain = [false];
+
     /// <summary>
     ///     Trusts <paramref name="certificate"/> for SSL in the current-user store backends
     ///     (login keychain on macOS, NSS db on Linux).
@@ -123,7 +129,20 @@ internal static partial class UnixCertificateTrust
     ///     Trusts the certificate machine-wide with an admin prompt (System keychain / update-ca-certificates).
     /// </summary>
     public static bool TrustMachineSsl(X509Certificate2 certificate, string friendlyName,
-        IProcessRunner? runner = null, IElevationPrompt? elevation = null)
+        IProcessRunner? runner = null, IElevationPrompt? elevation = null) =>
+        TrustMachineSslDetailed(certificate, friendlyName, runner, elevation).Succeeded;
+
+    /// <summary>
+    ///     Machine-wide SSL trust with outcome kind. On macOS this writes an SSL policy into
+    ///     the login keychain (one trust-settings dialog). Admin-domain
+    ///     <c>add-trusted-cert -d</c> from an elevated shell cannot show that dialog and
+    ///     fails with “no user interaction was possible.”
+    /// </summary>
+    public static CertificateOsTrustResult TrustMachineSslDetailed(
+        X509Certificate2 certificate,
+        string friendlyName,
+        IProcessRunner? runner = null,
+        IElevationPrompt? elevation = null)
     {
         runner ??= new ProcessRunner();
         elevation ??= new OsElevationPrompt(runner);
@@ -131,16 +150,27 @@ internal static partial class UnixCertificateTrust
         try
         {
             if (RunTime.IsMac)
-                return TrustMacSystem(elevation, cerPath);
+                return TrustMacSystemDetailed(runner, elevation, cerPath, certificate);
 
             if (RunTime.IsLinux)
-                return TrustLinuxSystem(elevation, cerPath, friendlyName);
+            {
+                var ok = TrustLinuxSystem(elevation, cerPath, friendlyName);
+                return ok
+                    ? CertificateOsTrustResult.Ok("Root CA trusted machine-wide")
+                    : CertificateOsTrustResult.Fail(
+                        CertificateOsTrustKind.Failed,
+                        "Machine-wide CA trust failed");
+            }
 
-            return false;
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Unsupported,
+                "OS SSL trust helpers are only available on macOS and Linux");
         }
-        catch
+        catch (Exception ex)
         {
-            return false;
+            return CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed,
+                "Machine-wide CA trust failed: " + ex.Message);
         }
         finally
         {
@@ -472,12 +502,21 @@ internal static partial class UnixCertificateTrust
     private static CertificateOsTrustResult TrustMacUserDetailed(
         IProcessRunner runner, string cerPath, X509Certificate2 certificate)
     {
-        var added = TrustMacUser(runner, cerPath, certificate);
+        var added = TrustMacUser(runner, cerPath, certificate, out var error);
         if (!added)
         {
+            if (IsMacKeychainUserCancel(error))
+            {
+                return CertificateOsTrustResult.Fail(
+                    CertificateOsTrustKind.Cancelled,
+                    "Root CA install cancelled");
+            }
+
             return CertificateOsTrustResult.Fail(
                 CertificateOsTrustKind.MacKeychainFailed,
-                "Failed to add the root CA to the login keychain");
+                string.IsNullOrWhiteSpace(error)
+                    ? "Failed to add the root CA to the login keychain"
+                    : "Failed to add the root CA to the login keychain: " + error);
         }
 
         if (VerifyMacSslTrust(runner, certificate))
@@ -489,26 +528,96 @@ internal static partial class UnixCertificateTrust
     }
 
     private static bool TrustMacUser(
-        IProcessRunner runner, string cerPath, X509Certificate2? certificate = null)
+        IProcessRunner runner, string cerPath, X509Certificate2? certificate, out string error)
     {
+        error = "";
+        // One login keychain only. Trying both login.keychain-db and login.keychain in one
+        // decrypt can show three Keychain password dialogs (stale deletes + two adds).
+        var keychain = ResolveLoginKeychainPath();
+        if (string.IsNullOrWhiteSpace(keychain))
+        {
+            error = "Login keychain not found";
+            return false;
+        }
+
+        // Unlock once so stale deletes and the single add-trusted-cert share one auth dialog.
+        // An already-unlocked keychain returns success without prompting.
+        runner.Run(SecurityBinary, $"unlock-keychain \"{keychain}\"");
+
         // Drop same-CN Keychain copies that are not this generation so Chrome/Safari do not
         // keep an untrusted/stale Titanium root while we add the current one.
         if (certificate is not null)
+        {
             TryRemoveStaleMacSameCommonNameRoots(runner, certificate);
+            if (VerifyMacSslTrust(runner, certificate))
+                return true;
+        }
 
-        // User trust domain (no -d). Using -d writes admin-domain stubs and often leaves
-        // System.keychain copies that Chrome keeps trusting after "Remove CA".
-        // -r trustRoot: trust as root CA in the login keychain.
-        var keychain = UserLoginKeychainDbPath();
-        var result = runner.Run(SecurityBinary,
-            $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
-        if (result is { Succeeded: true }) return true;
+        // User trust domain, with an SSL policy. -p ssl is what Chrome and Safari honor.
+        // Do not pass -d and do not wrap this in osascript. Admin-domain add-trusted-cert
+        // from `do shell script ... with administrator privileges` runs as root with no
+        // GUI, and macOS returns "SecTrustSettingsSetTrustSettings: The authorization was
+        // denied since no user interaction was possible." The fallback then prompts again.
+        // This command shows one Certificate Trust Settings dialog and writes a policy
+        // dump-trust-settings can read without the admin domain.
+        var last = runner.Run(SecurityBinary,
+            $"add-trusted-cert -r trustRoot -p ssl -k \"{keychain}\" \"{cerPath}\"");
+        if (last is { Succeeded: true })
+            return true;
 
-        // Older macOS keychain name
-        keychain = UserLoginKeychainPath();
-        result = runner.Run(SecurityBinary,
-            $"add-trusted-cert -r trustRoot -k \"{keychain}\" \"{cerPath}\"");
-        return result is { Succeeded: true };
+        error = FirstLine(last?.StandardError);
+        if (string.IsNullOrWhiteSpace(error))
+            error = FirstLine(last?.StandardOutput);
+        return false;
+    }
+
+    /// <summary>
+    ///     Prefer <c>login.keychain-db</c> (current macOS). Fall back to legacy
+    ///     <c>login.keychain</c> when the db file is missing.
+    /// </summary>
+    private static string? ResolveLoginKeychainPath()
+    {
+        var db = UserLoginKeychainDbPath();
+        if (!string.IsNullOrWhiteSpace(db) && File.Exists(db))
+            return db;
+        var legacy = UserLoginKeychainPath();
+        if (!string.IsNullOrWhiteSpace(legacy) && File.Exists(legacy))
+            return legacy;
+        // Paths may be absent in unit tests that stub the runner; prefer db then legacy.
+        return !string.IsNullOrWhiteSpace(db) ? db : legacy;
+    }
+
+    /// <summary>
+    ///     User dismissed Certificate Trust Settings (or the keychain unlock).
+    ///     Treat like Windows CryptUI No: quiet cancel, not a Keychain failure.
+    /// </summary>
+    internal static bool IsMacKeychainUserCancel(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error))
+            return false;
+
+        if (error.Contains("errSecUserCanceled", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("user canceled", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("user cancelled", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("user canceled the operation", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // security(1) often prints "The operation was canceled by the user" or exit text "-128".
+        if (error.Contains("canceled by the user", StringComparison.OrdinalIgnoreCase) ||
+            error.Contains("cancelled by the user", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var trimmed = error.Trim();
+        return trimmed is "-128" or "errSecUserCanceled" ||
+               trimmed.Contains("-128", StringComparison.Ordinal);
+    }
+
+    private static string FirstLine(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "";
+        var line = text.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        return line.Length == 0 ? "" : line[0].Trim();
     }
 
     /// <summary>
@@ -675,7 +784,11 @@ internal static partial class UnixCertificateTrust
         part.Contains("kSecTrustSettingsResultTrustAsRoot", StringComparison.Ordinal) ||
         part.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
         part.Contains("Trust Root", StringComparison.OrdinalIgnoreCase) ||
-        part.Contains("Trust As Root", StringComparison.OrdinalIgnoreCase);
+        part.Contains("Trust As Root", StringComparison.OrdinalIgnoreCase) ||
+        // Recent macOS `add-trusted-cert -d -r trustRoot -p ssl` may dump Policy OID SSL
+        // without echoing kSecTrustSettingsResultTrustRoot.
+        (part.Contains("Policy OID", StringComparison.OrdinalIgnoreCase) &&
+         part.Contains("SSL", StringComparison.OrdinalIgnoreCase));
 
     private static bool BlockMentionsOtherSha1(string part, string sha1)
     {
@@ -846,7 +959,13 @@ internal static partial class UnixCertificateTrust
                window.Contains("kSecTrustSettingsResultProceed", StringComparison.Ordinal) ||
                HasFoldedTrustResult(window, "=1") ||
                HasFoldedTrustResult(window, "=2") ||
-               window.Contains("TrustAsRoot", StringComparison.OrdinalIgnoreCase);
+               window.Contains("TrustAsRoot", StringComparison.OrdinalIgnoreCase) ||
+               window.Contains("TrustRoot", StringComparison.OrdinalIgnoreCase) ||
+               // Policy-only SSL trust (no explicit Result enum) still allows MITM.
+               window.Contains("sslServer", StringComparison.OrdinalIgnoreCase) ||
+               window.Contains("kSecTrustSettingsPolicy", StringComparison.Ordinal) ||
+               (window.Contains("PolicyOID", StringComparison.OrdinalIgnoreCase) &&
+                window.Contains("SSL", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool HasFoldedTrustResult(string window, string resultToken)
@@ -1023,11 +1142,19 @@ internal static partial class UnixCertificateTrust
                byHash.StandardOutput.Contains(sha1, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool TrustMacSystem(IElevationPrompt elevation, string cerPath)
+    /// <summary>
+    ///     One trust-settings dialog: SSL policy in the login keychain. System.keychain
+    ///     <c>add-trusted-cert -d</c> is not used — from an elevated shell it cannot show
+    ///     the trust dialog and a second prompt does not succeed either.
+    /// </summary>
+    private static CertificateOsTrustResult TrustMacSystemDetailed(
+        IProcessRunner runner,
+        IElevationPrompt elevation,
+        string cerPath,
+        X509Certificate2 certificate)
     {
-        var result = elevation.RunElevated("/usr/bin/security",
-            $"add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cerPath}\"");
-        return result is { Succeeded: true };
+        _ = elevation;
+        return TrustMacUserDetailed(runner, cerPath, certificate);
     }
 
     private static CertificateOsTrustResult TrustLinuxNssDetailed(
@@ -1067,6 +1194,8 @@ internal static partial class UnixCertificateTrust
         if (NssListContainsNickname(runner, certutil, nssDir, friendlyName))
         {
             TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
+            if (TryReloadCertificateFromCer(cerPath) is { } trusted)
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(trusted);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
         }
 
@@ -1080,6 +1209,8 @@ internal static partial class UnixCertificateTrust
             NssListContainsNickname(runner, certutil, nssDir, friendlyName))
         {
             TryTrustAdditionalLinuxNss(runner, certutil, cerPath, friendlyName);
+            if (TryReloadCertificateFromCer(cerPath) is { } trusted)
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(trusted);
             return CertificateOsTrustResult.Ok("Root CA trusted in user NSS database");
         }
 
@@ -1186,9 +1317,15 @@ internal static partial class UnixCertificateTrust
         }
 
         if (!anyDb)
+        {
+            LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
             return true;
+        }
 
-        return deleted || !VerifyLinuxNssTrust(runner, certificate);
+        var gone = deleted || !VerifyLinuxNssTrust(runner, certificate);
+        if (gone)
+            LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+        return gone;
     }
 
     private static bool UntrustLinuxNssDirectory(

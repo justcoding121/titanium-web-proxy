@@ -28,7 +28,17 @@ public static class MitmExclusionDefaults
     ];
 
     /// <summary>Pinning hosts that should tunnel (DecryptSsl=false) but stay visible.</summary>
-    public static readonly string[] TunnelOnlyPinningDomains = ["dropbox.com", "webex.com"];
+    public static readonly string[] TunnelOnlyPinningDomains =
+    [
+        "dropbox.com",
+        "webex.com",
+        // Safari / Apple services pin or reject MITM; opaque avoids multi-host hang storms.
+        "apple.com",
+        "icloud.com",
+        "icloud-content.com",
+        "mzstatic.com",
+        "cdn-apple.com",
+    ];
 
     /// <summary>
     ///     Builds <see cref="SystemProxySettings"/> with factory identity bypass rules and loopback

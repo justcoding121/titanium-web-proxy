@@ -49,11 +49,21 @@ public class InspectorFeatureSanityE2ETests
             Assert.IsTrue(vm.SystemProxy);
 
             vm.InstallCaCommand.Execute(null);
-            await Task.Delay(80);
+            // Install CA holds the trust gate until it finishes. A fixed delay lets a slow
+            // macOS runner still be inside that gate, and Decrypt HTTPS then refuses to turn on.
+            await WaitAsync(
+                () => interception.IsRootTrusted && !vm.IsStatusBusy,
+                () => "Install CA did not finish. trusted=" + interception.IsRootTrusted
+                      + " busy=" + vm.IsStatusBusy
+                      + " status=" + vm.StatusText);
             Assert.IsTrue(interception.IsRootTrusted, vm.StatusText);
 
             vm.DecryptHttps = true;
-            await WaitAsync(() => vm.DecryptHttps);
+            await WaitAsync(
+                () => vm.DecryptHttps,
+                () => "Decrypt HTTPS did not stay on. status=" + vm.StatusText
+                      + " busy=" + vm.IsStatusBusy
+                      + " trusted=" + interception.IsRootTrusted);
             Assert.IsTrue(interception.DecryptHttps);
 
             vm.OpenToolsComposerCommand.Execute(null);

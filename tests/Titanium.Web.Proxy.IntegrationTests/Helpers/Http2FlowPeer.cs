@@ -47,8 +47,22 @@ internal sealed class Http2FlowPeer : IDisposable
                 {
                     case Http2FrameType.Settings when (frame.Flags & Http2FrameFlag.Ack) == 0:
                         ApplySettings(frame.Payload);
-                        await WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack, Array.Empty<byte>());
-                        break;
+                        // Ack after the frame is queued, and do not wait for the write here. This loop is
+                        // the only socket reader; blocking it on writeGate (held by a test DATA write that
+                        // itself needs the proxy to keep reading) deadlocks a flow-controlled body.
+                        frames.Writer.TryWrite(frame);
+                        var ack = WriteFrameAsync(Http2FrameType.Settings, 0, Http2FrameFlag.Ack,
+                            Array.Empty<byte>());
+                        if (!ack.IsCompletedSuccessfully)
+                        {
+                            _ = ack.ContinueWith(t =>
+                            {
+                                if (t.IsFaulted)
+                                    frames.Writer.TryComplete(t.Exception!.GetBaseException());
+                            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                        }
+
+                        continue;
                     case Http2FrameType.WindowUpdate when frame.Payload.Length == 4:
                         var increment = (long)(BinaryPrimitives.ReadUInt32BigEndian(frame.Payload) & 0x7fffffff);
                         lock (windowLock)

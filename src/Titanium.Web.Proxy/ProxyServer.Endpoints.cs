@@ -48,18 +48,18 @@ public partial class ProxyServer : IDisposable
                 while (true)
                 {
                     dualAttempts++;
-                    Listen(endPoint);
-
-                    if (!wantDualQuic)
-                        break;
-
-                    var dualListen = (TransparentProxyEndPoint)endPoint;
-                    if (!dualListen.DecryptSsl)
-                        throw new InvalidOperationException(
-                            "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
-
                     try
                     {
+                        Listen(endPoint);
+
+                        if (!wantDualQuic)
+                            break;
+
+                        var dualListen = (TransparentProxyEndPoint)endPoint;
+                        if (!dualListen.DecryptSsl)
+                            throw new InvalidOperationException(
+                                "TransparentProxyEndPoint.EnableHttp3 requires DecryptSsl = true.");
+
                         quicListenerCts ??= new CancellationTokenSource();
                         ListenQuic(dualListen);
                         break;
@@ -67,9 +67,26 @@ public partial class ProxyServer : IDisposable
                     catch (Exception ex) when (ephemeralDual && dualAttempts < MaxEphemeralDualListenAttempts
                                                && IsAddressAlreadyInUse(ex))
                     {
-                        QuitListenQuic(dualListen);
-                        QuitListen(endPoint);
-                        endPoint.Port = 0;
+                        var failedPort = endPoint.Port;
+                        try
+                        {
+                            QuitListenQuic((TransparentProxyEndPoint)endPoint);
+                        }
+                        catch (Exception)
+                        {
+                            // The QUIC listener may never have started.
+                        }
+
+                        try
+                        {
+                            QuitListen(endPoint);
+                        }
+                        catch (Exception)
+                        {
+                            // The TCP listener may already have been released by the failed bind.
+                        }
+
+                        endPoint.Port = NextEphemeralDualListenPort(failedPort);
                     }
                 }
             }

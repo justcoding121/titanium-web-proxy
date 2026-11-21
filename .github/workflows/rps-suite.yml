@@ -128,7 +128,7 @@ jobs:
     uses: ./.github/workflows/rps-saturation.yml
     with:
       mode: ${{ inputs.mode }}
-      runner_os: ubuntu-latest
+      runner_os: ubuntu-26.04
       arm_shard: ${{ matrix.key }}
       repeats: ${{ inputs.repeats }}
 
@@ -188,7 +188,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Could not list status artifacts (gh exit $LASTEXITCODE)" }
           $statusNames = @($arts | Where-Object { $_ })
           $linuxOnly = $env:SUITE_MODE -eq 'compare-editions'
-          $osLabels = [ordered]@{ linux = 'ubuntu-latest' }
+          $osLabels = [ordered]@{ linux = 'ubuntu-26.04' }
           if (-not $linuxOnly) {
             $osLabels.windows = 'windows-latest'
             $osLabels.macos = 'macos-15'

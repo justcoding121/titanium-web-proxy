@@ -31,8 +31,32 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
     {
         _runner = runner ?? new ProcessRunner();
         _elevation = elevation ?? new OsElevationPrompt(_runner);
-        _processExitHandler = (_, _) => RestoreOriginalSettings();
-        _unhandledExceptionHandler = (_, _) => RestoreOriginalSettings();
+        _processExitHandler = (_, _) =>
+        {
+            RestoreOriginalSettings();
+            // Restore can no-op or re-apply a polluted snapshot during AppleScript quit.
+            // Always drop leftover loopback proxies so browsing survives process exit.
+            try
+            {
+                InstalledProxyCleanup.ForceClear();
+            }
+            catch
+            {
+                // process-exit path must not throw
+            }
+        };
+        _unhandledExceptionHandler = (_, _) =>
+        {
+            RestoreOriginalSettings();
+            try
+            {
+                InstalledProxyCleanup.ForceClear();
+            }
+            catch
+            {
+                // process-exit path must not throw
+            }
+        };
         AppDomain.CurrentDomain.ProcessExit += _processExitHandler;
         AppDomain.CurrentDomain.UnhandledException += _unhandledExceptionHandler;
     }
@@ -200,6 +224,26 @@ internal sealed class MacOsSystemProxyBackend : ISystemProxyBackend
         }
 
         return stale;
+    }
+
+    public ProxyProtocolType GetOrphanedLocalProxyProtocols(Func<string, int, bool> isListening)
+    {
+        ArgumentNullException.ThrowIfNull(isListening);
+        var orphaned = ProxyProtocolType.None;
+        foreach (var service in ListNetworkServices())
+        {
+            var http = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getwebproxy \"{Escape(service)}\""));
+            if (http.Enabled && http.Port > 0 && UnixProxyBypassMapper.IsLocalHost(http.Host)
+                && !isListening(http.Host, http.Port))
+                orphaned |= ProxyProtocolType.Http;
+
+            var https = ParseProxyState(_runner.Run(NetworkSetupCommand, $"-getsecurewebproxy \"{Escape(service)}\""));
+            if (https.Enabled && https.Port > 0 && UnixProxyBypassMapper.IsLocalHost(https.Host)
+                && !isListening(https.Host, https.Port))
+                orphaned |= ProxyProtocolType.Https;
+        }
+
+        return orphaned;
     }
 
     public void Dispose()

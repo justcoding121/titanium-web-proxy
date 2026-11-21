@@ -389,6 +389,41 @@ public class BindEndpointUxTests
         }
     }
 
+    [TestMethod]
+    public async Task TryAutoStartAsync_WithCaptureOff_StillClearsOrphanedLocalProxy()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.AutoStartCapture = false;
+            settings.Current.AutoSystemProxyOnStart = false;
+            settings.Save();
+
+            var recorder = new RecordingSystemProxyController();
+            using var interception = new InterceptionService(recorder) { UseInMemoryTrustState = true };
+            var registry = new SessionRegistry();
+            var vm = new MainWindowViewModel(
+                new SessionStreamBuffer(registry),
+                registry,
+                new UpdateService(settings),
+                settings,
+                interception);
+
+            await vm.TryAutoStartAsync();
+
+            Assert.AreEqual(1, recorder.ClearOrphanedCount);
+            Assert.IsFalse(interception.IsRunning);
+            Assert.AreEqual(0, recorder.SetCount);
+
+            vm.EnsureShutdown();
+        }
+        finally
+        {
+            TryDelete(path);
+        }
+    }
+
     private static string TempSettingsPath() =>
         Path.Combine(Path.GetTempPath(), "twp-bind-ux-" + Guid.NewGuid().ToString("N") + ".json");
 

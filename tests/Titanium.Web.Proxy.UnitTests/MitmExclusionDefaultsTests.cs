@@ -54,6 +54,17 @@ public class MitmExclusionDefaultsTests
     }
 
     [TestMethod]
+    public void IsBuiltInSslBypass_AppleSafariServices_AreTunnelOnly()
+    {
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("www.apple.com"));
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("api-safari-ause1c.smoot.apple.com"));
+        Assert.IsTrue(MitmExclusionDefaults.IsBuiltInSslBypass("www.icloud.com"));
+        Assert.IsFalse(MitmExclusionDefaults.IsBuiltInSslBypass("www.google.com"));
+        Assert.IsTrue(MitmExclusionDefaults.ShouldDisableSslDecrypt(
+            "www.apple.com", [], null, MitmExclusionMode.Merge));
+    }
+
+    [TestMethod]
     public void ShouldDisableSslDecrypt_Replace_HonorsCallerListOnly()
     {
         Assert.IsFalse(MitmExclusionDefaults.ShouldDisableSslDecrypt(

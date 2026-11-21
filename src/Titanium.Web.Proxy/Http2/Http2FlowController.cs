@@ -227,8 +227,9 @@ internal sealed class Http2FlowController
     ///     Non-blocking reserve of as many of <paramref name="bytes" /> as currently fit in both the
     ///     connection window and the stream window (Kestrel <c>CheckStreamWindow</c> shape). Returns the
     ///     reserved count (0..<paramref name="bytes" />); never waits. Used by the compressed-relay DATA
-    ///     path so a short client window cannot park the shared origin frame reader. Unknown streams
-    ///     yield 0 (same race-safe contract as <see cref="TryReserve"/>).
+    ///     path so a short client window cannot park the shared origin frame reader. A remainder below
+    ///     <see cref="PartialDataFrameFloor"/> is left unspent so the peer is not trained onto tiny frames.
+    ///     Unknown streams yield 0 (same race-safe contract as <see cref="TryReserve"/>).
     /// </summary>
     public int TryReservePartial(int streamId, int bytes)
     {
@@ -243,6 +244,15 @@ internal sealed class Http2FlowController
             var connAvail = connectionWindow > 0 ? connectionWindow : 0;
             var available = (int)Math.Min(Math.Min(streamAvail, connAvail), bytes);
             if (available <= 0)
+                return 0;
+
+            // A scrap of credit (the RFC 65535 window's 16383-byte tail is fine; a 1-byte tail is not)
+            // must not go out as its own DATA frame. The peer echoes that size on WINDOW_UPDATE and the
+            // stream never returns to full frames. Leave the scrap in the window until a later update
+            // covers the frame or reaches PartialDataFrameFloor. Peers that advertise an initial stream
+            // window below the floor are exempt: every frame would otherwise park forever.
+            if (available < bytes && available < PartialDataFrameFloor
+                && initialStreamWindow >= PartialDataFrameFloor)
                 return 0;
 
             connectionWindow -= available;

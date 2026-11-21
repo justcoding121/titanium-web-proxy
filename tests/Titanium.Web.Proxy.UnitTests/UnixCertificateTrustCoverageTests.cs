@@ -258,6 +258,18 @@ public class UnixCertificateTrustCoverageTests
                 failAdd, cerPath, cert)!;
             Assert.AreEqual(CertificateOsTrustKind.MacKeychainFailed, failed.Kind);
 
+            var cancelAdd = new FakeProcessRunner
+            {
+                DefaultSuccess = false,
+                FailMatching = "add-trusted-cert",
+                FailError = "The operation was canceled by the user. (-128)",
+            };
+            var cancelled = (CertificateOsTrustResult)Invoke(
+                "TrustMacUserDetailed",
+                [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
+                cancelAdd, cerPath, cert)!;
+            Assert.AreEqual(CertificateOsTrustKind.Cancelled, cancelled.Kind);
+
             var hashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var find = new FakeProcessRunner();
             find.When("security", "find-certificate", $"SHA-1 hash: {sha1}AABBCCDDEEFF00112233445566778899AABBCC\n");
@@ -274,9 +286,6 @@ public class UnixCertificateTrustCoverageTests
             Assert.IsTrue(untrust);
             Assert.IsTrue(elevation.Calls.Count >= 1);
 
-            Assert.IsTrue((bool)Invoke(
-                "TrustMacSystem", [typeof(IElevationPrompt), typeof(string)],
-                elevation, cerPath)!);
             Assert.IsTrue((bool)Invoke(
                 "TrustLinuxSystem",
                 [typeof(IElevationPrompt), typeof(string), typeof(string)],
@@ -407,19 +416,7 @@ public class UnixCertificateTrustCoverageTests
             "Friendly CA", cert)!).ToList();
         Assert.IsTrue(names.Count >= 2);
 
-        var cerPath = UnixCertificateTrust.WriteTempCer(cert, forUserGuidance: true);
-        try
-        {
-            Assert.IsTrue((bool)Invoke(
-                "TrustMacUser",
-                [typeof(IProcessRunner), typeof(string), typeof(X509Certificate2)],
-                runner, cerPath, cert)!);
-            Assert.IsTrue((bool)Invoke("VerifyMacSslTrust", [typeof(IProcessRunner), typeof(X509Certificate2)], runner, cert)!);
-        }
-        finally
-        {
-            TryDelete(cerPath);
-        }
+        Assert.IsTrue((bool)Invoke("VerifyMacSslTrust", [typeof(IProcessRunner), typeof(X509Certificate2)], runner, cert)!);
 
         using var unused = CreateEphemeralRoot();
         var unsupported = UnixCertificateTrust.TrustUserSsl(unused, "TWP", new FakeProcessRunner());

@@ -13,6 +13,9 @@ public enum UpdateApplyKind
 {
     Msi,
     Zip,
+    Deb,
+    Rpm,
+    AppImage,
 }
 
 /// <summary>How an offered channel install should be described to the user.</summary>
@@ -92,8 +95,6 @@ public sealed class UpdateService
             }
 
             var remoteText = NormalizeReleaseTag(manifest.Version);
-            var remote = ReleaseVersion.ParseComparable(remoteText);
-            var localComparable = ReleaseVersion.ToComparable(local);
             var localInfo = AssemblyInformationalVersion();
 
             var installedTag = _settings.Current.InstalledReleaseTag;
@@ -133,8 +134,10 @@ public sealed class UpdateService
                 };
             }
 
-            // Same ProductVersion is a MajorUpgrade (AllowSameVersionUpgrades). Older is still blocked.
-            if (kind == UpdateApplyKind.Msi && MsiOfferIsDowngrade(localComparable, remote))
+            // A lower ProductVersion cannot replace an MSI, same as a Mac disk image
+            // that is not newer than the Applications copy.
+            if (kind == UpdateApplyKind.Msi &&
+                MsiOfferIsDowngrade(ReleaseVersion.ToComparable(local), ReleaseVersion.ParseComparable(remoteText)))
             {
                 return new UpdateCheckResult
                 {
@@ -143,7 +146,7 @@ public sealed class UpdateService
                     OfferKind = UpdateOfferKind.None,
                     Message =
                         $"Windows Installer cannot replace this install with {remoteText} ({channelDisplay}) " +
-                        "(older version). Uninstall Titanium Inspector first, or download from the website.",
+                        "(older version). The installed copy was left in place.",
                 };
             }
 
@@ -262,8 +265,8 @@ public sealed class UpdateService
     }
 
     /// <summary>
-    /// MSI MajorUpgrade replaces the same ProductVersion (last install wins). A lower
-    /// ProductVersion is still a WiX downgrade and cannot apply in-place.
+    /// True when the remote ProductVersion is lower. The installer still replaces
+    /// the current install after the user confirms; this only classifies the offer.
     /// </summary>
     public static bool MsiOfferIsDowngrade(Version localComparable, Version remoteComparable) =>
         remoteComparable < localComparable;
@@ -402,6 +405,27 @@ public sealed class UpdateService
     }
 
     /// <summary>Download package, verify SHA256, spawn apply helper, return true if helper started.</summary>
+    /// <summary>
+    ///     When non-null, in-app zip/MSI apply must not run from this location
+    ///     (DMG volume or AppImage mount). Caller should offer relocate first.
+    /// </summary>
+    public static string? RefuseApplyReason()
+    {
+        if (OperatingSystem.IsMacOS() && MacAppRelocation.IsRunningFromDmgVolume())
+        {
+            return "Move Titanium Inspector to Applications before installing updates. " +
+                   "Updates cannot be applied while running from a disk image.";
+        }
+
+        if (OperatingSystem.IsLinux() && LinuxAppRelocation.IsRunningFromAppImage())
+        {
+            return "Install Titanium Inspector locally (~/.local) before installing updates. " +
+                   "Updates cannot be applied while running from an AppImage.";
+        }
+
+        return null;
+    }
+
     public async Task<(bool Ok, string Message)> DownloadAndStartApplyAsync(
         UpdateCheckResult check,
         CancellationToken cancellationToken = default)
@@ -411,11 +435,13 @@ public sealed class UpdateService
             return (false, "No update package to install.");
         }
 
+        var refuse = RefuseApplyReason();
+        if (refuse is not null)
+            return (false, refuse);
+
         var workDir = Path.Combine(Path.GetTempPath(), "TitaniumInspector-update");
         Directory.CreateDirectory(workDir);
-        var fileName = check.ApplyKind == UpdateApplyKind.Msi
-            ? $"TitaniumInspector-{check.RemoteVersion}.msi"
-            : $"TitaniumInspector-{check.RemoteVersion}.zip";
+        var fileName = PackageFileName(check.ApplyKind, check.RemoteVersion);
         var packagePath = Path.Combine(workDir, fileName);
 
         try
@@ -434,14 +460,7 @@ public sealed class UpdateService
 
             await File.WriteAllBytesAsync(packagePath, bytes, cancellationToken);
 
-            var installDir = AppContext.BaseDirectory.TrimEnd(
-                Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var exeName = OperatingSystem.IsWindows() ? "TitaniumInspector.exe" : "TitaniumInspector";
-            var relaunchPath = Path.Combine(installDir, exeName);
-            if (OperatingSystem.IsMacOS() && TryFindMacAppBundle(installDir, out var appBundle))
-            {
-                relaunchPath = appBundle;
-            }
+            var (installDir, relaunchPath) = ResolveApplyInstallPaths(check.ApplyKind);
 
             UpdateApplyHelper.StartDetached(
                 Environment.ProcessId,
@@ -456,6 +475,7 @@ public sealed class UpdateService
             // If MSI UAC is cancelled later, tag may ahead of assembly — ShouldOffer re-offers when they differ.
             _settings.Current.InstalledReleaseTag = check.RemoteVersion;
             _settings.Current.InstalledReleaseChannel = check.ChannelDisplay;
+            _settings.Current.PendingPostUpdateTrustCheck = true;
             _settings.Save();
 
             return (true, $"Installing {check.RemoteVersion} ({check.ChannelDisplay})…");
@@ -464,6 +484,60 @@ public sealed class UpdateService
         {
             return (false, $"Update failed: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    ///     Install directory and relaunch path for the apply helper. Mac bundles relaunch
+    ///     the .app; a local Linux share install relaunches that copy; an AppImage relaunches
+    ///     the image path.
+    /// </summary>
+    private static (string InstallDir, string RelaunchPath) ResolveApplyInstallPaths(UpdateApplyKind applyKind)
+    {
+        var installDir = AppContext.BaseDirectory.TrimEnd(
+            Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var exeName = OperatingSystem.IsWindows() ? "TitaniumInspector.exe" : "TitaniumInspector";
+        var relaunchPath = Path.Combine(installDir, exeName);
+        if (OperatingSystem.IsMacOS() && TryFindMacAppBundle(installDir, out var appBundle))
+        {
+            // Zip payload is publish output → Contents/MacOS; relaunch the .app.
+            relaunchPath = appBundle;
+            installDir = Path.Combine(appBundle, "Contents", "MacOS");
+        }
+        else if (TryUseLinuxLocalShare(installDir, out var localShare, out var localExe))
+        {
+            installDir = localShare;
+            relaunchPath = localExe;
+        }
+
+        if (applyKind == UpdateApplyKind.AppImage)
+            (installDir, relaunchPath) = PreferAppImageRelaunch(installDir, relaunchPath);
+
+        return (installDir, relaunchPath);
+    }
+
+    private static bool TryUseLinuxLocalShare(string installDir, out string localShare, out string localExe)
+    {
+        localShare = "";
+        localExe = "";
+        if (!OperatingSystem.IsLinux())
+            return false;
+
+        localShare = LinuxAppRelocation.DefaultInstallDir();
+        if (!Directory.Exists(localShare) || !installDir.StartsWith(localShare, StringComparison.Ordinal))
+            return false;
+
+        localExe = Path.Combine(localShare, LinuxAppRelocation.ExeName);
+        return true;
+    }
+
+    private static (string InstallDir, string RelaunchPath) PreferAppImageRelaunch(
+        string installDir, string relaunchPath)
+    {
+        var appImage = Environment.GetEnvironmentVariable("APPIMAGE");
+        if (string.IsNullOrWhiteSpace(appImage))
+            return (installDir, relaunchPath);
+
+        return (Path.GetDirectoryName(appImage) ?? installDir, appImage);
     }
 
     public static Version AssemblyVersion() =>
@@ -550,6 +624,100 @@ public sealed class UpdateService
         }
     }
 
+    /// <summary>
+    /// Deb and rpm installs live under <c>/opt/titanium-inspector</c>. Copying a zip there
+    /// fails without root, and App Center will not replace a package of the same version.
+    /// </summary>
+    public static UpdateApplyKind DetectLinuxPackageKind(string baseDirectory)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return UpdateApplyKind.Zip;
+        }
+
+        if (IsRunningAppImage())
+        {
+            return UpdateApplyKind.AppImage;
+        }
+
+        var full = Path.GetFullPath(baseDirectory)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!full.Equals("/opt/titanium-inspector", StringComparison.Ordinal)
+            && !full.StartsWith("/opt/titanium-inspector" + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            return UpdateApplyKind.Zip;
+        }
+
+        if (PackageQuerySucceeds("/usr/bin/dpkg-query", "-W", "titanium-inspector"))
+        {
+            return UpdateApplyKind.Deb;
+        }
+
+        if (PackageQuerySucceeds("/usr/bin/rpm", "-q", "titanium-inspector"))
+        {
+            return UpdateApplyKind.Rpm;
+        }
+
+        return File.Exists("/usr/bin/dpkg") ? UpdateApplyKind.Deb : UpdateApplyKind.Zip;
+    }
+
+    /// <summary>True when this process was started from an AppImage (<c>APPIMAGE</c> is set by the runtime).</summary>
+    public static bool IsRunningAppImage()
+    {
+        var path = Environment.GetEnvironmentVariable("APPIMAGE");
+        return !string.IsNullOrWhiteSpace(path);
+    }
+
+    internal static string PackageFileName(UpdateApplyKind kind, string? remoteVersion)
+    {
+        var version = string.IsNullOrWhiteSpace(remoteVersion) ? "update" : remoteVersion;
+        var ext = kind switch
+        {
+            UpdateApplyKind.Msi => ".msi",
+            UpdateApplyKind.Deb => ".deb",
+            UpdateApplyKind.Rpm => ".rpm",
+            UpdateApplyKind.AppImage => ".AppImage",
+            _ => ".zip",
+        };
+        return "TitaniumInspector-" + version + ext;
+    }
+
+    private static bool PackageQuerySucceeds(string fileName, params string[] args)
+    {
+        if (!File.Exists(fileName))
+        {
+            return false;
+        }
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            foreach (var arg in args)
+            {
+                psi.ArgumentList.Add(arg);
+            }
+
+            using var process = Process.Start(psi);
+            if (process is null || !process.WaitForExit(5000))
+            {
+                return false;
+            }
+
+            return process.ExitCode == 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static string SuggestRid()
     {
         var arm = RuntimeInformation.OSArchitecture is Architecture.Arm64 or Architecture.Arm;
@@ -587,6 +755,28 @@ public sealed class UpdateService
         }
 
         var rid = SuggestRid();
+        var linuxKind = DetectLinuxPackageKind(AppContext.BaseDirectory);
+        if (linuxKind == UpdateApplyKind.Deb
+            && assets.TryGetValue(rid + ".deb", out var deb)
+            && !string.IsNullOrEmpty(deb.Url))
+        {
+            return (UpdateApplyKind.Deb, deb);
+        }
+
+        if (linuxKind == UpdateApplyKind.Rpm
+            && assets.TryGetValue(rid + ".rpm", out var rpm)
+            && !string.IsNullOrEmpty(rpm.Url))
+        {
+            return (UpdateApplyKind.Rpm, rpm);
+        }
+
+        if (linuxKind == UpdateApplyKind.AppImage
+            && assets.TryGetValue(rid + ".AppImage", out var appImage)
+            && !string.IsNullOrEmpty(appImage.Url))
+        {
+            return (UpdateApplyKind.AppImage, appImage);
+        }
+
         if (assets.TryGetValue(rid, out var zip) && !string.IsNullOrEmpty(zip.Url))
         {
             return (UpdateApplyKind.Zip, zip);
@@ -758,7 +948,7 @@ public static class UpdateApplyHelper
         }
 
         var sh = Path.Combine(workDir, "apply-update.sh");
-        File.WriteAllText(sh, BuildUnixScript(pid, packagePath, installDir, relaunchPath, version, channel), new UTF8Encoding(false));
+        File.WriteAllText(sh, BuildUnixScript(pid, packagePath, installDir, relaunchPath, version, channel, kind), new UTF8Encoding(false));
         Process.Start(new ProcessStartInfo
         {
             FileName = "/bin/bash",
@@ -821,8 +1011,10 @@ public static class UpdateApplyHelper
         string installDir,
         string relaunchPath,
         string version,
-        string channel)
+        string channel,
+        UpdateApplyKind kind = UpdateApplyKind.Zip)
     {
+        var plistVersion = StripPrereleaseSuffix(version);
         var sb = new StringBuilder();
         sb.AppendLine("#!/usr/bin/env bash");
         sb.AppendLine("set -euo pipefail");
@@ -830,20 +1022,92 @@ public static class UpdateApplyHelper
         sb.AppendLine($"package={BashQuote(packagePath)}");
         sb.AppendLine($"install_dir={BashQuote(installDir)}");
         sb.AppendLine($"relaunch={BashQuote(relaunchPath)}");
+        sb.AppendLine($"version={BashQuote(version)}");
+        sb.AppendLine($"plist_version={BashQuote(plistVersion)}");
         sb.AppendLine("while kill -0 \"$pid\" 2>/dev/null; do sleep 0.4; done");
         sb.AppendLine("sleep 1");
+        if (kind == UpdateApplyKind.AppImage)
+        {
+            sb.AppendLine("cp -f \"$package\" \"$relaunch\"");
+            sb.AppendLine("chmod +x \"$relaunch\"");
+            sb.AppendLine("nohup \"$relaunch\" >/dev/null 2>&1 &");
+            sb.AppendLine($"echo 'Updated Inspector to {version} ({channel}).'");
+            return sb.ToString();
+        }
+
+        if (kind is UpdateApplyKind.Deb or UpdateApplyKind.Rpm)
+        {
+            var tool = kind == UpdateApplyKind.Deb ? "dpkg" : "rpm";
+            var toolArgs = kind == UpdateApplyKind.Deb ? "-i" : "-Uvh";
+            sb.AppendLine("if sudo -n true >/dev/null 2>&1; then");
+            sb.AppendLine($"  sudo -n {tool} {toolArgs} \"$package\"");
+            sb.AppendLine("elif [[ -x /usr/bin/pkexec ]]; then");
+            sb.AppendLine($"  pkexec {tool} {toolArgs} \"$package\"");
+            sb.AppendLine("elif [[ -x /usr/bin/sudo ]]; then");
+            sb.AppendLine($"  sudo {tool} {toolArgs} \"$package\"");
+            sb.AppendLine("else");
+            sb.AppendLine("  echo 'Need pkexec or sudo to install the update.' >&2");
+            sb.AppendLine("  exit 1");
+            sb.AppendLine("fi");
+            sb.AppendLine("if [[ \"$relaunch\" == *.app ]]; then");
+            sb.AppendLine("  open \"$relaunch\" || true");
+            sb.AppendLine("elif [[ -x \"$relaunch\" ]]; then");
+            sb.AppendLine("  (cd \"$install_dir\" && nohup \"$relaunch\" >/dev/null 2>&1 &)");
+            sb.AppendLine("fi");
+            sb.AppendLine($"echo 'Updated Inspector to '\"$version\"' ({channel}).'");
+            return sb.ToString();
+        }
+
+        sb.AppendLine("if [[ ! -w \"$install_dir\" && \"$relaunch\" != *.app ]]; then");
+        sb.AppendLine("  echo \"Cannot update $install_dir (not writable). Use the .deb or .rpm package.\" >&2");
+        sb.AppendLine("  exit 1");
+        sb.AppendLine("fi");
         sb.AppendLine("tmp=$(mktemp -d)");
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
-        sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
-        sb.AppendLine("rm -rf \"$tmp\"");
-        sb.AppendLine("chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");
+        sb.AppendLine("mkdir -p \"$install_dir\"");
+        // macOS .app: zip is publish output → replace Contents/MacOS, then open the bundle.
         sb.AppendLine("if [[ \"$relaunch\" == *.app ]]; then");
+        sb.AppendLine("  macos_dir=\"$relaunch/Contents/MacOS\"");
+        sb.AppendLine("  mkdir -p \"$macos_dir\"");
+        sb.AppendLine("  if command -v ditto >/dev/null 2>&1; then");
+        sb.AppendLine("    ditto \"$tmp\" \"$macos_dir\"");
+        sb.AppendLine("  else");
+        sb.AppendLine("    cp -a \"$tmp\"/. \"$macos_dir\"/");
+        sb.AppendLine("  fi");
+        sb.AppendLine("  chmod +x \"$macos_dir/TitaniumInspector\" 2>/dev/null || true");
+        sb.AppendLine("  rm -rf \"$tmp\"");
+        // Keep Finder / MacAppRelocation version in sync with the applied release
+        // (zip only replaces Contents/MacOS; Info.plist would otherwise lag).
+        sb.AppendLine("  plist=\"$relaunch/Contents/Info.plist\"");
+        sb.AppendLine("  if [[ -f \"$plist\" ]] && [[ -x /usr/libexec/PlistBuddy ]]; then");
+        sb.AppendLine("    /usr/libexec/PlistBuddy -c \"Set :CFBundleShortVersionString $plist_version\" \"$plist\" 2>/dev/null \\");
+        sb.AppendLine("      || /usr/libexec/PlistBuddy -c \"Add :CFBundleShortVersionString string $plist_version\" \"$plist\"");
+        sb.AppendLine("    /usr/libexec/PlistBuddy -c \"Set :CFBundleVersion $plist_version\" \"$plist\" 2>/dev/null \\");
+        sb.AppendLine("      || /usr/libexec/PlistBuddy -c \"Add :CFBundleVersion string $plist_version\" \"$plist\"");
+        sb.AppendLine("  fi");
         sb.AppendLine("  open \"$relaunch\" || true");
-        sb.AppendLine("elif [[ -x \"$relaunch\" ]]; then");
-        sb.AppendLine("  (cd \"$install_dir\" && nohup \"$relaunch\" >/dev/null 2>&1 &)");
+        sb.AppendLine("else");
+        sb.AppendLine("  cp -a \"$tmp\"/. \"$install_dir\"/");
+        sb.AppendLine("  rm -rf \"$tmp\"");
+        sb.AppendLine("  chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");
+        sb.AppendLine("  if [[ -x \"$relaunch\" ]]; then");
+        sb.AppendLine("    (cd \"$install_dir\" && nohup \"$relaunch\" >/dev/null 2>&1 &)");
+        sb.AppendLine("  fi");
         sb.AppendLine("fi");
-        sb.AppendLine($"echo 'Updated Inspector to {version} ({channel}).'");
+        sb.AppendLine($"echo 'Updated Inspector to '\"$version\"' ({channel}).'");
         return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Same as release packaging (<c>RELEASE_VERSION%%-*</c>): drop prerelease so
+    ///     <c>8.0.5-beta</c> becomes <c>8.0.5</c> for Info.plist.
+    /// </summary>
+    internal static string StripPrereleaseSuffix(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+            return version;
+        var dash = version.IndexOf('-');
+        return dash > 0 ? version[..dash] : version;
     }
 
     private static string EscapePs(string value) => value.Replace("'", "''", StringComparison.Ordinal);

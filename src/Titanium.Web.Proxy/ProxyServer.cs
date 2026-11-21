@@ -2466,10 +2466,19 @@ public partial class ProxyServer : IDisposable
 
     /// <summary>
     ///     How many times an ephemeral TCP+QUIC dual-listen may rebind. Windows UDP exclusion
-    ///     ranges are about 100 ports wide and the ephemeral allocator walks them in order, so a
-    ///     short retry stays inside the hole and the UDP bind fails with WSAEADDRINUSE.
+    ///     ranges are often wider than 100 ports. Each failed attempt steps one port forward
+    ///     (<see cref="NextEphemeralDualListenPort"/>). Asking for port 0 again reissues the
+    ///     port just closed, so the UDP bind hits the same address until the cap is spent.
     /// </summary>
-    private const int MaxEphemeralDualListenAttempts = 128;
+    private const int MaxEphemeralDualListenAttempts = 512;
+
+    /// <summary>
+    ///     The next TCP port to try after dual-listen QUIC failed with address-in-use.
+    ///     A port of 0 (or 65535) jumps to the start of the IANA dynamic range so the walk
+    ///     does not enter the privileged ports.
+    /// </summary>
+    internal static int NextEphemeralDualListenPort(int failedPort) =>
+        failedPort is > 0 and < 65535 ? failedPort + 1 : 49152;
 
     /// <summary>
     ///     True when <paramref name="ex"/> (or an inner exception) is WSAEADDRINUSE / EADDRINUSE.
@@ -2486,6 +2495,35 @@ public partial class ProxyServer : IDisposable
         }
 
         return false;
+    }
+
+    /// <summary>
+    ///     Ports whose system-proxy entry may be cleared on startup. A port that already accepts
+    ///     connections is left alone so a second Inspector cannot drop the first one's proxy.
+    /// </summary>
+    internal static HashSet<int> PortsEligibleForStaleProxyClear(IEnumerable<int> ports) =>
+        ports.Where(static port => !IsLoopbackPortAccepting(port)).ToHashSet();
+
+    /// <summary>
+    ///     True when something on this machine is already accepting TCP on <paramref name="port"/>.
+    /// </summary>
+    internal static bool IsLoopbackPortAccepting(int port)
+    {
+        if (port is <= 0 or > 65535)
+            return false;
+
+        try
+        {
+            using var client = new TcpClient();
+            var connect = client.ConnectAsync(IPAddress.Loopback, port);
+            if (!connect.Wait(TimeSpan.FromMilliseconds(250)))
+                return false;
+            return client.Connected;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
 

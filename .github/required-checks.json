@@ -17,7 +17,7 @@
     "beta": {
       "contexts": [
         "merge-gate",
-        "rps (ubuntu-latest)",
+        "rps (ubuntu-26.04)",
         "rps (windows-latest)",
         "rps (macos-15)",
         "gitleaks",
@@ -33,7 +33,7 @@
     "stable": {
       "contexts": [
         "merge-gate",
-        "rps (ubuntu-latest)",
+        "rps (ubuntu-26.04)",
         "rps (windows-latest)",
         "rps (macos-15)",
         "gitleaks",

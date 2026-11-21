@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Quic;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -65,21 +66,6 @@ public class Http3ReverseDualListenTests
         return proxy;
     }
 
-    private static bool IsAddressInUse(Exception ex)
-    {
-        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
-        {
-            if (cur is System.Net.Sockets.SocketException se &&
-                (se.SocketErrorCode == System.Net.Sockets.SocketError.AddressAlreadyInUse
-                 || se.NativeErrorCode is 10048 or 98))
-                return true;
-            if (cur.Message.Contains("Only one usage of each socket address", StringComparison.Ordinal))
-                return true;
-        }
-
-        return false;
-    }
-
     private static TransparentProxyEndPoint NewDualListenEndPoint(int forwardPort)
     {
         var endPoint = new TransparentProxyEndPoint(IPAddress.Loopback, 0, decryptSsl: true)
@@ -123,28 +109,9 @@ public class Http3ReverseDualListenTests
         sharedServer.HandleRequest(context => context.Response.WriteAsync("h3-dual-ok"));
 
         var forwardPort = new Uri(sharedServer.ListeningHttpUrl).Port;
-        ProxyServer? proxy = null;
-        TransparentProxyEndPoint? endPoint = null;
-        Exception? last = null;
-        for (var attempt = 1; attempt <= 8; attempt++)
-        {
-            endPoint = NewDualListenEndPoint(forwardPort);
-            try
-            {
-                // TCP binds first on port 0, then QUIC reuses that port. Retry when UDP is taken.
-                proxy = CreateDualListenProxy(endPoint);
-                break;
-            }
-            catch (Exception ex) when (IsAddressInUse(ex))
-            {
-                last = ex;
-                try { proxy?.Dispose(); } catch { /* best-effort */ }
-                proxy = null;
-            }
-        }
-
-        Assert.IsNotNull(proxy, "Dual-listen QUIC bind failed after retries: " + last);
-        Assert.IsNotNull(endPoint);
+        var endPoint = NewDualListenEndPoint(forwardPort);
+        // Product start walks past a busy UDP twin. A second start here hides a bind that gave up.
+        var proxy = CreateDualListenProxy(endPoint);
         using (proxy)
         {
             using var handler = CreateHttpClientHandler(HttpVersion.Version30);
@@ -154,13 +121,39 @@ public class Http3ReverseDualListenTests
                 DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact
             };
 
-            using var response = await client.GetAsync($"https://localhost:{endPoint!.Port}/");
+            using var response = await client.GetAsync($"https://localhost:{endPoint.Port}/");
             var body = await response.Content.ReadAsStringAsync();
 
             Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, body);
             Assert.AreEqual(HttpVersion.Version30, response.Version);
             Assert.AreEqual("h3-dual-ok", body);
         }
+    }
+
+    [TestMethod]
+    [Timeout(60_000)]
+    public void DualListen_StepsOffAUdpPortTheTcpAllocatorReissues()
+    {
+        RequireQuic();
+
+        // Close a port-0 TCP listener, then hold that UDP port. Windows often gives the
+        // same port to the next bind(0). Dual-listen must leave it and still start.
+        using var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var blocked = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+
+        using var udp4 = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        using var udp6 = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+        udp4.Bind(new IPEndPoint(IPAddress.Loopback, blocked));
+        udp6.Bind(new IPEndPoint(IPAddress.IPv6Loopback, blocked));
+
+        var forwardPort = new Uri(sharedServer.ListeningHttpUrl).Port;
+        var endPoint = NewDualListenEndPoint(forwardPort);
+        using var proxy = CreateDualListenProxy(endPoint);
+        Assert.AreNotEqual(0, endPoint.Port);
+        Assert.AreNotEqual(blocked, endPoint.Port, "dual-listen stayed on the UDP port held by this test");
+        Assert.IsTrue(proxy.ProxyRunning);
     }
 
     /// <summary>

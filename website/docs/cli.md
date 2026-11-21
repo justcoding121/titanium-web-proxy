@@ -202,7 +202,7 @@ Enable in config (`plus.enabled: true` + control-plane shared secret); disable w
 
 ### Alpine / containers
 
-Download the `linux-musl-*` zip (not `linux-x64`) for Alpine or musl-based Kubernetes images. See [HTTP/3](/docs/http3).
+For Alpine, download the Alpine zip (`linux-musl-*`), not the regular 64-bit Linux zip (`linux-x64`). See [HTTP/3](/docs/http3).
 
 ### Reload without restart
 
@@ -224,7 +224,7 @@ titanium reload -c twp.yaml
 
 **Needs a process restart:** listeners (bind/port), enabling or disabling Plus plugins, static files root, access-log path. Certificate PEM/PFX files and ACME renewals hot-reload without a restart when paths stay the same.
 
-Unlike a typical YARP process recycle, Titanium keeps the process and in-flight sessions on the previous cluster snapshot until they finish.
+Titanium keeps the process and in-flight sessions on the previous cluster snapshot until they finish.
 
 ### Restart without dropping connections (Linux)
 

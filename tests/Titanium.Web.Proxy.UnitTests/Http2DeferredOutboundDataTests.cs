@@ -176,36 +176,36 @@ public class Http2DeferredOutboundDataTests
         await using var writer = new Http2FrameWriter(ms);
         var deferred = new Http2DeferredOutboundData();
 
-        var f1 = ArrayPool<byte>.Shared.Rent(100);
-        f1.AsSpan(0, 100).Fill(0x11);
-        var f2 = ArrayPool<byte>.Shared.Rent(100);
-        f2.AsSpan(0, 100).Fill(0x22);
-        Assert.IsTrue(deferred.TryEnqueue(1, f1, 0, 100, endStream: false));
-        Assert.IsTrue(deferred.TryEnqueue(1, f2, 0, 100, endStream: true));
+        var f1 = ArrayPool<byte>.Shared.Rent(8192);
+        f1.AsSpan(0, 8192).Fill(0x11);
+        var f2 = ArrayPool<byte>.Shared.Rent(8192);
+        f2.AsSpan(0, 8192).Fill(0x22);
+        Assert.IsTrue(deferred.TryEnqueue(1, f1, 0, 8192, endStream: false));
+        Assert.IsTrue(deferred.TryEnqueue(1, f2, 0, 8192, endStream: true));
 
-        // Enough credit for 40 bytes of the first frame only.
-        flow.OnWindowUpdate(0, 40);
+        // Enough credit for 5000 bytes of the first frame only (above the tiny-frame floor).
+        flow.OnWindowUpdate(0, 5000);
         Assert.IsTrue(deferred.TryDrain(flow, writer));
         Assert.AreEqual(2, deferred.PendingCount(1)); // remainder of f1 + full f2
 
-        // Finish f1 (60) then all of f2 (100).
-        flow.OnWindowUpdate(0, 160);
+        // Finish f1 (3192) then all of f2 (8192).
+        flow.OnWindowUpdate(0, 3192 + 8192);
         Assert.IsTrue(deferred.TryDrain(flow, writer));
         Assert.AreEqual(0, deferred.PendingCount(1));
 
         await writer.DisposeAsync();
         var bytes = ms.ToArray();
 
-        // Expect DATA frames: len=40 (0x11...), len=60 (0x11...), len=100 (0x22... + END_STREAM)
-        Assert.AreEqual(9 + 40 + 9 + 60 + 9 + 100, bytes.Length);
-        Assert.AreEqual(40, (bytes[0] << 16) | (bytes[1] << 8) | bytes[2]);
+        // Expect DATA frames: len=5000 (0x11...), len=3192 (0x11...), len=8192 (0x22... + END_STREAM)
+        Assert.AreEqual(9 + 5000 + 9 + 3192 + 9 + 8192, bytes.Length);
+        Assert.AreEqual(5000, (bytes[0] << 16) | (bytes[1] << 8) | bytes[2]);
         Assert.AreEqual(0x11, bytes[9]);
-        Assert.AreEqual(60, (bytes[49] << 16) | (bytes[50] << 8) | bytes[51]);
-        Assert.AreEqual(0x11, bytes[58]);
-        Assert.AreEqual(100, (bytes[118] << 16) | (bytes[119] << 8) | bytes[120]);
-        Assert.AreEqual((byte)Http2FrameType.Data, bytes[121]);
-        Assert.AreEqual((byte)Http2FrameFlag.EndStream, bytes[122] & (byte)Http2FrameFlag.EndStream);
-        Assert.AreEqual(0x22, bytes[127]);
+        Assert.AreEqual(3192, (bytes[5009] << 16) | (bytes[5010] << 8) | bytes[5011]);
+        Assert.AreEqual(0x11, bytes[5018]);
+        Assert.AreEqual(8192, (bytes[8210] << 16) | (bytes[8211] << 8) | bytes[8212]);
+        Assert.AreEqual((byte)Http2FrameType.Data, bytes[8213]);
+        Assert.AreEqual((byte)Http2FrameFlag.EndStream, bytes[8214] & (byte)Http2FrameFlag.EndStream);
+        Assert.AreEqual(0x22, bytes[8219]);
     }
 
     [TestMethod]
@@ -279,23 +279,19 @@ public class Http2DeferredOutboundDataTests
     }
 
     [TestMethod]
-    public void ShouldThrottle_AndUnknownStreamHelpers()
+    public void UnknownStreamHelpers_CancelIsIdempotent()
     {
         var deferred = new Http2DeferredOutboundData();
-        Assert.IsFalse(deferred.ShouldThrottleReceiveCredit(3));
         Assert.AreEqual(0, deferred.PendingCount(99));
         Assert.IsFalse(deferred.HasOutboundInFlight(99));
         deferred.CancelStream(5);
         deferred.CancelStream(5);
 
-        for (var i = 0; i < Http2DeferredOutboundData.MaxFramesPerStream; i++)
-        {
-            var buf = ArrayPool<byte>.Shared.Rent(16 * 1024);
-            Assert.IsTrue(deferred.TryEnqueue(3, buf, 0, 16 * 1024, endStream: false));
-        }
-
-        Assert.IsTrue(deferred.ShouldThrottleReceiveCredit(3));
-        Assert.IsFalse(deferred.ShouldThrottleReceiveCredit(99));
+        var buf = ArrayPool<byte>.Shared.Rent(16);
+        Assert.IsTrue(deferred.TryEnqueue(3, buf, 0, 16, endStream: false));
+        Assert.AreEqual(1, deferred.PendingCount(3));
+        deferred.CancelStream(3);
+        Assert.AreEqual(0, deferred.PendingCount(3));
     }
 
     [TestMethod]
@@ -371,6 +367,302 @@ public class Http2DeferredOutboundDataTests
 
         Assert.AreEqual(1, deferred.PendingCount(1));
         deferred.CancelStream(1);
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_FullReserve_NoCreditCallback()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var calls = 0;
+        var buf = ArrayPool<byte>.Shared.Rent(32);
+        Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 32, endStream: false));
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, _) => calls++));
+        Assert.AreEqual(0, calls);
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_PartialReserve_GrantsOnlyWrittenPrefix()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        Assert.AreEqual(65535, flow.TryReservePartial(1, 65535));
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var granted = 0;
+        var body = ArrayPool<byte>.Shared.Rent(8192);
+        deferred.WithholdStreamCredit(1, 8192);
+        Assert.IsTrue(deferred.TryEnqueue(1, body, 0, 8192, endStream: false));
+        Assert.IsFalse(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(0, granted);
+
+        flow.OnWindowUpdate(1, 5000);
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(5000, granted);
+        Assert.AreEqual(1, deferred.PendingCount(1));
+
+        flow.OnWindowUpdate(1, 3192);
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(8192, granted);
+        Assert.AreEqual(0, deferred.PendingCount(1));
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_EndStream_DropsRemainingCredit()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var calls = 0;
+        deferred.WithholdStreamCredit(1, 50);
+        var empty = ArrayPool<byte>.Shared.Rent(1);
+        Assert.IsTrue(deferred.TryEnqueue(1, empty, 0, 0, endStream: true));
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, _) => calls++));
+        Assert.AreEqual(0, calls);
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task CancelStream_DropsWithheldCredit_NoCreditCallback()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var calls = 0;
+        deferred.WithholdStreamCredit(1, 20);
+        var buf = ArrayPool<byte>.Shared.Rent(20);
+        Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 20, endStream: false));
+        deferred.CancelStream(1);
+        Assert.IsFalse(deferred.TryDrain(flow, writer, onBytesForwarded: (_, _) => calls++));
+        Assert.AreEqual(0, calls);
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_Coalesced_SumsCredit()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var granted = 0;
+        deferred.WithholdStreamCredit(1, 100);
+        deferred.WithholdStreamCredit(1, 100);
+        var first = ArrayPool<byte>.Shared.Rent(100);
+        var second = ArrayPool<byte>.Shared.Rent(100);
+        Assert.IsTrue(deferred.TryEnqueue(1, first, 0, 100, endStream: false));
+        Assert.IsTrue(deferred.TryEnqueue(1, second, 0, 100, endStream: false));
+        Assert.AreEqual(1, deferred.PendingCount(1));
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(200, granted);
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdStreamCredit_NonPositive_IsNoOp()
+    {
+        var deferred = new Http2DeferredOutboundData();
+        deferred.WithholdStreamCredit(1, 0);
+        deferred.WithholdStreamCredit(1, -5);
+        // No frames queued; a drain with credit withheld only would still be empty.
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        Assert.IsFalse(deferred.TryDrain(flow, writer));
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_EmptyNonEndFrame_ReleasesLeftoverCredit()
+    {
+        // Hook output can shrink: inbound credit was withheld, then an empty non-END_STREAM
+        // slice drains and must return the leftover so the sender is not stuck.
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var granted = 0;
+        deferred.WithholdStreamCredit(1, 40);
+        var empty = ArrayPool<byte>.Shared.Rent(1);
+        Assert.IsTrue(deferred.TryEnqueue(1, empty, 0, 0, endStream: false));
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(40, granted);
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task WithholdAndDrain_PartialThenEmptyRemainder_ReleasesLeftover()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        Assert.AreEqual(65535, flow.TryReservePartial(1, 65535));
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var granted = 0;
+        // Withhold more than will be written (hook shrunk the body).
+        deferred.WithholdStreamCredit(1, 10_000);
+        var body = ArrayPool<byte>.Shared.Rent(5000);
+        Assert.IsTrue(deferred.TryEnqueue(1, body, 0, 5000, endStream: false));
+        flow.OnWindowUpdate(1, 5000);
+        // Full forward of the parked body also ReleaseRemainingCredit's leftover withheld bytes.
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (_, n) => granted += n));
+        Assert.AreEqual(10_000, granted);
+        Assert.AreEqual(0, deferred.PendingCount(1));
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public void TryWithholdStreamCredit_EmptyQueue_ReturnsFalse()
+    {
+        var deferred = new Http2DeferredOutboundData();
+        Assert.IsFalse(deferred.TryWithholdStreamCredit(1, 100));
+        Assert.IsTrue(deferred.TryWithholdStreamCredit(1, 0), "Non-positive bytes succeed without queueing.");
+    }
+
+    [TestMethod]
+    public async Task TryWithholdStreamCredit_Pending_ReturnsTrueAndStoresRoute()
+    {
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        await using var creditMs = new MemoryStream();
+        await using var creditWriter = new Http2FrameWriter(creditMs);
+        var deferred = new Http2DeferredOutboundData();
+        var buf = ArrayPool<byte>.Shared.Rent(32);
+        Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 32, endStream: false));
+        Assert.IsTrue(deferred.TryWithholdStreamCredit(1, 32, creditWriter, creditStreamId: 7, guardClientStreamId: 1));
+        Assert.IsTrue(deferred.TryGetCreditRoute(1, out var routed, out var creditId, out var guardId));
+        Assert.AreSame(creditWriter, routed);
+        Assert.AreEqual(7, creditId);
+        Assert.AreEqual(1, guardId);
+        await writer.DisposeAsync();
+        await creditWriter.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task TryWithholdStreamCredit_AfterConcurrentDrain_ReturnsFalse()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        var deferred = new Http2DeferredOutboundData();
+        var buf = ArrayPool<byte>.Shared.Rent(40);
+        Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 40, endStream: false));
+        Assert.IsTrue(deferred.TryDrain(flow, writer));
+        Assert.AreEqual(0, deferred.PendingCount(1));
+        Assert.IsFalse(deferred.TryWithholdStreamCredit(1, 40),
+            "A drain that emptied the queue must force the caller to grant credit immediately.");
+        await writer.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task TryGetCreditRoute_SurvivesDrain_AndClearsOnCancel()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        Assert.AreEqual(65535, flow.TryReservePartial(1, 65535));
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        await using var creditMs = new MemoryStream();
+        await using var creditWriter = new Http2FrameWriter(creditMs);
+        var deferred = new Http2DeferredOutboundData();
+        var body = ArrayPool<byte>.Shared.Rent(8192);
+        Assert.IsTrue(deferred.TryEnqueue(1, body, 0, 8192, endStream: false));
+        Assert.IsTrue(deferred.TryWithholdStreamCredit(1, 8192, creditWriter, 9, 1));
+
+        Http2FrameWriter? seenWriter = null;
+        var seenCredit = 0;
+        var seenGuard = 0;
+        var granted = 0;
+        flow.OnWindowUpdate(1, 5000);
+        Assert.IsTrue(deferred.TryDrain(flow, writer, onBytesForwarded: (sid, n) =>
+        {
+            Assert.IsTrue(deferred.TryGetCreditRoute(sid, out seenWriter!, out seenCredit, out seenGuard));
+            granted += n;
+        }));
+        Assert.AreEqual(5000, granted);
+        Assert.AreSame(creditWriter, seenWriter);
+        Assert.AreEqual(9, seenCredit);
+        Assert.AreEqual(1, seenGuard);
+
+        deferred.CancelStream(1);
+        Assert.IsFalse(deferred.TryGetCreditRoute(1, out _, out _, out _));
+        await writer.DisposeAsync();
+        await creditWriter.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task TryEnqueueRoutedCredit_UsesStickyRoute_AndSkipsDeadStream()
+    {
+        await using var ms = new MemoryStream();
+        await using var creditMs = new MemoryStream();
+        await using var creditWriter = new Http2FrameWriter(creditMs);
+        var deferred = new Http2DeferredOutboundData();
+        var buf = ArrayPool<byte>.Shared.Rent(16);
+        Assert.IsTrue(deferred.TryEnqueue(1, buf, 0, 16, endStream: false));
+        Assert.IsTrue(deferred.TryWithholdStreamCredit(1, 16, creditWriter, creditStreamId: 9, guardClientStreamId: 1));
+
+        var enqueued = 0;
+        Assert.IsTrue(deferred.TryEnqueueRoutedCredit(1, 16, _ => true,
+            (_, _, n) => enqueued += n));
+        Assert.AreEqual(16, enqueued);
+
+        Assert.IsTrue(deferred.TryEnqueueRoutedCredit(1, 8, _ => false,
+            (_, _, _) => throw new InvalidOperationException("dead stream must not enqueue")));
+        Assert.IsFalse(deferred.TryEnqueueRoutedCredit(2, 8, _ => true,
+            (_, _, _) => throw new InvalidOperationException("missing route must fall through")));
+        await creditWriter.DisposeAsync();
+    }
+
+    [TestMethod]
+    public async Task TryGetCreditRoute_ClearsOnEndStreamDrain()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        flow.OnWindowUpdate(1, 1_000_000);
+        await using var ms = new MemoryStream();
+        await using var writer = new Http2FrameWriter(ms);
+        await using var creditMs = new MemoryStream();
+        await using var creditWriter = new Http2FrameWriter(creditMs);
+        var deferred = new Http2DeferredOutboundData();
+        var body = ArrayPool<byte>.Shared.Rent(16);
+        Assert.IsTrue(deferred.TryEnqueue(1, body, 0, 16, endStream: true));
+        Assert.IsTrue(deferred.TryWithholdStreamCredit(1, 16, creditWriter, 3, 1));
+        Assert.IsTrue(deferred.TryDrain(flow, writer));
+        Assert.IsFalse(deferred.TryGetCreditRoute(1, out _, out _, out _),
+            "END_STREAM must drop the sticky route with the withheld credit.");
+        await writer.DisposeAsync();
+        await creditWriter.DisposeAsync();
     }
 
     private static int ReadStreamId(byte[] buf, int offset) =>

@@ -28,30 +28,44 @@ public sealed partial class MainWindowViewModel
 
         await AboutWindow.ShowAsync(owner);
     }
+    private void ReportUpToDateOrWarning(string message)
+    {
+        var upToDate = message.Contains("up to date", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("No newer Beta", StringComparison.OrdinalIgnoreCase);
+        if (upToDate)
+        {
+            SetTransientStatus(
+                message,
+                StatusSeverity.Neutral,
+                toastImportant: true,
+                revertMs: 4000,
+                toastSeverity: StatusSeverity.Success);
+            return;
+        }
+
+        SetOutcomeStatus(message, StatusSeverity.Warning, toastImportant: true);
+    }
+
     /// <summary>Startup or Help → Check for updates. When <paramref name="promptIfAvailable"/>, offer install dialog.</summary>
     public async Task CheckUpdatesAsync(bool promptIfAvailable = true)
     {
+        var refuse = UpdateService.RefuseApplyReason();
+        if (refuse is not null && promptIfAvailable)
+        {
+            SetOutcomeStatus(refuse, StatusSeverity.Warning, toastImportant: true);
+            if (OperatingSystem.IsMacOS())
+                _ = await TryOfferMacDmgMoveAsync().ConfigureAwait(true);
+            else if (OperatingSystem.IsLinux())
+                _ = await TryOfferLinuxAppImageInstallAsync().ConfigureAwait(true);
+            return;
+        }
+
         var channel = _updates.ChannelDisplayName;
         SetStatus($"Checking for updates ({channel})…", StatusSeverity.Busy);
         var result = await _updates.CheckAsync(_statusRevertCts?.Token ?? CancellationToken.None);
         if (!result.UpdateAvailable || string.IsNullOrEmpty(result.AssetUrl))
         {
-            var upToDate = result.Message.Contains("up to date", StringComparison.OrdinalIgnoreCase)
-                || result.Message.Contains("No newer Beta", StringComparison.OrdinalIgnoreCase);
-            if (upToDate)
-            {
-                SetTransientStatus(
-                    result.Message,
-                    StatusSeverity.Neutral,
-                    toastImportant: true,
-                    revertMs: 4000,
-                    toastSeverity: StatusSeverity.Success);
-            }
-            else
-            {
-                SetOutcomeStatus(result.Message, StatusSeverity.Warning, toastImportant: true);
-            }
-
+            ReportUpToDateOrWarning(result.Message);
             return;
         }
 

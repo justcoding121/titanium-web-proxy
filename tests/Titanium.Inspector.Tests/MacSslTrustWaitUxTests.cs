@@ -29,7 +29,8 @@ public class MacSslTrustWaitUxTests
         Assert.IsFalse(body.Contains("Keychain/NSS", StringComparison.Ordinal));
         if (OperatingSystem.IsMacOS())
         {
-            StringAssert.Contains(body, "Keychain");
+            StringAssert.Contains(body.ToLowerInvariant(), "keychain");
+            StringAssert.Contains(body.ToLowerInvariant(), "admin");
             Assert.IsFalse(body.Contains("Linux", StringComparison.Ordinal));
             Assert.IsFalse(body.Contains("NSS", StringComparison.Ordinal));
         }

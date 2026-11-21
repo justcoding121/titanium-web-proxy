@@ -28,7 +28,7 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           { "context": "merge-gate", "integration_id": 15368 },
-          { "context": "rps (ubuntu-latest)", "integration_id": 15368 },
+          { "context": "rps (ubuntu-26.04)", "integration_id": 15368 },
           { "context": "rps (windows-latest)", "integration_id": 15368 },
           { "context": "rps (macos-15)", "integration_id": 15368 },
           { "context": "gitleaks", "integration_id": 15368 },

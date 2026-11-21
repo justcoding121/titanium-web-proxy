@@ -91,7 +91,7 @@ Prebuilt icons live in [`icons/`](icons/) (hicolor PNG sizes + macOS `AppIcon.ic
 
 CLI does not install a Start menu, Dock, or application-menu launcher. It does ship a file icon: `src/Titanium.Cli/Assets/app.ico` is the Windows `ApplicationIcon` on `titanium.exe` and `twp.exe` (copied from the same publish, so both binaries match), and `icons/titanium-cli-*.png` is the Linux AppImage icon. `build-appimage.sh` reads those PNGs from this directory at release time; the CLI zip stays a single file on Windows.
 
-**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** prefer the notarized **DMG** — open it, drag **Titanium Inspector** onto **Applications**, eject the volume, then launch from Applications (or Spotlight). Zip fallback: extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app`. Running the app from the DMG volume works, but Inspector offers to move itself into Applications on first open.
+**Linux:** extract the zip, then `./install.sh` (default prefix `~/.local`). **macOS:** prefer the notarized **DMG** — open it, drag **Titanium Inspector** onto **Applications**, eject the volume, then launch from Applications (or Spotlight). Zip fallback: extract, then `./install-app.sh` → `~/Applications/Titanium Inspector.app`. Running the app from the DMG volume works, but Inspector offers to move itself into Applications on first open. `./uninstall-app.sh` clears a loopback system proxy, then removes both `~/Applications/Titanium Inspector.app` and `/Applications/Titanium Inspector.app`.
 
 Winget package IDs:
 
@@ -132,7 +132,7 @@ choco install titanium-inspector --pre
 ## HTTP/3 native lock file
 
 - **Lock:** [`http3-native.lock.json`](http3-native.lock.json) — pinned URLs + SHA256 per RID.
-- **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` (Linux) or `install_name_tool` `@loader_path` (macOS).
+- **Script:** [`bundle-http3-native.ps1`](bundle-http3-native.ps1) — download/verify → extract → copy beside binary → `patchelf --set-rpath '$ORIGIN'` (Linux, except the .NET OpenSSL shims, which must keep the host `libssl`) or `install_name_tool` `@loader_path` (macOS).
 - **Cache:** `tools/packaging/.cache/http3-natives/` (gitignored). CI caches this with `actions/cache` keyed on the lock file.
 - **License:** [`THIRD-PARTY-HTTP3.txt`](THIRD-PARTY-HTTP3.txt) is copied into every publish folder (MsQuic MIT + OpenSSL Apache-2.0). Inspector also ships [`THIRD-PARTY-INSPECTOR.txt`](THIRD-PARTY-INSPECTOR.txt) (Inter SIL OFL-1.1).
 

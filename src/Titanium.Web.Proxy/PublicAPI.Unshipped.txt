@@ -220,6 +220,7 @@ static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryEnableWindowsEnterp
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryRequestFirefoxQuit(System.TimeSpan? waitForExit = null) -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryResolveDefaultProfileDirectory(out string! profileDirectory, out string? error) -> bool
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate, string! friendlyName) -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
+static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2! certificate, string! friendlyName) -> Titanium.Web.Proxy.Network.CertificateOsTrustResult!
 static Titanium.Web.Proxy.Network.FirefoxCertificateTrust.UntrustDefaultProfile(string! friendlyName) -> bool
 Titanium.Web.Proxy.MitmExclusionDefaults
 static readonly Titanium.Web.Proxy.MitmExclusionDefaults.SystemProxyBypassRules -> string![]!
@@ -262,6 +263,7 @@ Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies() -> Titanium.Web.Prox
 Titanium.Web.Proxy.ProxyServer.TryDisableSystemProxy(Titanium.Web.Proxy.Models.ProxyProtocolType protocolType) -> Titanium.Web.Proxy.SystemProxyChangeResult
 Titanium.Web.Proxy.ProxyServer.TryRestoreOriginalProxySettings() -> Titanium.Web.Proxy.SystemProxyChangeResult
 Titanium.Web.Proxy.ProxyServer.TrySetAsSystemProxy(Titanium.Web.Proxy.Models.ExplicitProxyEndPoint! endPoint, Titanium.Web.Proxy.Models.ProxyProtocolType protocolType, Titanium.Web.Proxy.SystemProxySettings? settings = null) -> Titanium.Web.Proxy.SystemProxyChangeResult
+static Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func<string!, int, bool>? isListening = null) -> Titanium.Web.Proxy.SystemProxyChangeResult
 const Titanium.Web.Proxy.ProxyServer.DefaultViaHeaderPseudonym = "titanium-web-proxy" -> string!
 Titanium.Web.Proxy.Models.DecryptFailureBypassEntry
 Titanium.Web.Proxy.Models.DecryptFailureBypassEntry.BypassActive.get -> bool
@@ -591,3 +593,8 @@ override Titanium.Web.Proxy.Models.ProxyEndPoint.ToString() -> string!
 [TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.WebTransportProxyEndPoint(System.Net.IPAddress! ipAddress, int port) -> void
 [TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options.get -> Titanium.Web.Proxy.Models.WebTransportOptions!
 [TWP001]Titanium.Web.Proxy.Models.WebTransportProxyEndPoint.Options.set -> void
+Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+static Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear() -> void
+Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+static Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(string? procRoot = null) -> bool
+static Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned() -> bool

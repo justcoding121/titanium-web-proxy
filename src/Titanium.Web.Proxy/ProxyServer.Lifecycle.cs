@@ -61,7 +61,16 @@ public partial class ProxyServer : IDisposable
         {
             try
             {
-                var ownedPorts = ProxyEndPoints.Select(x => x.Port).ToHashSet();
+                // The fail-open helper holds the port after a crash so old browser hooks
+                // still connect. It is not a live Inspector. Stop it before deciding
+                // whether the port is taken, then clear hooks only when nothing real
+                // is listening.
+                foreach (var port in ProxyEndPoints.Select(x => x.Port))
+                    LinuxProxyFailOpen.StopIfCoveringPort(port);
+
+                // A port that still accepts connections belongs to a live Inspector. Clearing
+                // it here is what a second launch did before its own bind failed.
+                var ownedPorts = PortsEligibleForStaleProxyClear(ProxyEndPoints.Select(x => x.Port));
                 var protocolToRemove = SystemProxySettingsManager.GetStaleLocalProxyProtocols(ownedPorts);
                 if (protocolToRemove != ProxyProtocolType.None)
                     SystemProxySettingsManager.RemoveProxy(protocolToRemove, false);
@@ -160,8 +169,8 @@ public partial class ProxyServer : IDisposable
             // TCP endpoints. Dual-listen reverse H3: bind TCP first (assign ephemeral port), then UDP
             // on the same IP:port so HttpClient can discover H3 via Alt-Svc or RequestVersionExact.
             // Windows TCP and UDP port spaces are independent — ephemeral TCP can land on a UDP port
-            // that is already taken or inside a UDP exclusion range (WSAEADDRINUSE). Those ranges are
-            // about 100 ports wide and allocation is sequential, so retry well past one range.
+            // that is already taken or inside a UDP exclusion range (WSAEADDRINUSE). bind(0) reissues
+            // the port just closed, so a failed attempt must step to the next port.
             foreach (var endPoint in ProxyEndPoints)
             {
                 if (endPoint is TransparentQuicProxyEndPoint)
@@ -183,17 +192,17 @@ public partial class ProxyServer : IDisposable
                 while (true)
                 {
                     dualAttempts++;
-                    Listen(endPoint);
-
-                    if (!wantDualQuic)
-                    {
-                        startedTcpEndPoints.Add(endPoint);
-                        break;
-                    }
-
-                    var dual = (TransparentProxyEndPoint)endPoint;
                     try
                     {
+                        Listen(endPoint);
+
+                        if (!wantDualQuic)
+                        {
+                            startedTcpEndPoints.Add(endPoint);
+                            break;
+                        }
+
+                        var dual = (TransparentProxyEndPoint)endPoint;
                         createdQuicListenerCts = true;
                         quicListenerCts ??= new CancellationTokenSource();
                         ListenQuic(dual);
@@ -204,9 +213,10 @@ public partial class ProxyServer : IDisposable
                     catch (Exception ex) when (ephemeralDual && dualAttempts < MaxEphemeralDualListenAttempts
                                                && IsAddressAlreadyInUse(ex))
                     {
-                        SafeRollback(() => QuitListenQuic(dual));
+                        var failedPort = endPoint.Port;
+                        SafeRollback(() => QuitListenQuic((TransparentProxyEndPoint)endPoint));
                         SafeRollback(() => QuitListen(endPoint));
-                        endPoint.Port = 0;
+                        endPoint.Port = NextEphemeralDualListenPort(failedPort);
                     }
                 }
             }

@@ -170,8 +170,9 @@ public class BootstrapAndFirefoxHelperCoverageTests
             "user_pref(\"k\", 1);\nnot-a-pref\nuser_pref(\"keep\", true);\n", ["k", "missing"]);
         _ = LinuxFirefoxProxy.BuildFirefoxBypassListForTests(null);
         _ = LinuxFirefoxProxy.BuildFirefoxBypassListForTests("");
-        typeof(LinuxFirefoxProxy).GetMethod("ResolveFirefoxLaunch",
-            BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, []);
+        // ResolveFirefoxLaunch lived here before relaunch helpers moved to LinuxChromiumRelaunch.
+        typeof(LinuxChromiumRelaunch).GetMethod("ShellQuote",
+            BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, ["it's"]);
 
         var quote = typeof(LinuxBrowserLaunchProxy).GetMethod("QuoteShellArg",
             BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -183,7 +184,8 @@ public class BootstrapAndFirefoxHelperCoverageTests
             [Path.Combine(Path.GetTempPath(), "nope.sh")]);
         _ = LinuxGraphicalSession.EnumerateCandidateSessionPids().Take(1).ToList();
         _ = LinuxGraphicalSession.TryReadFromSessionProcess("DISPLAY");
-        LinuxProxyFailOpen.Stop();
+        if (!LiveProxySessionGuard.DesktopDependsOnInspectorProxy())
+            LinuxProxyFailOpen.Stop();
     }
 
     [TestMethod]

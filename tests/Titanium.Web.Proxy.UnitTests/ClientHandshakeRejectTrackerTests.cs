@@ -34,7 +34,7 @@ public class ClientHandshakeRejectTrackerTests
     public void Success_ResetsTheCount()
     {
         // TrustGrace off: isolates the reset of the earlier strikes from the "trusted host" memory.
-        var t = new ClientHandshakeRejectTracker { Threshold = 3, TrustGrace = TimeSpan.Zero };
+        var t = new ClientHandshakeRejectTracker { Threshold = 3, TrustGrace = TimeSpan.Zero, MinBurstSpread = TimeSpan.Zero };
         var now = DateTime.UtcNow;
         t.RecordFailure("example.com", now);
         t.RecordFailure("example.com", now);
@@ -63,7 +63,12 @@ public class ClientHandshakeRejectTrackerTests
     [TestMethod]
     public void AbortsAfterTheTrustGrace_CountAgain()
     {
-        var t = new ClientHandshakeRejectTracker { Threshold = 3, TrustGrace = TimeSpan.FromMinutes(10) };
+        var t = new ClientHandshakeRejectTracker
+        {
+            Threshold = 3,
+            TrustGrace = TimeSpan.FromMinutes(10),
+            MinBurstSpread = TimeSpan.Zero,
+        };
         var now = DateTime.UtcNow;
         t.RecordSuccess("example.com", now);
         var later = now.AddMinutes(11);
@@ -75,12 +80,22 @@ public class ClientHandshakeRejectTrackerTests
     [TestMethod]
     public void NeverTrustedHost_StillTripsAtTheThreshold()
     {
-        var t = new ClientHandshakeRejectTracker { Threshold = 3 };
+        var t = new ClientHandshakeRejectTracker { Threshold = 3, MinBurstSpread = TimeSpan.Zero };
         var now = DateTime.UtcNow;
         t.RecordSuccess("other.example.com", now);
         Assert.IsFalse(t.RecordFailure("pinned.example.com", now));
         Assert.IsFalse(t.RecordFailure("pinned.example.com", now));
         Assert.IsTrue(t.RecordFailure("pinned.example.com", now));
+    }
+
+    [TestMethod]
+    public void SameInstantAborts_DoNotTripBeforeSpread()
+    {
+        var t = new ClientHandshakeRejectTracker { Threshold = 2 };
+        var now = DateTime.UtcNow;
+        Assert.IsFalse(t.RecordFailure("example.com", now));
+        Assert.IsFalse(t.RecordFailure("example.com", now), "a second abort at the same instant must not learn a bypass");
+        Assert.IsTrue(t.RecordFailure("example.com", now.AddSeconds(1.1)));
     }
 
     [TestMethod]
@@ -96,7 +111,7 @@ public class ClientHandshakeRejectTrackerTests
     [TestMethod]
     public void HostsAreIndependent_AndCaseInsensitive()
     {
-        var t = new ClientHandshakeRejectTracker { Threshold = 2 };
+        var t = new ClientHandshakeRejectTracker { Threshold = 2, MinBurstSpread = TimeSpan.Zero };
         var now = DateTime.UtcNow;
         Assert.IsFalse(t.RecordFailure("a.example.com", now));
         Assert.IsFalse(t.RecordFailure("b.example.com", now));
@@ -162,6 +177,7 @@ public class ClientHandshakeRejectTrackerTests
         };
         proxy.ClearDecryptFailureBypass();
         proxy.ClientHandshakeRejects.Clear();
+        proxy.ClientHandshakeRejects.MinBurstSpread = TimeSpan.Zero;
         var raised = 0;
         proxy.DecryptFailureBypassChanged += (_, e) =>
         {

@@ -25,4 +25,13 @@ internal interface ISystemProxyBackend : IDisposable
     ///     <paramref name="ownedPorts"/> (used to clear stale settings after a crash).
     /// </summary>
     ProxyProtocolType GetStaleLocalProxyProtocols(IReadOnlyCollection<int> ownedPorts);
+
+    /// <summary>
+    ///     Protocols whose current system proxy points at a local host:port that is not
+    ///     accepting TCP (previous process died without restoring OS proxy).
+    /// </summary>
+    /// <param name="isListening">
+    ///     Returns true when something accepts connections on the host/port.
+    /// </param>
+    ProxyProtocolType GetOrphanedLocalProxyProtocols(Func<string, int, bool> isListening);
 }

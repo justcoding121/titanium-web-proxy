@@ -359,7 +359,31 @@ internal sealed class YarpProxyHost : IDisposable
 
     private static async Task<YarpProxyHost> StartAsync(YarpListenOptions options)
     {
-        var port = GetFreeDualStackPort();
+        var skipped = new HashSet<int>();
+        Exception? last = null;
+        for (var attempt = 1; attempt <= 32; attempt++)
+        {
+            var port = GetFreeDualStackPort(skipped);
+            try
+            {
+                return await StartOnPortAsync(options, port);
+            }
+            catch (Exception ex) when (attempt < 32 && IsAddressInUse(ex))
+            {
+                // A UDP probe can bind a port that MsQuic then rejects, and Windows
+                // bind(0) returns that same port. Skip it.
+                last = ex;
+                skipped.Add(port);
+            }
+        }
+
+        throw new InvalidOperationException(
+            "YARP listen failed after skipping UDP-busy ports " + string.Join(',', skipped) + ".",
+            last);
+    }
+
+    private static async Task<YarpProxyHost> StartOnPortAsync(YarpListenOptions options, int port)
+    {
         X509Certificate2? cert = null;
         if (options.UseTls)
             cert = LoopbackCertificateAuthority.ServerCertificate;
@@ -441,7 +465,15 @@ internal sealed class YarpProxyHost : IDisposable
 
         var app = builder.Build();
         app.MapReverseProxy();
-        await app.StartAsync();
+        try
+        {
+            await app.StartAsync();
+        }
+        catch
+        {
+            await app.DisposeAsync();
+            throw;
+        }
 
         var scheme = options.UseTls ? "https" : "http";
         // HttpClient H3 + IP literals often fails SNI; match TWP dual-listen ListenUrl host.
@@ -464,29 +496,58 @@ internal sealed class YarpProxyHost : IDisposable
         serverCertificate?.Dispose();
     }
 
-    private static int GetFreeTcpPort()
-    {
-        var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
     /// <summary>
     ///     Pick a port free for both TCP and UDP. Kestrel H3 binds MsQuic on the same port; Windows
     ///     TCP/UDP namespaces are independent so a TCP-only pick can fail QUIC with WSAEADDRINUSE.
     /// </summary>
-    private static int GetFreeDualStackPort()
+    private static int GetFreeDualStackPort(IReadOnlySet<int>? skip = null)
     {
-        for (var i = 0; i < 20; i++)
+        // Hold each rejected TCP socket so the next port-0 bind cannot return it.
+        var held = new List<TcpListener>();
+        try
         {
-            var port = GetFreeTcpPort();
-            if (IsUdpPortFree(port) && IsIpv6TcpPortFree(port))
-                return port;
+            for (var i = 0; i < 64; i++)
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                held.Add(listener);
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                if (skip is not null && skip.Contains(port))
+                    continue;
+                if (IsUdpPortFree(port) && IsIpv6TcpPortFree(port))
+                    return port;
+            }
+        }
+        finally
+        {
+            foreach (var listener in held)
+            {
+                try
+                {
+                    listener.Stop();
+                }
+                catch (SocketException)
+                {
+                    // Already closed.
+                }
+            }
         }
 
-        return GetFreeTcpPort();
+        throw new InvalidOperationException("No loopback port was free for both TCP and UDP.");
+    }
+
+    private static bool IsAddressInUse(Exception ex)
+    {
+        for (Exception? cur = ex; cur != null; cur = cur.InnerException)
+        {
+            if (cur is SocketException se &&
+                (se.SocketErrorCode == SocketError.AddressAlreadyInUse || se.NativeErrorCode is 10048 or 98))
+                return true;
+            if (cur.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool IsUdpPortFree(int port)

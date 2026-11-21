@@ -18,6 +18,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public async Task ChromeProfile_ApplyClearAndWatcherReassert_OnAnyOs()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var chromeRoot = Path.Combine(home, ".config", "google-chrome");
         var createdRoot = !Directory.Exists(chromeRoot);
@@ -30,13 +31,15 @@ public class LinuxBrowserProxyCoverageTests
             var written = LinuxChromeProfileProxy.Apply("127.0.0.1", 18866);
             Assert.IsTrue(written >= 1, "expected at least the disposable Chrome profile to be rewritten");
             var text = File.ReadAllText(prefs);
-            StringAssert.Contains(text, "fixed_servers");
-            StringAssert.Contains(text, "127.0.0.1:18866");
+            StringAssert.Contains(text, "\"system\"");
+            // mode=system must not pin a dead fixed endpoint after Inspector releases the port.
+            Assert.IsFalse(text.Contains("127.0.0.1:18866", StringComparison.Ordinal),
+                "Preferences must not store the live listener URL beside mode=system");
 
-            File.WriteAllText(prefs, """{"proxy":{"mode":"system"}}""");
+            File.WriteAllText(prefs, """{"proxy":{"mode":"direct"}}""");
             await Task.Delay(500);
             var reasserted = File.ReadAllText(prefs);
-            StringAssert.Contains(reasserted, "fixed_servers");
+            StringAssert.Contains(reasserted, "\"system\"");
 
             LinuxChromeProfileProxy.Clear();
             LinuxProxyFailOpen.Stop();
@@ -64,6 +67,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void BrowserLaunch_ApplyClearWritePoliciesAndDesktopHelpers()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var policyDir = Path.Combine(home, ".config", "google-chrome", "policies", "managed");
         var desktopDir = Path.Combine(home, ".local", "share", "applications");
@@ -110,6 +114,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void FirefoxPrefsMergeRemoveBypassAndBackupHooks()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         var existing = """
             user_pref("network.proxy.type", 5);
             user_pref("browser.startup.page", 1);
@@ -142,6 +147,7 @@ public class LinuxBrowserProxyCoverageTests
     [TestMethod]
     public void ChromiumRelaunch_ClassifiesFamiliesAndBuildsScript()
     {
+        LiveProxySessionGuard.InconclusiveIfDesktopDependsOnInspector();
         Assert.AreEqual("Chrome", LinuxChromiumRelaunch.ClassifyFamilyForTests("/opt/google/chrome/chrome"));
         Assert.AreEqual("Chromium", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/lib/chromium/chromium"));
         Assert.AreEqual("Brave", LinuxChromiumRelaunch.ClassifyFamilyForTests("/usr/bin/brave"));
@@ -176,6 +182,9 @@ public class LinuxBrowserProxyCoverageTests
             ])!;
         StringAssert.Contains(script, "google-chrome-stable");
         StringAssert.Contains(script, "4242");
+        StringAssert.Contains(script, "exec(base64.b64decode(sys.argv[1]))");
+        Assert.IsFalse(script.Contains("{ShellQuote(", StringComparison.Ordinal),
+            "$$ raw string must interpolate ShellQuote for the loopback-strip arg");
         InvokeCr("TryMakeExecutable", [typeof(string)], scriptPath);
         InvokeCr("ShellQuote", [typeof(string)], "it's");
         _ = LinuxGraphicalSession.TryGetDisplay();
@@ -320,20 +329,29 @@ public class LinuxBrowserProxyCoverageTests
 
             var launcherDir = (string)Invoke("LauncherDirectory", Type.EmptyTypes)!;
             Directory.CreateDirectory(launcherDir);
-            var marked = Path.Combine(launcherDir, "twp-cov-marked.sh");
+            var marked = Path.Combine(launcherDir, "google-chrome.sh");
             var plain = Path.Combine(launcherDir, "twp-cov-plain.sh");
-            File.WriteAllText(marked, "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker + "\n");
+            File.WriteAllText(marked,
+                "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker +
+                "\nexec \"/usr/bin/google-chrome-stable\" --proxy-server=http://127.0.0.1:9 \"$@\"\n");
             File.WriteAllText(plain, "#!/bin/sh\necho keep\n");
-            Invoke("DeleteLauncherScripts", Type.EmptyTypes);
-            Assert.IsFalse(File.Exists(marked));
+            Invoke("NeutralizeLauncherScripts", Type.EmptyTypes);
+            Assert.IsTrue(File.Exists(marked));
+            var neutralized = File.ReadAllText(marked);
+            StringAssert.Contains(neutralized, "exec \"/usr/bin/google-chrome-stable\"");
+            Assert.IsFalse(neutralized.Contains("--proxy-server=", StringComparison.Ordinal));
             Assert.IsTrue(File.Exists(plain));
 
             var locked = Path.Combine(launcherDir, "twp-cov-locked.sh");
-            using (new FileStream(locked, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+            File.WriteAllText(locked,
+                "#!/bin/sh\n# " + LinuxBrowserLaunchProxy.DesktopMarker +
+                "\nexec \"/usr/bin/google-chrome-stable\" --proxy-server=http://127.0.0.1:9 \"$@\"\n");
+            using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
             {
-                Invoke("DeleteLauncherScripts", Type.EmptyTypes);
+                Invoke("NeutralizeLauncherScripts", Type.EmptyTypes);
             }
 
+            TryDelete(marked);
             TryDelete(plain);
             TryDelete(locked);
 
@@ -428,7 +446,147 @@ public class LinuxBrowserProxyCoverageTests
 
     private static void TryDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+            try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+    }
+
+    [TestMethod]
+    public void MachinePolicyFile_AndLauncherNeutralize_StayInsideTheTempHome()
+    {
+        var home = Path.Combine(Path.GetTempPath(), "twp-policy-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(home, "vendor");
+        Directory.CreateDirectory(Path.Combine(root, "policies", "managed"));
+        var owned = Path.Combine(root, "policies", "managed", "titanium-inspector-ca.json");
+        File.WriteAllText(owned, "{}");
+        var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
+        Directory.CreateDirectory(launchers);
+        File.WriteAllText(
+            Path.Combine(launchers, "google-chrome.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "chromium.sh"),
+            "# X-Titanium-Inspector-Proxy=true\nexec \"/usr/bin/chromium\" --flag\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "brave-browser.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "microsoft-edge.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "unknown-browser.sh"),
+            "# X-Titanium-Inspector-Proxy=true\n");
+        File.WriteAllText(
+            Path.Combine(launchers, "chromium-browser.sh"),
+            "# X-Titanium-Inspector-Proxy=true\nexec /usr/bin/chromium --flag\n");
+        var chromeDefault = Path.Combine(home, ".config", "google-chrome", "Default");
+        Directory.CreateDirectory(chromeDefault);
+        var chromePrefs = Path.Combine(chromeDefault, "Preferences");
+        File.WriteAllText(chromePrefs, """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:8080"}}""");
+        File.WriteAllText(chromePrefs + ".titanium-inspector-proxy.bak", "null");
+        var firefoxProfile = Path.Combine(home, ".mozilla", "firefox", "profile.default");
+        Directory.CreateDirectory(firefoxProfile);
+        File.WriteAllText(
+            Path.Combine(firefoxProfile, "prefs.js"),
+            "user_pref(\"titanium.inspector.proxy.managed\", true);\nuser_pref(\"network.proxy.http\", \"127.0.0.1\");\n");
+        var firefoxSnap = Path.Combine(home, "snap", "firefox", "common", ".mozilla", "firefox", "other");
+        Directory.CreateDirectory(firefoxSnap);
+        File.WriteAllText(
+            Path.Combine(firefoxSnap, "prefs.js"),
+            "user_pref(\"network.proxy.ssl\", \"localhost\");\n");
+        Directory.CreateDirectory(Path.Combine(home, ".config", "TitaniumInspector"));
+        File.WriteAllText(
+            Path.Combine(home, ".config", "TitaniumInspector", "firefox-proxy-backup.json"),
+            """{"network.proxy.type":"0"}""");
+        var apps = Path.Combine(home, ".local", "share", "applications");
+        Directory.CreateDirectory(apps);
+        File.WriteAllText(
+            Path.Combine(apps, "google-chrome.desktop"),
+            "[Desktop Entry]\nX-Titanium-Inspector-Proxy=true\n");
+        var absentRoot = Path.Combine(home, "absent-vendor");
+        const string policyJson = """{"CACertificates":[]}""";
+        var previousHome = CoverageOs.HomeForTests;
+        var previousLinux = CoverageOs.TreatAsLinuxForTests;
+        var previousResolve = UnixProcessPath.ResolveOverrideForTests;
+        try
+        {
+            CoverageOs.HomeForTests = home;
+            CoverageOs.TreatAsLinuxForTests = true;
+            UnixProcessPath.ResolveOverrideForTests = _ => null;
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                policyJson,
+                [(root, new[] { Path.Combine(root, "missing-bin") })]);
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                policyJson,
+                [(absentRoot, Array.Empty<string>())]);
+            File.WriteAllText(owned, policyJson);
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                policyJson,
+                [(root, Array.Empty<string>())]);
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json",
+                null,
+                [(root, Array.Empty<string>())]);
+            using (var rsa = System.Security.Cryptography.RSA.Create(2048))
+            {
+                var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                    "CN=twp-cov",
+                    rsa,
+                    System.Security.Cryptography.HashAlgorithmName.SHA256,
+                    System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+                using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(cert);
+                LinuxBrowserLaunchProxy.ApplyCaCertificatesPolicy(cert, machinePolicy: true);
+                LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy();
+                LinuxBrowserLaunchProxy.RemoveCaCertificatesPolicy(machinePolicy: true);
+            }
+
+            Assert.IsFalse(LinuxInspectorProcess.IsRunning());
+            Assert.IsFalse(LinuxInspectorProcess.IsRunning(Path.Combine(home, "missing-proc")));
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(
+                Path.Combine(home, "missing-prefs")));
+            var badPrefs = Path.Combine(home, "bad-prefs");
+            File.WriteAllText(badPrefs, "not-json");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(badPrefs));
+            var loopbackPrefs = Path.Combine(home, "loopback-prefs");
+            File.WriteAllText(loopbackPrefs, """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:9"}}""");
+            File.WriteAllText(loopbackPrefs + ".titanium-inspector-proxy.bak", "null");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(loopbackPrefs));
+            var foreignPrefs = Path.Combine(home, "foreign-prefs");
+            File.WriteAllText(foreignPrefs, """{"proxy":{"mode":"fixed_servers","server":"http://example.test:80"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(foreignPrefs));
+            var plainServer = Path.Combine(home, "plain-server-prefs");
+            File.WriteAllText(plainServer, """{"proxy":{"mode":"fixed_servers","server":"not-a-uri"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(plainServer));
+            var systemServer = Path.Combine(home, "system-server-prefs");
+            File.WriteAllText(systemServer, """{"proxy":{"mode":"system","server":"127.0.0.1:9"}}""");
+            LinuxChromeProfileProxy.TryStripInspectorProxyForTests(systemServer, "127.0.0.1", 9);
+            Directory.CreateDirectory(Path.Combine(home, ".mozilla", "firefox", "empty-profile"));
+            LinuxChromeProfileProxy.Clear();
+            LinuxChromeProfileProxy.Clear(startFailOpen: false);
+            LinuxFirefoxProxy.Clear();
+            LinuxBrowserLaunchProxy.ClearInstalledHooks();
+            var rewritten = File.ReadAllText(Path.Combine(launchers, "google-chrome.sh"));
+            StringAssert.Contains(rewritten, "exec ");
+            Assert.IsFalse(File.Exists(Path.Combine(apps, "google-chrome.desktop")));
+            var savedHome = CoverageOs.HomeForTests;
+            CoverageOs.TreatAsLinuxForTests = false;
+            LinuxBrowserLaunchProxy.SyncMachinePolicyFileForTests(
+                "titanium-inspector-ca.json", "{}", [(root, Array.Empty<string>())]);
+            CoverageOs.TreatAsLinuxForTests = true;
+            CoverageOs.HomeForTests = " ";
+            LinuxFirefoxProxy.Clear();
+            LinuxProxyFailOpen.Stop();
+            CoverageOs.HomeForTests = savedHome;
+        }
+        finally
+        {
+            CoverageOs.HomeForTests = previousHome;
+            CoverageOs.TreatAsLinuxForTests = previousLinux;
+            UnixProcessPath.ResolveOverrideForTests = previousResolve;
+            try { Directory.Delete(home, true); } catch { /* best-effort */ }
+        }
     }
 }
 

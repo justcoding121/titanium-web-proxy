@@ -45,8 +45,8 @@ Pick **Stable** for production or **Beta** for the newest builds. Then choose In
   <p>Stable downloads. Beta and the other packages are in the lists below.</p>
   <ul>
     <li><strong>Windows:</strong> <a :href="picks.winInspector">Inspector MSI</a> · <a :href="picks.winCli">CLI zip</a></li>
-    <li><strong>macOS (Apple Silicon):</strong> <a :href="picks.macArmInspector">Inspector DMG</a> · <a :href="picks.macArmCli">CLI zip</a> <span class="quick-picks-alt">· Intel: <a :href="picks.macIntelInspector">Inspector</a> · <a :href="picks.macIntelCli">CLI</a></span> · <a href="#homebrew-macos-cli">Homebrew</a></li>
-    <li><strong>Linux (x64):</strong> <a :href="picks.linuxInspector">Inspector AppImage</a> · <a :href="picks.linuxCli">CLI zip</a> <span class="quick-picks-alt">· <a href="#stable">deb, rpm, arm64, Alpine musl</a></span></li>
+    <li><strong>macOS (Apple silicon):</strong> <a :href="picks.macArmInspector">Inspector DMG</a> · <a :href="picks.macArmCli">CLI zip</a> <span class="quick-picks-alt">· Intel: <a :href="picks.macIntelInspector">Inspector</a> · <a :href="picks.macIntelCli">CLI</a></span> · <a href="#homebrew-macos-cli">Homebrew</a></li>
+    <li><strong>Linux (64-bit):</strong> <a :href="picks.linuxInspector">Inspector AppImage</a> · <a :href="picks.linuxCli">CLI zip</a> <span class="quick-picks-alt">· <a href="#stable">deb, rpm, ARM, and Alpine</a></span></li>
   </ul>
 </div>
 
@@ -81,57 +81,57 @@ Pick **Stable** for production or **Beta** for the newest builds. Then choose In
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux x64 AppImage</strong>
-      <a v-if="ch.data.inspector.appimage && ch.data.inspector.appimage['linux-x64']" :href="ch.data.inspector.appimage['linux-x64'].url">{{ ch.data.inspector.appimage['linux-x64'].name }}</a>
-      <a v-else-if="ch.data.inspector['linux-x64']" :href="ch.data.inspector['linux-x64'].url">{{ ch.data.inspector['linux-x64'].name }} (zip)</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux x64 .deb</strong>
-      <a v-if="ch.data.inspector.deb && ch.data.inspector.deb['linux-x64']" :href="ch.data.inspector.deb['linux-x64'].url">{{ ch.data.inspector.deb['linux-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux x64 .rpm</strong>
-      <a v-if="ch.data.inspector.rpm && ch.data.inspector.rpm['linux-x64']" :href="ch.data.inspector.rpm['linux-x64'].url">{{ ch.data.inspector.rpm['linux-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux arm64 AppImage</strong>
-      <a v-if="ch.data.inspector.appimage && ch.data.inspector.appimage['linux-arm64']" :href="ch.data.inspector.appimage['linux-arm64'].url">{{ ch.data.inspector.appimage['linux-arm64'].name }}</a>
-      <a v-else-if="ch.data.inspector['linux-arm64']" :href="ch.data.inspector['linux-arm64'].url">{{ ch.data.inspector['linux-arm64'].name }} (zip)</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux arm64 .deb</strong>
-      <a v-if="ch.data.inspector.deb && ch.data.inspector.deb['linux-arm64']" :href="ch.data.inspector.deb['linux-arm64'].url">{{ ch.data.inspector.deb['linux-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Linux arm64 .rpm</strong>
-      <a v-if="ch.data.inspector.rpm && ch.data.inspector.rpm['linux-arm64']" :href="ch.data.inspector.rpm['linux-arm64'].url">{{ ch.data.inspector.rpm['linux-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Alpine / musl x64</strong>
-      <a v-if="ch.data.inspector['linux-musl-x64']" :href="ch.data.inspector['linux-musl-x64'].url">{{ ch.data.inspector['linux-musl-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>Alpine / musl arm64</strong>
-      <a v-if="ch.data.inspector['linux-musl-arm64']" :href="ch.data.inspector['linux-musl-arm64'].url">{{ ch.data.inspector['linux-musl-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>macOS arm64 DMG</strong>
+      <strong>macOS Apple silicon DMG</strong>
       <a v-if="ch.data.inspector.dmg && ch.data.inspector.dmg['osx-arm64']" :href="ch.data.inspector.dmg['osx-arm64'].url">{{ ch.data.inspector.dmg['osx-arm64'].name }}</a>
       <a v-else-if="ch.data.inspector['osx-arm64']" :href="ch.data.inspector['osx-arm64'].url">{{ ch.data.inspector['osx-arm64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>macOS x64 DMG</strong>
+      <strong>macOS Intel DMG</strong>
       <a v-if="ch.data.inspector.dmg && ch.data.inspector.dmg['osx-x64']" :href="ch.data.inspector.dmg['osx-x64'].url">{{ ch.data.inspector.dmg['osx-x64'].name }}</a>
       <a v-else-if="ch.data.inspector['osx-x64']" :href="ch.data.inspector['osx-x64'].url">{{ ch.data.inspector['osx-x64'].name }} (zip)</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux 64-bit AppImage</strong>
+      <a v-if="ch.data.inspector.appimage && ch.data.inspector.appimage['linux-x64']" :href="ch.data.inspector.appimage['linux-x64'].url">{{ ch.data.inspector.appimage['linux-x64'].name }}</a>
+      <a v-else-if="ch.data.inspector['linux-x64']" :href="ch.data.inspector['linux-x64'].url">{{ ch.data.inspector['linux-x64'].name }} (zip)</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux 64-bit .deb</strong>
+      <a v-if="ch.data.inspector.deb && ch.data.inspector.deb['linux-x64']" :href="ch.data.inspector.deb['linux-x64'].url">{{ ch.data.inspector.deb['linux-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux 64-bit .rpm</strong>
+      <a v-if="ch.data.inspector.rpm && ch.data.inspector.rpm['linux-x64']" :href="ch.data.inspector.rpm['linux-x64'].url">{{ ch.data.inspector.rpm['linux-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux ARM AppImage</strong>
+      <a v-if="ch.data.inspector.appimage && ch.data.inspector.appimage['linux-arm64']" :href="ch.data.inspector.appimage['linux-arm64'].url">{{ ch.data.inspector.appimage['linux-arm64'].name }}</a>
+      <a v-else-if="ch.data.inspector['linux-arm64']" :href="ch.data.inspector['linux-arm64'].url">{{ ch.data.inspector['linux-arm64'].name }} (zip)</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux ARM .deb</strong>
+      <a v-if="ch.data.inspector.deb && ch.data.inspector.deb['linux-arm64']" :href="ch.data.inspector.deb['linux-arm64'].url">{{ ch.data.inspector.deb['linux-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux ARM .rpm</strong>
+      <a v-if="ch.data.inspector.rpm && ch.data.inspector.rpm['linux-arm64']" :href="ch.data.inspector.rpm['linux-arm64'].url">{{ ch.data.inspector.rpm['linux-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Alpine 64-bit</strong>
+      <a v-if="ch.data.inspector['linux-musl-x64']" :href="ch.data.inspector['linux-musl-x64'].url">{{ ch.data.inspector['linux-musl-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Alpine ARM</strong>
+      <a v-if="ch.data.inspector['linux-musl-arm64']" :href="ch.data.inspector['linux-musl-arm64'].url">{{ ch.data.inspector['linux-musl-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
   </div>
@@ -143,60 +143,60 @@ Pick **Stable** for production or **Beta** for the newest builds. Then choose In
   </p>
   <div class="download-grid">
     <div class="download-row">
-      <strong>Windows x64</strong>
+      <strong>Windows 64-bit</strong>
       <a v-if="ch.data.cli['win-x64']" :href="ch.data.cli['win-x64'].url">{{ ch.data.cli['win-x64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux x64 AppImage</strong>
+      <strong>macOS Apple silicon</strong>
+      <a v-if="ch.data.cli['osx-arm64']" :href="ch.data.cli['osx-arm64'].url">{{ ch.data.cli['osx-arm64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>macOS Intel</strong>
+      <a v-if="ch.data.cli['osx-x64']" :href="ch.data.cli['osx-x64'].url">{{ ch.data.cli['osx-x64'].name }}</a>
+      <span v-else class="vp-muted">Not published yet</span>
+    </div>
+    <div class="download-row">
+      <strong>Linux 64-bit AppImage</strong>
       <a v-if="ch.data.cli.appimage && ch.data.cli.appimage['linux-x64']" :href="ch.data.cli.appimage['linux-x64'].url">{{ ch.data.cli.appimage['linux-x64'].name }}</a>
       <a v-else-if="ch.data.cli['linux-x64']" :href="ch.data.cli['linux-x64'].url">{{ ch.data.cli['linux-x64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux x64 .deb</strong>
+      <strong>Linux 64-bit .deb</strong>
       <a v-if="ch.data.cli.deb && ch.data.cli.deb['linux-x64']" :href="ch.data.cli.deb['linux-x64'].url">{{ ch.data.cli.deb['linux-x64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux x64 .rpm</strong>
+      <strong>Linux 64-bit .rpm</strong>
       <a v-if="ch.data.cli.rpm && ch.data.cli.rpm['linux-x64']" :href="ch.data.cli.rpm['linux-x64'].url">{{ ch.data.cli.rpm['linux-x64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux arm64 AppImage</strong>
+      <strong>Linux ARM AppImage</strong>
       <a v-if="ch.data.cli.appimage && ch.data.cli.appimage['linux-arm64']" :href="ch.data.cli.appimage['linux-arm64'].url">{{ ch.data.cli.appimage['linux-arm64'].name }}</a>
       <a v-else-if="ch.data.cli['linux-arm64']" :href="ch.data.cli['linux-arm64'].url">{{ ch.data.cli['linux-arm64'].name }} (zip)</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux arm64 .deb</strong>
+      <strong>Linux ARM .deb</strong>
       <a v-if="ch.data.cli.deb && ch.data.cli.deb['linux-arm64']" :href="ch.data.cli.deb['linux-arm64'].url">{{ ch.data.cli.deb['linux-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Linux arm64 .rpm</strong>
+      <strong>Linux ARM .rpm</strong>
       <a v-if="ch.data.cli.rpm && ch.data.cli.rpm['linux-arm64']" :href="ch.data.cli.rpm['linux-arm64'].url">{{ ch.data.cli.rpm['linux-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Alpine / musl x64</strong>
+      <strong>Alpine 64-bit</strong>
       <a v-if="ch.data.cli['linux-musl-x64']" :href="ch.data.cli['linux-musl-x64'].url">{{ ch.data.cli['linux-musl-x64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
     <div class="download-row">
-      <strong>Alpine / musl arm64</strong>
+      <strong>Alpine ARM</strong>
       <a v-if="ch.data.cli['linux-musl-arm64']" :href="ch.data.cli['linux-musl-arm64'].url">{{ ch.data.cli['linux-musl-arm64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>macOS x64</strong>
-      <a v-if="ch.data.cli['osx-x64']" :href="ch.data.cli['osx-x64'].url">{{ ch.data.cli['osx-x64'].name }}</a>
-      <span v-else class="vp-muted">Not published yet</span>
-    </div>
-    <div class="download-row">
-      <strong>macOS arm64</strong>
-      <a v-if="ch.data.cli['osx-arm64']" :href="ch.data.cli['osx-arm64'].url">{{ ch.data.cli['osx-arm64'].name }}</a>
       <span v-else class="vp-muted">Not published yet</span>
     </div>
   </div>
@@ -229,7 +229,7 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ## Advanced
 
-- **Alpine / musl containers:** use the Alpine / musl zip rows above — not the regular Linux zip. Details: [HTTP/3](/docs/http3) and [Install](/docs/install#advanced).
+- **Alpine containers:** use the Alpine rows above, not the regular Linux zip. Those builds use musl. Details: [HTTP/3](/docs/http3) and [Install](/docs/install#advanced).
 - **Windows signing:** Authenticode publisher **Jehonathan Thomas**.
 - **Some GitHub tags are NuGet-only** (no CLI/Inspector assets). Prefer this page or a release that lists the installers you need.
 

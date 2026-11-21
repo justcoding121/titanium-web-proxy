@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Threading;
 
 namespace Titanium.Web.Proxy.Helpers;
 
@@ -13,13 +15,124 @@ internal static class LinuxProxyFailOpen
 {
     private const string PidFileName = "fail-open-proxy.pid";
     private const string ScriptFileName = "fail-open-proxy.py";
+    // Written alongside the pid file when the helper was started via systemd-run --scope.
+    // Stop() reads this file to stop the scope unit before falling back to kill -TERM.
+    private const string ScopeFileName = "fail-open-proxy.scope";
+    private static int _ownedByThisProcess;
 
-    internal static void Stop()
+    /// <summary>True after <see cref="Start"/> in this process until an explicit <see cref="Stop"/>.</summary>
+    internal static bool OwnedByThisProcess => Volatile.Read(ref _ownedByThisProcess) != 0;
+
+    internal static void MarkOwnedByThisProcessForTests() => Volatile.Write(ref _ownedByThisProcess, 1);
+
+    internal static void ClearOwnedByThisProcessForTests() => Volatile.Write(ref _ownedByThisProcess, 0);
+
+    /// <summary>
+    ///     Stop the helper only when it is the process listening for this Inspector port.
+    ///     A real Inspector on that port is left alone.
+    /// </summary>
+    internal static void StopIfCoveringPort(int port)
     {
+        if (port <= 0)
+            return;
         try
         {
             var pidPath = PidPath();
             if (pidPath is null || !File.Exists(pidPath))
+                return;
+            if (!int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) || pid <= 1)
+                return;
+            var cmdPath = "/proc/" + pid + "/cmdline";
+            if (!File.Exists(cmdPath))
+                return;
+            // /proc cmdline is NUL-separated; read bytes so embedded NULs are preserved.
+            if (!CmdlineCoversPort(File.ReadAllBytes(cmdPath), port))
+                return;
+            Stop();
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
+    /// <summary>
+    ///     True when a NUL-separated <c>/proc/.../cmdline</c> is the fail-open helper and one
+    ///     argument is exactly <paramref name="port"/> (or <c>host:port</c>). Substring match
+    ///     would treat port 80 as covering a helper on 8080.
+    /// </summary>
+    internal static bool CmdlineCoversPort(string cmdline, int port) =>
+        CmdlineCoversPort(
+            string.IsNullOrEmpty(cmdline) ? null : System.Text.Encoding.UTF8.GetBytes(cmdline),
+            port);
+
+    /// <summary>
+    ///     Byte form for <c>/proc/.../cmdline</c> (NUL-separated). Prefer this over
+    ///     <see cref="File.ReadAllText(string)"/> so embedded NULs are not truncated.
+    /// </summary>
+    internal static bool CmdlineCoversPort(byte[]? cmdlineBytes, int port)
+    {
+        if (port <= 0 || cmdlineBytes is null || cmdlineBytes.Length == 0)
+            return false;
+
+        var cmdline = System.Text.Encoding.UTF8.GetString(cmdlineBytes);
+        var parts = cmdline.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+        if (!parts.Any(part => part.Contains("fail-open-proxy.py", StringComparison.Ordinal)))
+            return false;
+
+        var portToken = port.ToString();
+        var portSuffix = ":" + portToken;
+        return parts.Any(part =>
+            string.Equals(part, portToken, StringComparison.Ordinal)
+            || part.EndsWith(portSuffix, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     Stop a helper left by a dead Inspector. When this process just started the helper
+    ///     for a graceful exit, leave it running so a browser pinned with <c>--proxy-server</c>
+    ///     can still load. Returns false when the helper was kept.
+    /// </summary>
+    internal static bool StopUnlessOwnedByThisProcess()
+    {
+        if (Volatile.Read(ref _ownedByThisProcess) != 0)
+            return false;
+        Stop();
+        return true;
+    }
+
+    internal static void Stop() // NOSONAR S3776 -- systemd scope stop, pidfile kill, and unit cleanup share fail-open teardown order
+    {
+        Volatile.Write(ref _ownedByThisProcess, 0);
+        try
+        {
+            var dir = ConfigDir();
+            if (dir is null)
+                return;
+
+            // If the helper was started in a systemd user scope, stop that scope first.
+            // This handles the case where the helper was placed outside Inspector's cgroup
+            // (so kill -TERM on the double-forked pid might not reach it after a scope stop).
+            var scopePath = Path.Combine(dir, ScopeFileName);
+            if (File.Exists(scopePath))
+            {
+                try
+                {
+                    var scopeName = File.ReadAllText(scopePath).Trim();
+                    if (!string.IsNullOrEmpty(scopeName))
+                        TryStopSystemdScope(scopeName);
+                }
+                catch
+                {
+                    // best-effort
+                }
+                finally
+                {
+                    try { File.Delete(scopePath); } catch { /* ignore */ }
+                }
+            }
+
+            var pidPath = Path.Combine(dir, PidFileName);
+            if (!File.Exists(pidPath))
                 return;
             if (int.TryParse(File.ReadAllText(pidPath).Trim(), out var pid) && pid > 1)
             {
@@ -51,6 +164,27 @@ internal static class LinuxProxyFailOpen
         }
     }
 
+    private static void TryStopSystemdScope(string scopeName)
+    {
+        var systemctl = UnixProcessPath.Resolve("/usr/bin/systemctl", "/bin/systemctl");
+        if (systemctl is null)
+            return;
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = systemctl,
+                ArgumentList = { "--user", "stop", scopeName },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })?.WaitForExit(3000);
+        }
+        catch
+        {
+            // best-effort
+        }
+    }
+
     internal static void Start(string hostname, int port)
     {
         Stop();
@@ -63,22 +197,95 @@ internal static class LinuxProxyFailOpen
             var script = Path.Combine(dir, ScriptFileName);
             File.WriteAllText(script, FailOpenScript);
             var pidPath = Path.Combine(dir, PidFileName);
+            var scopePath = Path.Combine(dir, ScopeFileName);
             var python = UnixProcessPath.Resolve("/usr/bin/python3", "/usr/local/bin/python3");
             if (python is null)
                 return;
 
-            var psi = new ProcessStartInfo
+            // Prefer systemd-run --user --scope so the helper lives outside Inspector's
+            // cgroup. When Inspector runs as a systemd user service, the service stops its
+            // entire cgroup on exit — a setsid-only helper is killed with it. A scope unit
+            // is independent and survives. Fall back to setsid when systemd-run is absent.
+            var systemdRun = UnixProcessPath.Resolve("/usr/bin/systemd-run", "/bin/systemd-run");
+            var xdgRuntime = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+            var dbus = Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS");
+            var canUseSystemd = systemdRun is not null &&
+                                !string.IsNullOrEmpty(xdgRuntime) &&
+                                !string.IsNullOrEmpty(dbus);
+
+            ProcessStartInfo psi;
+            string? scopeName = null;
+
+            if (canUseSystemd)
             {
-                FileName = python,
-                Arguments = Quote(script) + " " + Quote(hostname) + " " + port + " " + Quote(pidPath),
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                WorkingDirectory = dir,
-            };
-            // Detach: do not wait; child double-forks in the script.
-            Process.Start(psi)?.Dispose();
+                // Unit name must be unique per port so concurrent Inspector instances do not clash.
+                scopeName = $"ti-fail-open-{port}.scope";
+                psi = new ProcessStartInfo
+                {
+                    FileName = systemdRun!,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = dir,
+                };
+                psi.EnvironmentVariables["XDG_RUNTIME_DIR"] = xdgRuntime!;
+                psi.EnvironmentVariables["DBUS_SESSION_BUS_ADDRESS"] = dbus!;
+                psi.ArgumentList.Add("--user");
+                psi.ArgumentList.Add("--scope");
+                psi.ArgumentList.Add("--collect");
+                psi.ArgumentList.Add($"--unit={scopeName}");
+                psi.ArgumentList.Add(python);
+                psi.ArgumentList.Add(script);
+                psi.ArgumentList.Add(hostname);
+                psi.ArgumentList.Add(port.ToString());
+                psi.ArgumentList.Add(pidPath);
+            }
+            else
+            {
+                var setsid = UnixProcessPath.Resolve("/usr/bin/setsid", "/bin/setsid");
+                if (setsid is null)
+                    return;
+
+                // setsid -f puts the helper in its own session so it is not killed when
+                // the parent Inspector process exits (for menu-launch path).
+                psi = new ProcessStartInfo
+                {
+                    FileName = setsid,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = dir,
+                };
+                psi.ArgumentList.Add("-f");
+                psi.ArgumentList.Add(python);
+                psi.ArgumentList.Add(script);
+                psi.ArgumentList.Add(hostname);
+                psi.ArgumentList.Add(port.ToString());
+                psi.ArgumentList.Add(pidPath);
+            }
+
+            if (!TryLaunchHelper(psi, scopeName, scopePath))
+            {
+                // systemd-run can fail even when the binary and session bus exist
+                // (unit name clash, user manager not ready). Fall back to setsid.
+                if (scopeName is null)
+                    return;
+                var setsid = UnixProcessPath.Resolve("/usr/bin/setsid", "/bin/setsid");
+                if (setsid is null)
+                    return;
+                var fallback = new ProcessStartInfo
+                {
+                    FileName = setsid,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = dir,
+                };
+                fallback.ArgumentList.Add("-f");
+                fallback.ArgumentList.Add(python);
+                fallback.ArgumentList.Add(script);
+                fallback.ArgumentList.Add(hostname);
+                fallback.ArgumentList.Add(port.ToString());
+                fallback.ArgumentList.Add(pidPath);
+                TryLaunchHelper(fallback, scopeName: null, scopePath);
+            }
         }
         catch
         {
@@ -86,9 +293,38 @@ internal static class LinuxProxyFailOpen
         }
     }
 
+    /// <summary>
+    ///     Starts <paramref name="psi"/> and treats a still-running process, or a zero exit,
+    ///     as success. A quick non-zero exit means the launcher failed and the caller may
+    ///     try the other start path. Ownership is taken before the wait so a same-process
+    ///     clear cannot stop the helper mid-spawn, and cleared again when the launch fails.
+    /// </summary>
+    private static bool TryLaunchHelper(ProcessStartInfo psi, string? scopeName, string scopePath)
+    {
+        using var launched = Process.Start(psi);
+        if (launched is null)
+            return false;
+
+        Volatile.Write(ref _ownedByThisProcess, 1);
+        var exited = launched.WaitForExit(3000);
+        if (exited && launched.ExitCode != 0)
+        {
+            Volatile.Write(ref _ownedByThisProcess, 0);
+            return false;
+        }
+
+        if (scopeName is not null)
+        {
+            try { File.WriteAllText(scopePath, scopeName); }
+            catch { /* best-effort */ }
+        }
+
+        return true;
+    }
+
     private static string? ConfigDir()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             return null;
         return Path.Combine(home, ".config", "TitaniumInspector");
@@ -99,9 +335,6 @@ internal static class LinuxProxyFailOpen
         var dir = ConfigDir();
         return dir is null ? null : Path.Combine(dir, PidFileName);
     }
-
-    private static string Quote(string value) =>
-        "\"" + value.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     // Minimal HTTP/HTTPS forwarder: CONNECT tunnels + absolute-form HTTP requests.
     private const string FailOpenScript =
@@ -121,14 +354,17 @@ internal static class LinuxProxyFailOpen
 
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        for _ in range(80):
+        # Inspector keeps the port until shutdown finishes. Twelve seconds was
+        # not enough, so the helper exited and a pinned browser saw a closed port.
+        deadline = time.time() + 90
+        while True:
             try:
                 srv.bind((host, port))
                 break
             except OSError:
+                if time.time() >= deadline:
+                    sys.exit(1)
                 time.sleep(0.15)
-        else:
-            sys.exit(1)
         srv.listen(128)
 
         def pipe(a, b):

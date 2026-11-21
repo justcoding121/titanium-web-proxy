@@ -292,13 +292,26 @@ public class SettingsPersistenceTests
 
                 vm.BindPort = 0;
                 vm.StartCaptureCommand.Execute(null);
-                await WaitUntil(() => interception.IsRunning);
+                await WaitUntil(() => interception.IsRunning && interception.BoundPort > 0);
 
                 Assert.IsTrue(interception.InstallRootCertificate(false));
                 vm.DecryptHttps = true;
                 await WaitUntil(() => vm.DecryptHttps);
 
                 Assert.IsTrue(vm.DecryptHttps);
+                // SetDecryptHttpsCore already PersistSettings(true). Assert that before
+                // EnsureShutdown cancels the background MITM probe (which must not rewrite false).
+                await WaitUntil(() =>
+                {
+                    try
+                    {
+                        return new SettingsService(path).Current.DecryptHttps;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
                 vm.EnsureShutdown();
             }
 
@@ -485,6 +498,64 @@ public class SettingsPersistenceTests
         Assert.AreEqual("127.0.0.1", fresh.Current.BindAddress);
         Assert.AreEqual(8866, fresh.Current.BindPort);
         TryDelete(path);
+    }
+
+    [TestMethod]
+    public void MergeMissingFactoryTunnelOnlyHosts_AppendsNewHostsOnce()
+    {
+        var settings = new InspectorSettings
+        {
+            ExclusionsInitialized = true,
+            TunnelOnlyDefaultsVersion = 0,
+            DecryptSkipHosts = ["dropbox.com", "webex.com"],
+        };
+
+        Assert.IsTrue(SettingsService.MergeMissingFactoryTunnelOnlyHosts(settings));
+        CollectionAssert.Contains(settings.DecryptSkipHosts, "apple.com");
+        CollectionAssert.Contains(settings.DecryptSkipHosts, "icloud.com");
+        Assert.AreEqual(SettingsService.CurrentTunnelOnlyDefaultsVersion, settings.TunnelOnlyDefaultsVersion);
+        Assert.IsFalse(SettingsService.MergeMissingFactoryTunnelOnlyHosts(settings),
+            "A second merge at the current version must be a no-op.");
+    }
+
+    [TestMethod]
+    public void MergeMissingFactoryTunnelOnlyHosts_DoesNotReAddUserRemovedHost()
+    {
+        var settings = new InspectorSettings
+        {
+            ExclusionsInitialized = true,
+            TunnelOnlyDefaultsVersion = SettingsService.CurrentTunnelOnlyDefaultsVersion,
+            DecryptSkipHosts = ["dropbox.com"],
+        };
+
+        Assert.IsFalse(SettingsService.MergeMissingFactoryTunnelOnlyHosts(settings));
+        CollectionAssert.DoesNotContain(settings.DecryptSkipHosts, "apple.com");
+    }
+
+    [TestMethod]
+    public void Load_UpgradesTunnelOnlyHostsForExistingSettings()
+    {
+        var path = TempSettingsPath();
+        try
+        {
+            var json =
+                """
+                {
+                  "ExclusionsInitialized": true,
+                  "TunnelOnlyDefaultsVersion": 0,
+                  "DecryptSkipHosts": [ "dropbox.com", "webex.com" ],
+                  "SystemProxyBypassHosts": []
+                }
+                """;
+            File.WriteAllText(path, json);
+            var loaded = new SettingsService(path).Current;
+            CollectionAssert.Contains(loaded.DecryptSkipHosts, "apple.com");
+            Assert.AreEqual(SettingsService.CurrentTunnelOnlyDefaultsVersion, loaded.TunnelOnlyDefaultsVersion);
+        }
+        finally
+        {
+            TryDelete(path);
+        }
     }
 
     private static string TempSettingsPath() =>

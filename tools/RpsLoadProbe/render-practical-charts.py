@@ -193,7 +193,7 @@ WIRE_COUNT = len(PRACTICAL_ARMS)
 HEAVIER_COUNT = len(PRACTICAL_HEAVIER_ARMS)
 
 OS_SPECS = (
-    ("linux", "Linux", ("ubuntu-latest",), "4-core / 16 GiB"),
+    ("linux", "Linux", ("ubuntu-26.04", "ubuntu-latest"), "4-core / 16 GiB"),
     ("windows", "Windows", ("windows-latest",), "4-core / 16 GiB"),
     ("macos", "macOS", ("macos-15",), "Apple Silicon 3-core / 7 GB"),
 )

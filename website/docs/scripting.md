@@ -355,12 +355,12 @@ As a route plugin it runs the request-headers phase. Set as the reverse proxy's 
 | Area | What a guest can do |
 | --- | --- |
 | Headers, body, trailers | Read and edit header maps, read and replace body buffers, send a local response, pause and resume a request. |
-| Properties | `proxy_get_property` with the attribute names Envoy uses (request, response, connection, upstream, plugin). Attributes Titanium has no value for answer empty, not an error. |
+| Properties | `proxy_get_property` with the proxy-wasm ABI attribute set (request, response, connection, upstream, plugin). Attributes Titanium has no value for answer empty, not an error. |
 | Callouts | `proxy_http_call`, `proxy_grpc_call`, and `proxy_grpc_stream` with `proxy_grpc_send`, `proxy_grpc_close`, and `proxy_grpc_cancel`, limited to `calloutHosts`. A request paused on a callout resumes when the guest continues it. |
 | Shared data and queues | `proxy_get_shared_data`, `proxy_set_shared_data` with CAS, and shared queues with `proxy_on_queue_ready`, scoped by `vmId`. |
 | Timers | `proxy_set_tick_period_milliseconds` and `proxy_on_tick` from a root context. |
 | Metrics | `proxy_define_metric`, `proxy_increment_metric`, `proxy_record_metric`, `proxy_get_metric`. |
-| Foreign functions | `proxy_call_foreign_function` with `compress` and `uncompress` (zlib, as in Envoy); the uncompressed output is capped. |
+| Foreign functions | `proxy_call_foreign_function` with `compress` and `uncompress` (zlib); the uncompressed output is capped. |
 | Logging and time | `proxy_log`, `proxy_get_current_time_nanoseconds`, and the WASI subset described in the [security model](#sandbox). |
 
 ### Choosing the upstream
@@ -369,7 +369,7 @@ A guest picks another cluster by setting the `twp.upstream_cluster` property wit
 
 ### Sharing a VM with `vmId`
 
-Plugins with the same `vmId`, module bytes, engine, and limits run in the same VMs, each with its own root context, as Envoy shares a VM between filters. Shared data and queues are scoped by `vmId`, and a plugin with no `vmId` uses the empty scope. A pool and its shared state live while a plugin uses them.
+Plugins with the same `vmId`, module bytes, engine, and limits run in the same VMs, each with its own root context, the way a proxy-wasm host shares a VM between filters. Shared data and queues are scoped by `vmId`, and a plugin with no `vmId` uses the empty scope. A pool and its shared state live while a plugin uses them.
 
 ### WebAssembly limits
 
@@ -398,12 +398,12 @@ Other gateways script their request path in different ways. This table lists wha
 
 | Gateway | Scripting it offers | In Titanium |
 | --- | --- | --- |
-| Envoy | A Lua HTTP filter, and proxy-wasm filters for HTTP and TCP. | `kind: lua`, and `kind: wasm` with proxy-wasm 0.1.0 to 0.2.1. Wasm modules built for Envoy's HTTP and network filters run here. |
-| NGINX | njs (JavaScript); Lua through a third-party module. | Lua 5.4 and Wasm. There is no JavaScript engine. |
+| Control-plane proxy | A Lua HTTP filter, and proxy-wasm filters for HTTP and TCP. | `kind: lua`, and `kind: wasm` with proxy-wasm 0.1.0 to 0.2.1. Wasm modules built for the proxy-wasm HTTP and network filter ABI run here. |
+| Edge server | A JavaScript engine; Lua through a third-party module. | Lua 5.4 and Wasm. There is no JavaScript engine. |
 | OpenResty | LuaJIT with the `ngx.*` API, cosockets, and `lua_shared_dict`. | Lua 5.4 with `ctx`, the libraries above, `shared.dict`, and `http.call`. No `ngx.*`, no LuaJIT, no cosockets. |
 | Kong | Lua plugins on the PDK, and proxy-wasm filters. | Lua plugins named in `middleware:`, and proxy-wasm modules. No PDK. |
-| HAProxy | Lua actions, fetches, and services; SPOE for external agents. | Lua request and response phases. SPOE is covered by the `extAuth` policy or a callout. HAProxy has no proxy-wasm. |
-| Traefik | Go plugins run by Yaegi, and WebAssembly middleware through http-wasm. | Lua and proxy-wasm. The http-wasm ABI is not supported, and Go plugins are replaced by [.NET plugins](/docs/plugins). |
+| Load balancer | Lua actions, fetches, and services; an external-agent protocol. | Lua request and response phases. External agents are covered by the `extAuth` policy or a callout. proxy-wasm runs in-process. |
+| Edge router | Go plugins, and WebAssembly middleware on the http-wasm ABI. | Lua and proxy-wasm. The http-wasm ABI is not supported, and Go plugins are replaced by [.NET plugins](/docs/plugins). |
 | APISIX | Lua plugins, external plugin runners, and a proxy-wasm plugin. | Lua and proxy-wasm in-process. There is no external plugin runner; use `extAuth` or a callout. |
 
 Checklist of what the engines cover:
@@ -430,6 +430,6 @@ What Titanium does not offer:
 - **OpenResty, Kong PDK, and APISIX Lua APIs.** There is no `ngx.*`, no Kong PDK, no APISIX plugin API, and no LuaJIT or FFI.
 - **Cosockets and arbitrary sockets.** A script reaches the network only through `http.call` or a Wasm callout to an allow-listed host.
 - **`require` and Lua modules.** A Lua plugin is one file.
-- **The http-wasm ABI** that Traefik uses. Titanium runs proxy-wasm modules only.
+- **The http-wasm ABI.** Titanium runs proxy-wasm modules only.
 
 If a case is not covered, open an issue describing it.
