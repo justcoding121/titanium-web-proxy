@@ -733,11 +733,14 @@ jobs:
           ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "$pkg_ver" "$rid" \
             || echo "deb/rpm soft-failed"
           if [[ -f "TitaniumInspector-${rid}.deb" ]]; then
-            if dpkg-deb -c "TitaniumInspector-${rid}.deb" | grep -q 'clear-proxy-if-stopped\.sh'; then
+            # Buffer the listing first: with pipefail, `dpkg-deb -c | grep -q` can SIGPIPE
+            # tar when grep exits early and fail the step even though the member is present.
+            deb_contents=$(dpkg-deb -c "TitaniumInspector-${rid}.deb")
+            if grep -q 'clear-proxy-if-stopped\.sh' <<<"$deb_contents"; then
               echo "error: .deb still ships clear-proxy-if-stopped.sh" >&2
               exit 1
             fi
-            if ! dpkg-deb -c "TitaniumInspector-${rid}.deb" | grep -q 'titanium-inspector-clear'; then
+            if ! grep -q 'titanium-inspector-clear' <<<"$deb_contents"; then
               echo "error: .deb missing titanium-inspector-clear" >&2
               exit 1
             fi
