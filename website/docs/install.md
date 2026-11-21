@@ -57,8 +57,8 @@ dotnet add package Titanium.Web.Proxy --prerelease
 
 ### Which Linux package?
 
-- Most Linux desktops and servers: **AppImage**, **`.deb`**, **`.rpm`**, or the regular **64-bit** (`linux-x64`) or **ARM** (`linux-arm64`) zip.
-- **Alpine** and other musl containers: use the **Alpine** zip (`linux-musl-x64` for 64-bit, `linux-musl-arm64` for ARM), not the regular Linux zip.
+- Most Linux desktops and servers: **AppImage**, **`.deb`**, **`.rpm`**, or the regular Linux (64-bit) zip (`linux-x64`) or Linux (ARM) zip (`linux-arm64`).
+- **Alpine** and other musl containers: use the Alpine (64-bit) zip (`linux-musl-x64`) or Alpine (ARM) zip (`linux-musl-arm64`), not the regular Linux zip.
 - HTTP/3 support is bundled in the platform packages — see [HTTP/3](/docs/http3).
 - Lua / WASM scripting natives ship in the same CLI RID zip (and in the default glibc GHCR image). On musl, take the musl zip so both HTTP/3 and scripting natives match. Verify with `titanium scripting-deps status` — see [Scripting](/docs/scripting).
 
