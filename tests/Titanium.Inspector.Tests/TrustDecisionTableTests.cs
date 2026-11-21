@@ -5,6 +5,7 @@ using System.Windows.Input;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Titanium.Inspector.Services;
 using Titanium.Inspector.ViewModels;
+using Titanium.Web.Proxy.Network;
 
 namespace Titanium.Inspector.Tests;
 
@@ -253,17 +254,9 @@ public partial class TrustDecisionTableTests
         Assert.IsFalse(harness.Interception.IsRootTrusted);
         harness.Interception.FailNextUserTrustInstall = true;
         harness.Dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
-        // The previous success still says "trusted" and the command is not busy until it
-        // starts. Treating that as done let the install consume the next failure flag.
-        var statusBeforeForcedFail = harness.Vm.StatusText;
-        harness.Vm.InstallCaCommand.Execute(null);
-        await WaitUntil(
-            () => harness.Vm.StatusText != statusBeforeForcedFail
-                  && TrustGateIdle(harness.Vm)
-                  && (harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
-                      || harness.Vm.StatusText.Contains("forced", StringComparison.OrdinalIgnoreCase)
-                      || harness.Vm.StatusText.Contains("fail", StringComparison.OrdinalIgnoreCase)),
-            25000);
+        // The failure banner reverts after a few seconds, and a rejected execute only
+        // leaves the in-progress guard. Wait on the trust result, and retry a rejection.
+        await ExecuteForcedFailInstallAsync(harness);
         Assert.IsFalse(string.IsNullOrWhiteSpace(harness.Vm.StatusText));
 
         // EnsureRootCaTrustedAsync in-memory success + promptIfNeeded:false after FailNext.
@@ -321,6 +314,51 @@ public partial class TrustDecisionTableTests
     private static bool TrustGateIdle(MainWindowViewModel vm) =>
         !vm.IsStatusBusy
         && !vm.StatusText.Contains("already in progress", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsForcedTrustTerminal(string status) =>
+        status.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
+        || status.Contains("forced", StringComparison.OrdinalIgnoreCase)
+        || status.Contains("fail", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Run Install CA until the forced failure is recorded. A busy runner can revert the
+    /// status banner before the next poll, and a rejected execute only sets the in-progress guard.
+    /// </summary>
+    private static async Task ExecuteForcedFailInstallAsync(TrustHarness harness)
+    {
+        var recoveryBefore = harness.Dialogs.TrustRecoveryCalls;
+        var executed = false;
+        var deadline = Environment.TickCount64 + 25000;
+        while (Environment.TickCount64 < deadline)
+        {
+            if (!harness.Vm.IsStatusBusy)
+            {
+                var status = harness.Vm.StatusText;
+                var failed = IsForcedTrustTerminal(status)
+                    || harness.Dialogs.TrustRecoveryCalls > recoveryBefore
+                    || harness.Interception.LastOsTrustResult?.Kind is CertificateOsTrustKind.Cancelled
+                        or CertificateOsTrustKind.Failed;
+                if (executed && failed)
+                    return;
+
+                if (!executed || status.Contains("already in progress", StringComparison.OrdinalIgnoreCase))
+                {
+                    harness.Vm.InstallCaCommand.Execute(null);
+                    executed = true;
+                }
+            }
+
+            await Task.Delay(25);
+        }
+
+        Assert.Fail(
+            "Timed out waiting for trust decision condition. status='"
+            + harness.Vm.StatusText
+            + "' recoveryCalls="
+            + harness.Dialogs.TrustRecoveryCalls
+            + " lastKind="
+            + harness.Interception.LastOsTrustResult?.Kind);
+    }
 
     private static async Task ExecuteUntilAsync(ICommand command, Func<bool> done, int timeoutMs = 20000)
     {
