@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 به سرورها",
   "network.http3Help": "فقط به سرورها. خاموش کردن HTTP/2 این را خاموش نمی‌کند.",
   "network.http3Unavailable": "HTTP/3 به QUIC نیاز دارد که این رایانه ندارد.",
+  "network.http3WrongArch": "کتابخانه QUIC این ساخت معماری Mac نادرستی دارد.",
+  "network.http3WrongArchAppleSilicon": "کتابخانه QUIC این ساخت معماری Mac نادرستی دارد. از DMG مربوط به Apple silicon استفاده کنید.",
   "network.newConnections": "تغییرها برای اتصال‌های تازه اعمال می‌شوند.",
   "network.protocols": "پروتکل‌ها",
   "network.reuse": "استفاده دوباره از اتصال سرور",

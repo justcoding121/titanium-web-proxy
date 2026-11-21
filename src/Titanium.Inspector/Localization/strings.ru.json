@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 к серверам",
   "network.http3Help": "Только к серверам. Выключение HTTP/2 это не выключает.",
   "network.http3Unavailable": "HTTP/3 нужен QUIC, которого нет на этом компьютере.",
+  "network.http3WrongArch": "Библиотека QUIC в этой сборке для другой архитектуры Mac.",
+  "network.http3WrongArchAppleSilicon": "Библиотека QUIC в этой сборке для другой архитектуры Mac. Используйте DMG для Apple silicon.",
   "network.newConnections": "Изменения действуют для новых соединений.",
   "network.protocols": "Протоколы",
   "network.reuse": "Повторно использовать соединения с сервером",

@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 till servrar",
   "network.http3Help": "Bara till servrar. Att stänga av HTTP/2 stänger inte av detta.",
   "network.http3Unavailable": "HTTP/3 kräver QUIC, som den här datorn inte har.",
+  "network.http3WrongArch": "QUIC-biblioteket i det här bygget har fel Mac-arkitektur.",
+  "network.http3WrongArchAppleSilicon": "QUIC-biblioteket i det här bygget har fel Mac-arkitektur. Använd DMG-filen för Apple silicon.",
   "network.newConnections": "Ändringar gäller nya anslutningar.",
   "network.protocols": "Protokoll",
   "network.reuse": "Återanvänd serveranslutningar",

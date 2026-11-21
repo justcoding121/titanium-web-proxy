@@ -362,6 +362,8 @@
   "network.http3": "HTTP/3 إلى الخوادم",
   "network.http3Help": "إلى الخوادم فقط. إيقاف HTTP/2 لا يوقف هذا.",
   "network.http3Unavailable": "يحتاج HTTP/3 إلى QUIC، وهذا الحاسوب لا يوفّره.",
+  "network.http3WrongArch": "مكتبة QUIC في هذا البناء لمعمارية Mac غير المطابقة.",
+  "network.http3WrongArchAppleSilicon": "مكتبة QUIC في هذا البناء لمعمارية Mac غير المطابقة. استخدم DMG الخاص بـ Apple silicon.",
   "network.newConnections": "تسري التغييرات على الاتصالات الجديدة.",
   "network.protocols": "البروتوكولات",
   "network.reuse": "إعادة استخدام اتصالات الخادم",
