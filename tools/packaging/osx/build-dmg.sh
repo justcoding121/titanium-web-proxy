@@ -84,5 +84,20 @@ fi
 MOUNT_ROOT=""
 
 rm -f "${DMG_PATH}"
-hdiutil convert "${RW_DMG}" -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}"
+# hdiutil convert returns "Resource temporarily unavailable" when the disk-image
+# service on a shared macOS runner is busy. The read-write image is still valid.
+converted=0
+for attempt in 1 2 3 4 5; do
+  if hdiutil convert "${RW_DMG}" -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}"; then
+    converted=1
+    break
+  fi
+  echo "hdiutil convert failed (attempt ${attempt})" >&2
+  rm -f "${DMG_PATH}"
+  sleep $((attempt * 5))
+done
+if [[ "${converted}" != "1" ]]; then
+  echo "error: hdiutil convert failed" >&2
+  exit 1
+fi
 echo "Built ${DMG_PATH}"
