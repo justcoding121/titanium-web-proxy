@@ -135,7 +135,10 @@ internal sealed class ContentWatcher : IDisposable
             token = next.Token;
         }
 
-        _ = Task.Run(() => DebouncedCheckAsync(token), CancellationToken.None);
+        // Start the delay before returning. A thread-pool hop here let a busy runner
+        // advance the fake clock before the debounce timer existed, so the poll test
+        // waited out its deadline with nothing to fire.
+        _ = DebouncedCheckAsync(token);
     }
 
     private async Task DebouncedCheckAsync(CancellationToken token)

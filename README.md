@@ -1,6 +1,6 @@
 # Titanium Web Proxy
 
-Embeddable .NET 10 HTTP(S) and MITM library, standalone CLI and Kubernetes reverse proxy, and desktop MITM debugger — on Windows, Linux, and macOS.
+Embeddable .NET 10 HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS.
 
 [![Build](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml/badge.svg?branch=develop&event=push)](https://github.com/justcoding121/titanium-web-proxy/actions/workflows/dotnetcore.yml?query=branch%3Adevelop+event%3Apush)
 [![NuGet](https://img.shields.io/nuget/v/Titanium.Web.Proxy.svg)](https://www.nuget.org/packages/Titanium.Web.Proxy)
@@ -134,7 +134,7 @@ titanium update
 
 `titanium run` is foreground (Ctrl+C to stop). Boot persistence: `titanium service install -c twp.yaml` — [CLI — service](https://titaniumproxy.com/docs/cli#service). Each CLI zip also includes a `twp` alias.
 
-**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, 64-bit and ARM Linux) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
+**Container and Helm:** the CLI ships as a hardened image (`ghcr.io/justcoding121/titanium-web-proxy`, Linux (64-bit and ARM)) and charts under `deploy/helm/` (also Release `.tgz` and `oci://ghcr.io/justcoding121/charts`) — [Kubernetes](https://titaniumproxy.com/docs/kubernetes). Gateway API / Ingress: [Gateway API](https://titaniumproxy.com/docs/gateway-api).
 
 The image entrypoint is `titanium run --config /etc/titanium/twp.yaml`. Save this as `conf/twp.yaml`. The listener is `0.0.0.0:8080` so the published port reaches it.
 

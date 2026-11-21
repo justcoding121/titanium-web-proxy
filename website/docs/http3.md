@@ -27,12 +27,12 @@ Self-contained GitHub Release zips **ship MsQuic natives** for common platforms:
 | Environment | Zip |
 | --- | --- |
 | Windows 11 / Server 2022+ | `win-x64` (OS MsQuic; no extra DLL) |
-| Linux 64-bit (Ubuntu, Debian, RHEL) | `linux-x64` |
-| Linux ARM (Graviton and other ARM servers) | `linux-arm64` |
-| Alpine 64-bit | `linux-musl-x64` |
-| Alpine ARM | `linux-musl-arm64` |
-| macOS Intel | `osx-x64` |
-| macOS Apple silicon | `osx-arm64` |
+| Linux (64-bit) — Ubuntu, Debian, RHEL | `linux-x64` |
+| Linux (ARM) — Graviton and other ARM servers | `linux-arm64` |
+| Alpine (64-bit) | `linux-musl-x64` |
+| Alpine (ARM) | `linux-musl-arm64` |
+| macOS (Intel) | `osx-x64` |
+| macOS (Apple silicon) | `osx-arm64` |
 
 Those zips ship **MsQuic + OpenSSL only** (MIT / Apache-2.0). They do **not** redistribute LGPL/GPL host libs (`libnuma`, `lttng-ust`). On empty/distroless images install those with `http3-deps` (or your package manager) so the loader can resolve them:
 
