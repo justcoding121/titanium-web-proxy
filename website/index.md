@@ -3,8 +3,8 @@ layout: home
 title: Titanium Web Proxy
 hero:
   name: Titanium Web Proxy
-  text: Intercept and inspect HTTP(S) from .NET in a few lines
-  tagline: "A high performing HTTP(S) proxy server.<br>Embeddable .NET HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS."
+  text: A high performing HTTP(S) proxy server.
+  tagline: Embeddable .NET HTTP(S) and man-in-the-middle (MITM) proxy library, standalone CLI and Kubernetes reverse proxy, and desktop MITM inspector — on Windows, Linux, and macOS.
   image:
     src: /logo.svg
     alt: Titanium Web Proxy

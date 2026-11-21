@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 const repo = 'https://github.com/justcoding121/titanium-web-proxy'
 const siteUrl = 'https://titaniumproxy.com'
 const ogImage = `${siteUrl}/og.jpg`
-const heroDescription = 'Intercept and inspect HTTP(S) from .NET in a few lines.'
+const heroDescription = 'A high performing HTTP(S) proxy server.'
 
 function canonicalUrl(page: string): string {
   const stem = page.replace(/\.md$/, '').replace(/\/index$/, '')
