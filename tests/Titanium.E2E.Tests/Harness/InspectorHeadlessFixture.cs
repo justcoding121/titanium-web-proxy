@@ -76,7 +76,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
                 return;
             }
             catch (InvalidOperationException ex) when (
-                attempt < maxAttempts && IsTransientHeadlessFontRace(ex))
+                attempt < maxAttempts && IsTransientHeadlessSessionRace(ex))
             {
                 await Task.Delay(25 * attempt);
             }
@@ -85,8 +85,9 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
 
     public async Task DispatchAsync(Action action)
     {
-        // macOS CI can drop IFontManagerImpl while ResetForUnitTests drains a queued layout.
-        // Pump once before the caller's action so a retry does not click the same control twice.
+        // macOS CI can drop IFontManagerImpl, or mutate Avalonia's loaded-control set,
+        // while ResetForUnitTests drains a queued layout. Pump once before the caller's
+        // action so a retry does not click the same control twice.
         await PumpUntilFontsReadyAsync();
         await _session!.Dispatch(() =>
         {
@@ -124,7 +125,7 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
                 return;
             }
             catch (InvalidOperationException ex) when (
-                attempt < maxAttempts && IsTransientHeadlessFontRace(ex))
+                attempt < maxAttempts && IsTransientHeadlessSessionRace(ex))
             {
                 await Task.Delay(25 * attempt);
             }
@@ -134,8 +135,9 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
     /// <summary>
     /// Wait until <paramref name="condition"/> is true, pumping the Avalonia dispatcher each poll so
     /// async RelayCommand continuations (StatusText after file I/O) can run in headless.
-    /// Condition is evaluated on the UI thread. Transient Headless <c>IFontManagerImpl</c> locator
-    /// races (seen on macOS CI during StatusText re-measure) are retried until timeout.
+    /// Condition is evaluated on the UI thread. Transient Headless races (a missing
+    /// <c>IFontManagerImpl</c>, or Avalonia enumerating its loaded-control set while a control
+    /// is still attaching) are retried until timeout.
     /// </summary>
     public async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout, int pollMs = 50)
     {
@@ -151,9 +153,10 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
                     return;
                 }
             }
-            catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
+            catch (InvalidOperationException ex) when (IsTransientHeadlessSessionRace(ex))
             {
-                // Keep polling; shared Headless session can briefly drop font services mid-re-measure.
+                // Keep polling; shared Headless session can briefly drop font services
+                // or race the loaded-control queue during re-measure.
             }
 
             await Task.Delay(pollMs);
@@ -164,14 +167,15 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
         {
             await DispatchAsync(() => { });
         }
-        catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
+        catch (InvalidOperationException ex) when (IsTransientHeadlessSessionRace(ex))
         {
             // ignore — caller asserts StatusText next
         }
     }
 
-    private static bool IsTransientHeadlessFontRace(InvalidOperationException ex) =>
-        ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal);
+    private static bool IsTransientHeadlessSessionRace(InvalidOperationException ex) =>
+        ex.Message.Contains("IFontManagerImpl", StringComparison.Ordinal)
+        || ex.Message.Contains("Collection was modified", StringComparison.Ordinal);
 
     public async ValueTask DisposeAsync()
     {
@@ -189,9 +193,9 @@ public sealed class InspectorHeadlessFixture : IAsyncDisposable
                         Dispatcher.UIThread.RunJobs();
                         Dispatcher.UIThread.RunJobs();
                     }
-                    catch (InvalidOperationException ex) when (IsTransientHeadlessFontRace(ex))
+                    catch (InvalidOperationException ex) when (IsTransientHeadlessSessionRace(ex))
                     {
-                        // ignore teardown font race
+                        // ignore teardown font or loaded-queue race
                     }
                 }, CancellationToken.None);
             }
