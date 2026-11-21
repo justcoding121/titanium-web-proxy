@@ -1,0 +1,283 @@
+name: package-lab
+
+# Unsigned release-shaped packages for the 8.0.6 pre-beta smoke.
+# This file stays on the lab branch. It does not publish a tag, a GitHub Release, or a catalog.
+on:
+  push:
+    branches:
+      - lab/release-806-smoke
+
+permissions:
+  contents: read
+
+jobs:
+  cli:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+          - rid: linux-musl-arm64
+            os: ubuntu-24.04-arm
+          - rid: win-x64
+            os: windows-latest
+          - rid: osx-x64
+            os: macos-15-intel
+          - rid: osx-arm64
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/cache@v6
+        with:
+          path: |
+            tools/packaging/.cache/http3-natives
+            tools/packaging/.cache/scripting-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json', 'tools/packaging/scripting-native.lock.json') }}-${{ matrix.rid }}
+      - name: Publish CLI
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/cli/$rid"
+          $publishArgs = @("-c", "Release", "-r", $rid, "--self-contained", "true", "-o", $out, "-p:Version=8.0.6")
+          if ($rid -eq "win-x64") {
+            $publishArgs += @("-p:PublishSingleFile=true", "-p:EnableCompressionInSingleFile=true")
+          }
+          dotnet publish src/Titanium.Cli/Titanium.Cli.csproj @publishArgs
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+          if (Test-Path "$out/titanium.exe") {
+            Copy-Item "$out/titanium.exe" "$out/twp.exe"
+          } elseif (Test-Path "$out/titanium") {
+            Copy-Item "$out/titanium" "$out/twp"
+          }
+          if ($rid -like "linux-musl-*") {
+            & bash ./tools/packaging/linux/wrap-musl-cli.sh $out
+            if ($LASTEXITCODE -ne 0) { throw "musl ICU wrapper failed ($LASTEXITCODE)" }
+          }
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          Copy-Item tools/packaging/THIRD-PARTY-CLI.txt "$out/THIRD-PARTY-CLI.txt"
+      - name: Verify host OpenSSL loads with bundled MsQuic
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-musl-x64'
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          out="artifacts/cli/$rid"
+          chmod +x tools/packaging/linux/verify-native-load.sh
+          if [[ "$rid" == linux-x64 ]]; then
+            images=(debian:trixie ubuntu:22.04 ubuntu:26.04)
+            kind=apt
+          else
+            images=(alpine:3.24 alpine:edge)
+            kind=apk
+          fi
+          for image in "${images[@]}"; do
+            ./tools/packaging/linux/verify-native-load.sh "$out" "$image" "$kind"
+          done
+      - name: Bundle scripting natives
+        if: ${{ !startsWith(matrix.rid, 'linux-musl-') }}
+        shell: pwsh
+        run: ./tools/packaging/bundle-scripting-native.ps1 -Rid "${{ matrix.rid }}" -PublishDir "artifacts/cli/${{ matrix.rid }}" -Strict
+      - name: Bundle scripting natives (musl x64)
+        if: matrix.rid == 'linux-musl-x64'
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          out="artifacts/cli/$rid"
+          pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 -Rid "$rid" -PublishDir "$out" -SkipLua
+          docker run --rm --platform linux/amd64 -v "$PWD:/src" -w /src mcr.microsoft.com/powershell:lts-alpine-3.17 \
+            sh -c "apk add --no-cache build-base curl ca-certificates icu-libs && pwsh -NoProfile -File tools/packaging/bundle-scripting-native.ps1 -Rid '$rid' -PublishDir '$out' -SkipWasmtime -Strict"
+          test -f "$out/liblua54.so"
+      - name: Bundle scripting natives (musl arm64)
+        if: matrix.rid == 'linux-musl-arm64'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          export CC=musl-gcc
+          pwsh -NoProfile -File ./tools/packaging/bundle-scripting-native.ps1 -Rid linux-musl-arm64 -PublishDir artifacts/cli/linux-musl-arm64 -Strict
+          test -f artifacts/cli/linux-musl-arm64/liblua54.so
+      - name: Zip CLI
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/cli/$rid"
+          if ($IsWindows) {
+            Compress-Archive -Path "$out/*" -DestinationPath "Titanium.Cli-$rid.zip"
+          } else {
+            Push-Location $out
+            try { zip -r "../../../Titanium.Cli-$rid.zip" . } finally { Pop-Location }
+          }
+      - name: Linux packages
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          arch=x86_64
+          [[ "$rid" == *arm64* ]] && arch=aarch64
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
+          sudo gem install --no-document fpm || true
+          chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          ./tools/packaging/linux/build-appimage.sh cli "artifacts/cli/$rid" "Titanium.Cli-$rid.AppImage" "8.0.6" "$arch"
+          ./tools/packaging/linux/build-deb-rpm.sh cli "artifacts/cli/$rid" . "8.0.6" "$rid"
+      - name: CLI starts on Ubuntu 26.04
+        if: matrix.rid == 'linux-x64'
+        run: |
+          set -euo pipefail
+          if compgen -G "artifacts/cli/linux-x64/libssl.so*" >/dev/null; then
+            echo "error: CLI publish still contains libssl" >&2
+            exit 1
+          fi
+          docker run --rm -v "$PWD/artifacts/cli/linux-x64:/opt/titanium:ro" ubuntu:26.04 \
+            bash -c "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libssl3t64 libnuma1 >/dev/null && /opt/titanium/titanium version" \
+            | tee cli-version.txt
+          grep -q "8.0.6" cli-version.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.rid }}-lab
+          if-no-files-found: error
+          path: |
+            Titanium.Cli-${{ matrix.rid }}.zip
+            Titanium.Cli-${{ matrix.rid }}.AppImage
+            Titanium.Cli-${{ matrix.rid }}.deb
+            Titanium.Cli-${{ matrix.rid }}.rpm
+
+  inspector:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            msi: true
+          - rid: linux-x64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+            msi: false
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+            msi: false
+          - rid: linux-musl-arm64
+            os: ubuntu-24.04-arm
+            msi: false
+          - rid: osx-x64
+            os: macos-15-intel
+            msi: false
+          - rid: osx-arm64
+            os: macos-latest
+            msi: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/cache@v6
+        with:
+          path: tools/packaging/.cache/http3-natives
+          key: http3-natives-${{ hashFiles('tools/packaging/http3-native.lock.json') }}-${{ matrix.rid }}
+      - name: Publish Inspector
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/inspector/$rid"
+          dotnet publish src/Titanium.Inspector/Titanium.Inspector.csproj -c Release -r $rid --self-contained true -o $out -p:Version=8.0.6
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+          if ($rid -like "linux*") {
+            $clearOut = Join-Path $env:RUNNER_TEMP "titanium-inspector-clear-$rid"
+            New-Item -ItemType Directory -Force -Path $clearOut | Out-Null
+            dotnet publish src/Titanium.Inspector.ClearProxy/Titanium.Inspector.ClearProxy.csproj -c Release -r $rid --self-contained true -p:PublishSingleFile=true -o $clearOut -p:Version=8.0.6
+            if ($LASTEXITCODE -ne 0) { throw "clear-proxy publish failed ($LASTEXITCODE)" }
+            $clearBin = Join-Path $clearOut "titanium-inspector-clear"
+            if (-not (Test-Path $clearBin)) { $clearBin = Join-Path $clearOut "titanium-inspector-clear.exe" }
+            Copy-Item -Force $clearBin (Join-Path $out "titanium-inspector-clear")
+          }
+          ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
+          Copy-Item -Force tools/packaging/THIRD-PARTY-INSPECTOR.txt (Join-Path $out "THIRD-PARTY-INSPECTOR.txt")
+          Copy-Item -Force src/Titanium.Inspector/Assets/app.ico (Join-Path $out "app.ico")
+          Copy-Item -Force tools/packaging/desktop-icons.sh $out
+          if ($rid -like "linux*") {
+            Copy-Item -Force tools/packaging/linux/install.sh, tools/packaging/linux/uninstall.sh, tools/packaging/linux/TitaniumInspector.desktop.in $out
+            Copy-Item -Force tools/packaging/icons/titanium-inspector.png $out
+          }
+          if ($rid -like "osx*") {
+            Copy-Item -Force tools/packaging/osx/install-app.sh, tools/packaging/osx/uninstall-app.sh $out
+            Copy-Item -Force tools/packaging/icons/AppIcon.icns $out
+          }
+      - name: Verify host OpenSSL loads with bundled MsQuic
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-musl-x64'
+        run: |
+          set -euo pipefail
+          chmod +x tools/packaging/linux/verify-native-load.sh
+          rid="${{ matrix.rid }}"
+          if [[ "$rid" == linux-x64 ]]; then
+            images=(debian:trixie ubuntu:22.04 ubuntu:26.04)
+            kind=apt
+          else
+            images=(alpine:3.24 alpine:edge)
+            kind=apk
+          fi
+          for image in "${images[@]}"; do
+            ./tools/packaging/linux/verify-native-load.sh "artifacts/inspector/$rid" "$image" "$kind"
+          done
+      - name: Zip Inspector
+        shell: pwsh
+        run: |
+          $rid = "${{ matrix.rid }}"
+          $out = "artifacts/inspector/$rid"
+          if ($IsWindows) { Compress-Archive -Path "$out/*" -DestinationPath "TitaniumInspector-$rid.zip" }
+          else {
+            Push-Location $out
+            try { zip -r "../../../TitaniumInspector-$rid.zip" . } finally { Pop-Location }
+          }
+      - name: Build MSI
+        if: matrix.msi
+        shell: pwsh
+        run: ./tools/packaging/build-inspector-msi.ps1 -PayloadDir artifacts/inspector/win-x64 -OutputMsi TitaniumInspector-win-x64.msi -Version 8.0.6
+      - name: Build ad-hoc DMG
+        if: startsWith(matrix.rid, 'osx-')
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          chmod +x tools/packaging/osx/build-app-bundle.sh tools/packaging/osx/build-dmg.sh
+          ./tools/packaging/osx/build-app-bundle.sh "artifacts/inspector/$rid" TitaniumInspector.app 8.0.6
+          codesign --force --deep --sign - --entitlements tools/packaging/osx/TitaniumInspector.entitlements TitaniumInspector.app
+          ./tools/packaging/osx/build-dmg.sh TitaniumInspector.app "TitaniumInspector-$rid.dmg" "Titanium Inspector"
+      - name: Linux packages
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
+        run: |
+          set -euo pipefail
+          rid="${{ matrix.rid }}"
+          arch=x86_64
+          [[ "$rid" == *arm64* ]] && arch=aarch64
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rsync imagemagick ruby ruby-dev build-essential rpm squashfs-tools file || true
+          sudo gem install --no-document fpm || true
+          chmod +x tools/packaging/linux/build-appimage.sh tools/packaging/linux/build-deb-rpm.sh
+          ./tools/packaging/linux/build-appimage.sh inspector "artifacts/inspector/$rid" "TitaniumInspector-$rid.AppImage" "8.0.6" "$arch"
+          ./tools/packaging/linux/build-deb-rpm.sh inspector "artifacts/inspector/$rid" . "8.0.6" "$rid"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: inspector-${{ matrix.rid }}-lab
+          if-no-files-found: error
+          path: |
+            TitaniumInspector-${{ matrix.rid }}.zip
+            TitaniumInspector-${{ matrix.rid }}.AppImage
+            TitaniumInspector-${{ matrix.rid }}.deb
+            TitaniumInspector-${{ matrix.rid }}.rpm
+            TitaniumInspector-${{ matrix.rid }}.dmg
+            TitaniumInspector-win-x64.msi
