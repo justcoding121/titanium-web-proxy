@@ -342,6 +342,7 @@ internal static class FakeOsExecutable
                 FileName = "powershell.exe",
                 UseShellExecute = false,
                 CreateNoWindow = true,
+                RedirectStandardOutput = true,
                 RedirectStandardError = true,
             };
             psi.ArgumentList.Add("-NoProfile");
@@ -351,10 +352,42 @@ internal static class FakeOsExecutable
                 $"Add-Type -OutputAssembly '{exe}' -OutputType ConsoleApplication -TypeDefinition (Get-Content -Raw -LiteralPath '{sourcePath}')");
             using var process = Process.Start(psi)
                 ?? throw new InvalidOperationException("Could not start powershell to build the fake tool.");
-            if (!process.WaitForExit(30_000) || !File.Exists(exe))
+            // Drain both streams. A full pipe buffer stalls Add-Type until the wait expires.
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            // A busy Windows runner can spend most of a minute starting the compiler.
+            var finished = process.WaitForExit(120_000);
+            if (!finished)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Already exited.
+                }
+
+                process.WaitForExit(5_000);
+            }
+
+            var error = stderr.IsCompletedSuccessfully ? stderr.Result : string.Empty;
+            if (!finished || process.ExitCode != 0 || !File.Exists(exe))
             {
                 throw new InvalidOperationException(
-                    "Fake tool was not compiled: " + process.StandardError.ReadToEnd());
+                    "Fake tool was not compiled (exit "
+                    + (finished ? process.ExitCode.ToString() : "timeout")
+                    + "): "
+                    + error);
+            }
+
+            try
+            {
+                stdout.Wait(5_000);
+            }
+            catch (AggregateException)
+            {
+                // The compiler output is only needed to keep the pipe from filling.
             }
 
             return exe;

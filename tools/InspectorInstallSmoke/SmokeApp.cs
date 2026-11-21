@@ -990,25 +990,26 @@ internal static class SmokeApp
             return;
 
         var conf = Path.Combine(Path.GetTempPath(), "twp-smoke-pf.conf");
-        var baseRules = File.Exists("/etc/pf.conf") ? File.ReadAllText("/etc/pf.conf") : string.Empty;
-        // The runner ruleset passes outbound UDP with "quick", so a block appended
-        // after it never matches. A leading quick block wins and forces the GET
-        // back through the proxy on the fresh Safari visit.
+        // A block before scrub/nat anchors is a syntax error, so the load never
+        // sticks and pfctl -E is skipped. The main ruleset then keeps its quick
+        // UDP pass. Two block rules alone are valid, and the default is pass,
+        // so TCP to the proxy still flows.
         File.WriteAllText(
             conf,
             "block drop out quick inet proto udp from any to any port 443\n"
-            + "block drop out quick inet6 proto udp from any to any port 443\n"
-            + baseRules);
+            + "block drop out quick inet6 proto udp from any to any port 443\n");
         var loaded = RunCapture("sudo", "pfctl -f \"" + conf + "\"", 15000);
         Console.WriteLine("pfctl load exit=" + loaded.Code + " " + TrimOneLine(loaded.Output));
         // pfctl prints a flush warning and exits 1 even when the ruleset loaded.
-        // Treating that as failure skipped pfctl -E, so the fresh Safari visit
-        // kept UDP/443 and the HAR only showed a CONNECT.
+        var syntax = loaded.Output.Contains("syntax error", StringComparison.OrdinalIgnoreCase);
         var warningOnly = loaded.Code != 0
             && loaded.Output.Contains("could result in flushing", StringComparison.OrdinalIgnoreCase)
-            && !loaded.Output.Contains("syntax error", StringComparison.OrdinalIgnoreCase);
+            && !syntax;
         if (loaded.Code != 0 && !warningOnly)
+        {
+            Console.WriteLine("pfctl load detail " + TrimOneLine(loaded.Output.Length > 400 ? loaded.Output[..400] : loaded.Output));
             return;
+        }
 
         var enabled = RunCapture("sudo", "pfctl -E", 10000);
         Console.WriteLine("pfctl enable exit=" + enabled.Code + " " + TrimOneLine(enabled.Output));

@@ -283,11 +283,6 @@ internal static class LinuxBrowserLaunchProxy
     private static void SyncMachinePolicyFile(string fileName, string? json) =>
         SyncMachinePolicyFile(fileName, json, MachinePolicyVendors);
 
-    /// <summary>Runs the machine-policy file sync against caller-supplied vendor roots (tests).</summary>
-    internal static void SyncMachinePolicyFileForTests(
-        string fileName, string? json, (string Root, string[] Binaries)[] vendors) =>
-        SyncMachinePolicyFile(fileName, json, vendors);
-
     private static void SyncMachinePolicyFile(
         string fileName, string? json, (string Root, string[] Binaries)[] vendors)
     {
@@ -332,6 +327,11 @@ internal static class LinuxBrowserLaunchProxy
             // best-effort
         }
     }
+
+    /// <summary>Runs the machine-policy file sync against caller-supplied vendor roots (tests).</summary>
+    internal static void SyncMachinePolicyFileForTests(
+        string fileName, string? json, (string Root, string[] Binaries)[] vendors) =>
+        SyncMachinePolicyFile(fileName, json, vendors);
 
     /// <summary>Runs the machine-policy sync against caller-supplied vendor roots (tests).</summary>
     internal static void SyncMachinePoliciesForTests(
