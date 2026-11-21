@@ -356,6 +356,10 @@ jobs:
           } elseif (Test-Path "$out/titanium") {
             Copy-Item "$out/titanium" "$out/twp"
           }
+          if ($rid -like "linux-musl-*") {
+            & bash ./tools/packaging/linux/wrap-musl-cli.sh $out
+            if ($LASTEXITCODE -ne 0) { throw "musl ICU wrapper failed ($LASTEXITCODE)" }
+          }
           ./tools/packaging/bundle-http3-native.ps1 -Rid $rid -PublishDir $out
       - name: Verify host OpenSSL loads with bundled MsQuic (Cli)
         if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-musl-x64'
