@@ -140,7 +140,7 @@ choco install titanium-inspector --pre
 | --- | --- |
 | `win-x64` | OS component (no DLL shipped) |
 | `linux-x64` / `linux-arm64` | Ubuntu 22.04-class `.deb` (Microsoft `libmsquic` only). Host packages: `libnuma1` and `libssl3` |
-| `linux-musl-x64` / `linux-musl-arm64` | Alpine v3.24 `.apk` (`libmsquic` only). Host packages: `numactl`, `lttng-ust`, `libssl3`, `libcrypto3`, `icu-libs` |
+| `linux-musl-x64` / `linux-musl-arm64` | Alpine v3.24 `.apk` (`libmsquic` only). Host packages: `numactl`, `lttng-ust`, `libssl3`, `libcrypto3`, `icu-libs`. The zip's `titanium` and `twp` commands say `apk add icu-libs` when ICU is missing, then run the binary. |
 | `osx-x64` / `osx-arm64` | Homebrew `libmsquic` + `openssl@3` on `macos-latest` |
 
 Do **not** mix glibc `.so` into musl zips (or the reverse). Do **not** redistribute LGPL/GPL natives (`libnuma`, `lttng-ust`) in the zip — install them on the host.

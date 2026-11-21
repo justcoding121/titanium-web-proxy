@@ -384,6 +384,26 @@ internal static class VersionCommand
 
 internal static partial class UpdateCommand
 {
+    internal const string InstallDirNotWritableMessage =
+        "The install directory is not writable. Run the same command with sudo.";
+
+    /// <summary>True when this process can create a file in <paramref name="installDir"/>.</summary>
+    internal static bool InstallDirectoryIsWritable(string installDir)
+    {
+        try
+        {
+            Directory.CreateDirectory(installDir);
+            var probe = Path.Combine(installDir, ".plus-write-" + Guid.NewGuid().ToString("N"));
+            File.WriteAllText(probe, "");
+            File.Delete(probe);
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            return false;
+        }
+    }
+
     private static readonly string CliIdentityPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "TitaniumCli",
@@ -679,6 +699,12 @@ internal static partial class UpdateCommand
         string channelDisplay,
         bool installing)
     {
+        if (!InstallDirectoryIsWritable(installDir))
+        {
+            AsyncConsole.WriteError(InstallDirNotWritableMessage);
+            return 1;
+        }
+
         // Keep the download under the install directory (not Path.GetTempPath) — S5443.
         var workDir = Path.Combine(installDir, ".plus-download-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(workDir);

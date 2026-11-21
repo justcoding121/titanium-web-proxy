@@ -172,6 +172,26 @@ public class UpdateCommandTests
     }
 
     [TestMethod]
+    public void InstallDirectoryIsWritable_RejectsAPathBlockedByAFile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "twp-nowrite-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Assert.IsTrue(UpdateCommand.InstallDirectoryIsWritable(root));
+            var blocker = Path.Combine(root, "blocked");
+            File.WriteAllText(blocker, "not a directory");
+            Assert.IsFalse(
+                UpdateCommand.InstallDirectoryIsWritable(Path.Combine(blocker, "install")),
+                UpdateCommand.InstallDirNotWritableMessage);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [TestMethod]
     public void RemovePlus_DeletesDllBakAndStaging()
     {
         var dir = Path.Combine(Path.GetTempPath(), "twp-remove-plus-" + Guid.NewGuid().ToString("N"));
