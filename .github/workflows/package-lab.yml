@@ -100,12 +100,12 @@ jobs:
           rid=osx-arm64
           out="artifacts/inspector/$rid"
           shopt -s nullglob
-          dylibs=("$out"/*.dylib)
-          if [[ ${#dylibs[@]} -eq 0 ]]; then
-            echo "error: no dylibs in $out" >&2
+          quic=("$out"/libmsquic*.dylib "$out"/libssl*.dylib "$out"/libcrypto*.dylib)
+          if [[ ${#quic[@]} -eq 0 ]]; then
+            echo "error: no HTTP/3 dylibs in $out" >&2
             exit 1
           fi
-          for f in "${dylibs[@]}"; do
+          for f in "${quic[@]}"; do
             archs=$(lipo -archs "$f")
             if [[ "$archs" != "arm64" ]]; then
               echo "error: $f is '$archs', expected arm64" >&2
