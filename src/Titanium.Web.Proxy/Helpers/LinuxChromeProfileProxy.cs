@@ -10,10 +10,10 @@ using System.Threading.Tasks;
 namespace Titanium.Web.Proxy.Helpers;
 
 /// <summary>
-///     Persist Chromium <c>Preferences</c> <c>proxy.mode=fixed_servers</c> so launches that bypass
-///     .desktop / XFCE helpers (plain <c>/usr/bin/google-chrome-stable</c>) still route through
-///     Inspector. User-level managed policy JSON is often ignored by Google Chrome on Linux;
-///     profile Preferences are read on browser start.
+///     Persist Chromium <c>Preferences</c> <c>proxy.mode=system</c> so launches that bypass
+///     .desktop / XFCE helpers (plain <c>/usr/bin/google-chrome-stable</c>) follow the desktop
+///     proxy. A <c>server</c> field is not written: Chromium ignores it only while mode stays
+///     <c>system</c>, and a later flush would leave a dead loopback URL on disk.
 /// </summary>
 internal static class LinuxChromeProfileProxy
 {
@@ -21,6 +21,9 @@ internal static class LinuxChromeProfileProxy
     private const string MarkerFileName = "chrome-profile-proxy.json";
     private const string ConfigDirName = ".config";
     private const string ProxyKey = "proxy";
+    private const string ProxyModeKey = "mode";
+    private const string ProxyServerKey = "server";
+    private const string SystemProxyMode = "system";
     private const string FixedServersMode = "fixed_servers";
     private const string ChromiumDirName = "chromium";
     private const string GoogleChromeDirName = "google-chrome";
@@ -29,7 +32,7 @@ internal static class LinuxChromeProfileProxy
     private const string MicrosoftEdgeDirName = "microsoft-edge";
     private const string FlatpakConfigDirName = "config";
 
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly List<FileSystemWatcher> Watchers = new();
     private static readonly int[] ClearRetryDelaysMs = [300, 800, 1500, 3000];
     private static string? _activeHost;
@@ -60,7 +63,14 @@ internal static class LinuxChromeProfileProxy
         }
     }
 
-    internal static void Clear()
+    internal static void Clear() => Clear(startFailOpen: true);
+
+    /// <param name="startFailOpen">
+    ///     When true (graceful quit while browsers are still open), bind a short fail-open
+    ///     helper so Chromium is not left dialing a closed port. Dead-app ForceClear passes
+    ///     false and stops any leftover helper instead.
+    /// </param>
+    internal static void Clear(bool startFailOpen)
     {
         string? host;
         int port;
@@ -84,30 +94,31 @@ internal static class LinuxChromeProfileProxy
                 TryRestorePreferences(prefsPath);
                 if (!string.IsNullOrEmpty(host) && port > 0)
                     TryStripInspectorProxy(prefsPath, host, port);
+                // The marker file is gone after a kill. A loopback fixed_servers
+                // entry still ignores the desktop proxy switch, so drop it too.
+                TryStripLoopbackFixedServer(prefsPath);
             }
 
             DeleteMarker();
-            ScheduleClearRetries_NoLock(host, port);
+            if (startFailOpen)
+                ScheduleClearRetries_NoLock(host, port);
+            else
+                CancelClearRetries_NoLock();
         }
 
-        // Outside the lock: ProxyServer may still hold the port for a moment during Stop().
-        if (!string.IsNullOrEmpty(host) && port > 0)
+        if (!startFailOpen)
         {
-            var h = host;
-            var p = port;
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(400, _clearRetryCts?.Token ?? CancellationToken.None).ConfigureAwait(false);
-                    LinuxProxyFailOpen.Start(h, p);
-                }
-                catch
-                {
-                    // ignore
-                }
-            }, _clearRetryCts?.Token ?? CancellationToken.None);
+            // Same process: keep the helper a graceful clear just started. Package removal
+            // runs in another process, where the ownership flag is clear, and still stops it.
+            LinuxProxyFailOpen.StopUnlessOwnedByThisProcess();
+            return;
         }
+
+        // Outside the lock. Launch now, detached. A delayed task dies with File → Exit
+        // before it binds, and Edge is left dialing a closed port. The helper retries
+        // the bind until this process releases the listener.
+        if (!string.IsNullOrEmpty(host) && port > 0)
+            LinuxProxyFailOpen.Start(host, port);
     }
 
     /// <summary>
@@ -118,9 +129,9 @@ internal static class LinuxChromeProfileProxy
     /// </summary>
     private static void EnsureInstalledDefaultProfiles()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!CoverageOs.IsLinux)
             return;
-        EnsureInstalledDefaultProfiles(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        EnsureInstalledDefaultProfiles(CoverageOs.Home);
     }
 
     /// <summary>Creates default profiles for the usual browser install markers under <paramref name="home"/>.</summary>
@@ -185,7 +196,7 @@ internal static class LinuxChromeProfileProxy
 
     internal static IEnumerable<string> EnumeratePreferencesPaths()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             yield break;
 
@@ -241,6 +252,9 @@ internal static class LinuxChromeProfileProxy
     internal static bool TryStripInspectorProxyForTests(string prefsPath, string hostname, int port) =>
         TryStripInspectorProxy(prefsPath, hostname, port);
 
+    internal static bool TryStripLoopbackFixedServerForTests(string prefsPath) =>
+        TryStripLoopbackFixedServer(prefsPath);
+
     private static bool TryWritePreferences(string prefsPath, string hostname, int port)
     {
         try
@@ -274,8 +288,13 @@ internal static class LinuxChromeProfileProxy
             AtomicWriteJson(prefsPath, root);
 
             var verify = File.ReadAllText(prefsPath);
-            return verify.Contains(FixedServersMode, StringComparison.Ordinal) &&
-                   verify.Contains($"{hostname}:{port}", StringComparison.Ordinal);
+            var written = JsonNode.Parse(verify) as JsonObject;
+            var writtenProxy = written?[ProxyKey] as JsonObject;
+            var writtenMode = writtenProxy?[ProxyModeKey]?.GetValue<string>() ?? string.Empty;
+            if (!writtenMode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase))
+                return false;
+            var writtenServer = writtenProxy?[ProxyServerKey]?.GetValue<string>() ?? string.Empty;
+            return !writtenServer.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
@@ -327,39 +346,17 @@ internal static class LinuxChromeProfileProxy
                 return false;
 
             var text = File.ReadAllText(prefsPath);
-            if (!text.Contains($"{hostname}:{port}", StringComparison.Ordinal) &&
-                !text.Contains(FixedServersMode, StringComparison.Ordinal))
+            if (InspectorProxyTextAlreadyClear(text, hostname, port))
                 return true;
 
-            var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject
-                       ?? new JsonObject();
-            var proxy = root[ProxyKey] as JsonObject;
-            if (proxy is null)
-                return true;
-
-            var server = proxy["server"]?.GetValue<string>() ?? string.Empty;
-            var mode = proxy["mode"]?.GetValue<string>() ?? string.Empty;
-            var pointsAtUs = server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase) ||
-                             (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase) &&
-                              server.Contains(hostname, StringComparison.OrdinalIgnoreCase) &&
-                              server.Contains(port.ToString(), StringComparison.Ordinal));
-
-            if (!pointsAtUs && !mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
+            var root = ParsePrefsObject(text);
+            if (root[ProxyKey] is not JsonObject proxy || !ProxyModeShouldBecomeSystem(proxy, hostname, port))
                 return true;
 
             // Prefer OS/system proxy (gsettings already restored) over a dead fixed endpoint.
-            root[ProxyKey] = new JsonObject { ["mode"] = "system" };
-            AtomicWriteJson(prefsPath, root);
-
-            // Drop backup if strip replaced our endpoint — original restore already attempted.
-            var backupPath = prefsPath + BackupSuffix;
-            if (File.Exists(backupPath))
-            {
-                try { File.Delete(backupPath); } catch { /* ignore */ }
-            }
-
-            var verify = File.ReadAllText(prefsPath);
-            return !verify.Contains($"{hostname}:{port}", StringComparison.Ordinal);
+            WriteSystemProxyMode(root, prefsPath);
+            DeleteBackupQuietly(prefsPath);
+            return !File.ReadAllText(prefsPath).Contains($"{hostname}:{port}", StringComparison.Ordinal);
         }
         catch
         {
@@ -367,12 +364,96 @@ internal static class LinuxChromeProfileProxy
         }
     }
 
+    /// <summary>
+    ///     Drop a loopback <c>server</c> left next to <c>fixed_servers</c> or <c>system</c>,
+    ///     even if the marker file was already deleted. A proxy the user set to any other
+    ///     host is left alone. Older builds wrote <c>server</c> beside <c>mode=system</c>.
+    /// </summary>
+    private static bool TryStripLoopbackFixedServer(string prefsPath)
+    {
+        try
+        {
+            if (!File.Exists(prefsPath))
+                return false;
+
+            var root = ParsePrefsObject(File.ReadAllText(prefsPath));
+            if (root[ProxyKey] is not JsonObject proxy || !IsLoopbackFixedOrSystemProxy(proxy))
+                return false;
+
+            WriteSystemProxyMode(root, prefsPath);
+            DeleteBackupQuietly(prefsPath);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool InspectorProxyTextAlreadyClear(string text, string hostname, int port) =>
+        !text.Contains($"{hostname}:{port}", StringComparison.Ordinal)
+        && !text.Contains(FixedServersMode, StringComparison.Ordinal);
+
+    private static JsonObject ParsePrefsObject(string text) =>
+        JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject ?? new JsonObject();
+
+    /// <summary>
+    ///     True when the stored proxy is Inspector's fixed endpoint, or any fixed_servers mode
+    ///     that should fall back to the desktop proxy.
+    /// </summary>
+    private static bool ProxyModeShouldBecomeSystem(JsonObject proxy, string hostname, int port)
+    {
+        var mode = JsonString(proxy, ProxyModeKey);
+        if (mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var server = JsonString(proxy, "server");
+        return server.Contains($"{hostname}:{port}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsLoopbackFixedOrSystemProxy(JsonObject proxy)
+    {
+        if (!IsLoopbackProxyServer(JsonString(proxy, ProxyServerKey)))
+            return false;
+
+        var mode = JsonString(proxy, ProxyModeKey);
+        return mode.Equals(FixedServersMode, StringComparison.OrdinalIgnoreCase)
+               || mode.Equals(SystemProxyMode, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string JsonString(JsonObject obj, string name) =>
+        obj[name]?.GetValue<string>() ?? string.Empty;
+
+    private static void WriteSystemProxyMode(JsonObject root, string prefsPath)
+    {
+        root[ProxyKey] = new JsonObject { [ProxyModeKey] = SystemProxyMode };
+        AtomicWriteJson(prefsPath, root);
+    }
+
+    private static void DeleteBackupQuietly(string prefsPath)
+    {
+        var backupPath = prefsPath + BackupSuffix;
+        if (!File.Exists(backupPath))
+            return;
+        try { File.Delete(backupPath); } catch { /* ignore */ }
+    }
+
+    private static bool IsLoopbackProxyServer(string server)
+    {
+        if (!Uri.TryCreate(server, UriKind.Absolute, out var uri))
+            return false;
+        return uri.Host is "127.0.0.1" or "localhost" or "::1";
+    }
+
     private static JsonObject BuildFixedServersProxy(string hostname, int port)
     {
+        // hostname/port identify the live listener for the caller. mode=system must not
+        // store them: a leftover server URL pins Chromium after Inspector releases the port.
+        _ = hostname;
+        _ = port;
         var proxy = new JsonObject
         {
-            ["mode"] = FixedServersMode,
-            ["server"] = $"http://{hostname}:{port}", // NOSONAR S5332 -- Chromium proxy.mode fixed_servers requires an http proxy URL.
+            [ProxyModeKey] = SystemProxyMode,
         };
         if (_activeLoopback)
             proxy["bypass_list"] = LinuxBrowserLaunchProxy.ProxyBypassList;
@@ -386,11 +467,11 @@ internal static class LinuxChromeProfileProxy
         File.Move(tmp, prefsPath, overwrite: true);
     }
 
-    private static void ScheduleClearRetries_NoLock(string? host, int port)
+    private static void ScheduleClearRetries_NoLock(string? host, int port) // NOSONAR S3776 -- delayed strip retries share cancellation with the active Apply gate
     {
         CancelClearRetries_NoLock();
-        if (string.IsNullOrEmpty(host) || port <= 0)
-            return;
+        // Still retry when the marker is gone: Chrome can flush loopback fixed_servers
+        // after the first strip.
 
         var cts = new CancellationTokenSource();
         _clearRetryCts = cts;
@@ -414,7 +495,11 @@ internal static class LinuxChromeProfileProxy
                     if (token.IsCancellationRequested || _activeHost is not null)
                         return;
                     foreach (var prefsPath in EnumeratePreferencesPaths())
-                        TryStripInspectorProxy(prefsPath, host, port);
+                    {
+                        if (!string.IsNullOrEmpty(host) && port > 0)
+                            TryStripInspectorProxy(prefsPath, host, port);
+                        TryStripLoopbackFixedServer(prefsPath);
+                    }
                 }
             }
         }, token);
@@ -437,7 +522,7 @@ internal static class LinuxChromeProfileProxy
 
     private static string? MarkerPath()
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = CoverageOs.Home;
         if (string.IsNullOrWhiteSpace(home))
             return null;
         return Path.Combine(home, ConfigDirName, "TitaniumInspector", MarkerFileName);
@@ -579,8 +664,12 @@ internal static class LinuxChromeProfileProxy
             if (!File.Exists(fullPath))
                 return;
             var text = File.ReadAllText(fullPath);
-            if (text.Contains(FixedServersMode, StringComparison.Ordinal) &&
-                text.Contains($"{host}:{port}", StringComparison.Ordinal))
+            var root = JsonNode.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text) as JsonObject;
+            var proxy = root?[ProxyKey] as JsonObject;
+            var mode = proxy?["mode"]?.GetValue<string>() ?? string.Empty;
+            var server = proxy?["server"]?.GetValue<string>() ?? string.Empty;
+            if (mode.Equals("system", StringComparison.OrdinalIgnoreCase) &&
+                !server.Contains($"{host}:{port}", StringComparison.OrdinalIgnoreCase))
                 return;
 
             lock (Gate)

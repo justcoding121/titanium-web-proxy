@@ -42,7 +42,24 @@ public partial class App : Application
             };
 
             // Wait for the background close path (or run shutdown if Closing never fired).
-            desktop.Exit += (_, _) => vm.EnsureShutdown();
+            // ForceClear covers Mac AppleScript quit where RestoreOriginalSettings can race
+            // ProcessExit and leave loopback networksetup enabled. Linux must not run it
+            // again: the graceful clear just started a fail-open helper for a pinned browser.
+            desktop.Exit += (_, _) =>
+            {
+                vm.EnsureShutdown();
+                if (OperatingSystem.IsMacOS())
+                {
+                    try
+                    {
+                        Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
+                    }
+                    catch
+                    {
+                        // best-effort
+                    }
+                }
+            };
         }
 
         base.OnFrameworkInitializationCompleted();

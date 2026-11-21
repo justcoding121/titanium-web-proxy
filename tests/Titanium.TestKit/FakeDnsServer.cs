@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace Titanium.TestKit;
 
@@ -46,30 +47,53 @@ public sealed class FakeDnsServer : IAsyncDisposable
     }
 
     /// <summary>
-    /// Binds a UDP socket to loopback:0 for an ephemeral port, then starts a TCP listener on
-    /// the same port. Retries up to 20 times if the TCP port is taken between the two binds.
+    /// Binds a UDP socket and a TCP listener to the same loopback port.
+    /// The first try asks for an ephemeral port. A retry walks forward: asking for port 0
+    /// again reissues the port just closed, so a busy TCP twin is hit until the cap is spent.
     /// </summary>
     public static FakeDnsServer Start()
     {
-        for (var attempt = 0; attempt < 20; attempt++)
+        const int maxAttempts = 512;
+        var port = 0;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             var udp = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            udp.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-            var port = ((IPEndPoint)udp.LocalEndPoint!).Port;
-            var tcp = new TcpListener(IPAddress.Loopback, port);
             try
             {
-                tcp.Start();
-                return new FakeDnsServer(udp, tcp, port);
+                udp.ExclusiveAddressUse = true;
+                udp.Bind(new IPEndPoint(IPAddress.Loopback, port));
             }
             catch (SocketException)
             {
                 udp.Dispose();
+                port = NextDualPort(port);
+                continue;
+            }
+
+            var bound = ((IPEndPoint)udp.LocalEndPoint!).Port;
+            var tcp = new TcpListener(IPAddress.Loopback, bound)
+            {
+                ExclusiveAddressUse = true
+            };
+            try
+            {
+                tcp.Start();
+                return new FakeDnsServer(udp, tcp, bound);
+            }
+            catch (SocketException)
+            {
+                udp.Dispose();
+                try { tcp.Stop(); } catch { /* unused listener */ }
+                port = NextDualPort(bound);
             }
         }
 
-        throw new InvalidOperationException("FakeDnsServer: could not bind UDP and TCP to the same loopback port after 20 attempts.");
+        throw new InvalidOperationException(
+            $"FakeDnsServer: could not bind UDP and TCP to the same loopback port after {maxAttempts} attempts.");
     }
+
+    private static int NextDualPort(int failedPort) =>
+        failedPort is > 0 and < 65535 ? failedPort + 1 : 49152;
 
     /// <summary>Port the server is listening on (both UDP and TCP).</summary>
     public int Port { get; }

@@ -640,14 +640,51 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         if (!MacAppRelocation.ShouldOfferMove(_settings.Current))
             return false;
 
+        var action = MacAppRelocation.DecideRelocateAction();
         var owner = TryGetMainWindow();
+
+        if (action == MacRelocateAction.OpenExisting)
+        {
+            var installedPath = MacAppRelocation.TryFindInstalledAppPath();
+            if (installedPath is null)
+                return false;
+
+            var open = await SimpleConfirmDialog.ShowAsync(
+                owner,
+                "Open installed Titanium Inspector",
+                "A same or newer copy is already in Applications. Open that copy instead of replacing it from this disk image?",
+                accept: "Open Applications copy",
+                cancel: "Stay on DMG",
+                height: 240).ConfigureAwait(true);
+
+            if (!open)
+            {
+                _settings.Current.MacDmgMovePromptDismissed = true;
+                _settings.Save();
+                return false;
+            }
+
+            MacAppRelocation.RelaunchInstalledApp(installedPath);
+            return true;
+        }
+
+        var title = action == MacRelocateAction.Replace
+            ? "Update Titanium Inspector"
+            : "Install Titanium Inspector";
+        var body = action == MacRelocateAction.Replace
+            ? "A newer Titanium Inspector is on this disk image. Replace the Applications copy with this version (recommended), then eject the DMG."
+            : "Titanium Inspector is running from a disk image. Move it to Applications for a normal install (recommended), then eject the DMG.";
+        var accept = action == MacRelocateAction.Replace
+            ? "Update Applications"
+            : "Move to Applications";
+
         var move = await SimpleConfirmDialog.ShowAsync(
             owner,
-            "Install Titanium Inspector",
-            "Titanium Inspector is running from a disk image. Move it to Applications for a normal install (recommended), then eject the DMG.",
-            accept: "Move to Applications",
+            title,
+            body,
+            accept: accept,
             cancel: "Not Now",
-            height: 220).ConfigureAwait(true);
+            height: 240).ConfigureAwait(true);
 
         if (!move)
         {
@@ -659,6 +696,8 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         try
         {
             var installed = MacAppRelocation.CopyBundleToApplications();
+            _settings.Current.MacDmgMovePromptDismissed = false;
+            _settings.Save();
             MacAppRelocation.RelaunchInstalledApp(installed);
             return true;
         }
@@ -666,6 +705,85 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         {
             SetOutcomeStatus(
                 "Could not copy to Applications: " + ex.Message,
+                StatusSeverity.Error,
+                toastImportant: true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     AppImage first-run / newer package: install into ~/.local/share/TitaniumInspector.
+    /// </summary>
+    public async Task<bool> TryOfferLinuxAppImageInstallAsync()
+    {
+        if (!OperatingSystem.IsLinux())
+            return false;
+
+        if (!LinuxAppRelocation.ShouldOfferInstall(_settings.Current))
+            return false;
+
+        var action = LinuxAppRelocation.DecideRelocateAction();
+        var owner = TryGetMainWindow();
+
+        if (action == LinuxRelocateAction.OpenExisting)
+        {
+            var installDir = LinuxAppRelocation.DefaultInstallDir();
+            var open = await SimpleConfirmDialog.ShowAsync(
+                owner,
+                "Open installed Titanium Inspector",
+                "A same or newer copy is already installed under ~/.local. Open that copy instead of replacing it from this AppImage?",
+                accept: "Open installed copy",
+                cancel: "Stay on AppImage",
+                height: 240).ConfigureAwait(true);
+
+            if (!open)
+            {
+                _settings.Current.LinuxAppImageInstallPromptDismissed = true;
+                _settings.Save();
+                return false;
+            }
+
+            LinuxAppRelocation.RelaunchInstalled(installDir);
+            return true;
+        }
+
+        var title = action == LinuxRelocateAction.Replace
+            ? "Update Titanium Inspector"
+            : "Install Titanium Inspector";
+        var body = action == LinuxRelocateAction.Replace
+            ? "A newer Titanium Inspector is in this AppImage. Replace the local ~/.local install with this version (recommended)."
+            : "Titanium Inspector is running from an AppImage. Install it under ~/.local for updates and a desktop entry (recommended).";
+        var accept = action == LinuxRelocateAction.Replace
+            ? "Update local install"
+            : "Install locally";
+
+        var install = await SimpleConfirmDialog.ShowAsync(
+            owner,
+            title,
+            body,
+            accept: accept,
+            cancel: "Not Now",
+            height: 240).ConfigureAwait(true);
+
+        if (!install)
+        {
+            _settings.Current.LinuxAppImageInstallPromptDismissed = true;
+            _settings.Save();
+            return false;
+        }
+
+        try
+        {
+            var dest = LinuxAppRelocation.InstallToLocalShare();
+            _settings.Current.LinuxAppImageInstallPromptDismissed = false;
+            _settings.Save();
+            LinuxAppRelocation.RelaunchInstalled(dest);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SetOutcomeStatus(
+                "Could not install AppImage locally: " + ex.Message,
                 StatusSeverity.Error,
                 toastImportant: true);
             return false;
@@ -682,6 +800,28 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         // MenuItem CheckBox TwoWay bindings can write false during init and PersistSettings.
         // Prefer the disk snapshot from LoadFromSettings for this first-start decision.
         RestoreLaunchPreferencesIfClobbered();
+
+        // Hard kill / power loss leave localhost system proxy pointing at a dead port.
+        // Clear those before capture so browsing works even when auto-start is off.
+        try
+        {
+            var orphan = _interception.ClearOrphanedLocalSystemProxy();
+            if (orphan.Succeeded)
+                InspectorUxTrace.Event("Proxy.OrphanClear", orphan.Message ?? "ok");
+            else
+                InspectorUxTrace.Event("Proxy.OrphanClearFailed", orphan.Message ?? "failed");
+        }
+        catch (Exception ex)
+        {
+            InspectorUxTrace.Event("Proxy.OrphanClearFailed", Truncate(ex.Message, 120));
+        }
+
+        if (_settings.Current.PendingPostUpdateTrustCheck)
+        {
+            _settings.Current.PendingPostUpdateTrustCheck = false;
+            _settings.Save();
+            _ = ReverifyDecryptTrustInBackgroundAsync();
+        }
 
         if (!_launchAutoStartCapture)
         {
@@ -753,6 +893,16 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         SetSystemProxyCore(false);
         RefreshEndpointAndBindUi();
         _registry.Dispose();
+    }
+
+    /// <summary>
+    /// Title-bar / File → Exit: show Busy, then stop and restore the system proxy off the UI thread.
+    /// </summary>
+    public async Task PrepareCloseAsync()
+    {
+        SetStatus("Stopping…", StatusSeverity.Busy);
+        await Task.Yield();
+        await RunOffUiAsync(EnsureShutdown, StatusCancelToken);
     }
 
     /// <summary>
@@ -2461,11 +2611,22 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
             }
 
             // Already capturing + trusted: optimistic check + MITM (no store Find on UI thread).
+            // macOS: require live SSL policy verify — IsRootTrusted alone can lag Keychain.
             if (_interception.IsRunning && _interception.IsRootTrusted)
             {
+                if (OperatingSystem.IsMacOS() && !_interception.VerifyOsUserSslTrust())
+                {
+                    _ = SnapDecryptHttpsUiAsync();
+                    var enableGenerationMac = Interlocked.Increment(ref _decryptEnableGeneration);
+                    _ = EnableDecryptHttpsAsync(enableGenerationMac);
+                    return;
+                }
+
                 SetDecryptHttpsCore(true);
                 SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
+                MaybeToastSafariRelaunchAfterDecrypt();
                 _ = ReverifyDecryptTrustInBackgroundAsync();
+                _ = VerifyDecryptProbeInBackgroundAsync();
                 return;
             }
 
@@ -3829,6 +3990,11 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
         // StartAsync has read the store, or a trusted root stays labeled "CA not trusted".
         NotifyDecryptTrustHealth();
 
+        // A later launch with Decrypt already on must still put the CA in Firefox profiles.
+        // The enable click is not repeated, and Linux enterprise-roots does not see ~/.pki/nssdb.
+        if (_decryptHttps && _interception.IsRootTrusted)
+            _interception.ScheduleFirefoxEnterpriseRootsBestEffort();
+
         // Keep the system-proxy restart guidance visible; do not replace it with Ready.
         // Also do not clobber a newer status if the user already acted during start
         // (Install CA / Decrypt can finish while StartCaptureAsync is still awaiting UI marshal).
@@ -4044,6 +4210,9 @@ public sealed partial class MainWindowViewModel : INotifyPropertyChanged, INotif
     {
         if (OperatingSystem.IsMacOS())
             return "System proxy enabled. Restart Firefox if it was already open so it picks up the proxy.";
+
+        if (OperatingSystem.IsLinux())
+            return "System proxy enabled. New connections use the system proxy. Restart a browser only if it was already open and does not switch.";
 
         return "System proxy enabled";
     }

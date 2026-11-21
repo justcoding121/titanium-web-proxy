@@ -1,0 +1,12 @@
+[Unit]
+Description=Clear Titanium Inspector proxy hooks while the app is not running
+
+[Timer]
+# Login handles the boot. This covers a kill during the session, before the
+# next power cycle. The clear binary exits immediately while Inspector is running.
+OnStartupSec=10s
+OnUnitActiveSec=5m
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

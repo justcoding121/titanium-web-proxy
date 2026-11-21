@@ -146,7 +146,10 @@ internal static class SmokeApp
             if (!await app.CaptureIsListeningAsync())
                 return Fail(1, "capture is not listening after upgrade");
             if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
-                return Fail(1, "system proxy is off after upgrade. " + ProxySnapshot());
+                return Fail(1, "system proxy is off after upgrade. " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+            // Seeded decryptHttps=true still runs the in-app MITM probe on start; a hard
+            // failure persists decrypt off (DecryptOff CONNECT) before browsers open.
+            app = await EnsureDecryptStaysOnAsync(app, exe, port);
             Console.WriteLine("upgrade-verify decrypt=true thumb=" + thumb + " proxy=on");
             return await ProveBrowsersAsync(app.StartedUtc, opt.Browsers ?? DefaultBrowsers());
         }
@@ -154,6 +157,17 @@ internal static class SmokeApp
         {
             await app.DisposeAsync();
         }
+    }
+
+    private static async Task<InspectorProcess> EnsureDecryptStaysOnAsync(
+        InspectorProcess app, string exe, int port)
+    {
+        if (await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(14)))
+            return app;
+
+        Console.WriteLine("decrypt flipped off after start; re-enabling");
+        await TrustRootAsync();
+        return await DecryptAndMaybeRelaunchAsync(app, exe, port);
     }
 
     private static async Task<int> FreshAsync(Options opt)
@@ -188,9 +202,56 @@ internal static class SmokeApp
         TryDeleteDir(local);
         if (!string.IsNullOrEmpty(opt.Thumb) && OperatingSystem.IsWindows())
             WindowsProfileGuard.RemoveUserRoot(opt.Thumb);
+        if (OperatingSystem.IsMacOS())
+            RemoveMacSystemTitaniumRoots();
         Console.WriteLine("wipe profile");
         return 0;
     }
+
+    /// <summary>
+    ///     The fresh phase mints a new root. A previous admin-domain root with the same
+    ///     common name makes SSL trust verification ambiguous, and Inspector then persists
+    ///     decrypt off. Best effort: log failures and continue.
+    /// </summary>
+    private static void RemoveMacSystemTitaniumRoots()
+    {
+        try
+        {
+            var listed = RunCapture(
+                "security",
+                "find-certificate -a -Z /Library/Keychains/System.keychain",
+                15000,
+                "");
+            var hashes = ExtractSha1Hashes(FilterTitaniumCertRecords(listed.Output));
+            Console.WriteLine("mac-wipe roots=" + hashes.Count);
+            foreach (var hash in hashes)
+            {
+                // -t updates the user trust domain and can wait on a dialog. sudo -n fails
+                // fast if a password is required instead of holding the smoke driver.
+                var deleted = RunMacSudo(
+                    "security delete-certificate -Z " + hash +
+                    " /Library/Keychains/System.keychain");
+                Console.WriteLine(
+                    "mac-wipe delete-certificate " + hash + " exit=" + deleted.Code +
+                    " " + TrimOneLine(deleted.Output));
+            }
+
+            var left = RunCapture(
+                "security",
+                "find-certificate -a -Z /Library/Keychains/System.keychain",
+                15000,
+                "");
+            var remaining = ExtractSha1Hashes(FilterTitaniumCertRecords(left.Output));
+            Console.WriteLine("mac-wipe remaining=" + remaining.Count);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("mac-wipe " + ex.GetType().Name + ": " + ex.Message);
+        }
+    }
+
+    private static (int Code, string Output) RunMacSudo(string securityArgs) =>
+        RunCapture("sudo", "-n " + securityArgs, 20000, "");
 
     private static async Task<string> MoveMacDmgAppIfNeededAsync(string exe)
     {
@@ -322,9 +383,9 @@ internal static class SmokeApp
 
             try
             {
-                var urls = name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && browsers.Length == 1 && false
-                    ? new[] { "https://example.com/" }
-                    : new[] { "https://example.com/", "https://www.google.com/" };
+                // One decrypted page per browser. A second cold start (example.org) missed
+                // a different browser on each run after example.com had already loaded.
+                var urls = new[] { "https://example.com/" };
                 if (!await ProveAsync(startedUtc, path, name, urls))
                     return Fail(1, name + " did not produce a decrypted GET");
                 Console.WriteLine("pass " + name);
@@ -341,27 +402,55 @@ internal static class SmokeApp
 
     private static async Task<bool> ProveAsync(DateTime startedUtc, string browserPath, string name, string[] urls)
     {
+        var firstUrl = true;
         foreach (var url in urls)
         {
             var before = DateTime.UtcNow;
             using var launched = LaunchBrowser(name, browserPath, url);
             var safari = name.Equals("safari", StringComparison.OrdinalIgnoreCase);
-            var ok = await WaitForHarAsync(before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), () =>
-            {
-                Console.WriteLine("relaunch " + name + " " + url);
-                if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
+            // Windows Chrome's first window is often still starting at 12s. A second
+            // process beside that window does not deliver the proof URL: this run
+            // kept the start pid and both reopens alive and never requested the page.
+            // After 20s with no decrypted GET, stop every process on the profile and
+            // start one window.
+            // The second origin is launched with the URL already on the command line.
+            // Killing Linux Edge at 12s dropped that navigation. Safari gets one
+            // relaunch after 40s so the first visit can finish a decrypted GET.
+            var windowsChromium = OperatingSystem.IsWindows()
+                && !safari
+                && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase);
+            Action? nudge = firstUrl
+                ? () =>
                 {
-                    KillLinuxFamily(name);
-                    TryGtkLaunch(name, url);
+                    Console.WriteLine("relaunch " + name + " " + url);
+                    if (OperatingSystem.IsLinux() && LinuxDesktopId(name) is not null)
+                    {
+                        KillLinuxFamily(name);
+                        TryGtkLaunch(name, url);
+                    }
+                    else if (safari)
+                    {
+                        TryRelaunchSafari(url);
+                    }
+                    else
+                    {
+                        // Reuse the temp profile / user-data-dir. A log line with no process
+                        // restart left Windows Firefox on its first launch, which never
+                        // requested the proof URL.
+                        RelaunchMacBrowser(name, browserPath, url, launched);
+                    }
                 }
-                else if (safari)
-                {
-                    TryRelaunchSafari(url);
-                }
-                else if (OperatingSystem.IsMacOS()
-                         && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
-                    TryStartAgain(browserPath, url);
-            }, safari ? TimeSpan.FromSeconds(8) : null);
+                : null;
+            TimeSpan? nudgeEvery = !firstUrl
+                ? null
+                : safari
+                    ? TimeSpan.FromSeconds(40)
+                    : windowsChromium
+                        ? TimeSpan.FromSeconds(20)
+                        : null;
+            firstUrl = false;
+            var ok = await WaitForHarAsync(
+                before, url, safari ? TimeSpan.FromSeconds(75) : TimeSpan.FromSeconds(60), nudge, nudgeEvery);
             launched.Kill();
             if (!ok)
             {
@@ -373,6 +462,136 @@ internal static class SmokeApp
         }
 
         return true;
+    }
+
+    private static void RelaunchMacBrowser(string name, string browserPath, string url, BrowserLaunch launched)
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows()
+                && launched.DataDir is not null
+                && !name.Equals("firefox", StringComparison.OrdinalIgnoreCase))
+            {
+                ReopenWindowsChromium(name, browserPath, url, launched);
+                return;
+            }
+
+            launched.KillProcessOnly();
+            Thread.Sleep(400);
+            if (name.Equals("firefox", StringComparison.OrdinalIgnoreCase) && launched.DataDir is not null)
+            {
+                SystemProxyBrowserCapture.StartFirefox(browserPath, launched.DataDir, url);
+                return;
+            }
+
+            if (launched.DataDir is not null)
+            {
+                SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
+                    browserPath, launched.DataDir, url, disableQuic: true);
+                return;
+            }
+
+            TryStartAgain(browserPath, url);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("relaunch failed: " + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Replace the Chromium window. The start pid can stay alive while the
+    /// window never loads the proof URL, and a second process on the same
+    /// profile then stays alive without navigating. Stop every process whose
+    /// command line has this user-data-dir, wait until the lock is gone, then
+    /// start one window.
+    /// </summary>
+    private static void ReopenWindowsChromium(string name, string browserPath, string url, BrowserLaunch launched)
+    {
+        var dir = launched.DataDir ?? throw new InvalidOperationException(name + " has no user-data-dir");
+        Console.WriteLine("restart " + name + "; no decrypted page from the current window");
+        launched.KillProcessOnly();
+        if (!WaitUntilDataDirUnused(dir))
+        {
+            Console.WriteLine("profile still in use for " + name + "; not starting another window");
+            return;
+        }
+
+        var again = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(
+            browserPath, dir, url, disableQuic: true);
+        Console.WriteLine("reopen " + name + " pid=" + again.Id + " exited=" + again.HasExited);
+        launched.AdoptIfStartExited(again);
+    }
+
+    private static void KillWindowsProcessesForDataDir(IReadOnlyList<int> pids)
+    {
+        foreach (var pid in pids)
+        {
+            Console.WriteLine("taskkill profile pid=" + pid);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "taskkill",
+                ArgumentList = { "/F", "/T", "/PID", pid.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            })?.WaitForExit(8000);
+        }
+    }
+
+    private static bool WaitUntilDataDirUnused(string dataDir)
+    {
+        // Each process query takes longer than a few seconds. A short deadline
+        // expired inside the first query and reported the profile busy.
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        List<int> left;
+        do
+        {
+            left = WindowsPidsForDataDir(dataDir);
+            if (left.Count == 0)
+                return true;
+            KillWindowsProcessesForDataDir(left);
+            Thread.Sleep(400);
+        }
+        while (DateTime.UtcNow < deadline);
+
+        left = WindowsPidsForDataDir(dataDir);
+        if (left.Count > 0)
+            Console.WriteLine("profile still in use pids=" + string.Join(",", left));
+        return left.Count == 0;
+    }
+
+    private static List<int> WindowsPidsForDataDir(string dataDir)
+    {
+        var pids = new List<int>();
+        var marker = dataDir.Replace("'", "''", StringComparison.Ordinal);
+        // $PID is this query. Its command line contains the profile path, so an
+        // unfiltered search taskkilled the shell and left Chrome running.
+        var script =
+            "$m = '" + marker + "'; " +
+            "Get-CimInstance Win32_Process | Where-Object { " +
+            "$_.ProcessId -ne $PID -and $_.Name -ne 'powershell.exe' -and $_.Name -ne 'pwsh.exe' -and " +
+            "$_.CommandLine -and $_.CommandLine.Contains($m) } | " +
+            "ForEach-Object { $_.ProcessId }";
+        using var proc = Process.Start(new ProcessStartInfo
+        {
+            FileName = "powershell",
+            ArgumentList = { "-NoProfile", "-Command", script },
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        });
+        if (proc is null)
+            return pids;
+        var output = proc.StandardOutput.ReadToEnd();
+        proc.WaitForExit(15000);
+        foreach (var line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (int.TryParse(line.Trim(), out var pid))
+                pids.Add(pid);
+        }
+
+        return pids;
     }
 
     private static BrowserLaunch LaunchBrowser(string name, string path, string url)
@@ -388,27 +607,34 @@ internal static class SmokeApp
         {
             var profile = SystemProxyBrowserCapture.CreateTempFirefoxProfile("twp-smoke-ff-");
             File.AppendAllText(Path.Combine(profile, "user.js"),
-                "user_pref(\"security.enterprise_roots.enabled\", true);\n");
+                "user_pref(\"security.enterprise_roots.enabled\", true);\n" +
+                "user_pref(\"browser.aboutwelcome.enabled\", false);\n" +
+                "user_pref(\"browser.startup.page\", 0);\n" +
+                "user_pref(\"browser.startup.homepage\", \"about:blank\");\n");
             Console.WriteLine("firefox: seeded enterprise_roots");
+            // Manual loopback prefs on every OS. A fresh profile's system-proxy
+            // mode (type 5) missed the proof URL on Windows while WinINET was
+            // still settling, and the only HAR row was the NCSI probe.
+            var port = ReadBindPort();
+            File.AppendAllText(Path.Combine(profile, "user.js"),
+                "user_pref(\"network.proxy.type\", 1);\n" +
+                "user_pref(\"network.proxy.http\", \"127.0.0.1\");\n" +
+                "user_pref(\"network.proxy.http_port\", " + port + ");\n" +
+                "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
+                "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
+                "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
+            Console.WriteLine("firefox: manual proxy prefs for the temp profile");
+            // Linux always has nss certutil in the smoke image; macOS may not.
             if (OperatingSystem.IsLinux())
-            {
-                var port = ReadBindPort();
-                File.AppendAllText(Path.Combine(profile, "user.js"),
-                    "user_pref(\"network.proxy.type\", 1);\n" +
-                    "user_pref(\"network.proxy.http\", \"127.0.0.1\");\n" +
-                    "user_pref(\"network.proxy.http_port\", " + port + ");\n" +
-                    "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
-                    "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
-                    "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
-                Console.WriteLine("firefox: manual proxy prefs for the Linux temp profile");
                 ImportRootIntoFirefoxProfile(profile);
-            }
             var proc = SystemProxyBrowserCapture.StartFirefox(path, profile, url);
             return new BrowserLaunch(proc, safari: false, profile);
         }
 
         var dir = Path.Combine(Path.GetTempPath(), "twp-smoke-" + name + "-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        // Chromium treats this empty file as "first run already happened" and loads the URL.
+        File.WriteAllText(Path.Combine(dir, "First Run"), string.Empty);
         if (OperatingSystem.IsLinux())
         {
             var desktop = LinuxDesktopId(name);
@@ -436,6 +662,7 @@ internal static class SmokeApp
 
         var killName = OperatingSystem.IsMacOS() ? MacKillName(name) : null;
         var chromium = SystemProxyBrowserCapture.StartChromiumViaSystemProxy(path, dir, url, disableQuic: true);
+        Console.WriteLine("launch " + name + " pid=" + chromium.Id + " exited=" + chromium.HasExited);
         return new BrowserLaunch(chromium, safari: false, dir, killName);
     }
 
@@ -763,19 +990,26 @@ internal static class SmokeApp
             return;
 
         var conf = Path.Combine(Path.GetTempPath(), "twp-smoke-pf.conf");
-        var baseRules = File.Exists("/etc/pf.conf") ? File.ReadAllText("/etc/pf.conf") : string.Empty;
-        // The runner ruleset passes outbound UDP with "quick", so a block appended
-        // after it never matches. A leading quick block wins and forces the GET
-        // back through the proxy on the fresh Safari visit.
+        // A block before scrub/nat anchors is a syntax error, so the load never
+        // sticks and pfctl -E is skipped. The main ruleset then keeps its quick
+        // UDP pass. Two block rules alone are valid, and the default is pass,
+        // so TCP to the proxy still flows.
         File.WriteAllText(
             conf,
             "block drop out quick inet proto udp from any to any port 443\n"
-            + "block drop out quick inet6 proto udp from any to any port 443\n"
-            + baseRules);
+            + "block drop out quick inet6 proto udp from any to any port 443\n");
         var loaded = RunCapture("sudo", "pfctl -f \"" + conf + "\"", 15000);
         Console.WriteLine("pfctl load exit=" + loaded.Code + " " + TrimOneLine(loaded.Output));
-        if (loaded.Code != 0)
+        // pfctl prints a flush warning and exits 1 even when the ruleset loaded.
+        var syntax = loaded.Output.Contains("syntax error", StringComparison.OrdinalIgnoreCase);
+        var warningOnly = loaded.Code != 0
+            && loaded.Output.Contains("could result in flushing", StringComparison.OrdinalIgnoreCase)
+            && !syntax;
+        if (loaded.Code != 0 && !warningOnly)
+        {
+            Console.WriteLine("pfctl load detail " + TrimOneLine(loaded.Output.Length > 400 ? loaded.Output[..400] : loaded.Output));
             return;
+        }
 
         var enabled = RunCapture("sudo", "pfctl -E", 10000);
         Console.WriteLine("pfctl enable exit=" + enabled.Code + " " + TrimOneLine(enabled.Output));
@@ -889,37 +1123,42 @@ internal static class SmokeApp
     {
         if (!Uri.TryCreate(entryUrl, UriKind.Absolute, out var uri))
             return entryUrl.Contains(host, StringComparison.OrdinalIgnoreCase);
-        if (host.Equals("example.com", StringComparison.OrdinalIgnoreCase))
-            return uri.Host.Equals("example.com", StringComparison.OrdinalIgnoreCase)
-                   || uri.Host.Equals("www.example.com", StringComparison.OrdinalIgnoreCase);
-        if (host.Equals("www.google.com", StringComparison.OrdinalIgnoreCase))
-            return uri.Host.EndsWith("google.com", StringComparison.OrdinalIgnoreCase);
+        if (host.Equals("example.com", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("example.org", StringComparison.OrdinalIgnoreCase))
+            return uri.Host.Equals(host, StringComparison.OrdinalIgnoreCase)
+                   || uri.Host.Equals("www." + host, StringComparison.OrdinalIgnoreCase);
         return uri.Host.Equals(host, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<InspectorProcess> StartAndDecryptAsync(string exe, int port, bool expectAlreadyOn)
     {
         var app = await InspectorProcess.StartAsync(exe, port);
-        await TrustRootAsync();
-        if (expectAlreadyOn)
-            return app;
-        return await DecryptAndMaybeRelaunchAsync(app, exe, port);
+        try
+        {
+            await TrustRootAsync();
+            if (expectAlreadyOn)
+                return app;
+            return await DecryptAndMaybeRelaunchAsync(app, exe, port);
+        }
+        catch
+        {
+            // Trust / decrypt failures must not leave Inspector holding the smoke driver's
+            // inherited stdout, or a piped `tee` waits until the job times out.
+            await app.DisposeAsync();
+            throw;
+        }
     }
 
     private static async Task<InspectorProcess> DecryptAndMaybeRelaunchAsync(InspectorProcess app, string exe, int port)
     {
         await TrustRootAsync();
         var click = await UiClicks.ClickDecryptHttpsAsync(app.Pid, TimeSpan.FromSeconds(30));
-        var deadline = DateTime.UtcNow.AddSeconds(20);
-        while (DateTime.UtcNow < deadline)
+        // Product EnableDecryptHttps / background probe can flip decrypt off for ~12s after
+        // the first true write. Require a stable on past that window before declaring success.
+        if (await WaitDecryptStableAsync(TimeSpan.FromSeconds(20), settle: TimeSpan.FromSeconds(14)))
         {
-            if (await ReadDecryptAsync())
-            {
-                Console.WriteLine("click: " + click.How);
-                return app;
-            }
-
-            await Task.Delay(400);
+            Console.WriteLine("click: " + click.How);
+            return app;
         }
 
         if (OperatingSystem.IsWindows())
@@ -929,7 +1168,44 @@ internal static class SmokeApp
         await app.DisposeAsync();
         PatchDecrypt(true);
         Console.WriteLine("click: FALLBACK (settings seed)");
-        return await InspectorProcess.StartAsync(exe, port);
+        // Quit clears the system proxy. The seeded process has to be listening
+        // and have the proxy back on before a browser is opened.
+        var restarted = await InspectorProcess.StartAsync(exe, port);
+        if (!await restarted.CaptureIsListeningAsync())
+            throw new InvalidOperationException("seeded relaunch did not start capture");
+        if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
+            throw new InvalidOperationException(
+                "seeded relaunch did not enable the system proxy. " + ProxySnapshot());
+        if (!await WaitDecryptStableAsync(TimeSpan.FromSeconds(8), settle: TimeSpan.FromSeconds(2)))
+            throw new InvalidOperationException("seeded relaunch did not keep decryptHttps on");
+        return restarted;
+    }
+
+    /// <summary>
+    ///     True when <c>decryptHttps</c> becomes true and stays true for <paramref name="settle"/>
+    ///     (covers the post-enable MITM probe that can turn decrypt back off).
+    /// </summary>
+    private static async Task<bool> WaitDecryptStableAsync(TimeSpan timeout, TimeSpan settle)
+    {
+        var deadline = DateTime.UtcNow + timeout + settle;
+        DateTime? firstTrue = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await ReadDecryptAsync())
+            {
+                firstTrue ??= DateTime.UtcNow;
+                if (DateTime.UtcNow - firstTrue.Value >= settle)
+                    return true;
+            }
+            else
+            {
+                firstTrue = null;
+            }
+
+            await Task.Delay(400);
+        }
+
+        return false;
     }
 
     private static async Task<string> TrustRootAsync()
@@ -1023,13 +1299,94 @@ internal static class SmokeApp
     {
         var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-root.cer");
         File.WriteAllBytes(cer, ExportCer(pfx));
-        // Unrestricted trustRoot. An ssl-only policy left the thumb out of the
-        // admin trust dump and Chrome opened CONNECT tunnels with no decrypted GET.
-        // The login keychain is what a fresh Safari process evaluates in addition
-        // to the system keychain.
-        Run("sudo", $"security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"{cer}\"", 20000);
-        Run("security", $"add-trusted-cert -r trustRoot \"{cer}\"", 20000);
-        Console.WriteLine("trusted root " + thumb);
+        try
+        {
+            // Hosted CI cannot show the login-keychain Certificate Trust Settings dialog.
+            // Passwordless sudo can still write the admin-domain System.keychain policy that
+            // Chrome/Safari honor. Interactive local runs keep the product login-keychain path.
+            if (MacTrustNeedsHeadlessInstall())
+            {
+                for (var attempt = 1; attempt <= 2; attempt++)
+                {
+                    // -p basic as well as ssl. The decrypt probe and System keychain
+                    // check use `verify-cert -p basic`, which stays NOT_TRUSTED when
+                    // the admin policy is SSL only, and the previous build then
+                    // turns decrypt back off.
+                    var added = RunMacSudo(
+                        "security add-trusted-cert -d -r trustRoot -p ssl -p basic -k /Library/Keychains/System.keychain \"" +
+                        cer + "\"");
+                    Console.WriteLine(
+                        "mac-trust add-trusted-cert attempt=" + attempt + " exit=" + added.Code +
+                        " " + TrimOneLine(added.Output));
+                    var adminDump = Capture("security", "dump-trust-settings -d");
+                    if (MacTrustDumpLooksTrusted(adminDump, thumb))
+                    {
+                        Console.WriteLine("trusted root " + thumb + " (system keychain ssl policy)");
+                        return;
+                    }
+
+                    if (attempt == 1)
+                        Thread.Sleep(2000);
+                }
+
+                throw new InvalidOperationException(
+                    "admin trust dump does not list " + thumb + " after add-trusted-cert -p ssl");
+            }
+
+            // Match product trust: login keychain + SSL policy. Do not pass -d; elevated
+            // add-trusted-cert cannot show the trust dialog ("no user interaction was possible").
+            var keychain = ResolveLoginKeychainForSmoke();
+            if (!string.IsNullOrEmpty(keychain))
+                Run("security", $"unlock-keychain \"{keychain}\"", 15000);
+            var args = string.IsNullOrEmpty(keychain)
+                ? $"add-trusted-cert -r trustRoot -p ssl \"{cer}\""
+                : $"add-trusted-cert -r trustRoot -p ssl -k \"{keychain}\" \"{cer}\"";
+            Run("security", args, 120000);
+            var dump = Capture("security", "dump-trust-settings");
+            if (!MacTrustDumpLooksTrusted(dump, thumb))
+                throw new InvalidOperationException(
+                    "trust dump has no SSL policy for " + thumb + " after add-trusted-cert -p ssl");
+            Console.WriteLine("trusted root " + thumb + " (ssl policy)");
+        }
+        finally
+        {
+            TryDelete(cer);
+        }
+    }
+
+    private static bool MacTrustNeedsHeadlessInstall() =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI"))
+        || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
+
+    private static string? ResolveLoginKeychainForSmoke()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var db = Path.Combine(home, "Library", "Keychains", "login.keychain-db");
+        if (File.Exists(db))
+            return db;
+        var legacy = Path.Combine(home, "Library", "Keychains", "login.keychain");
+        return File.Exists(legacy) ? legacy : null;
+    }
+
+    private static bool MacTrustDumpLooksTrusted(string dump, string thumb)
+    {
+        if (string.IsNullOrWhiteSpace(dump)
+            || dump.Contains("No Trust Settings were found", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var compact = dump.Replace(":", "", StringComparison.Ordinal).Replace(" ", "", StringComparison.Ordinal);
+        if (compact.Contains(thumb, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Recent macOS dumps often name the cert without a SHA-1 line.
+        // basic is accepted beside SSL: verify-cert -p basic is what the
+        // previous build uses once the admin dump has no hash line.
+        var policy = dump.Contains("SSL", StringComparison.OrdinalIgnoreCase)
+                     || dump.Contains("basic", StringComparison.OrdinalIgnoreCase);
+        return policy
+            && (dump.Contains("Trust Root", StringComparison.OrdinalIgnoreCase)
+                || dump.Contains("kSecTrustSettingsResultTrustRoot", StringComparison.OrdinalIgnoreCase)
+                || dump.Contains("Policy OID", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void WriteFreshSettings(int port, bool decrypt)
@@ -1128,6 +1485,23 @@ internal static class SmokeApp
                + " ProxyServer=" + (key?.GetValue("ProxyServer") as string ?? "");
     }
 
+    private static string LinuxProxyDiag(int port)
+    {
+        if (!OperatingSystem.IsLinux())
+            return "";
+        var mode = Capture("gsettings", "get org.gnome.system.proxy mode").Trim();
+        var host = Capture("gsettings", "get org.gnome.system.proxy.http host").Trim();
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var conf = Path.Combine(home, ".config", "environment.d", "90-titanium-inspector-proxy.conf");
+        var confBit = File.Exists(conf) ? "envdrop=yes" : "envdrop=no";
+        var chromePolicy = Path.Combine(home, ".config", "google-chrome", "policies", "managed",
+            "titanium-inspector-proxy.json");
+        var policyBit = File.Exists(chromePolicy) ? "policy=yes" : "policy=no";
+        var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
+        var launcherBit = Directory.Exists(launchers) ? "launchers=yes" : "launchers=no";
+        return $"gsettings.mode={mode} http.host={host} port={port} {confBit} {policyBit} {launcherBit}";
+    }
+
     private static bool ProxyIsOn(int port)
     {
         if (OperatingSystem.IsWindows())
@@ -1148,7 +1522,42 @@ internal static class SmokeApp
             if (File.Exists(conf) && File.ReadAllText(conf).Contains(port.ToString(), StringComparison.Ordinal))
                 return true;
             var g = Capture("gsettings", "get org.gnome.system.proxy mode");
-            return g.Contains("manual", StringComparison.OrdinalIgnoreCase);
+            if (g.Contains("manual", StringComparison.OrdinalIgnoreCase))
+                return true;
+            // Under xvfb/dbus-run-session gsettings may be empty while Inspector still
+            // wrote Chromium managed policy (ProxyMode=system, no ProxyServer port).
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string[] policyDirs =
+            [
+                Path.Combine(home, ".config", "google-chrome", "policies", "managed"),
+                Path.Combine(home, ".config", "chromium", "policies", "managed"),
+                Path.Combine(home, ".config", "microsoft-edge", "policies", "managed"),
+                Path.Combine(home, ".config", "BraveSoftware", "Brave-Browser", "policies", "managed"),
+                Path.Combine(home, ".config", "opera", "policies", "managed"),
+            ];
+            foreach (var dir in policyDirs)
+            {
+                var policy = Path.Combine(dir, "titanium-inspector-proxy.json");
+                if (!File.Exists(policy))
+                    continue;
+                var text = File.ReadAllText(policy);
+                if (text.Contains(port.ToString(), StringComparison.Ordinal)
+                    || text.Contains("\"ProxyMode\": \"system\"", StringComparison.Ordinal)
+                    || text.Contains("\"ProxyMode\":\"system\"", StringComparison.Ordinal))
+                    return true;
+            }
+
+            var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
+            if (Directory.Exists(launchers))
+            {
+                foreach (var file in Directory.EnumerateFiles(launchers))
+                {
+                    if (File.ReadAllText(file).Contains(":" + port, StringComparison.Ordinal))
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         var services = Capture("networksetup", "-listallnetworkservices");
@@ -1295,17 +1704,158 @@ internal static class SmokeApp
         }
 
         var ux = Path.Combine(ProfileDir(), "logs", "ux-trace.log");
-        if (!File.Exists(ux))
-            return;
-        var lines = File.ReadAllLines(ux);
-        var tail = string.Join(Environment.NewLine, lines.TakeLast(40));
-        Console.WriteLine("--- ux-trace ---");
-        Console.WriteLine(tail);
-        if (!string.IsNullOrEmpty(outDir))
+        if (File.Exists(ux))
         {
-            Directory.CreateDirectory(outDir);
-            File.WriteAllText(Path.Combine(outDir, "ux-trace-tail.log"), tail);
+            var lines = File.ReadAllLines(ux);
+            var tail = string.Join(Environment.NewLine, lines.TakeLast(40));
+            Console.WriteLine("--- ux-trace ---");
+            Console.WriteLine(tail);
+            if (!string.IsNullOrEmpty(outDir))
+            {
+                Directory.CreateDirectory(outDir);
+                File.WriteAllText(Path.Combine(outDir, "ux-trace-tail.log"), tail);
+            }
         }
+        else
+        {
+            Console.WriteLine("--- ux-trace ---");
+            Console.WriteLine("(missing)");
+        }
+
+        if (OperatingSystem.IsMacOS())
+            DumpMacTrustDiagnostics();
+    }
+
+    /// <summary>
+    ///     Best-effort macOS trust and settings dump. Prefixed so a failed smoke log
+    ///     shows whether decrypt was forced off and which roots the keychains hold.
+    /// </summary>
+    private static void DumpMacTrustDiagnostics()
+    {
+        string settings;
+        try
+        {
+            var settingsPath = Path.Combine(ProfileDir(), "settings.json");
+            settings = File.Exists(settingsPath) ? ReadSharedText(settingsPath) : "(missing settings.json)";
+        }
+        catch (Exception ex)
+        {
+            settings = ex.GetType().Name + ": " + ex.Message;
+        }
+
+        WriteMacDiag("settings.json", settings);
+        var decrypt = "missing";
+        if (settings.Contains("\"decryptHttps\": true", StringComparison.OrdinalIgnoreCase))
+            decrypt = "true";
+        else if (settings.Contains("\"decryptHttps\": false", StringComparison.OrdinalIgnoreCase))
+            decrypt = "false";
+        Console.WriteLine("mac-diag: decryptHttps=" + decrypt);
+
+        WriteMacDiag("dump-trust-settings", RunMacSecurity("dump-trust-settings"));
+        WriteMacDiag("dump-trust-settings -d", RunMacSecurity("dump-trust-settings -d"));
+
+        var system = FilterTitaniumCertRecords(
+            RunMacSecurity("find-certificate -a -Z /Library/Keychains/System.keychain"));
+        WriteMacDiag("system-keychain", system);
+
+        var login = ResolveLoginKeychainForSmoke();
+        var loginText = string.IsNullOrEmpty(login)
+            ? "(login keychain missing)"
+            : FilterTitaniumCertRecords(RunMacSecurity("find-certificate -a -Z \"" + login + "\""));
+        WriteMacDiag("login-keychain", loginText);
+
+        var thumb = "";
+        try
+        {
+            var pfx = Path.Combine(ProfileDir(), "rootCert.pfx");
+            if (!File.Exists(pfx))
+            {
+                WriteMacDiag("verify-cert", "rootCert.pfx missing");
+            }
+            else
+            {
+                thumb = ThumbFromPfx();
+                var cer = Path.Combine(Path.GetTempPath(), "titanium-smoke-diag.cer");
+                File.WriteAllBytes(cer, ExportCer(pfx));
+                try
+                {
+                    var verify = RunCapture("security", "verify-cert -p basic -c \"" + cer + "\"", 15000);
+                    WriteMacDiag("verify-cert", "exit=" + verify.Code + Environment.NewLine + verify.Output);
+                }
+                finally
+                {
+                    TryDelete(cer);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            WriteMacDiag("verify-cert", ex.GetType().Name + ": " + ex.Message);
+        }
+
+        var roots = ExtractSha1Hashes(system + "\n" + loginText);
+        Console.WriteLine(
+            "mac-diag: roots=[" + string.Join(",", roots) + "] current=" + thumb);
+    }
+
+    private static void WriteMacDiag(string label, string text)
+    {
+        Console.WriteLine("mac-diag: " + label);
+        Console.WriteLine(TruncateDiag(text));
+    }
+
+    private static string TruncateDiag(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return "(empty)";
+        return text.Length <= 4000 ? text : text[..4000] + "\n...(truncated)";
+    }
+
+    private static string RunMacSecurity(string args)
+    {
+        try
+        {
+            var result = RunCapture("security", args, 15000);
+            return "exit=" + result.Code + Environment.NewLine + result.Output;
+        }
+        catch (Exception ex)
+        {
+            return ex.GetType().Name + ": " + ex.Message;
+        }
+    }
+
+    private static string FilterTitaniumCertRecords(string text)
+    {
+        var parts = text.Split("SHA-1 hash:", StringSplitOptions.None);
+        var sb = new StringBuilder();
+        for (var i = 1; i < parts.Length; i++)
+        {
+            if (parts[i].Contains("Titanium", StringComparison.OrdinalIgnoreCase))
+                sb.Append("SHA-1 hash:").Append(parts[i]);
+        }
+
+        return sb.Length == 0 ? "(no Titanium certificates)" : sb.ToString();
+    }
+
+    private static List<string> ExtractSha1Hashes(string text)
+    {
+        var found = new List<string>();
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            const string prefix = "SHA-1 hash:";
+            var idx = line.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0)
+                continue;
+            var hex = line[(idx + prefix.Length)..].Trim();
+            if (hex.Length < 40)
+                continue;
+            var hash = hex[..40].ToUpperInvariant();
+            if (hash.All(Uri.IsHexDigit) && !found.Contains(hash, StringComparer.OrdinalIgnoreCase))
+                found.Add(hash);
+        }
+
+        return found;
     }
 
     private static async Task QuitPidAsync(int pid)
@@ -1432,10 +1982,18 @@ internal sealed class InspectorProcess : IAsyncDisposable
             FileName = exe,
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(exe) ?? Environment.CurrentDirectory,
+            // Detach from the smoke driver's stdout/stderr. Otherwise a piped `tee` stays
+            // open after the driver exits while this Avalonia process is still alive.
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
         };
         psi.Environment["TITANIUM_SKIP_ROOT_STORE_UI"] = "1";
         psi.Environment["TITANIUM_UPDATE_FEED"] = "";
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("Inspector did not start: " + exe);
+        proc.OutputDataReceived += static (_, _) => { };
+        proc.ErrorDataReceived += static (_, _) => { };
+        proc.BeginOutputReadLine();
+        proc.BeginErrorReadLine();
         return Task.FromResult(new InspectorProcess(proc));
     }
 
@@ -1516,7 +2074,7 @@ internal sealed class InspectorProcess : IAsyncDisposable
 
 internal sealed class BrowserLaunch : IDisposable
 {
-    private readonly Process? _process;
+    private Process? _process;
     private readonly bool _safari;
     private readonly string? _dir;
     private readonly string? _killName;
@@ -1529,7 +2087,34 @@ internal sealed class BrowserLaunch : IDisposable
         _killName = killName;
     }
 
-    public void Kill()
+    /// <summary>Temp Firefox profile or Chromium user-data-dir for a same-prefs relaunch.</summary>
+    public string? DataDir => _dir;
+
+    /// <summary>The start process is still running. Chromium's broker often is not.</summary>
+    public bool IsAlive
+    {
+        get
+        {
+            try
+            {
+                return _process is { HasExited: false };
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>Keep the replacement process so the proof can stop it on the way out.</summary>
+    public void AdoptIfStartExited(Process process)
+    {
+        if (!IsAlive)
+            _process = process;
+    }
+
+    /// <summary>Stop the browser but keep <see cref="DataDir"/> for a proof-URL relaunch.</summary>
+    public void KillProcessOnly()
     {
         try
         {
@@ -1550,8 +2135,27 @@ internal sealed class BrowserLaunch : IDisposable
                     })?.WaitForExit(3000);
                 }
             }
+
+            if (!_safari && OperatingSystem.IsMacOS()
+                && string.IsNullOrEmpty(_killName))
+            {
+                // Firefox smoke launches without MacKillName; still clear the profile lock.
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "killall",
+                    ArgumentList = { "firefox" },
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                })?.WaitForExit(3000);
+            }
         }
         catch { /* already gone */ }
+        _process = null;
+    }
+
+    public void Kill()
+    {
+        KillProcessOnly();
         if (_dir is not null)
         {
             try { Directory.Delete(_dir, true); } catch { /* in use */ }

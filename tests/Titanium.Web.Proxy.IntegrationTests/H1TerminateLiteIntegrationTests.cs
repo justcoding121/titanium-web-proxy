@@ -720,6 +720,11 @@ public class H1TerminateLiteIntegrationTests
             var countedBy = Environment.TickCount64 + 2_000;
             while (requests == 0 && Environment.TickCount64 < countedBy)
                 await Task.Delay(1);
+            // NoteLiteReply runs after the response is flushed, so the client can
+            // observe the status before the counter callback.
+            var metricDeadline = DateTime.UtcNow.AddSeconds(2);
+            while (requests < 1 && DateTime.UtcNow < metricDeadline)
+                await Task.Delay(15);
             Assert.AreEqual(1, requests);
             Assert.AreEqual("h1", protocol);
             Assert.AreEqual(1, duration);
@@ -778,6 +783,11 @@ public class H1TerminateLiteIntegrationTests
             var countedBy = Environment.TickCount64 + 2_000;
             while (requests == 0 && Environment.TickCount64 < countedBy)
                 await Task.Delay(1);
+            // NoteLiteReply runs after the response is flushed, so the client can
+            // observe the status before the counter callback.
+            var metricDeadline = DateTime.UtcNow.AddSeconds(2);
+            while (requests < 1 && DateTime.UtcNow < metricDeadline)
+                await Task.Delay(15);
             Assert.AreEqual(1, requests);
         }
         finally { proxy.Stop(); proxy.Dispose(); }
@@ -848,6 +858,11 @@ public class H1TerminateLiteIntegrationTests
             while (requests == 0 && Environment.TickCount64 < countedBy)
                 await Task.Delay(1);
 
+            // NoteLiteReply runs after the response is flushed, so the client can
+            // observe the status before the counter callback.
+            var metricDeadline = DateTime.UtcNow.AddSeconds(2);
+            while (requests < 1 && DateTime.UtcNow < metricDeadline)
+                await Task.Delay(15);
             Assert.AreEqual(1, requests);
             Assert.AreEqual("none", statusClass);
         }
@@ -915,6 +930,11 @@ public class H1TerminateLiteIntegrationTests
 
             // A replayable GET whose origin closes before a status line is RetryableServerConnectionException
             // with no inner exception. The existing classifier labels that Other, not a socket error.
+            // NoteLiteReply runs after the response is flushed, so the client can
+            // observe the status before the counter callback.
+            var metricDeadline = DateTime.UtcNow.AddSeconds(2);
+            while (requests < 1 && DateTime.UtcNow < metricDeadline)
+                await Task.Delay(15);
             Assert.AreEqual(1, requests);
             Assert.AreEqual(ForwarderError.Other.ToString(), error);
         }
@@ -989,6 +1009,11 @@ public class H1TerminateLiteIntegrationTests
             using var client = MakeClient();
             var response = await client.GetAsync($"https://127.0.0.1:{ep.Port}/");
             Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+            // NoteLiteReply runs after the response is flushed, so the client can
+            // observe the status before the counter callback.
+            var metricDeadline = DateTime.UtcNow.AddSeconds(2);
+            while (requests < 1 && DateTime.UtcNow < metricDeadline)
+                await Task.Delay(15);
             Assert.AreEqual(1, requests);
             Assert.AreEqual(ForwarderError.PolicyDenied.ToString(), error);
         }

@@ -296,6 +296,10 @@ public sealed partial class MainWindowViewModel
                 return true;
             }
 
+            // User cancelled Keychain / CryptUI — do not open recovery.
+            if (result?.Kind == CertificateOsTrustKind.Cancelled)
+                return false;
+
             if (!promptIfNeeded)
                 return ok;
         }
@@ -366,15 +370,41 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>
     /// CryptUI/Keychain on UI; store verify + My prune off UI after Yes (avoids Not Responding).
+    /// macOS: login-keychain SSL trust (one Certificate Trust Settings dialog; no admin System.keychain).
     /// </summary>
     private async Task<bool> InstallRootInteractiveAsync()
     {
         using var scope = InspectorUxTrace.Scope("InstallRootInteractive");
         await Task.Yield();
-        bool added;
+
+        if (OperatingSystem.IsMacOS())
+        {
+            // Prefer the user-domain path directly. TrustMacSystemDetailed already redirects to
+            // TrustMacUserDetailed, but calling AsAdmin(true) kept the old System-keychain UX
+            // wording and recovery elevate loop in play.
+            bool added;
+            using (InspectorUxTrace.Scope("InstallRootStoresOnly.MacLogin"))
+                added = _interception.InstallRootStoresOnly(machineStore: false);
+            InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={added}");
+
+            await Task.Yield();
+            using (InspectorUxTrace.Scope("ApplyUnixSslTrustOnUi.MacLogin"))
+                _interception.ApplyUnixSslTrustOnUi(machineStore: false);
+
+            using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation.MacLogin"))
+            {
+                return await RunOffUiAsync(
+                    () => _interception.FinalizeTrustAfterStoreMutation(
+                        machineStore: false,
+                        rootStoreAdded: added),
+                    StatusCancelToken);
+            }
+        }
+
+        bool winOrLinuxAdded;
         using (InspectorUxTrace.Scope("InstallRootStoresOnly.CryptUI"))
-            added = _interception.InstallRootStoresOnly(machineStore: false);
-        InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={added}");
+            winOrLinuxAdded = _interception.InstallRootStoresOnly(machineStore: false);
+        InspectorUxTrace.Event("InstallRootStoresOnly.Result", $"added={winOrLinuxAdded}");
 
         if (!OperatingSystem.IsWindows())
         {
@@ -383,12 +413,12 @@ public sealed partial class MainWindowViewModel
                 _interception.ApplyUnixSslTrustOnUi(machineStore: false);
         }
 
-        using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation", $"added={added}"))
+        using (InspectorUxTrace.Scope("FinalizeTrustAfterStoreMutation", $"added={winOrLinuxAdded}"))
         {
             return await RunOffUiAsync(
                 () => _interception.FinalizeTrustAfterStoreMutation(
                     machineStore: false,
-                    rootStoreAdded: added),
+                    rootStoreAdded: winOrLinuxAdded),
                 StatusCancelToken);
         }
     }
@@ -925,6 +955,16 @@ public sealed partial class MainWindowViewModel
             await ExportCaAsync();
         }
     }
+    /// <summary>
+    ///     Runs one decrypt-enable step, then reports whether this generation is still current.
+    /// </summary>
+    private async Task<bool> DecryptEnableStepStillCurrentAsync(int enableGeneration, Func<Task<bool>> step)
+    {
+        if (!await step())
+            return false;
+        return enableGeneration == Volatile.Read(ref _decryptEnableGeneration);
+    }
+
     private async Task EnableDecryptHttpsAsync(int enableGeneration)
     {
         if (!TryBeginTrustCommand())
@@ -940,21 +980,43 @@ public sealed partial class MainWindowViewModel
             // Stay on the Avalonia UI sync context after awaits. ConfigureAwait(false) here
             // resumes on a thread-pool thread, then ShowDialog / CryptUI hang forever with
             // status stuck on "Checking certificate trust…" (no message pump / wrong thread).
-            if (!await TryStartProxyForDecryptAsync())
+            if (!await DecryptEnableStepStillCurrentAsync(enableGeneration, TryStartProxyForDecryptAsync))
                 return;
-            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+            if (!await DecryptEnableStepStillCurrentAsync(enableGeneration, TryTrustRootForDecryptAsync))
                 return;
-            if (!await TryTrustRootForDecryptAsync())
-                return;
-            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
-                return;
-            if (!await TryCompleteMacSslTrustForDecryptAsync())
-                return;
-            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+            if (!await DecryptEnableStepStillCurrentAsync(enableGeneration, TryCompleteMacSslTrustForDecryptAsync))
                 return;
 
             SetDecryptHttpsCore(true);
+            SetStatus("Verifying HTTPS decrypt…", StatusSeverity.Busy);
+            var probe = await DecryptHttpsProbe.VerifyAsync(
+                _interception,
+                TimeSpan.FromSeconds(12),
+                CancellationToken.None).ConfigureAwait(true);
+            if (enableGeneration != Volatile.Read(ref _decryptEnableGeneration))
+                return;
+
+            if (probe.Inconclusive)
+            {
+                SetOutcomeStatus(
+                    Truncate(probe.Message, 140),
+                    StatusSeverity.Neutral,
+                    toastImportant: false);
+                return;
+            }
+
+            if (!probe.Ok)
+            {
+                await ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
+                SetOutcomeStatus(
+                    "Decrypt HTTPS off — verify failed: " + Truncate(probe.Message, 140),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+                return;
+            }
+
             SetOutcomeStatus("Decrypting HTTPS", StatusSeverity.Success, toastImportant: true);
+            MaybeToastSafariRelaunchAfterDecrypt();
         }
         catch (OperationCanceledException)
         {
@@ -1282,6 +1344,63 @@ public sealed partial class MainWindowViewModel
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DecryptHttps)));
         NotifyDecryptTrustHealth();
         SyncToggleVisual?.Invoke(nameof(DecryptHttps), enabled);
+    }
+
+    private bool _safariRelaunchToastShown;
+
+    /// <summary>
+    ///     Safari may cache failed TLS from the pre-trust window; one toast after first decrypt-on.
+    /// </summary>
+    private void MaybeToastSafariRelaunchAfterDecrypt()
+    {
+        if (!OperatingSystem.IsMacOS() || _safariRelaunchToastShown)
+            return;
+
+        _safariRelaunchToastShown = true;
+        SetTransientStatus(
+            "If Safari pages still spin, quit and reopen Safari so it picks up the new CA trust.",
+            StatusSeverity.Neutral,
+            toastImportant: true,
+            revertMs: 8000,
+            toastSeverity: StatusSeverity.Neutral);
+    }
+
+    /// <summary>
+    ///     Fast-path decrypt-on: confirm MITM works without blocking the checkbox flip.
+    /// </summary>
+    private async Task VerifyDecryptProbeInBackgroundAsync()
+    {
+        try
+        {
+            var probe = await DecryptHttpsProbe.VerifyAsync(
+                _interception,
+                TimeSpan.FromSeconds(12),
+                CancellationToken.None).ConfigureAwait(false);
+            // Do not PersistSettings(false) after EnsureShutdown: a late probe failure must not
+            // overwrite DecryptHttps=true that was already saved for the next launch.
+            // Inconclusive (network / paused capture / skip-listed host) keeps Decrypt on.
+            if (probe.Ok || probe.Inconclusive || !_decryptHttps || !_interception.IsRunning)
+                return;
+
+            await MarshalToUiAsync(async () =>
+            {
+                if (!_decryptHttps || !_interception.IsRunning)
+                    return;
+                await ForceDecryptHttpsOffAsync(cancelInFlightEnable: false);
+                SetOutcomeStatus(
+                    "Decrypt HTTPS off — verify failed: " + Truncate(probe.Message, 140),
+                    StatusSeverity.Error,
+                    toastImportant: true);
+            }, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // shutdown
+        }
+        catch (Exception ex)
+        {
+            InspectorUxTrace.Event("Decrypt.ProbeBackgroundFailed", Truncate(ex.Message, 120));
+        }
     }
 
     private void NotifyDecryptTrustHealth()

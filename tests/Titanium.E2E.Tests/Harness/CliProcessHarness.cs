@@ -150,8 +150,9 @@ public sealed partial class CliProcessHarness : IDisposable
     public static int GetFreePort() => GetFreePorts(1)[0];
 
     /// <summary>
-    /// Pick loopback ports the CLI can bind. The probe socket is closed only after an exclusive
-    /// re-bind succeeds, so a port still held by that probe is not handed to the process.
+    /// Pick loopback ports the CLI can bind. Ports come from below the Linux ephemeral range
+    /// so a just-released probe port is not reused as some other socket's source port before
+    /// the child process binds it.
     /// </summary>
     public static int[] GetFreePorts(int count)
     {
@@ -164,33 +165,39 @@ public sealed partial class CliProcessHarness : IDisposable
         return ports;
     }
 
+    private const int ReservedPortFloor = 18000;
+    private const int ReservedPortCeiling = 32000;
+    private static int _nextReservedPort = ReservedPortFloor;
+    private static readonly object ReservedPortGate = new();
+
     private static int ReserveLoopbackPort()
     {
-        for (var attempt = 0; attempt < 8; attempt++)
+        lock (ReservedPortGate)
         {
-            var probe = BindLoopback(0);
-            var port = ((IPEndPoint)probe.LocalEndpoint).Port;
-            probe.Stop();
-
-            TcpListener? confirm = null;
-            try
+            for (var attempt = 0; attempt < 512; attempt++)
             {
-                confirm = BindLoopback(port);
-                return port;
-            }
-            catch (SocketException)
-            {
-                // The probe socket has not released the port yet.
-            }
-            finally
-            {
+                var port = _nextReservedPort;
+                _nextReservedPort = port >= ReservedPortCeiling ? ReservedPortFloor : port + 1;
+                TcpListener? probe = null;
                 try
                 {
-                    confirm?.Stop();
+                    probe = BindLoopback(port);
+                    return port;
                 }
-                catch
+                catch (SocketException)
                 {
-                    // ignore
+                    // Taken. The next candidate is still outside the ephemeral range.
+                }
+                finally
+                {
+                    try
+                    {
+                        probe?.Stop();
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
                 }
             }
         }

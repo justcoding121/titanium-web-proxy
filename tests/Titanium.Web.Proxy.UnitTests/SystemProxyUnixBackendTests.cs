@@ -231,6 +231,38 @@ public class MacOsSystemProxyBackendTests
         result = new ProcessRunResult(0, "Auto Proxy Discovery: On\n", "");
         Assert.IsTrue(MacOsSystemProxyBackend.ParseAutoDiscovery(result));
     }
+
+    [TestMethod]
+    public void GetOrphanedLocalProxyProtocols_WhenDeadLocalPort_ReportsHttpAndHttps()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
+        runner.When("networksetup", "-getwebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        runner.When("networksetup", "-getsecurewebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
+
+        var orphaned = backend.GetOrphanedLocalProxyProtocols((_, _) => false);
+
+        Assert.AreEqual(ProxyProtocolType.Http | ProxyProtocolType.Https, orphaned);
+    }
+
+    [TestMethod]
+    public void GetOrphanedLocalProxyProtocols_WhenPortListening_IsNone()
+    {
+        var runner = new FakeProcessRunner();
+        runner.When("networksetup", "-listallnetworkservices", "Wi-Fi\n");
+        runner.When("networksetup", "-getwebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        runner.When("networksetup", "-getsecurewebproxy",
+            "Enabled: Yes\nServer: 127.0.0.1\nPort: 8866\n");
+        using var backend = new MacOsSystemProxyBackend(runner, new FakeElevationPrompt());
+
+        var orphaned = backend.GetOrphanedLocalProxyProtocols((_, _) => true);
+
+        Assert.AreEqual(ProxyProtocolType.None, orphaned);
+    }
 }
 
 [TestClass]
@@ -284,8 +316,11 @@ public class LinuxSystemProxyBackendTests
         Environment.SetEnvironmentVariable("HTTP_PROXY", null);
         Environment.SetEnvironmentVariable("HTTPS_PROXY", null);
 
+        LinuxBrowserLaunchProxy.ResetApplyCountForTests();
         using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
         backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost");
+        // GNOME-style path with hooks off never writes policy, Preferences, or a launcher.
+        Assert.AreEqual(0, LinuxBrowserLaunchProxy.ApplyCountForTests);
 
         Assert.IsTrue(runner.Commands.Exists(c =>
             c.Contains("gsettings", StringComparison.Ordinal) &&
@@ -297,14 +332,66 @@ public class LinuxSystemProxyBackendTests
         Assert.AreEqual("'127.0.0.1'", runner.GsettingsValue("org.gnome.system.proxy.http", "host"));
         Assert.AreEqual("8866", runner.GsettingsValue("org.gnome.system.proxy.http", "port"));
         Assert.AreEqual("true", runner.GsettingsValue("org.gnome.system.proxy.http", "enabled"));
-        Assert.IsTrue(runner.Commands.Exists(c =>
-            c.Contains("systemctl", StringComparison.Ordinal) &&
-            c.Contains("set-environment", StringComparison.Ordinal)));
+        Assert.IsFalse(runner.Commands.Exists(c =>
+            c.Contains("unset-environment", StringComparison.Ordinal)));
+        Assert.IsFalse(runner.Commands.Exists(c =>
+            c.Contains("set-environment", StringComparison.Ordinal) &&
+            c.Contains("127.0.0.1", StringComparison.Ordinal)));
+        // No leftover loopback session env → show-environment is empty → do not blank
+        // a corporate http_proxy the user may have set.
+        Assert.IsFalse(runner.Commands.Exists(c =>
+            c.Contains("set-environment", StringComparison.Ordinal) &&
+            c.Contains("http_proxy=", StringComparison.Ordinal)));
 
         backend.RestoreOriginalSettings();
         Assert.IsTrue(string.IsNullOrEmpty(Environment.GetEnvironmentVariable("http_proxy")));
-        Assert.IsTrue(runner.Commands.Exists(c =>
+        Assert.IsFalse(runner.Commands.Exists(c =>
             c.Contains("unset-environment", StringComparison.Ordinal)));
+    }
+
+    private static readonly string[] LoopbackOnlySessionProxyKeys = ["http_proxy"];
+
+    [TestMethod]
+    public void CollectLoopbackSessionProxyKeys_FiltersCorporateValues()
+    {
+        var keys = LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys(
+            "http_proxy=http://127.0.0.1:8866\nHTTPS_PROXY=http://corp.example:8080\nFOO=bar\n");
+        CollectionAssert.AreEqual(LoopbackOnlySessionProxyKeys, keys.ToArray());
+        Assert.AreEqual(0, LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys(null).Count);
+        Assert.AreEqual(0, LinuxSystemProxyBackend.CollectLoopbackSessionProxyKeys("").Count);
+    }
+
+    [TestMethod]
+    public void ForceClear_BlanksOnlyLoopbackSessionProxyEnv()
+    {
+        var runner = new FakeProcessRunner { TrackGsettings = true };
+        runner.When("sh", "command -v gsettings", "/usr/bin/gsettings\n");
+        runner.When("gsettings", "list-schemas", "org.gnome.system.proxy\n");
+        runner.SeedGsettings("org.gnome.system.proxy", "mode", "'none'");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy.http", "enabled", "false");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "host", "''");
+        runner.SeedGsettings("org.gnome.system.proxy.https", "port", "0");
+        runner.SeedGsettings("org.gnome.system.proxy", "ignore-hosts", "[]");
+        runner.When("sh", "command -v kwriteconfig6", "\n");
+        runner.When("sh", "command -v kwriteconfig5", "\n");
+        runner.When("systemctl", "--user show-environment",
+            "http_proxy=http://127.0.0.1:8866\nHTTPS_PROXY=http://corp.example:8080\n");
+        runner.DefaultSuccess = true;
+
+        using var backend = new LinuxSystemProxyBackend(runner, applyBrowserLaunchHooks: false);
+        backend.ForceClearInstalledProxy();
+
+        Assert.IsTrue(runner.Commands.Exists(c =>
+            c.Contains("set-environment", StringComparison.Ordinal) &&
+            c.Contains("http_proxy=", StringComparison.Ordinal) &&
+            !c.Contains("HTTPS_PROXY=", StringComparison.Ordinal)),
+            "Only the loopback-valued http_proxy key must be blanked.");
+        Assert.IsFalse(runner.Commands.Exists(c =>
+            c.Contains("set-environment", StringComparison.Ordinal) &&
+            c.Contains("HTTPS_PROXY=", StringComparison.Ordinal)),
+            "A corporate HTTPS_PROXY must stay.");
     }
 
     [TestMethod]
@@ -329,6 +416,59 @@ public class LinuxSystemProxyBackendTests
         var ex = Assert.ThrowsExactly<InvalidOperationException>(() =>
             backend.SetProxy("127.0.0.1", 8866, ProxyProtocolType.AllHttp, "localhost"));
         StringAssert.Contains(ex.Message, "Failed to apply GNOME system proxy");
+    }
+
+    [TestMethod]
+    public void ShouldPinBrowserProcess_OnlyOutsideGnomeAndKdeSessions()
+    {
+        // hooks=false → never pin regardless of desktop
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, "XFCE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(false, null));
+
+        // --- sessions that follow a live desktop proxy → no pin ---
+        // GNOME / Unity (already covered before this change)
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "ubuntu:GNOME"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "ubuntu:GNOME:ubuntu:ubuntu"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "GNOME"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "KDE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "plasma"));
+        // gsettings-watching desktops added in this change
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Cinnamon"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "X-Cinnamon"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Deepin"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Pantheon"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "UKUI"));
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "COSMIC"));
+        // Budgie ships as "Budgie:GNOME" on some distros — GNOME token makes it live
+        Assert.IsFalse(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Budgie:GNOME"));
+
+        // --- sessions that need a launcher pin ---
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "XFCE"));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, null));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, ""));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "LXQt"));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "MATE"));
+        // Budgie alone (no GNOME token) — Chrome does not watch gsettings for it
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "Budgie"));
+        // DDE: older Deepin branding — Chromium maps "Deepin" only, DDE falls to OTHER
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "DDE"));
+        // tiling compositors
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "sway"));
+        Assert.IsTrue(LinuxSystemProxyBackend.ShouldPinBrowserProcess(true, "i3"));
+
+        // SessionFollowsLiveProxy direct checks
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("ubuntu:GNOME"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Cinnamon"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("X-Cinnamon"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Deepin"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Pantheon"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("UKUI"));
+        Assert.IsTrue(LinuxSystemProxyBackend.SessionFollowsLiveProxy("COSMIC"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("XFCE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("DDE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("MATE"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy("Budgie"));
+        Assert.IsFalse(LinuxSystemProxyBackend.SessionFollowsLiveProxy(null));
     }
 }
 
@@ -427,6 +567,29 @@ public class LinuxBrowserLaunchProxyTests
     }
 
     [TestMethod]
+    public void BuildCaPolicyJson_PublishesThePublicCertificateOnly()
+    {
+        using var rsa = System.Security.Cryptography.RSA.Create(2048);
+        var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=Titanium Test CA",
+            rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256,
+            System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(
+            new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(
+                certificateAuthority: true, hasPathLengthConstraint: false, pathLengthConstraint: 0, critical: true));
+        using var cert = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        var json = LinuxBrowserLaunchProxy.BuildCaPolicyJson(cert);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var encoded = doc.RootElement.GetProperty("CACertificates")[0].GetString();
+        var der = Convert.FromBase64String(encoded!);
+        CollectionAssert.AreEqual(
+            cert.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Cert), der);
+        Assert.IsFalse(json.Contains("PRIVATE", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
     public void EnsureDefaultProfile_WritesFirstRunSentinel()
     {
         var root = Path.Combine(Path.GetTempPath(), "twp-chrome-profile-" + Guid.NewGuid().ToString("N"));
@@ -463,12 +626,14 @@ public class LinuxBrowserLaunchProxyTests
             Assert.AreEqual(1, LinuxBrowserLaunchProxy.WritePolicies("127.0.0.1", 8866, [dir]));
             var json = File.ReadAllText(Path.Combine(dir, LinuxBrowserLaunchProxy.PolicyFileName));
             Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "127.0.0.1", 8866, out var err), err);
-            StringAssert.Contains(json, "fixed_servers");
-            StringAssert.Contains(json, "http://127.0.0.1:8866");
+            StringAssert.Contains(json, "\"ProxyMode\": \"system\"");
+            Assert.IsFalse(json.Contains("ProxyServer", StringComparison.Ordinal), json);
             Assert.IsFalse(json.Contains("<-loopback>", StringComparison.Ordinal));
             StringAssert.Contains(json, "\"QuicAllowed\": false");
-            // Legacy int enum for older Chromium builds that still read ProxyServerMode.
-            StringAssert.Contains(json, "\"ProxyServerMode\": 2");
+            // No-schema launchers still pin the next process. Policy must not.
+            StringAssert.Contains(
+                LinuxBrowserLaunchProxy.ChromeProxyFlags("127.0.0.1", 8866),
+                "--proxy-server=http://127.0.0.1:8866");
         }
         finally
         {
@@ -487,8 +652,9 @@ public class LinuxBrowserLaunchProxyTests
             File.WriteAllText(prefs, """{"proxy":{"mode":"system"},"homepage":"x"}""");
             Assert.IsTrue(LinuxChromeProfileProxy.TryApplyToFileForTests(prefs, "127.0.0.1", 8866));
             var after = File.ReadAllText(prefs);
-            StringAssert.Contains(after, "fixed_servers");
-            StringAssert.Contains(after, "127.0.0.1:8866");
+            StringAssert.Contains(after, "\"mode\":\"system\"");
+            Assert.IsFalse(after.Contains("\"server\"", StringComparison.Ordinal), after);
+            Assert.IsFalse(after.Contains("127.0.0.1:8866", StringComparison.Ordinal), after);
             Assert.IsTrue(File.Exists(prefs + LinuxChromeProfileProxy.BackupSuffix));
             LinuxChromeProfileProxy.TryRestoreFileForTests(prefs);
             var restored = File.ReadAllText(prefs);
@@ -515,6 +681,27 @@ public class LinuxBrowserLaunchProxyTests
             var text = File.ReadAllText(prefs);
             StringAssert.Contains(text, "\"mode\":\"system\"");
             Assert.IsFalse(text.Contains("8866", StringComparison.Ordinal));
+
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"fixed_servers","server":"http://127.0.0.1:8866"}}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            StringAssert.Contains(File.ReadAllText(prefs), "\"mode\":\"system\"");
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"fixed_servers","server":"http://10.1.2.3:8080"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            StringAssert.Contains(File.ReadAllText(prefs), "10.1.2.3:8080");
+
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"system","server":"http://127.0.0.1:8866"}}""");
+            Assert.IsTrue(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            var systemStripped = File.ReadAllText(prefs);
+            StringAssert.Contains(systemStripped, "\"mode\":\"system\"");
+            Assert.IsFalse(systemStripped.Contains("server", StringComparison.Ordinal), systemStripped);
+
+            File.WriteAllText(prefs,
+                """{"proxy":{"mode":"system","server":"http://10.1.2.3:8080"}}""");
+            Assert.IsFalse(LinuxChromeProfileProxy.TryStripLoopbackFixedServerForTests(prefs));
+            StringAssert.Contains(File.ReadAllText(prefs), "10.1.2.3:8080");
         }
         finally
         {
@@ -529,7 +716,7 @@ public class LinuxBrowserLaunchProxyTests
         Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(json, "weird\"host", 8866, out var err), err);
         // Must be valid JSON even with quotes in the host fragment.
         using var doc = System.Text.Json.JsonDocument.Parse(json);
-        Assert.AreEqual("fixed_servers", doc.RootElement.GetProperty("ProxyMode").GetString());
+        Assert.AreEqual("system", doc.RootElement.GetProperty("ProxyMode").GetString());
     }
 
     [TestMethod]
@@ -543,6 +730,28 @@ public class LinuxBrowserLaunchProxyTests
             }
             """;
         Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(legacy, "10.0.0.1", 8888, out var err), err);
+
+        const string systemOnly = """{"ProxyMode":"system","QuicAllowed":false}""";
+        Assert.IsTrue(LinuxBrowserLaunchProxy.TryValidatePolicyJson(systemOnly, "127.0.0.1", 8866, out var systemErr), systemErr);
+    }
+
+    [TestMethod]
+    public void OwnedFailOpen_SurvivesSameProcessDeadAppStop()
+    {
+        // Does not kill a helper or rewrite browser files. The guard that skips live
+        // desktops must not hide this contract: ForceClear keeps a helper this process owns.
+        LinuxProxyFailOpen.MarkOwnedByThisProcessForTests();
+        try
+        {
+            // InstalledProxyCleanup.ForceClear → ClearInstalledHooks → Clear(startFailOpen: false)
+            // uses this path. A helper this process just started must stay up.
+            Assert.IsFalse(LinuxProxyFailOpen.StopUnlessOwnedByThisProcess());
+            Assert.IsTrue(LinuxProxyFailOpen.OwnedByThisProcess);
+        }
+        finally
+        {
+            LinuxProxyFailOpen.ClearOwnedByThisProcessForTests();
+        }
     }
 
     [TestMethod]
@@ -586,13 +795,13 @@ public class LinuxBrowserLaunchProxyTests
             """;
         var managed = new Dictionary<string, string>
         {
-            ["network.proxy.type"] = "1",
+            ["network.proxy.type"] = "5",
             ["network.proxy.http"] = "\"127.0.0.1\"",
             ["network.proxy.http_port"] = "8866",
             ["titanium.inspector.proxy.managed"] = "true",
         };
         var merged = LinuxFirefoxProxy.MergePrefsForTests(existing, managed);
-        StringAssert.Contains(merged, "user_pref(\"network.proxy.type\", 1);");
+        StringAssert.Contains(merged, "user_pref(\"network.proxy.type\", 5);");
         StringAssert.Contains(merged, "user_pref(\"network.proxy.http\", \"127.0.0.1\");");
         StringAssert.Contains(merged, "user_pref(\"network.proxy.http_port\", 8866);");
         StringAssert.Contains(merged, "titanium.inspector.proxy.managed");

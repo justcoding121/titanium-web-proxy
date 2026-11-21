@@ -274,6 +274,32 @@ public class Http2FlowControllerTests
     }
 
     [TestMethod]
+    public void TryReservePartial_LeavesSubFloorScrapUnspent()
+    {
+        var flow = new Http2FlowController();
+        flow.RegisterStream(1);
+        // Exhaust the default window except a scrap below PartialDataFrameFloor.
+        var scrap = Http2FlowController.PartialDataFrameFloor - 1;
+        Assert.AreEqual(Http2FlowController.InitialConnectionWindow - scrap,
+            flow.TryReservePartial(1, Http2FlowController.InitialConnectionWindow - scrap));
+        Assert.AreEqual(0, flow.TryReservePartial(1, 16384),
+            "A scrap below PartialDataFrameFloor must not become its own DATA frame.");
+        Assert.AreEqual(scrap, flow.AvailableSendCredit(1));
+    }
+
+    [TestMethod]
+    public void TryReservePartial_TinyInitialWindow_SpendsSubFloorScrap()
+    {
+        var flow = new Http2FlowController();
+        Assert.IsFalse(flow.OnInitialWindowSizeChanged(1024));
+        flow.RegisterStream(1);
+        flow.OnWindowUpdate(0, 1_000_000);
+        Assert.AreEqual(1024, flow.TryReservePartial(1, 16384),
+            "A peer with initial window below PartialDataFrameFloor must still get a partial frame.");
+        Assert.AreEqual(0, flow.AvailableSendCredit(1));
+    }
+
+    [TestMethod]
     public void TryReserve_FalseWhenPartialWouldSucceed()
     {
         var flow = new Http2FlowController();

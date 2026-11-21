@@ -171,6 +171,13 @@ public sealed class InspectorSettings
     /// </summary>
     public bool ExclusionsInitialized { get; set; }
 
+    /// <summary>
+    ///     Version of the factory tunnel-only host list last merged into
+    ///     <see cref="DecryptSkipHosts"/>. Bump <see cref="SettingsService.CurrentTunnelOnlyDefaultsVersion"/>
+    ///     when new factory hosts ship so upgraded installs receive them once without undoing a later removal.
+    /// </summary>
+    public int TunnelOnlyDefaultsVersion { get; set; }
+
     /// <summary>User acknowledged PAC replace warning when enabling System proxy.</summary>
     public bool WarnedAboutPacReplace { get; set; }
 
@@ -179,6 +186,14 @@ public sealed class InspectorSettings
     /// while running from a DMG volume.
     /// </summary>
     public bool MacDmgMovePromptDismissed { get; set; }
+
+    /// <summary>User dismissed AppImage "Install locally" (cleared when a newer AppImage is launched).</summary>
+    public bool LinuxAppImageInstallPromptDismissed { get; set; }
+
+    /// <summary>
+    ///     Set when an in-app update apply starts; cleared after the next-launch trust reverify.
+    /// </summary>
+    public bool PendingPostUpdateTrustCheck { get; set; }
 
     /// <summary>Optional FileDescriptorSet path for protobuf decode on inspect.</summary>
     public string? ProtobufDescriptorSetPath { get; set; }
@@ -281,10 +296,17 @@ public sealed class SettingsService
         Save();
     }
 
+    /// <summary>
+    ///     Bump when <see cref="MitmExclusionDefaults.TunnelOnlyPinningDomains"/> gains hosts that
+    ///     upgraded Inspector installs must receive once.
+    /// </summary>
+    public const int CurrentTunnelOnlyDefaultsVersion = 1;
+
     public static void ApplyFactoryExclusionDefaults(InspectorSettings settings)
     {
         settings.SystemProxyBypassHosts = MitmExclusionDefaults.SystemProxyBypassRules.ToList();
         settings.DecryptSkipHosts = MitmExclusionDefaults.TunnelOnlyPinningDomains.ToList();
+        settings.TunnelOnlyDefaultsVersion = CurrentTunnelOnlyDefaultsVersion;
     }
 
     /// <summary>
@@ -308,6 +330,30 @@ public sealed class SettingsService
         }
 
         return changed;
+    }
+
+    /// <summary>
+    ///     One-time append of new factory tunnel-only hosts into an upgraded install's
+    ///     <see cref="InspectorSettings.DecryptSkipHosts"/>. Hosts the user later removes stay removed.
+    /// </summary>
+    internal static bool MergeMissingFactoryTunnelOnlyHosts(InspectorSettings settings)
+    {
+        if (settings.TunnelOnlyDefaultsVersion >= CurrentTunnelOnlyDefaultsVersion)
+            return false;
+
+        settings.DecryptSkipHosts ??= [];
+        foreach (var host in MitmExclusionDefaults.TunnelOnlyPinningDomains)
+        {
+            if (settings.DecryptSkipHosts.Any(h =>
+                    string.Equals(h, host, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            settings.DecryptSkipHosts.Add(host);
+        }
+
+        // Always bump the version so a second load is a no-op even when every host was already present.
+        settings.TunnelOnlyDefaultsVersion = CurrentTunnelOnlyDefaultsVersion;
+        return true;
     }
 
     /// <summary>
@@ -385,6 +431,12 @@ public sealed class SettingsService
             {
                 // Additive: new factory SSO/identity hosts must land in existing settings.json or
                 // Inspector Replace-mode system proxy omits them.
+                writeBack = true;
+            }
+
+            if (MergeMissingFactoryTunnelOnlyHosts(loaded))
+            {
+                // Additive: new Apple / pinning tunnel-only hosts for upgraded Replace-mode installs.
                 writeBack = true;
             }
 

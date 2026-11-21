@@ -7,7 +7,17 @@ namespace Titanium.Web.Proxy.Configuration.Tests;
 [TestClass]
 public partial class DocsStructureTests
 {
-    private static readonly string[] HomeTiles =
+    private static readonly (string Title, string Link)[] HomePillars =
+    [
+        ("Embeddable .NET proxy", "/docs/library"),
+        ("CLI and Kubernetes edge proxy", "/docs/cli"),
+        ("Automatic tunnel", "/docs/features#inspector"),
+        ("Visual MITM debugger", "/docs/inspector"),
+        ("Benchmarked speed at scale", "/docs/performance"),
+        ("Control-plane add-ons", "/docs/plus"),
+    ];
+
+    private static readonly string[] PreservedCapabilityTitles =
     [
         "Debug HTTPS traffic",
         "Rewrite and replay",
@@ -62,26 +72,39 @@ public partial class DocsStructureTests
     }
 
     [TestMethod]
-    public void HomePage_ListsTheTwelveTilesInOrder_EachLinkingToARealDocsPage()
+    public void HomePage_ListsTheSixPillarsInOrder_EachLinkingToARealDocsPage()
     {
         var path = Path.Combine(DocsRepository.Root, "website", "index.md");
         var text = File.ReadAllText(path);
-        var frontMatter = FrontMatter(text);
+        var body = Body(text);
 
-        var titles = TileTitleRegex().Matches(frontMatter).Select(m => m.Groups[1].Value.Trim()).ToList();
-        CollectionAssert.AreEqual(HomeTiles, titles);
+        var majorStart = body.IndexOf("## Major features", StringComparison.Ordinal);
+        Assert.IsTrue(majorStart >= 0, "Major features section is present.");
+        var afterMajor = body[(majorStart + "## Major features".Length)..];
+        var nextHeading = afterMajor.IndexOf("\n## ", StringComparison.Ordinal);
+        var section = nextHeading < 0 ? afterMajor : afterMajor[..nextHeading];
 
-        var links = TileLinkRegex().Matches(frontMatter).Select(m => m.Groups[1].Value.Trim()).ToList();
-        Assert.AreEqual(HomeTiles.Length, links.Count, "Every tile needs a link.");
+        var titles = PillarTitleRegex().Matches(section).Select(m => m.Groups[1].Value.Trim()).ToList();
+        CollectionAssert.AreEqual(HomePillars.Select(p => p.Title).ToList(), titles);
+
+        var links = PillarLinkRegex().Matches(section).Select(m => m.Groups[1].Value.Trim()).ToList();
+        Assert.AreEqual(HomePillars.Length, links.Count, "Every pillar needs a Learn more link.");
 
         var failures = new List<string>();
-        foreach (var link in links)
+        for (var i = 0; i < HomePillars.Length; i++)
         {
+            var expected = HomePillars[i].Link;
+            var link = links[i];
+            if (!string.Equals(link, expected, StringComparison.Ordinal))
+            {
+                failures.Add($"{titles[i]}: expected {expected}, found {link}.");
+            }
+
             var hash = link.IndexOf('#', StringComparison.Ordinal);
             var page = hash < 0 ? link : link[..hash];
             if (!page.StartsWith("/docs/", StringComparison.Ordinal))
             {
-                failures.Add($"{link}: a tile links to a /docs/ page.");
+                failures.Add($"{link}: a pillar links to a /docs/ page.");
                 continue;
             }
 
@@ -100,6 +123,14 @@ public partial class DocsStructureTests
     }
 
     [TestMethod]
+    public void HomePage_KeepsTheTwelveCapabilityTitlesInTheBody()
+    {
+        var body = Body(File.ReadAllText(Path.Combine(DocsRepository.Root, "website", "index.md")));
+        var missing = PreservedCapabilityTitles.Where(title => !body.Contains(title, StringComparison.Ordinal)).ToList();
+        Assert.AreEqual(0, missing.Count, "Missing capability titles: " + string.Join(", ", missing));
+    }
+
+    [TestMethod]
     public void HomePage_KeepsEditionLinksDownloadPicksChartAndPerformance()
     {
         var text = File.ReadAllText(Path.Combine(DocsRepository.Root, "website", "index.md"));
@@ -111,6 +142,94 @@ public partial class DocsStructureTests
         StringAssert.Contains(text, "## Performance");
         StringAssert.Contains(text, "rps-practical-linux.png");
         StringAssert.Contains(text, "The Linux tiny-GET chart is below");
+        StringAssert.Contains(text, "<HomeQuickStart />");
+        StringAssert.Contains(text, "Intercept and inspect HTTP(S) from .NET in a few lines");
+        StringAssert.Contains(text, "45,499");
+        StringAssert.Contains(text, "non-commercial use only");
+        Assert.IsFalse(text.Contains("Commercial use needs a separate arrangement", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void HomeQuickStart_LibraryTabIsTheInstallCommandAndGettingStarted()
+    {
+        var vue = File.ReadAllText(Path.Combine(
+            DocsRepository.Root,
+            "website",
+            ".vitepress",
+            "theme",
+            "components",
+            "HomeQuickStart.vue"));
+        StringAssert.Contains(vue, "dotnet add package Titanium.Web.Proxy");
+        StringAssert.Contains(vue, "/docs/getting-started");
+        Assert.IsFalse(vue.Contains("ExplicitProxyEndPoint", StringComparison.Ordinal));
+        StringAssert.Contains(vue, "mkdir conf");
+        StringAssert.Contains(vue, "ghcr.io/justcoding121/titanium-web-proxy:latest");
+        Assert.IsFalse(vue.Contains("EOF", StringComparison.Ordinal));
+        var readme = File.ReadAllText(Path.Combine(DocsRepository.Root, "README.md"));
+        Assert.IsFalse(readme.Contains("EOF", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void HomeHeroDemo_NotesTheRootCertificateOnFirstRun()
+    {
+        var vue = File.ReadAllText(Path.Combine(
+            DocsRepository.Root,
+            "website",
+            ".vitepress",
+            "theme",
+            "components",
+            "HomeHeroDemo.vue"));
+        StringAssert.Contains(vue, "The first run installs a root certificate");
+        StringAssert.Contains(vue, "/docs/security");
+        StringAssert.Contains(vue, "45,499");
+    }
+
+    [TestMethod]
+    public void FrontDoor_DoesNotNamePeerProxyProducts()
+    {
+        var roots = new[]
+        {
+            Path.Combine(DocsRepository.Root, "README.md"),
+            Path.Combine(DocsRepository.Root, "website"),
+        };
+        var hits = new List<string>();
+        foreach (var root in roots)
+        {
+            var files = Directory.Exists(root)
+                ? Directory.GetFiles(root, "*.*", SearchOption.AllDirectories)
+                : new[] { root };
+            foreach (var file in files)
+            {
+                if (file.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.Contains($"{Path.DirectorySeparatorChar}.vitepress{Path.DirectorySeparatorChar}cache{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.Contains($"{Path.DirectorySeparatorChar}dist{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var ext = Path.GetExtension(file);
+                if (ext is not (".md" or ".vue" or ".mts" or ".css"))
+                {
+                    continue;
+                }
+
+                var text = File.ReadAllText(file);
+                if (PeerProxyNameRegex().IsMatch(text))
+                {
+                    hits.Add(Path.GetRelativePath(DocsRepository.Root, file));
+                }
+            }
+        }
+
+        Assert.AreEqual(0, hits.Count, "Peer product names: " + string.Join(", ", hits));
+    }
+
+    private static string Body(string text)
+    {
+        _ = FrontMatter(text);
+        var lines = text.Split('\n');
+        var end = Array.FindIndex(lines, 1, l => l.TrimEnd('\r') == "---");
+        return string.Join('\n', lines[(end + 1)..]);
     }
 
     private static string FrontMatter(string text)
@@ -130,9 +249,12 @@ public partial class DocsStructureTests
     [GeneratedRegex("[^A-Za-z0-9]+")]
     private static partial Regex NonAlphanumericRegex();
 
-    [GeneratedRegex(@"(?m)^  - title: (.+?)\r?$")]
-    private static partial Regex TileTitleRegex();
+    [GeneratedRegex(@"<h3>(.+?)</h3>")]
+    private static partial Regex PillarTitleRegex();
 
-    [GeneratedRegex(@"(?m)^    link: (.+?)\r?$")]
-    private static partial Regex TileLinkRegex();
+    [GeneratedRegex(@"href=""(/docs/[^""]+)"">Learn more")]
+    private static partial Regex PillarLinkRegex();
+
+    [GeneratedRegex(@"YARP|nginx|HAProxy|Envoy|Traefik|Caddy|Squid|Fiddler|Charles|mitmproxy", RegexOptions.IgnoreCase)]
+    private static partial Regex PeerProxyNameRegex();
 }

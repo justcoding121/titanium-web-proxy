@@ -3759,6 +3759,60 @@ references:
   commentId: N:Titanium.Web.Proxy.Helpers
   fullName: Titanium.Web.Proxy.Helpers
   nameWithType: Titanium.Web.Proxy.Helpers
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+  name: InstalledProxyCleanup
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html
+  commentId: T:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup
+  nameWithType: InstalledProxyCleanup
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  name: ForceClear()
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_ForceClear
+  commentId: M:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear()
+  nameWithType: InstalledProxyCleanup.ForceClear()
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear*
+  name: ForceClear
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_ForceClear_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear
+  nameWithType: InstalledProxyCleanup.ForceClear
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  name: TryForceClearWhenOwned()
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_TryForceClearWhenOwned
+  commentId: M:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned()
+  nameWithType: InstalledProxyCleanup.TryForceClearWhenOwned()
+- uid: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned*
+  name: TryForceClearWhenOwned
+  href: api/Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.html#Titanium_Web_Proxy_Helpers_InstalledProxyCleanup_TryForceClearWhenOwned_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.TryForceClearWhenOwned
+  nameWithType: InstalledProxyCleanup.TryForceClearWhenOwned
+- uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+  name: LinuxInspectorProcess
+  href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html
+  commentId: T:Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+  fullName: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess
+  nameWithType: LinuxInspectorProcess
+- uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(System.String)
+  name: IsRunning(string?)
+  href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html#Titanium_Web_Proxy_Helpers_LinuxInspectorProcess_IsRunning_System_String_
+  commentId: M:Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(System.String)
+  name.vb: IsRunning(String)
+  fullName: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(string?)
+  fullName.vb: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning(String)
+  nameWithType: LinuxInspectorProcess.IsRunning(string?)
+  nameWithType.vb: LinuxInspectorProcess.IsRunning(String)
+- uid: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning*
+  name: IsRunning
+  href: api/Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.html#Titanium_Web_Proxy_Helpers_LinuxInspectorProcess_IsRunning_
+  commentId: Overload:Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Helpers.LinuxInspectorProcess.IsRunning
+  nameWithType: LinuxInspectorProcess.IsRunning
 - uid: Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper
   name: UnixProxyBypassMapper
   href: api/Titanium.Web.Proxy.Helpers.UnixProxyBypassMapper.html
@@ -9250,6 +9304,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustDefaultProfile
   nameWithType: FirefoxCertificateTrust.TrustDefaultProfile
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
+  name: TrustInstalledProfiles(X509Certificate2, string)
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustInstalledProfiles_System_Security_Cryptography_X509Certificates_X509Certificate2_System_String_
+  commentId: M:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2,System.String)
+  name.vb: TrustInstalledProfiles(X509Certificate2, String)
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2, string)
+  fullName.vb: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles(System.Security.Cryptography.X509Certificates.X509Certificate2, String)
+  nameWithType: FirefoxCertificateTrust.TrustInstalledProfiles(X509Certificate2, string)
+  nameWithType.vb: FirefoxCertificateTrust.TrustInstalledProfiles(X509Certificate2, String)
+- uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles*
+  name: TrustInstalledProfiles
+  href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TrustInstalledProfiles_
+  commentId: Overload:Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TrustInstalledProfiles
+  nameWithType: FirefoxCertificateTrust.TrustInstalledProfiles
 - uid: Titanium.Web.Proxy.Network.FirefoxCertificateTrust.TryClearWindowsEnterpriseRoots
   name: TryClearWindowsEnterpriseRoots()
   href: api/Titanium.Web.Proxy.Network.FirefoxCertificateTrust.html#Titanium_Web_Proxy_Network_FirefoxCertificateTrust_TryClearWindowsEnterpriseRoots
@@ -12579,6 +12649,22 @@ references:
   isSpec: "True"
   fullName: Titanium.Web.Proxy.ProxyServer.TracingHeaderAllowList
   nameWithType: ProxyServer.TracingHeaderAllowList
+- uid: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func{System.String,System.Int32,System.Boolean})
+  name: TryClearOrphanedLocalSystemProxy(Func<string, int, bool>?)
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryClearOrphanedLocalSystemProxy_System_Func_System_String_System_Int32_System_Boolean__
+  commentId: M:Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func{System.String,System.Int32,System.Boolean})
+  name.vb: TryClearOrphanedLocalSystemProxy(Func(Of String, Integer, Boolean))
+  fullName: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func<string, int, bool>?)
+  fullName.vb: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy(System.Func(Of String, Integer, Boolean))
+  nameWithType: ProxyServer.TryClearOrphanedLocalSystemProxy(Func<string, int, bool>?)
+  nameWithType.vb: ProxyServer.TryClearOrphanedLocalSystemProxy(Func(Of String, Integer, Boolean))
+- uid: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy*
+  name: TryClearOrphanedLocalSystemProxy
+  href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryClearOrphanedLocalSystemProxy_
+  commentId: Overload:Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy
+  isSpec: "True"
+  fullName: Titanium.Web.Proxy.ProxyServer.TryClearOrphanedLocalSystemProxy
+  nameWithType: ProxyServer.TryClearOrphanedLocalSystemProxy
 - uid: Titanium.Web.Proxy.ProxyServer.TryDisableAllSystemProxies
   name: TryDisableAllSystemProxies()
   href: api/Titanium.Web.Proxy.ProxyServer.html#Titanium_Web_Proxy_ProxyServer_TryDisableAllSystemProxies

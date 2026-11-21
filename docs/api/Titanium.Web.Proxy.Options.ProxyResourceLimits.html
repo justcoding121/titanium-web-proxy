@@ -590,8 +590,8 @@ the ratio check (relying on <a class="xref" href="Titanium.Web.Proxy.Options.Pro
   </span>
   <a id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDeferredOutboundBytesPerStream_" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream*"></a>
   <h4 id="Titanium_Web_Proxy_Options_ProxyResourceLimits_MaxDeferredOutboundBytesPerStream" data-uid="Titanium.Web.Proxy.Options.ProxyResourceLimits.MaxDeferredOutboundBytesPerStream">MaxDeferredOutboundBytesPerStream</h4>
-  <div class="markdown level1 summary"><p>Bytes of HTTP/2 DATA that may be parked per stream waiting for send-window credit.
-Worst-case memory is concurrent streams times this value. Default 4 MiB + 16 KiB. Ceiling 64 MiB.</p>
+  <div class="markdown level1 summary"><p>Bytes of HTTP/2 DATA that may be parked per stream when the peer ignores stream flow control.
+A compliant peer stays within the advertised 768 KiB stream window. Default 4 MiB + 16 KiB. Ceiling 64 MiB.</p>
 </div>
   <div class="markdown level1 conceptual"></div>
   <h5 class="declaration">Declaration</h5>

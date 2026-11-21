@@ -145,8 +145,8 @@ public sealed class ProxyResourceLimits
     public long MaxHttp3FramePayloadBytes { get; private init; }
 
     /// <summary>
-    ///     Bytes of HTTP/2 DATA that may be parked per stream waiting for send-window credit.
-    ///     Worst-case memory is concurrent streams times this value. Default 4 MiB + 16 KiB. Ceiling 64 MiB.
+    ///     Bytes of HTTP/2 DATA that may be parked per stream when the peer ignores stream flow control.
+    ///     A compliant peer stays within the advertised 768 KiB stream window. Default 4 MiB + 16 KiB. Ceiling 64 MiB.
     /// </summary>
     public int MaxDeferredOutboundBytesPerStream { get; private init; }
 

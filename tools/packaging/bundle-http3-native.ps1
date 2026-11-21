@@ -265,6 +265,13 @@ function Set-LinuxRpath([string] $dir) {
     foreach ($soFile in $soFiles) {
         # Skip pure symlinks
         if ($soFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+        # These shims dlopen("libssl.so.3"). $ORIGIN makes them load the bundled
+        # Ubuntu 22.04 OpenSSL, which then aborts the process on a newer host
+        # ("No usable version of libssl was found"). libmsquic keeps $ORIGIN so
+        # its own libssl/libcrypto still resolve beside the binary.
+        if ($soFile.Name -match 'System\.Security\.Cryptography\.Native|System\.Net\.Security\.Native') {
+            continue
+        }
         try {
             Invoke-Native $patchelf @("--set-rpath", "`$ORIGIN", $soFile.FullName)
         }

@@ -141,6 +141,31 @@ public sealed class InterceptionService : IDisposable
     /// <summary>Test seam: next <see cref="InstallRootCertificate"/> returns false once (forces elevate path).</summary>
     public bool FailNextUserTrustInstall { get; set; }
 
+    /// <summary>Test seam: next user-trust install returns <see cref="CertificateOsTrustKind.Cancelled"/> once.</summary>
+    public bool CancelNextUserTrustInstall { get; set; }
+
+    private bool ConsumeForcedTrustInstallResult(out bool succeeded)
+    {
+        succeeded = false;
+        if (CancelNextUserTrustInstall)
+        {
+            CancelNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Cancelled, "Root CA install cancelled");
+            return true;
+        }
+
+        if (FailNextUserTrustInstall)
+        {
+            FailNextUserTrustInstall = false;
+            LastOsTrustResult = CertificateOsTrustResult.Fail(
+                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
+            return true;
+        }
+
+        return false;
+    }
+
     private bool _inMemoryTrusted;
 
     public bool SystemProxyEnabled => _systemProxyEnabled;
@@ -351,6 +376,8 @@ public sealed class InterceptionService : IDisposable
         _proxy.EnableHttpInterception = true;
         _proxy.EnableRequestTimingCapture = true;
         _proxy.EnableDecryptFailureBypass = EnableDecryptFailureBypass;
+        // Faster opaque recovery for pinned / untrusted clients (Safari hang window).
+        _proxy.ClientHandshakeRejectThreshold = 2;
         _proxy.DecryptFailureBypassChanged += OnDecryptFailureBypassChanged;
         ApplyViaHeaderOption();
         // Inspector eagerly buffers bodies for the session grid; 4 MiB trips too often on
@@ -489,7 +516,9 @@ public sealed class InterceptionService : IDisposable
     {
         if (Interlocked.Exchange(ref _shutdownStarted, 1) != 0)
         {
-            _shutdownCompleted.Wait(TimeSpan.FromSeconds(3), CancellationToken.None);
+            // Restore plus the detached fail-open spawn must finish before the
+            // process is torn down. Three seconds was cutting that off on Linux.
+            _shutdownCompleted.Wait(TimeSpan.FromSeconds(10), CancellationToken.None);
             return;
         }
 
@@ -542,20 +571,37 @@ public sealed class InterceptionService : IDisposable
 
             _fileLog = null;
             DisposeShaper();
+
+            // AppleScript quit / SIGTERM can skip Window.Closing or leave loopback proxy
+            // on when RestoreOriginalSettings races ProcessExit. Force-clear localhost
+            // system proxy after stop so browsers are not left pointed at a dead listener.
+            // Windows ForceClear only disables WinINET when it still points at loopback, so a
+            // successful restore to a non-loopback proxy is left alone.
+            // Linux graceful shutdown already started the fail-open helper. A second
+            // ForceClear stops that helper and leaves a --proxy-server browser on a closed port.
+            try
+            {
+                if (!OperatingSystem.IsLinux())
+                    Titanium.Web.Proxy.Helpers.InstalledProxyCleanup.ForceClear();
+            }
+            catch
+            {
+                // best-effort
+            }
+
             _shutdownCompleted.Set();
         }
     }
 
     /// <summary>
-    /// Persist-safe close path: queue <see cref="EnsureShutdown"/> on the thread pool so the
-    /// window can disappear immediately.
+    /// Queue <see cref="EnsureShutdown"/> off the caller so WinINET / networksetup / gsettings
+    /// cannot freeze the UI thread. <see cref="App"/> Exit still calls <see cref="EnsureShutdown"/>
+    /// which waits only while work is in flight (instant once <c>_shutdownCompleted</c> is set).
     /// </summary>
     public void BeginBackgroundShutdown()
     {
         if (Volatile.Read(ref _shutdownStarted) != 0)
-        {
             return;
-        }
 
         ThreadPool.UnsafeQueueUserWorkItem(_ =>
         {
@@ -679,6 +725,14 @@ public sealed class InterceptionService : IDisposable
     /// Optional gate evaluated under the system-proxy lock before mutating OS settings.
     /// Used to cancel a superseded optimistic enable/disable (e.g. Stop while enable is in flight).
     /// </param>
+    /// <summary>
+    ///     Clears localhost system proxy entries aimed at dead ports (hard kill / power loss).
+    ///     Safe before capture starts.
+    /// </summary>
+    public SystemProxyChangeResult ClearOrphanedLocalSystemProxy(
+        Func<string, int, bool>? isListening = null) =>
+        _systemProxy.ClearOrphanedLocalSystemProxy(isListening);
+
     public bool SetSystemProxy(bool enable, InspectorSettings? settings = null, Func<bool>? stillWanted = null)
     {
         LastSystemProxyError = null;
@@ -840,13 +894,8 @@ public sealed class InterceptionService : IDisposable
             return false;
         }
 
-        if (FailNextUserTrustInstall)
-        {
-            FailNextUserTrustInstall = false;
-            LastOsTrustResult = CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
-            return false;
-        }
+        if (ConsumeForcedTrustInstallResult(out var forcedInstall))
+            return forcedInstall;
 
         if (UseInMemoryTrustState)
         {
@@ -903,13 +952,8 @@ public sealed class InterceptionService : IDisposable
         if (_proxy is null)
             return false;
 
-        if (FailNextUserTrustInstall)
-        {
-            FailNextUserTrustInstall = false;
-            LastOsTrustResult = CertificateOsTrustResult.Fail(
-                CertificateOsTrustKind.Failed, "Forced user-trust failure (test)");
-            return false;
-        }
+        if (ConsumeForcedTrustInstallResult(out var forcedStores))
+            return forcedStores;
 
         if (UseInMemoryTrustState)
         {
@@ -1174,13 +1218,25 @@ public sealed class InterceptionService : IDisposable
         InspectorUxTrace.Event(
             "TrustFirefox.EnterpriseRootsUserPref",
             $"ok={pref.Succeeded} kind={pref.Kind} step={FirefoxCertificateTrust.LastEnterpriseRootsStep}");
+
+        // Linux/macOS Firefox keeps its own NSS database. Enterprise-roots does not
+        // make that profile trust ~/.pki/nssdb, so import the CA into every profile.
+        var nss = FirefoxCertificateTrust.TrustInstalledProfiles(cert, RootCertificateName);
+        InspectorUxTrace.Event(
+            "TrustFirefox.InstalledProfiles",
+            $"ok={nss.Succeeded} kind={nss.Kind} msg={TruncateTrustMsg(nss.Message)}");
+        if (nss.Succeeded)
+        {
+            LogTrustFirefoxOutcome(nss);
+            return nss;
+        }
+
         if (pref.Succeeded)
         {
             LogTrustFirefoxOutcome(pref);
             return pref;
         }
 
-        var nss = FirefoxCertificateTrust.TrustDefaultProfile(cert, RootCertificateName);
         LogTrustFirefoxOutcome(nss);
         return nss;
     }
@@ -1244,9 +1300,52 @@ public sealed class InterceptionService : IDisposable
 
     /// <summary>
     ///     Queue Firefox enable work on the serial background lane (coalesces consecutive enables).
+    ///     On Linux and macOS, also import the root into each Firefox profile NSS database.
+    ///     Enterprise-roots reads the OS store, not <c>~/.pki/nssdb</c>, and a policies.json that
+    ///     only sets ImportEnterpriseRoots is ignored by current Firefox.
     /// </summary>
     public void ScheduleFirefoxEnterpriseRootsBestEffort() =>
-        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Enable, TryEnableFirefoxEnterpriseRootsBestEffort);
+        EnqueueFirefoxTrustBackground(FirefoxTrustBgKind.Enable, EnableFirefoxTrustBestEffort);
+
+    private void EnableFirefoxTrustBestEffort()
+    {
+        TryEnableFirefoxEnterpriseRootsBestEffort();
+        TryImportRootIntoFirefoxProfiles();
+    }
+
+    /// <summary>
+    ///     Import the current root into Firefox profile databases. Skips a running Firefox
+    ///     because certutil against a locked cert9.db can hang the trust lane.
+    /// </summary>
+    private void TryImportRootIntoFirefoxProfiles()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows() || UseInMemoryTrustState || _proxy is null)
+                return;
+            if (string.Equals(Environment.GetEnvironmentVariable("TITANIUM_SKIP_ROOT_STORE_UI"), "1",
+                    StringComparison.Ordinal))
+                return;
+            if (FirefoxCertificateTrust.IsFirefoxProcessRunning())
+            {
+                InspectorUxTrace.Event("TrustFirefox.InstalledProfiles", "skipped firefox-running");
+                return;
+            }
+
+            var cert = _proxy.CertificateManager.RootCertificate;
+            if (cert is null)
+                return;
+
+            var result = FirefoxCertificateTrust.TrustInstalledProfiles(cert, RootCertificateName);
+            InspectorUxTrace.Event(
+                "TrustFirefox.InstalledProfiles",
+                $"ok={result.Succeeded} kind={result.Kind} msg={TruncateTrustMsg(result.Message)}");
+        }
+        catch
+        {
+            // install path must not fail because a Firefox profile DB was locked
+        }
+    }
 
     /// <summary>
     ///     Queue Firefox clear work on the serial background lane (coalesces consecutive clears).

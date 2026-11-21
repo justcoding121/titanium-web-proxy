@@ -1,6 +1,16 @@
 import { defineConfig } from 'vitepress'
 
 const repo = 'https://github.com/justcoding121/titanium-web-proxy'
+const siteUrl = 'https://titaniumproxy.com'
+const ogImage = `${siteUrl}/og.jpg`
+const heroDescription = 'Intercept and inspect HTTP(S) from .NET in a few lines.'
+
+function canonicalUrl(page: string): string {
+  const stem = page.replace(/\.md$/, '').replace(/\/index$/, '')
+  if (stem === 'index') return `${siteUrl}/`
+  if (stem === 'download' || stem === 'releases') return `${siteUrl}/${stem}/`
+  return `${siteUrl}/${stem}`
+}
 
 export default defineConfig({
   title: 'Titanium Web Proxy',
@@ -25,12 +35,29 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', href: '/logo.svg', type: 'image/svg+xml' }],
     ['meta', { name: 'theme-color', content: '#2B3A4A' }],
+    ['meta', { property: 'og:image', content: ogImage }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: ogImage }],
   ],
+  transformHead({ page, title, description }) {
+    const url = canonicalUrl(page)
+    const summary = page === 'index.md' ? heroDescription : description
+    return [
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: summary }],
+      ['meta', { property: 'og:url', content: url }],
+      ['meta', { property: 'og:type', content: 'website' }],
+      ['meta', { name: 'twitter:title', content: title }],
+      ['meta', { name: 'twitter:description', content: summary }],
+      ['link', { rel: 'canonical', href: url }],
+    ]
+  },
   themeConfig: {
     logo: '/logo.svg',
     siteTitle: 'Titanium Web Proxy',
     nav: [
       { text: 'Docs', link: '/docs/getting-started' },
+      { text: 'Licensing', link: '/#licensing' },
       // Trailing slash: with only dir/index.html, GitHub Pages 301s `/download` →
       // github.io when the Pages custom-domain CNAME is not active on the edge.
       { text: 'Download', link: '/download/' },
@@ -90,7 +117,8 @@ export default defineConfig({
       text: 'Edit this page on GitHub',
     },
     footer: {
-      message: 'Core, CLI, and website: MIT',
+      message:
+        'Core, CLI, and website: MIT · <a href="/#licensing">Licensing</a>',
       copyright: 'Copyright © 2015–present Jehonathan Thomas',
     },
   },

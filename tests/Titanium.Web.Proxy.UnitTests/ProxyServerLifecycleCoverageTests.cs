@@ -1,8 +1,10 @@
 using System;
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Titanium.Web.Proxy.Exceptions;
 using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http;
 using Titanium.Web.Proxy.Models;
@@ -282,6 +284,51 @@ public class ProxyServerLifecycleCoverageTests
         proxy.Start(changeSystemProxySettings: false);
         Assert.IsTrue(proxy.ProxyRunning);
         proxy.Stop();
+    }
+
+    [TestMethod]
+    public void Start_WhenPortIsTaken_ThrowsAddressInUseWithoutStoppingTheExistingListener()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            Assert.AreEqual(0, ProxyServer.PortsEligibleForStaleProxyClear([port]).Count);
+
+            using var proxy = new ProxyServer(false, false, false);
+            proxy.AddEndPoint(new ExplicitProxyEndPoint(IPAddress.Loopback, port, false));
+            var ex = Assert.ThrowsExactly<ProxyListenException>(() => proxy.Start());
+            Assert.IsTrue(ex.IsAddressInUse);
+            Assert.IsFalse(proxy.ProxyRunning);
+
+            using var client = new TcpClient();
+            client.Connect(IPAddress.Loopback, port);
+            Assert.IsTrue(client.Connected);
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [TestMethod]
+    public void IsLoopbackPortAccepting_TrueOnlyWhileAListenerIsUp()
+    {
+        Assert.IsFalse(ProxyServer.IsLoopbackPortAccepting(0));
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            Assert.IsTrue(ProxyServer.IsLoopbackPortAccepting(port));
+        }
+        finally
+        {
+            listener.Stop();
+        }
+
+        Assert.IsFalse(ProxyServer.IsLoopbackPortAccepting(port));
     }
 
 }

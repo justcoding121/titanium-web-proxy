@@ -336,7 +336,7 @@ def main() -> None:
             runs[mode] = parse_run_ids(override)
 
     win = {k: load_os(rid, "windows-latest") for k, rid in runs.items()}
-    lin = {k: load_os(rid, "ubuntu-latest") for k, rid in runs.items()}
+    lin = {k: load_os(rid, "ubuntu-26.04") for k, rid in runs.items()}
     # macOS wiki/charts use Apple Silicon `macos-15` only — never `macos-15-intel`.
     mac_folder = "macos-15"
     mac = {k: load_os(rid, mac_folder) for k, rid in runs.items()}
@@ -346,7 +346,7 @@ def main() -> None:
     rid_l = primary_run_id(runs["lossy"])
     rid_a = primary_run_id(runs["arch"])
     rid_t = run_id_with_os(runs["tls"], "windows-latest")
-    rid_t_lin = run_id_with_os(runs["tls"], "ubuntu-latest")
+    rid_t_lin = run_id_with_os(runs["tls"], "ubuntu-26.04")
     rid_t_mac = run_id_with_os(runs["tls"], mac_folder)
     rid_b_mac = run_id_with_os(runs["bodies"], mac_folder)
     rid_p_mac = run_id_with_os(runs["post"], mac_folder)
@@ -570,7 +570,7 @@ def main() -> None:
     )
     # Saturation is Linux-only unless a Windows or macOS folder was actually downloaded.
     sat_win = has_os(runs["saturation"], "windows-latest")
-    sat_lin = has_os(runs["saturation"], "ubuntu-latest")
+    sat_lin = has_os(runs["saturation"], "ubuntu-26.04")
     sat_mac = has_os(runs["saturation"], mac_folder)
     if sat_win and sat_lin:
         text = re.sub(
@@ -783,7 +783,7 @@ def main() -> None:
             f"Median of **3** repeats on `windows-latest` @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
             post_table(win["post"], True),
         )
-    if has_os(runs["post"], "ubuntu-latest"):
+    if has_os(runs["post"], "ubuntu-26.04"):
         patch_heavier(
             "### Linux — POST 64 KiB request + 64 KiB response",
             f"Median of **3** repeats @ `{HEAD}`. Source: Actions [{rid_p}]({run_url(rid_p)}) (`compare-post`).\n",
@@ -795,7 +795,7 @@ def main() -> None:
             f"Userspace **5 ms** one-way delay + **1%** TCP connection stall (H1/H2); UDP is **loss% only** (no per-datagram delay; MsQuic-safe) + **1%** datagram drop (H3); **64 KiB** GET. Median of **3** repeats on `windows-latest` @ `{HEAD}` — [{rid_l}]({run_url(rid_l)}) (`compare-lossy`).\n\n{WIN_NO_HAPROXY_ENVOY_NOTE}",
             lossy_table(win["lossy"], True),
         )
-    if has_os(runs["lossy"], "ubuntu-latest"):
+    if has_os(runs["lossy"], "ubuntu-26.04"):
         patch_heavier(
             "### Linux — lossy / high-RTT (H2 HOL / H3 loss)",
             f"Median of **3** repeats @ `{HEAD}`. Source: [{rid_l}]({run_url(rid_l)}) (`compare-lossy`; lossy H3 uses `quic-http3`, UDP drop-only).\n",
@@ -803,7 +803,7 @@ def main() -> None:
         )
 
     arch_win = has_os(runs["arch"], "windows-latest")
-    arch_lin = has_os(runs["arch"], "ubuntu-latest")
+    arch_lin = has_os(runs["arch"], "ubuntu-26.04")
     if arch_win and arch_lin:
         text = re.sub(
             r"Median of \*\*3\*\* repeats on matched 4 vCPU / 16 GiB runners @ `[^`]+` \(\[[0-9]+\]\([^)]+\)\)(?: \(`compare-arch`\))?\.",
@@ -835,7 +835,7 @@ def main() -> None:
         text2 = replace_table_at(text2, tls_tbl_w, tls_table(win["tls"], True))
         text = text[:w] + text2
 
-    if has_os(runs["tls"], "ubuntu-latest"):
+    if has_os(runs["tls"], "ubuntu-26.04"):
         tls = text.find("### TLS termination cost")
         l = text.find("#### Linux", tls)
         text2 = text[l:]

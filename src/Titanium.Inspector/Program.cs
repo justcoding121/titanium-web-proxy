@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Http3;
 
 namespace Titanium.Inspector;
@@ -11,10 +13,44 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        if (args.Any(static a => string.Equals(a, "--clear-system-proxy", StringComparison.Ordinal)))
+        {
+            InstalledProxyCleanup.ForceClear();
+            return;
+        }
+
         // Framework-dependent macOS Debug: System.Net.Quic does not search BaseDirectory for
         // libmsquic; relaunch with DYLD_FALLBACK when natives were copied beside the apphost.
         Http3NativeBootstrap.EnsureAppLocalMsQuicVisible(args);
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        }
+        catch (Exception ex) when (IsXOpenDisplayFailure(ex))
+        {
+            // Avalonia 11.2 always initializes X11 on Linux. XOpenDisplay throws when DISPLAY
+            // is missing or this process has no X authority (package scripts, SSH). Leaving the
+            // exception unhandled aborts the process, which Ubuntu records as a crash report.
+            Console.Error.WriteLine(
+                "Titanium Inspector could not open the X display ({0}).",
+                ex.Message);
+            Console.Error.WriteLine(
+                "Start it from the desktop session so it can use the existing display.");
+            Environment.ExitCode = 1;
+        }
+    }
+
+    internal static bool IsXOpenDisplayFailure(Exception ex)
+    {
+        for (var current = ex; current != null; current = current.InnerException)
+        {
+            if (current.Message.Contains("XOpenDisplay failed", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static AppBuilder BuildAvaloniaApp()

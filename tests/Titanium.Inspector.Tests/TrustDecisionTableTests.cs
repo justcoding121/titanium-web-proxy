@@ -165,6 +165,27 @@ public partial class TrustDecisionTableTests
 
     [TestMethod]
     [TestCategory("Inspector-Trust-Decision")]
+    public async Task Decrypt_OsTrustCancelled_StaysOffWithoutRecovery()
+    {
+        await using var harness = await TrustHarness.CreateAsync();
+        if (harness.Interception.IsRootTrusted)
+            harness.Interception.UntrustRootCertificate(false);
+        Assert.IsFalse(harness.Interception.IsRootTrusted);
+
+        harness.Dialogs.InstallRootCaResult = true;
+        harness.Interception.CancelNextUserTrustInstall = true;
+        harness.Vm.DecryptHttps = true;
+        await WaitUntil(() => harness.Dialogs.InstallRootCaCalls >= 1, 8000);
+        await WaitUntil(() => harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase), 8000);
+
+        Assert.IsFalse(harness.Vm.DecryptHttps);
+        Assert.AreEqual(0, harness.Dialogs.TrustRecoveryCalls);
+        Assert.AreEqual(0, harness.Dialogs.DecryptTrustFailedCalls);
+        StringAssert.Contains(harness.Vm.StatusText, "cancelled");
+    }
+
+    [TestMethod]
+    [TestCategory("Inspector-Trust-Decision")]
     public async Task Decrypt_WhileTrustBusy_RejectedWithSnap()
     {
         await using var harness = await TrustHarness.CreateAsync();
@@ -232,12 +253,16 @@ public partial class TrustDecisionTableTests
         Assert.IsFalse(harness.Interception.IsRootTrusted);
         harness.Interception.FailNextUserTrustInstall = true;
         harness.Dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
-        await ExecuteUntilAsync(
-            harness.Vm.InstallCaCommand,
-            () => harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
-                  || harness.Vm.StatusText.Contains("forced", StringComparison.OrdinalIgnoreCase)
-                  || harness.Vm.StatusText.Contains("trusted", StringComparison.OrdinalIgnoreCase)
-                  || !harness.Vm.IsStatusBusy,
+        // The previous success still says "trusted" and the command is not busy until it
+        // starts. Treating that as done let the install consume the next failure flag.
+        var statusBeforeForcedFail = harness.Vm.StatusText;
+        harness.Vm.InstallCaCommand.Execute(null);
+        await WaitUntil(
+            () => harness.Vm.StatusText != statusBeforeForcedFail
+                  && TrustGateIdle(harness.Vm)
+                  && (harness.Vm.StatusText.Contains("cancelled", StringComparison.OrdinalIgnoreCase)
+                      || harness.Vm.StatusText.Contains("forced", StringComparison.OrdinalIgnoreCase)
+                      || harness.Vm.StatusText.Contains("fail", StringComparison.OrdinalIgnoreCase)),
             25000);
         Assert.IsFalse(string.IsNullOrWhiteSpace(harness.Vm.StatusText));
 

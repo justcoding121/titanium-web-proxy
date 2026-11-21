@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using Titanium.Web.Proxy.Helpers;
 using Titanium.Web.Proxy.Logging;
 using Titanium.Web.Proxy.Models;
 using Titanium.Web.Proxy.Network;
@@ -294,6 +295,76 @@ public partial class ProxyServer : IDisposable
         {
             logger.LogWarning(ex, "Disable all system proxies failed");
             return SystemProxyChangeResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    ///     Clears localhost system HTTP(S) proxy entries whose target port is not accepting
+    ///     TCP (leftover after hard kill / power loss). Safe to call before capture starts.
+    /// </summary>
+    /// <param name="isListening">
+    ///     Optional probe; defaults to a short TCP connect to the proxy host:port.
+    /// </param>
+    public static SystemProxyChangeResult TryClearOrphanedLocalSystemProxy(
+        Func<string, int, bool>? isListening = null)
+    {
+        var backend = SystemProxyBackendFactory.Create();
+        if (backend is null)
+            return SystemProxyChangeResult.Fail(SystemProxyNotSupportedMessage);
+
+        try
+        {
+            isListening ??= IsLocalProxyPortListening;
+            var protocols = backend.GetOrphanedLocalProxyProtocols(isListening);
+            if (protocols == ProxyProtocolType.None)
+                return SystemProxyChangeResult.Ok("No orphaned local system proxy");
+
+            backend.RemoveProxy(protocols, saveOriginalConfig: false);
+            if (CoverageOs.IsLinux)
+            {
+                // Dead loopback on the desktop proxy: also drop Inspector launch hooks
+                // (Preferences, Firefox prefs, environment.d) so browsing is direct again.
+                try
+                {
+                    LinuxBrowserLaunchProxy.ClearInstalledHooks();
+                }
+                catch
+                {
+                    // best-effort
+                }
+            }
+
+            return SystemProxyChangeResult.Ok("Cleared orphaned local system proxy");
+        }
+        catch (Exception ex)
+        {
+            return SystemProxyChangeResult.Fail(ex.Message);
+        }
+        finally
+        {
+            backend.Dispose();
+        }
+    }
+
+    /// <summary>True when something accepts TCP on the given local proxy host:port.</summary>
+    internal static bool IsLocalProxyPortListening(string host, int port)
+    {
+        if (port <= 0)
+            return false;
+
+        try
+        {
+            var target = string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+                         || string.Equals(host, "::1", StringComparison.Ordinal)
+                ? "127.0.0.1"
+                : host;
+            using var client = new System.Net.Sockets.TcpClient();
+            var connect = client.ConnectAsync(target, port);
+            return connect.Wait(TimeSpan.FromMilliseconds(200)) && client.Connected;
+        }
+        catch
+        {
+            return false;
         }
     }
 

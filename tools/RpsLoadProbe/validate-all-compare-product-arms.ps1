@@ -82,7 +82,7 @@ function Get-MedianSustain([string]$OsFolder, [string]$Arm) {
 }
 
 $failed = @()
-foreach ($os in @('windows-latest', 'ubuntu-latest', 'macos-15')) {
+foreach ($os in @('windows-latest', 'ubuntu-26.04', 'macos-15')) {
     Write-Host "`n=== $os ===" -ForegroundColor Cyan
     foreach ($w in $wires) {
         $rev = Get-MedianSustain $os $w.Rev

@@ -278,6 +278,24 @@ internal class SystemProxyManager : ISystemProxyBackend
 
         return stale;
     }
+
+    public ProxyProtocolType GetOrphanedLocalProxyProtocols(Func<string, int, bool> isListening)
+    {
+        ArgumentNullException.ThrowIfNull(isListening);
+        var orphaned = ProxyProtocolType.None;
+        var proxyInfo = GetProxyInfoFromRegistry();
+        if (proxyInfo?.Proxies == null) return orphaned;
+
+        foreach (var proxy in proxyInfo.Proxies.Values)
+        {
+            if (proxy.Port <= 0 || !NetworkHelper.IsLocalIpAddress(proxy.HostName))
+                continue;
+            if (!isListening(proxy.HostName, proxy.Port))
+                orphaned |= proxy.ProtocolType;
+        }
+
+        return orphaned;
+    }
     public void RestoreOriginalSettings()
     {
         var ov = originalValues;

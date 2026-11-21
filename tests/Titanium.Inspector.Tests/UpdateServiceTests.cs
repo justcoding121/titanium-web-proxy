@@ -87,6 +87,145 @@ public class UpdateServiceTests
         StringAssert.Contains(script, "unzip");
         StringAssert.Contains(script, "99");
         StringAssert.Contains(script, "Beta");
+        StringAssert.Contains(script, "cp -a");
+        // Non-.app relaunch uses nohup; .app path is the other branch in the same script.
+        StringAssert.Contains(script, "nohup");
+    }
+
+    [TestMethod]
+    public void BuildUnixScript_MacApp_UsesDittoIntoContentsMacOS()
+    {
+        var script = UpdateApplyHelper.BuildUnixScript(
+            42,
+            "/tmp/a.zip",
+            "/Applications/Titanium Inspector.app/Contents/MacOS",
+            "/Applications/Titanium Inspector.app",
+            "7.1.0-beta",
+            "Stable");
+        StringAssert.Contains(script, "unzip");
+        StringAssert.Contains(script, "ditto");
+        StringAssert.Contains(script, "Contents/MacOS");
+        StringAssert.Contains(script, "open");
+        StringAssert.Contains(script, "PlistBuddy");
+        StringAssert.Contains(script, "CFBundleShortVersionString");
+        StringAssert.Contains(script, "CFBundleVersion");
+        // Packaging strips the prerelease suffix for Info.plist.
+        StringAssert.Contains(script, "plist_version='7.1.0'");
+        Assert.AreEqual("7.1.0", UpdateApplyHelper.StripPrereleaseSuffix("7.1.0-beta"));
+    }
+
+    [TestMethod]
+    public void RefuseApplyReason_WhenNotOnDmgOrAppImage_IsNull()
+    {
+        // Unit-test host is not a DMG/AppImage mount.
+        Assert.IsNull(UpdateService.RefuseApplyReason());
+    }
+
+    [TestMethod]
+    public void BuildUnixScript_DebUsesPackageManager()
+    {
+        var script = UpdateApplyHelper.BuildUnixScript(
+            7,
+            "/tmp/TitaniumInspector.deb",
+            "/opt/titanium-inspector",
+            "/opt/titanium-inspector/TitaniumInspector",
+            "8.0.4",
+            "Stable",
+            UpdateApplyKind.Deb);
+        StringAssert.Contains(script, "pkexec dpkg -i");
+        StringAssert.Contains(script, "sudo -n dpkg -i");
+        StringAssert.Contains(script, "nohup \"$relaunch\"");
+        Assert.IsFalse(script.Contains("settings.json", StringComparison.Ordinal));
+        Assert.IsFalse(script.Contains("unzip", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void DetectLinuxPackageKind_NonOptDirectory_IsZip()
+    {
+        var previous = Environment.GetEnvironmentVariable("APPIMAGE");
+        Environment.SetEnvironmentVariable("APPIMAGE", null);
+        try
+        {
+            Assert.AreEqual(UpdateApplyKind.Zip, UpdateService.DetectLinuxPackageKind(Path.GetTempPath()));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPIMAGE", previous);
+        }
+    }
+
+    [TestMethod]
+    public void DetectLinuxPackageKind_AppImageEnv_IsAppImage()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var previous = Environment.GetEnvironmentVariable("APPIMAGE");
+        Environment.SetEnvironmentVariable("APPIMAGE", "/tmp/TitaniumInspector.AppImage");
+        try
+        {
+            Assert.AreEqual(UpdateApplyKind.AppImage, UpdateService.DetectLinuxPackageKind(Path.GetTempPath()));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPIMAGE", previous);
+        }
+    }
+
+    [TestMethod]
+    public void BuildUnixScript_AppImageReplacesFile()
+    {
+        var script = UpdateApplyHelper.BuildUnixScript(
+            9,
+            "/tmp/TitaniumInspector-9.0.0.AppImage",
+            "/home/user/Downloads",
+            "/home/user/Downloads/TitaniumInspector.AppImage",
+            "9.0.0",
+            "Stable",
+            UpdateApplyKind.AppImage);
+        StringAssert.Contains(script, "cp -f \"$package\" \"$relaunch\"");
+        Assert.IsFalse(script.Contains("unzip", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void ResolveAsset_AppImage_PrefersAppImageKey()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var previous = Environment.GetEnvironmentVariable("APPIMAGE");
+        Environment.SetEnvironmentVariable("APPIMAGE", "/tmp/TitaniumInspector.AppImage");
+        try
+        {
+            var rid = UpdateService.SuggestRid();
+            var manifest = new InspectorReleaseManifest
+            {
+                Version = "9.9.9",
+                Products = new InspectorProductsBlock
+                {
+                    Inspector = new InspectorProductAssets
+                    {
+                        Assets = new Dictionary<string, ManifestAsset>
+                        {
+                            [rid] = new ManifestAsset { Url = "https://example.test/rid.zip", Sha256 = "aa" },
+                            [rid + ".AppImage"] = new ManifestAsset { Url = "https://example.test/app.AppImage", Sha256 = "bb" },
+                        },
+                    },
+                },
+            };
+
+            var (kind, asset) = UpdateService.ResolveAsset(manifest);
+            Assert.AreEqual(UpdateApplyKind.AppImage, kind);
+            Assert.AreEqual("https://example.test/app.AppImage", asset!.Url);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("APPIMAGE", previous);
+        }
     }
 
     [TestMethod]
@@ -214,6 +353,33 @@ public class UpdateServiceTests
         Assert.IsTrue(UpdateService.ShouldSeedInstalledIdentity(null, "7.0.5-beta", "7.0.5-beta"));
         Assert.IsFalse(UpdateService.ShouldSeedInstalledIdentity(null, null, "7.0.5-beta"));
         Assert.IsFalse(UpdateService.ShouldSeedInstalledIdentity(null, "7.0.5", "7.0.5-beta"));
+    }
+
+    [TestMethod]
+    public void Save_KeepsDecryptHttpsWhenTheInstalledReleaseChanges()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "ti-settings-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        try
+        {
+            var settings = new SettingsService(path);
+            settings.Current.DecryptHttps = true;
+            settings.Current.InstalledReleaseTag = "8.0.4";
+            settings.Save();
+
+            settings.Current.InstalledReleaseTag = "8.0.6";
+            settings.Current.InstalledReleaseChannel = "Stable";
+            settings.Save();
+
+            var reloaded = new SettingsService(path);
+            Assert.IsTrue(reloaded.Current.DecryptHttps);
+            Assert.AreEqual("8.0.6", reloaded.Current.InstalledReleaseTag);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [TestMethod]

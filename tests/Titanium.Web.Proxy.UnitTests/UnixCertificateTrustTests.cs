@@ -186,8 +186,33 @@ public class UnixCertificateTrustTests
                   Result Type           : kSecTrustSettingsResultTrustRoot
             """;
         var runner = new FakeProcessRunner();
-        runner.When("security", "dump-trust-settings -d", dump);
+        runner.When("security", "dump-trust-settings", dump);
         Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+    }
+
+    [TestMethod]
+    public void HasExplicitMacSslTrustSettings_AdminDomainDump_ReturnsTrue()
+    {
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var dump = $"""
+            Number of trusted certs = 1
+            Cert 0: Titanium Inspector Root Certificate
+               SHA-1 hash: {sha1}
+               Number of trust settings : 1
+               Trust Setting 0:
+                  Policy OID            : 1.2.840.113635.100.1.3
+                  Result Type           : kSecTrustSettingsResultTrustRoot
+            """;
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        // Register the admin-domain argv first. A contains-match on "dump-trust-settings"
+        // would otherwise swallow "dump-trust-settings -d".
+        runner.When("security", "dump-trust-settings -d", dump);
+        runner.When("security", "dump-trust-settings",
+            "SecTrustSettingsCopyCertificates: No Trust Settings were found.\n");
+        Assert.IsTrue(UnixCertificateTrust.HasExplicitMacSslTrustSettings(runner, cert));
+        Assert.IsTrue(runner.Commands.Any(c =>
+            c.Contains("dump-trust-settings -d", StringComparison.Ordinal)));
     }
 
     [TestMethod]
@@ -388,6 +413,55 @@ public class UnixCertificateTrustTests
             new System.Security.Cryptography.X509Certificates.X509BasicConstraintsExtension(true, false, 0, true));
         return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1));
     }
+
+    [TestMethod]
+    public void TrustMachineSslDetailed_OnMac_ElevatesBatchWithAddTrustedCert()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var sha1 = cert.GetCertHashString();
+        var stale = "AABBCCDDEEFF00112233445566778899AABBCCDD";
+        var runner = new FakeProcessRunner();
+        runner.When("security", "find-certificate",
+            $"SHA-1 hash: {stale}\nSHA-1 hash: {sha1}\n");
+        runner.When("security", "dump-trust-settings",
+            $"Cert 0: Titanium\nSHA-1 hash: {sha1}\nNumber of trust settings : 1\nkSecTrustSettingsResultTrustRoot\n");
+        runner.When("security", "trust-settings-export", "ok\n");
+        var elevation = new FakeElevationPrompt();
+
+        var result = UnixCertificateTrust.TrustMachineSslDetailed(
+            cert, "Titanium Root Certificate Authority", runner, elevation);
+
+        Assert.IsTrue(result.Succeeded, result.Message);
+        Assert.IsTrue(elevation.Calls.Count >= 1);
+        Assert.IsTrue(elevation.Calls.Exists(c =>
+            c.Arguments.Contains("add-trusted-cert", StringComparison.Ordinal)
+            && c.Arguments.Contains("System.keychain", StringComparison.Ordinal)));
+        Assert.IsTrue(elevation.Calls.Exists(c =>
+            c.Arguments.Contains("delete-certificate -Z " + stale, StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void TrustMachineSslDetailed_OnMac_CancelElevation_ReturnsCancelled()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("macOS-only");
+            return;
+        }
+
+        using var cert = CreateEphemeralRoot();
+        var runner = new FakeProcessRunner { DefaultSuccess = false };
+        var elevation = new FakeElevationPrompt { Cancel = true };
+        var result = UnixCertificateTrust.TrustMachineSslDetailed(
+            cert, "Titanium Root Certificate Authority", runner, elevation);
+        Assert.AreEqual(CertificateOsTrustKind.Cancelled, result.Kind);
+    }
 }
 
 [TestClass]
@@ -410,6 +484,10 @@ public class FirefoxCertificateTrustTests
             """;
         var path = FirefoxCertificateTrust.ParseDefaultProfilePath(ini);
         Assert.AreEqual("Profiles/abcd.default-release", path);
+        var all = FirefoxCertificateTrust.ParseProfileEntries(ini);
+        Assert.AreEqual(2, all.Count);
+        Assert.AreEqual("Profiles/abcd.default-release", all[0].Path);
+        Assert.AreEqual("Profiles/old.default", all[1].Path);
     }
 
     [TestMethod]

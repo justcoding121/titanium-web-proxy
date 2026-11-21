@@ -133,16 +133,236 @@
   font-size: 0.9rem;
 }
 
-/* The home page has twelve tiles. VitePress gives a multiple of three the grid-6 class (three per row);
-   keep the four-per-row layout the grid-4 class gives eight tiles. */
-@media (min-width: 768px) and (max-width: 959px) {
-  .VPFeatures.VPHomeFeatures .item.grid-6 {
-    width: calc(100% / 2);
-  }
+.copy-package {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+  padding: 0.4rem 0.55rem 0.4rem 0.75rem;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
 }
 
-@media (min-width: 960px) {
-  .VPFeatures.VPHomeFeatures .item.grid-6 {
-    width: calc(100% / 4);
+.copy-package__cmd {
+  font-size: 0.85rem;
+  color: var(--vp-c-text-1);
+  white-space: nowrap;
+}
+
+.copy-package__btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}
+
+.copy-package__btn:hover {
+  color: var(--vp-c-brand-2);
+}
+
+.home-hero-demo {
+  max-width: 1152px;
+  margin: 0 auto 2rem;
+  padding: 0 24px;
+}
+
+.home-hero-demo .inspector-preview {
+  margin-top: 1rem;
+}
+
+.home-hero-demo__note {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+}
+
+.home-quick-start {
+  max-width: 1152px;
+  margin: 0 auto 2.5rem;
+  padding: 0 24px;
+}
+
+.vp-doc .home-quick-start {
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.home-quick-start__title {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.home-quick-start__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.home-quick-start__tab {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg-soft);
+}
+
+.home-quick-start__tab.is-active {
+  color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+  font-weight: 600;
+}
+
+.home-quick-start__panel {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  background: var(--vp-c-bg-soft);
+}
+
+.home-quick-start__pre {
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  background: var(--vp-code-block-bg);
+}
+
+.home-quick-start__pre code {
+  white-space: pre;
+}
+
+.home-quick-start__links {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+}
+
+.home-quick-start__cta {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .VPHero .image {
+    width: 148px;
+    height: 148px;
+    margin: 0 auto 4px;
+  }
+
+  .VPHero .image-container {
+    width: 148px;
+    height: 148px;
+  }
+
+  .VPHero .name {
+    font-size: 28px;
+    line-height: 1.2;
+  }
+
+  .VPHero .text {
+    font-size: 26px;
+    line-height: 1.25;
+  }
+
+  .VPHero .tagline {
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .VPHero .actions {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .VPHero .action,
+  .VPHero .action .VPButton {
+    width: 100%;
+    margin-left: 0;
+    justify-content: center;
+  }
+
+  .copy-package {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-radius: 12px;
+  }
+
+  .copy-package__cmd {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .home-hero-demo {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0 24px;
+  }
+
+  .vp-doc .home-quick-start {
+    padding: 0;
+  }
+
+  .home-hero-demo__note {
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .home-quick-start__pre {
+    max-width: 100%;
+    font-size: 0.78rem;
+  }
+
+  .home-quick-start__pre code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .edition-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inspector-preview {
+    max-width: 100%;
+  }
+
+  .download-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .download-row a,
+  .download-row strong,
+  .quick-picks li {
+    overflow-wrap: anywhere;
+  }
+
+  .vp-doc div[class*='language-'] pre,
+  .vp-doc div[class*='language-'] code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 }

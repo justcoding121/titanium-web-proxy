@@ -268,6 +268,9 @@ namespace Titanium.Web.Proxy.UnitTests
             public ProxyProtocolType GetStaleLocalProxyProtocols(System.Collections.Generic.IReadOnlyCollection<int> ownedPorts) =>
                 ProxyProtocolType.None;
 
+            public ProxyProtocolType GetOrphanedLocalProxyProtocols(Func<string, int, bool> isListening) =>
+                ProxyProtocolType.None;
+
             public void Dispose() { }
         }
 

@@ -124,7 +124,7 @@ function Get-MedianMetrics([string]$OsFolder, [string]$Arm) {
     $best = $null
     foreach ($runId in $RunIds) {
         $dir = Join-Path $ResultsRoot $runId
-        # Exact OS folder or shard-suffixed (rps-csv-ubuntu-latest-shard-1-3).
+        # Exact OS folder or shard-suffixed (rps-csv-ubuntu-26.04-shard-1-3).
         # Also accept flat artifact layouts (csv directly under runId).
         # Never accept retired macos-15-intel paths when requesting macos-15.
         $csvs = @(Get-ChildItem `
@@ -355,7 +355,7 @@ function Emit-SinkRedirect {
 
 function Emit-MitmOrKeep([string]$OsFolder) {
     # Published MITM is Linux only. Windows and macOS product jobs never run twp-mitm-*.
-    if ($OsFolder -ne 'ubuntu-latest') {
+    if ($OsFolder -ne 'ubuntu-26.04') {
         Write-Output 'DROP'
         return
     }
@@ -373,9 +373,9 @@ Emit-SinkRedirect { Emit-ReverseTable 'windows-latest' }
 Out '---WIN_MITM---'
 Emit-SinkRedirect { Emit-MitmOrKeep 'windows-latest' }
 Out '---LIN_REVERSE---'
-Emit-SinkRedirect { Emit-ReverseTable 'ubuntu-latest' }
+Emit-SinkRedirect { Emit-ReverseTable 'ubuntu-26.04' }
 Out '---LIN_MITM---'
-Emit-SinkRedirect { Emit-MitmOrKeep 'ubuntu-latest' }
+Emit-SinkRedirect { Emit-MitmOrKeep 'ubuntu-26.04' }
 Out '---MAC_REVERSE---'
 Emit-SinkRedirect { Emit-ReverseTable 'macos-15' }
 Out '---MAC_MITM---'

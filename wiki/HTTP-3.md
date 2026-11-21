@@ -21,9 +21,9 @@ Release zips **bundle MsQuic natives** for:
 | RID | Typical host |
 | --- | --- |
 | `win-x64` | Windows 11 / Server 2022+ (OS MsQuic; no DLL in zip) |
-| `linux-x64` / `linux-arm64` | glibc (Ubuntu/Debian/RHEL-like) |
-| `linux-musl-x64` / `linux-musl-arm64` | Alpine / musl containers |
-| `osx-x64` / `osx-arm64` | macOS Intel / Apple Silicon |
+| `linux-x64` / `linux-arm64` | Linux (64-bit) / Linux (ARM), glibc |
+| `linux-musl-x64` / `linux-musl-arm64` | Alpine (64-bit) / Alpine (ARM) |
+| `osx-x64` / `osx-arm64` | macOS (Intel) / macOS (Apple silicon) |
 
 Linux/macOS natives sit next to the binary with `$ORIGIN` / `@loader_path` RPATH so `QuicListener.IsSupported` works without a system package. See [CLI/Inspector packaging](#user-content-cliinspector-packaging).
 
