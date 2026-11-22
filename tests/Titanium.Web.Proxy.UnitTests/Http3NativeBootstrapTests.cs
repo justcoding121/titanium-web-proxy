@@ -66,6 +66,7 @@ public class Http3NativeBootstrapTests
             var removable = Path.Combine(dir, "libcrypto.so");
             File.WriteAllText(locked, "stale");
             File.WriteAllText(removable, "stale");
+            File.WriteAllText(Path.Combine(dir, "libmsquic.so.2"), "keep");
             Console.SetError(error);
 
             var removed = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir, path =>
@@ -97,5 +98,39 @@ public class Http3NativeBootstrapTests
             Console.SetError(previous);
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    [TestMethod]
+    public void RemoveStaleBundledOpenSsl_LeavesADirectoryThatHasNoMsQuic()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-foreign-ssl-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var ssl = Path.Combine(dir, "libssl.so.3");
+            var crypto = Path.Combine(dir, "libcrypto.so.3");
+            File.WriteAllText(ssl, "theirs");
+            File.WriteAllText(crypto, "theirs");
+
+            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir));
+            Assert.IsTrue(File.Exists(ssl));
+            Assert.IsTrue(File.Exists(crypto));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void IsTitaniumOpenSslCleanupHost_IsOnlyTheShippingHosts()
+    {
+        Assert.IsTrue(Http3NativeBootstrap.IsTitaniumOpenSslCleanupHost("titanium"));
+        Assert.IsTrue(Http3NativeBootstrap.IsTitaniumOpenSslCleanupHost("TitaniumInspector"));
+        Assert.IsTrue(Http3NativeBootstrap.IsTitaniumOpenSslCleanupHost("RpsLoadProbe"));
+        Assert.IsFalse(Http3NativeBootstrap.IsTitaniumOpenSslCleanupHost("SomeOtherApp"));
+        Assert.IsFalse(Http3NativeBootstrap.IsTitaniumOpenSslCleanupHost(null));
+        Assert.IsFalse(Http3NativeBootstrap.IsTitaniumOpenSslCleanupHost(
+            System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name));
     }
 }

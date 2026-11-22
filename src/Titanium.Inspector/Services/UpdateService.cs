@@ -1088,9 +1088,12 @@ public static class UpdateApplyHelper
         sb.AppendLine("  open \"$relaunch\" || true");
         sb.AppendLine("else");
         // Linux zip installs through 8.0.5 bundled libssl/libcrypto. Drop them before the
-        // overlay so an in-place update picks up the host OpenSSL. The .app branch above
+        // overlay so an in-place update picks up the host OpenSSL, but only when this
+        // directory is a Titanium layout (libmsquic is present). The .app branch above
         // keeps macOS libssl.3.dylib / libcrypto.3.dylib.
-        sb.AppendLine("  rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
+        sb.AppendLine("  if compgen -G \"$install_dir\"/libmsquic.so* >/dev/null; then");
+        sb.AppendLine("    rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
+        sb.AppendLine("  fi");
         sb.AppendLine("  cp -a \"$tmp\"/. \"$install_dir\"/");
         sb.AppendLine("  rm -rf \"$tmp\"");
         sb.AppendLine("  chmod +x \"$install_dir/TitaniumInspector\" 2>/dev/null || true");

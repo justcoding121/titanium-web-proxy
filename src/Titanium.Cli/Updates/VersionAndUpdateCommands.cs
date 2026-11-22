@@ -991,7 +991,11 @@ internal static class CliUpdateApplyHelper
         sb.AppendLine("unzip -qo \"$package\" -d \"$tmp\"");
         if (removeBundledOpenSsl)
         {
-            sb.AppendLine("rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
+            // Only a Titanium layout (libmsquic beside the binary). A shared directory
+            // that merely contains libssl must keep those files.
+            sb.AppendLine("if compgen -G \"$install_dir\"/libmsquic.so* >/dev/null; then");
+            sb.AppendLine("  rm -f \"$install_dir\"/libssl.so* \"$install_dir\"/libcrypto.so*");
+            sb.AppendLine("fi");
         }
 
         sb.AppendLine("cp -a \"$tmp\"/. \"$install_dir\"/");
