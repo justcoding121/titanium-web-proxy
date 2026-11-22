@@ -1649,7 +1649,15 @@ internal static class SmokeApp
                 continue;
             var web = Capture("networksetup", "-getwebproxy \"" + service + "\"");
             var secure = Capture("networksetup", "-getsecurewebproxy \"" + service + "\"");
-            bits.Add(service + " web={" + TrimOneLine(web) + "} https={" + TrimOneLine(secure) + "}");
+            var pac = Capture("networksetup", "-getautoproxyurl \"" + service + "\"");
+            var wpad = Capture("networksetup", "-getproxyautodiscovery \"" + service + "\"");
+            var socks = Capture("networksetup", "-getsocksfirewallproxy \"" + service + "\"");
+            bits.Add(service
+                + " web={" + TrimOneLine(web) + "}"
+                + " https={" + TrimOneLine(secure) + "}"
+                + " pac={" + TrimOneLine(pac) + "}"
+                + " wpad={" + TrimOneLine(wpad) + "}"
+                + " socks={" + TrimOneLine(socks) + "}");
         }
 
         return string.Join(" | ", bits);

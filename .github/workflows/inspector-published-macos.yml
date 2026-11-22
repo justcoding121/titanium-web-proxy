@@ -1,0 +1,160 @@
+name: inspector-published-macos
+
+# Phase 8 smoke of the published v8.0.6-beta macOS packages.
+# Push this branch only. It does not build packages.
+on:
+  push:
+    branches:
+      - lab/release-806-published
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            dmg: TitaniumInspector-osx-arm64.dmg
+            cli: Titanium.Cli-osx-arm64.zip
+          - os: macos-15-intel
+            dmg: TitaniumInspector-osx-x64.dmg
+            cli: Titanium.Cli-osx-x64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download the published packages and check SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh release download v8.0.6-beta --repo "${GITHUB_REPOSITORY}" \
+            --pattern SHA256SUMS \
+            --pattern "${{ matrix.dmg }}" \
+            --pattern "${{ matrix.cli }}" \
+            --dir artifacts
+          check() {
+            local name="$1"
+            local expected actual
+            expected=$(awk -v n="$name" '$2 == n { print $1 }' artifacts/SHA256SUMS)
+            test -n "$expected"
+            actual=$(shasum -a 256 "artifacts/$name" | awk '{ print $1 }')
+            test "$expected" = "$actual"
+            echo "sha256 ok $name"
+          }
+          check "${{ matrix.dmg }}"
+          check "${{ matrix.cli }}"
+
+      - name: Install any missing browser
+        run: |
+          set -euo pipefail
+          install_cask() {
+            local cask="$1" app="$2"
+            if [[ -d "$app" ]]; then
+              return 0
+            fi
+            brew install --cask "$cask"
+          }
+          install_cask google-chrome "/Applications/Google Chrome.app"
+          install_cask microsoft-edge "/Applications/Microsoft Edge.app"
+          install_cask firefox "/Applications/Firefox.app"
+          test -x "/Applications/Safari.app/Contents/MacOS/Safari"
+
+      - name: Install the notarized app and record signatures
+        run: |
+          set -euo pipefail
+          dmg="artifacts/${{ matrix.dmg }}"
+          attach=$(hdiutil attach -nobrowse "$dmg")
+          echo "$attach"
+          root=$(printf '%s\n' "$attach" | sed -n 's#.*\(/Volumes/.*\)#\1#p' | tail -1)
+          test -d "$root"
+          rm -rf "/Applications/Titanium Inspector.app"
+          cp -R "$root/Titanium Inspector.app" "/Applications/Titanium Inspector.app"
+          hdiutil detach "$root" -force -quiet || true
+          mkdir -p "${RUNNER_TEMP}/inspector-smoke"
+          {
+            echo "=== codesign app ==="
+            codesign --verify --deep --strict --verbose=2 "/Applications/Titanium Inspector.app"
+            echo "=== stapler app ==="
+            xcrun stapler validate "/Applications/Titanium Inspector.app"
+            echo "=== spctl app ==="
+            spctl --assess --type execute --verbose=2 "/Applications/Titanium Inspector.app"
+            echo "=== spctl dmg ==="
+            spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          } > "${RUNNER_TEMP}/inspector-smoke/signatures.txt" 2>&1
+          cat "${RUNNER_TEMP}/inspector-smoke/signatures.txt"
+
+      - name: CLI zip version, signature, and HTTP/3
+        run: |
+          set -euo pipefail
+          rm -rf "${RUNNER_TEMP}/cli"
+          mkdir -p "${RUNNER_TEMP}/cli"
+          unzip -q "artifacts/${{ matrix.cli }}" -d "${RUNNER_TEMP}/cli"
+          bin=$(find "${RUNNER_TEMP}/cli" -type f -name titanium | head -1)
+          test -n "$bin"
+          chmod +x "$bin"
+          {
+            echo "=== codesign cli ==="
+            codesign --verify --deep --strict --verbose=2 "$bin"
+            echo "=== stapler cli ==="
+            xcrun stapler validate "$bin"
+            echo "=== version ==="
+            "$bin" version
+            echo "=== http3 ==="
+            "$bin" http3-deps status
+          } | tee "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
+          grep -q '8.0.6-beta' "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
+          grep -q 'QuicListener.IsSupported: True' "${RUNNER_TEMP}/inspector-smoke/cli-http3.txt"
+
+      - name: Inspector browser smoke
+        run: |
+          set -euo pipefail
+          sudo -n true
+          mkdir -p "${RUNNER_TEMP}/inspector-smoke"
+          networksetup -listallnetworkservices | tee "${RUNNER_TEMP}/inspector-smoke/net-services.txt"
+          dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
+          dll="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke.dll"
+          test -f "$dll"
+          set +e
+          dotnet "$dll" fresh \
+            --exe "/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector" \
+            --browsers chrome,edge,firefox,safari \
+            --out "${RUNNER_TEMP}/inspector-smoke" \
+            2>&1 | tee "${RUNNER_TEMP}/inspector-smoke/driver.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          cp -f /tmp/inspector-*.png "${RUNNER_TEMP}/inspector-smoke/" 2>/dev/null || true
+          screencapture -x "${RUNNER_TEMP}/inspector-smoke/desktop.png" || true
+          python3 - "${RUNNER_TEMP}/inspector-smoke/desktop.png" <<'PY'
+          import sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          if not p.is_file() or p.stat().st_size < 20000:
+              print("desktop capture is missing or too small to be a real screen")
+              sys.exit(1)
+          print("desktop capture bytes", p.stat().st_size)
+          PY
+          exit "$code"
+
+      - name: Homebrew beta formula
+        run: |
+          set -euo pipefail
+          brew tap justcoding121/titanium
+          brew update
+          brew install titanium
+          brew upgrade titanium || true
+          ver=$(titanium version)
+          echo "$ver" | tee "${RUNNER_TEMP}/inspector-smoke/brew-version.txt"
+          echo "$ver" | grep -q 'Cli: 8.0.6-beta'
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: published-macos-${{ matrix.os }}
+          path: ${{ runner.temp }}/inspector-smoke
+          if-no-files-found: ignore
+          retention-days: 14
