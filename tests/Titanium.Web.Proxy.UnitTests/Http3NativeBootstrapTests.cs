@@ -44,9 +44,57 @@ public class Http3NativeBootstrapTests
             Assert.IsTrue(File.Exists(Path.Combine(dir, "titanium")));
             Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir));
             Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(null));
+            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl("  "));
+            Assert.AreEqual(0, Http3NativeBootstrap.RemoveStaleBundledOpenSsl(Path.Combine(dir, "missing")));
         }
         finally
         {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [TestMethod]
+    public void RemoveStaleBundledOpenSsl_ReportsAFileThatCannotBeDeleted()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "twp-stale-ssl-" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(dir);
+        var previous = Console.Error;
+        var error = new StringWriter();
+        try
+        {
+            var locked = Path.Combine(dir, "libssl.so.3");
+            var removable = Path.Combine(dir, "libcrypto.so");
+            File.WriteAllText(locked, "stale");
+            File.WriteAllText(removable, "stale");
+            Console.SetError(error);
+
+            var removed = Http3NativeBootstrap.RemoveStaleBundledOpenSsl(dir, path =>
+            {
+                if (path.EndsWith("libssl.so.3", StringComparison.Ordinal))
+                {
+                    throw new IOException("busy");
+                }
+
+                if (path.EndsWith("libcrypto.so", StringComparison.Ordinal))
+                {
+                    throw new UnauthorizedAccessException("denied");
+                }
+
+                File.Delete(path);
+            });
+
+            Assert.AreEqual(0, removed);
+            Assert.IsTrue(File.Exists(locked));
+            Assert.IsTrue(File.Exists(removable));
+            var text = error.ToString();
+            StringAssert.Contains(text, "libssl.so.3");
+            StringAssert.Contains(text, "libcrypto.so");
+            StringAssert.Contains(text, "busy");
+            StringAssert.Contains(text, "denied");
+        }
+        finally
+        {
+            Console.SetError(previous);
             Directory.Delete(dir, recursive: true);
         }
     }

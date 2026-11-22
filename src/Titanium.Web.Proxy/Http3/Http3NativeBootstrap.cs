@@ -95,7 +95,10 @@ public static class Http3NativeBootstrap
     /// files were removed. A file that cannot be deleted is reported and left
     /// in place.
     /// </summary>
-    internal static int RemoveStaleBundledOpenSsl(string? directory)
+    internal static int RemoveStaleBundledOpenSsl(string? directory) =>
+        RemoveStaleBundledOpenSsl(directory, File.Delete);
+
+    internal static int RemoveStaleBundledOpenSsl(string? directory, Action<string> delete)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
         {
@@ -114,7 +117,7 @@ public static class Http3NativeBootstrap
 
             try
             {
-                File.Delete(path);
+                delete(path);
                 removed++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
