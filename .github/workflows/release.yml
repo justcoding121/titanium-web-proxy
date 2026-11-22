@@ -71,7 +71,7 @@ jobs:
     steps:
       - name: Dry-run skips same-SHA readiness wait
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
-        run: echo "dry_run: skipping release-readiness wait so lab artifacts can build from this tip"
+        run: echo 'dry_run skipping release-readiness wait so lab artifacts can build from this tip'
       - name: Same-SHA readiness workflows are green
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.dry_run != 'true'
         env:
