@@ -86,10 +86,12 @@ jobs:
       - name: Inspector browser smoke
         run: |
           set -euo pipefail
+          sudo -n true
+          mkdir -p "${RUNNER_TEMP}/inspector-smoke"
+          networksetup -listallnetworkservices | tee "${RUNNER_TEMP}/inspector-smoke/net-services.txt"
           dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
           driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
           chmod +x "$driver"
-          mkdir -p "${RUNNER_TEMP}/inspector-smoke"
           set +e
           "$driver" fresh \
             --exe "/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector" \

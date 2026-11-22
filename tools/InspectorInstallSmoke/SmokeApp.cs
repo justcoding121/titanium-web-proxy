@@ -175,6 +175,7 @@ internal static class SmokeApp
         var exe = Require(opt.Exe, "--exe");
         var port = FreePort();
         WriteFreshSettings(port, decrypt: false);
+        Console.WriteLine("proxy-saved " + DescribeProxy(0));
         exe = await MoveMacDmgAppIfNeededAsync(exe);
         var app = await InspectorProcess.StartAsync(exe, port);
         try
@@ -185,9 +186,9 @@ internal static class SmokeApp
                 return Fail(1, "fresh install did not start capture");
             if (!await WaitProxyAsync(port, TimeSpan.FromSeconds(20)))
                 return Fail(1, "fresh install did not enable the system proxy. " + ProxySnapshot());
-            Console.WriteLine("proxy-before " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+            Console.WriteLine("proxy-before " + DescribeProxy(port));
             app = await DecryptAndMaybeRelaunchAsync(app, exe, port);
-            Console.WriteLine("proxy-during " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+            Console.WriteLine("proxy-during " + DescribeProxy(port));
             var code = await ProveBrowsersAsync(app.StartedUtc, opt.Browsers ?? DefaultBrowsers());
             if (code != 0)
                 return code;
@@ -199,8 +200,8 @@ internal static class SmokeApp
 
         await Task.Delay(2000);
         if (ProxyIsOn(port))
-            return Fail(1, "system proxy still on after exit. " + ProxySnapshot() + " " + LinuxProxyDiag(port));
-        Console.WriteLine("pass proxy restored " + ProxySnapshot() + " " + LinuxProxyDiag(port));
+            return Fail(1, "system proxy still on after exit. " + DescribeProxy(port));
+        Console.WriteLine("pass proxy restored " + DescribeProxy(port));
         return 0;
     }
 
@@ -673,18 +674,14 @@ internal static class SmokeApp
                 "user_pref(\"browser.startup.page\", 0);\n" +
                 "user_pref(\"browser.startup.homepage\", \"about:blank\");\n");
             Console.WriteLine("firefox: seeded enterprise_roots");
-            // Manual loopback prefs on every OS. A fresh profile's system-proxy
-            // mode (type 5) missed the proof URL on Windows while WinINET was
-            // still settling, and the only HAR row was the NCSI probe.
-            var port = ReadBindPort();
+            // Type 5 follows the OS proxy (WinINET, networksetup, or gsettings).
+            // The product writes the same mode. A temp profile created after the
+            // proxy is on is not patched, so the smoke sets the mode itself and
+            // does not pin a host or port.
             File.AppendAllText(Path.Combine(profile, "user.js"),
-                "user_pref(\"network.proxy.type\", 1);\n" +
-                "user_pref(\"network.proxy.http\", \"127.0.0.1\");\n" +
-                "user_pref(\"network.proxy.http_port\", " + port + ");\n" +
-                "user_pref(\"network.proxy.ssl\", \"127.0.0.1\");\n" +
-                "user_pref(\"network.proxy.ssl_port\", " + port + ");\n" +
-                "user_pref(\"network.proxy.share_proxy_settings\", true);\n");
-            Console.WriteLine("firefox: manual proxy prefs for the temp profile");
+                "user_pref(\"network.proxy.type\", 5);\n" +
+                "user_pref(\"network.http.http3.enabled\", false);\n");
+            Console.WriteLine("firefox: system proxy mode for the temp profile");
             // Linux always has nss certutil in the smoke image; macOS may not.
             if (OperatingSystem.IsLinux())
                 ImportRootIntoFirefoxProfile(profile);
@@ -1632,7 +1629,30 @@ internal static class SmokeApp
         var policyBit = File.Exists(chromePolicy) ? "policy=yes" : "policy=no";
         var launchers = Path.Combine(home, ".local", "share", "titanium-inspector", "launchers");
         var launcherBit = Directory.Exists(launchers) ? "launchers=yes" : "launchers=no";
-        return $"gsettings.mode={mode} http.host={host} port={port} {confBit} {policyBit} {launcherBit}";
+        var httpPort = Capture("gsettings", "get org.gnome.system.proxy.http port").Trim();
+        return $"gsettings.mode={mode} http.host={host} http.port={httpPort} expect={port} {confBit} {policyBit} {launcherBit}";
+    }
+
+    private static string DescribeProxy(int port) =>
+        (ProxySnapshot() + " " + LinuxProxyDiag(port) + " " + MacProxyDiag()).Trim();
+
+    private static string MacProxyDiag()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return "";
+        var services = Capture("networksetup", "-listallnetworkservices");
+        var bits = new List<string>();
+        foreach (var line in services.Split('\n'))
+        {
+            var service = line.Trim().TrimStart('*').Trim();
+            if (service.Length == 0 || service.StartsWith("An asterisk", StringComparison.Ordinal))
+                continue;
+            var web = Capture("networksetup", "-getwebproxy \"" + service + "\"");
+            var secure = Capture("networksetup", "-getsecurewebproxy \"" + service + "\"");
+            bits.Add(service + " web={" + TrimOneLine(web) + "} https={" + TrimOneLine(secure) + "}");
+        }
+
+        return string.Join(" | ", bits);
     }
 
     private static bool ProxyIsOn(int port)
@@ -1656,7 +1676,13 @@ internal static class SmokeApp
                 return true;
             var g = Capture("gsettings", "get org.gnome.system.proxy mode");
             if (g.Contains("manual", StringComparison.OrdinalIgnoreCase))
-                return true;
+            {
+                var httpPort = Capture("gsettings", "get org.gnome.system.proxy.http port");
+                var httpsPort = Capture("gsettings", "get org.gnome.system.proxy.https port");
+                if (httpPort.Contains(port.ToString(), StringComparison.Ordinal)
+                    || httpsPort.Contains(port.ToString(), StringComparison.Ordinal))
+                    return true;
+            }
             // Under xvfb/dbus-run-session gsettings may be empty while Inspector still
             // wrote Chromium managed policy (ProxyMode=system, no ProxyServer port).
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
