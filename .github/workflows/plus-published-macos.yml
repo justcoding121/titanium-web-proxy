@@ -1,0 +1,82 @@
+name: plus-published-macos
+
+# Plus checklist and dashboard screenshots for the published v8.0.6-beta macOS CLI zips.
+# Push this branch only. It does not build packages.
+on:
+  push:
+    branches:
+      - lab/release-806-plus
+
+permissions:
+  contents: read
+
+jobs:
+  plus:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            cli: Titanium.Cli-osx-arm64.zip
+          - os: macos-15-intel
+            cli: Titanium.Cli-osx-x64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download the published CLI zip and check SHA256SUMS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh release download v8.0.6-beta --repo "${GITHUB_REPOSITORY}" \
+            --pattern SHA256SUMS \
+            --pattern "${{ matrix.cli }}" \
+            --dir artifacts
+          expected=$(awk -v n="${{ matrix.cli }}" '$2 == n { print $1 }' artifacts/SHA256SUMS)
+          test -n "$expected"
+          actual=$(shasum -a 256 "artifacts/${{ matrix.cli }}" | awk '{ print $1 }')
+          test "$expected" = "$actual"
+          echo "sha256 ok ${{ matrix.cli }}"
+
+      - name: Install Chrome for the dashboard screenshots
+        run: |
+          set -euo pipefail
+          app="/Applications/Google Chrome.app"
+          if [[ ! -d "$app" ]]; then
+            brew install --cask google-chrome
+          fi
+          test -x "$app/Contents/MacOS/Google Chrome"
+
+      - name: Install Playwright and run the Plus checklist
+        env:
+          SHOTS_OUT: ${{ runner.temp }}/plus-shots
+          SHOTS_BASE: http://127.0.0.1:19181
+          CHROME_BIN: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+        run: |
+          set -euo pipefail
+          npm install --no-fund --no-audit playwright-core@1.49.1
+          rm -rf "${RUNNER_TEMP}/cli"
+          mkdir -p "${RUNNER_TEMP}/cli"
+          unzip -q "artifacts/${{ matrix.cli }}" -d "${RUNNER_TEMP}/cli"
+          bin=$(find "${RUNNER_TEMP}/cli" -type f -name titanium | head -1)
+          test -n "$bin"
+          chmod +x "$bin"
+          xattr -cr "${RUNNER_TEMP}/cli" || true
+          export BIN="$bin"
+          export SHOTS_JS="$PWD/tools/lab/plus-shots.mjs"
+          export SHOTS_OUT CHROME_BIN SHOTS_BASE
+          bash tools/lab/plus-published.sh
+
+      - name: Upload Plus screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: plus-macos-${{ matrix.os }}
+          path: |
+            ${{ runner.temp }}/plus-shots
+            /tmp/plus-update.txt
+            /tmp/plus-audit.json
+          if-no-files-found: ignore
+          retention-days: 14
