@@ -90,10 +90,11 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/inspector-smoke"
           networksetup -listallnetworkservices | tee "${RUNNER_TEMP}/inspector-smoke/net-services.txt"
           dotnet build tools/InspectorInstallSmoke/InspectorInstallSmoke.csproj -c Release
-          driver="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke"
-          chmod +x "$driver"
+          # The apphost does not see the runner's dotnet muxer. Run the dll through it.
+          dll="$PWD/tools/InspectorInstallSmoke/bin/Release/net10.0/InspectorInstallSmoke.dll"
+          test -f "$dll"
           set +e
-          "$driver" fresh \
+          dotnet "$dll" fresh \
             --exe "/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector" \
             --browsers chrome,edge,firefox,safari \
             --out "${RUNNER_TEMP}/inspector-smoke" \
