@@ -420,13 +420,18 @@ internal static class DashboardViews
 
     private static string StateBadge(string state)
     {
-        var kind = state.Contains("Unhealthy", StringComparison.OrdinalIgnoreCase)
-            || state.Contains("Fail", StringComparison.OrdinalIgnoreCase)
-            ? "bad"
-            : state.Contains("Drain", StringComparison.OrdinalIgnoreCase)
-                || state.Contains("Eject", StringComparison.OrdinalIgnoreCase)
-                ? "warn"
-                : "ok";
+        var kind = "ok";
+        if (state.Contains("Unhealthy", StringComparison.OrdinalIgnoreCase)
+            || state.Contains("Fail", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "bad";
+        }
+        else if (state.Contains("Drain", StringComparison.OrdinalIgnoreCase)
+            || state.Contains("Eject", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = "warn";
+        }
+
         var mark = kind == "warn" ? "◐ " : "● ";
         return "<span class=\"badge " + kind + "\">" + mark + Enc(state) + "</span>";
     }

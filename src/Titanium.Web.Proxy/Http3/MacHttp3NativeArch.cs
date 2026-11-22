@@ -165,6 +165,10 @@ public static class MacHttp3NativeArch
         }
 
         [DllImport("libc", EntryPoint = "sysctlbyname", SetLastError = true)]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage(
+            "Microsoft.Globalization",
+            "CA2101:SpecifyMarshalingForPInvokeStringArguments",
+            Justification = "The name is marshaled as UTF-8, which sysctlbyname requires.")]
         private static extern int sysctlbyname(
             [MarshalAs(UnmanagedType.LPUTF8Str)] string name,
             ref int oldp,
