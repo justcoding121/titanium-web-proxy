@@ -1,0 +1,28 @@
+name: winget-channel-smoke
+
+# Install the already-merged winget Inspector package. It is an older MSI.
+# This proves the channel. It does not submit or move any winget PR.
+on:
+  push:
+    branches:
+      - lab/release-806-winget
+
+permissions:
+  contents: read
+
+jobs:
+  inspector:
+    runs-on: windows-latest
+    steps:
+      - name: Install the merged Inspector package
+        shell: pwsh
+        run: |
+          winget source update
+          winget install --id justcoding121.TitaniumInspector --exact --accept-package-agreements --accept-source-agreements --disable-interactivity
+          winget list --id justcoding121.TitaniumInspector --exact
+          Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* , HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "*Titanium Inspector*" } |
+            Select-Object DisplayName, DisplayVersion, Publisher |
+            Format-List |
+            Out-String |
+            Write-Output
