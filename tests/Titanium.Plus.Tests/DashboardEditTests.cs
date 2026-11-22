@@ -85,6 +85,21 @@ public partial class DashboardEditTests
     }
 
     [TestMethod]
+    public async Task EditPage_HidesTheLiveIndicator_BecauseItNeverPolls()
+    {
+        await using var rig = await Rig.CreateAsync(editing: true);
+        var cookie = await rig.SignInAsync(Secret);
+
+        var route = await rig.SendAsync("GET", "/edit/route/r1", cookie: cookie);
+        Assert.AreEqual(200, route.Status);
+        StringAssert.Contains(route.Text, "data-view=\"edit\"");
+
+        var js = await rig.SendAsync("GET", "/assets/dashboard.js");
+        StringAssert.Contains(js.Text, "live.hidden = true");
+        StringAssert.Contains(js.Text, "!renderers[view]");
+    }
+
+    [TestMethod]
     public async Task Save_AppliesTheEdit_AndAudits()
     {
         await using var rig = await Rig.CreateAsync(editing: true);

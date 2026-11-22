@@ -43,7 +43,10 @@ public static class Http3NativeBootstrap
         // An 8.0.5 zip update copies the new build over the old directory and
         // leaves libssl/libcrypto behind. That updater runs inside 8.0.5, so
         // the delete has to happen when this process starts, before MsQuic loads.
-        if (OperatingSystem.IsLinux())
+        // Only Titanium's own hosts: this method is public, and a library consumer
+        // may keep its own OpenSSL beside the app.
+        if (OperatingSystem.IsLinux()
+            && IsTitaniumOpenSslCleanupHost(Assembly.GetEntryAssembly()?.GetName().Name))
         {
             RemoveStaleBundledOpenSsl(AppContext.BaseDirectory);
         }
@@ -90,10 +93,17 @@ public static class Http3NativeBootstrap
     }
 
     /// <summary>
+    /// True for the Titanium CLI, Inspector, and load-probe hosts. Other entry
+    /// assemblies keep whatever OpenSSL they shipped beside their binaries.
+    /// </summary>
+    internal static bool IsTitaniumOpenSslCleanupHost(string? entryAssemblyName) =>
+        entryAssemblyName is "titanium" or "TitaniumInspector" or "RpsLoadProbe";
+
+    /// <summary>
     /// Deletes bundled OpenSSL copies next to the app. Host OpenSSL 3.3+ aborts
     /// when MsQuic loads those files beside <c>libmsquic</c>. Returns how many
     /// files were removed. A file that cannot be deleted is reported and left
-    /// in place.
+    /// in place. A directory with no <c>libmsquic.so*</c> is left untouched.
     /// </summary>
     internal static int RemoveStaleBundledOpenSsl(string? directory) =>
         RemoveStaleBundledOpenSsl(directory, File.Delete);
@@ -101,6 +111,11 @@ public static class Http3NativeBootstrap
     internal static int RemoveStaleBundledOpenSsl(string? directory, Action<string> delete)
     {
         if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return 0;
+        }
+
+        if (!HasBundledMsQuic(directory))
         {
             return 0;
         }
@@ -131,6 +146,10 @@ public static class Http3NativeBootstrap
 
         return removed;
     }
+
+    private static bool HasBundledMsQuic(string directory) =>
+        Directory.EnumerateFiles(directory)
+            .Any(path => Path.GetFileName(path).StartsWith("libmsquic.so", StringComparison.Ordinal));
 
     private static bool IsQuicAssemblyBesideApp(string baseDir)
     {

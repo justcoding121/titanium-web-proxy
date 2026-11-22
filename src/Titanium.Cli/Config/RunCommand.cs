@@ -533,10 +533,6 @@ internal static class RunCommand
             }
 
             await AsyncConsole.FlushAsync().ConfigureAwait(false);
-            Console.WriteLine("awaiting-shutdown-or-reload");
-            // Do not pass stoppingToken: a raced cancel must not fail the run with TaskCanceledException.
-            await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            ConfigReloadGate.WritePidFile(configPath, Environment.ProcessId);
             try
             {
                 await WaitForShutdownOrReloadAsync(
@@ -1335,6 +1331,10 @@ internal static class RunCommand
                         }, stoppingToken);
                     });
                     Console.WriteLine("sighup-handler-registered");
+                    // Pid file and the ready line follow the handler. A reload that reads the pid
+                    // file before SIGHUP is registered hits the default terminate action.
+                    ConfigReloadGate.WritePidFile(configPath, Environment.ProcessId);
+                    Console.WriteLine("awaiting-shutdown-or-reload");
                     // Diagnostic flush must not use stoppingToken: cancel can already be requested
                     // (Register fired RequestStop) and FlushAsync would throw TaskCanceledException.
                     await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
@@ -1363,6 +1363,9 @@ internal static class RunCommand
                     millisecondsTimeOutInterval: -1,
                     executeOnlyOnce: false);
                 Console.WriteLine("windows-reload-handler-registered");
+                // Pid file and the ready line follow the named event so titanium reload cannot signal too early.
+                ConfigReloadGate.WritePidFile(configPath, Environment.ProcessId);
+                Console.WriteLine("awaiting-shutdown-or-reload");
                 await Console.Out.FlushAsync(CancellationToken.None).ConfigureAwait(false);
             }
 

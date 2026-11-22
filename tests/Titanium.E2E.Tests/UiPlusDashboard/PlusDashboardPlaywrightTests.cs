@@ -357,6 +357,12 @@ public class PlusDashboardPlaywrightTests : PageTest
             "() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1");
         Assert.IsFalse(overflow, "The page itself scrolls sideways; only a table container may.");
 
+        await Page.GotoAsync(_prefix + "routes");
+        var scrolls = await Page.EvaluateAsync<bool>(
+            "() => Array.from(document.querySelectorAll('.table-scroll')).some(el => el.scrollWidth > el.clientWidth + 1)");
+        Assert.IsTrue(scrolls, "A wide table scrolls inside its own container.");
+        await Page.GotoAsync(_prefix);
+
         await Page.RouteAsync("**/api/overview", route => route.AbortAsync());
         await Page.WaitForTimeoutAsync(2500);
         await Expect(Page.GetByTestId("live-status")).ToContainTextAsync("Disconnected");
@@ -375,6 +381,7 @@ public class PlusDashboardPlaywrightTests : PageTest
             foreach (var (slug, path) in new[] { ("overview", ""), ("routes", "routes"), ("health", "health"), ("config", "config"), ("certs", "certificates"), ("audit", "audit") })
             {
                 await Page.GotoAsync(_prefix + path);
+                await Expect(Page.GetByTestId("live-status")).ToContainTextAsync("Live");
                 await Page.ScreenshotAsync(new()
                 {
                     Path = Path.Combine(dir, scheme + "-" + slug + ".png"),
@@ -385,6 +392,7 @@ public class PlusDashboardPlaywrightTests : PageTest
 
         await Page.SetViewportSizeAsync(390, 800);
         await Page.GotoAsync(_prefix + "routes");
+        await Expect(Page.GetByTestId("live-status")).ToContainTextAsync("Live");
         await Page.ScreenshotAsync(new() { Path = Path.Combine(dir, "narrow-routes.png"), FullPage = true });
     }
 
