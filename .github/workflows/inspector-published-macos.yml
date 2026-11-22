@@ -146,6 +146,8 @@ jobs:
         run: |
           set -euo pipefail
           brew tap justcoding121/titanium
+          brew trust justcoding121/titanium || true
+          brew trust --formula justcoding121/titanium/titanium || true
           brew update
           brew install titanium
           brew upgrade titanium || true
