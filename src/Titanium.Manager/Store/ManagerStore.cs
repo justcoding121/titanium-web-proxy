@@ -36,7 +36,14 @@ internal sealed class ManagerStore : IDisposable
         Migrate();
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        // Queries take this gate. Dispose must not close the connection under one of them.
+        lock (_gate)
+        {
+            _db.Dispose();
+        }
+    }
 
     private void Migrate()
     {

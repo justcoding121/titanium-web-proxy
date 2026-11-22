@@ -28,6 +28,8 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
     private readonly ManagerUiHost _ui;
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stop = new();
+    private readonly List<Task> _inFlight = [];
+    private readonly Lock _inFlightGate = new();
     private Task? _loop;
     private Task? _ticker;
 
@@ -97,8 +99,50 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
                 return;
             }
 
-            _ = Task.Run(() => HandleAsync(context), _stop.Token);
+            StartHandler(context);
         }
+    }
+
+    /// <summary>
+    /// Keeps the request task so shutdown can finish store use before the database is disposed.
+    /// A request accepted after stop was requested is aborted instead of queued.
+    /// </summary>
+    private void StartHandler(HttpListenerContext context)
+    {
+        Task task;
+        lock (_inFlightGate)
+        {
+            if (_stop.IsCancellationRequested)
+            {
+                try
+                {
+                    context.Response.Abort();
+                }
+                catch (Exception ex) when (ex is HttpListenerException
+                    or ObjectDisposedException
+                    or InvalidOperationException)
+                {
+                    // The listener is already closed.
+                }
+
+                return;
+            }
+
+            task = Task.Run(() => HandleAsync(context));
+            _inFlight.Add(task);
+        }
+
+        _ = task.ContinueWith(
+            completed =>
+            {
+                lock (_inFlightGate)
+                {
+                    _inFlight.Remove(completed);
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
     }
 
     private async Task HandleAsync(HttpListenerContext context)
@@ -1129,6 +1173,18 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
             {
                 /* ignore */
             }
+        }
+
+        Task[] pending;
+        lock (_inFlightGate)
+        {
+            pending = _inFlight.ToArray();
+        }
+
+        if (pending.Length > 0)
+        {
+            // Handlers still inside a store query must finish before the caller disposes the store.
+            await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         }
 
         _stop.Dispose();
