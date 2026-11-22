@@ -196,6 +196,7 @@ public class RunCommandProcessMetricsPoolingAndReloadFailBehaviorTests
                 () => stdout + Environment.NewLine + stderr);
 
             await File.WriteAllTextAsync(path, "listeners: [this is not valid yaml");
+            // The ready line is printed only after the Windows reload event exists.
             Assert.AreEqual(0, await ReloadCommand.ExecuteAsync(["reload", "-c", path]));
             await WaitForAsync(
                 () => stderr.ToString().Contains("Config reload failed", StringComparison.Ordinal)
