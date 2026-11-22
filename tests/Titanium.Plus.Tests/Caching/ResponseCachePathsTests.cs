@@ -422,6 +422,7 @@ public class ResponseCachePathsTests
         Assert.AreEqual("last-good", await served.Content.ReadAsStringAsync());
         Assert.AreEqual("STALE", XCache(served));
 
+        // The unread 503 drops the origin socket. The client keep-alive must still carry this request.
         var other = await f.GetAsync("/never-cached");
         Assert.AreEqual(HttpStatusCode.ServiceUnavailable, other.StatusCode);
         Assert.AreEqual("origin is down", await other.Content.ReadAsStringAsync());

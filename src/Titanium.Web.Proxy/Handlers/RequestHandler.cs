@@ -660,9 +660,25 @@ public partial class ProxyServer
 
                             if (!result.Continue) return;
 
-                            // user requested
+                            // A synthetic answer (cached stale-if-error, 304 merge) drops an unread origin
+                            // socket. That socket cannot be pooled, but the client response is complete,
+                            // so keep-alive on the client must continue. A non-synthetic close still ends
+                            // the client connection (short read / ambiguous framing).
                             if (args.HttpClient.CloseServerConnection)
                             {
+                                var served = args.HttpClient.Response;
+                                if (served.IsSynthetic && served.KeepAlive)
+                                {
+                                    args.HttpClient.CloseServerConnection = false;
+                                    if (connection != null)
+                                    {
+                                        await TcpConnectionFactory.Release(connection, true);
+                                        connection = null;
+                                    }
+
+                                    continue;
+                                }
+
                                 closeServerConnection = true;
                                 return;
                             }
