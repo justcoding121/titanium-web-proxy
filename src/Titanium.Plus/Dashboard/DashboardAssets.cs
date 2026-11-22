@@ -220,6 +220,7 @@ internal static class DashboardAssets
             live.textContent = ok ? 'Live, updated 0 s ago' : 'Disconnected, retrying';
             live.className = ok ? 'live' : 'live bad';
           }
+          if (live && !renderers[view]) { live.hidden = true; }
 
           function post(path, done) {
             return fetch(path, {
