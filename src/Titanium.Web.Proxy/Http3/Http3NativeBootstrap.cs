@@ -40,6 +40,14 @@ public static class Http3NativeBootstrap
     /// <param name="args">Application arguments (as passed to <c>Main</c>), used when relaunching.</param>
     public static void EnsureAppLocalMsQuicVisible(string[]? args = null)
     {
+        // An 8.0.5 zip update copies the new build over the old directory and
+        // leaves libssl/libcrypto behind. That updater runs inside 8.0.5, so
+        // the delete has to happen when this process starts, before MsQuic loads.
+        if (OperatingSystem.IsLinux())
+        {
+            RemoveStaleBundledOpenSsl(AppContext.BaseDirectory);
+        }
+
         if (!OperatingSystem.IsMacOS())
         {
             return;
@@ -79,6 +87,46 @@ public static class Http3NativeBootstrap
         }
 
         RelaunchWithDyldFallback(baseDir, args ?? Array.Empty<string>());
+    }
+
+    /// <summary>
+    /// Deletes bundled OpenSSL copies next to the app. Host OpenSSL 3.3+ aborts
+    /// when MsQuic loads those files beside <c>libmsquic</c>. Returns how many
+    /// files were removed. A file that cannot be deleted is reported and left
+    /// in place.
+    /// </summary>
+    internal static int RemoveStaleBundledOpenSsl(string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return 0;
+        }
+
+        var removed = 0;
+        foreach (var path in Directory.EnumerateFiles(directory))
+        {
+            var name = Path.GetFileName(path);
+            if (!name.StartsWith("libssl.so", StringComparison.Ordinal)
+                && !name.StartsWith("libcrypto.so", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                File.Delete(path);
+                removed++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine(
+                    "Stale bundled OpenSSL is still next to this install (" + path
+                    + "). Delete libssl.so* and libcrypto.so* from that directory. "
+                    + ex.Message);
+            }
+        }
+
+        return removed;
     }
 
     private static bool IsQuicAssemblyBesideApp(string baseDir)
