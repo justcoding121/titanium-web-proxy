@@ -250,7 +250,11 @@ public partial class TrustDecisionTableTests
                   && TrustGateIdle(harness.Vm));
         Assert.IsTrue(harness.Interception.IsRootTrusted);
 
+        // Wait until Install CA has released the trust gate before mutating in-memory trust.
+        // A concurrent finalize can flip IsRootTrusted back to true right after Untrust.
+        await WaitUntil(() => TrustGateIdle(harness.Vm), 10000);
         harness.Interception.UntrustRootCertificate(false);
+        await WaitUntil(() => !harness.Interception.IsRootTrusted && TrustGateIdle(harness.Vm), 10000);
         Assert.IsFalse(harness.Interception.IsRootTrusted);
         harness.Interception.FailNextUserTrustInstall = true;
         harness.Dialogs.TrustRecoveryResult = TrustRecoveryChoice.Cancel;
@@ -267,7 +271,9 @@ public partial class TrustDecisionTableTests
             .Invoke(harness.Vm, [true, false])!);
         Assert.IsTrue(harness.Interception.IsRootTrusted);
 
+        await WaitUntil(() => TrustGateIdle(harness.Vm), 10000);
         harness.Interception.UntrustRootCertificate(false);
+        await WaitUntil(() => !harness.Interception.IsRootTrusted && TrustGateIdle(harness.Vm), 10000);
         harness.Interception.FailNextUserTrustInstall = true;
         Assert.IsFalse(await (Task<bool>)typeof(MainWindowViewModel)
             .GetMethod("EnsureRootCaTrustedAsync", flags)!

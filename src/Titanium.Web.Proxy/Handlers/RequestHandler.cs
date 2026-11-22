@@ -676,6 +676,14 @@ public partial class ProxyServer
                                         connection = null;
                                     }
 
+                                    // Same cancel check as the normal keep-alive fall-through: a cancelled
+                                    // session must not start another request on this client socket.
+                                    if (cancellationTokenSource.IsCancellationRequested)
+                                    {
+                                        closeServerConnection = true;
+                                        return;
+                                    }
+
                                     continue;
                                 }
 

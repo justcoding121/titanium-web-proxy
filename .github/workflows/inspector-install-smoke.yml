@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'Runner leg to run (all runs the full matrix)'
+        description: 'Runner leg to run (all = Win/Linux/macos-latest; macos-15-intel is dispatch-only)'
         required: false
         default: all
         type: choice
-        options: [all, windows-latest, ubuntu-latest, macos-latest]
+        options: [all, windows-latest, ubuntu-latest, macos-latest, macos-15-intel]
   pull_request:
     branches: [beta, stable]
   push:
@@ -32,10 +32,13 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        # pull_request and push leave inputs.os empty, so those events keep every leg.
-        # A non-empty dispatch value other than "all" runs that one runner only.
+        # pull_request and push leave inputs.os empty, so those events keep every required leg.
+        # macos-15-intel is dispatch-only (not a required check on beta/stable PRs).
         os: ${{ fromJSON(inputs.os && inputs.os != 'all' && format('["{0}"]', inputs.os) || '["windows-latest","ubuntu-latest","macos-latest"]') }}
     steps:
+      - name: Screenshot folder
+        shell: bash
+        run: mkdir -p "${RUNNER_TEMP}/install-smoke/screenshots"
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
@@ -421,7 +424,7 @@ jobs:
           (cd artifacts/cli/osx-arm64 && zip -qr ../../Titanium.Cli-osx-arm64.zip .)
           installed="/Applications/Titanium Inspector.app/Contents/MacOS/TitaniumInspector"
           log="${RUNNER_TEMP}/install-smoke"
-          mkdir -p "$log"
+          mkdir -p "$log" "$log/screenshots"
           MOUNT_ROOT=""
           detach() {
             if [[ -n "${MOUNT_ROOT}" && -d "${MOUNT_ROOT}" ]]; then
@@ -517,6 +520,10 @@ jobs:
               networksetup -setsecurewebproxystate "${service}" off || true
             done < <(networksetup -listallnetworkservices)
           }
+          shot() {
+            local name="$1"
+            screencapture -x "$log/screenshots/${name}.png" 2>/dev/null || true
+          }
           open "/Applications/Titanium Inspector.app"
           for i in $(seq 1 40); do
             if lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | grep -q TitaniumInspector; then
@@ -532,6 +539,7 @@ jobs:
             echo "system proxy stayed off after launch" >&2
             exit 1
           fi
+          shot "01-after-launch"
           osascript -e 'tell application "Titanium Inspector" to quit' >/dev/null 2>&1 || true
           sleep 3
           if pgrep -f "Titanium Inspector.app/Contents/MacOS/TitaniumInspector" >/dev/null; then
@@ -542,6 +550,7 @@ jobs:
             echo "system proxy still on after graceful quit" >&2
             exit 1
           fi
+          shot "02-after-graceful-quit"
           echo "pass mac graceful quit cleared system proxy" | tee -a "$log/driver.log"
           open "/Applications/Titanium Inspector.app"
           for i in $(seq 1 40); do
@@ -608,7 +617,16 @@ jobs:
         if: always() && runner.os == 'macOS'
         uses: actions/upload-artifact@v7
         with:
-          name: install-smoke-macos-logs
+          name: install-smoke-macos-${{ matrix.os }}-logs
           path: ${{ runner.temp }}/install-smoke
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: install-smoke-${{ matrix.os }}-screenshots
+          path: ${{ runner.temp }}/install-smoke/screenshots
           if-no-files-found: ignore
           retention-days: 7

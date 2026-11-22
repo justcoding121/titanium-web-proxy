@@ -86,16 +86,31 @@ MOUNT_ROOT=""
 rm -f "${DMG_PATH}"
 # hdiutil convert returns "Resource temporarily unavailable" when the disk-image
 # service on a shared macOS runner is busy. The read-write image is still valid.
+# Force any lingering attach, sync the volume, then retry with longer backoff.
+hdiutil detach -force "${RW_DMG}" -quiet 2>/dev/null || true
+sync
+sleep 2
 converted=0
-for attempt in 1 2 3 4 5; do
+for attempt in 1 2 3 4 5 6 7 8; do
   if hdiutil convert "${RW_DMG}" -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}"; then
     converted=1
     break
   fi
   echo "hdiutil convert failed (attempt ${attempt})" >&2
   rm -f "${DMG_PATH}"
+  hdiutil detach -force "${RW_DMG}" -quiet 2>/dev/null || true
+  sync
   sleep $((attempt * 5))
 done
+if [[ "${converted}" != "1" ]]; then
+  # Last resort: rebuild a compressed image from the staged folder (layout may be flat).
+  echo "hdiutil convert still busy; falling back to create -format UDZO from stage" >&2
+  rm -f "${DMG_PATH}"
+  if hdiutil create -volname "${VOLUME_NAME}" -srcfolder "${STAGE}" -ov -format UDZO \
+      -imagekey zlib-level=9 "${DMG_PATH}"; then
+    converted=1
+  fi
+fi
 if [[ "${converted}" != "1" ]]; then
   echo "error: hdiutil convert failed" >&2
   exit 1

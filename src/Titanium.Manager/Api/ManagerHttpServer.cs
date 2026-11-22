@@ -128,7 +128,7 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
                 return;
             }
 
-            task = Task.Run(() => HandleAsync(context));
+            task = Task.Run(() => HandleAsync(context), _stop.Token);
             _inFlight.Add(task);
         }
 
@@ -1184,7 +1184,9 @@ internal sealed class ManagerHttpServer : IAsyncDisposable
         if (pending.Length > 0)
         {
             // Handlers still inside a store query must finish before the caller disposes the store.
-            await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            // Opt out of _stop: dispose already cancelled it, and we still need the in-flight work to finish.
+            await Task.WhenAll(pending).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None)
+                .ConfigureAwait(false);
         }
 
         _stop.Dispose();
