@@ -43,6 +43,14 @@ elif [[ -f "${TARGET}" && "${TARGET}" == *.zip ]]; then
   # The binaries inside are already signed. Codesigning the zip does not
   # notarize those Mach-O signatures, and stapler cannot staple a zip.
   echo "submitting signed zip without codesigning the container: ${TARGET}"
+elif [[ -d "${TARGET}" ]]; then
+  # Loose publish directory (the CLI zip payload). Sign every Mach-O here, including
+  # dylibs. Notarization is of the zip that is submitted afterwards, not of this directory.
+  while IFS= read -r -d '' f; do
+    file -b "${f}" 2>/dev/null | grep -qiE 'Mach-O' || continue
+    codesign "${SIGN_ARGS[@]}" "${f}"
+    codesign --verify --verbose=2 "${f}"
+  done < <(find "${TARGET}" -type f -print0)
 elif [[ -f "${TARGET}" ]]; then
   codesign "${SIGN_ARGS[@]}" "${TARGET}"
   codesign --verify --verbose=2 "${TARGET}" || true

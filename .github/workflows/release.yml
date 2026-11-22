@@ -483,8 +483,9 @@ jobs:
           rid="${{ matrix.rid }}"
           out="artifacts/cli/$rid"
           chmod +x "$out/titanium" "$out/twp" 2>/dev/null || true
-          ./tools/packaging/osx/sign-and-notarize.sh "$out/titanium" tools/packaging/osx/TitaniumCli.entitlements
-          ./tools/packaging/osx/sign-and-notarize.sh "$out/twp" tools/packaging/osx/TitaniumCli.entitlements || true
+          # Every Mach-O in the publish directory, including dylibs. The zip notarization
+          # below rejects an unsigned nested binary, and that step no longer ignores failure.
+          ./tools/packaging/osx/sign-and-notarize.sh "$out" tools/packaging/osx/TitaniumCli.entitlements
           rm -f "Titanium.Cli-$rid.zip"
           (cd "$out" && zip -r "../../../Titanium.Cli-$rid.zip" .)
           ./tools/packaging/osx/sign-and-notarize.sh "Titanium.Cli-$rid.zip"
