@@ -681,6 +681,23 @@ public partial class DashboardV2Tests
     }
 
     [TestMethod]
+    public async Task Routes_PaintsBadWarnAndOkDestinationBadges()
+    {
+        await using var rig = await Rig.CreateAsync(destinationIds: ["healthy", "sick", "leaving", "parked"]);
+        rig.Manager.SetDestinationState("sick", DestinationState.Unhealthy);
+        rig.Manager.SetDestinationState("leaving", DestinationState.Draining);
+        rig.Manager.SetDestinationState("parked", DestinationState.Maintenance);
+
+        var page = await rig.SendAsync("GET", "/routes", secret: Secret);
+
+        Assert.AreEqual(200, page.Status);
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-healthy\"><span class=\"badge ok\">● Healthy</span>");
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-sick\"><span class=\"badge bad\">● Unhealthy</span>");
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-leaving\"><span class=\"badge warn\">◐ Draining</span>");
+        StringAssert.Contains(page.Text, "data-testid=\"dest-state-parked\"><span class=\"badge ok\">● Maintenance</span>");
+    }
+
+    [TestMethod]
     public async Task Health_ListsRecentEjectionsAndProbeFailures_InARingOf200()
     {
         var manager = new ClusterManager();
