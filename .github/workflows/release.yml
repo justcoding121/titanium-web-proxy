@@ -487,7 +487,7 @@ jobs:
           ./tools/packaging/osx/sign-and-notarize.sh "$out/twp" tools/packaging/osx/TitaniumCli.entitlements || true
           rm -f "Titanium.Cli-$rid.zip"
           (cd "$out" && zip -r "../../../Titanium.Cli-$rid.zip" .)
-          ./tools/packaging/osx/sign-and-notarize.sh "Titanium.Cli-$rid.zip" || true
+          ./tools/packaging/osx/sign-and-notarize.sh "Titanium.Cli-$rid.zip"
       - name: Linux packages (AppImage + deb/rpm)
         if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
         env:
@@ -1423,13 +1423,32 @@ jobs:
           TAG: ${{ needs.resolve-version.outputs.release_tag }}
           VERSION: ${{ needs.resolve-version.outputs.version }}
           CHANNEL: ${{ needs.resolve-version.outputs.channel }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
-          mkdir -p charts
+          mkdir -p charts sums
           helm package deploy/helm/titanium -d charts
           helm package deploy/helm/titanium-gateway -d charts
           helm package deploy/helm/titanium-manager -d charts
-          gh release upload "$TAG" charts/*.tgz --clobber
+          gh release download "$TAG" -p SHA256SUMS -D sums
+          chmod +x tools/packaging/append-chart-checksums.sh
+          ./tools/packaging/append-chart-checksums.sh sums/SHA256SUMS charts
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "GPG_PRIVATE_KEY is required so the updated SHA256SUMS stays signed." >&2
+            exit 1
+          fi
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          chmod 700 "$GNUPGHOME"
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          args=(--batch --yes --detach-sign --armor -o sums/SHA256SUMS.asc sums/SHA256SUMS)
+          if [[ -n "${GPG_PASSPHRASE:-}" ]]; then
+            args=(--batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" --detach-sign --armor -o sums/SHA256SUMS.asc sums/SHA256SUMS)
+          fi
+          gpg "${args[@]}"
+          rm -rf "$GNUPGHOME"
+          gh release upload "$TAG" charts/*.tgz sums/SHA256SUMS sums/SHA256SUMS.asc --clobber
           # OCI registry: oci://ghcr.io/justcoding121/charts/<chart-name>
           for tgz in charts/*.tgz; do
             helm push "$tgz" oci://ghcr.io/justcoding121/charts

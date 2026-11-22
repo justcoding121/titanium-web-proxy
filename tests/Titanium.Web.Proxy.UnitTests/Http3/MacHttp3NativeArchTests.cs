@@ -113,6 +113,17 @@ public class MacHttp3NativeArchTests
         }
     }
 
+    [TestMethod]
+    public void IsProcessTranslated_ReturnsFalseOffMac_AndDoesNotThrowOnMac()
+    {
+        var translated = MacHttp3NativeArch.IsProcessTranslated();
+
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.IsFalse(translated);
+        }
+    }
+
     private static byte[] BuildThinHeader(uint magicLe, int cpuType)
     {
         var header = new byte[8];

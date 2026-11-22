@@ -10,17 +10,17 @@
 class Titanium < Formula
   desc "Titanium Web Proxy CLI (MITM / reverse proxy)"
   homepage "https://github.com/justcoding121/titanium-web-proxy"
-  version "8.0.5"
+  version "8.0.6-beta"
   license "MIT"
 
   on_macos do
     on_arm do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-arm64.zip"
-      sha256 "aad81ce3594e7e81c12e04d0488a7b9973823937464d9b99c34683e7eb4ce621"
+      sha256 "18d8bca74a1211975393d0da90675fdbdf89cd5f0cd1f094b53ed4c8665f824d"
     end
     on_intel do
       url "https://github.com/justcoding121/titanium-web-proxy/releases/download/v#{version}/Titanium.Cli-osx-x64.zip"
-      sha256 "1bbfb97eae7cde99d77cb593ac101d8eb1a461756e919ffa271aed775d6a3fcd"
+      sha256 "785eca9b62ed017062f9912189beed0a5f0ab53998b3909e3f6068cf90f0e855"
     end
   end
 
