@@ -1,0 +1,51 @@
+name: lab macos directory sign
+
+on:
+  push:
+    branches:
+      - lab/release-807-sign
+  workflow_dispatch:
+
+jobs:
+  adhoc-sign:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish osx-arm64 CLI
+        run: dotnet publish src/Titanium.Cli/Titanium.Cli.csproj -c Release -r osx-arm64 --self-contained true -o artifacts/cli/osx-arm64
+      - name: Sign every Mach-O with an ad-hoc identity
+        run: |
+          set -euo pipefail
+          out="artifacts/cli/osx-arm64"
+          ent="tools/packaging/osx/TitaniumCli.entitlements"
+          SIGN_ARGS=(--force --timestamp=none --sign -)
+          if [[ -f "${ent}" ]]; then
+            SIGN_ARGS+=(--entitlements "${ent}")
+          fi
+          signed_list="$(mktemp)"
+          # Same loop as tools/packaging/osx/sign-and-notarize.sh, with an ad-hoc identity.
+          while IFS= read -r -d '' f; do
+            file -b "${f}" 2>/dev/null | grep -qiE 'Mach-O' || continue
+            codesign "${SIGN_ARGS[@]}" "${f}"
+            codesign --verify --verbose=2 "${f}"
+            printf '%s\n' "${f}" >> "${signed_list}"
+          done < <(find "${out}" -type f -print0)
+          signed=$(wc -l < "${signed_list}" | tr -d ' ')
+          expected=0
+          while IFS= read -r -d '' f; do
+            kind=$(file -b "${f}" 2>/dev/null || true)
+            printf '%s' "${kind}" | grep -qiE 'Mach-O' || continue
+            expected=$((expected + 1))
+            detail=$(codesign -dv "${f}" 2>&1 || true)
+            printf '%s\n' "${detail}" | grep -q 'Signature=adhoc' || {
+              echo "not adhoc: ${f}"
+              printf '%s\n' "${detail}"
+              exit 1
+            }
+          done < <(find "${out}" -type f -print0)
+          echo "signed=${signed} expected=${expected}"
+          test "${expected}" -gt 0
+          test "${signed}" -eq "${expected}"
